@@ -194,7 +194,7 @@ export {
   FETCH,
   grantsAuthority,
   isLogin,
-  isOtherService,
+  isOtherServiceCall,
   isStoreChange,
   judgedEffects,
   judgedTargets,

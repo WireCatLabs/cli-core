@@ -60,6 +60,16 @@ shape of this file.
   one-shot command had met it.
 - **serve refuses a login or logout an older client relays to it** with `permission_error`, instead of logging its
   own connection in or out. Stop serve first, or update the client, which runs it locally.
+- **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
+  `searches clear` and `contacts notes remove` refuse with `permission_error`. Clearing what the store can rebuild
+  (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
+- **`conversations build` and `search conversations` say they can send text out.** `conversations build --analyze`
+  sends chat text to the analysis provider, and `search conversations` sends the query to a remote embedding
+  provider. `conversations build` is now declared as a write to an outside service and `search conversations` as a
+  read from one. Under the read-only lock each refuses before it sends anything to a remote provider; a local model
+  or a local server still works. Both always run in the calling process, never through a running `serve`.
+- **Model downloads no longer go through a running `serve`.** `models text download`, `models audio download` and
+  `images models download` fetch from a model host, not the messenger, so they always run in the calling process.
 
 ### Changed — may break callers
 

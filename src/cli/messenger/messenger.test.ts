@@ -3249,7 +3249,7 @@ describe("the shared read commands", () => {
     expect((await call(["conversations", "batches", "next", "--chat", "7"], never, env)).code).toBe(5)
   })
 
-  it("**asks before chat text leaves the machine**: --yes in machine mode, --max-tokens, never under the read-only lock, none for a local server", async () => {
+  it("**asks before chat text leaves the machine**: --yes in machine mode, --max-tokens, never under the read-only lock, none for a local server; a query to a remote embedder is held by the lock too", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3315,6 +3315,17 @@ describe("the shared read commands", () => {
       expect(agreed.stderr.join("\n")).not.toContain("sk-test")
 
       sent.length = 0
+      const query = await call(["search", "conversations", "anything", "--provider", "openai", "--json"], never, {
+        ...env,
+        CHAT_READ_ONLY: "1",
+      })
+      expect(query.code).toBe(5)
+      expect(JSON.parse(query.stderr.find((line) => line.startsWith("{")) ?? "{}").error.message).toBe(
+        "this process is read-only (CHAT_READ_ONLY) — it cannot send the query to api.openai.com",
+      )
+      expect(sent).toEqual([])
+
+      sent.length = 0
       const local = ["--base-url", "http://127.0.0.1:11434/v1", "--model", "m", "--dims", "8"]
       const onThisMachine = { ...env, CHAT_READ_ONLY: "1" }
       expect(
@@ -3323,7 +3334,7 @@ describe("the shared read commands", () => {
       expect(sent[0]?.url).toBe("http://127.0.0.1:11434/v1/embeddings")
       const status = await call(["conversations", "embed", "status", "--chat", "7", ...local, "--json"], never, env)
       expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ model: "url:127.0.0.1:11434:m", left: 0 })
-      const found = await call(["search", "conversations", "anything", ...local, "--json"], never, env)
+      const found = await call(["search", "conversations", "anything", ...local, "--json"], never, onThisMachine)
       expect(JSON.parse(found.stdout[0] ?? "").items.length).toBeGreaterThan(0)
     } finally {
       vi.unstubAllGlobals()

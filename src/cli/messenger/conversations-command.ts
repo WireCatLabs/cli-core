@@ -19,7 +19,14 @@ import { servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE, reachesOtherService, refuseUnderReadOnly } from "../effects.js"
+import {
+  LOCAL_READ,
+  LOCAL_WRITE,
+  REMOTE_READ,
+  REMOTE_WRITE,
+  reachesOtherService,
+  refuseUnderReadOnly,
+} from "../effects.js"
 import { embeddingChoice, type ModelOptions } from "../embedding-choice.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
@@ -42,7 +49,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   )
 
   boundOptions(
-    annotate(conversations.command("build"), { effects: LOCAL_WRITE })
+    reachesOtherService(annotate(conversations.command("build"), { effects: REMOTE_WRITE }))
       .description(
         "find a chat's conversations in what the store holds, replacing the last build; without --chat, every " +
           "chat that changed since its build and every group never built; never asks the messenger",
@@ -80,6 +87,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
       refuseLocalWrite(context, messenger.app.command, "conversations.build")
       const target = analysisChoice(options, messenger.app, context.settings, context.env, context.keyring)
+      if (!isLocal(target.baseUrl)) refuseUnderReadOnly(this, `send chat text to ${new URL(target.baseUrl).host}`)
       const controller = new AbortController()
       context.track({ close: async () => controller.abort() })
       const maxTokens = options.maxTokens ?? 100_000
@@ -717,7 +725,9 @@ const readinessLine = ({ chat, state, graph, pending, vectors }: ChatReadiness, 
 /** `search conversations`: the conversations nearest to a query, in meaning and in words. */
 export const conversationsSearchCommand = (messenger: Messenger): Command =>
   syncOptions(
-    boundOptions(withModelOptions(annotate(new Command("conversations"), { effects: LOCAL_READ }))),
+    boundOptions(
+      withModelOptions(reachesOtherService(annotate(new Command("conversations"), { effects: REMOTE_READ }))),
+    ),
     messenger,
   )
     .description(
@@ -757,6 +767,8 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
       const { chat, sinceTime: since } = options
       const context = messengerContext(this, messenger)
       const model = choiceOf(options, messenger, context)
+      if (typeof model !== "string" && !isLocal(model.remote.baseUrl))
+        refuseUnderReadOnly(this, `send the query to ${new URL(model.remote.baseUrl).host}`)
       if (options.catchUp) {
         if (options.filter !== undefined || options.source !== undefined)
           throw new CliError(

@@ -7,7 +7,7 @@ import { readRankingSelection } from "../../services/rankings-selection.js"
 import type { SearchParams } from "../../services/search-record.js"
 import { savedSearchItem } from "../../services/searches.js"
 import type { StoredSearch } from "../../store/store.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
+import { changesStore, LOCAL_READ, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { positiveCount, withPaging } from "../paging.js"
@@ -130,7 +130,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
       if (found.items.length === 0 && context.format === "pretty") context.renderer.note("no searches ran yet")
     })
 
-  annotate(searches.command("delete"), { effects: LOCAL_WRITE, output: { entity: "saved_search" } })
+  changesStore(annotate(searches.command("delete"), { effects: LOCAL_WRITE, output: { entity: "saved_search" } }))
     .description("delete a saved search, or one run from the history")
     .argument("<name|id>", "a saved search's name, or the id of any row of searches history")
     .action(async function (this: Command, reference: string) {
@@ -145,7 +145,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(searches.command("clear"), { effects: LOCAL_WRITE })
+  changesStore(annotate(searches.command("clear"), { effects: LOCAL_WRITE }))
     .description("empty the history; saved searches stay")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)

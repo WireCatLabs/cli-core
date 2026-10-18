@@ -10,6 +10,7 @@ import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
 import {
   changesAuthority,
+  isOtherServiceCall,
   isStoreChange,
   judgedEffects,
   judgedTargets,
@@ -97,10 +98,13 @@ describe("command effects", () => {
     )
   })
 
-  it("mark the store commands that replace, delete or rewrite the store for the read-only lock", () => {
+  it("mark for the read-only lock the commands that rewrite the store or delete what the owner saved in it", () => {
     const marked = commands.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)
     expect(marked.sort()).toEqual(
       [
+        "contacts notes remove",
+        "searches clear",
+        "searches delete",
         "store clear",
         "store copies delete",
         "store decrypt",
@@ -112,6 +116,20 @@ describe("command effects", () => {
     )
   })
 
+  it("keep off serve's relay the commands whose remote side is another service", () => {
+    const marked = commands.filter(({ command }) => isOtherServiceCall(command)).map(({ path }) => path)
+    expect(marked.sort()).toEqual(
+      [
+        "conversations build",
+        "conversations embed",
+        "images models download",
+        "models audio download",
+        "models text download",
+        "search conversations",
+      ].sort(),
+    )
+  })
+
   it("judge retry on the remote side, and keep a local-only write from running unasked", () => {
     expect(judgedEffects({ remote: "read", local: "write" })).toEqual({ remote: "read", local: "none" })
     expect(judgedEffects(undefined)).toBeUndefined()
@@ -119,6 +137,7 @@ describe("command effects", () => {
     expect(targets("messages sync")?.effects).toEqual({ remote: "read", local: "none" })
     expect(targets("messages send")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("conversations embed")?.effects).toEqual({ remote: "write", local: "none" })
+    expect(targets("conversations build")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("server restart")?.effects).toEqual({ remote: "none", local: "write" })
   })
 })
@@ -228,6 +247,20 @@ describe("the read-only lock on the message store", () => {
     expect(error.message).toBe("this process is read-only (CHAT_READ_ONLY) — it cannot change the message store")
     expect(readFileSync(store, "utf8")).toBe("kept")
     expect(existsSync(output)).toBe(false)
+  })
+
+  it.each([
+    ["searches delete", ["searches", "delete", "daily"]],
+    ["searches clear", ["searches", "clear"]],
+    ["contacts notes remove", ["contacts", "notes", "remove", "Alice", "1"]],
+  ])("refuses %s, which deletes what the owner saved", async (name, argv) => {
+    const store = kept(`${name}.db`)
+
+    const { code, error } = await locked(["ro", ...argv], store)
+
+    expect([code, error.code]).toEqual([5, "permission_error"])
+    expect(error.message).toBe("this process is read-only (CHAT_READ_ONLY) — it cannot change the message store")
+    expect(readFileSync(store, "utf8")).toBe("kept")
   })
 
   it("still previews store repair with --dry-run", async () => {

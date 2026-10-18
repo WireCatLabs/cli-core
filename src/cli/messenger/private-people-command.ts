@@ -4,7 +4,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { contactNote } from "../../entities/index.js"
 import type { ContactNoteItem } from "../../services/private-people.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { changesStore, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -88,7 +88,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       renderAnswer(this, context, itemOf(saved))
     })
   }
-  annotate(notes.command("remove"), { effects: LOCAL_WRITE })
+  changesStore(annotate(notes.command("remove"), { effects: LOCAL_WRITE }))
     .argument("<person>")
     .argument("<id>")
     .action(async function (this: Command, person: string, id: string) {

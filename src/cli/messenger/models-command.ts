@@ -31,7 +31,7 @@ import { orderedModels, type SpeechModel, speechModel, VAD } from "../../speech/
 import { choose } from "../../speech/transcribe.js"
 import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
-import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, reachesOtherService } from "../effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { nextStep } from "../steps.js"
@@ -113,7 +113,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(audio.command("download"), { effects: FETCH, output: { entity: "model" } })
+  reachesOtherService(annotate(audio.command("download"), { effects: FETCH, output: { entity: "model" } }))
     .argument("<model>", "a model id from `models audio list`")
     .description("download a speech model once, checked against the sha256 this version expects")
     .action(async function (this: Command, id: string) {
@@ -170,7 +170,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(text.command("download"), { effects: FETCH, output: { entity: "model" } })
+  reachesOtherService(annotate(text.command("download"), { effects: FETCH, output: { entity: "model" } }))
     .argument("<model>", "a model id from `models text list`")
     .addOption(new Option("--accept-terms", "accept the model's licence terms, for a model that has its own"))
     .description("download an embedding model once, checked against the sha256 this version expects")
@@ -274,11 +274,13 @@ export const imageModelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(image.command("download"), {
-    effects: FETCH,
-    output: { entity: "model" },
-    examples: [`${tool} images models download ${DEFAULT_IMAGE_MODEL}`],
-  })
+  reachesOtherService(
+    annotate(image.command("download"), {
+      effects: FETCH,
+      output: { entity: "model" },
+      examples: [`${tool} images models download ${DEFAULT_IMAGE_MODEL}`],
+    }),
+  )
     .argument("<model>", "a model id from `images models list`")
     .description("download a picture model once, checked against the sha256 this version expects")
     .action(async function (this: Command, id: string) {
