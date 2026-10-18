@@ -13,6 +13,18 @@ shape of this file.
   and does not reject, and otherwise it keeps listening until the signal aborts, then resolves. `OPTIONAL_METHODS`
   lists `listen`, and `fakeAdapter(seed, { listen: true })` has it. The cases cannot see whether `listen` connects.
 
+### Changed — may break callers
+
+- **Saving a chat the store already holds merges its `providerMetadata` key by key, and `parentChatId` keeps or
+  clears the same way.** A metadata key the new chat leaves out keeps its stored value; a key set to `null` is
+  removed, and metadata with no key left is stored as none. `parentChatId` left out keeps the stored parent, `null`
+  clears it (it could never be cleared before), and `Chat.parentChatId` is now `Id | null`. Before, the new
+  metadata replaced the stored one whole, so a push that left a key out erased it: a WhatsApp community lost
+  `community: true` on a push that did not say, and max-cli's login erased each dialog's `partnerId`. **Adapters
+  must send `null` for a key that is gone, or a flag that turned false; an absent key now means unknown.** An
+  adapter that leaves such a key out keeps the old value in the store, and a stale `username` still answers to
+  `@name` until the chat is saved with `username: null`. Chats the store already holds are not changed.
+
 ## 0.345.0 — 18.10.2026
 
 ### Added

@@ -26,7 +26,8 @@ export type ChatKind = "dialog" | "group" | "channel" | "saved" | "unknown"
 export type MembershipState = "joined" | "left" | "public" | "imported" | "archived" | "external"
 
 export interface Chat {
-  parentChatId?: Id
+  /** Saving a chat: absent keeps the stored parent, `null` clears it. */
+  parentChatId?: Id | null
   scope?: "personal" | "work"
   id: Id
   title: string | null
@@ -43,6 +44,10 @@ export interface Chat {
   unreadMentions?: number
   /** Absent where the messenger does not say. */
   membershipState?: MembershipState
+  /**
+   * Saving a chat merges this into the stored one key by key: a key left out keeps its stored value, a key set to
+   * `null` is removed. So a key that is gone, or a flag that turned false, is sent as `null`.
+   */
   providerMetadata?: ProviderMetadata
 }
 

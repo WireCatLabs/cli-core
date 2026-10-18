@@ -83,7 +83,7 @@ export const chatAnswer = (account: AccountKey, chat: ShownChat): Out<typeof cha
     muted: chat.muted,
     archived: chat.archived,
     membership_state: chat.membershipState,
-    parent_chat_id: chat.parentChatId,
+    parent_chat_id: chat.parentChatId ?? undefined,
     scope: chat.scope,
     provider_metadata: chat.providerMetadata,
     description: chat.description,
