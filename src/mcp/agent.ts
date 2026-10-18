@@ -144,7 +144,7 @@ const fieldsOf = (info: CommandInfo, { omit = [], offline = false }: Pick<Catalo
     if (!long || option.mcp === false) continue
     fields.push(optionField(option, long))
   }
-  if (offline && info.effects?.remote === "read") fields.push(OFFLINE)
+  if (offline && info.effects?.remote === "read" && info.offline !== false) fields.push(OFFLINE)
   return fields.filter((field) => !omit.includes(field.name))
 }
 

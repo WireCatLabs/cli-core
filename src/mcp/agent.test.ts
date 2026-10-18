@@ -197,6 +197,18 @@ describe("runCommandForAgent", () => {
     expect([...plain.connection.deleted, ...whatsapp.connection.deleted]).toEqual([])
   })
 
+  it("**refuses offline on a command that cannot answer offline**, before it runs", async () => {
+    const run = vi.fn(async () => 0)
+    const commands = describeProgram(
+      new Command("x").addCommand(annotate(new Command("inspect"), { effects: REMOTE_READ, offline: false })),
+    )
+
+    const answer = await runCommandForAgent({ run, commands }, ["inspect"], { offline: true }, { profile: "p" })
+
+    expect(answer).toMatchObject({ error: { error: { code: "validation_error" } } })
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it("refuses a command that runs until it is stopped", async () => {
     const commands = describeProgram(
       new Command("x").addCommand(annotate(new Command("watch"), { effects: REMOTE_READ, lifetime: "persistent" })),
@@ -282,5 +294,21 @@ describe("toolsFromCommands", () => {
 
     expect(Object.keys(list?.input.entries ?? {})).toContain("offline")
     expect(Object.keys(list?.input.entries ?? {})).not.toContain("types")
+  })
+
+  it("**offers no offline where a command or a group above it says it cannot answer offline**", () => {
+    const root = new Command("x")
+    const chats = root.command("chats")
+    annotate(chats.command("list"), { effects: REMOTE_READ })
+    annotate(chats.command("inspect"), { effects: REMOTE_READ, offline: false })
+    annotate(annotate(chats.command("folders"), { offline: false }).command("list"), { effects: REMOTE_READ })
+    const offered = Object.fromEntries(
+      toolsFromCommands(describeProgram(root), { offline: true }).map((tool) => [
+        tool.command,
+        "offline" in tool.input.entries,
+      ]),
+    )
+
+    expect(offered).toEqual({ "chats list": true, "chats inspect": false, "chats folders list": false })
   })
 })

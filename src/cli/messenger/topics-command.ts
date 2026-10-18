@@ -39,7 +39,7 @@ const listed = (messenger: Messenger) =>
 /** `search topics`: a forum group's topics whose title matches, asked of the messenger. */
 export const topicsSearchCommand = (messenger: Messenger): Command =>
   withPaging(
-    annotate(new Command("topics"), { effects: REMOTE_READ })
+    annotate(new Command("topics"), { effects: REMOTE_READ, offline: false })
       .description("a forum group's topics whose title matches")
       .argument("<chat>", messenger.chatArgument)
       .argument("<text>", "words from the topic's title"),
@@ -47,7 +47,7 @@ export const topicsSearchCommand = (messenger: Messenger): Command =>
 
 /** `topics list` and the writes — a forum group's topics, with the ids its messages carry as `threadId`. */
 export const topicsCommand = (messenger: Messenger): Command => {
-  const topics = new Command("topics").description("the topics of a forum group")
+  const topics = annotate(new Command("topics"), { offline: false }).description("the topics of a forum group")
 
   topics.addCommand(
     withPaging(

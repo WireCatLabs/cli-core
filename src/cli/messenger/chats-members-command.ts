@@ -45,7 +45,7 @@ export const membersCommand = (messenger: Messenger): Command => {
   members.addCommand(
     withQuery(
       annotate(
-        annotate(new Command("audit"), { effects: REMOTE_READ })
+        annotate(new Command("audit"), { effects: REMOTE_READ, offline: false })
           .description(
             "members that look like bots, each with its reasons — read from the member list and the local store; " +
               "never one request per person, and it removes nobody",
@@ -136,7 +136,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  const fetch = annotate(new Command("fetch"), { effects: FETCH })
+  const fetch = annotate(new Command("fetch"), { effects: FETCH, offline: false })
     .description(
       "read a group's whole member list into the local store's member history: who joined, who left, daily " +
         "counts and profile changes; someone is recorded as gone only when every member was read",
