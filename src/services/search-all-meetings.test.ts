@@ -344,5 +344,10 @@ describe("opt-in meeting-inclusive search", () => {
       app: { command: "max", appName: "max-cli", envPrefix: "MAX", description: "", version: "1.0.0" },
     })
     expect(max.notes?.meaningSkipped).toBe("e5-small is not downloaded — `max models text download e5-small`")
+    const memo = await searchAllIncludingMeetings(store, account, notes, {
+      app: { command: "tg", appName: "memo", envPrefix: "MEMO", description: "", version: "1.0.0" },
+      hintCommand: null,
+    })
+    expect(memo.notes?.meaningSkipped).toBe(zoom.notes?.meaningSkipped)
   })
 })

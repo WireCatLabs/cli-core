@@ -49,13 +49,27 @@ const block = (title: string, rows: readonly (readonly [string, string])[], colu
 
 type Row = readonly [label: string, command: string, does: string]
 
+const TOPICS: readonly (readonly [long: string, topic: string])[] = [
+  ["--json", "output"],
+  ["--offline", "offline"],
+  ["--timeout", "timeouts"],
+  ["--dry-run", "dry run"],
+]
+
+/** Only the topics this program has options for: memo has no --offline. */
+const optionTopics = (program: Command): string => {
+  const longs = new Set(program.options.map((option) => option.long))
+  const topics = TOPICS.filter(([long]) => longs.has(long)).map(([, topic]) => topic)
+  return topics.length > 0 ? topics.join(", ") : "the options every command takes"
+}
+
 /** Only commands the tool has: `guide` and `setup` are not in every tool. */
 const pointers = (program: Command, cli: string, start: string | undefined, profile: boolean): string[] => {
   const has = (path: string) => commandAt(program, path) !== undefined
   const next = [
     has("commands") ? [`${cli} commands`, "every command, by section"] : undefined,
     has("guide") ? [`${cli} guide`, "scenarios: command sequences for common tasks"] : undefined,
-    [`${cli} help options`, "output, offline, timeouts, dry run"],
+    [`${cli} help options`, optionTopics(program)],
   ].filter((row) => row !== undefined)
   const rows: Row[] = [
     ...(start ? [["Start here:", start, profile ? "(any profile name works)" : ""] as const] : []),
