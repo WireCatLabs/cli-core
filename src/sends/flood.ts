@@ -13,11 +13,12 @@ export interface FloodDeadline {
   providerError?: string
 }
 
-/** The account was told to stop writing — frozen, or limited for spam. Reads still work. */
+/** The account was told to stop writing — frozen, limited for spam, or banned. Reads still work. */
 export interface SendBlock {
-  state: "frozen" | "limited"
+  state: "frozen" | "limited" | "banned"
   since: string
-  until: string
+  /** `null`: no end is known, and the hold lasts until `flood clear` or a `doctor --online` that finds the account well. */
+  until: string | null
   hint: string
 }
 
@@ -35,6 +36,15 @@ const MOST_DEADLINES = 50
  */
 export const LIMITED_HOLD_MS = 60 * 60 * 1000
 export const FROZEN_HOLD_MS = 24 * 60 * 60 * 1000
+/**
+ * How a hold with no end is kept on disk: a cli-core before `until: null` reads a date it has not reached and keeps
+ * holding, where `null` would read as over and let a banned account write.
+ */
+const NO_END = "9999-12-31T23:59:59.999Z"
+
+/** "until 2026-…", or "until lifted" for a hold with no known end. */
+export const holdEnd = (block: Pick<SendBlock, "until">, show: (iso: string) => string = (iso) => iso): string =>
+  block.until === null ? "until lifted" : `until ${show(block.until)}`
 
 /** `<state dir>/flood/<profile>.json`, beside `sends/`. */
 export const floodPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
@@ -64,7 +74,9 @@ export class FloodMemory {
     const deadlines = Array.isArray(raw.deadlines)
       ? raw.deadlines.filter((one) => typeof one?.operation === "string" && alive(one.until))
       : []
-    return { deadlines, ...(raw.sendBlock && alive(raw.sendBlock.until) ? { sendBlock: raw.sendBlock } : {}) }
+    const block = raw.sendBlock && (raw.sendBlock.until === NO_END ? { ...raw.sendBlock, until: null } : raw.sendBlock)
+    const held = block && (block.until === null || alive(block.until))
+    return { deadlines, ...(held ? { sendBlock: block } : {}) }
   }
 
   /** The deadline this call is still under: one for its chat, or one for the call in every chat. */
@@ -88,13 +100,14 @@ export class FloodMemory {
     return this.read().sendBlock
   }
 
+  /** A ban the messenger gave no end for holds until lifted; a spam limit or a freeze without one, for a while. */
   block(block: Omit<SendBlock, "since" | "until"> & { until?: string }): SendBlock {
     const now = this.now()
+    const holdMs = { limited: LIMITED_HOLD_MS, frozen: FROZEN_HOLD_MS, banned: undefined }[block.state]
     const kept: SendBlock = {
       ...block,
       since: new Date(now).toISOString(),
-      until:
-        block.until ?? new Date(now + (block.state === "limited" ? LIMITED_HOLD_MS : FROZEN_HOLD_MS)).toISOString(),
+      until: block.until ?? (holdMs === undefined ? null : new Date(now + holdMs).toISOString()),
     }
     this.#write({ ...this.read(), sendBlock: kept })
     return kept
@@ -113,7 +126,8 @@ export class FloodMemory {
     return cleared
   }
 
-  #write(state: FloodState): void {
+  #write({ sendBlock, ...rest }: FloodState): void {
+    const state = sendBlock ? { ...rest, sendBlock: { ...sendBlock, until: sendBlock.until ?? NO_END } } : rest
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
     const temporary = `${this.path}.${process.pid}.tmp`
     writeFileSync(temporary, `${JSON.stringify(state)}\n`, { mode: 0o600 })

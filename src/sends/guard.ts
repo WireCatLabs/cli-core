@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import { type AppIdentity, readOnlyRefusal } from "../ports/app.js"
-import { FloodMemory, floodPathFor } from "./flood.js"
+import { FloodMemory, floodPathFor, holdEnd } from "./flood.js"
 import {
   type AccountAction,
   type ChatAction,
@@ -15,6 +15,23 @@ import { keyForWrite, type Level, levelFor, type PermissionKey, skipFlagFor } fr
 import { RecipientList, recipientsPathFor } from "./recipients.js"
 
 const HOUR_MS = 60 * 60 * 1000
+
+/**
+ * Asked of the guard for their permission level, yet they only read from the messenger or work here: reads go on
+ * during a hold.
+ */
+const READS_UNDER_HOLD = new Set<PermissionKey>([
+  "attachments.extract",
+  "conversations.embed",
+  "conversations.links",
+  "messages.server-search",
+  "messages.sync-first",
+  "stats.contacts.top.sync-first",
+  "stats.messages.counters.refresh",
+  "stats.messages.show.sync-first",
+  "stats.messages.top.sync-first",
+  "store.gaps.repair",
+])
 
 /** One write, as the guard is asked about it. `personIds` are checked and never journaled. */
 export interface GuardRequest {
@@ -141,6 +158,20 @@ export const sendGuard = ({
     if (readOnlyLock) throw readOnlyRefusal(readOnlyLock, "send, react, change chats or change the account")
   }
 
+  // Every write, counted or not: a reaction or a read receipt sent through a ban is what makes the ban stick.
+  const refuseHeld = ({ key }: GuardRequest) => {
+    if (key !== undefined && READS_UNDER_HOLD.has(key)) return
+    const block = flood?.sendBlock()
+    if (!block) return
+    throw new CliError(
+      "permission_error",
+      `profile ${profile} holds its writes ${holdEnd(block)}: ${block.hint} — reads still work; ` +
+        `do not retry: the owner checks the account with \`${command} ${profile} doctor --online\`, and lifts the ` +
+        `hold with \`${command} ${profile} flood clear\` once it is over`,
+      { sendBlock: block, standing: { state: block.state, hint: block.hint } },
+    )
+  }
+
   const permitted = (request: GuardRequest) => {
     const { chatId, kind = "message", action, personIds } = request
     refuseReadOnly()
@@ -251,25 +282,17 @@ export const sendGuard = ({
       if (levels === undefined) return
       const key = request.key ?? keyForWrite(request.kind ?? "message", request.action)
       if (levelFor(levels, key, permissionDefaults).level !== "ask") return
+      refuseHeld(request)
       await ask(key, request)
       answered.add(request)
     },
 
     check: (request, { reserve = true } = {}) => {
       permitted(request)
+      refuseHeld(request)
       const asked = { ...request, people: request.personIds?.length ?? request.count }
       const creatingTopic = request.kind === "chat" && request.action === "topic-create"
       if (!countsTowardLimit(asked) && !creatingTopic) return
-      const block = flood?.sendBlock()
-      if (block) {
-        throw new CliError(
-          "permission_error",
-          `profile ${profile} holds its writes until ${block.until}: ${block.hint} — reads still work; ` +
-            `do not retry: the owner checks the account with \`${command} ${profile} doctor --online\`, and lifts the ` +
-            `hold with \`${command} ${profile} flood clear\` once it is over`,
-          { sendBlock: block, standing: { state: block.state, hint: block.hint } },
-        )
-      }
       const checked = (entries: SendEntry[]) => {
         if (!creatingTopic) return withinLimit(request, entries)
         if (request.sendId === undefined) throw new CliError("validation_error", "a topic creation needs an attempt id")

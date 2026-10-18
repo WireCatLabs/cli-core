@@ -19,6 +19,19 @@ shape of this file.
   full `--timeout`, so the whole command can run up to twice that long.
 - **The test-matrix argument log records `--version`.** It ends before any command is parsed, so each CLI had to
   log it on its own.
+- **A ban with no end holds writes until it is lifted.** An adapter that reports the account `banned` (in
+  `details.standing`) holds the profile's writes until the owner runs `flood clear` or `doctor --online` finds the
+  account well again; with an end date from the messenger, the hold ends then. Such a hold has `until: null` in
+  `doctor --json`, `flood clear --json` and `server status --json`, and the text says "until lifted". A spam limit
+  and a frozen account without an end keep their hour and day.
+
+### Changed — may break callers
+
+- **A hold on writes stops every write, not only the counted ones.** While the messenger has the account frozen,
+  limited or banned, a reaction, marking a chat read, a quiet pin, a title change and a profile change are refused
+  with `permission_error` too; reads still work. Sending any of them during a ban is what makes it last longer.
+  A command at level `ask` is refused before it asks. `inbox` and `review` with `--mark-read` (or
+  `catch_up_marks_read`) still show what they read, and warn that nothing was marked read.
 
 ### Fixed
 
@@ -30,6 +43,10 @@ shape of this file.
   failed run is no longer marked safe to retry and is never run as an unasked next step. Under the read-only lock it
   refuses before sending anything to a remote provider; embedding on this machine or on a local server still works.
   It always runs in the calling process, never through a running `serve`.
+- **A rate limit or a ban that ends `watch` or `serve`'s feed is remembered.** The next command is held as if a
+  one-shot command had met it.
+- **serve refuses a login or logout an older client relays to it** with `permission_error`, instead of logging its
+  own connection in or out. Stop serve first, or update the client, which runs it locally.
 
 ## 0.333.0 — 18.10.2026
 

@@ -8,6 +8,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { holdLock, lockPath, readLock } from "../../background/lock.js"
+import { relayCommand } from "../../background/relay.js"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
@@ -93,7 +94,7 @@ const messengerOver = (connect: Messenger["connect"]): Messenger => ({
   connection: "exclusive",
 })
 
-const definitionFor = (messenger: Messenger) => ({
+const definitionFor = (messenger: Messenger, extra: () => Command[] = () => []) => ({
   app,
   commands: () => [
     serveCommand(messenger),
@@ -101,6 +102,7 @@ const definitionFor = (messenger: Messenger) => ({
     watchCommand(messenger),
     mcpCommand(messenger),
     recipientsCommand(messenger),
+    ...extra(),
   ],
 })
 
@@ -109,16 +111,23 @@ const refuseOwnConnection: Messenger["connect"] = async () => {
   throw new Error("the client opened a connection of its own")
 }
 
-const startServe = async (env: NodeJS.ProcessEnv) => {
+const startServe = async (env: NodeJS.ProcessEnv, extra?: () => Command[]) => {
   const connection = held()
   const stop = new AbortController()
   const streams = captureStreams()
-  const done = run(["serve"], definitionFor(messengerOver(async () => connection.adapter)), {
-    streams,
-    tty: false,
-    env,
-    signal: stop.signal,
-  })
+  const done = run(
+    ["serve"],
+    definitionFor(
+      messengerOver(async () => connection.adapter),
+      extra,
+    ),
+    {
+      streams,
+      tty: false,
+      env,
+      signal: stop.signal,
+    },
+  )
   await vi.waitFor(() => expect(readLock(lockPath(app, "default", env))?.relay).toBeDefined(), { interval: 5 })
   return {
     ...connection,
@@ -244,6 +253,42 @@ describe("commands through serve's relay", () => {
 
     expect(code).toBe(0)
     expect(ran).toEqual([undefined])
+    serve.stop()
+    await serve.done
+  })
+
+  it("**refuses a logout an older client relays**, and never runs it on serve's connection", async () => {
+    const { env } = setup()
+    const ran: string[] = []
+    const session = () => [
+      new Command("session").addCommand(
+        logsInOrOut(annotate(new Command("end"), { effects: REMOTE_WRITE })).action(() => {
+          ran.push("end")
+        }),
+      ),
+    ]
+    const serve = await startServe(env, session)
+    const streams = captureStreams()
+    const stdin = new PassThrough()
+    stdin.end()
+
+    const code = await relayCommand(
+      serve.lock()?.relay?.path ?? "",
+      { argv: ["--json", "session", "end"], env: { ...env }, cwd: process.cwd(), tty: false, stdinTty: false },
+      {
+        streams,
+        stdin,
+        stdout: new PassThrough(),
+        signal: new AbortController().signal,
+        writes: true,
+        holder: "serve",
+      },
+    )
+
+    expect(code).toBe(5)
+    expect(JSON.parse(streams.stderr[0] ?? "{}").error).toMatchObject({ code: "permission_error" })
+    expect(streams.stderr.join("\n")).toContain("chat default server stop")
+    expect(ran).toEqual([])
     serve.stop()
     await serve.done
   })

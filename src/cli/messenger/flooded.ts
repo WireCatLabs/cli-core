@@ -2,11 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import { isCliFailure } from "../../errors/failures.js"
 import { type AccountStanding, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { providerErrorKey } from "../../runs/events.js"
-import type { FloodMemory } from "../../sends/flood.js"
+import { type FloodMemory, holdEnd, type SendBlock } from "../../sends/flood.js"
 import type { Pacer } from "../../sends/pace.js"
 
-const LONG_LIVED = new Set(["watch", "feed", "self", "newSendId", "close", "formatMarkdown", "formatHtml"])
-const BLOCKING = new Set<AccountStanding["state"]>(["frozen", "limited"])
+const LONG_LIVED = new Set(["self", "newSendId", "close", "formatMarkdown", "formatHtml"])
+/** Neither held nor paced, as they listen for as long as the run does; what ends them is still remembered. */
+const LISTENING = new Set(["watch", "feed"])
+const BLOCKING = new Set<AccountStanding["state"]>(["frozen", "limited", "banned"])
 /** Shorter waits for the pace pass unannounced; a person at a terminal would not notice them. */
 const ANNOUNCE_WAIT_MS = 5_000
 /** Longer than this the pace refuses instead of waiting, as a run already ends at a wait this long. */
@@ -41,11 +43,11 @@ export const flooded = (
     if (standing && BLOCKING.has(standing.state)) {
       kept(() => {
         const block = memory.block({
-          state: standing.state as "frozen" | "limited",
+          state: standing.state as SendBlock["state"],
           hint: standing.hint ?? error.message,
           ...(standing.until ? { until: standing.until } : {}),
         })
-        warn(`writes from this profile are held until ${block.until}: ${block.hint}`)
+        warn(`writes from this profile are held ${holdEnd(block)}: ${block.hint}`)
       })
       return
     }
@@ -86,6 +88,15 @@ export const flooded = (
 
   return throughWrapper(messenger, {} as MessengerAdapter, (operation, call) => {
     if (LONG_LIVED.has(operation)) return call as never
+    if (LISTENING.has(operation))
+      return (async (...args: unknown[]) => {
+        try {
+          return await call(...args)
+        } catch (error) {
+          noted(operation, undefined, error)
+          throw error
+        }
+      }) as never
     return (async (...args: unknown[]) => {
       const chatId = chatOf(args)
       const owed = memory.owed(operation, chatId)

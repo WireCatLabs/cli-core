@@ -1131,7 +1131,9 @@ The setting, its levels, keys, defaults and hard limits are on the handbook's [p
 one ([WC-PERM-3]), the commands checked as `messages` ([WC-PERM-4]), housekeeping ([WC-PERM-5]), the built-in
 defaults ([WC-PERM-6], [WC-PERM-7]), the limits no level lifts ([WC-PERM-11]) and a bot's keys
 ([WC-PERM-20]). The write guard every write passes is [WC-PERM-13] to [WC-PERM-18]: the recipient list (which
-chats), `sends_per_hour` (how many), the send journal and the flood hold. What stays here:
+chats), `sends_per_hour` (how many), the send journal and the flood hold. Stricter here than WC-PERM-18: the hold stops
+every write, a reaction and a read receipt too, and a ban with no known end holds until `flood clear` or a
+`doctor --online` that finds the account well. What stays here:
 
 5. **A group's moderation rules use the same four levels** for each kind of action (delete,
    remove, accept, decline), `readonly` meaning "report it, do nothing". A rule's level can only be

@@ -11,12 +11,14 @@ import { flooded } from "./flooded.js"
 const wait = (seconds: number) =>
   new CliError("rate_limited", `wait ${seconds} s`, { retry_after_ms: seconds * 1000, provider_error: "FLOOD_WAIT" })
 
-const setup = (answers: Partial<Record<"history" | "send", () => Promise<unknown>>> = {}) => {
+const setup = (answers: Partial<Record<"history" | "send" | "watch" | "feed", () => Promise<unknown>>> = {}) => {
   const memory = new FloodMemory(join(mkdtempSync(join(tmpdir(), "flooded-")), "p.json"))
   const inner = {
     self: () => "1",
     history: vi.fn(answers.history ?? (async () => ({ items: [] }))),
     send: vi.fn(answers.send ?? (async () => ({ message: { id: "5" }, sendId: "9" }))),
+    watch: vi.fn(answers.watch ?? (async () => {})),
+    feed: vi.fn(answers.feed ?? (async () => {})),
   }
   const warnings: string[] = []
   const adapter = flooded(inner as unknown as MessengerAdapter, memory, {
@@ -66,6 +68,32 @@ describe("a call the messenger asked to hold off on", () => {
     expect(memory.sendBlock()).toMatchObject({ state: "frozen", hint: "it is frozen" })
     expect(memory.read().deadlines).toEqual([])
     expect(warnings[0]).toMatch(/^writes from this profile are held until .*: it is frozen$/)
+  })
+
+  it("**a ban with no end holds writes until lifted**, and the warning says so", async () => {
+    const banned = new CliError("permission_error", "banned", { standing: { state: "banned", hint: "it is banned" } })
+    const { adapter, memory, warnings } = setup({ send: () => Promise.reject(banned) })
+
+    await expect(adapter.send("42", "hi", { sendId: "9" })).rejects.toBe(banned)
+    expect(memory.sendBlock()).toMatchObject({ state: "banned", until: null })
+    expect(warnings).toEqual(["writes from this profile are held until lifted: it is banned"])
+  })
+
+  it("**a ban that ends a watch still holds the profile's writes**", async () => {
+    const banned = new CliError("permission_error", "banned", { standing: { state: "banned", hint: "it is banned" } })
+    const { adapter, memory } = setup({ watch: () => Promise.reject(banned) })
+
+    await expect(adapter.watch?.(() => {}, new AbortController().signal)).rejects.toBe(banned)
+    expect(memory.sendBlock()).toMatchObject({ state: "banned" })
+  })
+
+  it("a wait that ends a feed is remembered, and a remembered one never stops the next feed", async () => {
+    const { adapter, inner, memory } = setup({ feed: () => Promise.reject(wait(60)) })
+
+    await expect(adapter.feed?.(() => {}, new AbortController().signal)).rejects.toMatchObject({ code: "rate_limited" })
+    expect(memory.read().deadlines).toMatchObject([{ operation: "feed" }])
+    await expect(adapter.feed?.(() => {}, new AbortController().signal)).rejects.toMatchObject({ code: "rate_limited" })
+    expect(inner.feed).toHaveBeenCalledTimes(2)
   })
 
   it("a remembered wait that cannot be written warns, and the messenger's own error still comes through", async () => {

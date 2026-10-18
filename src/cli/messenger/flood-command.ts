@@ -1,6 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { FloodMemory, floodPathFor } from "../../sends/flood.js"
+import { FloodMemory, floodPathFor, holdEnd } from "../../sends/flood.js"
 import { DEFAULT_PACE, Pacer, pacePathFor } from "../../sends/pace.js"
 import { grantsAuthority, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -29,7 +29,7 @@ export const floodCommand = (messenger: Messenger): Command => {
             (one) =>
               `- the wait before ${one.operation}${one.chatId ? ` in chat ${one.chatId}` : ""}, until ${one.until}`,
           )
-          const hold = sendBlock ? [`- the hold on writes (${sendBlock.state}), until ${sendBlock.until}`] : []
+          const hold = sendBlock ? [`- the hold on writes (${sendBlock.state}), ${holdEnd(sendBlock)}`] : []
           renderAnswer(
             this,
             context,

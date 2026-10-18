@@ -94,7 +94,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
           chat.messages.map((message) => ({ ...message, chatTitle: chat.title })),
         )
         const hearing = await hearForCommand(context, messenger, read, transcribe === true, hearWith, connect)
-        const marked = marking ? await markShown(services, inbox.chats) : undefined
+        const marked = marking ? await markShown(services, inbox.chats, renderer.warn) : undefined
         return { inbox, hearing, marked, reader }
       })
 
