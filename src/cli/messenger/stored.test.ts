@@ -396,6 +396,35 @@ describe("the owner's stars in the store", () => {
     expect(await starredIds(store)).toEqual([])
   })
 
+  it("a star the store failed to keep warns, and the command still succeeds with one call to the messenger", async () => {
+    const { store } = await setUp()
+    const asked: unknown[] = []
+    const warnings: string[] = []
+    const events: unknown[] = []
+    const failing = {
+      ...store,
+      messages: {
+        ...store.messages,
+        saveStar: async () => {
+          throw new Error("disk full")
+        },
+      },
+    } as MessageStore
+    const adapter = { self: () => "500", star: async (...args: unknown[]) => asked.push(args) }
+    const wrapped = stored(adapter as unknown as MessengerAdapter, {
+      account,
+      store: async () => failing,
+      warn: (line: string) => warnings.push(line),
+      events: (event: unknown) => events.push(event),
+    })
+
+    await expect(wrapped.star?.("7", "1", true)).resolves.toBeUndefined()
+
+    expect(asked).toEqual([["7", "1", true]])
+    expect(warnings).toEqual(["not saved to the local store: disk full"])
+    expect(events).toEqual([{ event: "warning", code: "store_not_written", operation: "messages.star" }])
+  })
+
   it("keeps the stars `watch` hears, the same one twice as one, the last word winning", async () => {
     const { store } = await setUp()
     await store.messages.saveMessages(account, "7", [message("2", "the venue")], { via: "history" })
@@ -425,6 +454,44 @@ describe("the owner's stars in the store", () => {
 
     expect(await starredIds(store)).toEqual(["40"])
     expect(await starredIds(store, "8")).toEqual(["41"])
+  })
+
+  it("a pushed batch replayed keeps its stars once, one without a word keeps them, and false takes them off", async () => {
+    const { store } = await setUp()
+    const push = async (...batches: HistoryBatch[]) => {
+      const pending = new Set<Promise<void>>()
+      const adapter = {
+        self: () => "500",
+        feed: async (onBatch: (one: HistoryBatch) => void) => {
+          for (const batch of batches) onBatch(batch)
+        },
+      }
+      const wrapped = stored(adapter as unknown as MessengerAdapter, {
+        account,
+        store: async () => store,
+        warn: () => {},
+        events: () => {},
+        pending,
+      })
+      await wrapped.feed?.(() => {}, new AbortController().signal)
+      await Promise.all(pending)
+    }
+    const starring: HistoryBatch = {
+      messages: [{ ...message("40", "When?"), starred: true }, message("42", "Thursday")],
+      stars: [{ chatId: "7", messageId: "42", starred: true }],
+    }
+
+    await push(starring, starring)
+    expect(await starredIds(store)).toEqual(["40", "42"])
+
+    await push({ messages: [message("40", "When?"), message("42", "Thursday")] })
+    expect(await starredIds(store)).toEqual(["40", "42"])
+
+    await push({
+      messages: [{ ...message("40", "When?"), starred: false }],
+      stars: [{ chatId: "7", messageId: "42", starred: false }],
+    })
+    expect(await starredIds(store)).toEqual([])
   })
 
   it("a message saved again without a word on its star keeps it", async () => {
