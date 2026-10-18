@@ -5,6 +5,7 @@ import type { AccountKey } from "../types.js"
 import { purgeChats } from "./chats.js"
 import { pointerPairs } from "./entity-types.js"
 import { tombstone } from "./messages.js"
+import { targetKey } from "./notes.js"
 import type { StoreContext } from "./open.js"
 
 export interface ChatRekey {
@@ -58,6 +59,13 @@ const renameText = (context: StoreContext, key: AccountKey, accountKey: number, 
   database
     .prepare("UPDATE tasks SET source_group = ? WHERE source_group = ? AND substr(source_locator, 1, length(?)) = ?")
     .run(to, from, renamed, renamed)
+  const relink = database.prepare("UPDATE links SET target_text = ?, target_folded = ? WHERE id = ?")
+  for (const row of database
+    .prepare("SELECT id, target_text FROM links WHERE to_id IS NULL AND substr(target_text, 1, length(?)) = ?")
+    .all(old, old)) {
+    const text = renamed + String(row.target_text).slice(old.length)
+    relink.run(text, targetKey(text), Number(row.id))
+  }
 }
 
 /** Moves what the chat stored under the new id holds into the kept one, then purges it. */
@@ -76,10 +84,10 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
   )
   for (const pair of pairs) {
     threads.run(pair.kept, pair.gone)
-    // A copy deleted at the source must not come back through its twin: nothing of the other copy moves onto it.
+    // Both copies become tombstones before anything moves, so only what a deletion keeps (the owner's links) moves.
     if (pair.deleted) {
+      tombstone(context, pair.gone)
       tombstone(context, pair.kept)
-      continue
     }
     for (const link of links) link.run(pair.kept, pair.gone)
     moveMessagePointers(pair.gone, pair.kept)
@@ -105,6 +113,8 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
     "auto_tag_claims",
   ])
     database.prepare(`UPDATE OR IGNORE ${table} SET chat_id = ? WHERE chat_id = ?`).run(kept, gone)
+  // Moved members fire no insert trigger, so the chat's involvements are queued by hand.
+  database.prepare("INSERT OR IGNORE INTO involvement_pending (indexable_type, id) VALUES ('chat', ?)").run(kept)
   database
     .prepare(
       "UPDATE message_transcripts SET message_id = (SELECT id FROM messages m WHERE m.chat_id = message_transcripts.chat_id AND m.external_id = message_transcripts.message_external_id) WHERE chat_id = ?",

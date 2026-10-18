@@ -72,6 +72,14 @@ describe("re-keying a stored chat", () => {
         "INSERT INTO tasks (project_id, number, key, title, type, status, author_type, author_id, source, source_locator, source_group, created_at, updated_at) VALUES (1, 1, 'T-1', 'reply', 'request', 'open', 'person', 1, 'rule', ?, ?, 0, 0)",
       )
       .run(`msg:whatsapp/1%40lid/${encodeURIComponent(PHONE)}/A1`, PHONE)
+    database
+      .prepare(
+        "INSERT INTO links (from_type, from_id, kind, source, target_text, target_folded, created_at, updated_at) VALUES ('task', 1, 'evidence', 'owner', ?, ?, 0, 0)",
+      )
+      .run(
+        `msg:whatsapp/1%40lid/${encodeURIComponent(PHONE)}/B9`,
+        `msg:whatsapp/1%40lid/${encodeURIComponent(PHONE)}/b9`,
+      )
     database.close()
 
     expect(await store.chats.rekeyChat(OWNER, PHONE, LID)).toEqual({ outcome: "renamed", messages: 0, duplicates: 0 })
@@ -83,6 +91,9 @@ describe("re-keying a stored chat", () => {
     expect(await store.sync.syncState(OWNER, historyStartKey(PHONE))).toBeUndefined()
     expect(await raw(path, "SELECT source_locator, source_group FROM tasks")).toEqual([
       { source_locator: "msg:whatsapp/1%40lid/777%40lid/A1", source_group: LID },
+    ])
+    expect(await raw(path, "SELECT target_text, target_folded FROM links")).toEqual([
+      { target_text: "msg:whatsapp/1%40lid/777%40lid/B9", target_folded: "msg:whatsapp/1%40lid/777%40lid/b9" },
     ])
     expect((await store.messages.search("phone", { limit: 5, account: OWNER })).items.map((hit) => hit.chatId)).toEqual(
       [LID],
@@ -163,7 +174,7 @@ describe("re-keying a stored chat", () => {
     await store.close()
   })
 
-  it("keeps a deletion of the old copy, and moves nothing of the live twin onto it", async () => {
+  it("keeps a deletion of the old copy, and brings nothing of the live twin back", async () => {
     const path = fresh()
     const store = await openStore({ path })
     await store.messages.saveMessages(OWNER, PHONE, [message("A2", PHONE, "gone at the source")], { via: "history" })
@@ -171,6 +182,18 @@ describe("re-keying a stored chat", () => {
     await store.messages.saveMessages(OWNER, LID, [message("A2", LID, "gone at the source")], { via: "history" })
     await store.tags.addTags(OWNER, { type: "message", chatId: LID, messageId: "A2" }, ["secret"])
     await store.messages.keepTranscript(OWNER, LID, "A2", "spoken secret", "whatsapp")
+    await store.messages.saveVote(OWNER, LID, "A2", {
+      person: { id: "7", name: "Ana", username: null },
+      answers: ["1"],
+      votedAt: "2026-10-18T10:00:00.000Z",
+    })
+    const database = await openCache(path)
+    database
+      .prepare(
+        "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, created_at, updated_at) SELECT 'note', 1, 'message', m.id, 'mentions', 'owner', 0, 0 FROM messages m JOIN chats c ON c.id = m.chat_id WHERE c.external_id = ?",
+      )
+      .run(LID)
+    database.close()
 
     await store.chats.rekeyChat(OWNER, PHONE, LID)
 
@@ -179,6 +202,8 @@ describe("re-keying a stored chat", () => {
     ])
     expect(await store.tags.tags(OWNER)).toEqual([])
     expect(await store.messages.transcript(OWNER, LID, "A2")).toBeUndefined()
+    expect(await store.messages.pollVotes(OWNER, LID, "A2")).toEqual([])
+    expect(await raw(path, "SELECT count(*) AS n FROM links JOIN messages m ON m.id = links.to_id")).toEqual([{ n: 1 }])
     await store.close()
   })
 
@@ -196,11 +221,25 @@ describe("re-keying a stored chat", () => {
     await store.close()
   })
 
+  it("keeps the people of the chat it merges in", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana")])
+    await store.roster.saveMembers(OWNER, LID, ["7", "8"])
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    expect((await store.roster.members(OWNER, LID)).map((one) => one.id).sort()).toEqual(["7", "8"])
+    expect(await raw(path, "SELECT count(*) AS n FROM involvements WHERE subject_type = 'chat'")).toEqual([{ n: 2 }])
+    await store.close()
+  })
+
   it("changes nothing on a replay, an unknown chat, or another account's chat of the same id", async () => {
     const path = fresh()
     const store = await openStore({ path })
     await store.messages.saveMessages(OWNER, PHONE, [message("A1", PHONE, "mine")], { via: "history" })
     await store.messages.saveMessages(OTHER, PHONE, [message("A1", PHONE, "theirs")], { via: "history" })
+    await store.messages.saveMessages(OTHER, LID, [message("A2", LID, "theirs too")], { via: "history" })
 
     expect((await store.chats.rekeyChat(OWNER, PHONE, LID)).outcome).toBe("renamed")
     expect((await store.chats.rekeyChat(OWNER, PHONE, LID)).outcome).toBe("unchanged")
@@ -212,6 +251,9 @@ describe("re-keying a stored chat", () => {
 
     expect(await texts(store, LID)).toEqual(["mine"])
     expect((await store.messages.messages(OTHER, PHONE, { limit: 5 })).items.map((one) => one.text)).toEqual(["theirs"])
+    expect((await store.messages.messages(OTHER, LID, { limit: 5 })).items.map((one) => one.text)).toEqual([
+      "theirs too",
+    ])
     await store.close()
   })
 

@@ -184,9 +184,9 @@ MCP tools write through `services.tags` with their own permission keys (`tags.ad
 before the batch's messages. Everything hangs off `chats.id`, so a chat stored only under the old id is
 renamed in place. When both ids are stored, the old row is kept and the other merged into it: messages
 move, a message id held in both keeps the old row's copy (deleted if either was), every `chat` and
-`message` pointer (`pointerPairs`) moves, and the emptied chat is purged. The `sync_cursors` keys and
-task locators that spell the chat id are rewritten in the same transaction. The old id is not kept: the
-adapter holds the mapping.
+`message` pointer (`pointerPairs`) moves, and the emptied chat is purged. The `sync_cursors` keys, task
+locators and unresolved `msg:` evidence links that spell the chat id are rewritten in the same transaction.
+Saved searches and note bodies stay as written. The old id is not kept: the adapter holds the mapping.
 
 **The text of files** is `attachment_texts`, one row per attachment: what `attachments extract`
 read from the file `messages download` saved (`attachments.local_path`, written by the download since this

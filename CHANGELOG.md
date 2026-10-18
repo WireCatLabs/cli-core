@@ -25,7 +25,6 @@ shape of this file.
   account well again; with an end date from the messenger, the hold ends then. Such a hold has `until: null` in
   `doctor --json`, `flood clear --json` and `server status --json`, and the text says "until lifted". A spam limit
   and a frozen account without an end keep their hour and day.
-
 - **A stored chat can take a new id.** When a messenger starts naming a chat by another id (WhatsApp moving a person
   from their phone number to a private id), `store.chats.rekeyChat(account, from, to)` renames the stored chat, or
   merges it with the chat already stored under the new id, so one conversation stays one chat. Messages, files, tags,
