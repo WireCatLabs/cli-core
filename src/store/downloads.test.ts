@@ -121,6 +121,40 @@ describe("where downloads went", () => {
     ])
   })
 
+  it("**replaces a ref from a file read without saving it, and keeps the path a download recorded**", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    const attachments: Attachment[] = [
+      { kind: "voice", providerRef: { directPath: "/synthetic/expired" } },
+      { kind: "photo", providerRef: { directPath: "/synthetic/kept" } },
+    ]
+    await store.messages.saveMessages(OWNER, "-1", [message(attachments)], { via: "history" })
+    await store.attachments.keepDownloads(OWNER, "-1", "42", [{ kind: "voice", position: 0, path: "/saved/42-1.ogg" }])
+
+    const kept = await store.attachments.keepProviderRefs(OWNER, "-1", "42", [
+      { kind: "voice", position: 0, providerRef: { directPath: "/synthetic/fresh" } },
+      { kind: "photo", position: 1, providerRef: {} },
+    ])
+    const otherAccount = await store.attachments.keepProviderRefs({ provider: "tg", account: "2" }, "-1", "42", [
+      { kind: "voice", position: 0, providerRef: { directPath: "/synthetic/other-account" } },
+    ])
+    const unplaced = await store.attachments.keepProviderRefs(OWNER, "-1", "42", [
+      { kind: "photo", position: 0, providerRef: { directPath: "/synthetic/wrong-kind" } },
+    ])
+    const read = await store.messages.message(OWNER, "42", { chatId: "-1" })
+    await store.close()
+
+    expect([kept, otherAccount, unplaced]).toEqual([1, 0, 0])
+    expect(read?.attachments.map((one) => one.providerRef)).toEqual([
+      { directPath: "/synthetic/fresh" },
+      { directPath: "/synthetic/kept" },
+    ])
+    expect(await paths(path)).toEqual([
+      { position: 0, path: "/saved/42-1.ogg" },
+      { position: 1, path: null },
+    ])
+  })
+
   it("records nothing for a message or chat the store does not hold", async () => {
     const path = fresh()
     const store = await openStore({ path })

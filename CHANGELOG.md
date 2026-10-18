@@ -43,6 +43,24 @@ shape of this file.
   blocks while it waits. `recipients add`, which connects and so runs inside `serve`, uses the new
   `RecipientList.addAsync`. A write whose command ran out of time while it waited is not sent, and is journaled as
   failed.
+- **The MCP `messages list` tool offers `topic:` only where the messenger has forum topics.** For a messenger with
+  `topics: false` (WhatsApp, MAX) its description and `query` help no longer name `topic:12`, and a `topic:` term
+  is refused as an unknown query field, as `messages list` on the command line already refuses it.
+- **A file read without being saved keeps the new reference the messenger gave for it.** `messages transcribe
+  --local`, the MCP `messages photo` tool and the picture indexer (`images embed`) now save a `providerRef` the
+  adapter set while `bytes()` ran on the stored attachment of that account, as downloads have since 0.339.0, through
+  the new store write `attachments.keepProviderRefs` (matched as `keepDownloads` matches; a saved path stays). A ref
+  that cannot be saved costs only another fetch: transcribe warns without showing it, the photo and the picture are
+  answered anyway. Not saved yet: voice messages heard for a list (`messages list --transcribe`, and the MCP
+  `messages list`, `inbox` and `review` tools with `transcribe`) and the MCP `messages transcribe` tool.
+- **`chats admins add` keeps its summary within 80 characters where a messenger gives every right.** Without
+  `--can` (`pickAdminRights: false`) the summary is "make a member an admin, with every right"; the rights are named
+  in the description `--help` and `commands --json` show. wa's seven rights had pushed it to 88 (WC-CMD-22).
+- **A headless interactive command's steps after its `untilStopped()` phase get the default 30 s, not 5 minutes.**
+  The 5 minutes are for the phase (wa's `setup`, the history a phone pushes); a dead connection after it no longer
+  holds the run that long. At a terminal the steps after the phase stay unbounded, since one may still ask the person
+  (wa's `setup` asks which agent). An explicit `--timeout`, a `persistent` command and a background fetch keep what
+  they had (WC-LIFE-5).
 
 ## 0.339.0 — 18.10.2026
 

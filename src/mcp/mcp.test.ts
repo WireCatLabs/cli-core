@@ -26,7 +26,7 @@ import { skillCommand } from "../cli/skill-command.js"
 import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
-import type { MessengerAdapter, SendOptions } from "../ports/messenger.js"
+import type { MessengerAdapter, RemoteFile, SendOptions } from "../ports/messenger.js"
 import type { Asker, GuardRequest, SendGuard } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
 import { RESOURCES } from "../sends/permissions.js"
@@ -2437,6 +2437,36 @@ describe("the photo tool", () => {
     expect(JSON.parse(content[1]?.text ?? "").item).toEqual({ chat_id: "7", message_id: "1", bytes: jpeg.length })
   })
 
+  it("saves a reference the messenger renewed while the photo was read, on the stored attachment", async () => {
+    const OWNER = { provider: "chat", account: "500" }
+    const photo: RemoteFile = {
+      kind: "photo",
+      position: 0,
+      async *bytes() {
+        yield jpeg
+        photo.providerRef = { directPath: "/synthetic/fresh" }
+      },
+    }
+    const { call, client, env } = await connect(scripted({ download: async () => ({ files: [photo], skipped: [] }) }))
+    await call("chats list")
+    const seeded = await openStore({ path: env.MESSAGING_STORE })
+    await seeded.messages.saveMessages(
+      OWNER,
+      "7",
+      [{ ...message, attachments: [{ kind: "photo", providerRef: { directPath: "/synthetic/expired" } }] }],
+      { via: "history" },
+    )
+    await seeded.close()
+
+    const looked = await client.run({ command: "messages photo", arguments: { chat: "Book club", message: "1" } })
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const read = await store.messages.message(OWNER, "1", { chatId: "7" })
+    await store.close()
+
+    expect(looked.isError).not.toBe(true)
+    expect(read?.attachments.map((one) => one.providerRef)).toEqual([{ directPath: "/synthetic/fresh" }])
+  })
+
   it("refuses anything else with the command that saves it", async () => {
     const voice = await look(holding({ kind: "voice" }))
     const large = await look(holding({ kind: "photo", size: 600 * 1024 }))
@@ -2943,6 +2973,24 @@ describe("sending over MCP", () => {
     expect(JSON.stringify(pinArguments?.expire_time)).toContain("24h or 7d; 7d by default")
     expect(await client.commands()).toContain("messages star")
     expect(await plain.client.commands()).not.toContain("messages star")
+  })
+
+  it("offers topic: on messages list only where the messenger has forum topics", async () => {
+    const forum = await connect(scripted({ topicHistory: async () => ({ items: [message], hasMore: false }) }))
+    const flat = await connect(scripted(), { own: { topics: false } })
+    const described = async (from: typeof forum.raw) => {
+      const found = await from.callTool({ name: "chat_tools_search", arguments: { query: "messages list" } })
+      return (found.content as { text: string }[])[0]?.text ?? ""
+    }
+
+    const refused = await flat.call("messages list", { chat: "7", query: "topic:12" })
+    const read = await forum.call("messages list", { chat: "7", query: "topic:12" })
+
+    expect(await described(forum.raw)).toContain("topic:12")
+    expect(await described(flat.raw)).not.toContain("topic")
+    expect(read.isError).toBe(false)
+    expect(refused.body.error).toMatchObject({ code: "validation_error" })
+    expect(refused.body.error?.message).toContain('no field "topic"')
   })
 
   describe("the owner's own chat list", () => {

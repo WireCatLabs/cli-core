@@ -63,7 +63,8 @@ export interface BaseEnvironment {
   /**
    * Set by `run()`: ends the phase `untilStopped()` began without aborting its signal — the command saw it finish.
    * However a phase ends, the steps after it get the command's one-shot deadline again, started afresh, and a signal
-   * or a cancel ends the command once more.
+   * or a cancel ends the command once more. Without `--timeout` a headless interactive command gets the default 30 s,
+   * not its 5 minutes; at a terminal it stays unbounded, since a later step may still ask the person (WC-LIFE-5).
    */
   endUntilStopped?: () => void
 }

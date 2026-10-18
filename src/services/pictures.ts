@@ -14,6 +14,7 @@ import {
 import { capability, type RemoteFile } from "../ports/messenger.js"
 import type { PictureInput } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
+import { refreshedFiles } from "./file-download.js"
 import { storedChatId } from "./message-resolution.js"
 import type { MessagesService } from "./messages.js"
 
@@ -89,6 +90,7 @@ export const picturesService = (deps: ServiceDeps) => {
   const bytesOf = async (
     picture: PictureInput,
     files: () => Promise<RemoteFile[]>,
+    read: (file: RemoteFile) => Promise<void>,
   ): Promise<Uint8Array | undefined> => {
     if (picture.localPath) {
       try {
@@ -109,6 +111,7 @@ export const picturesService = (deps: ServiceDeps) => {
       if (total > PICTURE_MAX_BYTES) return undefined
       parts.push(part)
     }
+    await read(file)
     return Buffer.concat(parts)
   }
 
@@ -168,7 +171,14 @@ export const picturesService = (deps: ServiceDeps) => {
               return downloaded.files
             }
             try {
-              const bytes = await bytesOf(picture, files)
+              const bytes = await bytesOf(picture, files, async (file) => {
+                const refreshed = refreshedFiles([file])
+                if (refreshed.length === 0) return
+                // A ref not saved costs only another fetch; the vector is still worth keeping.
+                await store.attachments
+                  .keepProviderRefs(account, picture.chatId, picture.messageId, refreshed)
+                  .catch(() => undefined)
+              })
               if (!bytes) {
                 result.skipped += 1
                 continue

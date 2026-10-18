@@ -458,6 +458,63 @@ describe("a phase that runs until stopped", () => {
     expect(stop?.aborted).toBe(false)
   })
 
+  it("gives a headless interactive command the default deadline once its phase ended", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    let entered: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const done = run(
+      ["chats", "list"],
+      definition(
+        async (command) => {
+          environmentOf(command).untilStopped?.()
+          await new Promise((resolve) => setTimeout(resolve, 4 * 60_000))
+          environmentOf(command).endUntilStopped?.()
+          entered()
+          await new Promise(() => {})
+        },
+        { lifetime: "interactive" },
+      ),
+      { streams: captureStreams(), tty: false, env: { ...process.env, CI: undefined } },
+    )
+    await vi.advanceTimersByTimeAsync(4 * 60_000)
+    await started
+    await vi.advanceTimersByTimeAsync(29_000)
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1_100)
+    vi.useRealTimers()
+
+    expect(ended).toBe(true)
+    expect(await done).toBe(9)
+  })
+
+  it("leaves an interactive command at a terminal unbounded after its phase, while it may ask the person", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const done = run(
+      ["chats", "list"],
+      definition(
+        async (command) => {
+          environmentOf(command).untilStopped?.()
+          environmentOf(command).endUntilStopped?.()
+          await new Promise((resolve) => setTimeout(resolve, 10 * 60_000))
+        },
+        { lifetime: "interactive" },
+      ),
+      { streams: captureStreams(), tty: true, env: { ...process.env, CI: undefined } },
+    )
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    vi.useRealTimers()
+
+    expect(await done).toBe(0)
+  })
+
   it("ends the command, not a phase, on Ctrl-C after the phase ended", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
     const { done, started } = ending(["chats", "list"], async (_stop, command) => {

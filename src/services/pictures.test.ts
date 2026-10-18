@@ -6,7 +6,7 @@ import type { Messenger } from "../cli/messenger/context.js"
 import type { Message } from "../domain/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { imageModel } from "../images/picture/models.js"
-import type { MessengerAdapter } from "../ports/messenger.js"
+import type { MessengerAdapter, RemoteFile } from "../ports/messenger.js"
 import type { SendGuard } from "../sends/guard.js"
 import { openStore } from "../store/store.js"
 import { storedDeps } from "./deps.js"
@@ -54,7 +54,7 @@ const fakeEmbedder = (): PictureEmbedder & { images: number } => {
   return embedder
 }
 
-const setUp = async ({ pictures = true }: { pictures?: boolean } = {}) => {
+const setUp = async ({ pictures = true, renews = false }: { pictures?: boolean; renews?: boolean } = {}) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "pictures-")), "m.db") })
   await store.chats.saveChats(account, [
     { id: "9", title: "Chat 9", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
@@ -65,18 +65,15 @@ const setUp = async ({ pictures = true }: { pictures?: boolean } = {}) => {
   const adapter = {
     download: async (_chat: string, id: string) => {
       downloads.push(id)
-      return {
-        files: [
-          {
-            kind: "photo",
-            position: 0,
-            bytes: async function* () {
-              yield Uint8Array.of(Number(id) - 1)
-            },
-          },
-        ],
-        skipped: [],
+      const file: RemoteFile = {
+        kind: "photo",
+        position: 0,
+        bytes: async function* () {
+          yield Uint8Array.of(Number(id) - 1)
+          if (renews) file.providerRef = { directPath: `/synthetic/fresh-${id}` }
+        },
       }
+      return { files: [file], skipped: [] }
     },
   } as unknown as MessengerAdapter
   const deps = {
@@ -101,6 +98,16 @@ describe("images embed", () => {
     expect(embedder.images).toBe(3)
     expect(downloads).toEqual(["1", "2", "3"])
     await store.close()
+  })
+
+  it("saves a reference the messenger renewed while a picture was read, on its stored attachment", async () => {
+    const { store, service } = await setUp({ renews: true })
+
+    await service.embed({ limit: 10, pauseMs: 0 })
+    const read = await store.messages.message(account, "2", { chatId: "9" })
+    await store.close()
+
+    expect(read?.attachments.map((one) => one.providerRef)).toEqual([{ directPath: "/synthetic/fresh-2" }])
   })
 
   it("stops at the limit and says more is left; the next run goes on", async () => {

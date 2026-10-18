@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  truncateSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
@@ -12,9 +21,11 @@ import { parseMarkdown } from "../../domain/markdown.js"
 import type { Chat, Member, Message, WindowedMessage } from "../../domain/models.js"
 import { conversation, ENTITIES } from "../../entities/index.js"
 import { sampleMeeting } from "../../meetings/testing/index.js"
-import type { MessengerAdapter, SendOptions } from "../../ports/messenger.js"
+import type { MessengerAdapter, RemoteFile, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { MEETINGS_UNNAMED } from "../../services/search-all-meetings.js"
+import { modelPath, modelsDirectory, vadPath } from "../../speech/install.js"
+import { speechModel, VAD } from "../../speech/models.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { searchRecipes, seedSearchRecipes } from "../../testing/search-recipes.js"
@@ -4230,6 +4241,52 @@ describe("messages transcribe", () => {
 
     expect(code).not.toBe(0)
     expect(stderr.join("")).toContain("chat models audio download parakeet-v3")
+  })
+
+  it("**saves a reference the messenger renewed while --local read the voice message**", async () => {
+    const root = env()
+    const directory = modelsDirectory(root)
+    const model = speechModel("parakeet-v3")
+    mkdirSync(join(directory, model.id), { recursive: true })
+    for (const [path, bytes] of [
+      [vadPath(directory), VAD.bytes] as const,
+      ...model.files.map((file) => [modelPath(directory, model)(file.name), file.bytes] as const),
+    ]) {
+      writeFileSync(path, "")
+      truncateSync(path, bytes)
+    }
+    rememberAccount(app, "default", "500", root)
+    const seeded = await openStore({ env: root })
+    await seeded.messages.saveMessages(
+      { provider: "chat", account: "500" },
+      "7",
+      [{ ...message, id: "5", attachments: [{ kind: "voice", providerRef: { directPath: "/synthetic/expired" } }] }],
+      { via: "history" },
+    )
+    await seeded.close()
+    const tone = new Uint8Array(readFileSync(new URL("../../testing/fixtures/tone.ogg", import.meta.url)))
+    const voice: RemoteFile = {
+      kind: "voice",
+      mime: "audio/ogg",
+      position: 0,
+      async *bytes() {
+        yield tone
+        voice.providerRef = { directPath: "/synthetic/fresh" }
+      },
+    }
+
+    const heard = await call(
+      ["messages", "transcribe", "Book", "5", "--local", "--json"],
+      async () => ({ ...fake, download: async () => ({ files: [voice], skipped: [] }) }),
+      root,
+      { recognizer: () => ({ recognize: () => "heard locally", free: () => {} }) },
+    )
+    const store = await openStore({ env: root })
+    const read = await store.messages.message({ provider: "chat", account: "500" }, "5", { chatId: "7" })
+    await store.close()
+
+    expect(JSON.parse(heard.stdout[0] ?? "").item).toMatchObject({ text: "heard locally", via: "local" })
+    expect(read?.attachments.map((one) => one.providerRef)).toEqual([{ directPath: "/synthetic/fresh" }])
   })
 
   it("**lists a chat with its voice messages heard**, and shows them again later without asking", async () => {
