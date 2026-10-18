@@ -7,6 +7,13 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
     setupFiles: ["@wirecat/cli-base/testing/setup", "src/testing/sandbox.ts"],
     globals: false,
+    // Drizzle from node_modules reads its 290 KB package.json for each of its 72 modules: about 340 ms in every
+    // test file, a quarter of the suite's CPU (2026-10-18). Bundled once, like dist does, it loads in a few ms.
+    deps: {
+      optimizer: {
+        ssr: { enabled: true, include: ["drizzle-orm", "drizzle-orm/sqlite-core", "drizzle-orm/node-sqlite"] },
+      },
+    },
     // Agents run suites side by side on 24 cores; one worker per core ran the machine out of memory (2026-10-11).
     maxWorkers: 4,
     // Several sessions run suites on one machine; at load 70 an ordinary store test takes 5–7 s (2026-10-11).
