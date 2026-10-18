@@ -133,15 +133,16 @@ the counts of pictures not readable and failed when there are any. In machine mo
 ## Permissions
 
 - `images models list` and `images models download` are housekeeping. They need no permission.
-- `images embed` is checked as `conversations.embed`, the same key as `conversations embed`. It writes vectors to
-  the local store only. Unless the profile sets `permissions.conversations.embed` to allow, it is refused, or
+- `images embed` is checked as `conversations.embed`, the same key as `conversations embed`. It reads pictures from
+  the messenger and writes vectors to the local store only. Unless the profile sets `permissions.conversations.embed` to allow, it is refused, or
   asks for confirmation. The error names the `config set permissions.conversations.embed allow` command to use.
 
 ## Privacy
 
 - The model runs on your machine. Picture vectors and image context vectors stay in the local store.
 - `images embed` fetches picture bytes from the messenger, the same download `attachments` uses. It does not
-  send anything out, marks nothing read, and keeps no file: only the vector and a sha256.
+  send anything out, marks nothing read, and keeps no file: only the vector and a sha256. When `serve` holds the
+  messenger's connection, the command runs inside `serve`, which does the downloads.
 - The only network use of level 3 is the one time model download from Hugging Face.
 - Level 1 uses whatever text model `conversations embed` is told to use. The default is local. With
   `--provider`, the chunk texts, which include the image context texts, go to that service. Keep the default

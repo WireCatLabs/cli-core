@@ -19,6 +19,7 @@ import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
 import { recipientsCommand } from "./guard-commands.js"
+import { imagesCommand } from "./images-command.js"
 import { mcpCommand } from "./mcp-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { serveCommand } from "./serve-command.js"
@@ -231,6 +232,35 @@ describe("commands through serve's relay", () => {
 
     expect(code).toBe(0)
     expect(ran).toEqual([undefined])
+    serve.stop()
+    await serve.done
+  })
+
+  it("**runs `images embed` in serve**, whose connection downloads the pictures", async () => {
+    const { env } = setup()
+    const embedded: string[] = []
+    const embedding = (where: string): Messenger => ({
+      ...messengerOver(refuseOwnConnection),
+      services: (base) => ({
+        pictures: {
+          ...base.pictures,
+          embed: async () => {
+            embedded.push(where)
+            return { model: "synthetic", embedded: 0, skipped: 0, failed: 0, more: false }
+          },
+        },
+      }),
+    })
+    const serve = await startServe(env, () => [imagesCommand(embedding("serve"))])
+
+    const code = await run(
+      ["images", "embed", "--json"],
+      { app, commands: () => [imagesCommand(embedding("client"))] },
+      { streams: captureStreams(), tty: false, env },
+    )
+
+    expect(code).toBe(0)
+    expect(embedded).toEqual(["serve"])
     serve.stop()
     await serve.done
   })

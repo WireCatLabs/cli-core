@@ -1,6 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { destroysNothing, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, FETCH } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -17,7 +17,8 @@ export const imagesCommand = (messenger: Messenger): Command => {
 
   destroysNothing(
     annotate(images.command("embed"), {
-      effects: LOCAL_WRITE,
+      effects: FETCH,
+      offline: false,
       examples: [`${messenger.app.command} images embed`, `${messenger.app.command} images embed --limit 500`],
     }),
   )

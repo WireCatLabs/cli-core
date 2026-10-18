@@ -113,7 +113,6 @@ describe("command effects", () => {
       [
         "conversations embed clear",
         "doctor report create",
-        "images embed",
         "mentions rebuild",
         "server restart",
         "server start",

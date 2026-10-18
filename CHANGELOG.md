@@ -34,6 +34,17 @@ shape of this file.
   longer change a duplicate pair the owner decided (`tasks duplicates reject|defer`, `merge`, `unmerge`). `changesStore` is gone from `./cli`; mark a command with `destroysNothing(command)` instead. A
   CLI's own local write must be marked too, or it is refused under the lock (max-cli's `doctor report create`).
 
+### Fixed
+
+- **`stats chats show` no longer reports "nobody joined" for a chat whose joins were never recorded.** For a
+  messenger whose history lives in the local store, a chat with no stored join, leave or other chat event yet now
+  leaves `members` out, sets `complete` to false and says in `missing` (and on stderr in text mode) that joins and
+  leaves are not recorded for this chat yet. Once one event is stored for the chat, a period without joins counts 0
+  as before. Telegram and MAX are unchanged.
+- **`images embed` declares that it downloads pictures through the messenger.** It reads the messenger and writes
+  vectors here (`remote: read`), so it now runs inside `serve` when `serve` holds the connection, as other reads do,
+  and the MCP tool offers no `offline` input. The read-only lock still allows it.
+
 ## 0.336.0 — 18.10.2026
 
 ### Added
