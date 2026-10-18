@@ -132,7 +132,15 @@ const passiveFake = (listening: Partial<{ hangs: boolean }> = {}) => {
       new Promise<void>((resolve, reject) => {
         onEvent = handed
         fail = reject
-        if (!listening.hangs) signal.addEventListener("abort", () => resolve(), { once: true })
+        if (listening.hangs) return
+        signal.addEventListener(
+          "abort",
+          () => {
+            onEvent = undefined
+            resolve()
+          },
+          { once: true },
+        )
       }),
   )
   const adapter = {
@@ -184,6 +192,27 @@ describe("a one-shot command of a messenger whose history is in the store", () =
 
     expect(fake.listens).toHaveBeenCalledOnce()
     expect(fake.listens.mock.calls[0]?.[1].aborted).toBe(true)
+    expect(order).toEqual(["connection closed", "written", "store closed"])
+  })
+
+  it("saves a message the connection hands on while it closes, before the store closes", async () => {
+    const fake = passiveFake()
+    const closingAdapter = {
+      ...fake.adapter,
+      close: async () => {
+        fake.deliver(arrived("3"))
+        order.push("connection closed")
+      },
+    } as unknown as MessengerAdapter
+    const { close } = opened(closingAdapter, "store")
+    await tick()
+
+    const closing = close()
+    await tick()
+    expect(order).toEqual(["connection closed"])
+    finishWrite()
+    await closing
+
     expect(order).toEqual(["connection closed", "written", "store closed"])
   })
 
