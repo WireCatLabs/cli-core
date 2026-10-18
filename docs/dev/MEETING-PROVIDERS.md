@@ -271,3 +271,58 @@ The SDK has normalized synthetic provider proofs. The
 context. Hosts can opt in to the registered answer entity and shared CLI/MCP preparation adapters
 from `./cli`; see that guide for mounting and resource ownership. Broad calendar discovery and
 reviewed findings intake remain separate work. Core does not mount provider commands automatically.
+
+## Reverse project suggestions from supplied evidence
+
+`createMeetingProjectCandidateReader` from `@wirecat/cli-core/services` captures a provider/account,
+a numeric store account and a narrow `vocabulary` reader. Its input and output types are exported
+from `/meetings` and `/services`. It suggests existing global projects from evidence already selected
+by the host. It does not search all meeting history, infer membership or write a project link.
+
+```ts
+import { createMeetingProjectCandidateReader } from "@wirecat/cli-core/services"
+
+const suggest = createMeetingProjectCandidateReader(
+  { provider: "example-calendar", account: "AliceExample" },
+  selectedAccountId,
+  { vocabulary: store.knowledge },
+)
+const candidates = await suggest({
+  reference: `meeting:${selectedAccountId}/${meetingId}`,
+  title: "Harbour Example planning",
+  cues: evidence.items.map(({ reference, fingerprint, text, revision }) => ({
+    reference, fingerprint, text, revision,
+  })),
+})
+```
+
+The host authorizes and hydrates that source before calling the SDK. Supplied cue fingerprints and
+revision markers are retained, not revalidated against stored transcripts. Evidence must belong
+to the selected account and parent meeting. The reader detaches input before asynchronous I/O and
+never broadens selection. No input changes the captured provider/account or vocabulary grant.
+
+Defaults/hard maxima: one project vocabulary call, 128 projects, 64 KiB of catalog names/keys/aliases,
+ten candidates, 100 supplied cues, 4,096 characters per cue, 8,192 per title and 64 KiB of supplied
+text in total. References and fingerprints have separate fixed bounds. `limit`, `maxProjects` and
+`maxVocabularyReadBytes` can lower these bounds; `bytes` defaults to 16 KiB and takes 1–64 KiB for
+the serialized SDK packet. Catalog over-budget errors remain explicit refusals; they never become
+an empty match result. Select a known project for existing project-evidence search when the
+catalog exceeds the bounded grant; this SDK does not silently sample the first projects.
+
+Matching uses NFKC, lowercase and collapsed whitespace, preserving accents and literal punctuation.
+Unicode letters, numbers, combining marks and underscores define word boundaries. This is neither
+stemming nor semantic similarity: `año` differs from `ano`, and `HAR` does not match `HARBOR`.
+No model or download is needed. Candidates use stable numeric project-ID order, not confidence
+ranking. The same normalized term belonging to multiple projects stays ambiguous, even when an
+output limit hides one. Repeated cue references/normalized aliases do not multiply support;
+conflicting data for the same cue reference is refused.
+
+Each candidate retains its canonical project reference, matched term/alias ID and separate
+`metadata-title` hints or transcript references/fingerprints/revisions. At most twenty matches
+per project are returned, with `omittedMatches` counting additional matches. `association` and
+coverage retain unconfirmed status and unknown archive completeness. Input and vocabulary
+fingerprints let a caller detect changed evidence or catalog versions; no continuation snapshot
+or accepted finding is implied. Output trimming removes whole candidates, retaining mandatory
+coverage, total candidates, `hasMore` and `outputLimited`; increase bytes or narrow explicit input
+rather than treating omitted projects as absent. If mandatory provenance cannot fit, the reader
+refuses the byte limit. This SDK is not added to preparation or exposed as a CLI/MCP tool by itself.
