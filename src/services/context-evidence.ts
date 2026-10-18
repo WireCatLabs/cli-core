@@ -63,6 +63,7 @@ export type {
   ContextEvidencePage,
   ContextEvidenceReader,
   ContextEvidenceRequest,
+  ContextIndex,
   ContextSource,
 } from "../context/evidence.js"
 export type { ContextReadLimits, ContextReadUsage } from "../context/read-budget.js"

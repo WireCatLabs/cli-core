@@ -167,3 +167,48 @@ it.each([
   ).rejects.toMatchObject({ details: { param } })
   expect(read).not.toHaveBeenCalled()
 })
+
+it("brings the mail and document index up to date before reading, unless asked to read it as it is", async () => {
+  const f = await fixture()
+  const pend = () => {
+    f.db
+      .prepare("INSERT OR REPLACE INTO document_index_pending(indexable_type,id) VALUES('document',?)")
+      .run(Number(f.doc.id))
+  }
+  pend()
+  const asIs = await gatherProjectEvidence(
+    { evidence: f.port, index: f.store.contextIndex },
+    { ...f.request, index: "as-is" },
+  )
+  expect(asIs.index).toEqual({ state: "as-is", mail: 0, documents: 0, code: null })
+  expect(asIs.units.filter((u) => u.source === 2).every((u) => u.issue === "index-pending")).toBe(true)
+  expect(asIs.items.some((i) => i.kind === "document")).toBe(false)
+
+  const updated = await gatherProjectEvidence({ evidence: f.port, index: f.store.contextIndex }, f.request)
+  expect(updated.index).toMatchObject({ state: "updated", code: null })
+  expect(updated.units.every((u) => u.issue === null)).toBe(true)
+  expect(updated.items.some((i) => i.kind === "document")).toBe(true)
+
+  pend()
+  const hostless = await gatherProjectEvidence({ evidence: f.port }, f.request)
+  expect(hostless.index.state).toBe("unavailable")
+  const failing = await gatherProjectEvidence(
+    { evidence: f.port, index: { catchUp: () => Promise.reject(new CliError("permission_error", "read-only store")) } },
+    f.request,
+  )
+  expect(failing.index).toMatchObject({ state: "failed", code: "permission_error" })
+})
+
+it("searches the project key as its own lane and lets a window start without an end", async () => {
+  const f = await fixture()
+  const result = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, project: { name: "Zeppelin", key: "Harbour" }, after: 0, before: undefined, asOf: 10000 },
+  )
+  expect(result.lanes[1]).toEqual({ id: "l2", kinds: ["key"], query: "Harbour", people: [] })
+  expect(result.items.every((i) => i.lanes.join() === "l2" && i.context === "project")).toBe(true)
+  expect(result.window).toMatchObject({ after: 0, before: 10000, basis: "explicit" })
+  await expect(
+    gatherProjectEvidence({ evidence: f.port }, { ...f.request, after: undefined, before: 10000 }),
+  ).rejects.toMatchObject({ details: { param: "after" } })
+})

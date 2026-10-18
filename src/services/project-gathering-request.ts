@@ -4,7 +4,7 @@ import { type ContextSource, contextSource } from "../context/evidence.js"
 import { contextSourceKey } from "../context/evidence-response.js"
 
 export interface ProjectGatheringRequest {
-  project: { name: string; background?: string; aliases?: string[] }
+  project: { name: string; key?: string; background?: string; aliases?: string[] }
   keywords?: string[]
   people?: { name: string; reference?: string }[]
   sources: ContextSource[]
@@ -14,6 +14,7 @@ export interface ProjectGatheringRequest {
   before?: number
   asOf?: number
   fetch?: "none" | "before-read"
+  index?: "update" | "as-is"
   budgets?: ProjectGatheringBudgets
   runKey?: string
   checkpoint?: string
@@ -26,7 +27,7 @@ export interface ProjectGatheringBudgets {
   maxElapsedMs?: number
   maxItems?: number
 }
-export type ProjectLaneKind = "project" | "alias" | "keyword" | "person"
+export type ProjectLaneKind = "project" | "key" | "alias" | "keyword" | "person"
 export interface ProjectLane {
   id: string
   kinds: ProjectLaneKind[]
@@ -108,6 +109,7 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
       "before",
       "asOf",
       "fetch",
+      "index",
       "budgets",
       "runKey",
       "checkpoint",
@@ -116,9 +118,10 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
     "",
   )
   if (!input.project || typeof input.project !== "object") fail("project needs a name", "project")
-  known(input.project, ["name", "background", "aliases"], "project.")
+  known(input.project, ["name", "key", "background", "aliases"], "project.")
   const project = {
     name: text(input.project.name, "project.name", 512),
+    key: input.project.key === undefined ? null : text(input.project.key, "project.key", 64),
     background:
       input.project.background === undefined ? null : text(input.project.background, "project.background", 8192),
     aliases: list(input.project.aliases, "project.aliases", LIMITS.lanes).map((a, i) =>
@@ -157,23 +160,25 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
     if (person && !found.people.includes(person)) found.people.push(person)
   }
   lane("project", laneQuery(project.name, "project.name"))
+  if (project.key) lane("key", laneQuery(project.key, "project.key"))
   for (const [i, a] of project.aliases.entries()) lane("alias", laneQuery(a, `project.aliases.${i}`))
   for (const k of keywords) lane("keyword", k)
   for (const p of people) lane("person", p.name, p.reference ?? p.name)
   if (lanes.length > LIMITS.lanes) fail(`at most ${LIMITS.lanes} distinct search lanes`, "keywords")
 
   const fetch = input.fetch ?? "none"
+  const index = input.index ?? "update"
+  if (index !== "update" && index !== "as-is") fail("index must be update or as-is", "index")
   if (fetch !== "none" && fetch !== "before-read") fail("fetch must be none or before-read", "fetch")
   const explicit = input.after !== undefined || input.before !== undefined
   if (explicit && input.lookbackDays !== undefined) fail("give lookbackDays or after/before, not both", "lookbackDays")
-  if (explicit && (input.after === undefined || input.before === undefined))
-    fail("an explicit window needs both after and before", input.after === undefined ? "after" : "before")
+  if (explicit && input.after === undefined) fail("an explicit window needs after; before defaults to asOf", "after")
   const asOf = input.asOf === undefined ? null : whole(input.asOf, "asOf", 1, MAX_TIME)
   const lookbackDays = explicit ? null : whole(input.lookbackDays ?? 60, "lookbackDays", 1, LIMITS.lookbackDays)
   const window = explicit
     ? (() => {
         const after = whole(input.after, "after", 0, MAX_TIME)
-        const before = whole(input.before, "before", after + 1, MAX_TIME)
+        const before = whole(input.before ?? asOf ?? now, "before", after + 1, MAX_TIME)
         if (before - after > LIMITS.lookbackDays * DAY)
           fail(`window must not exceed ${LIMITS.lookbackDays} days`, "after")
         return { after, before, asOf: asOf ?? before }
@@ -202,7 +207,7 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
         sources.map(contextSourceKey),
         input.scope,
         lookbackDays,
-        explicit ? [window.after, window.before] : null,
+        explicit ? [window.after, input.before ?? null] : null,
         asOf,
         fetch,
       ]),
@@ -221,6 +226,7 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
     lookbackDays,
     window,
     fetch,
+    index,
     budgets,
     fingerprint,
     runKey,

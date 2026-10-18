@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ContextEvidenceItem, ContextEvidenceReader, ContextSource } from "../context/evidence.js"
+import type { ContextEvidenceItem, ContextEvidenceReader, ContextIndex, ContextSource } from "../context/evidence.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
 import {
@@ -25,7 +25,14 @@ export interface ProjectSourceFetcher {
 export interface ProjectGatheringPorts {
   evidence: ContextEvidenceReader
   fetcher?: ProjectSourceFetcher
+  index?: ContextIndex
   now?: () => number
+}
+export interface ProjectIndexCatchUp {
+  state: "updated" | "as-is" | "unavailable" | "failed"
+  mail: number
+  documents: number
+  code: string | null
 }
 export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   kind: ContextSource["kind"]
@@ -81,6 +88,24 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
         fetched[index] = { state: "failed", history: null, code: error.code }
       }
     }
+
+  const indexed: ProjectIndexCatchUp = { state: "as-is", mail: 0, documents: 0, code: null }
+  const kinds = [...new Set(plan.sources.map((source) => source.kind))].filter((kind) => kind !== "message")
+  if (plan.index === "update" && kinds.length) {
+    signal?.throwIfAborted()
+    if (!ports.index || typeof ports.index.catchUp !== "function") indexed.state = "unavailable"
+    else
+      try {
+        const done = await ports.index.catchUp({ kinds, signal })
+        if (!Number.isSafeInteger(done?.mail) || !Number.isSafeInteger(done?.documents))
+          throw new CliError("invalid_response", "index catch-up returned invalid counts")
+        Object.assign(indexed, { state: "updated", mail: done.mail, documents: done.documents })
+      } catch (error) {
+        signal?.throwIfAborted()
+        if (!(error instanceof CliError)) throw error
+        Object.assign(indexed, { state: "failed", code: error.code })
+      }
+  }
 
   const usage = { reads: 0, readBytes: 0, items: 0 }
   const items: ProjectEvidenceItem[] = []
@@ -213,6 +238,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     scope: { origin: plan.scope, sources: plan.sources },
     lanes: plan.lanes,
     fetch: fetched.map((f, index) => ({ source: index, ...f })),
+    index: indexed,
     units: units.map((unit, index) => ({
       lane: unit.lane.id,
       source: unit.sourceIndex,

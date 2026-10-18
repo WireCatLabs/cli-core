@@ -21,6 +21,14 @@ shape of this file.
 - **A next step in `--json` output and in an error carries `line`, the whole command with the profile**:
   `"line": "max personal mcp config"` beside `"command": "mcp config"`. A copied `command` alone failed with "name a
   profile". MCP answers leave it out; `command` is unchanged.
+- **`gatherProjectEvidence` brings the mail and document index up to date before reading** through the new
+  optional `MessageStore.contextIndex` port (`ContextIndex.catchUp`), the same fills a mail search and the notes
+  search run. `index: "as-is"` skips it; the result's `index` says what happened. On a store just synced, new
+  mail and imported documents were missed before.
+- **The project key is a search lane of its own** (`project.key`, lane kind `key`), and an explicit window may
+  give `after` alone: `before` is `asOf`, frozen with the run.
+- **`ProjectFetchState`, `ProjectUnitState`, `ProjectIndexCatchUp` and `ContextIndex` are exported** from
+  `@wirecat/cli-core/services`, so a host can name the result type.
 - **`searchAll(…, { app, hintCommand })`**: the tool a missing-model hint names, apart from `app.command`. memo passes
   tg's identity for `group:` lists but has no `models` command; `hintCommand: null` names the tools that have one
   (tg, max or wa) instead of `tg models text download`. `searchAllIncludingMeetings` and `searchAllWithMeetings`

@@ -5,6 +5,7 @@ export type {
   ContextEvidencePage,
   ContextEvidenceReader,
   ContextEvidenceRequest,
+  ContextIndex,
   ContextReadLimits,
   ContextReadUsage,
   ContextSource,
@@ -22,14 +23,17 @@ export type {
   ProjectGathering,
   ProjectGatheringPorts,
   ProjectGatheringStop,
+  ProjectIndexCatchUp,
   ProjectSourceFetcher,
 } from "./project-gathering.js"
 export { gatherProjectEvidence } from "./project-gathering.js"
 export type {
+  ProjectFetchState,
   ProjectGatheringBudgets,
   ProjectGatheringRequest,
   ProjectLane,
   ProjectLaneKind,
+  ProjectUnitState,
 } from "./project-gathering-request.js"
 
 import { type AccountService, accountService } from "./account.js"

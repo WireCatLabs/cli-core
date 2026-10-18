@@ -2,13 +2,17 @@ import { CliError } from "@wirecat/cli-base"
 import {
   type ContextEvidencePage,
   type ContextEvidenceReader,
+  type ContextIndex,
   contextCursorScope,
   contextEvidenceRequest,
 } from "../../context/evidence.js"
 import { formatLocator } from "../../domain/locator.js"
+import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { SqlValue } from "../driver.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import { contextDocumentTime, contextDocumentTimeKind, contextDocumentUrl } from "./context-document-source.js"
+import { drainEmailIndex } from "./email-index.js"
+import { drainNoteIndex } from "./note-index.js"
 import type { StoreContext } from "./open.js"
 import { read } from "./transaction.js"
 
@@ -173,5 +177,19 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
         })),
       }
     })
+  },
+})
+
+/** The same fills a mail search and the notes search run before reading; a message is indexed when it is saved. */
+export const contextIndexOver = (
+  { database }: Pick<StoreContext, "database">,
+  stemmerFor: (stemmers: Stemmers) => Stemmer,
+): ContextIndex => ({
+  async catchUp({ kinds, signal }) {
+    signal?.throwIfAborted()
+    const mail = kinds.includes("mail") ? drainEmailIndex(database, stemmerFor) : 0
+    signal?.throwIfAborted()
+    const documents = kinds.includes("document") ? drainNoteIndex(database, stemmerFor) : 0
+    return { mail, documents }
   },
 })
