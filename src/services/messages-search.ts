@@ -98,7 +98,7 @@ export const prepareLucene = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
-  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">>,
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">> & { messageStars?: boolean },
 ): Promise<Prepared> => {
   if (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > QUERY_PAGE_LIMIT)
     searchError("query.invalid-limit", { start: 0, end: 0 }, `use 1–${QUERY_PAGE_LIMIT} results`)
@@ -167,7 +167,9 @@ export const prepareLucene = async (
   const scopeAccounts = accounts.map(({ provider, account }) => ({ provider, account }))
   const chatLookup = scopeAccounts.some(({ provider }) => provider === MAIL) ? withMailThreads(store) : store
   const mailField = leaves.find(
-    ({ field, value }) => MAIL_FIELDS.has(field) && !(field === "is" && value.toLowerCase() === "starred"),
+    ({ field, value }) =>
+      MAIL_FIELDS.has(field) &&
+      !(field === "is" && value.toLowerCase() === "starred" && messenger.messageStars === true),
   )
   if (mailField && !scopeAccounts.some(({ provider }) => provider === MAIL))
     searchError(

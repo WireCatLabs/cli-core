@@ -114,13 +114,24 @@ describe("starred messages", () => {
     expect(JSON.parse(stdout).items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))).toEqual(["3", "1"])
   })
 
-  it("is no field of a messenger without stars", async () => {
+  it("is no field of a messenger without stars, in a list or a search", async () => {
     const env = await sandbox()
 
-    const { code, stderr } = await call(["messages", "list", "7", "starred:true", "--json"], env, { history: "store" })
+    const listed = await call(["messages", "list", "7", "starred:true", "--json"], env, { history: "store" })
+    const searched = await call(["search", "messages", "is:starred", "--json"], env, { history: "store" })
+
+    expect(listed.code).toBe(2)
+    expect(listed.stderr).toContain("starred")
+    expect(searched.code).toBe(2)
+    expect(searched.stderr).toContain("is: is a mail field")
+  })
+
+  it("takes only true or false", async () => {
+    const env = await sandbox()
+
+    const { code } = await call(["messages", "list", "7", "starred:yes", "--json"], env, STARS)
 
     expect(code).toBe(2)
-    expect(stderr).toContain("starred")
   })
 
   it("refuses while the list reads from the messenger, which filters nothing", async () => {
