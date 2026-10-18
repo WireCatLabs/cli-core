@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`registerCommands(server, prefix, commands)` and the `McpCommand` type** (`@wirecat/cli-core/mcp`): the three
+  tools `<prefix>_tools_search`, `<prefix>_read` and `<prefix>_write` that tg and max serve in place of one tool per
+  command. A CLI without the messenger `mcpCommand`, such as drive, can now serve its own commands the same way.
+
 ## 0.343.0 — 18.10.2026
 
 ### Added
