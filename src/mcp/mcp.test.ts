@@ -1535,11 +1535,13 @@ describe("the MCP server", () => {
     }
   })
 
-  it("under the read-only lock refuses the tools that delete or overwrite what the owner saved, and changes nothing", async () => {
-    const { call } = await connect(scripted(), { extraEnv: { CHAT_READ_ONLY: "1" } })
-    await call("chats list")
-    const created = await call("searches create", { name: "daily", text: "cat" })
+  it("under the read-only lock refuses the tools that write over or delete what the owner saved, and changes nothing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "mcp-"))
+    const unlocked = await connect(scripted(), { root })
+    await unlocked.call("chats list")
+    const created = await unlocked.call("searches create", { name: "daily", text: "cat" })
     expect(created.isError, JSON.stringify(created.body)).toBe(false)
+    const { call } = await connect(scripted(), { root, extraEnv: { CHAT_READ_ONLY: "1" } })
     const refused = "this process is read-only (CHAT_READ_ONLY) — it cannot change the message store"
 
     for (const [command, args] of [
@@ -1549,6 +1551,8 @@ describe("the MCP server", () => {
       ["contacts notes remove", { person: "Alice", id: "1" }],
       ["contacts alias rm", { person: "Alice" }],
       ["tags remove", { chat: "7", tags: ["work"] }],
+      ["searches create", { name: "daily", text: "dog", replace: true }],
+      ["contacts alias set", { person: "Alice", alias: "Al" }],
     ] as const) {
       const { isError, body } = await call(command, args)
       expect([command, isError, body.error?.code, body.error?.message]).toEqual([
@@ -1558,7 +1562,7 @@ describe("the MCP server", () => {
         refused,
       ])
     }
-    expect((await call("searches list")).body.items).toMatchObject([{ name: "daily" }])
+    expect((await call("searches list")).body.items).toMatchObject([{ name: "daily", params: { text: "cat" } }])
   })
 
   it("under the read-only lock refuses search_conversations with a remote embedder, before the query leaves", async () => {

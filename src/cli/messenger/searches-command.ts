@@ -33,7 +33,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
     "saved searches and the history of search messages and stats messages show, kept in the local store; --saved runs one",
   )
 
-  annotate(searches.command("create"), { effects: LOCAL_WRITE, output: { entity: "saved_search" } })
+  changesStore(annotate(searches.command("create"), { effects: LOCAL_WRITE, output: { entity: "saved_search" } }))
     .description("save a search under a name without running it; search messages --saved <name> runs it")
     .argument("<name>", "up to 64 letters a–z, digits and hyphens, not only digits")
     .argument("[query...]", "the query, as for search messages; none matches every stored message")

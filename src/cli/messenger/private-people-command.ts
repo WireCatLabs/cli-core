@@ -18,7 +18,7 @@ const everyNote = (command: string, items: ContactNoteItem[]) =>
 
 export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const alias = new Command("alias").description("a private local display name in the selected account")
-  annotate(alias.command("set"), { effects: LOCAL_WRITE })
+  changesStore(annotate(alias.command("set"), { effects: LOCAL_WRITE }))
     .argument("<person>")
     .argument("<alias>")
     .action(async function (this: Command, person: string, value: string) {

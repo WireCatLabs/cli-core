@@ -42,6 +42,9 @@ shape of this file.
   `searches clear`, `contacts notes edit`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse
   with `permission_error`, and so do their MCP tools, which deleted or overwrote under the lock before. Clearing what
   the store can rebuild (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
+- **The read-only lock also stops saving a search or an alias.** With `<PREFIX>_READ_ONLY` set, `searches create`
+  and `contacts alias set` refuse with `permission_error`, and so do their MCP tools. Before, they could write over a
+  saved search (`--replace`) or an alias the owner set.
 - **Model downloads no longer go through a running `serve`.** `models text download`, `models audio download` and
   `images models download` fetch from a model host, not the messenger, so they always run in the calling process.
 - **A re-keyed chat keeps its place in the recipient list.** When a messenger moves a chat to a new id, the
@@ -64,6 +67,10 @@ shape of this file.
   way. Both commands always run in the calling process, never through a running `serve`. A CLI that lists its local
   writes, or refuses only local writes for a read-only `messages` profile, must move `conversations build` to its
   remote writes.
+- **Under the read-only lock an agent can no longer save a new search or set a new alias.** `searches create` and
+  `contacts alias set` (and the MCP tools `searches_create`, `contacts_alias_set`) refuse with `permission_error`
+  even when nothing is overwritten. An agent started with `<PREFIX>_READ_ONLY` that saved searches must save them
+  in an unlocked process.
 - **`isOtherService` is now `isOtherServiceCall`**, named like `isLogin` and `isStoreChange`. No consumer imports it.
 
 ## 0.335.0 — 18.10.2026

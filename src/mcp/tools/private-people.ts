@@ -12,6 +12,7 @@ const LOCAL = { readOnlyHint: false, openWorldHint: false }
 
 export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool> => ({
   contacts_alias_set: tool({
+    changesStore: true,
     title: "Set a private contact alias",
     description: "Set a display name only in this account's local store; never rename a messenger contact.",
     input: v.object({ person, alias: v.pipe(v.string(), v.minLength(1), v.maxLength(200)) }),
