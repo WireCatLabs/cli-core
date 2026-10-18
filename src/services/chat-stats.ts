@@ -68,6 +68,11 @@ export interface ChatStats {
   memberCounts?: MemberCount[]
   /** Absent where the messenger was not asked: `--offline`, or one that does not say who joined. */
   members?: MemberChanges
+  /**
+   * The messenger's history lives in the store and the store holds no chat event for this chat yet, so `members` is
+   * left out rather than counted as nobody joining.
+   */
+  membersUnrecorded?: true
   series?: StatsRow[]
 }
 

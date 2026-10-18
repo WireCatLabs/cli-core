@@ -513,22 +513,28 @@ export const chatStatsAnswer = (stats: ChatStats, account: AccountKey): ItemBody
       }),
     series: series?.map((row) => defined({ ...row })),
   })
-  return itemOf(
-    item,
-    completeness.state === "complete"
+  const missing = [
+    ...(completeness.state === "complete"
+      ? []
+      : [
+          {
+            field: "messages",
+            why: "the store does not hold this chat whole, so these are lower bounds",
+            ...(fetch === undefined ? {} : { step: "messages.sync" }),
+          },
+        ]),
+    ...(stats.membersUnrecorded ? [{ field: "members", why: MEMBERS_UNRECORDED }] : []),
+  ]
+  return itemOf(item, {
+    missing,
+    ...(completeness.state === "complete" || fetch === undefined
       ? {}
-      : {
-          missing: [
-            {
-              field: "messages",
-              why: "the store does not hold this chat whole, so these are lower bounds",
-              ...(fetch === undefined ? {} : { step: "messages.sync" }),
-            },
-          ],
-          ...(fetch === undefined ? {} : { next: [nextStep("messages.sync", { args: { chat: chatId } })] }),
-        },
-  )
+      : { next: [nextStep("messages.sync", { args: { chat: chatId } })] }),
+  })
 }
+
+/** Said where the store has kept no join, leave or other chat event for the chat: a 0 would read as nobody joined. */
+export const MEMBERS_UNRECORDED = "joins and leaves are not recorded for this chat yet, so they are not counted"
 
 /** `stats tasks show`, CLI and MCP alike. */
 export const taskStatsAnswer = (rows: GroupStats[], account: AccountKey): ItemBody<Of<"task_stats">> =>

@@ -59,7 +59,8 @@ const chatTools = (messenger: Messenger): Record<string, AnyTool> => {
         "senders, replies, threads, reactions, views, forwards and comments where the messenger gave them, top_posts, and " +
         "questions { asked, answered, median_minutes_to_answer }. `by` adds a series row per day or week. Reads the local " +
         (messenger.history === "store"
-          ? "store only, joins and leaves included. "
+          ? "store only, joins and leaves included; until the store holds one chat event for the chat, members is " +
+            "left out and missing says they are not recorded yet. "
           : "store only, so joins and leaves are not in it — `chats events` has them. ") +
         "complete is false when the store does not hold the chat whole: then every number is a lower bound, and next " +
         "names the sync that fills it.",

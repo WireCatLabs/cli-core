@@ -186,12 +186,16 @@ describe("stats chats show", () => {
     const onDemand = await answered({ history: "store", historyOnDemand: true })
     const fetched = await answered({})
 
-    expect(pushed.missing).toEqual([{ field: "messages", why: expect.stringContaining("lower bounds") }])
+    expect(pushed.missing).toEqual([
+      { field: "messages", why: expect.stringContaining("lower bounds") },
+      { field: "members", why: expect.stringContaining("not recorded") },
+    ])
     expect(pushed).not.toHaveProperty("next")
     for (const body of [onDemand, fetched]) {
-      expect(body.missing).toEqual([expect.objectContaining({ step: "messages.sync" })])
+      expect(body.missing?.[0]).toEqual(expect.objectContaining({ step: "messages.sync" }))
       expect(body.next).toEqual([expect.objectContaining({ step: "messages.sync", args: { chat: "7" } })])
     }
+    expect(fetched.missing).toHaveLength(1)
   })
 
   it("says the counts are lower bounds when the messenger stopped reading joins early", async () => {
