@@ -332,6 +332,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--order` | `<recent\|name>` | choice | the order of a list: most recent first, or by name |  |
 | `--score` | `<preset>` | choice | the named ranking score preset |  |
 | `--weights` | `<json>` | string | the ranking component weights, all of them |  |
+| `--meeting-inventory` |  | switch | expose read-only discovery of candidate series in the selected meeting account |  |
 | `--meeting-project-candidates` |  | switch | expose read-only project suggestions from selected meeting evidence and the global project vocabulary |  |
 | `--meeting-preparation` |  | switch | expose meeting preparation tools, including their remote schedule reads |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |

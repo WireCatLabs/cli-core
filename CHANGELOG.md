@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- `conversations embed`, `conversations build`, `search conversations` and the model downloads say
+  `reaches: "other_service"` in `commands --json`, so a CLI's generated `docs/commands.md` labels them "Sends text to
+  an outside service" or "Reads from an outside service" instead of "Changes something in <messenger>" — they send
+  chat text to an embedding or analysis provider, or fetch a model, and never write to the messenger. The label needs
+  cli-base 0.44.3 (the dev pin now); on 0.44.0–0.44.2 the field is ignored and nothing breaks. Run `pnpm generate`
+  after adopting to regenerate `docs/commands.md`.
+
 ## 0.340.0 — 18.10.2026
 
 ### Added
@@ -229,8 +238,6 @@ shape of this file.
 - **`account privacy show`, `account privacy set`, `chats mute` and `chats unmute` have examples in their help.**
 
 ### Fixed
-
-- `conversations embed`, `conversations build`, `search conversations` and the model downloads say `reaches: "other_service"` in `commands --json`, so a CLI's generated `docs/commands.md` labels them "Sends text to an outside service" or "Reads from an outside service" instead of "Changes something in <messenger>" — they send chat text to an embedding or analysis provider, or fetch a model, and never write to the messenger. Run `pnpm generate` after adopting. Needs the cli-base release that adds `reaches`.
 
 - **`chats.unmute: readonly` now stops `chats unmute`.** The unmute was checked under `chats.mute`, so its own key
   was ignored. It is checked under `chats.unmute` now and journaled as `chat-unmute`. A config that names only
