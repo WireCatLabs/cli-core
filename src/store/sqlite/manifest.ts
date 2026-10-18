@@ -45,6 +45,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261018024850_version-23-chat-events", version: 23, minCompatible: 1 },
   { name: "20261018061512_version-24-message-stars", version: 24, minCompatible: 1 },
   { name: "20261018063952_version-24-message-stars-index", version: 24, minCompatible: 1 },
+  { name: "20261018165611_version-25-reviewed-tag-consolidation", version: 25, minCompatible: 25 },
+  { name: "20261018165650_version-25-resolved-tag-view", version: 25, minCompatible: 25 },
 ]
 
 export const generatedMigrations = (
@@ -53,9 +55,13 @@ export const generatedMigrations = (
 ): Migration[] => {
   const migrations: Migration[] = []
   for (const entry of manifest) {
+    if (!Number.isSafeInteger(entry.minCompatible) || entry.minCompatible < 1 || entry.minCompatible > entry.version)
+      throw new Error("each migration requires an explicit valid minCompatible")
     const found = generated.find(({ name }) => name === entry.name)
     if (!found) throw new Error(`migration ${entry.name} is in the manifest and not in the bundle — run pnpm db:bundle`)
     const last = migrations.at(-1)
+    if (last && last.version !== entry.version && entry.minCompatible < last.minCompatible)
+      throw new Error("migration minCompatible cannot decrease")
     if (last?.version !== entry.version) {
       migrations.push({ version: entry.version, minCompatible: entry.minCompatible, statements: [...found.statements] })
     } else if (last.minCompatible !== entry.minCompatible) {

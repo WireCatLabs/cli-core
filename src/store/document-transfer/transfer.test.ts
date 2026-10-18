@@ -556,3 +556,48 @@ describe("provider-neutral document annotation transfer", () => {
     expect(existsSync(missing)).toBe(false)
   })
 })
+
+it("refuses consolidated source or destination labels before copying or changing either store", async () => {
+  const consolidate = async (store: Awaited<ReturnType<typeof open>>, sourceId: string, survivorId: string) => {
+    const vocabulary = await store.knowledge.vocabulary()
+    const options = { sourceId, survivorId, expectedVocabularyFingerprint: vocabulary.fingerprint }
+    const preview = await store.knowledge.previewTagConsolidation(options)
+    await store.knowledge.applyTagConsolidation({
+      ...options,
+      expectedPreviewFingerprint: preview.previewFingerprint,
+      by: "owner",
+      idempotencyKey: "transfer-boundary",
+    })
+  }
+  const sourceCase = await seed()
+  const source = await open(sourceCase.source)
+  const entries = (await source.knowledge.vocabulary()).entries
+  const left = entries.find((row) => row.name === "transfer-proof")
+  const right = entries.find((row) => row.name === "retained-note")
+  if (!left || !right) throw Error("synthetic labels missing")
+  await consolidate(source, left.id, right.id)
+  const before = readFileSync(sourceCase.source)
+  const blocked = await previewDocumentTransfer(sourceCase.options)
+  expect(blocked.ready).toBe(false)
+  expect(blocked.conflicts.some((value) => value.includes("consolidated group"))).toBe(true)
+  await expect(
+    applyDocumentTransfer({ ...sourceCase.options, expected_fingerprint: blocked.fingerprint }),
+  ).rejects.toMatchObject({ code: "configuration_error" })
+  expect(readFileSync(sourceCase.source)).toEqual(before)
+  expect(existsSync(sourceCase.destination)).toBe(false)
+  const targetCase = await seed()
+  const destination = await open(targetCase.destination)
+  const first = await destination.knowledge.createTag("transfer-proof")
+  const second = await destination.knowledge.createTag("survivor")
+  await consolidate(destination, String(first.id), String(second.id))
+  const sourceBefore = readFileSync(targetCase.source),
+    destinationBefore = readFileSync(targetCase.destination)
+  const targetBlocked = await previewDocumentTransfer(targetCase.options)
+  expect(targetBlocked.ready).toBe(false)
+  expect(targetBlocked.conflicts.some((value) => value.includes("consolidated group"))).toBe(true)
+  await expect(
+    applyDocumentTransfer({ ...targetCase.options, expected_fingerprint: targetBlocked.fingerprint }),
+  ).rejects.toMatchObject({ code: "configuration_error" })
+  expect(readFileSync(targetCase.source)).toEqual(sourceBefore)
+  expect(readFileSync(targetCase.destination)).toEqual(destinationBefore)
+})

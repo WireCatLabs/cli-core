@@ -27,7 +27,7 @@ export const ENTITY_TABLES = {
   person: "persons",
   place: "places",
   project: "projects",
-  tag: "tags",
+  tag: "canonical_tags",
   task: "tasks",
 } as const
 

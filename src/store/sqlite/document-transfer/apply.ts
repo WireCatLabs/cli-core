@@ -134,7 +134,7 @@ export const applyTransfer = (
       const tag = canonicalTagNamed(database, String(tagging.tag_name))
       const tagId = tag
         ? Number(tag.id)
-        : insert(database, "tags", "name kind created_at updated_at", {
+        : insert(database, "canonical_tags", "name kind created_at updated_at", {
             name: tagging.tag_name ?? null,
             kind: tagging.tag_kind ?? null,
             created_at: tagging.created_at ?? null,

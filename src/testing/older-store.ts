@@ -2,6 +2,7 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  25: "DROP VIEW resolved_tags; DROP TABLE tag_consolidations; DROP TABLE tag_redirects; DROP INDEX canonical_auto_tag_claims_by_tag_id; CREATE INDEX auto_tag_claims_by_tag_id ON canonical_auto_tag_claims(tag_id); ALTER TABLE canonical_auto_tag_claims RENAME TO auto_tag_claims; ALTER TABLE canonical_tags RENAME TO tags;",
   24: "DROP INDEX messages_starred_by_time; ALTER TABLE messages DROP COLUMN starred;",
   23: "DROP TABLE chat_event_people; DROP TABLE chat_events;",
   22: "ALTER TABLE account_identities DROP COLUMN mail_demoted;",

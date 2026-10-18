@@ -7,6 +7,23 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Reviewed tag consolidation (store version 25).** Tag and automatic-claim tables move behind a
+  structural compatibility boundary with `minCompatible: 25`; older SDKs must be upgraded together
+  before using the migrated shared file. Later migrations must preserve that minimum. Activation
+  remains gated on the coordinated breaking package policy and consumer rollout. Consolidated tag
+  groups refuse document annotation transfer before copying; existing destinations need current
+  schema maintenance for a read-only preview.
+
+### Added
+
+- `knowledge.applyTagConsolidation` applies an owner-reviewed complete preview atomically, retains
+  independent assignment/claim/alias/link provenance, follows inherited names in reads and search,
+  and returns a text-free idempotent receipt. Label removal respects requested origin scope across
+  retained members. [The consolidation guide](docs/dev/TAG-CONSOLIDATION.md) describes review,
+  compatibility and the explicit transfer limitation.
+
 ## 0.343.0 — 18.10.2026
 
 ### Added

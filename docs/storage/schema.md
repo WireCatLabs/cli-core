@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-91 tables, 19 full-text indexes.
+93 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -1572,7 +1572,7 @@ Every tool an agent called through the CLIs or MCP: who, which tool, at what acc
 
 Polymorphic: `<name>_type` text + `<name>_id` integer.
 
-### `tags`
+### `canonical_tags`
 
 A tag's name, stored once. Which things carry it is `taggings`.
 
@@ -1584,15 +1584,15 @@ A tag's name, stored once. Which things carry it is `taggings`.
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
-### `auto_tag_claims`
+### `canonical_auto_tag_claims`
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `chat_id` | integer | not null | → `chats.id` | the `chat` it belongs to |
-| `tag_id` | integer | not null | → `tags.id` | the `tag` it belongs to |
-| `algorithm` | text | not null |  | Name and version of the rules that assigned the automatic tag, currently `keywords-v1`. |
-| `score` | real | not null |  | Share of the chat's metadata fields (title, username, description) that matched the tag's keywords: 1/3, 2/3 or 1; not a probability. |
-| `fields` | text | not null |  | JSON list of which metadata fields matched, from `title`, `username`, `description`. |
+| `tag_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `algorithm` | text | not null |  |  |
+| `score` | real | not null |  |  |
+| `fields` | text | not null |  |  |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
@@ -1651,7 +1651,7 @@ One tag on one thing.
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `tag_id` | integer | not null | → `tags.id` | the `tag` it belongs to |
+| `tag_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
 | `taggable_type` | text | not null |  | `chat`, `identity`, `message`, `email`, `document`, `note`, `person`, `organization`, `project`, `task`, `event`, … |
 | `taggable_id` | integer | not null |  | the row in the `taggable_type` table |
 | `main` | integer | not null |  | 1 on the thing's main topic; at most one per thing |
@@ -1662,6 +1662,40 @@ One tag on one thing.
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (tag_id, taggable_type, taggable_id)`, `UNIQUE (taggable_type, taggable_id) WHERE main = 1`, `INDEX (author_type, author_id)`
+
+### `tag_redirects`
+
+A retained plain tag now resolves to another plain tag. Original rows and their attribution remain intact.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `source_id` | integer | PK | → `canonical_tags.id` |  |
+| `survivor_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (survivor_id)`
+
+### `tag_consolidations`
+
+Immutable text-free receipts for owner-reviewed tag consolidation. IDs, hashes and counts cannot restore deleted source content.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `source_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `survivor_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `source_member_ids` | text | not null |  | JSON array of retained source IDs |
+| `survivor_member_ids` | text | not null |  | JSON array of retained survivor IDs |
+| `actor_type` | text | not null |  | `person` or `bot` |
+| `actor_id` | integer | not null |  | the row in the `actor_type` table |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `idempotency_key` | text | not null, unique |  |  |
+| `vocabulary_fingerprint` | text | not null |  |  |
+| `preview_fingerprint` | text | not null |  |  |
+| `counts` | text | not null |  | JSON counts only; no names, bodies or evidence |
+| `request_fingerprint` | text | not null |  |  |
+
+*Keys and indexes:* `INDEX (source_id)`, `INDEX (survivor_id)`, `INDEX (actor_type, actor_id)`
 
 ## Chunks, embeddings and search state
 

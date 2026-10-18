@@ -378,7 +378,7 @@ export const replaceAutoTags = (
   const pk = metadataChatPk(context, key, chatId)
   const db = context.database
   db.prepare("DELETE FROM taggings WHERE taggable_type='chat' AND taggable_id=? AND source='auto'").run(pk)
-  db.prepare("DELETE FROM auto_tag_claims WHERE chat_id=?").run(pk)
+  db.prepare("DELETE FROM canonical_auto_tag_claims WHERE chat_id=?").run(pk)
   const claims = new Map<number, { score: number; fields: string[] }>()
   for (const match of matches) {
     const tagId = ensureTag(context, match.tag).id
@@ -390,7 +390,7 @@ export const replaceAutoTags = (
   }
   for (const [tagId, match] of claims) {
     db.prepare(
-      "INSERT INTO auto_tag_claims (chat_id, tag_id, algorithm, score, fields, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO canonical_auto_tag_claims (chat_id, tag_id, algorithm, score, fields, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     ).run(pk, tagId, algorithm, match.score, JSON.stringify(match.fields), context.now(), context.now())
     db.prepare(
       "INSERT INTO taggings (tag_id, taggable_type, taggable_id, source, created_at, updated_at) VALUES (?, 'chat', ?, 'auto', ?, ?) ON CONFLICT DO NOTHING",

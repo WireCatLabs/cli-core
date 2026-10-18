@@ -1,105 +1,104 @@
-# Tag consolidation foundation
+# Reviewed tag consolidation
 
-The store does not merge tags. `knowledge.previewTagConsolidation` inspects selected dependencies;
-its `applySupported` remains false. The separate `createTagRedirectIndex` export from
-`@wirecat/cli-core/store` validates a supplied complete tag graph without reading or changing a store.
-There is no redirect table, merge command, migration or runtime reader change.
+`knowledge.previewTagConsolidation` and `knowledge.applyTagConsolidation` combine two plain tag
+names into one effective label. The source rows remain stored with their original IDs and attribution.
+Projects and topics are excluded. Similarity can suggest a pair; it never selects or applies a merge.
 
-## Captured graph policy
+## Review and apply
 
-`createTagRedirectIndex({ complete: true, tags, redirects })` accepts canonical positive numeric
-IDs. Tags have `{ id, kind: "tag" }`; redirects have `{ sourceId, survivorId }`. Topics and projects
-are excluded. Each array is bounded to 4,096 rows and each ID to a safe integer. Unknown fields,
-duplicate IDs, missing endpoints, multiple edges from one source, cycles and chains longer than
-16 hops fail before an index is returned. `complete: true` is a caller assertion, not proof that
-a database query read everything: the future SQLite adapter must refuse truncated reads itself.
+Read a complete unfiltered `knowledge.vocabulary()` catalog. Select its source and survivor tag IDs,
+then request a preview with those IDs and its `fingerprint` as `expectedVocabularyFingerprint`.
+The preview reports assignments, aliases, automatic claims, links, overlapping targets and bounded
+samples. Its `sourceMemberIds` and `survivorMemberIds` include previously consolidated records.
 
-`resolve(id)` returns the requested ID, canonical ID, traversal path and numerically sorted
-`memberIds`. Source records remain members; this policy does not delete, combine or choose between
-their assignment authors, claim algorithms or link evidence. Input mutation and modification of a
-returned array cannot change subsequent results. Row order cannot change resolution.
+Applying requires the same IDs, both `expectedVocabularyFingerprint` and
+`expectedPreviewFingerprint`, explicit `by: "owner"`, and a unique `idempotencyKey`. The key takes
+1–128 ASCII identifier characters; use an opaque identifier, never source content. Agents propose
+pairs for owner review. A host must derive owner authority from its existing actor boundary.
+`coverage.applySupported` describes the store SDK capability. It does not mean a consumer has an
+apply command or permits an MCP write; hosts must update their own commands and descriptions.
 
-This shared policy gives prospective SQLite readers and writers the same definition of a label:
+The store opens a short synchronous `BEGIN IMMEDIATE`, checks the complete current state, validates
+the resulting redirect graph and commits the redirect and receipt together. No write lock is held
+while a person reviews the preview. Changed vocabulary or dependency provenance refuses the entire
+apply, even when the visible counts are unchanged. An aborted signal rolls back the transaction.
+An exact authorized retry returns the original immutable receipt. Reusing its key with different
+IDs or fingerprints refuses.
 
-- Name and alias selection in `sqlite/tags.ts` and `sqlite/vocabulary.ts` resolves to the canonical ID.
-- `tags.ts`, `knowledge.ts` and automatic chat tagging resolve before new writes. Retained rows keep
-  their original IDs and attribution. A canonical assignment must not overwrite competing provenance.
-- Tag listings and search predicates select every `memberIds` entry, then present the canonical name.
-- A reviewed apply planner validates its proposed graph with this policy before writing. It must
-  revalidate the current dependency fingerprint within the same SQLite write transaction.
+## Retained provenance and names
 
-Those integrations are requirements for a later slice, not behavior supplied by this helper. In
-particular, passing this helper a graph does not make current store searches understand redirects.
+The physical source tag, taggings, automatic claims, aliases and both endpoints of polymorphic
+links are retained. Applying does not overwrite competing authors, file origins, algorithm scores,
+claim evidence or link evidence. Deduplicated display does not collapse those physical records.
 
-## References that a future apply must cover
+`tag_redirects` stores current direct canonical mappings. On a later merge, every existing source
+member points directly to the new survivor in the same transaction. The `resolved_tags` view uses
+indexed joins rather than recursive graph traversal. Reads and search predicates include every
+retained member; new assignments resolve names and aliases to the current canonical ID.
 
-The implementation inventory at source `1effa17c` includes these concrete entry points:
+Catalogs expose canonical entries with deduplicated target usage. Original source names appear as
+read-only aliases with `id: "tag:<retained-id>"` and `retained: true`. They cannot be removed as
+ordinary aliases. Inherited real aliases retain their original positive IDs and can be removed
+through the survivor's alias API. Historical text in saved queries, notes and action proposals is
+not rewritten; name selection resolves it when the operation supports tags.
 
-| Paths under `src/store/` | Required integration |
-| --- | --- |
-| `sqlite/tags.ts`, `sqlite/vocabulary.ts`, `sqlite/knowledge.ts` | Names, aliases, vocabulary fingerprints, ID selection, assignment writes/removal/listing and account-path label links |
-| `sqlite/chats.ts`, `sqlite/tags.ts` | Automatic claims and replacement; preserve claim reasons separately from owner assignments |
-| `sqlite/meeting-hit-search.ts` | Selected label IDs in meeting search and cursor binding |
-| `sqlite/catalog.ts`, `sqlite/imported-documents.ts` | Document selection by canonical names/aliases |
-| `sqlite/lucene-fields.ts`, `sqlite/note-search.ts` | Direct name predicates for messages, mail, notes, documents, identities and account-path links |
-| `sqlite/document-transfer/{snapshot,plan,apply}.ts` | Source graph capture, destination mapping, conflicts and assignment/alias provenance |
-| `sqlite/accounts.ts`, `sqlite/chat-rekey.ts`, schema triggers | Purges/rekeys must still remove target-owned data rather than resurrecting it through retained labels |
-| `sqlite/tag-consolidation.ts` | Complete dependency reads and stale-plan checks; the present four-table preview does not certify all serialized references |
+Explicit label removal withdraws the effective label across its members. An explicit manual or
+automatic origin scope withdraws only that scope and preserves the other claim. Automatic rule
+replacement withdraws the chat's previous automatic claims, then assigns the current matches.
+Owner removal, target deletion and account purge must not resurrect retained assignments.
 
-`aliases`, both `links` endpoints and historical action subjects may retain original tag IDs.
-Saved queries, note bodies and proposal JSON may retain names as text. Historical text is not
-rewritten. Projects, task keys and main-topic selection stay outside tag consolidation.
+## Bounded state and text-free receipts
 
-## Compatibility blocks activation
+Each consolidation reads a complete plain-tag graph of at most 4,096 tags and 4,096 redirects.
+The shared `createTagRedirectIndex` policy rejects invalid IDs, missing endpoints, cycles and
+oversized graphs. Persisted mappings additionally must point directly to canonical rows.
 
-`src/store/migrations.ts:migrate` compares the latest file row's `min_compatible` with the SDK's
-latest migration number only while opening a writable connection. An additive migration with
-`minCompatible: 1` lets older SDKs continue opening the file. `sqlite/read-compatibility.ts` does
-the corresponding check for read-only opening. Neither check is a per-operation capability gate.
-`sqlite/transaction.ts` does not recheck compatibility on an already-open handle. Document transfer
-has its own source-file check in `store/document-transfer/index.ts`; it is not a general write gate.
+Dependency review covers complete selected groups in `taggings`, `aliases`,
+`canonical_auto_tag_claims` and both `links` endpoints. Defaults are 5,000 dependency rows and
+1 MiB; callers can select at most 20,000 rows and 16 MiB. Budget exhaustion returns no partial
+preview. Hashes cover every inspected provenance column, including private text omitted from samples.
+The graph is independently bounded and included in the checked fingerprint and input byte budget.
 
-Consequently, an additive redirect table cannot safely activate consolidation: old readers would
-still show source names and old writers could assign retained source IDs. Raising `minCompatible`
-rejects future old opens, but does not stop old connections that are already open. The migration
-contract currently describes raising that minimum as a package-major change. No such change is
-included here and no migration number is reserved.
+`tag_consolidations` retains IDs, owner actor ID/type, timestamp, idempotency key, counts and hashes.
+It stores no name, transcript, note, message, link-evidence or claim-text snapshot. Deleting source
+content leaves no restorable copy in the receipt. A receipt records the historical reviewed choice;
+a later redirect does not rewrite it or change an exact retry's answer.
 
-`src/store/tag-redirect-compatibility.test.ts` demonstrates both failure modes with two connections
-and a synthetic manifest: an additive minimum admits old opens; a raised minimum refuses those
-opens but the old connection can still read source labels and commit writes through `writeBatch`.
-These are deliberately isolated fixture tables, not a proposed production migration.
+## Document transfer boundary
 
-The smallest activation follow-up must specify and test a coordinated compatibility boundary:
+Annotation transfer previews refuse a touched consolidated tag group in either source or destination.
+The existing copy maps a tag by name and has one assignment per tag/target; flattening a group there
+would lose independent authors or recreate duplicate labels. Both preview and apply therefore refuse
+before changing either store. Ordinary unconsolidated tags remain transferable. Read-only source
+stores from earlier supported schemas retain their existing snapshot path; an existing destination
+needs current schema maintenance before its read-only preview.
 
-1. Reserve a schema version in a separate coordination PR before implementing persistence.
-2. Integrate canonical resolution into all paths above; retain original dependency rows rather
-   than materializing lossy duplicate assignments. Test deletion, transfers and same-target overlap.
-3. Choose a supported breaking manifest gate and upgrade affected consumers together. Prove old SDK
-   opens refuse. Protect already-open handles through verified quiescence or a deliberately breaking
-   structural SQL boundary. Renaming a table can invalidate cached old queries when SQLite reparses
-   them; a manifest-only test does not rule out this alternative. A new per-operation check cannot
-   retroactively protect older binaries that never call it.
-4. Test an already-open old SDK across activation, including cached queries and write-transaction
-   serialization. Audit surviving operations: empty automatic replacement and account purge touch
-   assignments/claims directly, so renaming only `tags` does not uniformly revoke old writes. Prove
-   that every surviving path remains safe, including cleanup, aliases and polymorphic links. Until
-   this compatibility boundary is enforced, keep apply unavailable. A graph-only release cannot
-   unlock it. Persistent background consumers are part of the boundary.
+Copying a consolidated group with its retained identities and provenance is a separate follow-up.
+A merge receipt is not permission to silently merge unrelated labels in another destination store.
 
-## Provenance and receipts
+## Compatibility and activation gates
 
-A prospective redirect retains the source `tags` row, assignment rows, automatic claims, aliases
-and polymorphic links. Effective reads group them by canonical ID but attribution remains attached
-to its original record. Removal must define which original claims it withdraws; silently deleting
-every contributor is not a valid consequence of deduplicated display.
+Store version 25 atomically renames `tags` to `canonical_tags` and `auto_tag_claims` to
+`canonical_auto_tag_claims`, then adds redirects, receipts and the resolved view. Its
+`minCompatible: 25` rejects earlier SDKs on new writable and read-only opens. No compatibility view
+restores the old table names: that would allow old writers and readers to use different semantics.
 
-A future immutable receipt stores selected IDs, actor ID/type, timestamp, idempotency key, counts
-and bounded cryptographic hashes of the checked state. It must not retain transcript, note,
-message, link-evidence or automatic-claim text snapshots. Target deletion must continue purging
-the original content and derived search material. Receipts cannot restore deleted content.
-The existing preview fingerprint is evidence of inspected state, not authorization or a complete
-write plan. Exact retry may return a receipt only after matching the same authorized selection.
+An already-open old reader can finish its previous SQLite snapshot. It cannot upgrade that snapshot
+to a writer after the structural change. After rollback, cached old tag statements refuse. Actual
+Core 0.342.0 regression tests cover tag selection/addition/removal, automatic replacement, alias
+changes and chat rekey; failed writes leave all fixture assignments and claims unchanged. Deliberate
+old account purge remains permitted and removes the original target data and claims.
 
-Use Core's short synchronous `BEGIN IMMEDIATE` transaction for compare-and-apply; no writer or
-file lock is held while a user or agent reviews a preview. Stale state refuses the entire write.
+Every later manifest row must explicitly preserve or raise the activated compatibility minimum.
+Manifest assembly refuses omitted, invalid or decreasing declarations, so a later additive migration
+cannot accidentally re-admit an older SDK.
+
+This compatibility change requires the coordinated breaking package policy and pinned consumer
+rollout described in [architecture](ARCHITECTURE.md#adding-a-migration). The implementation must not
+be merged or released before that gate is reviewed. A schema reservation alone does not authorize
+activation, a package-major decision or weakening the existing release policy.
+
+Before activation, refresh [coordination](COORDINATION.md#store-migrations) and verify that version
+25 was not reassigned or overtaken. If another migration needs that next slot first, retire this
+unused reservation, reserve a fresh slot and renumber the isolated implementation. Never append a
+migration below a version an owner file may already have applied; the runner would skip it.

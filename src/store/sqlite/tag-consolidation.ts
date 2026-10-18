@@ -5,28 +5,25 @@ import type {
   TagConsolidationPreview,
   TagConsolidationStore,
 } from "../../domain/tag-consolidation.js"
+import { createTagRedirectIndex } from "../../domain/tag-redirects.js"
 import type { StoreContext } from "./open.js"
+import { applyTagConsolidation } from "./tag-consolidation-apply.js"
+import { consolidationInput } from "./tag-consolidation-input.js"
+import { tagCanonicalId, tagRedirectSnapshot } from "./tag-resolution.js"
 import { read } from "./transaction.js"
 import type { VocabularyCatalog } from "./vocabulary.js"
 
 type Row = Record<string, unknown>
 const selections = [
-  ["taggings", "tag_id IN (?,?)"],
-  ["aliases", "aliasable_type='tag' AND aliasable_id IN (?,?)"],
-  ["auto_tag_claims", "tag_id IN (?,?)"],
-  ["links", "(from_type='tag' AND from_id IN (?,?)) OR (to_type='tag' AND to_id IN (?,?))"],
+  ["taggings", "tag_id IN (SELECT value FROM json_each(?))"],
+  ["aliases", "aliasable_type='tag' AND aliasable_id IN (SELECT value FROM json_each(?))"],
+  ["canonical_auto_tag_claims", "tag_id IN (SELECT value FROM json_each(?))"],
+  [
+    "links",
+    "(from_type='tag' AND from_id IN (SELECT value FROM json_each(?))) OR (to_type='tag' AND to_id IN (SELECT value FROM json_each(?)))",
+  ],
 ] as const
 
-const bounded = (value: number, max: number, field: string) => {
-  if (!Number.isSafeInteger(value) || value < 1 || value > max)
-    throw new CliError("validation_error", `${field} must be an integer from 1 to ${max}`)
-  return value
-}
-const idOf = (value: string, field: string) => {
-  if (typeof value !== "string" || !/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))
-    throw new CliError("validation_error", `${field} must be a positive canonical tag id`)
-  return Number(value)
-}
 const cancelled = (options: TagConsolidationOptions) => {
   if (options.signal?.aborted) throw new CliError("cancelled", "tag consolidation preview was cancelled")
 }
@@ -35,51 +32,33 @@ export const tagConsolidationStoreOver = (
   context: StoreContext,
   catalog: () => VocabularyCatalog,
 ): TagConsolidationStore => ({
-  previewTagConsolidation: async (options) => {
-    if (!options || typeof options !== "object") throw new CliError("validation_error", "preview options are required")
-    const allowed = new Set([
-      "sourceId",
-      "survivorId",
-      "expectedVocabularyFingerprint",
-      "maxRows",
-      "maxReadBytes",
-      "sampleLimit",
-      "signal",
-    ])
-    for (const field of Object.keys(options))
-      if (!allowed.has(field)) throw new CliError("validation_error", `unknown preview field: ${field}`)
-    const source = idOf(options.sourceId, "sourceId")
-    const survivor = idOf(options.survivorId, "survivorId")
-    if (source === survivor) throw new CliError("validation_error", "sourceId and survivorId must differ")
-    if (
-      typeof options.expectedVocabularyFingerprint !== "string" ||
-      !/^v1:all:all:[a-f0-9]{64}$/.test(options.expectedVocabularyFingerprint)
-    )
-      throw new CliError(
-        "validation_error",
-        "expectedVocabularyFingerprint must come from a complete unfiltered vocabulary preview",
-      )
-    const maxRows = bounded(options.maxRows ?? 5000, 20000, "maxRows")
-    const maxReadBytes = bounded(options.maxReadBytes ?? 1024 * 1024, 16 * 1024 * 1024, "maxReadBytes")
-    const limit = bounded(options.sampleLimit ?? 10, 100, "sampleLimit")
-    cancelled(options)
-    // The catalog and dependency rows must describe one SQLite snapshot, including when called inside a write.
-    return read(context.database, () => {
-      const current = catalog()
-      if (current.fingerprint !== options.expectedVocabularyFingerprint)
-        throw new CliError("configuration_error", "vocabulary changed since the preview", {
-          reason: "vocabulary.stale",
-        })
-      const selected = [source, survivor].map((id) =>
-        current.entries.find((entry) => entry.id === String(id) && entry.kind !== "project"),
-      )
-      if (selected.some((entry) => !entry)) throw new CliError("not_found", "a selected canonical tag is unavailable")
-      if (selected.some((entry) => entry?.kind !== "tag"))
-        throw new CliError("validation_error", "consolidation preview supports tags only")
-      return previewRows(context, options, source, survivor, maxRows, maxReadBytes, limit, current)
-    })
-  },
+  previewTagConsolidation: async (options) => previewTagConsolidation(context, catalog, options),
+  applyTagConsolidation: async (options) =>
+    applyTagConsolidation(context, (input) => previewTagConsolidation(context, catalog, input), options),
 })
+
+const previewTagConsolidation = (
+  context: StoreContext,
+  catalog: () => VocabularyCatalog,
+  options: TagConsolidationOptions,
+): TagConsolidationPreview => {
+  const { source, survivor, maxRows, maxReadBytes, limit } = consolidationInput(options)
+  cancelled(options)
+  return read(context.database, () => {
+    const current = catalog()
+    if (current.fingerprint !== options.expectedVocabularyFingerprint)
+      throw new CliError("configuration_error", "vocabulary changed since the preview", { reason: "vocabulary.stale" })
+    if (tagCanonicalId(context.database, source) === tagCanonicalId(context.database, survivor))
+      throw new CliError("validation_error", "sourceId and survivorId already resolve to the same canonical tag")
+    const selected = [source, survivor].map((id) =>
+      current.entries.find((entry) => entry.id === String(id) && entry.kind !== "project"),
+    )
+    if (selected.some((entry) => !entry)) throw new CliError("not_found", "a selected canonical tag is unavailable")
+    if (selected.some((entry) => entry?.kind !== "tag"))
+      throw new CliError("validation_error", "consolidation preview supports tags only")
+    return previewRows(context, options, source, survivor, maxRows, maxReadBytes, limit, current)
+  })
+}
 
 const previewRows = (
   context: StoreContext,
@@ -93,11 +72,18 @@ const previewRows = (
 ): TagConsolidationPreview => {
   const rows = new Map<string, Row[]>()
   let count = 0
-  let readBytes = 0
-  const hash = createHash("sha256").update(JSON.stringify([source, survivor, catalog.fingerprint]))
+  const graph = tagRedirectSnapshot(context.database)
+  const index = createTagRedirectIndex(graph)
+  const sourceMemberIds = index.resolve(String(source)).memberIds
+  const survivorMemberIds = index.resolve(String(survivor)).memberIds
+  const sourceMembers = new Set(sourceMemberIds.map(Number))
+  const memberIds = JSON.stringify([...sourceMemberIds, ...survivorMemberIds].map(Number))
+  const captured = JSON.stringify(graph)
+  let readBytes = Buffer.byteLength(captured)
+  const hash = createHash("sha256").update(JSON.stringify([source, survivor, catalog.fingerprint, graph]))
   for (const [table, where] of selections) {
     cancelled(options)
-    const parameters = table === "links" ? [source, survivor, source, survivor] : [source, survivor]
+    const parameters = table === "links" ? [memberIds, memberIds] : [memberIds]
     const columns = context.database
       .prepare(`PRAGMA table_info(${table})`)
       .all()
@@ -118,7 +104,7 @@ const previewRows = (
       )
     const values = context.database
       .prepare(
-        `SELECT * FROM ${table} WHERE ${where} ORDER BY ${table === "auto_tag_claims" ? "chat_id,tag_id" : "id"} LIMIT ?`,
+        `SELECT * FROM ${table} WHERE ${where} ORDER BY ${table === "canonical_auto_tag_claims" ? "chat_id,tag_id" : "id"} LIMIT ?`,
       )
       .all(...parameters, maxRows + 1)
     const serialized = JSON.stringify(values)
@@ -135,23 +121,24 @@ const previewRows = (
   cancelled(options)
   const assignments = rows.get("taggings") ?? []
   const aliases = rows.get("aliases") ?? []
-  const claims = rows.get("auto_tag_claims") ?? []
+  const claims = rows.get("canonical_auto_tag_claims") ?? []
   const links = rows.get("links") ?? []
   const byTargetType = new Map<string, { type: string; source: number; survivor: number }>()
   for (const row of assignments) {
     const type = String(row.taggable_type)
     const totals = byTargetType.get(type) ?? { type, source: 0, survivor: 0 }
-    if (Number(row.tag_id) === source) totals.source++
+    if (sourceMembers.has(Number(row.tag_id))) totals.source++
     else totals.survivor++
     byTargetType.set(type, totals)
   }
   const counts = (values: Row[], field: string) => ({
-    source: values.filter((row) => Number(row[field]) === source).length,
-    survivor: values.filter((row) => Number(row[field]) === survivor).length,
+    source: values.filter((row) => sourceMembers.has(Number(row[field]))).length,
+    survivor: values.filter((row) => !sourceMembers.has(Number(row[field]))).length,
   })
   const overlaps = (values: Row[], key: (row: Row) => string) => {
-    const targets = new Set(values.filter((row) => Number(row.tag_id) === source).map(key))
-    return values.filter((row) => Number(row.tag_id) === survivor && targets.has(key(row))).length
+    const targets = new Set(values.filter((row) => sourceMembers.has(Number(row.tag_id))).map(key))
+    return new Set(values.filter((row) => !sourceMembers.has(Number(row.tag_id)) && targets.has(key(row))).map(key))
+      .size
   }
   const target = (id: number) => {
     const entry = catalog.entries.find((row) => row.kind === "tag" && row.id === String(id))
@@ -160,6 +147,8 @@ const previewRows = (
   return {
     source: target(source),
     survivor: target(survivor),
+    sourceMemberIds,
+    survivorMemberIds,
     vocabularyFingerprint: catalog.fingerprint,
     previewFingerprint: `tag-preview-v1:${hash.digest("hex")}`,
     assignments: {
@@ -201,7 +190,7 @@ const previewRows = (
       rows: count,
       readBytes,
       samplesComplete: [assignments, aliases, links].every((values) => values.length <= limit),
-      applySupported: false,
+      applySupported: true,
     },
   }
 }

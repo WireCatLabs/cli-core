@@ -137,10 +137,10 @@ describe("the initial migration", () => {
            normalized_text, updated_at) VALUES (1, 1, '4', 1, 1, 'Tomatoes ripen', 1, 'sync', 'tomatoes ripen', 1)`)
     run(`INSERT INTO attachments (attachable_type, attachable_id, position, kind, text, normalized_text, created_at,
            updated_at) VALUES ('message', 1, 0, 'document', 'Seed catalogue', 'seed catalogue', 1, 1)`)
-    run(`INSERT INTO tags (name, created_at, updated_at) VALUES ('garden', 1, 1)`)
+    run(`INSERT INTO canonical_tags (name, created_at, updated_at) VALUES ('garden', 1, 1)`)
     run(`INSERT INTO taggings (tag_id, taggable_type, taggable_id, source, created_at, updated_at)
            VALUES (1, 'message', 1, 'owner', 1, 1), (1, 'chat', 1, 'owner', 1, 1)`)
-    run(`INSERT INTO auto_tag_claims (chat_id, tag_id, algorithm, score, fields, created_at, updated_at)
+    run(`INSERT INTO canonical_auto_tag_claims (chat_id, tag_id, algorithm, score, fields, created_at, updated_at)
            VALUES (1, 1, 'rule', 1, '[]', 1, 1)`)
     run(`INSERT INTO aliases (aliasable_type, aliasable_id, account_id, name, name_folded, source, created_at, updated_at)
            VALUES ('identity', 1, NULL, 'Bobby', 'bobby', 'owner', 1, 1), ('chat', 1, NULL, 'Club', 'club', 'owner', 1, 1),
@@ -177,7 +177,7 @@ describe("the initial migration", () => {
     run("DELETE FROM chats")
     expect(all("SELECT name FROM aliases ORDER BY name")).toEqual([{ name: "B" }, { name: "Bobby" }])
     expect(one("SELECT count(*) AS n FROM taggings")).toEqual({ n: 0 })
-    expect(one("SELECT count(*) AS n FROM auto_tag_claims")).toEqual({ n: 0 })
+    expect(one("SELECT count(*) AS n FROM canonical_auto_tag_claims")).toEqual({ n: 0 })
     run("DELETE FROM identities")
     expect(all("SELECT name FROM aliases")).toEqual([{ name: "B" }])
     run("INSERT INTO identities_fts (identities_fts) VALUES ('integrity-check')")
@@ -292,11 +292,11 @@ describe("the initial migration", () => {
            thread_root_id, updated_at) VALUES (2, 1, '12', 3, 'x', 1, 'sync', 99, 1)`),
     ).toThrow(/FOREIGN KEY/)
 
-    run(`INSERT INTO tags (name, kind, created_at, updated_at) VALUES ('Food', 'topic', 1, 1), ('Wellbeing', 'topic', 1, 1),
+    run(`INSERT INTO canonical_tags (name, kind, created_at, updated_at) VALUES ('Food', 'topic', 1, 1), ('Wellbeing', 'topic', 1, 1),
            ('animals', 'tag', 1, 1)`)
-    expect(() => run(`INSERT INTO tags (name, kind, created_at, updated_at) VALUES ('Food', 'tag', 1, 1)`)).toThrow(
-      /UNIQUE/,
-    )
+    expect(() =>
+      run(`INSERT INTO canonical_tags (name, kind, created_at, updated_at) VALUES ('Food', 'tag', 1, 1)`),
+    ).toThrow(/UNIQUE/)
     run(`INSERT INTO taggings (tag_id, taggable_type, taggable_id, main, source, created_at, updated_at)
            VALUES (1, 'chat', 1, 1, 'owner', 1, 1), (3, 'chat', 1, 0, 'owner', 1, 1)`)
     expect(() =>
@@ -448,7 +448,7 @@ describe("what the initial migration seeds and enforces", () => {
     for (const hash of ["only", "shared"])
       run(`INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at)
              VALUES ('m', '${hash}', 1, x'00', 1, 1)`)
-    run(`INSERT INTO tags (name, kind, created_at, updated_at) VALUES ('work', 'tag', 1, 1)`)
+    run(`INSERT INTO canonical_tags (name, kind, created_at, updated_at) VALUES ('work', 'tag', 1, 1)`)
     run(`INSERT INTO links (from_type, from_id, to_type, to_id, kind, anchor, source, created_at, updated_at)
            VALUES ('account', 1, 'tag', 1, 'labelled', 'Projects', 'owner', 1, 1)`)
 
