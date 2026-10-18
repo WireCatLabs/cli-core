@@ -13,6 +13,7 @@ import {
   type PermissionKey,
   readKeysForCommand,
 } from "../../sends/permissions.js"
+import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { OFFLINE, type ServiceDeps, type ServiceMessenger, type Services, servicesFor } from "../../services/index.js"
 import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
@@ -324,6 +325,22 @@ const settled = async (pending: Set<Promise<void>>, ms: number): Promise<boolean
   }
 }
 
+/** A list that cannot be read stays as it is, which refuses every send: the warning says why. */
+const rekeyRecipients = (
+  app: Messenger["app"],
+  profile: string,
+  env: NodeJS.ProcessEnv,
+  warn: (message: string) => void,
+  from: Id,
+  to: Id,
+): void => {
+  try {
+    new RecipientList(recipientsPathFor(app, profile, env), app.command).rekey(from, to)
+  } catch (error) {
+    warn(`the recipient list still names ${from}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 /**
  * A connection as every shared reader sees it: its account remembered, each call a run event, what
  * the reads answer saved to the store. `close` closes the connection and the store it opened. One
@@ -368,6 +385,7 @@ export const connected = (
             events,
             pending,
             ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
+            rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
           }),
     close: async () => {
       try {

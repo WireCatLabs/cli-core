@@ -168,11 +168,14 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   // The deadline a person or a script set, which a phase keeps; the default one it ends.
   let explicitEnd: number | undefined
   let oneShot: number | undefined
+  let finished = false
   // The steps after a phase are one-shot again, however it ended: bounded, and ended by a signal as any command is.
   const endPhase = () => {
     if (!phased) return
     phased = false
     if (phaseTimer) clearTimeout(phaseTimer)
+    // A later phase keeps the --timeout the steps after this one got, not the one this phase already used up.
+    if (explicitEnd !== undefined && oneShot !== undefined) explicitEnd = Date.now() + oneShot
     control.start(oneShot)
   }
   const interrupted = (signal: "SIGINT" | "SIGTERM") => {
@@ -216,7 +219,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
     untilStopped: () => {
-      if (phased) return phase.signal
+      if (phased || finished) return phase.signal
       phased = true
       phase = new AbortController()
       phase.signal.addEventListener("abort", endPhase, { once: true })
@@ -478,6 +481,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       process.stdout.off("error", pipeError)
       process.stderr.off("error", pipeError)
     }
+    finished = true
     if (phaseTimer) clearTimeout(phaseTimer)
     await control.finish()
   }

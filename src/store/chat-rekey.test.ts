@@ -234,6 +234,57 @@ describe("re-keying a stored chat", () => {
     await store.close()
   })
 
+  it("merges one person's open stays in both chats into one, earliest seen to latest", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Team", "group"), chat(LID, "Team", "group")])
+    const read = (observedAt: string, joinedAt: string | undefined, role: "admin" | "member") => ({
+      observation: { observedAt, source: "remote_fetch" as const },
+      members: [{ id: "7", name: "Ana", username: null, role, ...(joinedAt ? { joinedAt } : {}) }],
+      complete: true,
+      participants: 1,
+    })
+    await store.roster.saveRoster(OWNER, PHONE, read("2026-10-01T10:00:00.000Z", "2026-09-01T10:00:00.000Z", "member"))
+    await store.roster.saveRoster(OWNER, LID, read("2026-10-10T10:00:00.000Z", undefined, "admin"))
+
+    expect((await store.chats.rekeyChat(OWNER, PHONE, LID)).outcome).toBe("merged")
+
+    expect(await raw(path, "SELECT first_seen_at, last_seen_at, joined_at, role, left_at FROM member_stays")).toEqual([
+      {
+        first_seen_at: Date.parse("2026-10-01T10:00:00.000Z"),
+        last_seen_at: Date.parse("2026-10-10T10:00:00.000Z"),
+        joined_at: Date.parse("2026-09-01T10:00:00.000Z"),
+        role: "admin",
+        left_at: null,
+      },
+    ])
+    expect(await raw(path, "SELECT count(*) AS n FROM member_observation_members")).toEqual([{ n: 2 }])
+    await store.close()
+  })
+
+  it("is not left when the chat list named the new id before the re-key landed", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Ana")])
+    await store.chats.saveChats(OWNER, [chat(LID, "Ana")])
+    await store.chats.markChatsLeft(OWNER, [LID])
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 0, messages: 0 })
+    await store.close()
+  })
+
+  it("stays left when the chat list named neither id", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana"), chat("9@lid", "Bo")])
+    await store.chats.markChatsLeft(OWNER, ["9@lid"])
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 1, messages: 0 })
+    await store.close()
+  })
+
   it("changes nothing on a replay, an unknown chat, or another account's chat of the same id", async () => {
     const path = fresh()
     const store = await openStore({ path })

@@ -15,6 +15,15 @@ shape of this file.
   the store can rebuild (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
 - **Model downloads no longer go through a running `serve`.** `models text download`, `models audio download` and
   `images models download` fetch from a model host, not the messenger, so they always run in the calling process.
+- **A re-keyed chat keeps its place in the recipient list.** When a messenger moves a chat to a new id, the
+  profile's list of chats it may send to names the new id once the store saved the move. Only a chat already on
+  the list moves; a list that is off stays off, and one that cannot be read is left as it is and still refuses.
+- **Re-keying a group no longer fails when a person was in both chats.** The two open stays become one, from the
+  first time they were seen to the last; before, the store refused the whole re-key and the chat stayed split.
+- **A re-keyed chat is not marked left by mistake.** A full chat list that named the new id before the re-key
+  arrived marked the old one left, and the merged chat kept that mark. It is now left only when both were.
+- **A second wait-until-stopped phase gets a full `--timeout`.** After `--timeout` ended the first phase, a second
+  one ended at once. A phase asked for after the command finished now starts no timer.
 
 ### Changed — may break callers
 
