@@ -312,7 +312,8 @@ export const setMainTopic = (context: StoreContext, thing: Thing, topic: string 
 
 export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagFilter): StoredTag[] => {
   const selectedTag = filter.tag === undefined ? undefined : (canonicalTagNamed(database, filter.tag)?.id ?? -1)
-  const tagged = selectedTag === undefined ? "" : " AND t.canonical_id=?"
+  const tagged =
+    selectedTag === undefined ? "" : " AND t.canonical_id=(SELECT canonical_id FROM resolved_tags WHERE id=?)"
   const parts: { type: TagType; sql: string; params: SqlValue[] }[] = [
     {
       type: "chat",

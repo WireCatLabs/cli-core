@@ -30,7 +30,7 @@ import { type TaskCloseStore, taskCloseOver } from "./task-close-store.js"
 import { inboxKey, typedKey } from "./task-keys.js"
 import { type TaskPairs, taskPairsOver } from "./task-pairs.js"
 import { taskRowOf, thingOf } from "./things.js"
-import { write } from "./transaction.js"
+import { read, write } from "./transaction.js"
 import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
 
 export { inboxKey, linkInbox, taskAccountOf } from "./task-keys.js"
@@ -146,10 +146,11 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     categoriesFile: () => context.sharedConfig,
     saveCategories: async (categories) => write(database, () => saveTaskCategories(database, categories, now())),
     unlistedCategories: async () => unlistedTaskCategories(database, listOf()),
-    tagWhere: async (name) => ({
-      sql: "EXISTS (SELECT 1 FROM taggings g JOIN resolved_tags r ON r.id=g.tag_id WHERE g.taggable_type='task' AND g.taggable_id=t.id AND r.canonical_id=?)",
-      params: [canonicalTagNamed(database, name)?.id ?? -1],
-    }),
+    tagWhere: async (name) =>
+      read(database, () => ({
+        sql: "EXISTS (SELECT 1 FROM taggings g JOIN resolved_tags r ON r.id=g.tag_id WHERE g.taggable_type='task' AND g.taggable_id=t.id AND r.canonical_id=(SELECT canonical_id FROM resolved_tags WHERE id=?))",
+        params: [canonicalTagNamed(database, name)?.id ?? -1],
+      })),
     query: async (account, where, { limit, offset }) => {
       const project = inbox(account, false)
       if (project === undefined) return []

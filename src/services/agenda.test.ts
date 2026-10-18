@@ -235,6 +235,24 @@ it("finds tagged tasks and agenda items by every inherited name after consolidat
         [first.task.id, second.task.id].sort(),
       )
     }
+    const captured = await store.tasks.tagWhere("arrival")
+    const next = await store.knowledge.createTag("harbour")
+    const current = (await store.knowledge.vocabulary()).fingerprint
+    const nextSelection = {
+      sourceId: String(survivor.id),
+      survivorId: String(next.id),
+      expectedVocabularyFingerprint: current,
+    }
+    const nextPreview = await store.knowledge.previewTagConsolidation(nextSelection)
+    await store.knowledge.applyTagConsolidation({
+      ...nextSelection,
+      expectedPreviewFingerprint: nextPreview.previewFingerprint,
+      by: "owner",
+      idempotencyKey: "task-predicate-after-merge",
+    })
+    expect(
+      (await store.tasks.query("chat:500", captured, { limit: 20, offset: 0 })).map((row) => row.task.id).sort(),
+    ).toEqual([first.task.id, second.task.id].sort())
   } finally {
     await store.close()
   }
