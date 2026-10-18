@@ -312,7 +312,7 @@ describe("a messenger whose history is read from the store", () => {
     const { code, stderr } = await call(["messages", "list", "Book", "--json"], sandbox(), connect, "store")
 
     expect(code).not.toBe(0)
-    expect(stderr).toContain("run `chat serve` or `chat watch` once to fill the local store")
+    expect(stderr).toContain("run `chat default serve` or `chat default watch` once to fill the local store")
     expect(stderr).not.toContain("--offline")
     expect(connects).toEqual([])
   })
@@ -338,7 +338,7 @@ describe("a messenger whose history is read from the store", () => {
       return streams.stderr.join("\n")
     }
     expect(await ask("store")).toContain(
-      "link it with `chat default setup`, then run `chat serve` or `chat watch` once to fill the local store",
+      "link it with `chat default setup`, then run `chat default serve` or `chat default watch` once to fill the local store",
     )
     expect(await ask()).toContain("log in with `chat default setup`, or run the command once without --offline")
   })

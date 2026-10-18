@@ -166,7 +166,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
         const { potentialWrites } = await probeStdio(server)
         if (potentialWrites.length > 0 && this.opts<{ allowWrites?: boolean }>().allowWrites !== true)
           throw new Error(
-            `this profile offers ${potentialWrites.length} tools that may write; review its permissions, then pass --allow-writes to install it`,
+            `this profile offers ${potentialWrites.length} ${potentialWrites.length === 1 ? "tool" : "tools"} that may write; review its permissions, then pass --allow-writes to install it`,
           )
         renderAnswer(
           this,

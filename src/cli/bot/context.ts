@@ -35,6 +35,8 @@ export const botContext = (command: Command, bot: BotMessenger) => {
     base.track(adapter)
     return adapter
   }
+  const noToken = () =>
+    new CliError("authentication_error", `no bot token for profile "${profile}" — run \`${words} auth set\``)
   return {
     ...base,
     profile,
@@ -71,7 +73,10 @@ export const botContext = (command: Command, bot: BotMessenger) => {
     chatRef: (typed: string): BotChatRef => {
       const trimmed = typed.trim()
       if (/^-?\d+$/.test(trimmed) || /^user:\d+$/.test(trimmed)) return trimmed
-      return pickChat(trimmed, registry.list()).id
+      const known = registry.list()
+      // A bot that never had a token has seen no chat, and its missing token is what needs fixing.
+      if (known.length === 0 && !tokens.read()) throw noToken()
+      return pickChat(trimmed, known).id
     },
     readSecret: (prompt: string) => {
       return bot.readSecret?.(command, prompt) ?? readSecret(prompt, secretInputOf(command))
@@ -81,9 +86,7 @@ export const botContext = (command: Command, bot: BotMessenger) => {
     /** A client for the stored token, or a refusal that says how to store one. */
     authenticated: (options: BotConnectOptions = {}): Promise<BotAdapter> => {
       const stored = tokens.read()
-      if (!stored) {
-        throw new CliError("authentication_error", `no bot token for profile "${profile}" — run \`${words} auth set\``)
-      }
+      if (!stored) throw noToken()
       return connect(stored.token, options)
     },
   }

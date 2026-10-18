@@ -22,6 +22,9 @@ export const usableProfileName = (profile: string): string => {
   return profile
 }
 
+/** The top-level commands that never read a profile; every other one is `<tool> <profile> …`. */
+export const PROFILE_FREE: ReadonlySet<string> = new Set(["commands", "complete", "help", "skill", "upgrade"])
+
 /**
  * Every word that means a command at the top level. Taken off the built program rather than
  * written out, because a list written out goes stale the day a command is added — and `help` is in
@@ -35,11 +38,26 @@ export const commandWords = (program: Command): Set<string> =>
  * `TG_PROFILE=personal tg chats list`, with no flag in either. An option is never a profile, so
  * `tg --json chats list` still works.
  */
-export const liftProfile = (argv: string[], words: Set<string>): { profile?: string; rest: string[] } => {
-  const [first, ...rest] = argv
+export const liftProfile = (
+  argv: string[],
+  words: Set<string>,
+  valued: ReadonlySet<string> = new Set(),
+): { profile?: string; rest: string[] } => {
+  // `tg --json personal chats list`: options before the profile are skipped over, with the value an option takes.
+  let at = 0
+  while (argv[at]?.startsWith("-") && argv[at] !== "--") at += valued.has(argv[at] as string) ? 2 : 1
+  const first = argv[at]
   if (first === undefined || first.startsWith("-") || words.has(first)) return { rest: argv }
-  return { profile: first, rest }
+  return { profile: first, rest: [...argv.slice(0, at), ...argv.slice(at + 1)] }
 }
+
+/** The root's options that take the next word as their value: `--timeout 30s`. */
+export const valuedOptions = (program: Command): Set<string> =>
+  new Set(
+    program.options
+      .filter((option) => option.required)
+      .flatMap((option) => [option.long, option.short].filter((flag): flag is string => flag !== undefined)),
+  )
 
 /**
  * Refused at creation, which is the only moment it can still be explained: a profile named after a

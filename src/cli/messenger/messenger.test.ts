@@ -2112,7 +2112,9 @@ describe("the shared read commands", () => {
     })
     const mail = await call(["search", "mail", "chapter", "--json"], never, env)
     expect(mail.code).toBe(2)
-    expect(mail.stderr.join("\n")).toContain("mail is memo's: install @wirecat/cli-memo, then `memo search mail …`")
+    expect(mail.stderr.join("\n")).toContain(
+      "mail is searched by the separate memo CLI: install @wirecat/cli-memo, then `memo search mail …`",
+    )
 
     const args = ["search", "messages", "chapter", "--json"]
     const all = await call([...args, "--source", "all"], never, env)
