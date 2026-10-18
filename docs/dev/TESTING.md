@@ -41,6 +41,11 @@ a full run should print that line zero times.
 pace, and the agent and model variables an agent's shell would leak in. A test that defines a new app prefix
 adds it there.
 
+`src/testing/fresh-store.ts` runs last: a store opened where no file is yet starts from a copy of one migrated
+once per test file, since migrating an empty store costs 40–55 ms and a run opens about 1,900 of them. Everything
+else in opening still runs on the copy. A test that needs the migrations themselves to run opens a file at an older
+version, or calls `migrate` itself.
+
 ## Coverage has a floor
 
 `vitest.config.ts` holds it: lines 92 %, statements 90 %, functions 89 %, branches 77 % over `src/`,

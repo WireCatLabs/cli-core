@@ -5,7 +5,7 @@ export default defineConfig({
   tsconfig: "./node_modules/@wirecat/cli-base/config/tsconfig.base.json",
   test: {
     include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
-    setupFiles: ["@wirecat/cli-base/testing/setup", "src/testing/sandbox.ts"],
+    setupFiles: ["@wirecat/cli-base/testing/setup", "src/testing/sandbox.ts", "src/testing/fresh-store.ts"],
     globals: false,
     // Drizzle from node_modules reads its 290 KB package.json for each of its 72 modules: about 340 ms in every
     // test file, a quarter of the suite's CPU (2026-10-18). Bundled once, like dist does, it loads in a few ms.
