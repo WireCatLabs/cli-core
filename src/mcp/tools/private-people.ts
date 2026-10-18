@@ -71,6 +71,7 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
       ),
   }),
   contacts_notes_add: tool({
+    changesStore: true,
     title: "Add a private contact note",
     description: "Save the user's note locally with a stable id; nothing is sent to the person.",
     input: v.object({ person, text }),
@@ -143,6 +144,7 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
     },
   }),
   tags_auto: tool({
+    changesStore: true,
     title: "Classify cached channels",
     description:
       "Derive local keyword tags from title, username and description, preserving manual tags. sync_first reads current descriptions first. Dry-run uses cached data only.",

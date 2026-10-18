@@ -193,6 +193,59 @@ describe("tasks", () => {
     })
   })
 
+  it("**runs the timed follow-ups' task writes under the read-only lock**; a close only suggests, a plan keeps the old text", async () => {
+    const call = await setup()
+    call.env.CHAT_READ_ONLY = "1"
+    const ok = async (...argv: string[]) => {
+      const result = await call(...argv, "--json")
+      expect([argv.join(" "), result.code, result.stderr]).toEqual([argv.join(" "), 0, ""])
+      return result
+    }
+
+    await ok("tasks", "scan", "7", "--yes")
+    const { id, key } = item(await ok("tasks", "add", PROMISE, "--type", "promise", "--category", "money"))
+    const before = item(await ok("tasks", "show", key)).title
+    await ok(
+      "tasks",
+      "plan",
+      key,
+      "--title",
+      "send Ana the invoice",
+      "--description",
+      "Owes: me",
+      "--remind-time",
+      "1d",
+    )
+    await ok("tasks", "link", key, "msg:chat/500/7/2")
+    const scanned = json(await ok("tasks", "list")).items.find((one: { id: string }) => one.id !== id).id
+    await ok("tasks", "duplicates", "defer", scanned, key)
+    await ok("tasks", "duplicates", "reject", scanned, key)
+    await ok("tasks", "merge", scanned, "--into", key)
+    await ok("tasks", "unmerge", scanned)
+    await ok("tasks", "claim", key)
+    await ok("tasks", "release", key)
+    const closed = item(await ok("tasks", "close", key, "--as", "done", "--certainty", "0.99"))
+    expect(closed).toMatchObject({ state: "open", close_suggestion: { as: "done", certainty: 0.99 } })
+
+    const asOwner = await call("tasks", "close", key, "--as", "done", "--as-owner", "--json")
+    expect([asOwner.code, asOwner.stderr]).toEqual([5, expect.stringContaining("cannot close a task as the owner")])
+    expect((await call("tasks", "reject", key, "--json")).code).toBe(5)
+
+    delete call.env.CHAT_READ_ONLY
+    expect((await call("tasks", "duplicates", "reject", scanned, key, "--json")).code).toBe(0)
+    call.env.CHAT_READ_ONLY = "1"
+    const overruled = await call("tasks", "duplicates", "defer", scanned, key, "--json")
+    expect([overruled.code, overruled.stderr]).toEqual([5, expect.stringContaining("the owner already decided")])
+
+    const store = await openStore({ path: call.env.MESSAGING_STORE as string })
+    try {
+      const events = await store.tasks.events(id)
+      expect(events.find((one) => one.kind === "title")?.changes).toEqual({ title: [before, "send Ana the invoice"] })
+    } finally {
+      await store.close()
+    }
+  })
+
   it("**narrows by a query** over kind, chat and age, and names the fields it has", async () => {
     const call = await setup()
     await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")

@@ -63,6 +63,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       },
     }),
     conversations_links_add: tool({
+      changesStore: true,
       title: "Store agent conversation links",
       description:
         "Stores { model, skill?, answers } for one batch atomically in the local store. " +
@@ -92,6 +93,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       },
     }),
     conversations_links_clear: tool({
+      changesStore: true,
       title: "Clear agent conversation links",
       description:
         "Drops stored agent answers for a chat, optionally only one model's. Messages are untouched. " +

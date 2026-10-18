@@ -4,6 +4,7 @@ import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument, queryTerms } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { taskStatsAnswer } from "../../cli/messenger/stats-answers.js"
+import { readOnlyLockOf } from "../../ports/app.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { AGENDA_QUERY, agendaItem } from "../../services/agenda.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
@@ -165,7 +166,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "Closes a task as done, or as dismissed when it needs no answer; `reason` is kept with it. State your " +
         "`certainty` that the task needs nothing more: when the owner allows agent closes and it is at least the " +
         "owner's threshold (config task_agent_close_min, default 0.8), the task closes; otherwise it stays open " +
-        "with `close_suggestion` set, and the owner confirms or refuses it — do not ask again. A closed task stays " +
+        "with `close_suggestion` set, and the owner confirms or refuses it — do not ask again. Under the read-only " +
+        "lock every close waits on the owner this way. A closed task stays " +
         "closed, and the rules never reopen it; only `tasks unmerge` reopens a merged one. Writes only to the local " +
         `store; nothing is sent. Returns ${ROW_CLOSED}.`,
       input: v.object({
@@ -189,6 +191,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
               as: args.as,
               by: "agent",
               certainty: args.certainty,
+              ...(readOnlyLockOf(messenger.app, defaults.env) ? { suggestOnly: true } : {}),
               ...(args.reason === undefined ? {} : { reason: args.reason }),
             }),
           ),

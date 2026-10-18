@@ -20,6 +20,7 @@ import { momentOf } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
 import {
+  destroysNothing,
   LOCAL_READ,
   LOCAL_WRITE,
   REMOTE_READ,
@@ -453,7 +454,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   })
 
   withModelOptions(
-    annotate(embed.command("clear"), { effects: LOCAL_WRITE })
+    destroysNothing(annotate(embed.command("clear"), { effects: LOCAL_WRITE }))
       .description("drop a chat's vectors, or only one model's; messages and conversations are never touched")
       .option("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {

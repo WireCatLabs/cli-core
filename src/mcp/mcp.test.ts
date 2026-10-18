@@ -1535,7 +1535,7 @@ describe("the MCP server", () => {
     }
   })
 
-  it("under the read-only lock refuses the tools that write over or delete what the owner saved, and changes nothing", async () => {
+  it("under the read-only lock refuses the tools that write what the owner keeps, and changes nothing", async () => {
     const root = mkdtempSync(join(tmpdir(), "mcp-"))
     const unlocked = await connect(scripted(), { root })
     await unlocked.call("chats list")
@@ -1553,6 +1553,8 @@ describe("the MCP server", () => {
       ["tags remove", { chat: "7", tags: ["work"] }],
       ["searches create", { name: "daily", text: "dog", replace: true }],
       ["contacts alias set", { person: "Alice", alias: "Al" }],
+      ["tags add", { chat: "7", tags: ["work"] }],
+      ["contacts notes add", { person: "Alice", text: "met at the fair" }],
     ] as const) {
       const { isError, body } = await call(command, args)
       expect([command, isError, body.error?.code, body.error?.message]).toEqual([
@@ -1563,6 +1565,19 @@ describe("the MCP server", () => {
       ])
     }
     expect((await call("searches list")).body.items).toMatchObject([{ name: "daily", params: { text: "cat" } }])
+  })
+
+  it("under the read-only lock adds and plans tasks, and a close only waits on the owner", async () => {
+    const root = mkdtempSync(join(tmpdir(), "mcp-"))
+    await (await connect(scripted(), { root })).call("chats list")
+    const { call } = await connect(scripted(), { root, extraEnv: { CHAT_READ_ONLY: "1" } })
+
+    const added = await call("tasks add", { message: "msg:chat/500/7/101", type: "promise", category: "money" })
+    expect(added.isError, JSON.stringify(added.body)).toBe(false)
+    const task = added.body.item.id
+    expect((await call("tasks plan", { task, title: "Send the plan" })).isError).toBe(false)
+    const closed = await call("tasks close", { task, as: "done", certainty: 1 })
+    expect(closed.body.item).toMatchObject({ state: "open", close_suggestion: { as: "done", certainty: 1 } })
   })
 
   it("under the read-only lock refuses search_conversations with a remote embedder, before the query leaves", async () => {

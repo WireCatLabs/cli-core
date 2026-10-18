@@ -217,6 +217,8 @@ export interface CloseRequest {
   agent?: string
   /** 0–1: how sure the agent is that the task needs nothing more. */
   certainty?: number
+  /** Under `<PREFIX>_READ_ONLY`: the close waits on the owner whatever the threshold, so the lock closes nothing. */
+  suggestOnly?: boolean
 }
 
 export interface ClosedTask extends TaskView {
@@ -572,7 +574,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         return cardOf(store, id)
       }),
 
-    close: (id, { as, reason, by, agent, certainty }) =>
+    close: (id, { as, reason, by, agent, certainty, suggestOnly }) =>
       inStore(async (store, account) => {
         const existing = await owned(store, account, id)
         const suggested = existing.state === "open" ? await store.tasks.closeSuggestion(id) : null
@@ -592,7 +594,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
               { reason: "task.certainty-required" },
             )
           const { allowed, min } = await store.tasks.agentClose()
-          if (!allowed || certainty < min) {
+          if (suggestOnly || !allowed || certainty < min) {
             const suggestion = { as: state, certainty, ...(reason === undefined ? {} : { reason }) }
             await store.tasks.suggestClose(id, suggestion, { bot: agent ?? "agent" })
             return closedView((await store.tasks.get(id)) ?? existing)

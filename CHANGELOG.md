@@ -15,6 +15,25 @@ shape of this file.
   is refused, as the store reads refuse it. `watch` shows such a chat's stored title where the messenger gives
   none. Telegram and MAX, which answer for their own history, are unchanged.
 
+### Changed — may break callers
+
+- **The read-only lock refuses every local write that deletes or overwrites what the owner keeps.** With
+  `<PREFIX>_READ_ONLY` set, a command that writes only on this machine answers `permission_error` unless it is marked
+  `destroysNothing`, so a new local write is refused until someone marks it. Newly refused: `tags add`, `tags auto`,
+  `mentions confirm`, `mentions reject`, `contacts notes add`, `contacts link`, `contacts unlink`,
+  `attachments text set`, `chats tracking add`, `chats tracking remove`, `conversations links add`,
+  `conversations links clear`, `conversations consents revoke` and `tasks reject`, and their MCP tools. Still allowed:
+  what the store rebuilds or a new file (`images embed`, `mentions rebuild`, `conversations embed clear`,
+  `store jobs cancel|retry|clear`, `store backup`, `store reindex`, `store export`, `stats charts`,
+  `doctor report create`, `server start|stop|restart`), every sync, fetch and `serve`, and the task bookkeeping the
+  follow-ups skill does on a timer (`tasks add`, `scan`, `plan`, `link`, `merge`, `unmerge`, `claim`, `release`,
+  `close`, `duplicates reject`, `duplicates defer`). Under the lock `tasks close` (and `tasks_close`) only suggests the
+  close for the owner to confirm, and `--as-owner` is refused; the task's history names the agent, not the owner, for
+  what it plans, merges or decides under the lock. `tasks plan` keeps the old title and description in the task's
+  history (`TASK_EVENT_KINDS` gains `title` and `description`). An agent — under the lock, or any MCP agent — can no
+  longer change a duplicate pair the owner decided (`tasks duplicates reject|defer`, `merge`, `unmerge`). `changesStore` is gone from `./cli`; mark a command with `destroysNothing(command)` instead. A
+  CLI's own local write must be marked too, or it is refused under the lock (max-cli's `doctor report create`).
+
 ## 0.336.0 — 18.10.2026
 
 ### Added

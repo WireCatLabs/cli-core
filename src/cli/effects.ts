@@ -1,4 +1,4 @@
-import { annotate, annotateOption, stepTargets } from "@wirecat/cli-base/commands"
+import { annotate, annotateOption, metaOf, stepTargets } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
 import { type Command, Option } from "commander"
 import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
@@ -42,24 +42,37 @@ export const logsInOrOut = <T extends Command>(command: T): T => {
 
 export const isLogin = (command: Command): boolean => LOGIN.has(command)
 
-const STORE_CHANGE = new WeakSet<Command>()
+const KEPT_UNDER_LOCK = new WeakSet<Command>()
 
 /**
- * Marks a command that replaces, deletes or rewrites the message store or a file made from it, or that writes what
- * the owner saved in it (saved searches, aliases, contact notes). The store is the owner's archive, so
- * `<PREFIX>_READ_ONLY` refuses it even though nothing leaves the machine; `--dry-run` still previews it. What the store can rebuild from its messages —
- * jobs, conversation links, vectors — is not marked.
+ * Marks a local write `<PREFIX>_READ_ONLY` lets through, because it deletes or overwrites nothing that cannot be got
+ * back: what the store rebuilds from its messages (vectors, a backfill job, the mention index), a new file (a backup,
+ * a chart, a report), or the task bookkeeping a scheduled agent does, which only adds, is undone by its pair
+ * (merge/unmerge, claim/release) or keeps the old value in the task's history; under the lock a close only suggests.
  */
-export const changesStore = <T extends Command>(command: T): T => {
-  STORE_CHANGE.add(command)
+export const destroysNothing = <T extends Command>(command: T): T => {
+  KEPT_UNDER_LOCK.add(command)
   return command
 }
 
-export const isStoreChange = (command: Command): boolean => STORE_CHANGE.has(command)
+/**
+ * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
+ * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
+ * keeps receiving, a remote write meets the send guard, and an authority change has its own refusal.
+ */
+export const isStoreChange = (command: Command): boolean => {
+  const effects = metaOf(command).effects
+  return (
+    effects?.remote === "none" &&
+    effects.local === "write" &&
+    !KEPT_UNDER_LOCK.has(command) &&
+    !changesAuthority(command)
+  )
+}
 
 export const STORE_CHANGE_REFUSAL = "change the message store"
 
-/** Under `<PREFIX>_READ_ONLY`, refuses a change `changesStore` marks — for a caller outside `run()`, an MCP tool. */
+/** Under `<PREFIX>_READ_ONLY`, refuses a change to the store — for a caller outside `run()`, an MCP tool. */
 export const refuseStoreChange = (app: AppIdentity, env: NodeJS.ProcessEnv): void => {
   const lock = readOnlyLockOf(app, env)
   if (lock) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { metaOf } from "@wirecat/cli-base/commands"
+import { annotate, metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
@@ -10,10 +10,13 @@ import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
 import {
   changesAuthority,
+  destroysNothing,
+  FETCH,
   isOtherServiceCall,
   isStoreChange,
   judgedEffects,
   judgedTargets,
+  LOCAL_WRITE,
   logsInOrOut,
   refuseUnderReadOnly,
 } from "./effects.js"
@@ -98,14 +101,60 @@ describe("command effects", () => {
     )
   })
 
-  it("mark for the read-only lock the commands that rewrite the store or write what the owner saved in it", () => {
-    const marked = commands.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)
-    expect(marked.sort()).toEqual(
+  it("refuse under the read-only lock every local write but what destroys nothing that cannot be got back", () => {
+    const localWrites = commands.filter(({ command }) => {
+      const effects = metaOf(command).effects
+      return effects?.remote === "none" && effects.local === "write" && !changesAuthority(command)
+    })
+    const refused = localWrites.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)
+    const kept = localWrites.filter(({ command }) => !isStoreChange(command)).map(({ path }) => path)
+
+    expect(kept.sort()).toEqual(
       [
+        "conversations embed clear",
+        "doctor report create",
+        "images embed",
+        "mentions rebuild",
+        "server restart",
+        "server start",
+        "server stop",
+        "stats charts",
+        "store backup",
+        "store export",
+        "store jobs cancel",
+        "store jobs clear",
+        "store jobs retry",
+        "store reindex",
+        "tasks add",
+        "tasks claim",
+        "tasks close",
+        "tasks duplicates defer",
+        "tasks duplicates reject",
+        "tasks link",
+        "tasks merge",
+        "tasks plan",
+        "tasks release",
+        "tasks scan",
+        "tasks unmerge",
+      ].sort(),
+    )
+    expect(refused.sort()).toEqual(
+      [
+        "attachments text set",
+        "chats tracking add",
+        "chats tracking remove",
         "contacts alias rm",
         "contacts alias set",
+        "contacts link",
+        "contacts notes add",
         "contacts notes edit",
         "contacts notes remove",
+        "contacts unlink",
+        "conversations consents revoke",
+        "conversations links add",
+        "conversations links clear",
+        "mentions confirm",
+        "mentions reject",
         "searches clear",
         "searches create",
         "searches delete",
@@ -116,9 +165,33 @@ describe("command effects", () => {
         "store repair",
         "store reset",
         "store restore",
+        "tags add",
+        "tags auto",
         "tags remove",
+        "tasks reject",
       ].sort(),
     )
+    expect(
+      commands.filter(({ command }) => isStoreChange(command) && metaOf(command).effects?.remote !== "none"),
+    ).toEqual([])
+  })
+
+  it("let through every task write the follow-ups skill makes on a timer, but the owner's tasks reject", () => {
+    const skill = readFileSync(new URL("../../skills/follow-ups/SKILL.md", import.meta.url), "utf8")
+    const named = [
+      ...new Set([...skill.matchAll(/`(?:\{\{command\}\} )?(tasks (?:duplicates )?[a-z]+)/g)].map((m) => m[1])),
+    ]
+    const used = commands.filter(({ path }) => named.includes(path))
+
+    expect(used.length).toBeGreaterThan(10)
+    expect(used.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)).toEqual(["tasks reject"])
+  })
+
+  it("refuse a local write nobody marked, so a new command fails closed", () => {
+    const fresh = annotate(new Command("fresh"), { effects: LOCAL_WRITE })
+    expect(isStoreChange(fresh)).toBe(true)
+    expect(isStoreChange(destroysNothing(annotate(new Command("kept"), { effects: LOCAL_WRITE })))).toBe(false)
+    expect(isStoreChange(annotate(new Command("fetch"), { effects: FETCH }))).toBe(false)
   })
 
   it("keep off serve's relay the commands whose remote side is another service", () => {
@@ -263,7 +336,16 @@ describe("the read-only lock on the message store", () => {
     ["tags remove", ["tags", "remove", "work", "--chat", "7"]],
     ["searches create", ["searches", "create", "daily", "cat"]],
     ["contacts alias set", ["contacts", "alias", "set", "Alice", "Al"]],
-  ])("refuses %s, which writes over or deletes what the owner saved", async (name, argv) => {
+    ["tags add", ["tags", "add", "work", "--chat", "7"]],
+    ["tags auto", ["tags", "auto"]],
+    ["mentions confirm", ["mentions", "confirm", "1"]],
+    ["contacts notes add", ["contacts", "notes", "add", "Alice", "--file", "/dev/null"]],
+    ["contacts link", ["contacts", "link", "Alice", "Bob"]],
+    ["attachments text set", ["attachments", "text", "set", "7", "1", "--text-file", "/dev/null"]],
+    ["chats tracking add", ["chats", "tracking", "add", "7"]],
+    ["conversations links add", ["conversations", "links", "add", "--batch", "1"]],
+    ["conversations consents revoke", ["conversations", "consents", "revoke"]],
+  ])("refuses %s, which writes what the owner keeps", async (name, argv) => {
     const store = kept(`${name}.db`)
 
     const { code, error } = await locked(["ro", ...argv], store)
@@ -271,6 +353,30 @@ describe("the read-only lock on the message store", () => {
     expect([code, error.code]).toEqual([5, "permission_error"])
     expect(error.message).toBe("this process is read-only (CHAT_READ_ONLY) — it cannot change the message store")
     expect(readFileSync(store, "utf8")).toBe("kept")
+  })
+
+  it("previews tags add with --dry-run and leaves the store as it was", async () => {
+    const store = kept("dry.db")
+
+    const { code } = await locked(["ro", "tags", "add", "work", "--chat", "7", "--dry-run"], store)
+
+    expect(code).toBe(0)
+    expect(readFileSync(store, "utf8")).toBe("kept")
+  })
+
+  it.each([
+    ["store export", ["store", "export", "--output", "OUT"]],
+    ["stats charts", ["stats", "charts", "7", "--output", "OUT"]],
+    ["messages sync", ["messages", "sync", "7"]],
+    ["contacts sync", ["contacts", "sync"]],
+    ["review --new", ["review", "--new"]],
+  ])("lets %s past the lock: it writes nothing the owner keeps, or it receives", async (_, argv) => {
+    const { error } = await locked(
+      ["ro", ...argv.map((word) => (word === "OUT" ? join(root, "out.svg") : word))],
+      join(root, "absent.db"),
+    )
+
+    expect(error?.message ?? "").not.toContain("read-only")
   })
 
   it("still previews store repair with --dry-run", async () => {

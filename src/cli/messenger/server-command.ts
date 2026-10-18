@@ -12,7 +12,7 @@ import { parseDuration } from "../../domain/duration.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { FloodMemory, floodPathFor, holdEnd } from "../../sends/flood.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { wholeList } from "./chat-answers.js"
@@ -252,21 +252,23 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
     options.idle ? sub.option("--idle <duration>", "stop after this long with nobody using it — 15m, 1h") : sub
 
   withIdle(
-    annotate(command.command("start"), { effects: LOCAL_WRITE }).description(
+    destroysNothing(annotate(command.command("start"), { effects: LOCAL_WRITE })).description(
       "start serve in the background — through the unit if one is installed — and answer once it connects",
     ),
   ).action(async function (this: Command) {
     await start(prepare(this), idleArgs(this))
   })
 
-  annotate(command.command("stop"), { effects: LOCAL_WRITE })
+  destroysNothing(annotate(command.command("stop"), { effects: LOCAL_WRITE }))
     .description("stop this profile's serve — through the unit if it runs under one")
     .action(async function (this: Command) {
       await stop(prepare(this))
     })
 
   withIdle(
-    annotate(command.command("restart"), { effects: LOCAL_WRITE }).description("stop it and start it again"),
+    destroysNothing(annotate(command.command("restart"), { effects: LOCAL_WRITE })).description(
+      "stop it and start it again",
+    ),
   ).action(async function (this: Command) {
     const args = idleArgs(this)
     const prepared = prepare(this)

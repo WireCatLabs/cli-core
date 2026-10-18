@@ -10,7 +10,7 @@ import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
-import { LOCAL_WRITE, REMOTE_READ } from "../effects.js"
+import { destroysNothing, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
@@ -90,7 +90,7 @@ const reportCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(report.command("create"), { effects: LOCAL_WRITE })
+  destroysNothing(annotate(report.command("create"), { effects: LOCAL_WRITE }))
     .description("write a problem report to a file, and say where to send it")
     .option("--run <id>", "the run the report is about; the newest failed one if not given")
     .option("--output <file>", "where to write it; a new file in this directory if not given")

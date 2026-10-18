@@ -11,7 +11,7 @@ import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
-import { changesStore, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -60,7 +60,7 @@ const statusCommand = (messenger: Messenger): Command =>
  * store is not offered.
  */
 const clearCommand = (messenger: Messenger): Command =>
-  changesStore(annotate(new Command("clear"), { effects: LOCAL_WRITE, mcp: false }))
+  annotate(new Command("clear"), { effects: LOCAL_WRITE, mcp: false })
     .description("delete from the store the chats this account has left, with their messages")
     .option("--left", "the chats this account has left — the only thing this clears")
     .option("--allow-dangerous", "yes, delete — it cannot be undone, and a chat you left cannot be fetched again")
@@ -95,7 +95,7 @@ const clearCommand = (messenger: Messenger): Command =>
  * folder, and each later run into the same folder adds only what changed.
  */
 const exportCommand = (messenger: Messenger): Command =>
-  annotate(new Command("export"), { effects: LOCAL_WRITE, mcp: false })
+  destroysNothing(annotate(new Command("export"), { effects: LOCAL_WRITE, mcp: false }))
     .description(
       "a chat's stored messages, oldest first: --jsonl one message per line, --json the list envelope of messages; never asks the messenger",
     )

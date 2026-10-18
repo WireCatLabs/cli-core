@@ -10,7 +10,7 @@ import { chartPng } from "../../charts/png.js"
 import { chartRenderer } from "../../charts/render.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { momentOf } from "../../services/moment.js"
-import { LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { adminStatisticsCommand } from "./admin-statistics-command.js"
 import { statsCommand as chatStatsCommand } from "./chats-stats-command.js"
@@ -48,7 +48,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
   if (messenger.officialStats === true) chats.addCommand(officialStatsCommand(messenger))
   stats.addCommand(chats)
   stats.addCommand(new Command("tasks").description("task statistics").addCommand(tasksStatsCommand(messenger)))
-  annotate(stats.command("charts"), { effects: LOCAL_WRITE, output: { entity: "chart" } })
+  destroysNothing(annotate(stats.command("charts"), { effects: LOCAL_WRITE, output: { entity: "chart" } }))
     .description("a chart's data from a chat's statistics, and optionally a dark SVG or PNG image")
     .argument("<chat>", messenger.chatArgument)
     .option(

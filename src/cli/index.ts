@@ -193,7 +193,7 @@ export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export {
   changesAuthority,
-  changesStore,
+  destroysNothing,
   FETCH,
   grantsAuthority,
   isLogin,

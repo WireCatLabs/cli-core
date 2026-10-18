@@ -66,6 +66,7 @@ const OTHERS: Entry[] = [
   validation("task.dependency-cycle", "the task would depend on itself"),
   validation("task.duplicate-candidates", "open tasks may be the same job: attach to one, or add it as new"),
   validation("task.certainty-required", "an agent closes a task with its certainty, 0 to 1"),
+  ["task.pair-decided", "permission_error", "the owner already decided the pair; an agent does not change it"],
   validation("task.no-close-suggestion", "the task has no agent's close waiting on the owner"),
   validation("task.merged", "the task was merged into another; use that one"),
   validation("task.not-merged", "the task was not merged into another"),

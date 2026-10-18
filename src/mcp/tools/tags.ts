@@ -53,6 +53,7 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tags_add: tool({
+      changesStore: true,
       title: "Tag a chat, person, message or task",
       description: `Puts tags on one chat, person, message or task. ${TARGET} Returns { item: { target, added, unchanged } }.`,
       input,
