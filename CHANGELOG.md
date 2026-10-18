@@ -14,6 +14,11 @@ shape of this file.
 - **The contract kit checks `listen`** when the adapter has it: on a signal already aborted it resolves at once
   and does not reject, and otherwise it keeps listening until the signal aborts, then resolves. `OPTIONAL_METHODS`
   lists `listen`, and `fakeAdapter(seed, { listen: true })` has it. The cases cannot see whether `listen` connects.
+- **`loginQr` shows a login QR code the same way in every messenger CLI**: drawn on the diagnostic stream, which
+  `--quiet` does not hide, or written to the `--qr-file` PNG with `writeSecurely` (a temporary file created with
+  mode `0600`, renamed over the path, never chmodded afterwards). On a terminal too narrow for the code it draws
+  nothing and says to widen the terminal or pass `--qr-file`; it opens nothing. `close()` removes the image.
+  `qrNeedsTerminal(command)` is the shared refusal when nobody could scan, and `atTerminal(input)` the shared test.
 
 ### Changed — may break callers
 

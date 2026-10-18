@@ -41,5 +41,12 @@ export { defaultRules, ModerationRules, moderationPathFor } from "./moderation/r
 export { type OutputOptions, resolveOutput } from "./output.js"
 export { pollLines, type RenderOptions, renderMessage, renderMessages } from "./render/messages.js"
 export { isId, type PeopleLookup, pickChat, pickPerson } from "./resolve.js"
+export {
+  atTerminal,
+  type LoginQr,
+  type LoginQrOptions,
+  loginQr,
+  qrNeedsTerminal,
+} from "./terminal/login-qr.js"
 export { readSecret, type SecretInput } from "./terminal/prompt.js"
 export { qrPng, terminalQr } from "./terminal/qr.js"
