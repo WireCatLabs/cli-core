@@ -17,6 +17,20 @@ export {
   downloadTextModel,
   type ModelDownloadOptions,
 } from "./model-downloads.js"
+export type {
+  ProjectEvidenceItem,
+  ProjectGathering,
+  ProjectGatheringPorts,
+  ProjectGatheringStop,
+  ProjectSourceFetcher,
+} from "./project-gathering.js"
+export { gatherProjectEvidence } from "./project-gathering.js"
+export type {
+  ProjectGatheringBudgets,
+  ProjectGatheringRequest,
+  ProjectLane,
+  ProjectLaneKind,
+} from "./project-gathering-request.js"
 
 import { type AccountService, accountService } from "./account.js"
 import { type AdminService, adminService } from "./admin.js"

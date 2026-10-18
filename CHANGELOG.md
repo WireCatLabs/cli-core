@@ -9,6 +9,12 @@ shape of this file.
 
 ### Added
 
+- **`gatherProjectEvidence` collects cited evidence for one project** from explicitly selected stored messages,
+  mail and imported documents: the project name, aliases, keywords and people's names are alternative search
+  lanes, the window defaults to 60 days and is read in 90-day chunks, every invocation has its own read, byte,
+  time and item budgets, and an opaque reference-only checkpoint resumes the run with its window frozen. An
+  optional host fetch port runs first; a failed fetch or source is reported as coverage, never as absence. It
+  writes nothing. See `docs/dev/PROJECT-GATHERING.md`.
 - **The run record of a one-shot command's passive listen counts what it received**: the `adapter.listen`
   response carries `counts` by event (`message`, `edit`, …), as `messages.watch` does, so a run shows how many
   messages a store-history messenger handed on and saved during the command.
