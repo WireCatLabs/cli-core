@@ -114,8 +114,6 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
           ...(args.catch_up_messages === undefined ? [] : ["--catch-up-messages", String(args.catch_up_messages)]),
           ...(args.catch_up_time === undefined ? [] : ["--catch-up-time", args.catch_up_time]),
           "--json",
-          "--timeout",
-          "0",
         ]
         return itemOf(
           snakeKeys(

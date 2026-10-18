@@ -2205,6 +2205,7 @@ describe("the MCP server", () => {
     })
     expect(queued.isError, JSON.stringify(queued.body)).toBe(false)
     expect(spawnJob.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["--fingerprint", "--repair-time", "1s"]))
+    expect(spawnJob.mock.calls[0]?.[0]).not.toContain("--timeout")
     expect(backend.opened()).toBe(0)
     expect((await call("store jobs show", { job: queued.body.item.job })).body.item).toMatchObject({
       profile: "default",
