@@ -2,12 +2,14 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
 import type { Chat, GroupCard } from "../../domain/models.js"
 import { adminTools } from "../../mcp/tools/admin.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { guardFor } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { commandsCommand } from "../commands-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { accountCommand } from "./account-command.js"
@@ -68,7 +70,15 @@ const call = async (
   const streams = captureStreams()
   const code = await run(
     argv,
-    { app, commands: () => [chatsCommand(messenger), contactsCommand(messenger), accountCommand(messenger)] },
+    {
+      app,
+      commands: () => [
+        chatsCommand(messenger),
+        contactsCommand(messenger),
+        accountCommand(messenger),
+        commandsCommand(app),
+      ],
+    },
     { streams, tty: false, env },
   )
   return { code, stdout: streams.stdout, stderr: streams.stderr }
@@ -760,6 +770,25 @@ describe("chats create, join and leave", () => {
     expect(can.stderr.join("\n")).toContain("unknown option '--can'")
     expect(done).toEqual([["7", "91", ["members", "pin"]]])
     expect(Object.keys(tool?.input.entries ?? {})).toEqual(["chat", "person"])
+  })
+
+  it("keeps the summary of admins add within 80 characters where every right is given, and still names them", async () => {
+    const whatsapp = {
+      adminRights: ["members", "admins", "info", "pin", "link", "post", "delete"] as const,
+      pickAdminRights: false,
+    }
+
+    const listed = await call(["commands", "--json"], base, sandbox(), whatsapp)
+
+    const add = (JSON.parse(listed.stdout.join("")).commands as CommandInfo[])
+      .flatMap(function walk(one): CommandInfo[] {
+        return [one, ...one.commands.flatMap(walk)]
+      })
+      .find((one) => one.path.join(" ") === "chats admins add")
+    const summary = (add?.summary ?? add?.description.split("\n")[0] ?? "").trim()
+    expect(summary.length).toBeGreaterThan(0)
+    expect(summary.length).toBeLessThanOrEqual(80)
+    expect(add?.description).toContain("members, admins, info, pin, link, post, delete")
   })
 
   it("**changes chat folders through the guard**, a folder named by its title, and refuses one it cannot tell apart", async () => {

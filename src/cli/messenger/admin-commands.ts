@@ -239,6 +239,7 @@ const adminsCommand = (messenger: Messenger): Command => {
   const admins = new Command("admins").description("give or take back a member's admin rights")
   const picks = messenger.pickAdminRights !== false
   const add = annotate(new Command("add"), { effects: REMOTE_WRITE })
+    .summary(picks ? "make a member an admin with these rights" : "make a member an admin, with every right")
     .description(
       picks
         ? "make a member an admin with these rights"

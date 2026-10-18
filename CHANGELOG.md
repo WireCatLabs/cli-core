@@ -54,6 +54,9 @@ shape of this file.
   the new store write `attachments.keepProviderRefs` (matched as `keepDownloads` matches; a saved path stays). A ref
   that cannot be saved costs only another fetch: transcribe warns without showing it, the photo and the picture are
   answered anyway. `messages list --transcribe` and the MCP `messages transcribe` tool do not save it yet.
+- **`chats admins add` keeps its summary within 80 characters where a messenger gives every right.** Without
+  `--can` (`pickAdminRights: false`) the summary is "make a member an admin, with every right"; the rights are named
+  in the description `--help` and `commands --json` show. wa's seven rights had pushed it to 88 (WC-CMD-22).
 
 ## 0.339.0 — 18.10.2026
 
