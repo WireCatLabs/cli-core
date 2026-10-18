@@ -27,6 +27,9 @@ accept them yet. A reader must verify the caller's authorized account before ret
 
 ### Reviewing duplicate tags
 
+The [tag consolidation foundation](dev/TAG-CONSOLIDATION.md) documents the separate bounded
+`createTagRedirectIndex` policy and compatibility requirements. It does not enable store merges.
+
 `store.knowledge.previewTagConsolidation({ sourceId, survivorId,
 expectedVocabularyFingerprint, maxRows?, maxReadBytes?, sampleLimit?, signal? })` reads two explicit
 canonical tag IDs. Obtain the required fingerprint from unfiltered `vocabulary()`; filtered catalog
