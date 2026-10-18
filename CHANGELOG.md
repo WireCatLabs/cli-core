@@ -15,6 +15,20 @@ shape of this file.
   is checked under its own key (`chats.unmute` apart from `chats.mute`), passes the read-only lock and the write
   guard as its command does, and is audited as a private write: nobody in the chat is told.
 
+### Changed — may break callers
+
+- **A send or `flood clear` blocked on a held lock exits 9 (`timeout`), not 1 (`internal_error`).** When another
+  process holds the send journal or the request pace past the 5 s wait, nothing was sent, so the error is now
+  `timeout`, which is safe to retry.
+
+### Fixed
+
+- **A change to the recipient list can no longer undo another one made at the same time.** `recipients add`,
+  `recipients remove`, `recipients clear` and the re-key `serve` applies each read and write the list under one lock,
+  so a chat removed while `serve` re-keys stays removed. A list held by another process for 5 s refuses the change
+  with `timeout` and stays as it was. A re-key in `serve` waits at most 250 ms for it, then warns and keeps the old
+  id, so sends to the new id are refused rather than allowed.
+
 ## 0.337.0 — 18.10.2026
 
 ### Added
@@ -44,17 +58,8 @@ shape of this file.
   longer change a duplicate pair the owner decided (`tasks duplicates reject|defer`, `merge`, `unmerge`). `changesStore` is gone from `./cli`; mark a command with `destroysNothing(command)` instead. A
   CLI's own local write must be marked too, or it is refused under the lock (max-cli's `doctor report create`).
 
-- **A send or `flood clear` blocked on a held lock exits 9 (`timeout`), not 1 (`internal_error`).** When another
-  process holds the send journal or the request pace past the 5 s wait, nothing was sent, so the error is now
-  `timeout`, which is safe to retry.
-
 ### Fixed
 
-- **A change to the recipient list can no longer undo another one made at the same time.** `recipients add`,
-  `recipients remove`, `recipients clear` and the re-key `serve` applies each read and write the list under one lock,
-  so a chat removed while `serve` re-keys stays removed. A list held by another process for 5 s refuses the change
-  with `timeout` and stays as it was. A re-key in `serve` waits at most 250 ms for it, then warns and keeps the old
-  id, so sends to the new id are refused rather than allowed.
 - **`stats chats show` no longer reports "nobody joined" for a chat whose joins were never recorded.** For a
   messenger whose history lives in the local store, a chat with no stored join, leave or other chat event yet now
   leaves `members` out, sets `complete` to false and says in `missing` (and on stderr in text mode) that joins and
