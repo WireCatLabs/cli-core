@@ -35,6 +35,7 @@ import {
 } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
+import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { movedPath, movedPointer } from "./moved.js"
@@ -56,6 +57,8 @@ export interface ProgramDefinition {
     ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint">
   }
   configure?: (program: Command) => void
+  /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
+  firstScreen?: FirstScreen
   prepare?: (program: Command, environment: RunOptions) => void | Promise<void>
   onFailure?: (error: unknown, program: Command) => void | Promise<void>
 }
@@ -71,7 +74,7 @@ export interface ProgramOptions {
  * `exitOverride` and the write hooks turn it into a value a test can drive.
  */
 export const createProgram = (
-  { app, commands, configure }: ProgramDefinition,
+  { app, commands, configure, firstScreen }: ProgramDefinition,
   { out, err }: ProgramOptions = {},
 ): Command => {
   const program = new Command()
@@ -112,6 +115,7 @@ export const createProgram = (
 
   for (const command of commands()) program.addCommand(command)
   configure?.(program)
+  installHelp(program, { pitch: app.description, ...firstScreen })
 
   // Depth-first: Commander does not pass `configureOutput` down to a command added with
   // `addCommand`, so `tg messages --help` would write to the real terminal.
@@ -451,7 +455,9 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     await control.race(() => program.parseAsync(rest, { from: "user" }))
     const code = exit.code ?? (process.exitCode === undefined ? 0 : Number(process.exitCode))
     const hint =
-      code === 0 && rest[0] !== "commands" && !rest.includes("--quiet") ? hintFor(definition, rest, options) : undefined
+      code === 0 && rest[0] !== "commands" && rest[0] !== "help" && !rest.includes("--quiet")
+        ? hintFor(definition, rest, options)
+        : undefined
     if (hint) streams.diagnostic(hint)
     return code
   } catch (caught) {

@@ -266,6 +266,12 @@ and exit codes, includes options inherited from ancestor groups, and resolves co
 Give one command path per call; inspect other groups in separate calls.
 `<cli> commands --json` still returns the full tree.
 
+`<cli> --help` and a bare `<cli>` show the first screen: the tool's pitch, the profile rule once, what the tool
+can do, the other WireCat tools and pointers to `commands`, `help options` and `skill show`. A tool on
+`createProgram` passes `firstScreen: { pitch, can }` in its definition; a tool that builds its own commander program
+calls `installHelp(program, { pitch, can, profile?, start? })`. `<cli> help options` prints the options for
+every command, and `<cli> --help-all` the full commander help.
+
 ## Evidence packets for agents
 
 `prepareEvidencePacket` from `@wirecat/cli-core/services` packages a message page that the

@@ -228,6 +228,13 @@ export {
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
 export {
+  type FirstScreen,
+  type FirstScreenLine,
+  firstScreen,
+  installHelp,
+  WIRECAT_TOOLS,
+} from "./help/first-screen.js"
+export {
   bufferedInput,
   type InputPolicy,
   inputPolicy,
