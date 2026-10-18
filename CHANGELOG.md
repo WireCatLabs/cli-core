@@ -42,9 +42,6 @@ shape of this file.
   blocks while it waits. `recipients add`, which connects and so runs inside `serve`, uses the new
   `RecipientList.addAsync`. A write whose command ran out of time while it waited is not sent, and is journaled as
   failed.
-
-### Fixed
-
 - **The MCP `messages list` tool offers `topic:` only where the messenger has forum topics.** For a messenger with
   `topics: false` (WhatsApp, MAX) its description and `query` help no longer name `topic:12`, and a `topic:` term
   is refused as an unknown query field, as `messages list` on the command line already refuses it.
