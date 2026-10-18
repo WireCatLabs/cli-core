@@ -83,7 +83,7 @@ by meaning; where `bot watch` takes deliveries; and the rule for merging and rel
 3. **A new command or option is a parity row.** Mark it `planned` for tg and max ("each CLI's next
    cli-core bump") with a catalogue meaning, run `pnpm parity:render`; the Parity workflow runs on the pull
    request.
-4. **Pull requests run only a fast standards check.** Run the full check yourself first.
+4. **cli-core pull requests run full validation; other repositories' may run only a fast standards check.** Run their full checks yourself first.
 5. **In zsh, never name a shell variable `path`** — it is `PATH`. Push a worktree branch with
    `git push origin HEAD:<branch>`.
 

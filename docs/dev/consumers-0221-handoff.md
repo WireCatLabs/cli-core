@@ -74,7 +74,7 @@ the bump can be reverted alone.
 3. **Log pruning is new behaviour on the owner's data.** From 0.219.0, opening the store deletes agent-call rows
    older than 90 days and empties handled bot-update payloads older than 30 days. All three CLIs share one
    store, so they move to 0.222.0 in the same release window.
-4. **Pull requests run only a fast standards check**; run each full check yourself. tg-cli and max-cli refuse a
+4. **cli-core pull requests run full validation; other repositories' may run only a fast standards check**, so run their full checks yourself. tg-cli and max-cli refuse a
    release within two hours of their last one (`bin/release`).
 5. **The main checkouts are stale** (tg-cli's has an unresolved conflict in `CLEANUP.md`): work only in worktrees
    off `origin/main`, never in the main checkouts.

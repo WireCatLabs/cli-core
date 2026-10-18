@@ -90,7 +90,7 @@ Two repositories, in this order; one branch and pull request per step, off `orig
    folders the scan covered, or a mail in two folders drops out of one it is still in.
 4. **The email rows of `involvements` are empty** until something writes `store.mail`; `contacts timeline`
    then shows mail with no extra work (`src/store/sqlite/involvement-queue.ts:45-57`).
-5. **Pull requests run only a fast standards check.** Run each repository's full check yourself first.
+5. **cli-core pull requests run full validation; other repositories' may run only a fast standards check.** Run their full checks yourself first.
 6. **In zsh, never name a shell variable `path`** — it is `PATH`. Push a worktree branch with
    `git push origin HEAD:<branch>`: the sandbox can mask `.git/config`, so `-u` may not record the upstream.
 

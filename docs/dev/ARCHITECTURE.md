@@ -391,7 +391,7 @@ it by editing that line in a PR of its own, merged before the migration.
 
 1. **Take the number** as the paragraph above says, and wait for that PR to merge.
 2. **Change the spec first**, `scripts/schema/spec.mjs`, and `pnpm schema:render` for the page. Then change
-   `src/store/sqlite/schema.ts` to match, until `pnpm schema:check` passes (full validation runs it after merge, not the pull request), and run
+   `src/store/sqlite/schema.ts` to match, until `pnpm schema:check` passes (the pull request's full validation runs it too), and run
    `pnpm db:generate --name version-<n>-<what>`. It writes `drizzle/<timestamp>_version-<n>-<what>/migration.sql`.
 3. **Read the SQL before anything else.** For a constraint change (a new `NOT NULL`, a changed
    default, a foreign key), drizzle-kit rebuilds the table: `CREATE TABLE __new_…`, copy, `DROP TABLE`,

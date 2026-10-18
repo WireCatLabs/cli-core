@@ -5,7 +5,7 @@ name: Parity
 # Their main, not npm: a row lists a CLI in `in` once its main has it, and a release always trails that.
 # Built against this checkout, not their pin: the pin prints the last release's shape, which a change to
 # that shape can never match. The pinned pairing is each CLI's own `parity:check`.
-# It runs inside full validation (push to main, release, monthly) and by hand, never on a pull request.
+# It runs inside full validation (pull request, push to main, release, monthly) and by hand.
 # `app_ref` builds a CLI's branch instead of its main, for a release whose CLIs adopt it on a branch
 # (bin/release --app-ref, scripts/parity/app-ref.sh).
 on:
