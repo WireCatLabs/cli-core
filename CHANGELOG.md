@@ -16,6 +16,10 @@ shape of this file.
 
 ### Fixed
 
+- **A missing text model no longer points zm or drive users at tg.** When no command was passed — zm's `search all`,
+  drive's notes search — the hint named `tg models text download`, which such a user may not have. Now a tool that
+  passes its command gets its own; any other is told to install the model with a WireCat CLI that has
+  `models text download` (tg, max or wa), since they share the model folder.
 - **The README's adapter example runs as written.** It called `adapterOver` and `fakeClient`, which do not exist; it
   now uses the kit's `fakeAdapter` and says where your adapter goes. The same fix is in the adapter guide.
 - **The README says who the package is for, gives the install command and its peers,** and advises pinning an exact

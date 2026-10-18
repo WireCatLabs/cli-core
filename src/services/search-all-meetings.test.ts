@@ -330,4 +330,19 @@ describe("opt-in meeting-inclusive search", () => {
       message: expect.stringContaining("changed"),
     })
   })
+
+  it("names the download command of the tool that has one, and never another tool's", async () => {
+    const { store } = await fixture()
+    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "zm-test-no-models-")) }
+    const notes = request({ only: ["notes"], env })
+    const zoom = await searchAllIncludingMeetings(store, account, notes)
+    expect(zoom.notes?.meaningSkipped).toBe(
+      "e5-small is not downloaded — install it with a WireCat CLI that has `models text download` (tg, max or wa); " +
+        "they share the model folder",
+    )
+    const max = await searchAllIncludingMeetings(store, account, notes, {
+      app: { command: "max", appName: "max-cli", envPrefix: "MAX", description: "", version: "1.0.0" },
+    })
+    expect(max.notes?.meaningSkipped).toBe("e5-small is not downloaded — `max models text download e5-small`")
+  })
 })

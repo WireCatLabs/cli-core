@@ -109,11 +109,17 @@ export interface NotesEmbedded {
 /** Chunks one batch embeds: one short transaction writes each, as for conversations. */
 const NOTE_BATCH = 8
 
-const localModel = (choice: string | undefined, env: NodeJS.ProcessEnv | undefined, command: string) => {
+/** `command` is given only by a tool that has `models text download`; any other gets the tools that do. */
+const downloadHint = (model: string, command: string | undefined) =>
+  command === undefined
+    ? `install it with a WireCat CLI that has \`models text download\` (tg, max or wa); they share the model folder`
+    : `\`${command} models text download ${model}\``
+
+const localModel = (choice: string | undefined, env: NodeJS.ProcessEnv | undefined, command: string | undefined) => {
   const model = textModel(choice ?? DEFAULT_TEXT_MODEL)
   const directory = textModelsDirectory(env)
   if (!isTextModelInstalled(model, directory))
-    throw new CliError("not_found", `${model.id} is not downloaded — \`${command} models text download ${model.id}\``, {
+    throw new CliError("not_found", `${model.id} is not downloaded — ${downloadHint(model.id, command)}`, {
       reason: "model.not-downloaded",
       model: model.id,
     })
@@ -147,7 +153,7 @@ const embedChunks = async (
     maxChunks = Number.POSITIVE_INFINITY,
     env,
     threads,
-    command = "tg",
+    command,
   }: NotesEmbedOptions & {
     command?: string
   } = {},
@@ -199,7 +205,7 @@ export const nearestNotes = async (
     source,
     env,
     threads,
-    command = "tg",
+    command,
   }: Omit<NotesEmbedOptions, "maxChunks"> & {
     limit: number
     folderIds?: string[]
@@ -335,7 +341,7 @@ const pictureLane = async (
     source: Note["source"] | undefined
     limit: number
     env: NodeJS.ProcessEnv | undefined
-    command: string
+    command: string | undefined
     embedder: PictureEmbedder | undefined
   },
 ): Promise<Pick<NotesFound, "pictures" | "pictures_skipped">> => {
@@ -343,7 +349,12 @@ const pictureLane = async (
   if (words === "" || source === "internal") return {}
   let vector: Float32Array
   try {
-    const use = embedder ?? (await openPictureEmbedderFor({ ...(env === undefined ? {} : { env }), command }))
+    const use =
+      embedder ??
+      (await openPictureEmbedderFor({
+        ...(env === undefined ? {} : { env }),
+        ...(command === undefined ? {} : { command }),
+      }))
     try {
       vector = await use.embedQuery(words)
     } finally {
@@ -413,7 +424,7 @@ export const searchNotes = async (
     exact = false,
     timezone,
     env,
-    command = "tg",
+    command,
     pictures: withPictures = false,
     pictureLimit = 5,
     pictureEmbedder,
