@@ -20,6 +20,7 @@ const everyNote = (command: string, items: ContactNoteItem[]) =>
 export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const alias = new Command("alias").description("a private local display name in the selected account")
   annotate(alias.command("set"), { effects: LOCAL_WRITE })
+    .description("your own name for a person in this account; kept on this machine, never sent")
     .argument("<person>")
     .argument("<alias>")
     .action(async function (this: Command, person: string, value: string) {
@@ -32,6 +33,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       )
     })
   annotate(alias.command("rm"), { effects: LOCAL_WRITE })
+    .description("drop your local name for a person; their own name shows again")
     .argument("<person>")
     .action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
@@ -45,15 +47,19 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const notes = new Command("notes").description(
     "your private notes on a stored contact, the same in every account that sees them",
   )
-  withQuery(annotate(notes.command("list"), { effects: LOCAL_READ }).argument("<person>"), NOTES_QUERY).action(
-    async function (this: Command, person: string, words: string[]) {
-      const context = messengerContext(this, messenger)
-      listQuery(typedQuery(words), NOTES_QUERY, "contacts notes list")
-      const items = await context.withServices((services) => services.privatePeople.notes(person))
-      renderAnswer(this, context, everyNote("contacts notes list", items))
-    },
-  )
+  withQuery(
+    annotate(notes.command("list"), { effects: LOCAL_READ })
+      .description("every private note you keep on a person, oldest first")
+      .argument("<person>"),
+    NOTES_QUERY,
+  ).action(async function (this: Command, person: string, words: string[]) {
+    const context = messengerContext(this, messenger)
+    listQuery(typedQuery(words), NOTES_QUERY, "contacts notes list")
+    const items = await context.withServices((services) => services.privatePeople.notes(person))
+    renderAnswer(this, context, everyNote("contacts notes list", items))
+  })
   annotate(notes.command("show"), { effects: LOCAL_READ, output: { entity: "contact_note" } })
+    .description("one private note on a person, with its revision for edit")
     .argument("<person>")
     .argument("<id>")
     .action(async function (this: Command, person: string, id: string) {
@@ -72,6 +78,11 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       }),
       { name: "text", description: "the note's text" },
     )
+      .description(
+        name === "add"
+          ? "add a private note on a person from stdin or --file; never sent"
+          : "replace a note's text; --revision must match the one you read",
+      )
       .argument("<person>")
       .addOption(ownerOnlyOption("--file <path>", "read note text from a file; omitted or - reads stdin"))
     if (name === "edit")
@@ -93,6 +104,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
     })
   }
   annotate(notes.command("remove"), { effects: LOCAL_WRITE })
+    .description("delete one private note on a person")
     .argument("<person>")
     .argument("<id>")
     .action(async function (this: Command, person: string, id: string) {

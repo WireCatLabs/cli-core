@@ -36,7 +36,7 @@ export const PARTIAL_NOTE =
 export const inboxCommand = (messenger: Messenger): Command =>
   annotate(new Command("inbox"), {
     effects: REMOTE_READ,
-    output: { entity: "message", view: "message.summary" },
+    output: { entity: "message", view: "summary" },
     query: INBOX_QUERY,
   })
     .description("other people's unread messages in every chat; --new for what arrived since the last check")

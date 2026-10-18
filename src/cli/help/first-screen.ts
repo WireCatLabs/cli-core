@@ -121,7 +121,7 @@ export const installHelp = (program: Command, screen: FirstScreen = {}): Command
         ? firstScreen(program, screen)
         : (own.formatHelp ?? Help.prototype.formatHelp).call(helper, command, helper),
   })
-  installCommandHelp(program, { profile: screen.profile !== false })
+  installCommandHelp(program)
   program.addOption(new Option("--help-all", "the full help: every command and option").hideHelp())
   program.on("option:help-all", () => {
     full = true

@@ -186,12 +186,14 @@ const sendsCommand = (bot: BotMessenger): Command =>
   new Command("sends")
     .description("what this bot sent, edited and deleted from this machine — ids and outcomes, never text")
     .addCommand(
-      annotate(new Command("list"), { effects: LOCAL_READ }).action(async function (this: Command) {
-        const context = botContext(this, bot)
-        await context.run(async () =>
-          renderAnswer(this, context, wholeList("bot sends list", context.journal().entries().map(snakeKeys))),
-        )
-      }),
+      annotate(new Command("list"), { effects: LOCAL_READ })
+        .description("every send, edit and delete this bot made from this machine, with its outcome")
+        .action(async function (this: Command) {
+          const context = botContext(this, bot)
+          await context.run(async () =>
+            renderAnswer(this, context, wholeList("bot sends list", context.journal().entries().map(snakeKeys))),
+          )
+        }),
     )
 
 const chatsCommand = (bot: BotMessenger): Command => {

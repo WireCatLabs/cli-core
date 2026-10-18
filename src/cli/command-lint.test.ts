@@ -3,9 +3,13 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { metaOf } from "@wirecat/cli-base/commands"
+import type { Command } from "commander"
 import { expect, it } from "vitest"
+import { ENTITIES } from "../entities/index.js"
 import { sharedProgram } from "../testing/shared-program.js"
-import { run } from "./program.js"
+import { commandPathOf } from "./command-contract.js"
+import { createProgram, run } from "./program.js"
 
 // Every CLI runs `cli-dev lint` on its tree, and a shared command's violation lands in all of them at once.
 it("the shared commands pass the command lint, apart from the baseline", async () => {
@@ -18,4 +22,16 @@ it("the shared commands pass the command lint, apart from the baseline", async (
 
   expect(`${lint.stdout}${lint.stderr}`).toMatch(/lint: ok/)
   expect(lint.status).toBe(0)
+})
+
+it("every declared output of a shared command names an entity cli-core has", () => {
+  const all = (command: Command): Command[] => [command, ...command.commands.flatMap(all)]
+  const unknown = all(createProgram(sharedProgram)).flatMap((command) => {
+    const output = metaOf(command).output
+    const name = output && (output.view ? `${output.entity}.${output.view}` : output.entity)
+    return name === undefined || name in ENTITIES ? [] : [`${commandPathOf(command).join(" ")}: ${name}`]
+  })
+
+  // Baseline: task_pair has no entity yet, so its schema is still the open envelope.
+  expect(unknown).toEqual(["tasks duplicates: task_pair"])
 })

@@ -31,7 +31,7 @@ export const unansweredHours = (value: unknown, flag = "--unanswered"): number =
 export const reviewCommand = (messenger: Messenger): Command =>
   annotate(new Command("review"), {
     effects: REMOTE_READ,
-    output: { entity: "message", view: "message.summary" },
+    output: { entity: "message", view: "summary" },
     query: REVIEW_QUERY,
   })
     .description("every message, yours too, in chats that changed since a point — for reviewing who owes what")

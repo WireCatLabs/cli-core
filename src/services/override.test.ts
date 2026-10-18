@@ -9,7 +9,7 @@ import { run } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
 import type { Message } from "../domain/models.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
-import { type Override } from "./index.js"
+import type { Override } from "./index.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 
