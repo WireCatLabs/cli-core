@@ -272,6 +272,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `review` | go through what needs the owner |
 | `watch` | follow new events as they come |
 | `serve` | the long-running process |
+| `setup` | the guided first run: log in or link the account, then install the agent skill |
 | `doctor` | check this machine's setup |
 | `upgrade` | install a newer version of this tool |
 | `commands` | the command tree as data |
@@ -331,6 +332,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--order` | `<recent\|name>` | choice | the order of a list: most recent first, or by name |  |
 | `--score` | `<preset>` | choice | the named ranking score preset |  |
 | `--weights` | `<json>` | string | the ranking component weights, all of them |  |
+| `--meeting-project-candidates` |  | switch | expose read-only project suggestions from selected meeting evidence and the global project vocabulary |  |
 | `--meeting-preparation` |  | switch | expose meeting preparation tools, including their remote schedule reads |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
 | `--accept-terms` |  | switch | accept the model's licence terms |  |
@@ -401,6 +403,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--grant` | `<scopes>` | list | also ask for these permissions at sign-in, comma-separated; the command lists them |  |
 | `--min-similarity` | `<n>` | number | how alike two names must be to count as a match, from 0 to 1 |  |
 | `--analyze` |  | switch | also analyze with the configured provider |  |
+| `--agent` | `<agent>` | choice | also install the agent skill for this agent after logging in |  |
 | `--catch-up` |  | switch | prepare local search: after this run, or before a search reads it |  |
 | `--extract` |  | switch | also read the text inside the files written |  |
 | `--mark-read` |  | switch | also mark the chat read up to the newest message shown; the other person sees it |  |
@@ -638,6 +641,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `unknown-resource` | medium | group | a group is a resource from the vocabulary (plural, or a registered singular) or a root word |
 | `flag-two-meanings` | high | flag | a flag takes the same kind of value in every command, and the one the vocabulary gives it |
 | `missing-command-help` | high | command | every command has a summary |
+| `missing-command-effects` | high | command | every command that runs declares its effects: each leaf, and a group with an action of its own |
 | `command-help-too-long` | low | command | a summary is at most 80 characters |
 | `command-example-count` | medium | command | a leaf command has one to three examples; generated commands are exempt |
 | `faulty-help-example-parameters` | high | command | an example starts with the tool, runs its own command, and gives only arguments and options it takes |
