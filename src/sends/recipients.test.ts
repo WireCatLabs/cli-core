@@ -53,3 +53,43 @@ describe("a re-keyed chat in the recipient list", () => {
     expect(readFileSync(list.path, "utf8")).toBe("{ not json")
   })
 })
+
+describe("two writers of one recipient list", () => {
+  it("does not let a re-key write back a chat the owner removed while it ran", () => {
+    const path = listAt([entry(PHONE), entry("9@lid", { title: "Bo" })]).path
+    const owner = new RecipientList(path, "wa", 0)
+    let refused: unknown
+    class Serve extends RecipientList {
+      override read() {
+        const chats = super.read()
+        if (refused === undefined) {
+          try {
+            owner.remove("9@lid")
+            refused = false
+          } catch (error) {
+            refused = error
+          }
+        }
+        return chats
+      }
+    }
+
+    new Serve(path, "wa").rekey(PHONE, LID)
+    expect(refused).toMatchObject({ code: "timeout" })
+    expect(owner.remove("9@lid")?.id).toBe("9@lid")
+
+    expect(owner.read()).toEqual([entry(LID)])
+  })
+
+  it("refuses a change while another process holds the list, and leaves the file as it was", () => {
+    const list = new RecipientList(listAt([entry(PHONE), entry("9@lid", { title: "Bo" })]).path, "wa", 0)
+    const before = readFileSync(list.path, "utf8")
+    writeFileSync(`${list.path}.lock`, "")
+
+    expect(() => list.remove("9@lid")).toThrow(expect.objectContaining({ code: "timeout" }))
+    expect(() => list.rekey(PHONE, LID)).toThrow(/stayed locked/)
+    expect(() => list.add(entry("5@lid"))).toThrow(/stayed locked/)
+    expect(() => list.off()).toThrow(/stayed locked/)
+    expect(readFileSync(list.path, "utf8")).toBe(before)
+  })
+})

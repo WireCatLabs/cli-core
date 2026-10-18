@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import type { AppIdentity } from "../ports/app.js"
+import { withFileLock } from "./file-lock.js"
 
 export interface Recipient {
   id: Id
@@ -32,6 +33,7 @@ export class RecipientList {
   constructor(
     readonly path: string,
     readonly command: string,
+    readonly lockWaitMs?: number,
   ) {}
 
   /** `undefined` when the list is off. A file that cannot be read refuses rather than opening up. */
@@ -52,27 +54,31 @@ export class RecipientList {
 
   /** Whether it was new. Adding one again fills in a partner an older entry was stored without. */
   add(recipient: Recipient): boolean {
-    const chats = this.read() ?? []
-    const known = chats.find((chat) => chat.id === recipient.id)
-    if (known) {
-      if (recipient.partnerId && !known.partnerId) {
-        this.#write(chats.map((chat) => (chat === known ? { ...known, partnerId: recipient.partnerId } : chat)))
+    return this.#locked(() => {
+      const chats = this.read() ?? []
+      const known = chats.find((chat) => chat.id === recipient.id)
+      if (known) {
+        if (recipient.partnerId && !known.partnerId) {
+          this.#write(chats.map((chat) => (chat === known ? { ...known, partnerId: recipient.partnerId } : chat)))
+        }
+        return false
       }
-      return false
-    }
-    this.#write([...chats, recipient])
-    return true
+      this.#write([...chats, recipient])
+      return true
+    })
   }
 
   /** The id or the title as it was stored; `undefined` when neither matched. */
   remove(reference: string): Recipient | undefined {
-    const chats = this.read() ?? []
-    const wanted = reference.trim()
-    const gone =
-      chats.find((chat) => chat.id === wanted) ??
-      chats.find((chat) => chat.title?.toLocaleLowerCase() === wanted.toLocaleLowerCase())
-    if (gone) this.#write(chats.filter((chat) => chat !== gone))
-    return gone
+    return this.#locked(() => {
+      const chats = this.read() ?? []
+      const wanted = reference.trim()
+      const gone =
+        chats.find((chat) => chat.id === wanted) ??
+        chats.find((chat) => chat.title?.toLocaleLowerCase() === wanted.toLocaleLowerCase())
+      if (gone) this.#write(chats.filter((chat) => chat !== gone))
+      return gone
+    })
   }
 
   /**
@@ -80,26 +86,39 @@ export class RecipientList {
    * changes, and no list is created, so the list never opens up. Whether anything changed.
    */
   rekey(from: Id, to: Id): boolean {
-    const chats = this.read()
-    if (from === to || !chats?.some((chat) => chat.id === from || chat.partnerId === from)) return false
-    const held = chats.some((chat) => chat.id === to)
-    this.#write(
-      chats
-        .filter((chat) => !(held && chat.id === from))
-        .map((chat) => ({
-          ...chat,
-          ...(chat.id === from ? { id: to } : {}),
-          ...(chat.partnerId === from ? { partnerId: to } : {}),
-        })),
-    )
-    return true
+    if (from === to) return false
+    return this.#locked(() => {
+      const chats = this.read()
+      if (!chats?.some((chat) => chat.id === from || chat.partnerId === from)) return false
+      const held = chats.some((chat) => chat.id === to)
+      this.#write(
+        chats
+          .filter((chat) => !(held && chat.id === from))
+          .map((chat) => ({
+            ...chat,
+            ...(chat.id === from ? { id: to } : {}),
+            ...(chat.partnerId === from ? { partnerId: to } : {}),
+          })),
+      )
+      return true
+    })
   }
 
   /** Whether there was a list to turn off. */
   off(): boolean {
-    if (!existsSync(this.path)) return false
-    rmSync(this.path)
-    return true
+    return this.#locked(() => {
+      if (!existsSync(this.path)) return false
+      rmSync(this.path)
+      return true
+    })
+  }
+
+  /**
+   * Every change reads and writes under one lock: a `serve` re-keying while the owner removes a chat must not write
+   * the removed chat back. A lock held too long refuses the change and leaves the list as it was.
+   */
+  #locked<T>(body: () => T): T {
+    return withFileLock(this.path, "the recipient list", body, this.lockWaitMs)
   }
 
   #write(chats: Recipient[]): void {
