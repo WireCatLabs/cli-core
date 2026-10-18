@@ -1,6 +1,10 @@
 {
   "clis": ["max", "tg", "wa"],
   "options": {
+    "--about-text": {
+      "value": "<who>",
+      "meaning": "who sees the about text: everyone, contacts or nobody"
+    },
     "--accept-terms": {
       "meaning": "accept the model's licence terms, for a model that has its own"
     },
@@ -138,7 +142,7 @@
     },
     "--calls": {
       "value": "<who>",
-      "meaning": "who may call: everyone, contacts or nobody"
+      "meaning": "whose calls ring: everyone, contacts or nobody"
     },
     "--can": {
       "value": "<rights>",
@@ -452,6 +456,10 @@
     "--last-name": {
       "value": "<name>",
       "meaning": "your last name"
+    },
+    "--last-seen": {
+      "value": "<who>",
+      "meaning": "who sees when the account was last online: everyone, contacts or nobody"
     },
     "--lease": {
       "value": "<duration>",
@@ -789,6 +797,10 @@
       "value": "<name>",
       "meaning": "filter diagnostic runs by recorded profile"
     },
+    "--profile-photo": {
+      "value": "<who>",
+      "meaning": "who sees the profile photo: everyone, contacts or nobody"
+    },
     "--provider": {
       "value": "<provider>",
       "meaning": "embedding provider: local or openai; analysis: agent, openai or anthropic; consents revoke: exact provider identity from the list"
@@ -810,6 +822,10 @@
     },
     "--quiz": {
       "meaning": "a quiz: one answer is right, and a vote is final"
+    },
+    "--read-receipts": {
+      "value": "<on|off>",
+      "meaning": "send read receipts"
     },
     "--reason": {
       "value": "<text>",
@@ -1165,6 +1181,13 @@
         "wa": "wa backlog: account privacy"
       },
       "options": {
+        "--about-text": {
+          "in": [],
+          "planned": {
+            "wa": "wa backlog: account privacy"
+          },
+          "reason": "WhatsApp's settings; max-cli and tg-cli list only the first five, and nobody has checked whether MAX or Telegram has these"
+        },
         "--calls": {
           "in": ["max"],
           "planned": {
@@ -1193,12 +1216,33 @@
             "wa": "wa backlog: account privacy"
           }
         },
+        "--last-seen": {
+          "in": [],
+          "planned": {
+            "wa": "wa backlog: account privacy"
+          },
+          "reason": "WhatsApp's settings; max-cli and tg-cli list only the first five, and nobody has checked whether MAX or Telegram has these"
+        },
         "--phone-number": {
           "in": ["max"],
           "planned": {
             "tg": "tg-cli backlog: settings writes (mute, privacy)",
             "wa": "wa backlog: account privacy"
           }
+        },
+        "--profile-photo": {
+          "in": [],
+          "planned": {
+            "wa": "wa backlog: account privacy"
+          },
+          "reason": "WhatsApp's settings; max-cli and tg-cli list only the first five, and nobody has checked whether MAX or Telegram has these"
+        },
+        "--read-receipts": {
+          "in": [],
+          "planned": {
+            "wa": "wa backlog: account privacy"
+          },
+          "reason": "WhatsApp's settings; max-cli and tg-cli list only the first five, and nobody has checked whether MAX or Telegram has these"
         }
       }
     },

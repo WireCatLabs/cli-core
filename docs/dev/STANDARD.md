@@ -744,6 +744,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 
 | Option | Value | Meaning | Default | Commands |
 |---|---|---|---|---|
+| `--about-text` | `<who>` | who sees the about text: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--accept-terms` |  | accept the model's licence terms, for a model that has its own |  | `models text download` |
 | `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `bot webhooks set` (max-only), `chats folders update` |
 | `--after-n` | `<n>` | how many messages after it |  | `messages context` |
@@ -781,7 +782,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by read_other_bots |  | `bot contacts show` (max, tg only), `bot messages between` (max, tg only), `bot search messages` (max, tg only) |
 | `--brief` |  | found messages and mail as reference, title, time, sender and excerpt only |  | every command (planned) |
 | `--by` | `<grouping>` | what to count by. **each command names its own groupings — stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals — so it differs on purpose (Help text rule 4)** |  | `searches create`, `stats charts`, `stats chats retention`, `stats chats show`, `stats messages show` |
-| `--calls` | `<who>` | who may call: everyone, contacts or nobody |  | `account privacy set` (planned) |
+| `--calls` | `<who>` | whose calls ring: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--can` | `<rights>` | what they may do, comma-separated: read, members, admins, info, pin, link, post, edit, delete. **lists the rights each messenger has — MAX has `read`, Telegram does not — so it differs on purpose (Help text rule 4)** |  | `bot chats admins add` (max, tg only), `chats admins add` (planned) |
 | `--caption-above` |  | show the text above the --photo or --file, not below it |  | `messages send` (tg-only) |
 | `--catch-up` |  | prepare local search: after this run, or before a search reads it |  | `messages sync`, `search conversations`, `store gaps repair` |
@@ -862,6 +863,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch` (max, tg only), `messages sync`, `tasks scan` |
 | `--last-name` | `<name>` | your last name |  | `account update` |
+| `--last-seen` | `<who>` | who sees when the account was last online: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--lease` | `<duration>` | how long a task claim lasts, such as 30m or 2h; claiming again extends it | `30m` | `tasks claim` |
 | `--left` |  | only the chats this account has left |  | `store clear` |
 | `--limit` | `<n>` | how many: rows to show, or messages one run fetches. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `attachments extract`, `attachments list`, `bot chats members list` (max-only), `bot contacts show` (max, tg only), `bot messages between` (max, tg only), `bot messages list` (max, tg only), `bot search messages` (max, tg only), `bot store fetch` (max, tg only), `calls list` (planned), `chats documents list`, `chats link list` (tg-only), `chats list`, `chats media` (planned), `chats members list`, `chats requests list`, `contacts context`, `contacts list`, `contacts timeline`, `conversations list`, `conversations related`, `images embed`, `inbox`, `mentions domains` (planned), `mentions list` (planned), `mentions places` (planned), `messages comments` (tg, wa only), `messages evidence`, `messages list`, `messages sync`, `metadata refresh` (planned), `polls voters` (tg, wa only), `runs list`, `runs search`, `search all`, `search conversations`, `search messages`, `search notes`, `searches create`, `searches history`, `sends list`, `server logs`, `stats chats newcomers`, `stats chats retention`, `stats contacts evidence`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages evidence`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `store gaps repair`, `store jobs list`, `tags auto`, `tasks duplicates`, `tasks list`, `tasks related` |
@@ -948,12 +950,14 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--port` | `<port>` | the local port for --http |  | `mcp` |
 | `--problems` |  | only failed responses, warnings and crashes |  | `runs show` |
 | `--profile` | `<name>` | filter diagnostic runs by recorded profile |  | `runs search` |
+| `--profile-photo` | `<who>` | who sees the profile photo: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--provider` | `<provider>` | embedding provider: local or openai; analysis: agent, openai or anthropic; consents revoke: exact provider identity from the list |  | `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
 | `--public-url` | `<url>` | the tunnel's https address the browser apps use |  | `mcp` |
 | `--qr-file` | `<png>` | write the QR code to this PNG instead of drawing it, for an agent to pass on |  | `session start` (tg, wa only), `setup` (tg, wa only) |
 | `--question` |  | match only questions |  | `replies edit` |
 | `--quiet` |  | diagnostics off. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--quiz` |  | a quiz: one answer is right, and a vote is final |  | `polls create` (tg-only) |
+| `--read-receipts` | `<on\|off>` | send read receipts |  | `account privacy set` (planned) |
 | `--reason` | `<text>` | why a task was closed, kept with it — no-reply-needed, for example |  | `tasks close` |
 | `--record` |  | keep this run under `runs` — ids and timings, never message content. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--remind-time` | `<time>` | when to look at it again: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks plan` |

@@ -300,6 +300,47 @@ describe("reads only the server answers", () => {
     expect([wrong.code, empty.code, readOnly.code]).toEqual([2, 2, 5])
   })
 
+  it("`account privacy set` offers the settings a messenger lists, and only the first five when it lists none", async () => {
+    const changes: unknown[] = []
+    const adapter: MessengerAdapter = {
+      ...base,
+      privacy: async () => ({ readReceipts: false, profilePhoto: "contacts_except", lastSeen: "nobody" }),
+      updatePrivacy: async (change) => {
+        changes.push(change)
+        return { readReceipts: false, about: "contacts" }
+      },
+    }
+    const listed: Partial<Messenger> = {
+      privacy: true,
+      privacySettings: ["calls", "readReceipts", "profilePhoto", "about", "lastSeen"],
+    }
+    const set = await invoke(
+      ["account", "privacy", "set", "--read-receipts", "off", "--about-text", "contacts", "--last-seen", "nobody"],
+      adapter,
+      listed,
+    )
+    const shown = await invoke(["account", "privacy", "show", "--json"], adapter, listed)
+    const chosen = await invoke(["account", "privacy", "set", "--profile-photo", "contacts_except"], adapter, listed)
+    const notListed = await invoke(["account", "privacy", "set", "--find-by-phone", "contacts"], adapter, listed)
+    const byDefault = await invoke(["account", "privacy", "set", "--read-receipts", "off"], adapter, { privacy: true })
+
+    expect(set.code).toBe(0)
+    expect(changes).toEqual([{ readReceipts: false, about: "contacts", lastSeen: "nobody" }])
+    expect(JSON.parse(shown.stdout).item).toEqual({
+      read_receipts: false,
+      profile_photo: "contacts_except",
+      last_seen: "nobody",
+    })
+    expect([chosen.code, notListed.code, byDefault.code]).toEqual([2, 2, 2])
+    expect(JSON.parse(chosen.stderr).error).toMatchObject({
+      code: "validation_error",
+      message: '--profile-photo takes everyone, contacts, nobody, not "contacts_except"',
+    })
+    expect(notListed.stderr).toContain("unknown option '--find-by-phone'")
+    expect(byDefault.stderr).toContain("unknown option '--read-receipts'")
+    expect(changes).toHaveLength(1)
+  })
+
   it("`stickers list` lists the sets, or one set's stickers", async () => {
     const adapter: MessengerAdapter = {
       ...base,
