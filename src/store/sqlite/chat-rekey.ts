@@ -68,6 +68,37 @@ const renameText = (context: StoreContext, key: AccountKey, accountKey: number, 
   }
 }
 
+/**
+ * A person may have one open stay per chat, so an open stay in both chats becomes one. Left behind, the absorbed one
+ * would be purged with the observations that moved still pointing at it, and the foreign key refuses the re-key.
+ */
+const foldOpenStays = (context: StoreContext, kept: number, gone: number): void => {
+  const { database } = context
+  const pairs = database
+    .prepare(
+      "SELECT g.id AS gone, k.id AS kept FROM member_stays g JOIN member_stays k ON k.chat_id = ? AND k.identity_id = g.identity_id AND k.left_at IS NULL WHERE g.chat_id = ? AND g.left_at IS NULL",
+    )
+    .all(kept, gone)
+  const fold = database.prepare(
+    `UPDATE member_stays SET
+       first_seen_at = min(member_stays.first_seen_at, g.first_seen_at),
+       last_seen_at = max(member_stays.last_seen_at, g.last_seen_at),
+       joined_at = coalesce(min(member_stays.joined_at, g.joined_at), member_stays.joined_at, g.joined_at),
+       role = CASE WHEN g.last_seen_at > member_stays.last_seen_at THEN coalesce(g.role, member_stays.role)
+         ELSE coalesce(member_stays.role, g.role) END,
+       invited_by_identity_id = coalesce(member_stays.invited_by_identity_id, g.invited_by_identity_id),
+       updated_at = ?
+     FROM (SELECT * FROM member_stays WHERE id = ?) AS g WHERE member_stays.id = ?`,
+  )
+  const observed = database.prepare("UPDATE member_observation_members SET member_stay_id = ? WHERE member_stay_id = ?")
+  const drop = database.prepare("DELETE FROM member_stays WHERE id = ?")
+  for (const pair of pairs) {
+    fold.run(context.now(), Number(pair.gone), Number(pair.kept))
+    observed.run(Number(pair.kept), Number(pair.gone))
+    drop.run(Number(pair.gone))
+  }
+}
+
 /** Moves what the chat stored under the new id holds into the kept one, then purges it. */
 const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRekey, "outcome"> => {
   const { database } = context
@@ -103,6 +134,7 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
       "DELETE FROM poll_votes WHERE chat_id = ? AND EXISTS (SELECT 1 FROM poll_votes g WHERE g.chat_id = ? AND g.message_external_id = poll_votes.message_external_id AND g.identity_id = poll_votes.identity_id AND g.voted_at > poll_votes.voted_at)",
     )
     .run(kept, gone)
+  foldOpenStays(context, kept, gone)
   for (const table of [
     "poll_votes",
     "message_transcripts",
@@ -152,7 +184,6 @@ const MESSENGER_FIELDS = [
   "participants_count",
   "metadata",
   "username",
-  "membership_state",
   "description",
   "details_fetched_at",
 ] as const
@@ -174,11 +205,16 @@ export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: nu
     const fields = MESSENGER_FIELDS.map((field) => `${field} = coalesce(?, ${field})`).join(", ")
     context.database
       .prepare(
-        `UPDATE chats SET ${fields}, kind = CASE WHEN kind = 'unknown' THEN ? ELSE kind END, last_message_at = ?, updated_at = ? WHERE id = ?`,
+        // Left only when both were: a complete chat list that named the new id before the re-key marked the old one.
+        `UPDATE chats SET ${fields}, kind = CASE WHEN kind = 'unknown' THEN ? ELSE kind END,
+           membership_state = CASE WHEN ? IS NULL THEN nullif(membership_state, 'left') ELSE coalesce(nullif(?, 'left'), membership_state) END,
+           last_message_at = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         ...MESSENGER_FIELDS.map((field) => scalar(twin[field])),
         scalar(twin.kind),
+        scalar(twin.membership_state),
+        scalar(twin.membership_state),
         latest(old.last_message_at, twin.last_message_at),
         context.now(),
         kept,

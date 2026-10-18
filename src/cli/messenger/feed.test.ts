@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -150,6 +150,23 @@ describe("a messenger that pushes its history", () => {
         .items.map((message: { text: string }) => message.text)
         .sort(),
     ).toEqual(["under the lid", "under the phone"])
+  })
+
+  it("a re-key moves the chat in the profile's recipient list once the store took it", async () => {
+    const { root, env } = sandbox()
+    const list = join(root, "state", "profiles", "default.recipients.json")
+    mkdirSync(join(root, "state", "profiles"), { recursive: true })
+    writeFileSync(list, JSON.stringify({ chats: [{ id: "5550001", title: "Ana", addedAt: "2026-10-01T00:00:00Z" }] }))
+    const stop = new AbortController()
+    const { connect } = pushing(stop, {
+      feed: async (onBatch) => {
+        onBatch({ rekeys: [{ from: "5550001", to: "9990001" }] })
+        stop.abort()
+      },
+    })
+
+    expect((await call(["serve", "--json"], env, connect, stop.signal, "store")).code).toBe(0)
+    expect(JSON.parse(readFileSync(list, "utf8")).chats.map((chat: { id: string }) => chat.id)).toEqual(["9990001"])
   })
 
   it("a refused re-key leaves the chat split and still keeps the batch's messages", async () => {

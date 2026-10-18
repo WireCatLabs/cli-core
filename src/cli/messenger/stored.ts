@@ -16,6 +16,8 @@ export interface Saving {
   deletedWithoutChat?: DeletionScope
   /** The app command and profile running, recorded with the first save so another app can name this account. */
   profile?: { app: string; name: string }
+  /** After a re-key is saved: what outside the store spells the chat id follows it. */
+  rekeyed?: (from: Id, to: Id) => void
 }
 
 /**
@@ -28,7 +30,7 @@ export interface Saving {
  */
 export const stored = (
   messenger: MessengerAdapter,
-  { account, store, warn, events, pending, deletedWithoutChat, profile }: Saving,
+  { account, store, warn, events, pending, deletedWithoutChat, profile, rekeyed }: Saving,
 ): MessengerAdapter => {
   let warned = false
   let recorded = profile === undefined
@@ -200,7 +202,10 @@ export const stored = (
                 // Each re-key apart: one refused leaves the chat split, never the batch's history unsaved.
                 const saving = previous.then(async () => {
                   for (const { from, to } of batch.rekeys ?? [])
-                    await attempt("history.rekey", (opened) => opened.chats.rekeyChat(account, from, to))
+                    await attempt("history.rekey", async (opened) => {
+                      await opened.chats.rekeyChat(account, from, to)
+                      rekeyed?.(from, to)
+                    })
                   await attempt("history.feed", (opened) => fill(opened, account, batch))
                 })
                 previous = saving

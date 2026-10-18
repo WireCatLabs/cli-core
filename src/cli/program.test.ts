@@ -512,6 +512,43 @@ describe("a phase that runs until stopped", () => {
     vi.useRealTimers()
   })
 
+  it("starts no phase timer when a command asks for a phase under --timeout after the run returned", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    let late: (() => AbortSignal | undefined) | undefined
+    const { done } = ending(["chats", "list", "--timeout", "2m"], async (_stop, command) => {
+      environmentOf(command).endUntilStopped?.()
+      late = environmentOf(command).untilStopped
+    })
+    await vi.advanceTimersByTimeAsync(1_100)
+    expect(await done).toBe(0)
+
+    late?.()
+
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it("gives a second phase after --timeout ended the first a full --timeout of its own", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
+    let second: AbortSignal | undefined
+    const { done, started } = ending(["chats", "list", "--timeout", "2m"], async (stop, command) => {
+      await new Promise((resolve) => stop?.addEventListener("abort", resolve, { once: true }))
+      second = environmentOf(command).untilStopped?.()
+      await new Promise((resolve) => second?.addEventListener("abort", resolve, { once: true }))
+    })
+    await started
+    await vi.advanceTimersByTimeAsync(121_000)
+    expect(second?.aborted).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(118_000)
+    expect(second?.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(2_100)
+    vi.useRealTimers()
+
+    expect(second?.reason).toMatchObject({ code: "timeout" })
+    expect(await done).toBe(0)
+  })
+
   it("gives the steps after a phase that --timeout ended a fresh full --timeout", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
     const { done, started } = ending(["chats", "list", "--timeout", "2m"], async (stop) => {
