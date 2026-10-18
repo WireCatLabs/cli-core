@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The run record of a one-shot command's passive listen counts what it received**: the `adapter.listen`
+  response carries `counts` by event (`message`, `edit`, …), as `messages.watch` does, so a run shows how many
+  messages a store-history messenger handed on and saved during the command.
+
 ## 0.344.0 — 18.10.2026
 
 ### Changed — may break callers
@@ -41,9 +47,6 @@ shape of this file.
   is listed under Other. `createProgram` puts cli-core's own groups (`chats`, `messages`, `tags`, `schedule`,
   `config`…) in theirs; a tool sets its own groups (`session`, `setup`). The section is kept off the commands
   document.
-- **The run record of a one-shot command's passive listen counts what it received**: the `adapter.listen`
-  response carries `counts` by event (`message`, `edit`, …), as `messages.watch` does, so a run shows how many
-  messages a store-history messenger handed on and saved during the command.
 
 ## 0.343.0 — 18.10.2026
 
