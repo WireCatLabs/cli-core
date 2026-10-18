@@ -13,6 +13,15 @@ shape of this file.
   (`@wirecat/cli-core/services`): the model download behind `models text download` and `images models download`,
   checked against the expected sha256 and loaded once. A CLI without the messenger `modelsCommand`, such as drive,
   can now offer its own download instead of sending people to tg or max.
+- **A messenger whose history is in the store can save what arrives during any command, not only `serve` and
+  `watch`.** An adapter may now have `listen(onEvent, signal)` (the optional `PassiveUpdates` group): it hands on the
+  same events as `watch`, from a connection that does not watch, without connecting. A one-shot command
+  (`messages send`, `doctor --online`) and an MCP session then save them, and `close` waits for those saves. Without
+  it, a WhatsApp message queued while nothing was connected was received by such a command and then lost, since
+  WhatsApp delivers it once. An adapter without `listen` behaves as before. Watch for: `listen` must not
+  connect or wait for the connection, and must resolve once nothing more will be handed on after `signal` aborts.
+  Run records of such a command now hold an `adapter.listen` request; a listen that fails is a `listen_failed`
+  warning.
 - `createTagRedirectIndex` validates a complete bounded tag redirect graph and resolves retained IDs
   without losing their membership. It is a policy foundation only: no store redirects or tag merge
   are enabled. The consolidation guide records the old-reader/writer compatibility and provenance

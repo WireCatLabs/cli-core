@@ -340,6 +340,17 @@ export interface LiveUpdates {
   watch(onEvent: (event: MessageEvent) => void, signal: AbortSignal, onReady?: () => void): Promise<void>
 }
 
+export interface PassiveUpdates {
+  /**
+   * What the open connection receives, as `watch` hands it, until `signal` aborts — on a connection opened without
+   * `{ listen: true }`. It only listens: it never connects or waits for the connection, and it hands on what the
+   * messenger queued while nothing was connected. For a messenger that cannot fetch those again
+   * (`history: "store"`), which then saves them for a command that never watches. Resolves once nothing more will
+   * be handed on.
+   */
+  listen(onEvent: (event: MessageEvent) => void, signal: AbortSignal): Promise<void>
+}
+
 /** One voter's vote in the poll message `messageId` of `chatId` carries, as `PollVoteEvent` has it. */
 export interface HistoryVote {
   chatId: Id
@@ -669,6 +680,7 @@ export interface MessengerAdapter
     Partial<ForumControl>,
     Partial<TopicEditing>,
     Partial<LiveUpdates>,
+    Partial<PassiveUpdates>,
     Partial<PushedHistory>,
     Partial<MessageMedia>,
     Partial<ScheduledMessages>,

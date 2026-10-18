@@ -11,7 +11,9 @@ import { flooded } from "./flooded.js"
 const wait = (seconds: number) =>
   new CliError("rate_limited", `wait ${seconds} s`, { retry_after_ms: seconds * 1000, provider_error: "FLOOD_WAIT" })
 
-const setup = (answers: Partial<Record<"history" | "send" | "watch" | "feed", () => Promise<unknown>>> = {}) => {
+const setup = (
+  answers: Partial<Record<"history" | "send" | "watch" | "feed" | "listen", () => Promise<unknown>>> = {},
+) => {
   const memory = new FloodMemory(join(mkdtempSync(join(tmpdir(), "flooded-")), "p.json"))
   const inner = {
     self: () => "1",
@@ -19,6 +21,7 @@ const setup = (answers: Partial<Record<"history" | "send" | "watch" | "feed", ()
     send: vi.fn(answers.send ?? (async () => ({ message: { id: "5" }, sendId: "9" }))),
     watch: vi.fn(answers.watch ?? (async () => {})),
     feed: vi.fn(answers.feed ?? (async () => {})),
+    listen: vi.fn(answers.listen ?? (async () => {})),
   }
   const warnings: string[] = []
   const adapter = flooded(inner as unknown as MessengerAdapter, memory, {
@@ -94,6 +97,22 @@ describe("a call the messenger asked to hold off on", () => {
     expect(memory.read().deadlines).toMatchObject([{ operation: "feed" }])
     await expect(adapter.feed?.(() => {}, new AbortController().signal)).rejects.toMatchObject({ code: "rate_limited" })
     expect(inner.feed).toHaveBeenCalledTimes(2)
+  })
+
+  it("a listen runs while a remembered wait holds the profile, as it only receives", async () => {
+    const { adapter, inner } = setup({
+      history: () => Promise.reject(wait(60)),
+      listen: () => Promise.reject(wait(60)),
+    })
+
+    await expect(adapter.history?.("42", { limit: 1 })).rejects.toMatchObject({ code: "rate_limited" })
+    await expect(adapter.listen?.(() => {}, new AbortController().signal)).rejects.toMatchObject({
+      code: "rate_limited",
+    })
+    await expect(adapter.listen?.(() => {}, new AbortController().signal)).rejects.toMatchObject({
+      code: "rate_limited",
+    })
+    expect(inner.listen).toHaveBeenCalledTimes(2)
   })
 
   it("a remembered wait that cannot be written warns, and the messenger's own error still comes through", async () => {

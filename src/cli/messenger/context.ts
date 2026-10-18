@@ -352,6 +352,39 @@ const settled = async (pending: Set<Promise<void>>, ms: number): Promise<boolean
   }
 }
 
+/**
+ * Runs the adapter's `listen` until `stop`, which answers whether it ended in time. A listen that fails warns and
+ * never fails the command; one that fails once the connection is `closing` is the close, not news. It still listens
+ * while the connection closes, so what arrives then is saved too.
+ */
+const listened = (
+  adapter: MessengerAdapter,
+  events: EventSink,
+  warn: (message: string) => void,
+): { closing: () => void; stop: () => Promise<boolean> } | undefined => {
+  if (!adapter.listen) return undefined
+  const abort = new AbortController()
+  let closing = false
+  const ended = Promise.resolve()
+    .then(() => adapter.listen?.(() => {}, abort.signal))
+    .catch((error: unknown) => {
+      if (closing) return
+      events({ event: "warning", code: "listen_failed", operation: "messages.listen" })
+      warn(
+        `messages arriving during this command are not saved: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    })
+  return {
+    closing: () => {
+      closing = true
+    },
+    stop: () => {
+      abort.abort()
+      return settled(new Set([ended]), SAVES_WAIT_MS)
+    },
+  }
+}
+
 /** A list that cannot be read stays as it is, which refuses every send: the warning says why. */
 const rekeyRecipients = async (
   app: Messenger["app"],
@@ -372,6 +405,10 @@ const rekeyRecipients = async (
  * A connection as every shared reader sees it: its account remembered, each call a run event, what
  * the reads answer saved to the store. `close` closes the connection and the store it opened. One
  * function, so a command and an MCP tool call save and record exactly alike.
+ *
+ * A `history: "store"` messenger with `listen` saves what arrives for as long as a connection that does not
+ * `watch` is open: what it queued while nothing was connected is delivered once and cannot be fetched again. A
+ * connection opened with `listen: true` is left to its `watch`, which saves the same events.
  */
 export const connected = (
   connection: MessengerAdapter,
@@ -387,6 +424,7 @@ export const connected = (
   { settings, env, renderer }: Pick<BaseContext, "settings" | "env" | "renderer">,
   events: EventSink,
   store: LazyStore = lazyStore(env, app.command),
+  { listen: watching = false }: Pick<ConnectOptions, "listen"> = {},
 ): { adapter: MessengerAdapter; close: () => Promise<void> } => {
   const self = connection.self()
   if (self !== null) rememberAccount(app, settings.profile, self, env)
@@ -402,26 +440,34 @@ export const connected = (
     events,
   )
   const pending = new Set<Promise<void>>()
+  const saving =
+    self === null
+      ? adapter
+      : stored(adapter, {
+          account: { provider, account: self },
+          profile: { app: app.command, name: settings.profile },
+          store: store.open,
+          warn: renderer.warn,
+          events,
+          pending,
+          ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
+          rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
+          ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
+        })
+  const passive =
+    history === "store" && self !== null && !watching ? listened(saving, events, renderer.warn) : undefined
   return {
-    adapter:
-      self === null
-        ? adapter
-        : stored(adapter, {
-            account: { provider, account: self },
-            profile: { app: app.command, name: settings.profile },
-            store: store.open,
-            warn: renderer.warn,
-            events,
-            pending,
-            ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
-            rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
-            ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
-          }),
+    adapter: saving,
     close: async () => {
+      passive?.closing()
       try {
         await connection.close()
       } finally {
         try {
+          if (passive && !(await passive.stop())) {
+            events({ event: "warning", code: "store_not_written", operation: "messages.listen" })
+            renderer.warn("not saved to the local store: the messenger was still handing on messages at exit")
+          }
           if (!(await settled(pending, SAVES_WAIT_MS))) {
             events({ event: "warning", code: "store_not_written", operation: "close" })
             renderer.warn("not saved to the local store: the last messages were still being written at exit")
@@ -455,7 +501,10 @@ export const connectedFor = async (
     await store.close()
     throw error
   }
-  return { connection, ...connected(connection, messenger, base, options.events, store) }
+  return {
+    connection,
+    ...connected(connection, messenger, base, options.events, store, options.listen ? { listen: true } : {}),
+  }
 }
 
 const unrecorded = (command: Command, messenger: Messenger, profile: string): CliError => {

@@ -18,6 +18,7 @@ export const lentConnection = (
   throughWrapper(connection, {
     close: async () => {},
     feed: undefined,
+    listen: undefined,
     ...(connection.watch && watchers
       ? {
           // A watcher that throws (its output limit, a closed reader) ends its own watch, never serve's.
