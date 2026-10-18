@@ -219,14 +219,14 @@ release ([README, "How often, and what may break"](../REFERENCE.md#how-often-and
   holds only the seed's chats and messages with ids as strings, and that `feed` ends on abort.
 
 Each case checks with `node:assert/strict`, so the kit does not depend on a test runner. Under
-vitest:
+vitest, with `fakeAdapter` where your adapter over your own fake client goes:
 
 ```ts
-import { contractCases, digitIds } from "@wirecat/cli-core/testing"
+import { contractCases, digitIds, fakeAdapter } from "@wirecat/cli-core/testing"
 import { describe, it } from "vitest"
 
 describe("the adapter keeps the port's promises", () => {
-  for (const one of contractCases({ connect: (seed) => adapterOver(fakeClient(seed)), ids: digitIds }))
+  for (const one of contractCases({ connect: (seed) => fakeAdapter(seed), ids: digitIds }))
     it(one.name, async (context) => {
       const result = await one.run()
       if (result) context.skip(result.skipped)

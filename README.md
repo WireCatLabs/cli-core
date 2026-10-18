@@ -43,10 +43,22 @@ A messaging CLI has two halves. One speaks a protocol: MTProto for Telegram, a W
 The other half is the same for every messenger: store what was read, search it, render it for a person and as JSON
 for a program, guard every send, expose it all to an agent. This package is the second half.
 
-[tg-cli](https://github.com/WireCatLabs/tg-cli) and [max-cli](https://github.com/WireCatLabs/max-cli) are built on it,
-and so are the mail and notes tool [cli-memo](https://github.com/WireCatLabs/cli-memo),
-[zoom-cli](https://github.com/WireCatLabs/zoom-cli) and [drive-cli](https://github.com/WireCatLabs/drive-cli). They
-import it as `@wirecat/cli-core`. Up to 0.261.0 the package was named `@wirecat/cli-messaging`, which is deprecated.
+[tg-cli](https://github.com/WireCatLabs/tg-cli), [max-cli](https://github.com/WireCatLabs/max-cli) and
+the [WhatsApp tool](https://github.com/WireCatLabs/whatsapp-cli) are built on it, and so are the mail and notes tool
+[cli-memo](https://github.com/WireCatLabs/cli-memo), [zoom-cli](https://github.com/WireCatLabs/zoom-cli) and
+[drive-cli](https://github.com/WireCatLabs/drive-cli). They import it as `@wirecat/cli-core`. Up to 0.261.0 the package
+was named `@wirecat/cli-messaging`, which is deprecated. The npm versions 0.0.0-stage, 0.0.0 and 0.18–0.20 of
+`@wirecat/cli-core` are deprecated too: they are placeholders and the old cli-base.
+
+**Who it is for.** First of all, it is the engine of the WireCat tools, and it changes as fast as they need. You can
+build your own messenger CLI on it, but expect to follow a moving API (see [Build on it](#build-on-it)).
+
+```sh
+npm install --save-exact @wirecat/cli-core
+```
+
+npm 7+ and pnpm also install its peers: `@wirecat/cli-base` in the range `package.json` names, and `commander` 15 or
+later. `@napi-rs/canvas` is optional; charts need it only for PNG output.
 
 It is built on [`@wirecat/cli-base`](https://github.com/WireCatLabs/cli-base), the layer every CLI needs: two output
 streams, closed error codes, the keyring, injectable clocks, the query parser. cli-base is a peer dependency, so an
@@ -221,12 +233,15 @@ A new messenger is three pieces: an adapter that implements `MessengerCore` (and
 `Messenger` that describes it, and the contract cases run against it. The
 [adapter guide](docs/dev/ADAPTERS.md) walks through each one.
 
+This runs as it is under vitest. `fakeAdapter` is the in-memory adapter the kit ships; put your own adapter there,
+built over a fake client filled from `seed`. The `./testing` kit is not stable yet.
+
 ```ts
-import { contractCases, digitIds } from "@wirecat/cli-core/testing"
+import { contractCases, digitIds, fakeAdapter } from "@wirecat/cli-core/testing"
 import { describe, it } from "vitest"
 
 describe("the adapter keeps the port's promises", () => {
-  for (const one of contractCases({ connect: (seed) => adapterOver(fakeClient(seed)), ids: digitIds }))
+  for (const one of contractCases({ connect: (seed) => fakeAdapter(seed), ids: digitIds }))
     it(one.name, async (context) => {
       const result = await one.run()
       if (result) context.skip(result.skipped)
@@ -237,6 +252,8 @@ describe("the adapter keeps the port's promises", () => {
 **Before 1.0, any release may break a caller.** Releases are frequent, sometimes several a day, and any of them
 may change any entry point. Every such change is listed in the [changelog](CHANGELOG.md) under "Changed — may break
 callers", with what to change. tg-cli and max-cli pin an exact version and move to a new one in their own pull request.
+Pin an exact version too: as of 18.10.2026, 132 of the 321 versions in the changelog break callers, and no patch
+release has.
 The full list of entry points and what each holds is in the [API reference](docs/REFERENCE.md).
 
 ⚠ **Errors are recognised by shape, not by class** (`isCliFailure`). A package linked during development brings its

@@ -14,6 +14,18 @@ shape of this file.
   are enabled. The consolidation guide records the old-reader/writer compatibility and provenance
   requirements that must be met before applying a merge.
 
+### Fixed
+
+- **The README's adapter example runs as written.** It called `adapterOver` and `fakeClient`, which do not exist; it
+  now uses the kit's `fakeAdapter` and says where your adapter goes. The same fix is in the adapter guide.
+- **The README says who the package is for, gives the install command and its peers,** and advises pinning an exact
+  version, with how often versions have broken callers so far.
+- **The package no longer ships source maps.** They pointed at `src/`, which is not published, so vitest in a
+  consumer warned about missing source files. The package now holds `CHANGELOG.md`, and its npm page links the
+  issues and README.
+- **`./skill-validation` resolves for `require()` too.** Its export named only an `import` condition; it now has
+  `default`, like every other entry point.
+
 ## 0.342.0 — 18.10.2026
 
 ### Changed — may break callers
