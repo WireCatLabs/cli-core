@@ -2539,6 +2539,10 @@ describe("three tools in place of one per command", () => {
     const { items } = JSON.parse((result.content as { text: string }[])[0]?.text ?? "null")
     expect(items.filter(({ writes }: { writes: boolean }) => writes)).toEqual([])
     expect((await raw.listTools()).tools.map(({ name }) => name)).not.toContain("chat_write")
+    const send = await raw.callTool({ name: "chat_read", arguments: { command: "messages send" } })
+    expect(JSON.parse((send.content as { text: string }[])[0]?.text ?? "null").error.message).toContain(
+      "permissions.messages is readonly",
+    )
   })
 })
 
@@ -2551,11 +2555,21 @@ describe("sending over MCP", () => {
     expect(send?.writes).toBe(true)
   })
 
-  it("offers no change on the messenger under the read-only lock", async () => {
-    const commands = await (await connect(scripted(), { extraEnv: { CHAT_READ_ONLY: "1" } })).client.commands()
+  it("offers no change on the messenger under the read-only lock, and a call to one gets the lock's refusal", async () => {
+    const { telegram, sent } = sending()
+    const { client, raw, call } = await connect(telegram, { extraEnv: { CHAT_READ_ONLY: "1" } })
+    const commands = await client.commands()
+
+    const refused = await call("messages send", { chat: "7", text: "hi" })
 
     expect(commands).toContain("messages list")
     expect(commands.filter((one) => /^(messages (send|edit|delete)|reactions add)$/.test(one))).toEqual([])
+    expect((await raw.listTools()).tools.map(({ name }) => name)).toContain("chat_write")
+    expect(refused.body.error).toMatchObject({
+      code: "permission_error",
+      message: "this process is read-only (CHAT_READ_ONLY) — it cannot send, react, change chats or change the account",
+    })
+    expect(sent).toEqual([])
   })
 
   it("sends through the guard, with the reply, and journals it without the text", async () => {
@@ -2968,7 +2982,7 @@ describe("sending over MCP", () => {
       const refused = await Promise.all(COMMANDS.map((command) => call(command, { chat: "7" })))
 
       expect((await client.commands()).filter((one) => COMMANDS.includes(one))).toEqual([])
-      expect(refused.every((one) => one.isError)).toBe(true)
+      expect(refused.map((one) => one.body.error?.code)).toEqual(Array(7).fill("permission_error"))
       expect(writes).toEqual([])
     })
   })
@@ -3124,13 +3138,15 @@ describe("sending over MCP", () => {
     expect(sent).toHaveLength(1)
   })
 
-  it("refuses on a read-only profile, and sends nothing", async () => {
+  it("refuses on a read-only profile with the level's refusal, and sends nothing", async () => {
     const { telegram, sent } = sending()
     const { call } = await connect(telegram, { config: READ_ONLY })
 
     expect(await call("messages send", { chat: "7", text: "hi" })).toMatchObject({
       isError: true,
-      body: { error: { code: "validation_error" } },
+      body: {
+        error: { code: "permission_error", message: expect.stringContaining("permissions.messages is readonly") },
+      },
     })
     expect(sent).toEqual([])
   })

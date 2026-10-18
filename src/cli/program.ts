@@ -18,15 +18,15 @@ import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { parseDuration } from "../domain/duration.js"
 import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
-import { type AppIdentity, envName, MESSENGER_CHANGE_REFUSAL, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
+import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
 import { keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
+import { refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
   changesAuthorityNow,
-  changesMessenger,
   isLogin,
   isStoreChange,
   judgedEffects,
@@ -282,8 +282,12 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     const lock = readOnlyLockOf(definition.app, commandEnv)
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
-    // A preview answers as the write would, so the lock refuses it too (SEC-65).
-    if (lock && changesMessenger(action)) throw readOnlyRefusal(lock, MESSENGER_CHANGE_REFUSAL)
+    refuseWriteBeforeConnecting(action, {
+      app: definition.app,
+      env: commandEnv,
+      dryRun: flags.dryRun === true,
+      ...(definition.configuration ? { resolve: definition.configuration.resolveSettings } : {}),
+    })
     // A client older than the relay's refusal to forward a login still sends one; on serve it would log out serve.
     if (options.relayed && isLogin(action))
       throw new CliError(

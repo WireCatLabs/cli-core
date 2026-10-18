@@ -41,7 +41,7 @@ export interface McpCommand {
   run: (args: Record<string, unknown>, ctx: ServerContext) => Promise<CallToolResult>
 }
 
-const normal = (command: string): string =>
+export const normal = (command: string): string =>
   command
     .trim()
     .toLowerCase()
@@ -103,6 +103,8 @@ export const registerCommands = (
   prefix: string,
   commands: Record<string, McpCommand>,
   errors?: AppErrors,
+  /** Throws the refusal of a command left out because the lock or a level stops it, so the agent learns why. */
+  withheld?: (command: string) => void,
 ) => {
   const byNormal = new Map(Object.keys(commands).map((command) => [normal(command), command]))
 
@@ -152,6 +154,7 @@ export const registerCommands = (
         const command = byNormal.get(normal(asked))
         const one = command === undefined ? undefined : commands[command]
         if (command === undefined || !one) {
+          withheld?.(normal(asked))
           const moved = movedPath(normal(asked).split(" "), (path) => byNormal.has(path))
           if (moved !== undefined)
             throw new CliError("validation_error", `no command "${asked}" here — ${movedPointer(moved)}`)

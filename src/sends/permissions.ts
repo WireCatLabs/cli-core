@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { AccountAction, SendKind } from "./journal.js"
+import type { AccountAction, ChatAction, SendKind } from "./journal.js"
 
 /**
  * What a profile may be allowed to do (max-cli `CLI-37`, `NEED-251`). One name per thing the owner would
@@ -264,6 +264,20 @@ export const keyForWrite = (kind: SendKind, action?: string): PermissionKey => {
     return key
   }
   return KIND_KEYS[kind]
+}
+
+/** `keyForWrite` read backwards, as far as a command's key says it: an unpin is a `pin`, a chat change names its action. */
+export const writeOfKey = (key: PermissionKey): { kind?: SendKind; action?: ChatAction | AccountAction } => {
+  const account = Object.entries(ACCOUNT_KEYS).find(([, named]) => named === key)?.[0]
+  if (account) return { kind: "account", action: account as AccountAction }
+  const kind = Object.entries(KIND_KEYS).find(([, named]) => named === key || key.startsWith(`${named}.`))?.[0]
+  if (kind) return { kind: kind as SendKind }
+  if (key === "messages.unpin") return { kind: "pin" }
+  if (key.startsWith("chats.")) {
+    const action = Object.entries(CHAT_KEYS).find(([, named]) => named === key)?.[0] ?? key.slice("chats.".length)
+    return { kind: "chat", action: action as ChatAction }
+  }
+  return {}
 }
 
 /** Write keys written out where a write is checked; `permission-keys.test.ts` keeps this list whole. */
