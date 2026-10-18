@@ -145,6 +145,7 @@ describe("observation CLI", () => {
       command: "stats messages evidence",
       args: { message: item.cohort, selection: JSON.stringify(item.selection), component: "report" },
       why: expect.any(String),
+      line: expect.stringMatching(/^chat stats messages evidence /),
     })
     const evidence = await call(
       "stats",

@@ -260,6 +260,10 @@ export const withSafety = (steps: readonly NextStep[], targets: Targets): NextSt
     return { ...step, safe_to_auto_execute: effects !== undefined && !writes(effects) }
   })
 
+/** Each command step with `line`, the whole command to type — only the CLI knows the profile, so MCP gets none. */
+export const withLines = (root: Command, steps: readonly NextStep[]): NextStep[] =>
+  steps.map((step) => (step.kind === "command" ? { ...step, line: stepLine(root, step) } : step))
+
 const kebab = (name: string) => name.replaceAll("_", "-")
 const quoted = (value: unknown) => {
   const text = String(value)

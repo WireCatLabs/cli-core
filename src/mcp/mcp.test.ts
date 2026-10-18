@@ -3987,8 +3987,9 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
         { streams, tty: false, env },
       )
       expect(code, argv.join(" ")).toBe(0)
-      const { meta: _, ...answer } = JSON.parse(streams.stdout.join(""))
-      return answer
+      const { meta: _, next, ...answer } = JSON.parse(streams.stdout.join(""))
+      // MCP answers leave out `line`, the command with the profile; the rest must match.
+      return next ? { ...answer, next: next.map(({ line: _line, ...step }: { line?: string }) => step) } : answer
     }
     const tool = async (name: string, args?: Record<string, unknown>) => {
       const { meta: _, ...answer } = (await call(name, args)).body

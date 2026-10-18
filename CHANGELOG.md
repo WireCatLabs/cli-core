@@ -9,6 +9,9 @@ shape of this file.
 
 ### Added
 
+- **A next step in `--json` output and in an error carries `line`, the whole command with the profile**:
+  `"line": "max personal mcp config"` beside `"command": "mcp config"`. A copied `command` alone failed with "name a
+  profile". MCP answers leave it out; `command` is unchanged.
 - **`searchAll(…, { app, hintCommand })`**: the tool a missing-model hint names, apart from `app.command`. memo passes
   tg's identity for `group:` lists but has no `models` command; `hintCommand: null` names the tools that have one
   (tg, max or wa) instead of `tg models text download`. `searchAllIncludingMeetings` and `searchAllWithMeetings`
@@ -29,6 +32,9 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Peer `@wirecat/cli-base` is `>=0.47.0 <0.48.0`** (was `>=0.45.0 <0.47.0`): 0.47.0 is the first whose strict
+  `nextStepSchema` accepts `line`, so a tool on an older cli-base would refuse cli-core's own answers in its schema
+  checks. Bump cli-base with cli-core.
 - **Saving a chat keeps a `title`, `unreadCount`, `lastMessageAt` or `participantsCount` the update leaves out**, the
   rule #1596 set for `providerMetadata` keys and `parentChatId`: left out keeps the stored value, `null` stores none,
   a value replaces it. So a push that knows only part of a chat, such as WhatsApp's notice that a group left its

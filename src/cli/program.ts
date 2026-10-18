@@ -43,7 +43,7 @@ import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
-import { commandAt } from "./steps.js"
+import { commandAt, withLines } from "./steps.js"
 
 export interface ProgramDefinition {
   app: AppIdentity
@@ -660,6 +660,7 @@ interface Failure {
   object: ReturnType<typeof errorObjectOf>
   record?: ReturnType<typeof errorRecordOf>
   cli: string
+  program: Command
 }
 
 const failed = (
@@ -685,6 +686,7 @@ const failed = (
   return {
     object,
     cli: app.command,
+    program,
     ...(debug
       ? { record: errorRecordOf(failure, object, { command, service: app.command, version: app.version }) }
       : {}),
@@ -695,12 +697,13 @@ const failed = (
  * **A failure never reaches stdout.** It goes to stderr — as JSON when nobody is watching, because
  * an exit code says which kind of thing went wrong and nothing about which chat or how long to wait.
  */
-const report = (streams: Streams, options: BaseEnvironment, { object, record, cli }: Failure): number => {
+const report = (streams: Streams, options: BaseEnvironment, { object, record, cli, program }: Failure): number => {
   if (options.agent) {
     options.agent.failure(object)
     return exitCodeOfError(object)
   }
   const interactive = options.tty ?? process.stdout.isTTY === true
-  streams.diagnostic(renderError(object, { cli, interactive, ...(record ? { record } : {}) }))
-  return exitCodeOfError(object)
+  const lined = object.error.next ? { error: { ...object.error, next: withLines(program, object.error.next) } } : object
+  streams.diagnostic(renderError(lined, { cli, interactive, ...(record ? { record } : {}) }))
+  return exitCodeOfError(lined)
 }
