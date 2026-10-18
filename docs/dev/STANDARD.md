@@ -284,6 +284,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `doctor` | check this machine's setup |
 | `upgrade` | install a newer version of this tool |
 | `commands` | the command tree as data |
+| `guide` | scenarios: the commands for a common task, in order, and why each |
 | `complete` | shell completion |
 | `mcp` | the MCP server and its setup |
 | `bot` | the profile's bot account |

@@ -282,6 +282,47 @@ description), **Next usually** (up to three commands whose arguments take what i
 `commandHelpMarkdown(root, path)` renders the same for `docs/commands.md`; `exampleReport(program)` lists the
 commands still on a generated example, and `pnpm help:examples` prints that list for the shared commands.
 
+### Scenarios: `<cli> guide`
+
+`<cli> guide` lists the tool's scenarios, then the ones it works with that another tool holds;
+`<cli> guide <name>` prints one: the goal, each step as a command with one line of why, and what to look at.
+`--json` gives the same as a list (`tool`, `name`, `title`, `goal`, `command`) or one item (`name`, `title`,
+`goal`, `steps: [{ run, why }]`, `look`). `guide` takes no profile and is not an MCP tool.
+
+A scenario is one Markdown file, `<name>.md`, in a directory the tool ships. The front matter holds everything the
+command prints; the body is for the site's Examples page and the command does not read it.
+
+```markdown
+---
+title: Catch up after a day away
+goal: Know who waits on you and what you promised, without reading every chat.
+steps:
+  - run: tg review date>1d --unanswered 4h
+    why: questions to you that nobody answered, across every chat
+look:
+  - who asked first and how long ago
+---
+```
+
+A step is written as a person types it: the tool's name first, no profile, as in a written example. The tool
+mounts the command and names the directory, plus the cross-tool scenarios it lists by reference:
+
+```ts
+import { fileURLToPath } from "node:url"
+import { checkGuide, guideCommand } from "@wirecat/cli-core/cli"
+
+guideCommand(app, {
+  directory: fileURLToPath(new URL("../scenarios", import.meta.url)),
+  worksWith: [{ tool: "memo", name: "person-brief", title: "one person across every tool" }],
+})
+
+// In the tool's tests: every file parses, every step's command path exists and its options and arguments parse,
+// on a program built fresh per step; no account, no network, no action runs. packageRoot checks `files` ships it.
+expect(await checkGuide(() => createProgram(definition), { packageRoot: process.cwd() })).toEqual([])
+```
+
+`profile: false` drops the profile sentence for a tool whose commands take none.
+
 ## Evidence packets for agents
 
 `prepareEvidencePacket` from `@wirecat/cli-core/services` packages a message page that the

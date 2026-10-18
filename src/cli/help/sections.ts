@@ -67,6 +67,7 @@ const CORE_SECTIONS: Readonly<Record<string, HelpSection>> = {
   complete: "setup",
   config: "setup",
   doctor: "setup",
+  guide: "setup",
   models: "setup",
   skill: "setup",
   store: "setup",

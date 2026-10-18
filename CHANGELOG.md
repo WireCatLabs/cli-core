@@ -15,6 +15,15 @@ shape of this file.
   time and item budgets, and an opaque reference-only checkpoint resumes the run with its window frozen. An
   optional host fetch port runs first; a failed fetch or source is reported as coverage, never as absence. It
   writes nothing. See `docs/dev/PROJECT-GATHERING.md`.
+- **`<tool> guide [name]`: scenarios, the commands for a common task in order** (`guideCommand(app, { directory,
+  worksWith?, profile? })` from `@wirecat/cli-core/cli`). The list names each scenario and, under "Works with",
+  the ones another tool holds (`memo guide person-brief`); one scenario prints its goal, each step as a command and
+  why, and what to look at; `--json` gives the same as data. The source is one Markdown file per scenario with
+  front matter (`title`, `goal`, `steps: [{ run, why }]`, `look`) in a directory the tool ships and names.
+  `guide` takes no profile and is not an MCP tool. `await checkGuide(() => program, { packageRoot })` is for the
+  tool's CI: each step's command path exists and its options and arguments parse, with no account and no network,
+  and the directory is in the package's `files`. The first screen's "Next" names `guide` once a tool mounts it. The
+  peer range takes cli-base 0.46 too (`>=0.45.0 <0.47.0`): `cli-dev lint` knows `guide` from 0.46.0 on.
 - **The run record of a one-shot command's passive listen counts what it received**: the `adapter.listen`
   response carries `counts` by event (`message`, `edit`, …), as `messages.watch` does, so a run shows how many
   messages a store-history messenger handed on and saved during the command.

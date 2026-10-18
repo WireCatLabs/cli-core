@@ -23,7 +23,7 @@ export const usableProfileName = (profile: string): string => {
 }
 
 /** The top-level commands that never read a profile; every other one is `<tool> <profile> …`. */
-export const PROFILE_FREE: ReadonlySet<string> = new Set(["commands", "complete", "help", "skill", "upgrade"])
+export const PROFILE_FREE: ReadonlySet<string> = new Set(["commands", "complete", "guide", "help", "skill", "upgrade"])
 
 /**
  * Every word that means a command at the top level. Taken off the built program rather than
