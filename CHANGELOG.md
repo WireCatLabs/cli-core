@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.338.0 — 18.10.2026
+
 ### Added
 
 - **Agents mute, archive, pin and mark unread a chat over MCP.** The personal server now offers `chats mute`,
