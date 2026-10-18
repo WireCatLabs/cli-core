@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- `createTagRedirectIndex` validates a complete bounded tag redirect graph and resolves retained IDs
+  without losing their membership. It is a policy foundation only: no store redirects or tag merge
+  are enabled. The consolidation guide records the old-reader/writer compatibility and provenance
+  requirements that must be met before applying a merge.
+
 ## 0.342.0 — 18.10.2026
 
 ### Changed — may break callers

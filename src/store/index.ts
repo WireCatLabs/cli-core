@@ -19,6 +19,8 @@ export type {
   TagConsolidationPreview,
   TagConsolidationStore,
 } from "../domain/tag-consolidation.js"
+export type { TagRedirectIndex, TagRedirectResolution, TagRedirectSnapshot } from "../domain/tag-redirects.js"
+export { createTagRedirectIndex } from "../domain/tag-redirects.js"
 export type {
   FindingEvidence,
   FindingOutcome,
