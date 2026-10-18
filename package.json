@@ -8,6 +8,10 @@
     "type": "git",
     "url": "git+https://github.com/WireCatLabs/cli-core.git"
   },
+  "homepage": "https://github.com/WireCatLabs/cli-core#readme",
+  "bugs": {
+    "url": "https://github.com/WireCatLabs/cli-core/issues"
+  },
   "type": "module",
   "engines": {
     "node": "^22.16.0 || >=24"
@@ -18,6 +22,7 @@
     "parity.json",
     "skills",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES",
     "docs/search/recipes.json"
@@ -106,7 +111,7 @@
     },
     "./skill-validation": {
       "types": "./dist/skills/validate.d.ts",
-      "import": "./dist/skills/validate.js"
+      "default": "./dist/skills/validate.js"
     },
     "./files": {
       "types": "./dist/files/index.d.ts",
