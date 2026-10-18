@@ -15,6 +15,12 @@ shape of this file.
   has them). It no longer lists every command or the options for every command, so a test that looks for a command
   or a global option in the root `--help` must read `--help-all`, which prints the old help, or `help options`.
   Exit codes are unchanged: `--help` exits 0, a bare run exits 2.
+- **`<tool> commands` without `--json` prints a text list, by section, even when piped.** It printed the whole JSON
+  document (hundreds of kilobytes) to any reader that was not a terminal, and a table in one. Now every command that
+  runs is one line — its usage and the first clause of its description, `(writes)` when it changes something —
+  under Read, Write, Organise, Automate, Set up or Other. `commands <path>` narrows it. `--json` and `--jsonl` print
+  the same document as before; only the `commands` command's own description changed. A script that parsed the
+  output of a bare `commands` must pass `--json`.
 
 ### Added
 
@@ -28,6 +34,11 @@ shape of this file.
   description and no "What you can do" block.
 - **`<tool> help options`** prints the options for every command; `help <command>` prints that command's help.
   `help` and `--help-all` are hidden, so `commands --json` and the MCP tools are unchanged.
+- **`inSection(command, section)` and `SECTIONS`** (`@wirecat/cli-core/cli`): where `commands` lists a group and
+  everything under it — `read`, `write`, `organise`, `automate` or `setup`; a command without one, or under none,
+  is listed under Other. `createProgram` puts cli-core's own groups (`chats`, `messages`, `tags`, `schedule`,
+  `config`…) in theirs; a tool sets its own groups (`session`, `setup`). The section is kept off the commands
+  document.
 
 ## 0.343.0 — 18.10.2026
 

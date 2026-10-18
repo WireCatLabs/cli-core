@@ -272,6 +272,10 @@ can do, the other WireCat tools and pointers to `commands`, `help options` and `
 calls `installHelp(program, { pitch, can, profile?, start? })`. `<cli> help options` prints the options for
 every command, and `<cli> --help-all` the full commander help.
 
+`<cli> commands` without `--json` lists every command that runs, one line each, by section (Read, Write,
+Organise, Automate, Set up, Other); `<cli> commands <path>` narrows it. cli-core's groups carry their section; a
+tool puts its own groups in one with `inSection(command, "setup")`.
+
 ## Evidence packets for agents
 
 `prepareEvidencePacket` from `@wirecat/cli-core/services` packages a message page that the

@@ -234,6 +234,7 @@ export {
   installHelp,
   WIRECAT_TOOLS,
 } from "./help/first-screen.js"
+export { type HelpSection, inSection, SECTIONS } from "./help/sections.js"
 export {
   bufferedInput,
   type InputPolicy,
