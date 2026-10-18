@@ -380,7 +380,7 @@ describe("reads only the server answers", () => {
     const adapter: MessengerAdapter = {
       ...base,
       send: async (chatId, _text, options) => {
-        sent.push(options.attachments?.map(({ kind, name }) => ({ kind, name })))
+        sent.push(options.stickerFile?.name)
         return { message: { ...message("61"), chatId }, sendId: options.sendId }
       },
     }
@@ -409,7 +409,7 @@ describe("reads only the server answers", () => {
     expect(fake.stderr).toContain("not a WebP image")
     expect(guarded.stderr).toContain("--allow-any-file")
     expect(allowed.code, allowed.stderr).toBe(0)
-    expect(sent).toEqual([[{ kind: "sticker", name: "cat.webp" }], [{ kind: "sticker", name: "key.webp" }]])
+    expect(sent).toEqual(["cat.webp", "key.webp"])
     expect(elsewhere.stderr).toContain("unknown option '--sticker-file'")
   })
 

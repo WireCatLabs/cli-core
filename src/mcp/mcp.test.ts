@@ -3203,7 +3203,7 @@ describe("sending over MCP", () => {
     const unknown = await withoutStickers("messages send", { chat: "7", sticker_file: join(root, "cat.webp") })
 
     expect(attached.isError, JSON.stringify(attached.body)).toBe(false)
-    expect(sent[0]?.attachments).toMatchObject([{ kind: "sticker", name: "cat.webp" }])
+    expect(sent[0]?.stickerFile).toMatchObject({ name: "cat.webp" })
     for (const refused of guarded) {
       expect(refused.isError).toBe(true)
       expect(JSON.stringify(refused.body)).toContain("credential files")

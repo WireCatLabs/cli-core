@@ -9,14 +9,15 @@ shape of this file.
 
 ### Added
 
-- **A sticker can be sent from a .webp file.** The new `Messenger` trait `stickerFileBytes` (the largest sticker,
-  in bytes) mounts `messages send --sticker-file <file>` and the MCP `messages send` argument `sticker_file`, for a
+- **A sticker can be sent from a .webp file.** The new `Messenger` trait `stickerFileBytes` (the largest sticker, in
+  bytes) mounts `messages send --sticker-file <file>` and the MCP `messages send` argument `sticker_file`, for a
   messenger whose sticker is an uploaded file rather than one of a set (WhatsApp). The file is read like `--file`:
   known credential places and the WireCat folders are refused unless the owner adds `--allow-any-file`, which the
   MCP side never has; a file that is not a .webp (by its name and its first bytes), is larger than the limit, or
-  comes with text or another file is refused before anything connects. The adapter's `send` gets it as one `Upload` of the new kind `sticker`, and the
-  send journal records the kind and size. `--sticker <id>` and `stickers: true` are unchanged, so tg and max see
-  no difference.
+  comes with text or another file is refused before anything connects. The adapter's `send` gets it as the new
+  option `stickerFile` (`{ name, source }`, type `StickerFile`), and the send journal records it as kind `sticker`
+  with its size. `--sticker <id>` and `stickers: true` are unchanged, so tg and max see no difference at run time;
+  `UploadKind` is unchanged.
 - **`chats update --remove-photo` takes a group's photo away.** A messenger turns it on with the new `Messenger`
   trait `groupPhotoRemoval`; the adapter's `updateGroup` then gets `GroupChange.removePhoto: true`. The MCP
   `chats_update` tool takes `remove_photo: true` on the same messenger. A new photo and its removal in one call are
