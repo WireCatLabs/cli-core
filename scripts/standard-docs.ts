@@ -6,7 +6,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { LINT_RULES, VOCABULARY } from "@wirecat/cli-base/standards"
+import { LINT_RULES, VOCABULARY } from "@wirecat/cli-base/standards/tables"
 import { cell, withGenerated } from "./generated-blocks.ts"
 
 const page = join(import.meta.dirname, "..", "docs/dev/STANDARD.md")

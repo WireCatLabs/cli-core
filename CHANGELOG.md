@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Core now requires Base `>=0.45.0 <0.46.0`.** Base 0.45.0 moved the vocabulary, lint, audit and field tables from
+  `@wirecat/cli-base/standards` to `@wirecat/cli-base/standards/tables`, so a CLI start no longer parses them. The MCP
+  agent reads `VOCABULARY` from the new entry (it loads only when an agent server starts), and
+  `scripts/standard-docs.ts` reads the tables from there. A consumer moves to Base 0.45.0 together with this version.
+
 ## 0.341.0 — 18.10.2026
 
 ### Added

@@ -7,7 +7,8 @@ import {
   flatten,
   type OptionInfo,
 } from "@wirecat/cli-base/commands"
-import { type ErrorObject, VOCABULARY, writes } from "@wirecat/cli-base/standards"
+import { type ErrorObject, writes } from "@wirecat/cli-base/standards"
+import { VOCABULARY } from "@wirecat/cli-base/standards/tables"
 import * as v from "valibot"
 import { lentConnection } from "../cli/messenger/serve-relay.js"
 import type { RunOptions } from "../cli/program.js"
