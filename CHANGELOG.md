@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.335.0 — 18.10.2026
+
 ### Fixed
 
 - **An agent is no longer offered `offline` on a command that refuses it.** The MCP catalogue offered an `offline`
