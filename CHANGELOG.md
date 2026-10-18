@@ -16,6 +16,10 @@ shape of this file.
 
 ### Fixed
 
+- **`<cli> mcp --help` and the root help no longer suggest `claude mcp add tg -- tg mcp`.** That command always
+  failed with "name a profile", so a newcomer registered a broken server. The hint now reads
+  `claude mcp add tg -- tg <profile> mcp`. Run `pnpm generate` after adopting to refresh `docs/commands.md`.
+
 - **Node 22 no longer prints `ExperimentalWarning: SQLite is an experimental feature` on every command that opens the
   store.** Agents read the two stderr lines as a failure. The store now drops that one warning before it loads
   `node:sqlite`; every other warning still prints, and Node 24 never printed it. A consumer gets it by adopting this
