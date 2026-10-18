@@ -44,6 +44,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261017212239_version-22-mail-demoted", version: 22, minCompatible: 1 },
   { name: "20261018024850_version-23-chat-events", version: 23, minCompatible: 1 },
   { name: "20261018061512_version-24-message-stars", version: 24, minCompatible: 1 },
+  { name: "20261018063952_version-24-message-stars-index", version: 24, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

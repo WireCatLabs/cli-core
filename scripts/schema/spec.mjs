@@ -181,6 +181,7 @@ const EDITS = {
     ],
     keys: [
       "INDEX (chat_id, sent_at DESC)",
+      "INDEX (chat_id, sent_at DESC) WHERE starred = 1",
       "INDEX (chat_id, reply_to_external_id) WHERE reply_to_external_id IS NOT NULL AND deleted_at IS NULL",
       "INDEX (account_id, external_id)",
       "INDEX (id) WHERE normalized_text IS NULL AND deleted_at IS NULL",

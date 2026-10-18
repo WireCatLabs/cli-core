@@ -461,6 +461,7 @@ export const messages = sqliteTable(
   (table) => [
     unique().on(table.chatId, table.externalId),
     index("messages_by_time").on(table.chatId, desc(table.sentAt)),
+    index("messages_starred_by_time").on(table.chatId, desc(table.sentAt)).where(sql`starred = 1`),
     index("messages_by_reply")
       .on(table.chatId, table.replyToExternalId)
       .where(sql`reply_to_external_id IS NOT NULL AND deleted_at IS NULL`),

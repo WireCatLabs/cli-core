@@ -43,6 +43,7 @@ const CASCADE = new Set([
 const NAMES = {
   "chats:account_id,last_message_at DESC": "chats_by_recency",
   "messages:chat_id,sent_at DESC": "messages_by_time",
+  "messages:chat_id,sent_at DESC WHERE starred = 1": "messages_starred_by_time",
   "messages:chat_id,reply_to_external_id": "messages_by_reply",
   "messages:account_id,external_id": "messages_by_account",
   "messages:id": "messages_to_normalize",

@@ -532,5 +532,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "ALTER TABLE `messages` ADD `starred` integer;"
     ]
+  },
+  {
+    "name": "20261018063952_version-24-message-stars-index",
+    "statements": [
+      "CREATE INDEX `messages_starred_by_time` ON `messages` (`chat_id`,\"sent_at\" desc) WHERE starred = 1;"
+    ]
   }
 ]

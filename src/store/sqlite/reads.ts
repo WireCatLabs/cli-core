@@ -186,7 +186,7 @@ export const messagePage = (
         starred === undefined
           ? undefined
           : starred
-            ? eq(messages.starred, 1)
+            ? sql`${messages.starred} = 1`
             : or(eq(messages.starred, 0), isNull(messages.starred)),
       ),
     )
