@@ -23,7 +23,14 @@ import { recorded, wasSettled } from "../runs/recording.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
-import { changesAuthority, isLogin, isStoreChange, judgedEffects, judgedTargets } from "./effects.js"
+import {
+  changesAuthority,
+  isLogin,
+  isStoreChange,
+  judgedEffects,
+  judgedTargets,
+  STORE_CHANGE_REFUSAL,
+} from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -267,7 +274,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
-    if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, "change the message store")
+    if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
     // A client older than the relay's refusal to forward a login still sends one; on serve it would log out serve.
     if (options.relayed && isLogin(action))
       throw new CliError(

@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { embeddingChoice } from "../../cli/embedding-choice.js"
+import { embeddingChoice, refuseRemoteQuery } from "../../cli/embedding-choice.js"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
@@ -179,6 +179,8 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, args, defaults, connect) => {
         const size = args.limit ?? defaults.limit
+        const model = embeddingChoice({}, messenger.app, defaults.settings, defaults.env, { keyring: defaults.keyring })
+        refuseRemoteQuery(model, messenger.app, defaults.env)
         const found = await searchServices(
           messenger,
           store,
@@ -189,7 +191,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
           ...syncArgs(args),
           signal: defaults.signal,
           limit: size,
-          model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, { keyring: defaults.keyring }),
+          model,
           ...(args.filter === undefined ? {} : { filter: args.filter }),
           ...(args.source === undefined ? {} : { source: args.source }),
           ...(args.timezone === undefined ? {} : { timezone: args.timezone }),

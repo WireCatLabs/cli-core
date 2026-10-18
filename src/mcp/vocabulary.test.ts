@@ -1,6 +1,8 @@
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
-import { run } from "../cli/program.js"
+import { isStoreChange } from "../cli/effects.js"
+import { createProgram, run } from "../cli/program.js"
+import { commandAt } from "../cli/steps.js"
 import { keyForCommand } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
 import { commandOf, toolKey } from "./tool.js"
@@ -54,6 +56,22 @@ describe("one vocabulary for the CLI and its agent catalogue", () => {
     expect(toolKey("chats_send_as", tools.chats_send_as as never)).toBe("chats.send-as")
     expect(toolKey("chats_mark_read", tools.chats_mark_read as never)).toBe("chats.mark-read")
     expect(toolKey("chats_members", tools.chats_members as never)).toBe("chats.members.list")
+  })
+
+  it("refuses under the read-only lock the tools whose command the lock refuses", () => {
+    const program = createProgram(sharedProgram)
+    const marked = (refused: (name: string, definition: (typeof tools)[string]) => boolean) =>
+      Object.entries(tools)
+        .filter(([name, definition]) => refused(name, definition))
+        .map(([name]) => name)
+        .sort()
+
+    expect(marked((_, definition) => definition.changesStore === true)).toEqual(
+      marked((name, definition) => {
+        const command = commandAt(program, commandOf(name, definition))
+        return command !== undefined && isStoreChange(command)
+      }),
+    )
   })
 
   it("names other commands by path in what the agent reads, never by a retired tool name", () => {

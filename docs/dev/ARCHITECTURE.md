@@ -479,8 +479,8 @@ it holds (NEED-1389):
   and writes `relay: { path, protocol }` into the lock. `run()`'s `preAction` (`relayTarget`, `src/cli/relay-route.ts`)
   sends a command there when the lock's process is alive and offers a relay, and the command reaches the messenger
   (`effects.remote` not `none`) — except `serve`, `server`, `bot`, logins (`lifetime: "interactive"`), a command
-  whose remote side is another service (`reachesOtherService`: `conversations embed`), `--offline`, `--dry-run` and
-  `mcp --http`.
+  whose remote side is another service (`reachesOtherService`: `conversations build` and `embed`, `search
+  conversations`, the model downloads), `--offline`, `--dry-run` and `mcp --http`.
 - **The command, not the adapter.** The client sends its argv, environment, working directory and stdin
   (`src/background/relay.ts`, one JSON object per line); serve runs `run()` again in-process (`runCommand`) and
   streams back each `data`, `diagnostic` and raw stdout write, then the exit code. Parsing, settings, the send guard,

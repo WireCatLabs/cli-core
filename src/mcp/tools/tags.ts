@@ -70,6 +70,7 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tags_remove: tool({
+      changesStore: true,
       title: "Untag a chat, person, message or task",
       description: `Takes tags off one chat, person, message or task. ${TARGET} Returns { item: { target, removed, unchanged } }.`,
       input: v.object({ ...input.entries, source: v.optional(v.picklist(["manual", "auto"])) }),

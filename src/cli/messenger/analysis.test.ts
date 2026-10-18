@@ -117,16 +117,18 @@ const setup = async () => {
   }
   await add()
   const keyring = memoryKeyring()
-  const call = async (...argv: string[]) => {
+  const callWith = async (extra: NodeJS.ProcessEnv, argv: string[]) => {
     const streams = captureStreams()
     const code = await run(
       argv,
       { app, commands: () => [conversationsCommand(messenger), configCommand(app, config)] },
-      { streams, tty: false, env, keyring },
+      { streams, tty: false, env: { ...env, ...extra }, keyring },
     )
     return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
   }
-  return { call, add, calls: () => calls, configure, baseUrl }
+  const call = (...argv: string[]) => callWith({}, argv)
+  const locked = (...argv: string[]) => callWith({ CHAT_READ_ONLY: "1" }, argv)
+  return { call, locked, add, calls: () => calls, configure, baseUrl }
 }
 const json = (result: { stdout: string[] }) => {
   const body = JSON.parse(result.stdout[0] ?? "null")
@@ -199,5 +201,18 @@ describe("analysis CLI consent and configuration", () => {
     expect(calls()).toBe(0)
     const shown = json(await call("config", "show", "--json"))
     expect(shown.settings).toContainEqual({ setting: "analysis_provider", value: "openai", from: "config file" })
+  })
+  it("under the read-only lock sends nothing to a remote provider, and still analyzes on a local server", async () => {
+    const { call, locked, configure, calls } = await setup()
+    configure({ analysis_base_url: "https://analysis.example.com/v1" })
+    const refused = await locked("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")
+    expect(refused.code).toBe(5)
+    expect(JSON.parse(refused.stderr).error.message).toBe(
+      "this process is read-only (CHAT_READ_ONLY) — it cannot send chat text to analysis.example.com",
+    )
+    expect(json(await call("conversations", "consents", "list", "--json")).items).toEqual([])
+    configure()
+    expect((await locked("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")).code).toBe(0)
+    expect(calls()).toBe(1)
   })
 })

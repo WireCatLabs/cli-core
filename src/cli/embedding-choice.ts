@@ -2,8 +2,8 @@ import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { type AISettings, endpoint } from "../analysis/settings.js"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
-import { remoteModel } from "../embeddings/remote.js"
-import type { AppIdentity } from "../ports/app.js"
+import { isLocal, remoteModel } from "../embeddings/remote.js"
+import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import type { ModelChoice } from "../services/embeddings.js"
 
 export interface ModelOptions {
@@ -53,4 +53,14 @@ export const embeddingChoice = (
     )
   }
   return { remote, ...(key ? { apiKey: key } : {}), ...(concurrency ? { concurrency } : {}) }
+}
+
+/**
+ * Under `<PREFIX>_READ_ONLY`, refuses a query bound for an embedder off this machine. Nothing changes there, but the
+ * lock keeps the owner's text from leaving: a stricter reading of WC-PERM-12.
+ */
+export const refuseRemoteQuery = (model: ModelChoice, app: AppIdentity, env: NodeJS.ProcessEnv): void => {
+  if (typeof model === "string" || isLocal(model.remote.baseUrl)) return
+  const lock = readOnlyLockOf(app, env)
+  if (lock) throw readOnlyRefusal(lock, `send the query to ${new URL(model.remote.baseUrl).host}`)
 }

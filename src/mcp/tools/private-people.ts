@@ -27,6 +27,7 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
       ),
   }),
   contacts_alias_rm: tool({
+    changesStore: true,
     title: "Remove a private contact alias",
     description: "Remove only this account's local alias.",
     input: v.object({ person }),
@@ -83,6 +84,7 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
       ),
   }),
   contacts_notes_edit: tool({
+    changesStore: true,
     title: "Edit a private contact note",
     description: "Replace note text only if its revision still matches the one read.",
     input: v.object({ person, id, text, revision: v.pipe(v.number(), v.integer(), v.minValue(1)) }),
@@ -99,6 +101,7 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
       ),
   }),
   contacts_notes_remove: tool({
+    changesStore: true,
     title: "Delete a private contact note",
     description: "Delete this local note's text; the contact and source messages remain.",
     input: v.object({ person, id }),

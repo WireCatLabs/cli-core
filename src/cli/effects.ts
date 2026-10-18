@@ -1,7 +1,7 @@
 import { annotate, annotateOption, stepTargets } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
 import { type Command, Option } from "commander"
-import { readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
+import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { environmentOf } from "./context.js"
 
 /** Reads the messenger; a page it keeps on the way is incidental. */
@@ -45,9 +45,10 @@ export const isLogin = (command: Command): boolean => LOGIN.has(command)
 const STORE_CHANGE = new WeakSet<Command>()
 
 /**
- * Marks a `store` command that replaces, deletes or rewrites the message store or a file made from it. The store is
- * the owner's archive, so `<PREFIX>_READ_ONLY` refuses it even though nothing leaves the machine; `--dry-run` still
- * previews it.
+ * Marks a command that replaces, deletes or rewrites the message store, a file made from it, or what the owner saved
+ * in it (saved searches, contact notes). The store is the owner's archive, so `<PREFIX>_READ_ONLY` refuses it even
+ * though nothing leaves the machine; `--dry-run` still previews it. What the store can rebuild from its messages —
+ * jobs, conversation links, vectors — is not marked.
  */
 export const changesStore = <T extends Command>(command: T): T => {
   STORE_CHANGE.add(command)
@@ -56,18 +57,27 @@ export const changesStore = <T extends Command>(command: T): T => {
 
 export const isStoreChange = (command: Command): boolean => STORE_CHANGE.has(command)
 
+export const STORE_CHANGE_REFUSAL = "change the message store"
+
+/** Under `<PREFIX>_READ_ONLY`, refuses a change `changesStore` marks — for a caller outside `run()`, an MCP tool. */
+export const refuseStoreChange = (app: AppIdentity, env: NodeJS.ProcessEnv): void => {
+  const lock = readOnlyLockOf(app, env)
+  if (lock) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
+}
+
 const OTHER_SERVICE = new WeakSet<Command>()
 
 /**
- * Marks a command whose remote side is a service other than the messenger — an embedding provider. Its effects
- * still say what leaves the machine, but serve's relay has no connection to lend it, so it always runs here.
+ * Marks a command whose remote side is a service other than the messenger — an embedding or analysis provider, a
+ * model host. Its effects still say what leaves the machine, but serve's relay has no connection to lend it, so it
+ * always runs here.
  */
 export const reachesOtherService = <T extends Command>(command: T): T => {
   OTHER_SERVICE.add(command)
   return command
 }
 
-export const isOtherService = (command: Command): boolean => OTHER_SERVICE.has(command)
+export const isOtherServiceCall = (command: Command): boolean => OTHER_SERVICE.has(command)
 
 /** An option only the owner passes: MCP tools leave it out of their input (`mcp: false`). */
 export const ownerOnlyOption = (flags: string, description: string): Option =>
