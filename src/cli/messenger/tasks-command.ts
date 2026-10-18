@@ -219,7 +219,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         found.items.length === 0 ? "" : `${(found.previews ?? []).map(line).join("\n")}\n`,
       )
       if (found.items.length === 0 && context.format === "pretty")
-        context.renderer.note("no tasks — review and serve add them as questions arrive")
+        context.renderer.note("no tasks — review, inbox and messages sync add them as questions arrive")
     })
 
   planOptions(
