@@ -49,7 +49,7 @@ export const candidateInput = (input: MeetingProjectCandidateInput, accountId: n
   for (const cue of input.cues ?? []) {
     object(cue, ["reference", "fingerprint", "text", "revision"], "cue")
     const ref = bounded(cue.reference, 200, "cue.reference")
-    bounded(cue.text, 4096, "cue.text")
+    bounded(cue.text, 65536, "cue.text")
     if (!/^[a-f0-9]{64}$/.test(bounded(cue.fingerprint, 64, "cue.fingerprint"))) invalid("cue.fingerprint")
     if (cue.revision !== "current" && cue.revision !== "superseded") invalid("cue.revision")
     const parsed = parseMeetingReference(ref)

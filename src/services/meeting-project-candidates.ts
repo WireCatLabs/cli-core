@@ -5,6 +5,7 @@ import type {
   MeetingProjectCandidates,
   MeetingProviderScope,
 } from "../meetings/index.js"
+import { snapshotMeetingScope } from "../meetings/index.js"
 import type { VocabularyStore } from "../store/index.js"
 import { checkMeetingCancelled } from "./meeting-evidence.js"
 import { matchProjectCandidates } from "./meeting-project-candidate-matching.js"
@@ -16,20 +17,13 @@ export const createMeetingProjectCandidateReader = (
   accountId: number,
   ports: { vocabulary: Pick<VocabularyStore, "vocabulary"> },
 ): MeetingProjectCandidateReader => {
-  if (
-    !scope ||
-    [scope.provider, scope.account].some(
-      (s) => typeof s !== "string" || !s.trim() || s.length > 200 || /[\p{Cc}\p{Cf}]/u.test(s),
-    ) ||
-    !Number.isSafeInteger(accountId) ||
-    accountId < 1 ||
-    typeof ports?.vocabulary?.vocabulary !== "function"
-  )
+  const fixed = snapshotMeetingScope(scope)
+  if (!Number.isSafeInteger(accountId) || accountId < 1 || typeof ports?.vocabulary?.vocabulary !== "function")
     throw new CliError(
       "configuration_error",
       "project candidates need a captured account and bounded vocabulary reader",
     )
-  const owner = { provider: scope.provider, account: scope.account, accountId }
+  const owner = { provider: fixed.provider, account: fixed.account, accountId }
   const vocabulary = ports.vocabulary.vocabulary.bind(ports.vocabulary)
   return async (original, options = {}) => {
     const limits = candidateLimits(options)
@@ -60,6 +54,7 @@ export const createMeetingProjectCandidateReader = (
         association: "unconfirmed-literal-evidence",
         archiveCompleteness: "unknown",
         candidatesTotal: found.length,
+        omittedMatches: found.reduce((sum, candidate) => sum + candidate.omittedMatches, 0),
         hasMore: found.length > limits.limit,
         outputLimited: false,
         matching: "unicode-normalized-literal-word-boundaries",

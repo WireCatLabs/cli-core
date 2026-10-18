@@ -302,7 +302,7 @@ to the selected account and parent meeting. The reader detaches input before asy
 never broadens selection. No input changes the captured provider/account or vocabulary grant.
 
 Defaults/hard maxima: one project vocabulary call, 128 projects, 64 KiB of catalog names/keys/aliases,
-ten candidates, 100 supplied cues, 4,096 characters per cue, 8,192 per title and 64 KiB of supplied
+ten candidates, 100 supplied cues, 65,536 characters per cue, 8,192 per title and 64 KiB of supplied
 text in total. References and fingerprints have separate fixed bounds. `limit`, `maxProjects` and
 `maxVocabularyReadBytes` can lower these bounds; `bytes` defaults to 16 KiB and takes 1–64 KiB for
 the serialized SDK packet. Catalog over-budget errors remain explicit refusals; they never become
@@ -319,10 +319,58 @@ conflicting data for the same cue reference is refused.
 
 Each candidate retains its canonical project reference, matched term/alias ID and separate
 `metadata-title` hints or transcript references/fingerprints/revisions. At most twenty matches
-per project are returned, with `omittedMatches` counting additional matches. `association` and
+per project are returned, with `omittedMatches` counting additional matches. Coverage also retains
+the total omitted-match count when output projection hides per-project details. `association` and
 coverage retain unconfirmed status and unknown archive completeness. Input and vocabulary
 fingerprints let a caller detect changed evidence or catalog versions; no continuation snapshot
 or accepted finding is implied. Output trimming removes whole candidates, retaining mandatory
 coverage, total candidates, `hasMore` and `outputLimited`; increase bytes or narrow explicit input
 rather than treating omitted projects as absent. If mandatory provenance cannot fit, the reader
 refuses the byte limit. This SDK is not added to preparation or exposed as a CLI/MCP tool by itself.
+
+
+## Reverse project suggestions from stored meetings
+
+`createStoredMeetingProjectCandidateReader` from `/services` adds authorized, bounded hydration over
+the supplied-evidence SDK. Pass the captured provider/account, numeric account ID, bounded
+`meetings` read capabilities (including `account`) and `vocabulary`. It verifies the stored owner
+before reading metadata or transcripts. It never opens a provider connection or writes to the store.
+
+The reader uses the existing meeting evidence service: one transcript page, up to twenty cues by
+default (maximum one hundred), a 32 KiB cue packet and at most 64 KiB stored text per read. A fixed
+eight-call store budget also bounds custom readers returning partial pages; the separate global
+project catalog remains one read of at most 128 projects and 64 KiB. Exceeding a read bound refuses
+explicitly. Metadata is read once; the title is captured before transcript I/O. Reads are live, not
+one transaction or a frozen archive snapshot. The SDK result retains the evidence fingerprint,
+read limits, skipped revisions, continuation and unknown archive completeness alongside candidate
+provenance. Its output budget includes that metadata and removes whole candidates when needed.
+
+`addMeetingProjectCandidatesCommand`, `readMeetingProjectCandidates`,
+`meetingProjectCandidatesTool` and `callMeetingProjectCandidatesTool` are exported from `/cli`,
+following the existing preparation adapters. The host injects the stored reader and owns resource
+closure. The command mounts under an existing `meetings` group:
+
+```text
+example meetings projects scan meeting:1/2 --cues 20 --bytes 16384 --json
+```
+
+The raw MCP tool is `meeting_project_candidates`, with `ref`, `limit`, `cues`, `bytes`,
+`max_read_bytes` and `cursor`. Both adapters validate unknown fields and name the field in a
+`validation_error` before calling the host reader. Success is an item envelope with execution
+`meta`; the registered `meeting_project_candidates` entity and every nested field use snake_case.
+`meta.truncated` reports bounded candidate output or more evidence, while `meta.complete` reports
+read issues; neither asserts a complete archive. `bytes` bounds the item JSON, separately from the
+host's envelope/rendered-output budget. MCP errors preserve the host's supplied failure context.
+
+Resume with `item.evidence.coverage.next_cursor` and the same parent `ref`. A cue cursor continues
+within a revision; a transcript cursor continues after a fully read revision, including an empty
+one. The next page rematches the title and selected evidence against the live project vocabulary;
+project IDs may repeat between pages. Fingerprints can change between calls. Candidate omission
+is separate from evidence continuation: increase `limit`/`bytes` to retain more matched projects,
+and use the evidence cursor to examine more transcript cues. A null cursor with byte-truncated
+zero cues means a single cue did not fit the fixed evidence budget; it is not proof of no match.
+
+Provider hosts must opt in to the global vocabulary grant explicitly. Base registers
+`--meeting-project-candidates`; it does not mount the tool on its own. The SDK and adapters add no
+preparation default or remote provider transport. Confirm a suggested project link through the
+existing reviewed finding workflow; a title match or alias collision never confirms membership.

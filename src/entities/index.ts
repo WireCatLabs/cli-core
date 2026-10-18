@@ -33,6 +33,7 @@ import {
 } from "./meeting.js"
 import { meetingFindings } from "./meeting-findings.js"
 import { meetingPreparation } from "./meeting-preparation.js"
+import { meetingProjectCandidates } from "./meeting-project-candidates.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { message } from "./message.js"
@@ -82,6 +83,7 @@ export {
   job,
   joinRequest,
   meeting,
+  meetingProjectCandidates,
   member,
   memory,
   message,
@@ -162,6 +164,7 @@ export const ENTITIES = {
   meeting,
   meeting_details: meetingDetails,
   meeting_hit: meetingHit,
+  meeting_project_candidates: meetingProjectCandidates,
   meeting_project_evidence: meetingProjectEvidence,
   meeting_preparation: meetingPreparation,
   meeting_findings: meetingFindings,

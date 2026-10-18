@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { botCommand } from "../cli/bot/command.js"
 import { commandsCommand } from "../cli/commands-command.js"
 import { configCommand } from "../cli/config-command.js"
+import { addMeetingProjectCandidatesCommand } from "../cli/meeting-project-candidates-command.js"
 import { accountCommand } from "../cli/messenger/account-command.js"
 import { storeCommand } from "../cli/messenger/archive-commands.js"
 import { attachmentsCommand } from "../cli/messenger/attachments-command.js"
@@ -113,4 +114,11 @@ export const sharedCommands = (over: Messenger = messenger) => {
 }
 
 /** A messenger that mounts every shared command, as tg, max and wa do between them. */
-export const sharedProgram: ProgramDefinition = { app, commands: () => sharedCommands() }
+export const sharedProgram: ProgramDefinition = {
+  app,
+  commands: () => sharedCommands(),
+  configure: (program) => {
+    program.command("meetings").description("stored meetings")
+    addMeetingProjectCandidatesCommand(program, { read: refuse, output: () => undefined, signal: () => undefined })
+  },
+}
