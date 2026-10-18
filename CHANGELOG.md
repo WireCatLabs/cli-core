@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.346.0 — 18.10.2026
+
 ### Added
 
 - **The contract kit checks `listen`** when the adapter has it: on a signal already aborted it resolves at once
