@@ -1882,6 +1882,14 @@
         }
       }
     },
+    "chats archive": {
+      "in": [],
+      "planned": {
+        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "wa": "wa stream S1: chat archive, pin and unread"
+      },
+      "reason": "MAX: no measured request archives, pins or marks a chat unread"
+    },
     "chats clear": {
       "in": ["max"],
       "planned": {
@@ -2134,6 +2142,14 @@
         "--until-id": "all"
       }
     },
+    "chats mark-unread": {
+      "in": [],
+      "planned": {
+        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "wa": "wa stream S1: chat archive, pin and unread"
+      },
+      "reason": "MAX: no measured request archives, pins or marks a chat unread"
+    },
     "chats media": {
       "in": ["max"],
       "planned": {
@@ -2229,6 +2245,14 @@
         }
       }
     },
+    "chats pin": {
+      "in": [],
+      "planned": {
+        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "wa": "wa stream S1: chat archive, pin and unread"
+      },
+      "reason": "MAX: no measured request archives, pins or marks a chat unread"
+    },
     "chats requests": {
       "in": "all"
     },
@@ -2315,12 +2339,28 @@
     "chats tracking show": {
       "in": "all"
     },
+    "chats unarchive": {
+      "in": [],
+      "planned": {
+        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "wa": "wa stream S1: chat archive, pin and unread"
+      },
+      "reason": "MAX: no measured request archives, pins or marks a chat unread"
+    },
     "chats unmute": {
       "in": ["max"],
       "planned": {
         "tg": "tg-cli backlog: settings writes (mute, privacy)",
         "wa": "wa backlog: chats mute"
       }
+    },
+    "chats unpin": {
+      "in": [],
+      "planned": {
+        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "wa": "wa stream S1: chat archive, pin and unread"
+      },
+      "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats update": {
       "in": "all",

@@ -18,7 +18,14 @@ import { membersCommand } from "./chats-members-command.js"
 import { markReadCommand } from "./chats-read-command.js"
 import { trackingCommand } from "./chats-tracking-command.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { chatDeletionCommands, mediaCommand, muteCommands } from "./records-command.js"
+import {
+  archiveCommands,
+  chatDeletionCommands,
+  chatPinCommands,
+  markUnreadCommand,
+  mediaCommand,
+  muteCommands,
+} from "./records-command.js"
 
 export const chatsCommand = (messenger: Messenger): Command => {
   const chats = new Command("chats").description("the account's chats")
@@ -125,6 +132,9 @@ export const chatsCommand = (messenger: Messenger): Command => {
   chats.addCommand(moderateCommand(messenger))
   if (messenger.chatMedia === true) chats.addCommand(mediaCommand(messenger))
   if (messenger.chatMute === true) for (const command of muteCommands(messenger)) chats.addCommand(command)
+  if (messenger.chatArchive === true) for (const command of archiveCommands(messenger)) chats.addCommand(command)
+  if (messenger.chatPin === true) for (const command of chatPinCommands(messenger)) chats.addCommand(command)
+  if (messenger.chatMarkUnread === true) chats.addCommand(markUnreadCommand(messenger))
   if (messenger.chatDeletion === true) for (const command of chatDeletionCommands(messenger)) chats.addCommand(command)
   if (messenger.personalBots === true) for (const command of botChatCommands(messenger)) chats.addCommand(command)
 

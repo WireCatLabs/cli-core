@@ -39,6 +39,11 @@ const ACCOUNT: Record<AccountAction, Permission> = {
   "folder-join": "folders",
   "sessions-end": "sessions",
   "chat-mute": "profile",
+  "chat-archive": "profile",
+  "chat-unarchive": "profile",
+  "chat-pin": "profile",
+  "chat-unpin": "profile",
+  "chat-mark-unread": "profile",
   privacy: "profile",
 }
 
@@ -218,6 +223,11 @@ const ACCOUNT_KEYS: Record<AccountAction, PermissionKey> = {
   "folder-join": "chats.folders.join",
   "sessions-end": "account.sessions.end",
   "chat-mute": "chats.mute",
+  "chat-archive": "chats.archive",
+  "chat-unarchive": "chats.unarchive",
+  "chat-pin": "chats.pin",
+  "chat-unpin": "chats.unpin",
+  "chat-mark-unread": "chats.mark-unread",
   privacy: "account.privacy.set",
 }
 
