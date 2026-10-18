@@ -20,6 +20,7 @@ import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, MESSENGER_CHANGE_REFUSAL, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
+import { keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
@@ -384,6 +385,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
         kind: path[0] === "bot" ? "bot" : "personal",
         env: options.env ?? process.env,
         readOnly: true,
+        // No permission governs housekeeping like `skill install`, so no profile's settings change its preview.
+        needsProfile: keyForCommand(path) !== null,
       })
       const permissions = "permissions" in resolved ? (resolved.permissions as Settings["permissions"]) : {}
       renderAnswer(action, outputFor(action), itemOf(snakeKeys(preview(action, permissions))))

@@ -35,7 +35,7 @@ const doctorOf = async (script: string) => {
     },
     mcp: { execPath: process.execPath, scriptPath },
   } as Parameters<typeof run>[2])
-  return { code, root, stderr: streams.stderr.join("\n") }
+  return { code, root, stdout: streams.stdout.join("\n"), stderr: streams.stderr.join("\n") }
 }
 
 describe("mcp doctor", () => {
@@ -56,6 +56,25 @@ describe("mcp doctor", () => {
     expect(error.message).toContain("token [hidden]")
     expect(error.message).not.toContain("noise 5\n")
     expect(error.message).not.toContain(root)
+  })
+
+  it("**UX-67.c: does not call a profile healthy that has no account here**", async () => {
+    const { code, stdout, stderr } = await doctorOf(
+      [
+        "import { createInterface } from 'node:readline'",
+        "const answer = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\\n')",
+        "createInterface({ input: process.stdin }).on('line', (line) => {",
+        "  const { id, method } = JSON.parse(line)",
+        "  if (method === 'initialize') answer(id, { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'fake', version: '1' } })",
+        "  else if (method === 'tools/list') answer(id, { tools: [] })",
+        "  else if (id !== undefined) answer(id, {})",
+        "})",
+      ].join("\n"),
+    )
+
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout).item).toMatchObject({ healthy: false, signed_in: false })
+    expect(stderr).toContain("has no account on this computer yet")
   })
 
   it("keeps only the last lines, capped in length", () => {

@@ -8,7 +8,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { holdLock, lockPath, readLock } from "../../background/lock.js"
-import { relayCommand } from "../../background/relay.js"
+import { relayCommand, relayPath } from "../../background/relay.js"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
@@ -512,4 +512,15 @@ describe("commands through serve's relay", () => {
     expect(code).toBe(0)
     expect(connection.sent.map((one) => one.text)).toEqual(["alone"])
   })
+})
+
+it.skipIf(process.platform === "win32")("keeps the relay socket path short when TMPDIR is deep too", () => {
+  vi.stubEnv("TMPDIR", `/var/${"deep/".repeat(20)}`)
+  try {
+    const path = relayPath(`/home/${"state/".repeat(20)}tg-personal.lock`)
+    expect(path.length).toBeLessThanOrEqual(100)
+    expect(path.startsWith("/tmp/wirecat-relay-")).toBe(true)
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })

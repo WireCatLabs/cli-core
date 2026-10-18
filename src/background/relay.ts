@@ -55,13 +55,18 @@ const MAX_SOCKET_PATH = 100
 
 /**
  * The relay socket beside the serve lock. A state directory too deep for a socket path moves it to a private
- * directory under the system's temporary one, named by a hash of the path it replaces.
+ * directory under the system's temporary one, or under /tmp when that is too deep too, named by a hash of the path
+ * it replaces.
  */
 export const relayPath = (lockPath: string): string => {
   const beside = lockPath.replace(/\.lock$/, ".sock")
   if (beside.length <= MAX_SOCKET_PATH) return beside
   const hash = createHash("sha256").update(beside).digest("hex").slice(0, 16)
-  return join(tmpdir(), `wirecat-relay-${process.getuid?.() ?? "user"}`, `${hash}.sock`)
+  const name = join(`wirecat-relay-${process.getuid?.() ?? "user"}`, `${hash}.sock`)
+  const temporary = join(tmpdir(), name)
+  // macOS gives each user a deep TMPDIR under /var/folders, and a custom one can be deeper still.
+  if (temporary.length <= MAX_SOCKET_PATH || process.platform === "win32") return temporary
+  return join("/tmp", name)
 }
 
 /** Owner-only, or nothing: a directory someone else made, or others can enter, is not ours to listen in. */

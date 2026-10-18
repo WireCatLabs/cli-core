@@ -29,6 +29,12 @@ shape of this file.
   issues and README.
 - **`./skill-validation` resolves for `require()` too.** Its export named only an `import` condition; it now has
   `default`, like every other entry point.
+- **`mcp doctor` no longer calls a profile healthy when it has no account on this computer.** It reports
+  `healthy: false` and `signed_in: false`, and warns that the tools will fail until the owner logs in with `setup`.
+- **`--dry-run` on housekeeping (`skill install`, `config`, `complete`…) no longer asks for a profile**, since no
+  permission governs those commands. Commands that a profile's permissions govern still need one.
+- **`serve`'s relay socket fits on macOS with a deep `TMPDIR`.** When the temporary folder is too deep for a socket
+  path too, the socket goes under `/tmp` (still in an owner-only folder). It made tg's macOS release check fail.
 
 ### Security
 

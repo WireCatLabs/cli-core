@@ -900,6 +900,23 @@ it("does not blame a profile when a known resource has an unknown subcommand", a
   expect(result.stderr.join("\n")).not.toContain("read as a profile name")
 })
 
+it("previews housekeeping with --dry-run without a profile, and still asks for one where permissions apply", async () => {
+  const home = mkdtempSync(join(tmpdir(), "dry-run-"))
+  const env = { HOME: home, XDG_CONFIG_HOME: join(home, "config"), XDG_STATE_HOME: join(home, "state") }
+  const preview = async (argv: string[]) => {
+    const streams = captureStreams()
+    const commands = () => [
+      new Command("skill").addCommand(new Command("install").action(() => {})),
+      new Command("chats").addCommand(new Command("list").action(() => {})),
+    ]
+    return { code: await run(argv, { app, commands }, { streams, tty: false, env }), streams }
+  }
+  const skill = await preview(["skill", "install", "--dry-run", "--json"])
+  expect([skill.code, skill.streams.stderr]).toEqual([0, []])
+  expect(JSON.parse(skill.streams.stdout[0] ?? "").item.preview).toBe(true)
+  expect((await preview(["chats", "list", "--dry-run", "--json"])).code).toBe(2)
+})
+
 describe("machine failures", () => {
   const cases = [
     ["unknown root", ["missing", "operation"]],

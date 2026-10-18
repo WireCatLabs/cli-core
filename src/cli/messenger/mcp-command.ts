@@ -10,7 +10,9 @@ import { type AppIdentity, envName } from "../../ports/app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
+import { rootOf } from "../profile.js"
 import { nextStep } from "../steps.js"
+import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** Where the running CLI really lives; a test hands in its own. */
@@ -200,12 +202,23 @@ export const mcpCommand = (messenger: Messenger): Command => {
         const { tools, potentialWrites } = await probeStdio(entry as Parameters<typeof probeStdio>[0], {
           start: stderr.start,
         })
+        const account = messenger.accountOf?.(this) ?? recalledAccount(app, messenger.provider, settings.profile, env)
+        if (!account) {
+          const setup = rootOf(this).commands.some((one) => one.name() === "setup")
+            ? ` — log in with \`${app.command} ${settings.profile} setup\``
+            : ""
+          context.renderer.warn(
+            `the server starts, but profile ${settings.profile} has no account on this computer yet, so its ` +
+              `tools will fail${setup}`,
+          )
+        }
         renderAnswer(
           this,
           context,
           itemOf({
-            healthy: true,
+            healthy: account !== undefined,
             profile: settings.profile,
+            signed_in: account !== undefined,
             tools: tools.length,
             potential_writes: potentialWrites.length,
           }),
