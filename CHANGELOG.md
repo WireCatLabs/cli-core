@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A messenger whose history lives in the local store finds chats and people by name there.** A send, a group
+  change or any other write that names a chat or a person looks the name up among the stored chats and people
+  first, and asks the messenger only for a name the store does not hold. A name that matches several stored chats
+  is refused, as the store reads refuse it. `watch` shows such a chat's stored title where the messenger gives
+  none. Telegram and MAX, which answer for their own history, are unchanged.
+
 ## 0.336.0 — 18.10.2026
 
 ### Added

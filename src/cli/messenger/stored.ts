@@ -1,8 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ChatEvent, Id, Message, MessageEvent, PollVote } from "../../domain/models.js"
+import type { Chat, ChatEvent, Id, Message, MessageEvent, PollVote } from "../../domain/models.js"
 import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
-import { isId, pickPerson } from "../../resolve.js"
+import type { MessengerTraits } from "../../ports/traits.js"
+import { isId, type PeopleLookup, pickPerson } from "../../resolve.js"
 import type { EventSink } from "../../runs/events.js"
+import { codeOf } from "../../sends/guarded.js"
+import { chatIdIn } from "../../services/message-resolution.js"
 import type { AccountKey, DeletionScope, MessageStore } from "../../store/store.js"
 
 export interface Saving {
@@ -18,6 +21,11 @@ export interface Saving {
   profile?: { app: string; name: string }
   /** After a re-key is saved: what outside the store spells the chat id follows it. */
   rekeyed?: (from: Id, to: Id) => void
+  /**
+   * Set for a messenger whose history is pushed into the store (`history: "store"`): chat and person names, and the
+   * titles `watch` leaves out, are answered from the store first. Its server has no directory to ask.
+   */
+  namesFromStore?: Pick<MessengerTraits, "savedChatId">
 }
 
 /**
@@ -30,7 +38,7 @@ export interface Saving {
  */
 export const stored = (
   messenger: MessengerAdapter,
-  { account, store, warn, events, pending, deletedWithoutChat, profile, rekeyed }: Saving,
+  { account, store, warn, events, pending, deletedWithoutChat, profile, rekeyed, namesFromStore }: Saving,
 ): MessengerAdapter => {
   let warned = false
   let recorded = profile === undefined
@@ -57,7 +65,15 @@ export const stored = (
     return saving.finally(() => pending?.delete(saving))
   }
 
-  const { chats, history, around } = messenger
+  const { chats, history, around, people } = messenger
+  const titles = new Map<Id, string>()
+  const storedPeople = async (): Promise<PeopleLookup | undefined> => {
+    try {
+      return await (await store())?.people.people(account.provider, { account: account.account })
+    } catch {
+      return undefined
+    }
+  }
   // A method not listed here saves nothing and passes through; a lane that should save adds its line.
   return throughWrapper(messenger, {
     ...(messenger.forumState
@@ -89,7 +105,7 @@ export const stored = (
       : {}),
     self: () => messenger.self(),
     resolve: async (reference) => {
-      if (isId(reference)) return messenger.resolve(reference)
+      if (isId(reference) && !namesFromStore) return messenger.resolve(reference)
       let accountId: string
       try {
         accountId = account.account
@@ -98,7 +114,9 @@ export const stored = (
       }
       const scoped = { provider: account.provider, account: accountId }
       const opened = await store().catch(() => undefined)
-      if (opened) {
+      if (!opened) return messenger.resolve(reference)
+      const { id, held } = namesFromStore ? await storedChat(opened, scoped, namesFromStore, reference) : {}
+      if (!isId(reference)) {
         const people = await opened.people.people(scoped.provider, { account: scoped.account })
         const wanted = reference.trim().toLowerCase()
         if (people.all().some((person) => person.alias?.toLowerCase().includes(wanted))) {
@@ -107,21 +125,41 @@ export const stored = (
           if (chats.length !== 1 || !chats[0])
             throw new CliError("validation_error", "the alias has no unique stored direct chat; use a chat id")
           let remote: Awaited<ReturnType<MessengerAdapter["resolve"]>> | undefined
-          try {
-            remote = await messenger.resolve(reference)
-          } catch (error) {
-            if (!(error instanceof CliError) || error.code !== "not_found") throw error
-          }
+          if (namesFromStore) remote = held
+          else
+            try {
+              remote = await messenger.resolve(reference)
+            } catch (error) {
+              if (!(error instanceof CliError) || error.code !== "not_found") throw error
+            }
           if (remote && remote.id !== chats[0].id)
             throw new CliError("validation_error", "the local alias also names another messenger chat; use a chat id", {
               candidates: [{ id: chats[0].id }, { id: remote.id }],
             })
-          return remote ?? messenger.resolve(chats[0].id)
+          return remote ?? (namesFromStore ? chats[0] : messenger.resolve(chats[0].id))
         }
       }
-      return messenger.resolve(reference)
+      return held ?? messenger.resolve(id ?? reference)
     },
     chat: (reference) => messenger.chat(reference),
+    ...(people && namesFromStore
+      ? {
+          people: async (references: string[]) => {
+            const known = await storedPeople()
+            const found = references.map((reference) => (known ? personIn(known, reference) : undefined))
+            const asked = references.filter((_, at) => found[at] === undefined)
+            const answered = asked.length === 0 ? [] : await people.call(messenger, asked)
+            const ids: Id[] = []
+            for (const id of found) {
+              const one = id ?? answered.shift()
+              if (one === undefined)
+                throw new CliError("not_found", "the messenger found fewer people than it was asked")
+              ids.push(one)
+            }
+            return ids
+          },
+        }
+      : {}),
     logout: () => messenger.logout(),
     close: () => messenger.close(),
     me: async () => {
@@ -180,16 +218,20 @@ export const stored = (
       : {}),
     ...(messenger.watch
       ? {
-          watch: (onEvent, signal, onReady) =>
-            messenger.watch?.(
-              (event) => {
-                const seenAt = Date.now()
-                void save("messages.watch", (opened) => keep(opened, account, event, seenAt, deletedWithoutChat))
-                onEvent(event)
-              },
-              signal,
-              onReady,
-            ) ?? Promise.resolve(),
+          watch: async (onEvent, signal, onReady) => {
+            if (namesFromStore) await rememberTitles(store, account, titles)
+            return (
+              messenger.watch?.(
+                (event) => {
+                  const seenAt = Date.now()
+                  void save("messages.watch", (opened) => keep(opened, account, event, seenAt, deletedWithoutChat))
+                  onEvent(namesFromStore ? titled(event, titles) : event)
+                },
+                signal,
+                onReady,
+              ) ?? Promise.resolve()
+            )
+          },
         }
       : {}),
     ...(messenger.feed
@@ -199,6 +241,14 @@ export const stored = (
             let previous: Promise<void> = Promise.resolve()
             return (
               messenger.feed?.((batch) => {
+                if (namesFromStore) {
+                  for (const { from, to } of batch.rekeys ?? []) {
+                    const title = titles.get(from)
+                    titles.delete(from)
+                    if (title && !titles.has(to)) titles.set(to, title)
+                  }
+                  for (const chat of batch.chats ?? []) if (chat.title) titles.set(chat.id, chat.title)
+                }
                 // Each re-key apart: one refused leaves the chat split, never the batch's history unsaved.
                 const saving = previous.then(async () => {
                   for (const { from, to } of batch.rekeys ?? [])
@@ -288,6 +338,56 @@ export const stored = (
       return sent
     },
   })
+}
+
+/**
+ * The chat id a name or id names, as the store reads it, and the stored chat when there is one. Neither when the
+ * store knows no such name; an error when several stored chats match it.
+ */
+const storedChat = async (
+  store: MessageStore,
+  account: AccountKey,
+  traits: Pick<MessengerTraits, "savedChatId">,
+  reference: string,
+): Promise<{ id?: Id; held?: Chat }> => {
+  const bound = store.forAccount(account)
+  const id = await chatIdIn(traits, reference, bound).catch((error: unknown) => {
+    if (codeOf(error) === "not_found") return undefined
+    throw error
+  })
+  if (id === undefined) return {}
+  const held = (await bound.chats.chats({})).items.find((chat) => chat.id === id)
+  return held ? { id, held } : { id }
+}
+
+const personIn = (people: PeopleLookup, reference: string): Id | undefined => {
+  try {
+    return pickPerson(reference, people).id
+  } catch (error) {
+    if (codeOf(error) === "not_found") return undefined
+    throw error
+  }
+}
+
+/** Read once when `watch` starts: a store read per event would let a later event overtake an earlier one. */
+const rememberTitles = async (store: Saving["store"], account: AccountKey, titles: Map<Id, string>): Promise<void> => {
+  try {
+    const opened = await store()
+    for (const chat of (await opened?.forAccount(account).chats.chats({}))?.items ?? [])
+      if (chat.title && !titles.has(chat.id)) titles.set(chat.id, chat.title)
+  } catch {}
+}
+
+const titled = (event: MessageEvent, titles: Map<Id, string>): MessageEvent => {
+  if (event.event === "message" || event.event === "edit") {
+    const title = event.message.chatTitle ?? titles.get(event.message.chatId)
+    return title ? { ...event, message: { ...event.message, chatTitle: title } } : event
+  }
+  if (event.event === "chat_event" && event.change.event === "title" && event.change.title)
+    titles.set(event.chatId, event.change.title)
+  if (event.chatTitle !== null || event.chatId === null) return event
+  const title = titles.get(event.chatId)
+  return title ? { ...event, chatTitle: title } : event
 }
 
 /**

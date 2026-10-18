@@ -463,3 +463,161 @@ describe("the stored-messages lookup an adapter gets", () => {
     ])
   })
 })
+
+describe("chat titles `watch` hands on where the history is pushed", () => {
+  const heard = async (namesFromStore: boolean) => {
+    const { store } = await setUp()
+    const events: MessageEvent[] = [
+      { event: "message", message: { ...message("2", "hello"), chatTitle: null } },
+      { event: "delete", chatId: "8", chatTitle: null, messageId: "3" },
+      { event: "edit", message: { ...message("4", "pushed", "9"), chatTitle: null } },
+      { event: "message", message: { ...message("5", "titled"), chatTitle: "Its own" } },
+    ]
+    const adapter = {
+      self: () => "500",
+      feed: async (onBatch: (batch: HistoryBatch) => void) => {
+        onBatch({
+          chats: [
+            { id: "9", title: "Pushed", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+          ],
+        })
+      },
+      watch: async (onEvent: (event: MessageEvent) => void) => {
+        for (const event of events) onEvent(event)
+      },
+    }
+    const wrapped = stored(adapter as unknown as MessengerAdapter, {
+      account,
+      store: async () => store,
+      warn: () => {},
+      events: () => {},
+      ...(namesFromStore ? { namesFromStore: {} } : {}),
+    })
+    const signal = new AbortController().signal
+    await wrapped.feed?.(() => {}, signal)
+    const titles: (string | null)[] = []
+    await wrapped.watch?.(
+      (event) =>
+        titles.push(event.event === "message" || event.event === "edit" ? event.message.chatTitle : event.chatTitle),
+      signal,
+    )
+    return titles
+  }
+
+  it("fills a missing title from the stored chats and the pushed ones, and keeps the messenger's own", async () => {
+    expect(await heard(true)).toEqual(["Book club", "Olga", "Pushed", "Its own"])
+  })
+
+  it("leaves the titles as the messenger gave them for a messenger that answers for its history", async () => {
+    expect(await heard(false)).toEqual([null, null, null, "Its own"])
+  })
+})
+
+describe("names the store answers where the history is pushed", () => {
+  const other = { provider: "test", account: "600" }
+  const naming = async () => {
+    const { store } = await setUp()
+    await store.chats.saveChats(other, [
+      { id: "70", title: "Garden", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 },
+    ])
+    await store.people.savePeople(other, [{ id: "71", name: "Petra" }])
+    const asked: string[] = []
+    const pushed: ((batch: HistoryBatch) => void)[] = []
+    const events: MessageEvent[] = []
+    let hear: (event: MessageEvent) => void = () => {}
+    const adapter = {
+      self: () => "500",
+      resolve: async (reference: string) => {
+        asked.push(reference)
+        return { id: "99", title: reference, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 }
+      },
+      people: async (references: string[]) => {
+        asked.push(...references)
+        return references.map(() => "98")
+      },
+      feed: async (onBatch: (batch: HistoryBatch) => void) => {
+        pushed.push(onBatch)
+      },
+      watch: async (onEvent: (event: MessageEvent) => void) => {
+        hear = onEvent
+      },
+    }
+    const wrapped = stored(adapter as unknown as MessengerAdapter, {
+      account,
+      store: async () => store,
+      warn: () => {},
+      events: () => {},
+      namesFromStore: {},
+    })
+    const signal = new AbortController().signal
+    const rename = (id: string, title: string) =>
+      pushed[0]?.({
+        chats: [{ id, title, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 }],
+      })
+    const titleOf = (chatId: string) => {
+      hear({ event: "delete", chatId, chatTitle: null, messageId: "1" })
+      const last = events.at(-1)
+      return last?.event === "delete" ? last.chatTitle : undefined
+    }
+    const listen = () => wrapped.watch?.((event) => events.push(event), signal)
+    const push = (batch: HistoryBatch) => pushed[0]?.(batch)
+    const retitle = (chatId: string, title: string) =>
+      hear({
+        event: "chat_event",
+        chatId,
+        chatTitle: null,
+        change: {
+          messageId: "t1",
+          timestamp: "2026-10-18T10:00:00.000Z",
+          event: "title",
+          by: { id: null, name: null },
+          people: [],
+          title,
+        },
+      })
+    return { wrapped, asked, signal, rename, push, retitle, titleOf, listen }
+  }
+
+  it("never answers a name from another account's chats or people", async () => {
+    const { wrapped, asked, titleOf, listen } = await naming()
+
+    expect((await wrapped.resolve("Garden")).id).toBe("99")
+    expect(await wrapped.people?.(["Petra"])).toEqual(["98"])
+    await listen()
+
+    expect(asked).toEqual(["Garden", "Petra"])
+    expect(titleOf("70")).toBeNull()
+  })
+
+  it("shows a chat's new title once a pushed batch renames it, before watch starts and while it runs", async () => {
+    const { wrapped, signal, rename, titleOf, listen } = await naming()
+    await wrapped.feed?.(() => {}, signal)
+    rename("7", "Reading club")
+    await listen()
+
+    expect(titleOf("7")).toBe("Reading club")
+    rename("7", "Readers")
+    expect(titleOf("7")).toBe("Readers")
+  })
+
+  it("shows the new title after a live title change", async () => {
+    const { wrapped, signal, retitle, titleOf, listen } = await naming()
+    await wrapped.feed?.(() => {}, signal)
+    await listen()
+
+    retitle("7", "Readers")
+
+    expect(titleOf("7")).toBe("Readers")
+  })
+
+  it("keeps a chat's title when a pushed batch moves the chat to a new id", async () => {
+    const { wrapped, signal, push, titleOf, listen } = await naming()
+    await wrapped.feed?.(() => {}, signal)
+    await listen()
+
+    push({ rekeys: [{ from: "7", to: "77" }] })
+
+    expect(titleOf("77")).toBe("Book club")
+    expect(titleOf("7")).toBeNull()
+  })
+})
