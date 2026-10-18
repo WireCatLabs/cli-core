@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **`downloadTextModel(id, { env, acceptTerms?, progress? })` and `downloadImageModel(id, { env, progress? })`**
+  (`@wirecat/cli-core/services`): the model download behind `models text download` and `images models download`,
+  checked against the expected sha256 and loaded once. A CLI without the messenger `modelsCommand`, such as drive,
+  can now offer its own download instead of sending people to tg or max.
 - `createTagRedirectIndex` validates a complete bounded tag redirect graph and resolves retained IDs
   without losing their membership. It is a policy foundation only: no store redirects or tag merge
   are enabled. The consolidation guide records the old-reader/writer compatibility and provenance

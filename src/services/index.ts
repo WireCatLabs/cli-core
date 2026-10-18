@@ -11,6 +11,12 @@ export type {
   ScopedContextEvidenceReader,
 } from "./context-evidence.js"
 export { createContextEvidenceReader } from "./context-evidence.js"
+export {
+  type DownloadedModel,
+  downloadImageModel,
+  downloadTextModel,
+  type ModelDownloadOptions,
+} from "./model-downloads.js"
 
 import { type AccountService, accountService } from "./account.js"
 import { type AdminService, adminService } from "./admin.js"
