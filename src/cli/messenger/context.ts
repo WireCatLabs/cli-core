@@ -320,6 +320,8 @@ export interface MessengerContext extends BaseContext {
 
 /** Long enough for a local write; a store that hangs must not keep the process alive. */
 const SAVES_WAIT_MS = 5_000
+/** The lock wait blocks serve's event loop; an owner's `recipients` change holds the list for milliseconds. */
+const REKEY_LOCK_WAIT_MS = 250
 
 /** Whether every save finished within `ms`. Saves never reject: `stored` turns a failure into a warning. */
 const settled = async (pending: Set<Promise<void>>, ms: number): Promise<boolean> => {
@@ -345,7 +347,7 @@ const rekeyRecipients = (
   to: Id,
 ): void => {
   try {
-    new RecipientList(recipientsPathFor(app, profile, env), app.command).rekey(from, to)
+    new RecipientList(recipientsPathFor(app, profile, env), app.command, REKEY_LOCK_WAIT_MS).rekey(from, to)
   } catch (error) {
     warn(`the recipient list still names ${from}: ${error instanceof Error ? error.message : String(error)}`)
   }
