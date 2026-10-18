@@ -7,13 +7,15 @@ name: Parity
 # that shape can never match. The pinned pairing is each CLI's own `parity:check`.
 # It runs inside full validation (pull request, push to main, release, monthly) and by hand.
 # `app_ref` builds a CLI's branch instead of its main, for a release whose CLIs adopt it on a branch
-# (bin/release --app-ref, scripts/parity/app-ref.sh).
+# (bin/release --app-ref, scripts/parity/app-ref.sh). Without it, a pull request builds the CLI branch named
+# like its own when one exists, so a change paired with consumer branches can go green. ci.yml passes no
+# app_ref by default on purpose: an explicit `main` would hide that branch.
 on:
   workflow_call:
     inputs:
       app_ref:
         type: string
-        default: main
+        default: ""
   workflow_dispatch:
     inputs:
       app_ref:
