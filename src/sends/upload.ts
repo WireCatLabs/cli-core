@@ -44,7 +44,10 @@ const SIGNATURES: Record<string, (head: Uint8Array) => boolean> = {
   ".jpg": JPEG,
   ".jpeg": JPEG,
   ".png": (head) => Buffer.from(head.subarray(0, 4)).toString("latin1") === "\x89PNG",
-  ".webp": (head) => Buffer.from(head.subarray(8, 12)).toString("latin1") === "WEBP",
+  ".webp": (head) => {
+    const text = Buffer.from(head).toString("latin1")
+    return text.startsWith("RIFF") && text.slice(8, 12) === "WEBP"
+  },
 }
 
 const fileHead = async (path: string): Promise<Uint8Array> => {
