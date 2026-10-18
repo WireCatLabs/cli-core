@@ -95,8 +95,9 @@ describe("the answer envelope", () => {
     expect(sealed({ ...printed, meta: { ...printed.meta, run_id: "run-2" } }).meta?.run_id).toBe("run-2")
   })
 
-  it("prints the whole envelope for a machine, with only the steps this CLI has", () => {
+  it("prints the whole envelope for a machine, with only the steps this CLI has, each with its whole line", () => {
     const { root, list } = program()
+    root.option("--profile <name>").setOptionValue("profile", "personal")
     const streams = captureStreams()
     const body = itemOf(chat, { next: [download, sync] })
     renderAnswer(
@@ -105,7 +106,7 @@ describe("the answer envelope", () => {
       body,
     )
     const printed = JSON.parse(streams.stdout[0] ?? "")
-    expect(printed.next).toEqual([sync])
+    expect(printed.next).toEqual([{ ...sync, line: "chat personal messages sync 2" }])
     expect(printed.meta.run_id).toEqual(expect.any(String))
     expect(streams.stderr).toEqual([])
     expect(root.name()).toBe("chat")

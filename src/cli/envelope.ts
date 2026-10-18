@@ -15,9 +15,9 @@ import {
 import type { Command } from "commander"
 import * as v from "valibot"
 import { currentRun } from "../runs/scope.js"
-import { setExitCode } from "./context.js"
+import { environmentOf, setExitCode } from "./context.js"
 import { withoutProviderRefs } from "./provider-refs.js"
-import { nextStep, rootOf, runnable, stepLine, withSafety } from "./steps.js"
+import { nextStep, rootOf, runnable, stepLine, withLines, withSafety } from "./steps.js"
 
 export type ListBody<T> = Omit<ListEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
 export type ItemBody<T> = Omit<ItemEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
@@ -193,7 +193,8 @@ export const renderAnswer = <T>(
 ): void => {
   if (!isBody(body)) refuse(body)
   const root = rootOf(command)
-  const next = runnable(root, body.next)
+  const runnableSteps = runnable(root, body.next)
+  const next = environmentOf(command).agent ? runnableSteps : withLines(root, runnableSteps)
   const kept = withoutProviderRefs({ ...body, ...(next.length > 0 ? { next } : {}) }) as Body<T>
   if (next.length === 0) delete (kept as { next?: unknown }).next
   const whole = sealed(kept) as ListEnvelope<T> | ItemEnvelope<T>
