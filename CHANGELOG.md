@@ -21,6 +21,9 @@ shape of this file.
 
 ### Fixed
 
+- **`chats.unmute: readonly` now stops `chats unmute`.** The unmute was checked under `chats.mute`, so its own key
+  was ignored. It is checked under `chats.unmute` now and journaled as `chat-unmute`. A config that names only
+  `chats.mute` behaves as before: that level still covers the unmute, until `chats.unmute` is set too.
 - **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
   `searches clear`, `contacts notes edit`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse
   with `permission_error`, and so do their MCP tools, which deleted or overwrote under the lock before. Clearing what

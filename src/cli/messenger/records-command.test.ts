@@ -177,6 +177,39 @@ describe("reads only the server answers", () => {
     expect(muted).toHaveLength(3)
   })
 
+  it("`chats unmute` is checked as `chats.unmute`, and a config naming only `chats.mute` still covers it", async () => {
+    const muted: unknown[] = []
+    const adapter: MessengerAdapter = {
+      ...base,
+      mute: async (chatId, until) => {
+        muted.push([chatId, until])
+      },
+    }
+    const under = (permissions: Record<string, string>) => ({ defaults: { permissions }, profiles: {} })
+    const codes = async (permissions: Record<string, string>) =>
+      Promise.all(
+        ["mute", "unmute"].map(
+          async (verb) =>
+            (await invoke(["chats", verb, "Book club"], adapter, { chatMute: true }, under(permissions))).code,
+        ),
+      )
+    const ownKey = await invoke(
+      ["chats", "unmute", "Book club"],
+      adapter,
+      { chatMute: true },
+      under({
+        "chats.unmute": "readonly",
+      }),
+    )
+
+    expect(ownKey.stderr).toContain("chats.unmute")
+    expect(await codes({ "chats.unmute": "readonly" })).toEqual([0, 5])
+    expect(await codes({ "chats.mute": "readonly" })).toEqual([5, 5])
+    expect(await codes({ "chats.mute": "readonly", "chats.unmute": "allow" })).toEqual([5, 0])
+    expect(await codes({ chats: "readonly", "chats.mute": "allow" })).toEqual([0, 0])
+    expect(await codes({ "chats.mute": "ask" })).toEqual([7, 7])
+  })
+
   it("`chats archive`, `pin` and `mark-unread` change the owner's own chat list, each under its own key", async () => {
     const calls: unknown[] = []
     const adapter: MessengerAdapter = {

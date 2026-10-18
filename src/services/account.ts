@@ -74,8 +74,10 @@ export const accountService = (deps: ServiceDeps): AccountService => {
       const mute = capability(connection, "mute", "mute a chat")
       const { id: chatId } = await connection.resolve(chat)
       const operationId = newOperationId()
-      await guardedWrite(deps.guard, { operationId, chatId, kind: "account", action: "chat-mute" }, () =>
-        mute(chatId, until),
+      await guardedWrite(
+        deps.guard,
+        { operationId, chatId, kind: "account", action: until === null ? "chat-unmute" : "chat-mute" },
+        () => mute(chatId, until),
       )
       return { operationId, chatId, mutedUntil: until }
     },
