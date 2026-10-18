@@ -7,7 +7,7 @@ import { Pacer } from "./pace.js"
 const fresh = () => join(mkdtempSync(join(tmpdir(), "pace-")), "pace", "p.json")
 const T = 1_000_000
 
-describe("the request pace", async () => {
+describe("the request pace", () => {
   it("lets a burst go at once, then spaces calls one interval apart", async () => {
     const pacer = new Pacer(fresh(), { perMinute: 60, burst: 3 }, () => T)
 

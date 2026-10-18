@@ -138,6 +138,37 @@ describe("two senders at once", () => {
     }
   })
 
+  it("lets only one of two writes waiting on a held journal through the hourly limit", async () => {
+    vi.useFakeTimers()
+    try {
+      const path = sendsPathFor("g-lock-race")
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(`${path}.lock`, "")
+      const act = vi.fn(async () => "sent")
+      const writes = ["op-a", "op-b"].map((operationId) =>
+        guardedWrite(guard("g-lock-race", 1), { chatId: "111", operationId }, act).then(
+          () => "sent",
+          (error: CliError) => error.code,
+        ),
+      )
+
+      await vi.advanceTimersByTimeAsync(100)
+      unlinkSync(`${path}.lock`)
+      await vi.advanceTimersByTimeAsync(40)
+
+      expect((await Promise.all(writes)).sort()).toEqual(["rate_limited", "sent"])
+      expect(act).toHaveBeenCalledTimes(1)
+      expect(
+        new SendJournal(path)
+          .entries()
+          .map((entry) => entry.outcome)
+          .sort(),
+      ).toEqual(["refused", "sent"])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("does not send a write whose command ended while it waited for the journal", async () => {
     vi.useFakeTimers()
     try {
