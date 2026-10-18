@@ -11,6 +11,7 @@ import { adminStatisticsTools } from "./tools/admin-statistics.js"
 import { attachmentsTools } from "./tools/attachments.js"
 import { chatsTools } from "./tools/chats.js"
 import { chatsReadTools } from "./tools/chats-read.js"
+import { chatStateTools } from "./tools/chats-state.js"
 import { contactsTools } from "./tools/contacts.js"
 import { contactWriteTools } from "./tools/contacts-write.js"
 import { conversationsTools } from "./tools/conversations.js"
@@ -97,6 +98,7 @@ export const personalMcpTools = (messenger: Messenger): Record<string, AnyTool> 
       ...localTools(messenger),
       ...sendTools(messenger),
       ...markReadTools(messenger),
+      ...chatStateTools(messenger),
       ...deleteTools(messenger),
     }).map(([name, definition]) => [name, { ...definition, input: v.strictObject(definition.input.entries) }]),
   )

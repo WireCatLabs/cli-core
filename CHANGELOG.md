@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Agents mute, archive, pin and mark unread a chat over MCP.** The personal server now offers `chats mute`,
+  `chats unmute`, `chats archive`, `chats unarchive`, `chats pin`, `chats unpin` and `chats mark-unread`, each only
+  where the CLI's `Messenger` switch mounts the command (`chatMute`, `chatArchive`, `chatPin`, `chatMarkUnread`). Each
+  is checked under its own key (`chats.unmute` apart from `chats.mute`), passes the read-only lock and the write
+  guard as its command does, and is audited as a private write: nobody in the chat is told.
+
 ## 0.337.0 — 18.10.2026
 
 ### Added

@@ -2933,6 +2933,122 @@ describe("sending over MCP", () => {
     expect(await plain.client.commands()).not.toContain("messages star")
   })
 
+  describe("the owner's own chat list", () => {
+    const ALL = { chatMute: true, chatArchive: true, chatPin: true, chatMarkUnread: true }
+    const COMMANDS = [
+      "chats archive",
+      "chats mark-unread",
+      "chats mute",
+      "chats pin",
+      "chats unarchive",
+      "chats unmute",
+      "chats unpin",
+    ]
+    const owning = (writes: unknown[]) =>
+      scripted({
+        mute: async (chatId, until) => {
+          writes.push(["mute", chatId, until])
+        },
+        archiveChat: async (chatId, archived) => {
+          writes.push(["archive", chatId, archived])
+        },
+        pinChat: async (chatId, pinned) => {
+          writes.push(["pin", chatId, pinned])
+        },
+        markChatUnread: async (chatId) => {
+          writes.push(["unread", chatId])
+        },
+      })
+    const offered = async (options: Parameters<typeof connect>[1]) =>
+      (await (await connect(owning([]), options)).client.commands()).filter((one) => COMMANDS.includes(one)).sort()
+
+    it("runs each command through the write guard, as an account change in the named chat", async () => {
+      const writes: unknown[] = []
+      const checked: GuardRequest[] = []
+      const { call } = await connect(owning(writes), {
+        own: ALL,
+        guard: () => ({ check: (request) => void checked.push(request), record: () => {} }),
+      })
+
+      const answers = [
+        await call("chats mute", { chat: "7" }),
+        await call("chats unmute", { chat: "7" }),
+        await call("chats archive", { chat: "7" }),
+        await call("chats unarchive", { chat: "7" }),
+        await call("chats pin", { chat: "7" }),
+        await call("chats unpin", { chat: "7" }),
+        await call("chats mark-unread", { chat: "7" }),
+      ]
+
+      expect(answers.map((one) => one.isError)).toEqual(Array(7).fill(false))
+      expect(answers[0]?.body.item).toMatchObject({ chat_id: "7", muted_until: "forever" })
+      expect(writes).toEqual([
+        ["mute", "7", "forever"],
+        ["mute", "7", null],
+        ["archive", "7", true],
+        ["archive", "7", false],
+        ["pin", "7", true],
+        ["pin", "7", false],
+        ["unread", "7"],
+      ])
+      expect(checked.map(({ kind, action, chatId }) => [kind, action, chatId])).toEqual(
+        [
+          "chat-mute",
+          "chat-unmute",
+          "chat-archive",
+          "chat-unarchive",
+          "chat-pin",
+          "chat-unpin",
+          "chat-mark-unread",
+        ].map((action) => ["account", action, "7"]),
+      )
+    })
+
+    it("mutes until a time the agent names", async () => {
+      const writes: unknown[] = []
+      const { call } = await connect(owning(writes), { own: ALL })
+
+      const muted = await call("chats mute", { chat: "7", until: "2h" })
+
+      expect(muted.isError).toBe(false)
+      expect(writes).toEqual([["mute", "7", muted.body.item.muted_until]])
+      expect(Date.parse(muted.body.item.muted_until)).toBeGreaterThan(Date.now())
+    })
+
+    it("offers only what the CLI's switches mount", async () => {
+      expect(await offered({})).toEqual([])
+      expect(await offered({ own: { chatMute: true } })).toEqual(["chats mute", "chats unmute"])
+      expect(await offered({ own: { chatPin: true, chatMarkUnread: true } })).toEqual([
+        "chats mark-unread",
+        "chats pin",
+        "chats unpin",
+      ])
+    })
+
+    it("checks each command under its own key, so unmute is not mute", async () => {
+      expect(await offered({ own: ALL, config: levels({ "chats.unmute": "readonly", "chats.pin": "deny" }) })).toEqual([
+        "chats archive",
+        "chats mark-unread",
+        "chats mute",
+        "chats unarchive",
+        "chats unpin",
+      ])
+      expect(await offered({ own: ALL, config: levels({ chats: "readonly", "chats.unmute": "allow" }) })).toEqual([
+        "chats unmute",
+      ])
+    })
+
+    it("refuses every one of them under the read-only lock, before the messenger is asked", async () => {
+      const writes: unknown[] = []
+      const { call } = await connect(owning(writes), { own: ALL, extraEnv: { CHAT_READ_ONLY: "1" } })
+
+      const refused = await Promise.all(COMMANDS.map((command) => call(command, { chat: "7" })))
+
+      expect(refused.map((one) => one.body.error?.code)).toEqual(Array(7).fill("permission_error"))
+      expect(writes).toEqual([])
+    })
+  })
+
   it("preserves topic addressing through MCP send and poll tools", async () => {
     const validations: unknown[] = []
     const sends: unknown[] = []

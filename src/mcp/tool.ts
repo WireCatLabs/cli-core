@@ -209,7 +209,7 @@ export const tierOf = (
   if (/delete|ban|kick|remove|purge|block/.test(key)) return "destructive"
   if (/draft/.test(key)) return "draft"
   if (key === "messages_pin" && messenger?.quietPins === false) return "write-public"
-  if (/mark_read|read_mark|archive|mute|pin|tag|note|label|folder|alias|save|_(un)?star$/.test(key))
+  if (/mark_read|mark_unread|read_mark|archive|mute|pin|tag|note|label|folder|alias|save|_(un)?star$/.test(key))
     return "write-private"
   return "write-public"
 }
