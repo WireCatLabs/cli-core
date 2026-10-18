@@ -24,7 +24,7 @@ import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import {
-  changesAuthority,
+  changesAuthorityNow,
   isLogin,
   isStoreChange,
   judgedEffects,
@@ -286,7 +286,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
           `serve first (\`${command} ${options.relayed.profile} server stop\`), or update ${command}, which then runs it here`,
         { sent: false },
       )
-    if (lock && changesAuthority(action) && !flags.dryRun)
+    if (lock && changesAuthorityNow(action) && !flags.dryRun)
       throw new CliError(
         "permission_error",
         `this process is read-only (${lock}) — \`${command} ${path.join(" ")}\` changes what a later run may do; ` +

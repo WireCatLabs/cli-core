@@ -5,7 +5,13 @@ import { outputFor } from "./context.js"
 import { run } from "./program.js"
 import { upgradeCommand } from "./upgrade-command.js"
 
-const call = async (command: string, argv: string[], ports: PackageUpgradePorts, tty = false) => {
+const call = async (
+  command: string,
+  argv: string[],
+  ports: PackageUpgradePorts,
+  tty = false,
+  env: NodeJS.ProcessEnv = process.env,
+) => {
   const app = { command, appName: "app-cli", envPrefix: "APP", version: "1.0.0", description: "Synthetic CLI" }
   const streams = captureStreams()
   const code = await run(
@@ -14,7 +20,7 @@ const call = async (command: string, argv: string[], ports: PackageUpgradePorts,
       app,
       commands: () => [upgradeCommand(app, `@synthetic/${command}`, (from) => ({ ...outputFor(from), ...ports }))],
     },
-    { streams, tty, env: process.env },
+    { streams, tty, env },
   )
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
@@ -47,6 +53,37 @@ describe.each(["max", "tg"])("the shared upgrade command for %s", (command) => {
     expect(result.stderr).toEqual([])
     expect(ports.install).not.toHaveBeenCalled()
     expect(ports.afterUpdate).not.toHaveBeenCalled()
+  })
+
+  it("**checks under the read-only lock, and refuses the install there**", async () => {
+    const env = { ...process.env, APP_READ_ONLY: "1" }
+    const ports = fake()
+    ports.latest = vi.fn(async () => "2.0.0")
+
+    const checked = await call(command, ["upgrade", "--check", "--json"], ports, false, env)
+    expect(checked.code).toBe(0)
+    expect(itemOf(checked.stdout[0])).toMatchObject({ latest: "2.0.0", newer: true, updated: false })
+
+    const refused = await call(command, ["upgrade", "--json", "--no-record"], ports, false, env)
+    expect(refused.code).toBe(5)
+    expect(JSON.parse(refused.stderr.at(-1) ?? "").error.message).toBe(
+      `this process is read-only (APP_READ_ONLY) — \`${command} upgrade\` changes what a later run may do; ` +
+        "run it without APP_READ_ONLY",
+    )
+    expect(ports.latest).toHaveBeenCalledOnce()
+    expect(ports.install).not.toHaveBeenCalled()
+  })
+
+  it("**never asks npm with --offline, --check included**", async () => {
+    const ports = fake()
+    ports.latest = vi.fn(async () => "2.0.0")
+    for (const argv of [["upgrade", "--check"], ["upgrade"]]) {
+      const result = await call(command, [...argv, "--offline", "--json", "--no-record"], ports)
+      expect(result.code).toBe(2)
+      expect(JSON.parse(result.stderr.at(-1) ?? "").error.message).toContain("not with --offline")
+    }
+    expect(ports.latest).not.toHaveBeenCalled()
+    expect(ports.install).not.toHaveBeenCalled()
   })
 
   it.each(["json", "jsonl"])("installs once and keeps progress off %s stdout", async (format) => {

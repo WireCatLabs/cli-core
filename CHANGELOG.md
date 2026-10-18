@@ -21,7 +21,14 @@ shape of this file.
   process holds the send journal or the request pace past the 5 s wait, nothing was sent, so the error is now
   `timeout`, which is safe to retry.
 
+- **`upgrade --offline` exits 2 (`validation_error`).** `upgrade` asks npm for the newest version, so with
+  `--offline`, `--check` included, it now refuses instead of ignoring the flag and asking npm anyway.
+
 ### Fixed
+
+- **`upgrade --check` runs under `<PREFIX>_READ_ONLY`.** It only asks npm for the newest version, so the lock lets it
+  through; `upgrade` without `--check` is still refused, as a change to what a later run may do. `grantsAuthority`
+  takes `{ unless: "<option>" }` for a flag that makes a run only look.
 
 - **A change to the recipient list can no longer undo another one made at the same time.** `recipients add`,
   `recipients remove`, `recipients clear` and the re-key `serve` applies each read and write the list under one lock,
