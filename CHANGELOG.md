@@ -26,6 +26,13 @@ shape of this file.
   `doctor --json`, `flood clear --json` and `server status --json`, and the text says "until lifted". A spam limit
   and a frozen account without an end keep their hour and day.
 
+- **A stored chat can take a new id.** When a messenger starts naming a chat by another id (WhatsApp moving a person
+  from their phone number to a private id), `store.chats.rekeyChat(account, from, to)` renames the stored chat, or
+  merges it with the chat already stored under the new id, so one conversation stays one chat. Messages, files, tags,
+  notes, votes, history markers and task sources move with it; a message both held is kept once, and stays deleted
+  if either copy was. A messenger that pushes its history sends it as `rekeys` in a pushed batch, which the store
+  applies before the batch's messages. Running it again changes nothing. No store migration.
+
 ### Changed — may break callers
 
 - Core now requires Base `>=0.44.0 <0.45.0` and validates against registry Base 0.44.1. Every command must declare its effects; command discovery can include `runnable` on groups. Consumers must adopt the compatible Base range together and accept that optional discovery field.

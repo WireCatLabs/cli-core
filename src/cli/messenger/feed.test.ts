@@ -115,6 +115,42 @@ describe("a messenger that pushes its history", () => {
     expect(JSON.parse(chats.stdout).items).toHaveLength(seed.chats.length)
   })
 
+  it("**a re-key in a batch joins the chat stored under the old id with the batch's messages under the new one**", async () => {
+    const { env } = sandbox()
+    const stop = new AbortController()
+    const said = (id: string, chatId: string, text: string) => ({
+      id,
+      chatId,
+      senderId: "7",
+      senderName: "Ana",
+      timestamp: "2026-10-18T10:00:00.000Z",
+      editedAt: null,
+      text,
+      outgoing: false,
+      attachments: [],
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+    })
+    const { connect } = pushing(stop, {
+      feed: async (onBatch) => {
+        onBatch({ messages: [said("1", "5550001", "under the phone")] })
+        onBatch({ rekeys: [{ from: "5550001", to: "9990001" }], messages: [said("2", "9990001", "under the lid")] })
+        stop.abort()
+      },
+    })
+
+    expect((await call(["serve", "--json"], env, connect, stop.signal, "store")).code).toBe(0)
+    const chats = await call(["chats", "list", "--json"], env, neverConnects, undefined, "store")
+    expect(JSON.parse(chats.stdout).items.map((chat: { id: string }) => chat.id)).toEqual(["9990001"])
+    const messages = await call(["messages", "list", "9990001", "--json"], env, neverConnects, undefined, "store")
+    expect(
+      JSON.parse(messages.stdout)
+        .items.map((message: { text: string }) => message.text)
+        .sort(),
+    ).toEqual(["under the lid", "under the phone"])
+  })
+
   it("a batch the store cannot take is a warning, and serve still ends normally", async () => {
     const { root, env } = sandbox()
     mkdirSync(join(root, "m.db"))

@@ -286,6 +286,7 @@ export const stored = (
  * transaction of its messages, after them, so a poll in the batch is held, or known deleted, before its votes.
  */
 const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatch): Promise<void> => {
+  for (const { from, to } of batch.rekeys ?? []) await store.chats.rekeyChat(account, from, to)
   if (batch.chats?.length) await store.chats.saveChats(account, batch.chats)
   if (batch.people?.length) await store.people.savePeople(account, batch.people)
   const byChat = new Map<Id, { messages: Message[]; votes: { messageId: Id; vote: PollVote }[] }>()

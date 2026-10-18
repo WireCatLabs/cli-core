@@ -331,8 +331,11 @@ export interface HistoryVote {
 /**
  * What a messenger pushed in one go: any of chats, the people in them, past messages of any chats, and votes in
  * their polls. A vote is saved with its chat's messages, so a poll in the same batch is held before its votes.
+ * `rekeys` are chats the messenger now names by another id; they apply first, so the batch's messages under the
+ * new id join the chat already stored under the old one.
  */
 export interface HistoryBatch {
+  rekeys?: { from: Id; to: Id }[]
   chats?: Chat[]
   people?: Member[]
   messages?: Message[]

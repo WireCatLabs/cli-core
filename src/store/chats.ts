@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../domain/channel-tags.js"
 import type { Chat, ChatKind, Id, Page } from "../domain/models.js"
 import { keysOver } from "./keys.js"
+import { type ChatRekey, rekeyChat } from "./sqlite/chat-rekey.js"
 import type { ChatMetadata } from "./sqlite/chats.js"
 import * as chatQueries from "./sqlite/chats.js"
 import type { ChatCompleteness } from "./sqlite/completeness.js"
@@ -25,6 +26,11 @@ export interface ChatsStore {
    * Remembers when, so a search can say the store knows the account's whole chat list.
    */
   markChatsLeft(key: AccountKey, present: Id[]): Promise<number>
+  /**
+   * The chat the messenger now names `to` instead of `from`: renamed, or merged into the chat already stored as
+   * `to`. Replaying it changes nothing.
+   */
+  rekeyChat(key: AccountKey, from: Id, to: Id): Promise<ChatRekey>
   /** The chats marked left and the messages they hold; with `clear`, deletes them and all under them. */
   leftChats(key: AccountKey, options?: { clear?: boolean }): Promise<{ chats: number; messages: number }>
   /** Per chat: whether its history is held up to date, without gaps, back to its start. */
@@ -82,6 +88,12 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
         writeState(accountKey, completeness.CHAT_LIST_KEY, String(present.length))
       })
       return marked
+    },
+
+    rekeyChat: async (key, from, to) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) return { outcome: "unchanged", messages: 0, duplicates: 0 }
+      return write(database, () => rekeyChat(context, key, accountKey, from, to))
     },
 
     leftChats: async (key, { clear = false } = {}) => {
