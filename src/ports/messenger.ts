@@ -354,9 +354,10 @@ export interface PassiveUpdates {
    * What the open connection is pushed of the messenger's history, as `feed` hands it, until `signal` aborts — on
    * the same connections as `listen`, under the same rules: it never connects or waits for the connection, and
    * resolves once nothing more will be handed on. A messenger that pushes history once (`history: "store"`) then
-   * has it saved by a command that never feeds.
+   * has it saved by a command that never feeds. Optional within the group, so an adapter typed as having
+   * `PassiveUpdates` before it existed still is one.
    */
-  listenHistory(onBatch: (batch: HistoryBatch) => void, signal: AbortSignal): Promise<void>
+  listenHistory?(onBatch: (batch: HistoryBatch) => void, signal: AbortSignal): Promise<void>
 }
 
 /** One voter's vote in the poll message `messageId` of `chatId` carries, as `PollVoteEvent` has it. */
