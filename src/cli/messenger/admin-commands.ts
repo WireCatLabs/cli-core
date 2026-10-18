@@ -9,7 +9,7 @@ import {
   type GroupChange,
   type GroupSettingKey,
 } from "../../domain/models.js"
-import { readUpload } from "../../sends/upload.js"
+import { readUpload, typesText } from "../../sends/upload.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { withQuery } from "../list-query.js"
@@ -62,6 +62,17 @@ const settingsOf = (
   return changes
 }
 
+/** How `--photo` describes the file a profile or group photo takes: the messenger's types, where it names them. */
+export const photoHelp = ({ profilePhotoTypes }: Messenger): string =>
+  profilePhotoTypes === undefined ? "an image file" : `a ${typesText(profilePhotoTypes)} file`
+
+export const readProfilePhoto = (messenger: Messenger, path: string, env: NodeJS.ProcessEnv) =>
+  readUpload("photo", path, {
+    app: messenger.app,
+    env,
+    ...(messenger.profilePhotoTypes === undefined ? {} : { photoTypes: messenger.profilePhotoTypes }),
+  })
+
 const updateCommand = (messenger: Messenger): Command => {
   const keys = messenger.groupSettings ?? GROUP_SETTINGS
   const update = annotate(new Command("update"), { effects: REMOTE_WRITE })
@@ -69,14 +80,19 @@ const updateCommand = (messenger: Messenger): Command => {
     .argument("<chat>", messenger.chatArgument)
     .option("--title <title>", "the new name")
     .option("--description <text>", "the new description")
-  if (messenger.groupPhoto === true) update.option("--photo <file>", "a new photo for it — an image file")
+  if (messenger.groupPhoto === true) update.option("--photo <file>", `a new photo for it — ${photoHelp(messenger)}`)
+  if (messenger.groupPhotoRemoval === true) update.option("--remove-photo", "take its photo away; not with --photo")
   for (const key of keys) update.option(`--${SETTING_FLAGS[key][0]}`, SETTING_FLAGS[key][1])
   return update.action(async function (this: Command, chat: string) {
     const context = messengerContext(this, messenger)
-    const { title, description, photo, ...rest } = this.opts<{ title?: string; description?: string; photo?: string }>()
+    const { title, description, photo, removePhoto, ...rest } = this.opts<{
+      title?: string
+      description?: string
+      photo?: string
+      removePhoto?: boolean
+    }>()
     const settings = settingsOf(keys, rest)
-    const upload =
-      photo === undefined ? undefined : await readUpload("photo", photo, { app: messenger.app, env: context.env })
+    const upload = photo === undefined ? undefined : await readProfilePhoto(messenger, photo, context.env)
     renderItem(
       this,
       context,
@@ -86,6 +102,7 @@ const updateCommand = (messenger: Messenger): Command => {
           ...(description === undefined ? {} : { description }),
           ...(Object.keys(settings).length > 0 ? { settings } : {}),
           ...(upload === undefined ? {} : { photo: upload }),
+          ...(removePhoto === true ? { removePhoto: true } : {}),
         }),
       ),
     )

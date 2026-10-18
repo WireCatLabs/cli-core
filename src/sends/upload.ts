@@ -39,6 +39,10 @@ export const uploadBytes = async (source: UploadSource): Promise<Uint8Array> => 
 const PHOTO = new Set([".jpg", ".jpeg", ".png", ".webp"])
 const VOICE = new Set([".ogg", ".oga", ".opus"])
 
+/** `[".jpg", ".jpeg"]` as help says it: ".jpg or .jpeg". */
+export const typesText = (types: readonly string[]): string =>
+  types.length < 2 ? (types[0] ?? "") : `${types.slice(0, -1).join(", ")} or ${types.at(-1)}`
+
 /** Single path parts that hold credentials wherever they are. */
 const CREDENTIAL_PARTS = new Set([
   ".ssh",
@@ -166,12 +170,21 @@ const inside = (path: string, dir: string): boolean => {
 export const readUpload = async (
   kind: UploadKind,
   path: string,
-  { app, env = process.env, anyFile = false }: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean },
+  {
+    app,
+    env = process.env,
+    anyFile = false,
+    photoTypes,
+  }: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean; photoTypes?: readonly string[] },
 ): Promise<Upload> => {
-  if (kind === "photo" && !PHOTO.has(extname(path).toLowerCase())) {
+  const extension = extname(path).toLowerCase()
+  if (kind === "photo" && photoTypes !== undefined && !photoTypes.includes(extension)) {
+    throw new CliError("validation_error", `this photo must be a ${typesText(photoTypes)} file, not ${path}`)
+  }
+  if (kind === "photo" && photoTypes === undefined && !PHOTO.has(extension)) {
     throw new CliError("validation_error", `a photo is a .jpg, .png or .webp — send ${path} as a file instead`)
   }
-  if (kind === "voice" && !VOICE.has(extname(path).toLowerCase())) {
+  if (kind === "voice" && !VOICE.has(extension)) {
     throw new CliError("validation_error", `a voice message is Ogg Opus: .ogg, .oga or .opus — send ${path} as a file`)
   }
   if (kind === "sticker" && extname(path).toLowerCase() !== ".webp") {

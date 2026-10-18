@@ -142,9 +142,16 @@ export const adminService = (deps: ServiceDeps): AdminService => {
 
     update: async (chat, change) => {
       const settings = Object.keys(change.settings ?? {}).length
-      const profile = change.title !== undefined || change.description !== undefined || change.photo !== undefined
+      const profile =
+        change.title !== undefined ||
+        change.description !== undefined ||
+        change.photo !== undefined ||
+        change.removePhoto === true
       if (!profile && settings === 0) {
         throw new CliError("validation_error", "nothing to change — give a title, a description, a photo or a setting")
+      }
+      if (change.photo !== undefined && change.removePhoto === true) {
+        throw new CliError("validation_error", "give a new photo or remove the photo — not both")
       }
       if (change.title !== undefined && change.title.trim() === "") {
         throw new CliError("validation_error", "a group needs a title")

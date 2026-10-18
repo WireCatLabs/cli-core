@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { readUpload } from "../../sends/upload.js"
 import { maskedAccount } from "../../services/people.js"
 import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
@@ -10,6 +9,7 @@ import { itemOf, renderAnswer } from "../envelope.js"
 import { NONE_NAMED } from "../settings.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
 import { recalledAccount } from "./accounts.js"
+import { photoHelp, readProfilePhoto } from "./admin-commands.js"
 import { accountAnswer, renderItem, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { privacyCommand } from "./records-command.js"
@@ -68,7 +68,7 @@ export const accountCommand = (messenger: Messenger): Command => {
         .option("--first-name <name>", "your first name")
         .option("--last-name <name>", "your last name")
         .option("--description <text>", "about you")
-        .option("--photo <file>", "a new profile photo — an image file")
+        .option("--photo <file>", `a new profile photo — ${photoHelp(messenger)}`)
         .action(async function (this: Command) {
           const context = messengerContext(this, messenger)
           const { firstName, lastName, description, photo } = this.opts<{
@@ -77,8 +77,7 @@ export const accountCommand = (messenger: Messenger): Command => {
             description?: string
             photo?: string
           }>()
-          const upload =
-            photo === undefined ? undefined : await readUpload("photo", photo, { app: messenger.app, env: context.env })
+          const upload = photo === undefined ? undefined : await readProfilePhoto(messenger, photo, context.env)
           renderItem(
             this,
             context,

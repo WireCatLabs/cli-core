@@ -844,6 +844,9 @@
       "value": "<chat>",
       "meaning": "take a chat out of a folder; repeat it for more"
     },
+    "--remove-photo": {
+      "meaning": "take a group's photo away; not with --photo"
+    },
     "--repair-time": {
       "value": "<duration>",
       "meaning": "time budget for interior archive gap repair"
@@ -2466,6 +2469,14 @@
             "tg": "tg-cli backlog: chats update --photo",
             "wa": "wa backlog: the group photo"
           }
+        },
+        "--remove-photo": {
+          "in": [],
+          "planned": {
+            "tg": "tg-cli backlog: chats update --photo",
+            "wa": "wa #55: chats update --photo and --remove-photo"
+          },
+          "reason": "MAX: no measured request takes a group's photo away"
         },
         "--title": "all"
       }

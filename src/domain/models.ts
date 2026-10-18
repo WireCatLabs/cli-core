@@ -79,6 +79,8 @@ export interface GroupChange {
   description?: string
   settings?: Partial<GroupSettings> & MoreGroupSettings
   photo?: Upload
+  /** Takes the group's photo away; never beside `photo`. Only where `Messenger.groupPhotoRemoval` is on. */
+  removePhoto?: true
 }
 
 export const GROUP_SETTINGS = [

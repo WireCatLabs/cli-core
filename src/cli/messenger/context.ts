@@ -192,6 +192,13 @@ export interface Messenger extends ServiceMessenger {
   folderOrder?: boolean
   /** Whether `chats update --photo` sets a group's photo; no when unset. */
   groupPhoto?: boolean
+  /** Whether `chats update --remove-photo` takes a group's photo away; no when unset. */
+  groupPhotoRemoval?: boolean
+  /**
+   * The file extensions a profile photo takes — the owner's in `account update --photo`, a group's in `chats update
+   * --photo` — checked before connecting; `.jpg`, `.jpeg`, `.png` and `.webp` when unset. WhatsApp takes JPEG alone.
+   */
+  profilePhotoTypes?: readonly string[]
   /** Whether `chats media` lists a chat's media from the server; no when unset. */
   chatMedia?: boolean
   /** Whether `account privacy show` and `set` read and change the account's privacy; no when unset. */
