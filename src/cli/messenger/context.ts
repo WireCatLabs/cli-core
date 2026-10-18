@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
 import type { AdminRight, GroupSettingKey, Id, Message, PollVote, PrivacyKey, Provider } from "../../domain/models.js"
+import type { WarmEmbedders } from "../../embeddings/embed.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
@@ -17,7 +18,7 @@ import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { OFFLINE, type ServiceDeps, type ServiceMessenger, type Services, servicesFor } from "../../services/index.js"
 import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
-import { type BaseContext, baseContext, environmentOf } from "../context.js"
+import { type BaseContext, type BaseEnvironment, baseContext, environmentOf } from "../context.js"
 import { knownPermissionKeys, type PermissionKeyOf, unknownPermissionKeys } from "../permission-keys.js"
 import { asFirstWord } from "../profile.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../settings.js"
@@ -308,6 +309,8 @@ export type ReadConnection = <T>(work: (adapter: MessengerAdapter) => Promise<T>
 
 export interface MessengerContext extends BaseContext {
   profile: string
+  /** Run for an agent over MCP, where a write at level `ask` goes ahead: nobody is at a terminal (NEED-773). */
+  agent: boolean
   stdin: NodeJS.ReadableStream & { isTTY?: boolean }
   /** The local speech recognizer, where a test hands one in. */
   recognizer?: OpenRecognizer
@@ -519,7 +522,7 @@ const refuseDenied = (command: Command, settings: Settings) => {
 export const refuseLocalWrite = (context: MessengerContext, command: string, permission: PermissionKey): void => {
   const { settings } = context
   const { level, key } = levelFor(settings.permissions, permission)
-  if (level === "allow") return
+  if (level === "allow" || (level === "ask" && context.agent)) return
   throw new CliError(
     level === "ask" ? "confirmation_required" : "permission_error",
     `profile ${settings.profile} does not let ${permission} write (permissions.${key} is ${level}, from the ` +
@@ -555,9 +558,12 @@ export const messengerContext = (
   const guard =
     messenger.guard?.(command, base.settings, warn) ??
     guardFor(app, base.settings, warn, base.env, terminalAsker(command))
+  // The MCP server's open models, so a command it runs does not load a second copy.
+  const { embedders } = environmentOf<BaseEnvironment & { embedders?: WarmEmbedders }>(command)
 
   return {
     ...base,
+    agent: environmentOf(command).agent !== undefined,
     profile,
     stdin: environmentOf(command).stdin ?? process.stdin,
     ...(environmentOf(command).recognizer ? { recognizer: environmentOf(command).recognizer } : {}),
@@ -609,6 +615,7 @@ export const messengerContext = (
             searchCatchUp: base.settings.searchCatchUp,
             pictures: base.settings.pictureSearch,
             guard,
+            ...(embedders ? { embedders } : {}),
             connection: async () => {
               if (base.settings.offline) throw new CliError("validation_error", OFFLINE)
               if (released) throw new CliError("validation_error", "the read connection has already been released")

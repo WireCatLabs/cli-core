@@ -32,6 +32,7 @@ import { embeddingChoice, type ModelOptions, refuseRemoteQuery } from "../embedd
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
+import { readsStdin } from "../stdin-field.js"
 import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
 import { answerOf as askOwner } from "./ask.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
@@ -327,7 +328,11 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     .command("links")
     .description("your agent's answers: which earlier message each message of a batch answers")
 
-  annotate(links.command("add"), { effects: LOCAL_WRITE })
+  readsStdin(annotate(links.command("add"), { effects: LOCAL_WRITE }), {
+    name: "answer",
+    description: '{ "model", "skill"?, "answers": [{ "message", "parent", "confidence" }] }',
+    json: true,
+  })
     .description(
       'store your agent\'s answer to a batch, read as JSON from stdin: { "model", "answers": [{ "message", ' +
         '"parent", "confidence" }] }; all or nothing',
@@ -466,6 +471,34 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const model = given ? choiceOf(options, messenger, context, { needKey: false }) : undefined
     const cleared = await context.withServices((services) => services.embeddings.clear(chat, model))
     renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} vectors dropped\n`)
+  })
+
+  boundOptions(
+    destroysNothing(
+      annotate(conversations.command("rebuild"), {
+        effects: LOCAL_WRITE,
+        examples: [`${messenger.app.command} conversations rebuild --max-chats 5`],
+      }),
+    )
+      .summary("build and embed the chats that changed, on this machine only")
+      .description(
+        "build, then embed with the model on this machine, the chats that changed since their build and the group " +
+          "chats never built — or only --chat; bounded per run, so run it again for the rest; never asks the " +
+          "messenger, downloads no model and sends no text anywhere",
+      )
+      .option("--chat <chat>", messenger.chatArgument),
+  ).action(async function (this: Command) {
+    const options = this.optsWithGlobals<{ chat?: string } & BoundOptions>()
+    const context = messengerContext(this, messenger)
+    refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
+    const refreshed = await context.withServices((services) =>
+      services.embeddings.refresh({
+        ...(options.chat === undefined ? {} : { chat: options.chat }),
+        ...bounds(options),
+        progress: (note) => context.renderer.note(note),
+      }),
+    )
+    renderRefreshed(this, context, refreshed)
   })
 
   const consents = conversations

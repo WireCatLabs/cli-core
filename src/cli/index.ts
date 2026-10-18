@@ -10,12 +10,6 @@ export { callMeetingProjectCandidatesTool, meetingProjectCandidatesTool } from "
 export { callMeetingSeriesInventoryTool, meetingSeriesInventoryTool } from "../mcp/meeting-series-inventory.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
 export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
-export {
-  answerMessagesSearch,
-  MESSAGES_SEARCH_DESCRIPTION,
-  type MessagesSearchArgs,
-  messagesSearchInput,
-} from "../mcp/tools/search.js"
 export { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 export type {
   AccountEditing,

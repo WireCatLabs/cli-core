@@ -1,25 +1,14 @@
-import { CliError } from "@wirecat/cli-base"
 import { imageSize } from "image-size"
 import * as v from "valibot"
-import { MAX_TEXT_CHARS } from "../../attachments/extract.js"
-import { gatewayOcr } from "../../attachments/gateway-ocr.js"
 import { pdfPreviewLimits } from "../../attachments/limits.js"
-import { FETCH } from "../../cli/effects.js"
-import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
+import { itemOf, snakeKeys } from "../../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../../cli/execution.js"
-import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { nextStep } from "../../cli/steps.js"
-import { levelFor } from "../../sends/permissions.js"
-import { refusedPlace } from "../../sends/upload.js"
-import { ATTACHMENT_QUERY } from "../../services/attachments.js"
-import { onlineDeps } from "../../services/deps.js"
-import { downloadMessage } from "../../services/file-download.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
-import { type AnyTool, BinaryResource, chatOf, limit, Picture, page, paging, READ, tool } from "../tool.js"
+import { type AnyTool, BinaryResource, chatOf, Picture, READ, tool } from "../tool.js"
 
 export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> => {
-  const command = messenger.app.command
+  const _command = messenger.app.command
   return {
     attachments_show: tool({
       title: "Read bytes of one retained attachment",
@@ -83,149 +72,6 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
           "&sha256=" +
           done.sha256
         return new BinaryResource(base64, done.complete ? done.mimeType : "application/octet-stream", uri, about)
-      },
-    }),
-
-    attachments_extract: tool({
-      title: "Extract text from saved files",
-      description:
-        "Keep file text in the local content index. Agents normally transcribe scans themselves and use `attachments text set`. Explicit ocr calls models.ocr for bulk images/scanned PDFs; concurrency1–8 (default4). from_dir needs chat; download needs output_dir. Returns { item } with counts, `files` (statuses and paths, never text) and `cursor`; a cut-short run names the attachments.extract step.",
-      key: "attachments.extract",
-      input: v.object({
-        chat: v.optional(chatOf(messenger)),
-        from_dir: v.optional(v.pipe(v.string(), v.minLength(1))),
-        download: v.optional(v.boolean()),
-        ocr: v.optional(v.boolean()),
-        concurrency: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(8))),
-        output_dir: v.optional(v.pipe(v.string(), v.minLength(1))),
-        limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(500))),
-        cursor: v.optional(v.pipe(v.string(), v.regex(/^[1-9][0-9]*$/))),
-      }),
-      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true, destructiveHint: false },
-      effects: FETCH,
-      stored: async (store, account, args, defaults, connect) => {
-        if (args.download && (!args.output_dir || !connect))
-          throw new CliError("validation_error", "download needs output_dir and an online session")
-        if (args.output_dir && !args.download) throw new CliError("validation_error", "output_dir requires download")
-        if (args.output_dir && refusedPlace(args.output_dir, messenger.app, defaults.env))
-          throw new CliError(
-            "validation_error",
-            "output_dir cannot write credential folders, the CLI's own folders or the message store",
-          )
-        if (args.from_dir && (!args.chat || args.download || args.output_dir))
-          throw new CliError(
-            "validation_error",
-            "from_dir needs chat and cannot be combined with download or output_dir",
-          )
-        if (
-          levelFor(defaults.settings.permissions ?? {}, "messages").level === "deny" ||
-          (args.download && levelFor(defaults.settings.permissions ?? {}, "messages.download").level === "deny")
-        )
-          throw new CliError("permission_error", "this profile does not allow reading these message files")
-        if (args.concurrency !== undefined && !args.ocr)
-          throw new CliError("validation_error", "concurrency requires explicit OCR")
-        if (args.ocr && defaults.settings.offline) throw new CliError("validation_error", "API OCR cannot run offline")
-        const pipeline = args.ocr
-          ? gatewayOcr({
-              app: messenger.app,
-              settings: defaults.settings,
-              env: defaults.env,
-              keyring: defaults.keyring,
-              enabled: true,
-              ...(defaults.signal === undefined ? {} : { signal: defaults.signal }),
-            })
-          : undefined
-        const run = await servicesFor({
-          ...storedDeps(messenger, store, account, defaults.guard),
-          env: defaults.env,
-        }).attachments.extract({
-          ...(args.chat === undefined ? {} : { chat: args.chat }),
-          ...(args.from_dir === undefined ? {} : { fromDir: args.from_dir }),
-          ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
-          limit: args.limit ?? 100,
-          scanLimit: 500,
-          signal: defaults.signal,
-          ...(pipeline === undefined ? {} : { ocr: pipeline, concurrency: args.concurrency ?? 4 }),
-          ...(args.download
-            ? {
-                download: async (chatId: string, messageId: string) => {
-                  await connect?.(async (adapter) => {
-                    const deps = onlineDeps(messenger, adapter, defaults.guard, {
-                      env: defaults.env,
-                      profile: defaults.settings.profile,
-                    })
-                    await downloadMessage(
-                      servicesFor({ ...deps, store: async () => store, account: async () => account }).messages,
-                      chatId,
-                      messageId,
-                      args.output_dir as string,
-                      () => {},
-                    )
-                  })
-                },
-              }
-            : {}),
-        })
-        const { items, ...totals } = run
-        return itemOf(snakeKeys({ ...totals, files: items }), {
-          next:
-            run.cursor === undefined
-              ? []
-              : [
-                  nextStep("attachments.extract", {
-                    args: { cursor: run.cursor, ...(args.chat === undefined ? {} : { chat: args.chat }) },
-                  }),
-                ],
-        })
-      },
-    }),
-
-    attachments_list: tool({
-      title: "List files of stored messages",
-      description:
-        "Files of this account's stored messages, newest first: where each was saved on this machine and whether " +
-        "its text is held — never the text. With `is:needs_text`, only files saved here that nobody has text for " +
-        "yet, such as a scan or a photo: use `attachments show` to receive bytes remotely, or read `local_path` on the " +
-        "server, then write the text with `attachments text set` (`message`, `position`), and content:<word> in " +
-        `\`search messages\` finds it. \`${command} attachments extract\` reads text layers (plain text, Word, PDF).`,
-      input: v.object({ query: queryArgument(ATTACHMENT_QUERY), limit, page }),
-      annotations: { ...READ, openWorldHint: false },
-      output: { entity: "attachment", list: true },
-      stored: async (store, account, args, defaults) => {
-        const { size, number, window } = paging(args, defaults)
-        const query = listQuery(args.query ?? "", ATTACHMENT_QUERY, "attachments list")
-        const found = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).attachments.list({
-          ...window,
-          ...(query ? { query } : {}),
-        })
-        return listOf("attachments list", { items: found.items, limit: size, has_more: found.has_more, page: number })
-      },
-    }),
-
-    attachments_text_set: tool({
-      changesStore: true,
-      title: "Keep the text read from a file",
-      description:
-        "Keeps text you read from one file of a stored message — a scan, a photo, a PDF of pictures — in the local " +
-        "store, replacing what was there, so content:<word> in `search messages` finds the message. Nothing is sent. " +
-        "`message` is an id in `chat`, or a msg: locator alone; `attachment` (from 1) is needed when the message " +
-        "has more than one file. Returns { item: { locator, attachment, origin, chars, replaced } }.",
-      input: v.object({
-        chat: v.optional(chatOf(messenger)),
-        message: v.pipe(v.string(), v.minLength(1), v.description("a message id in `chat`, or a msg: locator alone")),
-        attachment: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description("which file, from 1"))),
-        text: v.pipe(v.string(), v.minLength(1), v.maxLength(MAX_TEXT_CHARS), v.description("the text of the file")),
-      }),
-      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false, destructiveHint: false },
-      stored: async (store, account, args, defaults) => {
-        const located = args.chat === undefined
-        const kept = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).attachments.setText({
-          chat: located ? args.message : (args.chat as string),
-          ...(located ? {} : { message: args.message }),
-          ...(args.attachment === undefined ? {} : { attachment: args.attachment }),
-          text: args.text,
-        })
-        return itemOf(snakeKeys(kept))
       },
     }),
   }

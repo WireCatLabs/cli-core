@@ -368,7 +368,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     oneShot = deadline
     afterPhase = timeout !== undefined || persistent || job || interactiveLogin ? deadline : DEFAULT_COMMAND_MS
     if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
-    if (options.relayed) absolutePaths(action, options.relayed.cwd)
+    // An agent's run shares this process's directory; a chat folder's name is not a path to resolve.
+    if (options.relayed && !options.agent) absolutePaths(action, options.relayed.cwd)
     const cooperative = persistent || stopsAtItsPace === true
     if (!cooperative) options.signal?.addEventListener("abort", externalAbort, { once: true })
     if (!cooperative && options.signal?.aborted) {
@@ -589,7 +590,7 @@ const keepFailure = async (
   await recorded(
     {
       app: definition.app,
-      command: path || definition.app.command,
+      command: `${options.agent ? "mcp " : ""}${path || definition.app.command}`,
       profile: settings?.profile ?? profile ?? "default",
       record: false,
       keepFailed: settings?.keepFailedRuns ?? !rest.includes("--no-record"),

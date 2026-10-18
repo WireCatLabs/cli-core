@@ -62,8 +62,8 @@ from this plan. Slices 3, 5, 6, 7 and 8 have no other owner.
 - Releases: at most one cli-core release every 2 hours (`CLAUDE.md`).
 
 Shared examples to copy: `src/cli/messenger/polls-command.ts` (`annotate(..., {mutates: true})`,
-`capability(...)`), `messages-send-command.ts`, `admin-folders-command.ts`; MCP tools in
-`src/mcp/tools/*.ts`, registered in `src/mcp/tools.ts`; guarded writes in `src/sends/polls.ts`
+`capability(...)`), `messages-send-command.ts`, `admin-folders-command.ts` (MCP tools are generated from the
+commands); guarded writes in `src/sends/polls.ts`
 and `src/sends/guarded.ts`. tg: `src/telegram/adapter.ts` + `map.ts`, registered in
 `src/program.ts:72-76`. max: `src/spec/operations/*.ts` → `pnpm generate` → `src/client.ts` →
 `src/adapter/max-adapter.ts`, registered in `src/program.ts:69-75`.

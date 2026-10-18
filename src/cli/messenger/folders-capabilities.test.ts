@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest"
-import { folderTools } from "../../mcp/tools/folders.js"
 import { settingsFor } from "../settings.js"
 import { foldersCommand } from "./admin-folders-command.js"
 import type { Messenger } from "./context.js"
@@ -26,17 +25,12 @@ describe("folder capability discovery", () => {
       "update",
       "delete",
     ])
-    expect(Object.keys(folderTools(messenger))).toEqual([
-      "chats_folders_list",
-      "chats_folders_show",
-      "chats_folders_create",
-      "chats_folders_update",
-      "chats_folders_delete",
-    ])
     expect(connect).not.toHaveBeenCalled()
     expect(foldersCommand({ ...messenger, folderOrder: true }).commands.map((command) => command.name())).toContain(
       "order",
     )
-    expect(Object.keys(folderTools({ ...messenger, folderJoin: true }))).toContain("chats_folders_join")
+    expect(foldersCommand({ ...messenger, folderJoin: true }).commands.map((command) => command.name())).toContain(
+      "join",
+    )
   })
 })

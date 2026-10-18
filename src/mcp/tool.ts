@@ -1,5 +1,5 @@
-import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
-import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
+import type { CallToolResult, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
+import { toJsonSchema } from "@valibot/to-json-schema"
 import { CliError, errorCodes, errorObjectOf, type KeyringStore, mcpErrorResult } from "@wirecat/cli-base"
 import {
   type Effects,
@@ -38,7 +38,7 @@ import { onlineDeps, storeModeDeps } from "../services/deps.js"
 import { type Services, servicesFor } from "../services/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { MessengerSession } from "./session.js"
-import { agentJson, UNTRUSTED } from "./text.js"
+import { agentJson } from "./text.js"
 
 export const limit = v.optional(
   v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100), v.description("how many")),
@@ -226,7 +226,7 @@ export const effectsOf = (definition: Pick<AnyTool, "annotations" | "effects">):
 }
 
 /** The audit outcome of an answer: a profile's refusal apart from a failure. */
-const outcomeOf = (result: CallToolResult): Pick<ToolCall, "status" | "error"> => {
+export const outcomeOf = (result: CallToolResult): Pick<ToolCall, "status" | "error"> => {
   if (!result.isError) return { status: "ok" }
   const code = (result.structuredContent as { error?: { code?: unknown } } | undefined)?.error?.code
   const error = typeof code === "string" ? code : "generic_failure"
@@ -448,45 +448,6 @@ export const outputSchemaOf = (definition: Pick<AnyTool, "output">): v.GenericSc
   if (!definition.output) return v.looseObject({})
   const entity = ENTITIES[definition.output.entity] as v.GenericSchema
   return definition.output.list ? listEnvelopeSchema(entity) : itemEnvelopeSchema(entity)
-}
-
-/**
- * The input a client is shown, which the SDK then lets through: `entryRunner` checks it, so a wrong argument is
- * answered as this CLI's `validation_error` and recorded, not as the SDK's own text before any handler runs.
- */
-const describedOnly = (input: Input) => ({
-  "~standard": {
-    ...toStandardJsonSchema(input)["~standard"],
-    validate: (value: unknown) => ({ value }),
-  },
-})
-
-/**
- * Registers each tool as `<cli>_<name>`, in name order so a client sees the same list every time; every tool's
- * description ends with the warning about data.
- */
-export const registerTools = (server: McpServer, tools: Record<string, AnyTool>, registration: Registration): void => {
-  const run = entryRunner(registration)
-  for (const [key, definition] of Object.entries(tools).sort(([one], [other]) => one.localeCompare(other))) {
-    const syncAllowed = syncAllowedFor(key, registration.defaults)
-    server.registerTool(
-      `${registration.command}_${key}`,
-      {
-        outputSchema: toStandardJsonSchema(outputSchemaOf(definition)),
-        title: definition.title,
-        description: `${definition.description} ${UNTRUSTED}`,
-        inputSchema: describedOnly(inputOf(definition, syncAllowed)),
-        annotations: {
-          ...definition.annotations,
-          ...("sync_first" in definition.input.entries
-            ? { openWorldHint: definition.annotations.openWorldHint === true || syncAllowed }
-            : {}),
-        },
-        ...(definition._meta ? { _meta: definition._meta } : {}),
-      },
-      (args: Record<string, unknown>, ctx: ServerContext) => run(key, definition, args, ctx),
-    )
-  }
 }
 
 /** An answer that is a picture, not JSON: it goes to the client as `image` content, with `about` as text. */

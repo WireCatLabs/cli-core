@@ -1,3 +1,7 @@
+import { CliError } from "@wirecat/cli-base"
+import type { Command } from "commander"
+import { environmentOf } from "./context.js"
+
 /**
  * Who decides: the agent whose terminal runs the tool, by the variables cli-base's skill hint reads, else the
  * owner. `AI_AGENT` carries a version (`claude-code_2-1-296_agent`); one bot per release would split the agent's
@@ -20,4 +24,16 @@ export const holderOf = (env: NodeJS.ProcessEnv, flag?: string): string => {
   if (given) return given.slice(0, 200)
   const session = env.CLAUDE_CODE_SESSION_ID?.trim()
   return session ? `claude-code:${session}` : authorOf(env)
+}
+
+/**
+ * Who acts in this run. An MCP server's run is the agent's whatever the server's environment says, and an agent never
+ * acts as the owner: the owner's decision over an agent's is what `--as-owner` records.
+ */
+export const actorOf = (command: Command, asOwner?: boolean): string => {
+  const { env = process.env, agent } = environmentOf(command)
+  if (!agent) return authorOf(env, asOwner)
+  if (asOwner) throw new CliError("permission_error", "an agent cannot act as the owner; the owner runs this command")
+  const named = authorOf(env)
+  return named === "owner" ? "agent" : named
 }

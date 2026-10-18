@@ -1,9 +1,11 @@
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server"
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError } from "@wirecat/cli-base"
+import type { CommandOutput } from "@wirecat/cli-base/commands"
 import * as v from "valibot"
 import { answerSchema, listOf } from "../cli/envelope.js"
 import { movedPath, movedPointer } from "../cli/moved.js"
+import { ENTITIES, type EntityName } from "../entities/index.js"
 import type { AppErrors } from "../errors/reasons.js"
 import { agentArguments } from "./text.js"
 import {
@@ -212,26 +214,30 @@ export const registerCommands = (
     )
 }
 
-/** The personal account's definitions as commands, each run through the shared runner. */
-export const registerSurface = (server: McpServer, tools: Record<string, AnyTool>, registration: Registration) => {
+/** The definitions no command answers — a picture for the model, the server's own status — as commands. */
+export const surfaceCommands = (
+  tools: Record<string, AnyTool>,
+  registration: Registration,
+): Record<string, McpCommand> => {
   const run = entryRunner(registration)
-  registerCommands(
-    server,
-    registration.command,
-    Object.fromEntries(
-      Object.entries(tools).map(([key, definition]) => [
-        commandOf(key, definition),
-        {
-          title: definition.title,
-          description: definition.description,
-          writes: definition.annotations.readOnlyHint !== true,
-          input: inputOf(definition, syncAllowedFor(key, registration.defaults)),
-          ...(definition.output ? { output: outputSchemaOf(definition) } : {}),
-          checked: true,
-          run: (args, ctx) => run(key, definition, args, ctx),
-        } satisfies McpCommand,
-      ]),
-    ),
-    registration.messenger?.app?.errors,
+  return Object.fromEntries(
+    Object.entries(tools).map(([key, definition]) => [
+      commandOf(key, definition),
+      {
+        title: definition.title,
+        description: definition.description,
+        writes: definition.annotations.readOnlyHint !== true,
+        input: inputOf(definition, syncAllowedFor(key, registration.defaults)),
+        ...(definition.output ? { output: outputSchemaOf(definition) } : {}),
+        checked: true,
+        run: (args, ctx) => run(key, definition, args, ctx),
+      } satisfies McpCommand,
+    ]),
   )
 }
+
+/** The envelope a command answers with, from the entity it declares (`annotate(…, { output })`). */
+export const outputOf = ({ entity, view }: CommandOutput): v.GenericSchema =>
+  answerSchema(
+    (ENTITIES[(view ? `${entity}.${view}` : entity) as EntityName] as v.GenericSchema | undefined) ?? v.unknown(),
+  )

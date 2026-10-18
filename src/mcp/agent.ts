@@ -1,10 +1,17 @@
 import { Readable } from "node:stream"
 import { CliError, captureStreams, errorObjectOf } from "@wirecat/cli-base"
-import { type ArgumentInfo, type CommandInfo, flatten, type OptionInfo } from "@wirecat/cli-base/commands"
+import {
+  type ArgumentInfo,
+  type CommandInfo,
+  type CommandOutput,
+  flatten,
+  type OptionInfo,
+} from "@wirecat/cli-base/commands"
 import { type ErrorObject, VOCABULARY, writes } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { lentConnection } from "../cli/messenger/serve-relay.js"
 import type { RunOptions } from "../cli/program.js"
+import type { StdinField } from "../cli/stdin-field.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { keyForCommand, type Level, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
 
@@ -25,6 +32,10 @@ export interface AgentContext {
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
   /** The server's one open connection. The command borrows it: it cannot close it, and never opens its own. */
   connection?: () => Promise<MessengerAdapter>
+  /** What a command reads on stdin, as the field an agent gives it in. */
+  stdin?: (path: readonly string[]) => StdinField | undefined
+  /** More of the run's environment, read by the commands that look for it: the server's `spawnJob`, `embedders`. */
+  environment?: Readonly<Record<string, unknown>>
 }
 
 export type AgentAnswer = { result: unknown } | { error: ErrorObject }
@@ -38,6 +49,8 @@ export interface AgentTool {
   description: string
   writes: boolean
   input: v.ObjectSchema<v.ObjectEntries, undefined>
+  /** The entity it answers with, when the command declares one. */
+  output?: CommandOutput
 }
 
 export interface CatalogueOptions {
@@ -52,11 +65,14 @@ export interface CatalogueOptions {
   omit?: readonly string[]
   /** Offer `offline` on commands that read the messenger: answer from the copy on this machine. */
   offline?: boolean
+  /** What a command reads on stdin, as the field an agent gives it in. */
+  stdin?: (path: readonly string[]) => StdinField | undefined
 }
 
 const TYPES = new Map(VOCABULARY.flags.map((flag) => [flag.name, flag.type]))
 
-const snake = (name: string) => name.replaceAll("-", "_")
+// `<name|id>` is one argument: its field is `name_or_id`.
+const snake = (name: string) => name.replaceAll("|", "_or_").replace(/[^a-z0-9]+/gi, "_")
 
 const longOf = (option: OptionInfo): string | undefined => option.flags.match(/--[a-z0-9][a-z0-9-]*/)?.[0]
 
@@ -69,7 +85,7 @@ const text = (description: string) =>
     v.description(description),
   )
 
-type ValueKind = "switch" | "count" | "number" | "list" | "variadic" | "text"
+type ValueKind = "switch" | "count" | "number" | "list" | "variadic" | "json" | "text"
 
 interface Field {
   name: string
@@ -77,6 +93,8 @@ interface Field {
   schema: v.GenericSchema
   argv: (value: unknown) => string[]
   positional: boolean
+  /** Given to the command on stdin, not as an argument. */
+  stdin?: true
 }
 
 const optionKind = (option: OptionInfo, long: string): ValueKind => {
@@ -84,10 +102,11 @@ const optionKind = (option: OptionInfo, long: string): ValueKind => {
   if (option.choices) return "text"
   const type = TYPES.get(long)
   if (type === "count" || type === "number" || type === "list") return type
+  if (/<json>/.test(option.flags)) return "json"
   return /\.\.\.[>\]]/.test(option.flags) ? "variadic" : "text"
 }
 
-const optionField = (option: OptionInfo, long: string): Field => {
+const optionField = (option: OptionInfo, long: string, negatable = false): Field => {
   const kind = optionKind(option, long)
   const about = option.description
   const schema =
@@ -96,21 +115,30 @@ const optionField = (option: OptionInfo, long: string): Field => {
       : option.choices
         ? v.pipe(v.picklist(option.choices as string[]), v.description(about))
         : kind === "count"
-          ? v.pipe(v.number(), v.integer(), v.minValue(1), v.description(about))
+          ? // The command judges the range: `--thread-hops 0` is one, `--limit 0` is not.
+            v.pipe(v.number(), v.integer(), v.minValue(0), v.description(about))
           : kind === "number"
             ? v.pipe(v.number(), v.description(about))
-            : kind === "list" || kind === "variadic"
-              ? v.pipe(v.array(text("one value")), v.minLength(1), v.description(about))
-              : text(about)
+            : kind === "list"
+              ? // The command line takes `a,b`; an agent may write it so, or as a list.
+                v.pipe(v.union([v.pipe(v.array(text("one value")), v.minLength(1)), text(about)]), v.description(about))
+              : kind === "variadic"
+                ? v.pipe(v.array(text("one value")), v.minLength(1), v.description(about))
+                : kind === "json"
+                  ? // A next step hands back the object an answer gave; the command takes it as JSON text.
+                    v.pipe(v.union([v.string(), v.record(v.string(), v.unknown())]), v.description(about))
+                  : text(about)
   return {
     name: snake(long.slice(2)),
     required: option.mandatory,
     schema,
     positional: false,
     argv: (value) => {
-      if (kind === "switch") return value === true ? [long] : []
+      // `approval: false` where the command has `--no-approval` says so; elsewhere false is leaving the switch off.
+      if (kind === "switch") return value === true ? [long] : negatable ? [`--no-${long.slice(2)}`] : []
       if (kind === "variadic") return (value as unknown[]).map((one) => `${long}=${String(one)}`)
-      if (kind === "list") return [`${long}=${(value as unknown[]).map(String).join(",")}`]
+      if (kind === "list") return [`${long}=${Array.isArray(value) ? value.map(String).join(",") : String(value)}`]
+      if (kind === "json") return [`${long}=${typeof value === "string" ? value : JSON.stringify(value)}`]
       return [`${long}=${String(value)}`]
     },
   }
@@ -123,7 +151,8 @@ const argumentField = (argument: ArgumentInfo): Field => {
   return {
     name: snake(argument.name),
     required: argument.required,
-    schema: argument.variadic ? v.pipe(v.array(one), v.minLength(argument.required ? 1 : 0)) : one,
+    // A query is several words on the command line; an agent writes it as one string, which is one of them.
+    schema: argument.variadic ? v.union([v.pipe(v.array(one), v.minLength(argument.required ? 1 : 0)), one]) : one,
     positional: true,
     argv: (value) => (Array.isArray(value) ? value.map(String) : [String(value)]),
   }
@@ -137,12 +166,29 @@ const OFFLINE: Field = {
   argv: (value) => (value === true ? ["--offline"] : []),
 }
 
-const fieldsOf = (info: CommandInfo, { omit = [], offline = false }: Pick<CatalogueOptions, "omit" | "offline">) => {
+const stdinField = ({ name, description, json }: StdinField): Field => ({
+  name,
+  required: true,
+  schema: json
+    ? v.pipe(v.union([v.string(), v.record(v.string(), v.unknown())]), v.description(description))
+    : v.pipe(v.string(), v.minLength(1), v.description(description)),
+  positional: false,
+  stdin: true,
+  argv: () => [],
+})
+
+const fieldsOf = (
+  info: CommandInfo,
+  { omit = [], offline = false, stdin }: Pick<CatalogueOptions, "omit" | "offline" | "stdin">,
+) => {
   const fields: Field[] = info.arguments.map(argumentField)
+  const read = stdin?.(info.path)
+  if (read) fields.push(stdinField(read))
+  const longs = new Set(info.options.map(longOf))
   for (const option of info.options) {
     const long = longOf(option)
     if (!long || option.mcp === false) continue
-    fields.push(optionField(option, long))
+    fields.push(optionField(option, long, longs.has(`--no-${long.slice(2)}`)))
   }
   if (offline && info.effects?.remote === "read" && info.offline !== false) fields.push(OFFLINE)
   return fields.filter((field) => !omit.includes(field.name))
@@ -197,26 +243,35 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
       description: info.description,
       writes: writes(info.effects),
       input: schemaOf(fieldsOf(info, options)),
+      ...(info.output ? { output: info.output } : {}),
     }))
 }
 
-const argvOf = (info: CommandInfo, input: Record<string, unknown>, profile: string): string[] => {
-  const fields = fieldsOf(info, { offline: true })
+const argvOf = (
+  info: CommandInfo,
+  input: Record<string, unknown>,
+  profile: string,
+  stdin: CatalogueOptions["stdin"],
+): { argv: string[]; stdin?: string } => {
+  const fields = fieldsOf(info, { offline: true, ...(stdin ? { stdin } : {}) })
   const known = new Map(fields.map((field) => [field.name, field]))
   for (const name of Object.keys(input))
     if (!known.has(name)) throw new CliError("validation_error", `${info.path.join(" ")}: no argument "${name}"`)
   const options: string[] = []
   const positionals: string[] = []
+  let given: string | undefined
   for (const field of fields) {
     const value = input[field.name]
     if (value === undefined) {
       if (field.required) throw new CliError("validation_error", `${info.path.join(" ")}: "${field.name}" is required`)
       continue
     }
+    if (field.stdin) given = typeof value === "string" ? value : JSON.stringify(value)
     for (const token of field.argv(value)) (field.positional ? positionals : options).push(token)
   }
   // Values never reach commander as tokens of their own, and positionals come after `--`: no value becomes a flag.
-  return [profile, ...info.path, ...options, "--json", ...(positionals.length > 0 ? ["--", ...positionals] : [])]
+  const argv = [profile, ...info.path, ...options, "--json", ...(positionals.length > 0 ? ["--", ...positionals] : [])]
+  return given === undefined ? { argv } : { argv, stdin: given }
 }
 
 /**
@@ -235,25 +290,28 @@ export const runCommandForAgent = async (
 ): Promise<AgentAnswer> => {
   try {
     const info = flatten(program.commands).find((one) => one.path.length === path.length && startsWith(one.path, path))
-    if (!info || info.commands.length > 0)
+    // A group runs when it declares effects of its own, as `toolsFromCommands` offers it: `tasks duplicates` lists.
+    if (!info || (info.commands.length > 0 && info.effects === undefined))
       throw new CliError("validation_error", `no command "${path.join(" ")}" to run`)
     if (info.lifetime)
       throw new CliError("validation_error", `"${path.join(" ")}" runs until it is stopped; an agent call must return`)
     const levels = ctx.levels?.()
     const refused = levels && refusal(info, levels, ctx.keyOf)
     if (refused) throw new CliError("permission_error", `${path.join(" ")}: ${refused}`, { sent: false })
-    const argv = argvOf(info, input, ctx.profile)
-    const borrowed = ctx.connection ? lentConnection(await ctx.connection()) : undefined
+    const { argv, stdin } = argvOf(info, input, ctx.profile, ctx.stdin)
+    const lend = ctx.connection
+    let borrowed: Promise<MessengerAdapter> | undefined
 
     let answered = false
     let result: unknown
     let failure: ErrorObject | undefined
     const streams = captureStreams()
     const code = await program.run(argv, {
+      ...ctx.environment,
       streams,
       tty: false,
       ...(ctx.env ? { env: ctx.env } : {}),
-      stdin: Readable.from([]),
+      stdin: Readable.from(stdin === undefined ? [] : [stdin]),
       answer: () => null,
       agent: {
         result: (value) => {
@@ -265,7 +323,16 @@ export const runCommandForAgent = async (
         },
         ...(ctx.overrides?.length ? { overrides: ctx.overrides } : {}),
       },
-      ...(borrowed ? { relayed: { profile: ctx.profile, cwd: process.cwd(), connection: () => borrowed } } : {}),
+      // Opened only when the command asks: a read the store answers never connects.
+      ...(lend
+        ? {
+            relayed: {
+              profile: ctx.profile,
+              cwd: process.cwd(),
+              connection: () => (borrowed ??= lend().then((adapter) => lentConnection(adapter))),
+            },
+          }
+        : {}),
     })
     if (failure) return { error: failure }
     if (answered) return { result }

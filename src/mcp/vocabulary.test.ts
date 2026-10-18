@@ -6,9 +6,9 @@ import { commandAt } from "../cli/steps.js"
 import { keyForCommand } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
 import { commandOf, toolKey } from "./tool.js"
-import { personalMcpTools } from "./tools.js"
+import { pictureTools } from "./tools.js"
 
-const tools = personalMcpTools(messenger)
+const tools = pictureTools(messenger)
 
 interface Listed {
   path: readonly string[]
@@ -28,7 +28,7 @@ const cliCommands = async (): Promise<Set<string>> => {
   return new Set(runnable((JSON.parse(streams.stdout.join("")) as { commands: Listed[] }).commands))
 }
 
-describe("one vocabulary for the CLI and its agent catalogue", () => {
+describe("the tools that answer with a picture, in the CLI's vocabulary", () => {
   it("lists every tool under a command the CLI has", async () => {
     const commands = await cliCommands()
     const strays = Object.entries(tools)
@@ -42,7 +42,7 @@ describe("one vocabulary for the CLI and its agent catalogue", () => {
         .filter(([, definition]) => definition.agentOnly)
         .map(([name]) => name)
         .sort(),
-    ).toEqual(["conversations_refresh", "messages_photo"])
+    ).toEqual(["messages_photo"])
   })
 
   it("reads a tool's level from its command's permission key", () => {
@@ -53,9 +53,6 @@ describe("one vocabulary for the CLI and its agent catalogue", () => {
       )
 
     expect(drifted).toEqual([])
-    expect(toolKey("chats_send_as", tools.chats_send_as as never)).toBe("chats.send-as")
-    expect(toolKey("chats_mark_read", tools.chats_mark_read as never)).toBe("chats.mark-read")
-    expect(toolKey("chats_members", tools.chats_members as never)).toBe("chats.members.list")
   })
 
   it("refuses under the read-only lock the tools whose command the lock refuses", () => {
