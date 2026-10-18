@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { annotate, metaOf } from "@wirecat/cli-base/commands"
+import { annotate, describeProgram, flatten, metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
@@ -205,6 +205,20 @@ describe("command effects", () => {
         "search conversations",
       ].sort(),
     )
+  })
+
+  it("tell the commands document which commands reach another service, so its page does not call them messenger writes", () => {
+    const described = flatten(describeProgram(program))
+    const reaching = described
+      .filter((command) => command.reaches === "other_service")
+      .map(({ path }) => path.join(" "))
+    expect(reaching.sort()).toEqual(
+      commands
+        .filter(({ command }) => isOtherServiceCall(command))
+        .map(({ path }) => path)
+        .sort(),
+    )
+    expect(described.find(({ path }) => path.join(" ") === "messages send")?.reaches).toBeUndefined()
   })
 
   it("judge retry on the remote side, and keep a local-only write from running unasked", () => {
