@@ -216,7 +216,8 @@ export const launchd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
       if (unit.logPath) mkdirSync(dirname(unit.logPath), { recursive: true, mode: 0o700 })
     },
     logs: async (unit, lines) => tail(unit.logPath, lines),
-    atLogin: () => "from then on it also starts at every login, until `server stop`",
+    atLogin: (unit) =>
+      `from then on it also starts at every login, until \`${app.command} ${unit.profile} server stop\``,
   }
 }
 
@@ -246,10 +247,10 @@ export const tail = (path: string | undefined, lines: number): string =>
 
 /** Where there is neither: `start` still runs serve in the background; only `install` needs one of them. */
 export const noUnits = (app: AppIdentity, system: ServerSystem): Platform => {
-  const refuse = (): never => {
+  const refuse = (unit: Unit): never => {
     throw new CliError(
       "validation_error",
-      `${app.command} server install knows systemd (Linux) and launchd (macOS), not ${system.platform} — \`${app.command} server start\` runs serve without a unit`,
+      `${app.command} server install knows systemd (Linux) and launchd (macOS), not ${system.platform} — \`${app.command} ${unit.profile} server start\` runs serve without a unit`,
     )
   }
   return {

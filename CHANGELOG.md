@@ -25,6 +25,9 @@ shape of this file.
 - **`server status` names the profile in the commands it suggests.** After a refused login it said
   `<cli> session start`, then `<cli> server start`; it now says `<cli> <profile> session start`, then
   `<cli> <profile> server start`, and the same for `server logs` after another exit that a restart would not fix.
+- **Every command the `server` commands and the store's maintenance commands suggest names the profile**:
+  `server install`, `start`, `status` and `uninstall`, the launchd "until `server stop`" note, and the "serve is
+  running — stop it first" refusal of `store repair`, `store restore` and `store reset`.
 - **`metadata get` and `metadata refresh` have help and examples**, so the command lint no longer lists them under
   missing help or missing examples.
 

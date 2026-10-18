@@ -97,7 +97,7 @@ const lockProcess =
       if (!carries(pid, marker)) {
         throw new CliError(
           "validation_error",
-          `serve for profile ${context.profile} (PID ${pid}) was not started by \`${app.command} server start\` — stop it where it runs`,
+          `serve for profile ${context.profile} (PID ${pid}) was not started by \`${app.command} ${context.profile} server start\` — stop it where it runs`,
         )
       }
       process.kill(pid, "SIGTERM")
@@ -149,7 +149,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
     if (!existsSync(unit.path)) {
       throw new CliError(
         "not_found",
-        `no unit for profile ${unit.profile} — \`${app.command} server install\` writes it`,
+        `no unit for profile ${unit.profile} — \`${app.command} ${unit.profile} server install\` writes it`,
       )
     }
   }
@@ -164,10 +164,10 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
     by === "unit"
       ? `under ${unit.path.endsWith(".plist") ? "launchd" : "systemd"} (${unit.name})`
       : by === "server"
-        ? `started by \`${app.command} server start\``
+        ? `started by \`${app.command} ${unit.profile} server start\``
         : by === "command"
           ? `started by a ${app.command} command that needed it — it stops once unused`
-          : `started by hand — \`${app.command} server stop\` leaves it alone`
+          : `started by hand — \`${app.command} ${unit.profile} server stop\` leaves it alone`
 
   const start = async (prepared: Prepared, args: string[]) => {
     const { system, platform, unit, server, each, say } = prepared
@@ -204,7 +204,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
           },
           [
             `Started: serving profile ${unit.profile} (PID ${now.pid}), connected${now.connectedAt ? ` since ${clock(now.connectedAt)}` : ""}, ${how(by, unit)}.`,
-            `Its log: ${app.command} server logs`,
+            `Its log: ${app.command} ${unit.profile} server logs`,
           ],
         )
         return
@@ -218,7 +218,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
     }
     throw new CliError(
       "timeout",
-      `serve is running but not connected yet — \`${app.command} server status\`, \`${app.command} server logs\``,
+      `serve is running but not connected yet — \`${app.command} ${unit.profile} server status\`, \`${app.command} ${unit.profile} server logs\``,
     )
   }
 
@@ -297,7 +297,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       const flood = new FloodMemory(floodPathFor(app, unit.profile, context.env)).read()
       const unitLine = isInstalled
         ? `Unit: ${tilde(unit.path, context.env)} — ${state.detail ?? (state.active ? "active" : "inactive")}.`
-        : `No unit installed — \`${app.command} server install\` adds one, for starting under systemd or launchd.`
+        : `No unit installed — \`${app.command} ${unit.profile} server install\` adds one, for starting under systemd or launchd.`
       say(
         {
           profile: unit.profile,
@@ -326,7 +326,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
             ? held.connected
               ? `Serving profile ${unit.profile} since ${clock(held.startedAt)} (PID ${held.pid}), connected${held.connectedAt ? ` since ${clock(held.connectedAt)}` : ""}, ${how(by ?? "hand", unit)}.`
               : `Starting profile ${unit.profile} since ${clock(held.startedAt)} (PID ${held.pid}) — not connected yet, ${how(by ?? "hand", unit)}.`
-            : `Not serving profile ${unit.profile}.${isInstalled && gaveUp === undefined && state.detail?.startsWith("failed") ? ` The unit failed — \`${app.command} server logs\`.` : ""}`,
+            : `Not serving profile ${unit.profile}.${isInstalled && gaveUp === undefined && state.detail?.startsWith("failed") ? ` The unit failed — \`${app.command} ${unit.profile} server logs\`.` : ""}`,
           ...(gaveUp === exitCodeFor("authentication_error")
             ? [
                 `It stopped because the login is no longer valid, and it will not restart by itself — \`${app.command} ${unit.profile} session start\`, then \`${app.command} ${unit.profile} server start\`.`,
@@ -375,9 +375,9 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       say({ profile: unit.profile, unit: unit.name, path: unit.path, command: unit.command, replaced }, [
         `${replaced ? "Rewrote" : "Wrote"} ${tilde(unit.path, context.env)} — nothing started.`,
         `It runs: ${unit.command.map((word) => tilde(word, context.env)).join(" ")}`,
-        `Start it now: ${app.command} server start · ${platform.atLogin(unit)}`,
+        `Start it now: ${app.command} ${unit.profile} server start · ${platform.atLogin(unit)}`,
         // Suggested, never turned on: an agent reading chats every morning is the owner's choice (NEED-161).
-        `A daily follow-up review is off. To turn it on: ${app.command} schedule agent follow-ups claude "${followUpsPrompt(app.command)}" --at 08:30`,
+        `A daily follow-up review is off. To turn it on: ${app.command} ${unit.profile} schedule agent follow-ups claude "${followUpsPrompt(app.command)}" --at 08:30`,
       ])
     })
 
@@ -387,7 +387,10 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       const { context, platform, unit, say } = prepare(this)
       installed(unit)
       if ((await platform.state(unit)).active) {
-        throw new CliError("validation_error", `the unit is running — \`${app.command} server stop\` first`)
+        throw new CliError(
+          "validation_error",
+          `the unit is running — \`${app.command} ${unit.profile} server stop\` first`,
+        )
       }
       rmSync(unit.path, { force: true })
       say({ profile: unit.profile, unit: unit.name, path: unit.path, removed: true }, [

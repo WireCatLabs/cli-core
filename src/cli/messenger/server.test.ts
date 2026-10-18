@@ -171,7 +171,7 @@ describe("server without a unit", () => {
     const { code, stderr } = await call(["start"], env, machine("linux", { serve: "silent" }).system)
 
     expect(code).not.toBe(0)
-    expect(stderr).toContain("not connected yet")
+    expect(stderr).toContain("not connected yet — `chat default server status`, `chat default server logs`")
     expect((await call(["status", "--json"], env, machine("linux").system)).answer).toMatchObject({
       running: true,
       connected: false,
@@ -256,10 +256,10 @@ describe("server without a unit", () => {
     const { system } = machine("linux")
 
     expect((await call(["status"], env, system, true)).text).toBe(
-      "Not serving profile default.\nNo unit installed — `chat server install` adds one, for starting under systemd or launchd.",
+      "Not serving profile default.\nNo unit installed — `chat default server install` adds one, for starting under systemd or launchd.",
     )
     expect((await call(["start"], env, system, true)).text).toMatch(
-      /^Started: serving profile default \(PID \d+\), connected since \d\d:\d\d, started by `chat server start`\.\nIts log: chat server logs$/,
+      /^Started: serving profile default \(PID \d+\), connected since \d\d:\d\d, started by `chat default server start`\.\nIts log: chat default server logs$/,
     )
   })
 })
@@ -287,8 +287,8 @@ describe("server with a systemd unit", () => {
       [
         `Rewrote ~/.config/systemd/user/chat-serve-${unitScope(app, "default", env)}.service — nothing started.`,
         "It runs: /opt/node /opt/chat/bin/chat.js serve",
-        `Start it now: chat server start · at every login too: systemctl --user enable chat-serve-${unitScope(app, "default", env)}`,
-        `A daily follow-up review is off. To turn it on: chat schedule agent follow-ups claude "${followUpsPrompt("chat")}" --at 08:30`,
+        `Start it now: chat default server start · at every login too: systemctl --user enable chat-serve-${unitScope(app, "default", env)}`,
+        `A daily follow-up review is off. To turn it on: chat default schedule agent follow-ups claude "${followUpsPrompt("chat")}" --at 08:30`,
       ].join("\n"),
     )
   })
@@ -367,9 +367,9 @@ describe("server with a systemd unit", () => {
     const { env } = setup()
     await call(["install"], env, machine("linux").system)
 
-    expect((await call(["uninstall"], env, machine("linux", { answers: showing("active", 42) }).system)).code).not.toBe(
-      0,
-    )
+    const refused = await call(["uninstall"], env, machine("linux", { answers: showing("active", 42) }).system)
+    expect(refused.code).not.toBe(0)
+    expect(refused.stderr).toContain("the unit is running — `chat default server stop` first")
     expect(existsSync(unitPath(env))).toBe(true)
 
     const removed = await call(["uninstall", "--json"], env, machine("linux", { answers: showing("inactive") }).system)
@@ -434,6 +434,9 @@ describe("server with a launchd agent", () => {
       path,
     })
     expect(ran).toEqual([])
+    expect((await call(["install"], env, system, true)).text).toContain(
+      "from then on it also starts at every login, until `chat default server stop`",
+    )
     const plist = readFileSync(path, "utf8")
     expect(plist).toContain("<key>Disabled</key><true/>")
     expect(plist).toContain(`<string>${join(env.CHAT_STATE_DIR, "serve", "default.log")}</string>`)
@@ -468,7 +471,7 @@ it("where there is neither, install is refused and start still runs serve in the
   const { env } = setup()
   const refused = await call(["install"], env, machine("win32").system)
   expect(refused.code).not.toBe(0)
-  expect(refused.stderr).toContain("chat server start")
+  expect(refused.stderr).toContain("`chat default server start`")
 
   expect((await call(["start", "--json"], env, machine("win32").system)).answer).toMatchObject({ started: true })
 })
@@ -609,6 +612,6 @@ describe("a CLI's own server process", () => {
 
     const status = await call(["status", "--json"], env, system)
     expect(status.answer.stopped).toBeUndefined()
-    expect((await call(["status"], env, system, true)).text).toContain("The unit failed")
+    expect((await call(["status"], env, system, true)).text).toContain("The unit failed — `chat default server logs`.")
   })
 })
