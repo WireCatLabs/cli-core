@@ -1,5 +1,5 @@
 import { openAsBlob, realpathSync } from "node:fs"
-import { stat } from "node:fs/promises"
+import { open, stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { Upload, UploadKind, UploadSource } from "../domain/attachments.js"
@@ -258,6 +258,8 @@ const readSticker = async (
 ): Promise<Upload> => {
   if (read.stickerBytes === undefined) throw new CliError("validation_error", "this messenger sends no sticker files")
   const upload = await readUpload("sticker", path, read)
+  if (!(await isWebp(path)))
+    throw new CliError("validation_error", `${path} is named .webp but is not a WebP image — nothing was sent`)
   const size = uploadSize(upload.source)
   if (size > read.stickerBytes)
     throw new CliError(
@@ -266,4 +268,15 @@ const readSticker = async (
         `${Math.floor(read.stickerBytes / 1024)} KiB — nothing was sent`,
     )
   return upload
+}
+
+const isWebp = async (path: string): Promise<boolean> => {
+  const handle = await open(path, "r")
+  try {
+    const head = Buffer.alloc(12)
+    const { bytesRead } = await handle.read(head, 0, 12, 0)
+    return bytesRead === 12 && head.toString("latin1", 0, 4) === "RIFF" && head.toString("latin1", 8, 12) === "WEBP"
+  } finally {
+    await handle.close()
+  }
 }

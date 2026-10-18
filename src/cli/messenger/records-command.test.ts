@@ -386,8 +386,10 @@ describe("reads only the server answers", () => {
     }
     const dir = mkdtempSync(join(tmpdir(), "sticker-"))
     mkdirSync(join(dir, ".ssh"))
-    for (const name of ["cat.webp", "cat.png", ".ssh/key.webp"]) writeFileSync(join(dir, name), "RIFF")
-    writeFileSync(join(dir, "big.webp"), "RIFF".repeat(300))
+    const webp = "RIFF\0\0\0\0WEBP"
+    for (const name of ["cat.webp", "cat.png", ".ssh/key.webp"]) writeFileSync(join(dir, name), webp)
+    writeFileSync(join(dir, "big.webp"), webp.padEnd(1200, "0"))
+    writeFileSync(join(dir, "fake.webp"), "\x89PNG\r\n\x1a\n0000")
     const own = { stickerFileBytes: 1024 }
     const send = (...rest: string[]) => invoke(["messages", "send", "Book club", ...rest], adapter, own)
 
@@ -395,6 +397,7 @@ describe("reads only the server answers", () => {
     const png = await send("--sticker-file", join(dir, "cat.png"))
     const withText = await send("hi", "--sticker-file", join(dir, "cat.webp"))
     const big = await send("--sticker-file", join(dir, "big.webp"))
+    const fake = await send("--sticker-file", join(dir, "fake.webp"))
     const guarded = await send("--sticker-file", join(dir, ".ssh/key.webp"))
     const allowed = await send("--sticker-file", join(dir, ".ssh/key.webp"), "--allow-any-file")
     const elsewhere = await invoke(["messages", "send", "Book club", "--sticker-file", join(dir, "cat.webp")], adapter)
@@ -403,6 +406,7 @@ describe("reads only the server answers", () => {
     expect(png.stderr).toContain("a sticker is a .webp")
     expect(withText.stderr).toContain("a sticker goes alone")
     expect(big.stderr).toContain("at most 1 KiB")
+    expect(fake.stderr).toContain("not a WebP image")
     expect(guarded.stderr).toContain("--allow-any-file")
     expect(allowed.code, allowed.stderr).toBe(0)
     expect(sent).toEqual([[{ kind: "sticker", name: "cat.webp" }], [{ kind: "sticker", name: "key.webp" }]])

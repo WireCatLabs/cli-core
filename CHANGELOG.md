@@ -13,8 +13,8 @@ shape of this file.
   in bytes) mounts `messages send --sticker-file <file>` and the MCP `messages send` argument `sticker_file`, for a
   messenger whose sticker is an uploaded file rather than one of a set (WhatsApp). The file is read like `--file`:
   known credential places and the WireCat folders are refused unless the owner adds `--allow-any-file`, which the
-  MCP side never has; a file that is not a .webp, is larger than the limit, or comes with text or another file is
-  refused before anything connects. The adapter's `send` gets it as one `Upload` of the new kind `sticker`, and the
+  MCP side never has; a file that is not a .webp (by its name and its first bytes), is larger than the limit, or
+  comes with text or another file is refused before anything connects. The adapter's `send` gets it as one `Upload` of the new kind `sticker`, and the
   send journal records the kind and size. `--sticker <id>` and `stickers: true` are unchanged, so tg and max see
   no difference.
 

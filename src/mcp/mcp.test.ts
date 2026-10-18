@@ -3190,16 +3190,24 @@ describe("sending over MCP", () => {
     const { call: withoutStickers } = await connect(telegram, {})
     const root = mkdtempSync(join(tmpdir(), "mcp-sticker-"))
     mkdirSync(join(root, ".ssh"))
-    writeFileSync(join(root, "cat.webp"), "RIFF")
-    writeFileSync(join(root, ".ssh", "key.webp"), "RIFF")
+    writeFileSync(join(root, "cat.webp"), "RIFF\0\0\0\0WEBP")
+    writeFileSync(join(root, ".ssh", "key.webp"), "RIFF\0\0\0\0WEBP")
+    symlinkSync(join(root, ".ssh", "key.webp"), join(root, "innocent.webp"))
 
     const attached = await call("messages send", { chat: "7", sticker_file: join(root, "cat.webp") })
-    const guarded = await call("messages send", { chat: "7", sticker_file: join(root, ".ssh", "key.webp") })
+    const guarded = await Promise.all(
+      [join(root, ".ssh", "key.webp"), join(root, "innocent.webp"), `${root}/x/../.ssh/key.webp`].map((path) =>
+        call("messages send", { chat: "7", sticker_file: path }),
+      ),
+    )
     const unknown = await withoutStickers("messages send", { chat: "7", sticker_file: join(root, "cat.webp") })
 
     expect(attached.isError, JSON.stringify(attached.body)).toBe(false)
     expect(sent[0]?.attachments).toMatchObject([{ kind: "sticker", name: "cat.webp" }])
-    expect(guarded.isError).toBe(true)
+    for (const refused of guarded) {
+      expect(refused.isError).toBe(true)
+      expect(JSON.stringify(refused.body)).toContain("credential files")
+    }
     expect(unknown.isError).toBe(true)
     expect(sent).toHaveLength(1)
   })
