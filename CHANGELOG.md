@@ -14,7 +14,8 @@ shape of this file.
   run's environment ends the phase `untilStopped()` began, for example when the link finished or the phone said its
   history was sent. However the phase ends — by that call, Ctrl-C, a cancel or `--timeout` — the steps after it get
   the command's one-shot deadline again, started afresh, and Ctrl-C ends the command as any command (130, 143).
-  Before, nothing bounded those steps.
+  Before, nothing bounded those steps. An explicit `--timeout` that ends the phase gives the steps after it a fresh
+  full `--timeout`, so the whole command can run up to twice that long.
 - **The test-matrix argument log records `--version`.** It ends before any command is parsed, so each CLI had to
   log it on its own.
 

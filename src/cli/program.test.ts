@@ -7,6 +7,7 @@ import { Command, Option } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
+import { writesInFlight } from "../sends/guarded.js"
 import { baseContext, environmentOf } from "./context.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -416,7 +417,7 @@ describe("a phase that runs until stopped", () => {
   const ending = (
     argv: string[],
     rest: (stop: AbortSignal | undefined, command: Command) => Promise<void>,
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; streams?: ReturnType<typeof captureStreams> } = {},
   ) => {
     let entered: (stop: AbortSignal | undefined) => void = () => {}
     const started = new Promise<AbortSignal | undefined>((resolve) => {
@@ -458,6 +459,7 @@ describe("a phase that runs until stopped", () => {
   })
 
   it("ends the command, not a phase, on Ctrl-C after the phase ended", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
     const { done, started } = ending(["chats", "list"], async (_stop, command) => {
       environmentOf(command).endUntilStopped?.()
       await new Promise(() => {})
@@ -465,9 +467,71 @@ describe("a phase that runs until stopped", () => {
     const stop = await started
 
     process.emit("SIGINT")
+    await vi.advanceTimersByTimeAsync(1_100)
+    vi.useRealTimers()
 
     expect(await done).toBe(130)
     expect(stop?.aborted).toBe(false)
+  })
+
+  it("reports a write the fresh deadline cut as an unknown outcome", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const streams = captureStreams()
+    const { done } = ending(
+      ["chats", "list", "--json"],
+      async (_stop, command) => {
+        environmentOf(command).endUntilStopped?.()
+        writesInFlight.getStore()?.add({ operationId: "op-after-phase", cut: () => {} })
+        await new Promise(() => {})
+      },
+      { streams },
+    )
+
+    await vi.advanceTimersByTimeAsync(31_100)
+    vi.useRealTimers()
+    await done
+
+    expect(JSON.parse(streams.stderr[0] ?? "").error).toMatchObject({
+      code: "outcome_unknown",
+      details: { operation_ids: ["op-after-phase"] },
+    })
+  })
+
+  it("starts no deadline when a command ends its phase after the run returned", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    let end: (() => void) | undefined
+    const { done } = ending(["chats", "list"], async (_stop, command) => {
+      end = environmentOf(command).endUntilStopped
+    })
+    await vi.advanceTimersByTimeAsync(1_100)
+    expect(await done).toBe(0)
+
+    end?.()
+
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it("gives the steps after a phase that --timeout ended a fresh full --timeout", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started } = ending(["chats", "list", "--timeout", "2m"], async (stop) => {
+      await new Promise((resolve) => stop?.addEventListener("abort", resolve, { once: true }))
+      await new Promise(() => {})
+    })
+    const stop = await started
+    await vi.advanceTimersByTimeAsync(121_000)
+    expect(stop?.reason).toMatchObject({ code: "timeout" })
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(118_000)
+    expect(ended).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(2_100)
+    vi.useRealTimers()
+
+    expect(await done).toBe(9)
   })
 
   it("bounds the steps after a phase that Ctrl-C ended", async () => {
