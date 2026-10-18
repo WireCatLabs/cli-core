@@ -15,6 +15,11 @@ export {
   WORK_TASK_TYPES,
 } from "../domain/knowledge.js"
 export type {
+  TagConsolidationOptions,
+  TagConsolidationPreview,
+  TagConsolidationStore,
+} from "../domain/tag-consolidation.js"
+export type {
   FindingEvidence,
   FindingOutcome,
   MeetingFactFinding,

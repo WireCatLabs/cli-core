@@ -25,6 +25,35 @@ accept them yet. A reader must verify the caller's authorized account before ret
 
 ## Canonical project and label vocabulary
 
+### Reviewing duplicate tags
+
+`store.knowledge.previewTagConsolidation({ sourceId, survivorId,
+expectedVocabularyFingerprint, maxRows?, maxReadBytes?, sampleLimit?, signal? })` reads two explicit
+canonical tag IDs. Obtain the required fingerprint from unfiltered `vocabulary()`; filtered catalog
+fingerprints, topics, self-selection, missing IDs, stale vocabulary and unknown fields are refused.
+Names and lexical similarity do not select a survivor. The method reads one SQLite snapshot and works
+on a query-only connection without schema changes, index maintenance or model calls.
+
+The preview counts each tag's assignments by target type and shared targets, aliases, automatic
+claims and shared chats, plus links in either direction. Bounded samples retain assignment source
+and author IDs; claim fields and link evidence/metadata are fingerprinted without being returned.
+`previewFingerprint` covers the directional selection, vocabulary fingerprint and every inspected
+row, including provenance. Changing a sample limit does not change it. It is not an authorization
+token or a fingerprint for a future apply operation.
+
+Defaults are 5,000 dependency rows, 1 MiB of dependency input and 10 samples per sampled table;
+ceilings are 20,000 rows, 16 MiB and 100 samples. A conservative SQL byte estimate rejects oversized
+rows before hydration, so a preview can refuse before the actual JSON byte limit is reached. The
+catalog has its own existing limits. Exceeding either dependency budget fails the whole preview.
+`coverage.samplesComplete` reports sample truncation; counts and the fingerprint still cover every
+selected dependency row. `coverage.completeWithinInspectedTables` covers only `taggings`, `aliases`,
+`auto_tag_claims` and `links` referencing the selected tags. It does not cover saved search text,
+proposal/action history or arbitrary serialized references; `coverage.applySupported` is always
+false. No consolidation command or write is provided by this SDK slice. Applying consolidation
+requires a separate canonical-reference/provenance contract that also accounts for those references.
+
+### Catalog, resolution and aliases
+
 `store.knowledge.vocabulary({ kind?, scope?, maxEntries?, maxReadBytes?, signal? })` lists live owner
 projects and tags/topics with stable IDs, aliases, usage counts and a preview fingerprint.
 `resolveVocabulary(name, options)` matches only explicit aliases, canonical names or project keys;
