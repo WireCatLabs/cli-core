@@ -603,7 +603,8 @@ export const searchNotesOf = async (
     ...query
   }: Omit<NotesQuery, "folderIds" | "withInternal"> & { accounts?: string; app?: AppIdentity },
 ): Promise<NotesFoundOf> => {
-  const what = `${app?.command ?? query.command ?? "tg"} search notes`
+  const own = app?.command ?? query.command
+  const what = `${own === undefined ? "" : `${own} `}search notes`
   const held = [
     { provider: "notes", account: INTERNAL_NOTES },
     ...(await store.notes.folders()).map(({ id }) => ({ provider: "notes", account: id })),

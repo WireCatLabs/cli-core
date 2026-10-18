@@ -58,14 +58,17 @@ describe("savePicture", () => {
     expect(near).toEqual([{ ref, score: 1 }])
   })
 
-  it("names the download command when the model is missing", async () => {
+  it("names the tool's download command when the model is missing, and no other tool's", async () => {
     const { store, folder, add } = await open()
     const ref = await add(folder.id, "cat.png")
-    await expect(
-      savePicture(store, { ref }, Uint8Array.of(1), {
-        env: { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) },
-      }),
-    ).rejects.toMatchObject({ code: "not_found", message: expect.stringContaining("images models download clip-b32") })
+    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) }
+    await expect(savePicture(store, { ref }, Uint8Array.of(1), { env, command: "max" })).rejects.toMatchObject({
+      code: "not_found",
+      message: expect.stringContaining("`max images models download clip-b32`"),
+    })
+    await expect(savePicture(store, { ref }, Uint8Array.of(1), { env })).rejects.toThrow(
+      "install it with a WireCat CLI that has `images models download` (tg, max or wa)",
+    )
   })
 })
 
@@ -98,7 +101,7 @@ describe("searchNotes with pictures", () => {
       pictures: true,
       env: { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) },
     })
-    expect(found.pictures_skipped).toContain("images models download clip-b32")
+    expect(found.pictures_skipped).toContain("images models download")
     expect(found.pictures).toBeUndefined()
   })
 
