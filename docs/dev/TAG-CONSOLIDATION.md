@@ -76,11 +76,16 @@ The smallest activation follow-up must specify and test a coordinated compatibil
 2. Integrate canonical resolution into all paths above; retain original dependency rows rather
    than materializing lossy duplicate assignments. Test deletion, transfers and same-target overlap.
 3. Choose a supported breaking manifest gate and upgrade affected consumers together. Prove old SDK
-   opens refuse. Define an explicit quiescent activation procedure that closes old connections;
-   opening checks alone cannot establish it. Do not claim a new per-operation gate retroactively
-   protects older binaries that never call it. Persistent background consumers are part of this gate.
-4. Test an already-open old SDK across activation. Until the compatibility boundary and connection
-   lifecycle are enforced, keep apply unavailable. A graph-only release cannot unlock it.
+   opens refuse. Protect already-open handles through verified quiescence or a deliberately breaking
+   structural SQL boundary. Renaming a table can invalidate cached old queries when SQLite reparses
+   them; a manifest-only test does not rule out this alternative. A new per-operation check cannot
+   retroactively protect older binaries that never call it.
+4. Test an already-open old SDK across activation, including cached queries and write-transaction
+   serialization. Audit surviving operations: empty automatic replacement and account purge touch
+   assignments/claims directly, so renaming only `tags` does not uniformly revoke old writes. Prove
+   that every surviving path remains safe, including cleanup, aliases and polymorphic links. Until
+   this compatibility boundary is enforced, keep apply unavailable. A graph-only release cannot
+   unlock it. Persistent background consumers are part of the boundary.
 
 ## Provenance and receipts
 
