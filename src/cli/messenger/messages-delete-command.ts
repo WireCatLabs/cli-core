@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { DELETE_AT_ONCE } from "../../services/index.js"
+import { DELETE_AT_ONCE } from "../../services/messages.js"
 import { environmentOf } from "../context.js"
 import { ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"

@@ -7,6 +7,7 @@ import { runAnalysis } from "../../analysis/runner.js"
 import { isLocal } from "../../embeddings/remote.js"
 import { renderMessages } from "../../render/messages.js"
 import { BATCH_SIZE, CONVERSATION_QUERY, type ConversationItem } from "../../services/conversations.js"
+import { storedDeps } from "../../services/deps.js"
 import {
   type ChatReadiness,
   type EmbedStatus,
@@ -15,7 +16,6 @@ import {
   REFRESH_BOUNDS,
   type Refreshed,
 } from "../../services/embeddings.js"
-import { servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
@@ -72,6 +72,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       ),
     { chunks: false },
   ).action(async function (this: Command) {
+    const { servicesFor } = await import("../../services/index.js")
     const options = this.optsWithGlobals<
       AnalysisOptions & {
         chat?: string
@@ -189,6 +190,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     )
     .argument("[message]", "a message id in that chat: show the conversation it is in")
     .action(async function (this: Command, first: string, message: string | undefined) {
+      const { servicesFor } = await import("../../services/index.js")
       const context = messengerContext(this, messenger)
       if (message === undefined && !/^\d+$/.test(first)) {
         throw new CliError("validation_error", "a conversation id is a number; for a chat, name a message too")
@@ -524,6 +526,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     .option("--chat <chat>", "revoke only this chat's consents; defaults to every chat")
     .option("--provider <identity>", "exact provider identity from consents list; defaults to every provider")
     .action(async function (this: Command) {
+      const { servicesFor } = await import("../../services/index.js")
       const { chat, provider } = this.opts<{ chat?: string; provider?: string }>()
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)

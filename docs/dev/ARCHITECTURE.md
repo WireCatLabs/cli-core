@@ -230,7 +230,9 @@ rows past the newest 1,000 are dropped. A named row is a saved search, which `--
 run. `--no-record` (`ServiceDeps.history: false`) records nothing; a bot's search calls `searchStore` and is
 not recorded.
 
-**Where the queries live.** `src/store/store.ts` holds the `MessageStore` interface and `storeOver`. The
+**Where the queries live.** `src/store/store.ts` holds the `MessageStore` interface and an `openStore` that
+imports `src/store/message-store.ts`, which holds `storeOver`, on the first open, so building a command tree does
+not load the modules only `storeOver` needs. The
 store is a set of areas, each a getter built on first use by its own file under `src/store/` —
 `accounts`, `chats`, `sync`, `messages`, `attachments`, `roster`, `people`, `conversations`, `vectors`,
 `counters`, `tags`, `mentions`, `searches`, `queries`, `searchIndex`, beside `mail`, `notes`, `tasks`,

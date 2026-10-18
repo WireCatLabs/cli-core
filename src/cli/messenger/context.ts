@@ -15,7 +15,8 @@ import {
   readKeysForCommand,
 } from "../../sends/permissions.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
-import { OFFLINE, type ServiceDeps, type ServiceMessenger, type Services, servicesFor } from "../../services/index.js"
+import { OFFLINE } from "../../services/deps.js"
+import type { ServiceDeps, ServiceMessenger, Services } from "../../services/index.js"
 import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { type BaseContext, type BaseEnvironment, baseContext, environmentOf } from "../context.js"
@@ -698,6 +699,7 @@ export const messengerContext = (
             },
           }
           try {
+            const { servicesFor } = await import("../../services/index.js")
             return await work(servicesFor(deps), async (read) => {
               try {
                 return await read(await deps.connection())

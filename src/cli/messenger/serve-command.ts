@@ -13,7 +13,6 @@ import { repliesStatePathFor } from "../../replies/state.js"
 import { levelFor } from "../../sends/permissions.js"
 import { newSendId } from "../../sends/send-id.js"
 import { onlineDeps } from "../../services/deps.js"
-import { servicesFor } from "../../services/index.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
@@ -92,15 +91,17 @@ export const serveCommand = (messenger: Messenger): Command => {
     let connection: MessengerAdapter | undefined
     const members = memberFetches({
       withStore: (work) => context.withStore(work, { name: "serve members" }),
-      fetch: (store, account, chatId) =>
-        servicesFor({
-          ...onlineDeps(messenger, connection as MessengerAdapter, context.guard, {
-            profile: context.profile,
-            env: context.env,
-          }),
-          store: async () => store,
-          account: async () => account,
-        }).chats.fetchMembers(chatId, {}),
+      fetch: async (store, account, chatId) =>
+        (await import("../../services/index.js"))
+          .servicesFor({
+            ...onlineDeps(messenger, connection as MessengerAdapter, context.guard, {
+              profile: context.profile,
+              env: context.env,
+            }),
+            store: async () => store,
+            account: async () => account,
+          })
+          .chats.fetchMembers(chatId, {}),
       warn,
     })
     const stems = stemFills({
@@ -206,15 +207,17 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
             },
             { name: "serve replies" },
           ),
-        send: (reply) =>
-          servicesFor(onlineDeps(messenger, open, context.guard, { profile, env })).messages.send({
-            chat: reply.chat,
-            text: reply.text,
-            sendId: reply.sendId,
-            key: "replies.send",
-            origin: reply.origin,
-            ...(reply.replyTo === undefined ? {} : { replyTo: reply.replyTo }),
-          }),
+        send: async (reply) =>
+          (await import("../../services/index.js"))
+            .servicesFor(onlineDeps(messenger, open, context.guard, { profile, env }))
+            .messages.send({
+              chat: reply.chat,
+              text: reply.text,
+              sendId: reply.sendId,
+              key: "replies.send",
+              origin: reply.origin,
+              ...(reply.replyTo === undefined ? {} : { replyTo: reply.replyTo }),
+            }),
         newSendId: () => open.newSendId?.() ?? newSendId(),
         render: replyRenderer(app, profile, () => messenger.resolveSettings({ profile }, { env }), env, renderer.warn, {
           ai: true,

@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Chat, Message, Provider } from "../../domain/models.js"
 import { isBotProvider } from "../../search/query.js"
 import type { AccountKey, IngestedVia, MessageStore, PersonFacts } from "../../store/index.js"
-import { openStore } from "../../store/index.js"
+import { openStore } from "../../store/store.js"
 import type { BotEvent } from "./port.js"
 
 const CHAT_ID = /^-?\d+$/

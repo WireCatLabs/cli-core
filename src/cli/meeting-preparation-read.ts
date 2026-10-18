@@ -3,13 +3,12 @@ import { isoTime } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { communicationFields } from "../context/communication-selection.js"
 import { validateMeetingChange } from "../meetings/index.js"
+import type { MeetingPreparation, MeetingPreparationRequest } from "../services/index.js"
+import { validatePreparationCommunications } from "../services/meeting-communications-selection.js"
 import {
   MEETING_PREPARATION_LIMITS,
-  type MeetingPreparation,
-  type MeetingPreparationRequest,
   validateMeetingPreparationRequest,
-} from "../services/index.js"
-import { validatePreparationCommunications } from "../services/meeting-communications-selection.js"
+} from "../services/meeting-preparation-validation.js"
 import { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 
 export type MeetingPreparationReader = (

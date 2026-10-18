@@ -1,50 +1,37 @@
 import type { ContextEvidenceReader } from "../context/evidence.js"
-import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
-import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
-import {
-  type AccountAttachments,
-  type AttachmentsStore,
-  accountAttachmentsOver,
-  attachmentsStoreOver,
-} from "./attachments.js"
-import { type ChatsStore, chatsStoreOver } from "./chats.js"
-import { type ConversationsStore, conversationsStoreOver } from "./conversations.js"
-import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
+import type { AccountStore } from "./account-store.js"
+import type { AccountsStore } from "./accounts.js"
+import type { AttachmentsStore } from "./attachments.js"
+import type { ChatsStore } from "./chats.js"
+import type { ConversationsStore } from "./conversations.js"
+import type { CountersStore } from "./counters.js"
 import type { MeetingFindingsStore } from "./meeting-findings.js"
-import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
-import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
-import { type AccountPeople, accountPeopleOver, type PeopleStore, peopleStoreOver } from "./people.js"
-import { type QueriesStore, queriesStoreOver } from "./queries.js"
-import { type RosterStore, rosterStoreOver } from "./roster.js"
-import { type SearchIndexStore, searchIndexStoreOver } from "./search-index.js"
-import { type SearchesStore, searchesStoreOver } from "./searches.js"
-import * as accounts from "./sqlite/accounts.js"
-import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
-import * as attachmentTexts from "./sqlite/attachment-texts.js"
-import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
-import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
-import { contextEvidenceOver } from "./sqlite/context-evidence.js"
-import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
-import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
-import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
-import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
-import { logPruner } from "./sqlite/log-pruning.js"
-import { meetingFindingsStoreOver } from "./sqlite/meeting-findings.js"
-import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
-import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
-import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
-import { type SourceMentionStore, sourceMentionStoreOver } from "./sqlite/mention-sources.js"
-import { noteSearchOver } from "./sqlite/note-search.js"
-import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
-import type { StoreContext } from "./sqlite/open.js"
-import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
-import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
-import * as stems from "./sqlite/stems.js"
-import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
-import { type SyncStore, syncStoreOver } from "./sync.js"
-import { type TagsStore, tagsStoreOver } from "./tags.js"
+import type { MentionsStore } from "./mentions.js"
+import type { MessagesStore } from "./messages.js"
+import type { PeopleStore } from "./people.js"
+import type { QueriesStore } from "./queries.js"
+import type { RosterStore } from "./roster.js"
+import type { SearchIndexStore } from "./search-index.js"
+import type { SearchesStore } from "./searches.js"
+import type { AgentActionsStore } from "./sqlite/agent-actions.js"
+import type { BotUpdateStore } from "./sqlite/bot-updates.js"
+import type { CatalogStore } from "./sqlite/catalog.js"
+import type { MailStore } from "./sqlite/emails.js"
+import type { FactsStore } from "./sqlite/facts.js"
+import type { InvolvementStore } from "./sqlite/involvements.js"
+import type { KnowledgeStore } from "./sqlite/knowledge.js"
+import type { MeetingVectors } from "./sqlite/meeting-vectors.js"
+import type { StoredMeetings } from "./sqlite/meetings.js"
+import type { MemoriesStore } from "./sqlite/memories.js"
+import type { SourceMentionStore } from "./sqlite/mention-sources.js"
+import type { NotesStore } from "./sqlite/notes.js"
+import type { StoreOptions } from "./sqlite/open-store.js"
+import type { ProposedActionsStore } from "./sqlite/proposed-actions.js"
+import type { StoreTaskStore } from "./sqlite/tasks.js"
+import type { SyncStore } from "./sync.js"
+import type { TagsStore } from "./tags.js"
 import type { AccountKey } from "./types.js"
-import { type AccountVectors, accountVectorsOver, type VectorsStore, vectorsStoreOver } from "./vectors.js"
+import type { VectorsStore } from "./vectors.js"
 
 export interface MessageStore {
   readonly contextEvidence?: ContextEvidenceReader
@@ -109,193 +96,8 @@ export interface MessageStore {
 
 export { BACKFILL_ON_OPEN, type StoreOptions } from "./sqlite/open-store.js"
 
-export const openStore = async (options: StoreOptions = {}): Promise<MessageStore> => {
-  const context = await openStoreContext(options)
-  try {
-    return storeOver(context)
-  } catch (error) {
-    context.database.close()
-    throw error
-  }
-}
-
-/** Built on first use, once, so a spy on an area sees every call. */
-const once = <T>(build: () => T): (() => T) => {
-  let built: T | undefined
-  return () => {
-    built ??= build()
-    return built
-  }
-}
-
-const areaOf = <K extends Keyed<K>, A extends K>(keyed: () => K, whole: (keyed: K) => A): (() => Area<K, A>) =>
-  once(() => {
-    const part = keyed()
-    return { keyed: part, whole: whole(part) }
-  })
-
-const storeOver = (context: StoreContext): MessageStore => {
-  const { database } = context
-  const stemmerFor = stems.stemmerCache()
-  const pruneLogsWhenDue = logPruner(database, context.now)
-  const own = <K extends Keyed<K>>(keyed: K): K => ({ ...keyed })
-
-  // Built on first use: an area that prepares its statements must not stop the store opening for the rest.
-  const mail = once(() => mailStoreOver(context, stemmerFor))
-  const areas = {
-    accounts: areaOf(
-      () => accountAccountsOver(context),
-      (keyed: AccountAccounts) => accountsStoreOver(context, keyed),
-    ),
-    chats: areaOf((): ChatsStore => chatsStoreOver(context), own),
-    sync: areaOf((): SyncStore => syncStoreOver(context), own),
-    messages: areaOf(
-      () => accountMessagesOver(context),
-      (keyed: AccountMessages) => messagesStoreOver(context, keyed),
-    ),
-    attachments: areaOf(
-      () => accountAttachmentsOver(context),
-      (keyed: AccountAttachments) => attachmentsStoreOver(context, keyed),
-    ),
-    roster: areaOf((): RosterStore => rosterStoreOver(context), own),
-    people: areaOf(
-      () => accountPeopleOver(context),
-      (keyed: AccountPeople) => peopleStoreOver(context, keyed),
-    ),
-    conversations: areaOf((): ConversationsStore => conversationsStoreOver(context), own),
-    vectors: areaOf(
-      () => accountVectorsOver(context, mail),
-      (keyed: AccountVectors) => vectorsStoreOver(context, keyed),
-    ),
-    counters: areaOf(
-      () => accountCountersOver(context),
-      (keyed: AccountCounters) => countersStoreOver(context, keyed),
-    ),
-    tags: areaOf((): TagsStore => tagsStoreOver(context), own),
-    mentions: areaOf(
-      () => accountMentionsOver(context),
-      (keyed: AccountMentions) => mentionsStoreOver(context, keyed),
-    ),
-  }
-  const contextEvidence = once(() => contextEvidenceOver(context))
-  const searches = once(() => searchesStoreOver(context))
-  const queries = once(() => queriesStoreOver(context, stemmerFor))
-  const searchIndex = once(() => searchIndexStoreOver(context))
-  const botUpdates = once(() => botUpdateStoreOver(context, pruneLogsWhenDue))
-  const involvements = once(() => involvementStoreOver(context))
-  const tasks = once(() => taskStoreOver(context))
-  const sourceMentions = once(() => sourceMentionStoreOver(context))
-  const knowledge = once(() => knowledgeStoreOver(context))
-  const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
-  const catalog = once(() => catalogStoreOver(context))
-  const meetingFindings = once(() => meetingFindingsStoreOver(context))
-  const facts = once(() => factsStoreOver(context))
-  const memories = once(() => memoriesStoreOver(context))
-  const proposedActions = once(() => proposedActionsStoreOver(context))
-  const agentActions = once(() => agentActionsStoreOver(context, pruneLogsWhenDue))
-  const meetings = once(() => meetingStoreOver(context))
-
-  const store: MessageStore = {
-    get contextEvidence() {
-      return contextEvidence()
-    },
-    meetingVectors: meetingVectorsOver(context),
-    get accounts() {
-      return areas.accounts().whole
-    },
-    get chats() {
-      return areas.chats().whole
-    },
-    get sync() {
-      return areas.sync().whole
-    },
-    get messages() {
-      return areas.messages().whole
-    },
-    get attachments() {
-      return areas.attachments().whole
-    },
-    get roster() {
-      return areas.roster().whole
-    },
-    get people() {
-      return areas.people().whole
-    },
-    get conversations() {
-      return areas.conversations().whole
-    },
-    get vectors() {
-      return areas.vectors().whole
-    },
-    get counters() {
-      return areas.counters().whole
-    },
-    get tags() {
-      return areas.tags().whole
-    },
-    get mentions() {
-      return areas.mentions().whole
-    },
-    get searches() {
-      return searches()
-    },
-    get queries() {
-      return queries()
-    },
-    get searchIndex() {
-      return searchIndex()
-    },
-    get botUpdates() {
-      return botUpdates()
-    },
-    get involvements() {
-      return involvements()
-    },
-    get tasks() {
-      return tasks()
-    },
-    get sourceMentions() {
-      return sourceMentions()
-    },
-    get knowledge() {
-      return knowledge()
-    },
-    get notes() {
-      return notes()
-    },
-    get catalog() {
-      return catalog()
-    },
-    get meetingFindings() {
-      return meetingFindings()
-    },
-    get facts() {
-      return facts()
-    },
-    get memories() {
-      return memories()
-    },
-    get proposedActions() {
-      return proposedActions()
-    },
-    get agentActions() {
-      return agentActions()
-    },
-    get meetings() {
-      return meetings()
-    },
-    get mail() {
-      return mail()
-    },
-
-    forAccount: (key) =>
-      bindAccount(store, key, areas, {
-        accountPk: () => accounts.findAccountPk(context, key),
-        attachmentAccount: (attachmentPk) => attachmentTexts.accountOf(context, attachmentPk),
-      }),
-    close: async () => database.close(),
-  }
-  return store
-}
+/** Loads the store's modules on the first open, not when a command that may open one is defined. */
+export const openStore = async (options: StoreOptions = {}): Promise<MessageStore> =>
+  (await import("./message-store.js")).openStore(options)
 
 export * from "./exports.js"

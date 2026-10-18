@@ -69,6 +69,15 @@ shape of this file.
   `config`…) in theirs; a tool sets its own groups (`session`, `setup`). The section is kept off the commands
   document.
 
+### Fixed
+
+- **Importing `@wirecat/cli-core/cli` loads 618 of the package's modules instead of 704**, and the store barrel
+  (`@wirecat/cli-core/store`) 184 instead of 239. `openStore` loads the store's table modules when it first opens a
+  store, and the commands load the services when they run, not when the program is built. On Node 24 the bare
+  import takes about 400 ms instead of 430–450 ms. A tg or max command starts about as fast as before (within 2–3 %):
+  tg loads 1,637 modules on `--version` and max 1,031, and most of what is left is what they need to build the
+  command tree. Names, types, help and `commands --json` are unchanged.
+
 ## 0.343.0 — 18.10.2026
 
 ### Added
