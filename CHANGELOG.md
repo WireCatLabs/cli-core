@@ -21,6 +21,11 @@ shape of this file.
   `commandHelpMarkdown(root, path)` gives the same three lines for `docs/commands.md`, and
   `exampleReport(program)` lists the commands still on a generated example.
 
+### Fixed
+
+- **`--brief` and `--full` no longer mention mail in a messenger's help.** They said "found messages and mail"; tg,
+  max and wa have no mail. Consumers' help snapshots change on bump.
+
 ## 0.344.0 — 18.10.2026
 
 ### Changed — may break callers
