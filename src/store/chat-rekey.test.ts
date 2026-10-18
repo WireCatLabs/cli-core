@@ -69,9 +69,9 @@ describe("re-keying a stored chat", () => {
       .run()
     database
       .prepare(
-        "INSERT INTO tasks (project_id, number, key, title, type, status, author_type, author_id, source, source_locator, created_at, updated_at) VALUES (1, 1, 'T-1', 'reply', 'request', 'open', 'person', 1, 'rule', ?, 0, 0)",
+        "INSERT INTO tasks (project_id, number, key, title, type, status, author_type, author_id, source, source_locator, source_group, created_at, updated_at) VALUES (1, 1, 'T-1', 'reply', 'request', 'open', 'person', 1, 'rule', ?, ?, 0, 0)",
       )
-      .run(`msg:whatsapp/1%40lid/${encodeURIComponent(PHONE)}/A1`)
+      .run(`msg:whatsapp/1%40lid/${encodeURIComponent(PHONE)}/A1`, PHONE)
     database.close()
 
     expect(await store.chats.rekeyChat(OWNER, PHONE, LID)).toEqual({ outcome: "renamed", messages: 0, duplicates: 0 })
@@ -81,8 +81,8 @@ describe("re-keying a stored chat", () => {
     expect((await store.tags.tags(OWNER)).map((tag) => [tag.tag, tag.chatId])).toEqual([["family", LID]])
     expect(await store.sync.syncState(OWNER, historyStartKey(LID))).toMatchObject({ value: "A1" })
     expect(await store.sync.syncState(OWNER, historyStartKey(PHONE))).toBeUndefined()
-    expect(await raw(path, "SELECT source_locator FROM tasks")).toEqual([
-      { source_locator: "msg:whatsapp/1%40lid/777%40lid/A1" },
+    expect(await raw(path, "SELECT source_locator, source_group FROM tasks")).toEqual([
+      { source_locator: "msg:whatsapp/1%40lid/777%40lid/A1", source_group: LID },
     ])
     expect((await store.messages.search("phone", { limit: 5, account: OWNER })).items.map((hit) => hit.chatId)).toEqual(
       [LID],
@@ -160,6 +160,39 @@ describe("re-keying a stored chat", () => {
       { text: "", gone: 1 },
     ])
     expect(await store.messages.countMessages(OWNER, LID)).toBe(0)
+    await store.close()
+  })
+
+  it("keeps a deletion of the old copy, and moves nothing of the live twin onto it", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.messages.saveMessages(OWNER, PHONE, [message("A2", PHONE, "gone at the source")], { via: "history" })
+    await store.messages.markDeleted(OWNER, ["A2"], { chatId: PHONE })
+    await store.messages.saveMessages(OWNER, LID, [message("A2", LID, "gone at the source")], { via: "history" })
+    await store.tags.addTags(OWNER, { type: "message", chatId: LID, messageId: "A2" }, ["secret"])
+    await store.messages.keepTranscript(OWNER, LID, "A2", "spoken secret", "whatsapp")
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    expect(await raw(path, "SELECT text, deleted_at IS NOT NULL AS gone FROM messages")).toEqual([
+      { text: "", gone: 1 },
+    ])
+    expect(await store.tags.tags(OWNER)).toEqual([])
+    expect(await store.messages.transcript(OWNER, LID, "A2")).toBeUndefined()
+    await store.close()
+  })
+
+  it("merges two chats that both carry the same automatic tag", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana")])
+    const match = [{ tag: "family", score: 1, fields: ["title"] }]
+    await store.chats.replaceAutoTags(OWNER, PHONE, "keywords-1", match)
+    await store.chats.replaceAutoTags(OWNER, LID, "keywords-1", match)
+    expect(await raw(path, "SELECT count(*) AS n FROM auto_tag_claims")).toEqual([{ n: 2 }])
+
+    expect((await store.chats.rekeyChat(OWNER, PHONE, LID)).outcome).toBe("merged")
+    expect(await raw(path, "SELECT count(*) AS n FROM auto_tag_claims")).toEqual([{ n: 1 }])
     await store.close()
   })
 

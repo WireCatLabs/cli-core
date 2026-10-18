@@ -22,18 +22,21 @@ const chatRow = (context: StoreContext, accountKey: number, chatId: Id) =>
  * Re-points every `<x>_type = type` pointer from one row to another. A pointer the kept row already has (a unique
  * key) is a duplicate and goes. Involvements are derived and recomputed, so they are left for the purge.
  */
-const movePointers = (
-  context: StoreContext,
-  pairs: { table: string; pointer: string }[],
-  type: "chat" | "message",
-  from: number,
-  to: number,
-): void => {
-  for (const { table, pointer } of pairs) {
-    if (table === "involvements") continue
-    const where = `WHERE ${pointer}_type = ? AND ${pointer}_id = ?`
-    context.database.prepare(`UPDATE OR IGNORE ${table} SET ${pointer}_id = ? ${where}`).run(to, type, from)
-    context.database.prepare(`DELETE FROM ${table} ${where}`).run(type, from)
+const pointerMover = (context: StoreContext, type: "chat" | "message") => {
+  const statements = pointerPairs(context.database)
+    .filter(({ table }) => table !== "involvements")
+    .map(({ table, pointer }) => {
+      const where = `WHERE ${pointer}_type = '${type}' AND ${pointer}_id = ?`
+      return [
+        context.database.prepare(`UPDATE OR IGNORE ${table} SET ${pointer}_id = ? ${where}`),
+        context.database.prepare(`DELETE FROM ${table} ${where}`),
+      ] as const
+    })
+  return (from: number, to: number): void => {
+    for (const [move, drop] of statements) {
+      move.run(to, from)
+      drop.run(from)
+    }
   }
 }
 
@@ -52,25 +55,34 @@ const renameText = (context: StoreContext, key: AccountKey, accountKey: number, 
         `UPDATE ${table} SET source_locator = ? || substr(source_locator, length(?) + 1) WHERE substr(source_locator, 1, length(?)) = ?`,
       )
       .run(renamed, old, old, old)
+  database
+    .prepare("UPDATE tasks SET source_group = ? WHERE source_group = ? AND substr(source_locator, 1, length(?)) = ?")
+    .run(to, from, renamed, renamed)
 }
 
 /** Moves what the chat stored under the new id holds into the kept one, then purges it. */
 const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRekey, "outcome"> => {
   const { database } = context
-  const pointers = pointerPairs(database)
   const pairs = database
     .prepare(
-      "SELECT g.id AS gone, k.id AS kept, g.deleted_at AS deleted FROM messages g JOIN messages k ON k.chat_id = ? AND k.external_id = g.external_id WHERE g.chat_id = ?",
+      "SELECT g.id AS gone, k.id AS kept, g.deleted_at IS NOT NULL OR k.deleted_at IS NOT NULL AS deleted FROM messages g JOIN messages k ON k.chat_id = ? AND k.external_id = g.external_id WHERE g.chat_id = ?",
     )
     .all(kept, gone)
-    .map((row) => ({ gone: Number(row.gone), kept: Number(row.kept), deleted: row.deleted !== null }))
+    .map((row) => ({ gone: Number(row.gone), kept: Number(row.kept), deleted: Boolean(row.deleted) }))
+  const moveMessagePointers = pointerMover(context, "message")
+  const threads = database.prepare("UPDATE messages SET thread_root_id = ? WHERE thread_root_id = ?")
+  const links = ["message_id", "parent_id"].map((column) =>
+    database.prepare(`UPDATE OR IGNORE message_links SET ${column} = ? WHERE ${column} = ?`),
+  )
   for (const pair of pairs) {
-    // A copy deleted at the source must not come back through its twin.
-    if (pair.deleted) tombstone(context, pair.kept)
-    database.prepare("UPDATE messages SET thread_root_id = ? WHERE thread_root_id = ?").run(pair.kept, pair.gone)
-    for (const column of ["message_id", "parent_id"])
-      database.prepare(`UPDATE OR IGNORE message_links SET ${column} = ? WHERE ${column} = ?`).run(pair.kept, pair.gone)
-    movePointers(context, pointers, "message", pair.gone, pair.kept)
+    threads.run(pair.kept, pair.gone)
+    // A copy deleted at the source must not come back through its twin: nothing of the other copy moves onto it.
+    if (pair.deleted) {
+      tombstone(context, pair.kept)
+      continue
+    }
+    for (const link of links) link.run(pair.kept, pair.gone)
+    moveMessagePointers(pair.gone, pair.kept)
   }
   const moved = database
     .prepare(
@@ -98,8 +110,13 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
       "UPDATE message_transcripts SET message_id = (SELECT id FROM messages m WHERE m.chat_id = message_transcripts.chat_id AND m.external_id = message_transcripts.message_external_id) WHERE chat_id = ?",
     )
     .run(kept)
+  database
+    .prepare(
+      "DELETE FROM message_transcripts WHERE chat_id = ? AND message_id IN (SELECT id FROM messages WHERE chat_id = ? AND deleted_at IS NOT NULL)",
+    )
+    .run(kept, kept)
   database.prepare("UPDATE chats SET parent_chat_id = ? WHERE parent_chat_id = ?").run(kept, gone)
-  movePointers(context, pointers, "chat", gone, kept)
+  pointerMover(context, "chat")(gone, kept)
   purgeChats(context, [gone])
   database
     .prepare(

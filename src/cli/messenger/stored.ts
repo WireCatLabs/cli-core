@@ -197,7 +197,12 @@ export const stored = (
             let previous: Promise<void> = Promise.resolve()
             return (
               messenger.feed?.((batch) => {
-                const saving = previous.then(() => attempt("history.feed", (opened) => fill(opened, account, batch)))
+                // Each re-key apart: one refused leaves the chat split, never the batch's history unsaved.
+                const saving = previous.then(async () => {
+                  for (const { from, to } of batch.rekeys ?? [])
+                    await attempt("history.rekey", (opened) => opened.chats.rekeyChat(account, from, to))
+                  await attempt("history.feed", (opened) => fill(opened, account, batch))
+                })
                 previous = saving
                 pending?.add(saving)
                 void saving.finally(() => pending?.delete(saving))
@@ -286,7 +291,6 @@ export const stored = (
  * transaction of its messages, after them, so a poll in the batch is held, or known deleted, before its votes.
  */
 const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatch): Promise<void> => {
-  for (const { from, to } of batch.rekeys ?? []) await store.chats.rekeyChat(account, from, to)
   if (batch.chats?.length) await store.chats.saveChats(account, batch.chats)
   if (batch.people?.length) await store.people.savePeople(account, batch.people)
   const byChat = new Map<Id, { messages: Message[]; votes: { messageId: Id; vote: PollVote }[] }>()

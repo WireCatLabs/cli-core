@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
+import type { Message } from "../../domain/models.js"
 import { contractSeed, fakeAdapter } from "../../kit/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { run } from "../program.js"
@@ -149,6 +150,26 @@ describe("a messenger that pushes its history", () => {
         .items.map((message: { text: string }) => message.text)
         .sort(),
     ).toEqual(["under the lid", "under the phone"])
+  })
+
+  it("a refused re-key leaves the chat split and still keeps the batch's messages", async () => {
+    const { env } = sandbox()
+    const stop = new AbortController()
+    const { connect } = pushing(stop, {
+      feed: async (onBatch) => {
+        onBatch({ chats: seed.chats })
+        onBatch({
+          rekeys: [{ from: seed.dialog, to: seed.busy }],
+          messages: [{ ...(seed.messages[0] as Message), id: "kept-1", chatId: seed.busy, text: "still saved" }],
+        })
+        stop.abort()
+      },
+    })
+    const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
+    expect(code).toBe(0)
+    expect(stderr).toContain('"body":"serve.warning"')
+    const messages = await call(["messages", "list", seed.busy, "--json"], env, neverConnects, undefined, "store")
+    expect(JSON.parse(messages.stdout).items.map((message: { text: string }) => message.text)).toContain("still saved")
   })
 
   it("a batch the store cannot take is a warning, and serve still ends normally", async () => {
