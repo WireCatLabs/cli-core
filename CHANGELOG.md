@@ -26,7 +26,7 @@ shape of this file.
 - **A messenger can say every pin tells the chat's members.** With `quietPins: false`, `messages pin` always pins
   out loud: the pin tells the members and counts toward the hourly limit, with or without `--notify`. Its help says
   so, the agents' `messages_pin` takes no `notify`, and its description no longer says a one-to-one pin stays on the
-  owner's side, which is true only of Telegram.
+  owner's side, which is true only of Telegram. The MCP agent log records such a pin as a write others see.
 - **A pin can end by itself.** A messenger that lists `pinDurations` (seconds) gives `messages pin` an
   `--expire-time` option, such as `--expire-time 24h` (`expire_time` for agents), that takes only those lengths; the
   adapter's `pin` gets it as `duration`, in seconds. Without the option the messenger's own default applies.

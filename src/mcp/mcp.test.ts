@@ -2887,6 +2887,7 @@ describe("sending over MCP", () => {
     const refused = [
       await call("messages pin", { chat: "7", message: "1", notify: false }),
       await call("messages pin", { chat: "7", message: "1", expire_time: "30d" }),
+      await plain.call("messages pin", { chat: "7", message: "1", expire_time: "24h" }),
     ]
     const starred = await call("messages star", { chat: "7", message: "1" })
     const unstarred = await call("messages unstar", { chat: "7", message: "1" })
@@ -2896,7 +2897,11 @@ describe("sending over MCP", () => {
     }
 
     expect([pinned.isError, starred.isError, unstarred.isError]).toEqual([false, false, false])
-    expect(refused.map((one) => one.body.error?.code)).toEqual(["validation_error", "validation_error"])
+    expect(refused.map((one) => one.body.error?.code)).toEqual([
+      "validation_error",
+      "validation_error",
+      "validation_error",
+    ])
     expect(writes).toEqual([
       ["pin", "7", "1", { notify: true, duration: 604_800 }],
       ["star", "7", "1", true],
