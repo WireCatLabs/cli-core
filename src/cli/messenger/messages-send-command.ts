@@ -59,6 +59,8 @@ export const sendCommand = (messenger: Messenger): Command => {
   if (messenger.html) send.option("--html", HTML_HELP)
   if (messenger.stickers === true)
     send.option("--sticker <id>", "send this sticker, alone; `stickers list` finds its id")
+  if (messenger.stickerFileBytes !== undefined)
+    send.option("--sticker-file <file>", "send a .webp file as a sticker, alone, with no text")
   return send
 }
 
@@ -84,6 +86,7 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
     spoiler,
     captionAbove,
     sticker,
+    stickerFile,
   } = command.opts<{
     topic?: string
     replyTo?: string
@@ -104,6 +107,7 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
     spoiler?: boolean
     captionAbove?: boolean
     sticker?: string
+    stickerFile?: string
   }>()
   const threadId = threadIdOf(topic)
   const scheduledFor = at === undefined ? undefined : sendTime(at)
@@ -112,12 +116,18 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
   const sendAs = typedSendAs(givenSendAs)
   const commentTo = typedCommentTo?.trim()
   if (commentTo === "") throw new CliError("validation_error", "--comment-to needs the post's message id")
-  const read = { app: messenger.app, env: context.env, anyFile: allowAnyFile === true }
+  const read = {
+    app: messenger.app,
+    env: context.env,
+    anyFile: allowAnyFile === true,
+    ...(messenger.stickerFileBytes === undefined ? {} : { stickerBytes: messenger.stickerFileBytes }),
+  }
   const attachments = await readAttachments(
     {
       ...(photo === undefined ? {} : { photo }),
       ...(file === undefined ? {} : { file }),
       ...(voice === undefined ? {} : { voice }),
+      ...(stickerFile === undefined ? {} : { sticker: stickerFile }),
       ...(text === undefined ? {} : { text }),
       asFile: asFile === true,
       ...(filename === undefined ? {} : { filename }),

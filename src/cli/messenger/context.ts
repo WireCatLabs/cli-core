@@ -214,6 +214,11 @@ export interface Messenger extends ServiceMessenger {
   personalBots?: boolean
   /** Whether `messages send --sticker` sends a sticker; no when unset. `stickers list` is a group a CLI adds itself. */
   stickers?: boolean
+  /**
+   * The largest .webp `messages send --sticker-file` sends as a sticker, in bytes; no `--sticker-file` when unset.
+   * For a messenger whose sticker is an uploaded file, not one of a set (WhatsApp).
+   */
+  stickerFileBytes?: number
   /** Whether shared folders can be joined; yes when unset. */
   folderJoin?: boolean
   /** Whether another invite link can be made — `chats link create`; yes when unset. */

@@ -109,7 +109,7 @@ export interface SendEntry {
   resultChatId?: Id
   length?: number
   /** What was attached, by kind and size — never a file name. */
-  attachments?: { kind: "photo" | "file" | "video" | "voice"; bytes: number }[]
+  attachments?: { kind: "photo" | "file" | "video" | "voice" | "sticker"; bytes: number }[]
   /** When the provider will send it; it counts toward the limit of that hour, not of the hour it was queued. */
   scheduledFor?: string
   /** Whether a pin told the members. */

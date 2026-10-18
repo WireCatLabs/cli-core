@@ -375,6 +375,40 @@ describe("reads only the server answers", () => {
     expect(elsewhere.stderr).toContain("unknown option '--sticker'")
   })
 
+  it("`messages send --sticker-file` uploads a .webp as a sticker, alone, behind the file guard and the size limit", async () => {
+    const sent: unknown[] = []
+    const adapter: MessengerAdapter = {
+      ...base,
+      send: async (chatId, _text, options) => {
+        sent.push(options.attachments?.map(({ kind, name }) => ({ kind, name })))
+        return { message: { ...message("61"), chatId }, sendId: options.sendId }
+      },
+    }
+    const dir = mkdtempSync(join(tmpdir(), "sticker-"))
+    mkdirSync(join(dir, ".ssh"))
+    for (const name of ["cat.webp", "cat.png", ".ssh/key.webp"]) writeFileSync(join(dir, name), "RIFF")
+    writeFileSync(join(dir, "big.webp"), "RIFF".repeat(300))
+    const own = { stickerFileBytes: 1024 }
+    const send = (...rest: string[]) => invoke(["messages", "send", "Book club", ...rest], adapter, own)
+
+    const ok = await send("--sticker-file", join(dir, "cat.webp"), "--json")
+    const png = await send("--sticker-file", join(dir, "cat.png"))
+    const withText = await send("hi", "--sticker-file", join(dir, "cat.webp"))
+    const big = await send("--sticker-file", join(dir, "big.webp"))
+    const guarded = await send("--sticker-file", join(dir, ".ssh/key.webp"))
+    const allowed = await send("--sticker-file", join(dir, ".ssh/key.webp"), "--allow-any-file")
+    const elsewhere = await invoke(["messages", "send", "Book club", "--sticker-file", join(dir, "cat.webp")], adapter)
+
+    expect(ok.code, ok.stderr).toBe(0)
+    expect(png.stderr).toContain("a sticker is a .webp")
+    expect(withText.stderr).toContain("a sticker goes alone")
+    expect(big.stderr).toContain("at most 1 KiB")
+    expect(guarded.stderr).toContain("--allow-any-file")
+    expect(allowed.code, allowed.stderr).toBe(0)
+    expect(sent).toEqual([[{ kind: "sticker", name: "cat.webp" }], [{ kind: "sticker", name: "key.webp" }]])
+    expect(elsewhere.stderr).toContain("unknown option '--sticker-file'")
+  })
+
   it("`chats delete` and `clear` ask first, go ahead with --allow-dangerous, and only where the messenger offers them", async () => {
     const done: unknown[] = []
     const adapter: MessengerAdapter = {

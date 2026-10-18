@@ -13,6 +13,7 @@
   "chats update --disappear-time",
   "chats update --only-admins-edit-info",
   "chats update --only-admins-send",
+  "messages send --sticker-file",
   "replies audience --reply",
   "replies edit --as-reply",
   "replies edit --contacts-only",

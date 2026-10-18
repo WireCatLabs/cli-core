@@ -3184,6 +3184,26 @@ describe("sending over MCP", () => {
     expect(sent).toHaveLength(1)
   })
 
+  it("sends a .webp as a sticker only where the messenger takes one, and refuses a guarded one with no way around it", async () => {
+    const { telegram, sent } = sending()
+    const { call } = await connect(telegram, { own: { stickerFileBytes: 1024 } })
+    const { call: withoutStickers } = await connect(telegram, {})
+    const root = mkdtempSync(join(tmpdir(), "mcp-sticker-"))
+    mkdirSync(join(root, ".ssh"))
+    writeFileSync(join(root, "cat.webp"), "RIFF")
+    writeFileSync(join(root, ".ssh", "key.webp"), "RIFF")
+
+    const attached = await call("messages send", { chat: "7", sticker_file: join(root, "cat.webp") })
+    const guarded = await call("messages send", { chat: "7", sticker_file: join(root, ".ssh", "key.webp") })
+    const unknown = await withoutStickers("messages send", { chat: "7", sticker_file: join(root, "cat.webp") })
+
+    expect(attached.isError, JSON.stringify(attached.body)).toBe(false)
+    expect(sent[0]?.attachments).toMatchObject([{ kind: "sticker", name: "cat.webp" }])
+    expect(guarded.isError).toBe(true)
+    expect(unknown.isError).toBe(true)
+    expect(sent).toHaveLength(1)
+  })
+
   it("refuses on a read-only profile, and sends nothing", async () => {
     const { telegram, sent } = sending()
     const { call } = await connect(telegram, { config: READ_ONLY })

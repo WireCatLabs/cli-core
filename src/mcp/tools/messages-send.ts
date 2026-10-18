@@ -32,6 +32,9 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
     voice: v.optional(
       v.pipe(v.string(), v.minLength(1), v.description("an Ogg Opus file to send as a voice message, alone")),
     ),
+    sticker_file: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.description("a .webp file to send as a sticker, alone, with no text")),
+    ),
     reply_to: v.optional(v.pipe(message, v.description("the message this answers, in the same chat"))),
     comment_to: v.optional(
       v.pipe(message, v.description("a post of this channel to comment on; the comment goes to its discussion")),
@@ -65,12 +68,14 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
   if (messenger.sendAs === false) delete (sendInput as Partial<typeof sendInput>).send_as
   if (messenger.silentSends === false) delete (sendInput as Partial<typeof sendInput>).silent
   if (messenger.scheduledSends === false) delete (sendInput as Partial<typeof sendInput>).at_time
+  if (messenger.stickerFileBytes === undefined) delete (sendInput as Partial<typeof sendInput>).sticker_file
   return {
     messages_send: tool({
       title: "Send a message",
       description:
         "Send one message as the owner — text, or a file or photo from the owner's machine with the text as its " +
-        "caption. Only when the owner asked for this exact message to this exact chat. Known credential files " +
+        `caption${messenger.stickerFileBytes === undefined ? "" : ", or a .webp sticker alone"}. ` +
+        "Only when the owner asked for this exact message to this exact chat. Known credential files " +
         "(~/.ssh, ~/.netrc, cloud and git tokens, keyrings, browser profiles), the WireCat apps' own folders and " +
         "the message store are refused, with no way around it here; other files, hidden ones included, are sent. " +
         "A name that matches several chats is refused with the candidates — pick an id, never guess. " +
@@ -85,7 +90,11 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
       online: async (adapter, args, { guard, env }) => {
         const at = args.at_time === undefined ? undefined : sendTime(args.at_time)
         // Never anyFile here: a path an agent was talked into is how a key would leave the machine.
-        const read = { app: messenger.app, env }
+        const read = {
+          app: messenger.app,
+          env,
+          ...(messenger.stickerFileBytes === undefined ? {} : { stickerBytes: messenger.stickerFileBytes }),
+        }
         if (args.filename !== undefined && !messenger.mediaOptions?.includes("fileName"))
           throw new CliError("validation_error", "this messenger has no --filename")
         const attachments = await readAttachments(
@@ -93,6 +102,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
             ...(args.photo === undefined ? {} : { photo: args.photo }),
             ...(args.file === undefined ? {} : { file: args.file }),
             ...(args.voice === undefined ? {} : { voice: args.voice }),
+            ...(args.sticker_file === undefined ? {} : { sticker: args.sticker_file }),
             ...(args.text === undefined ? {} : { text: args.text }),
             asFile: args.as_file === true,
             ...(args.filename === undefined ? {} : { filename: args.filename }),

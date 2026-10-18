@@ -993,6 +993,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--start` | `<param>` | the start parameter the bot or app reads; for chats start, a link's own ?start= when not given |  | `chats app` (planned), `chats start` (planned) |
 | `--status` | `<status>` | filter diagnostic runs by outcome |  | `runs search` |
 | `--sticker` | `<id>` | send this sticker, alone; stickers list finds its id |  | `messages send` (planned) |
+| `--sticker-file` | `<file>` | send a .webp file as a sticker, alone, with no text |  | `messages send` (planned) |
 | `--store-token` | `<profile>` | keep a returned authentication token only in this bot profile's OS keyring; never print it |  | `bot api` (max, tg only) |
 | `--sync-first` |  | first fetch new messages within the chat, time and message bounds |  | `bot contacts show` (max, tg only), `contacts context` (max, tg only), `search conversations` (max, tg only), `search messages` (max, tg only), `stats contacts top` (max, tg only), `stats messages show` (max, tg only), `stats messages top` (max, tg only), `tags auto` |
 | `--sync-time` | `<duration>` | stop fetching after this long (default: 30s) |  | `search conversations` (max, tg only), `search messages` (max, tg only), `stats contacts top` (max, tg only), `stats messages counters refresh`, `stats messages show` (max, tg only), `stats messages top` (max, tg only) |
