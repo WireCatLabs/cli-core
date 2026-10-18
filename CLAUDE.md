@@ -23,8 +23,8 @@ vulnerabilities are reported as the [security policy](SECURITY.md) says.
 4. **A change reaches tg-cli and max-cli only through a release.** Both pin an exact version.
 5. **Release when a consumer needs the merged code; there is no fixed gap between releases** —
    [README, "How often, and what may break"](docs/REFERENCE.md#how-often-and-what-may-break).
-   `bin/release` publishes the next free version through GitHub; stable-export breaks still
-   follow the README policy.
+   `bin/release` publishes the next free version through GitHub; a change that may break a
+   caller goes under "Changed — may break callers" in the changelog.
 
 ## Comments
 

@@ -10,8 +10,7 @@ Open work only. A finished item is deleted; its record is the merged pull reques
 
 - **One message search without a language switch** — Lucene syntax with legacy's forgiving matching,
   matchers run in parallel, merged and ranked against the query, each hit labelled with how it matched
-  (the legacy search and `--language` are already gone). Ranking test set and an owner-approved plan come first:
-  [combined-search-handoff.md](combined-search-handoff.md). Approved plan for the narrow first step (B):
+  (the legacy search and `--language` are already gone). Ranking test set and an owner-approved plan come first. Approved plan for the narrow first step (B):
   [typo-search-default-plan.md](typo-search-default-plan.md).
 - **One Markdown parser in the messengers** — `parseMarkdownSpans` (`.`) is the shared parser; tg-cli and
   whatsapp-cli switch to it and keep only their renderers. max-cli's dialect differs (`*` italic, `__` bold, `++`

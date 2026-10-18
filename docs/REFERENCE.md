@@ -500,19 +500,20 @@ unless the caller explicitly sets `registries: true`.
 **Release when a consumer needs it.** Changes wait under `## Unreleased` until then; there is no
 gap to keep between releases — tg-cli and max-cli pace their own.
 
-**These exports are stable.** A change that breaks them waits for a **breaking release**, at most one
-a week, whose changelog section says what to change in a consumer; tg-cli and max-cli move to it
-the same day.
+**Before 1.0, any release may break a caller.** A change that does is listed in the changelog under
+"Changed — may break callers", with what to change in a consumer.
+
+The exports below are the ones consumers lean on most. A change to them is made with the most care and
+always says what to change, but it is not held back for a special release.
 
 | Export | Stable |
 |---|---|
 | `.` | the domain types (`Chat`, `Message`, `Contact`, `Page`, …), the message locator |
 | `./cli` | `Messenger`, `MessengerAdapter` and its method groups (`MessengerCore` required; `ServerReads` and the rest optional), `createProgram`, `run`, `messengerContext`, the command factories' names and arguments |
-| `./store` | `openStore`, `MessageStore`, `storePath`, and the file format: `minCompatible` rises only in a breaking release |
+| `./store` | `openStore`, `MessageStore`, `storePath`, and the file format: `minCompatible` rises only in a release that lists it under "Changed — may break callers" |
 | `./sends` | `sendGuard`, `SendJournal`, the journal's line format |
 | `./speech` | The pinned speech-model catalogue, shared directories, verified installer and installed-only bounded PCM recognizer. Importing it does not load a recognizer or download a model |
 | `./services` | `servicesFor`, `Override` and the service names |
 | `./background` | `lockPath`, `readLock`, `holdLock`, `releaseLock`, `servingProfiles`, `alive`, `carries`, `holdersOf`, `ServerSystem`, `thisMachine`, `platformFor` and the systemd and launchd units · the serve relay: `listenRelay(path, run)`, `relayCommand(path, request, options)`, `relayPath(lockPath)`, `RELAY_PROTOCOL` |
 
-`./testing` and `./parity` are not on this list. Everything else may change in any release, and still goes under "Changed — may break callers" when
-it does. tg-cli and max-cli take new versions through Dependabot pull requests.
+`./testing` and `./parity` are not on this list. tg-cli and max-cli take new versions through Dependabot pull requests.

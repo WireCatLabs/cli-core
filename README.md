@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-core/main/docs/images/cli-core-banner.png" alt="Built on cli-base: the foundation for agent-ready CLIs" width="100%">
+  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-core/main/docs/images/cli-core-banner.png" alt="cli-core: the foundation for agent-ready CLIs" width="100%">
 </p>
 
 # @wirecat/cli-core
@@ -45,14 +45,14 @@ for a program, guard every send, expose it all to an agent. This package is the 
 
 [tg-cli](https://github.com/WireCatLabs/tg-cli) and [max-cli](https://github.com/WireCatLabs/max-cli) are built on it,
 and so are the mail and notes tool [cli-memo](https://github.com/WireCatLabs/cli-memo),
-[zoom-cli](https://github.com/WireCatLabs/zoom-cli) and [drive-cli](https://github.com/WireCatLabs/drive-cli). Until
-they move to the new name, they import it as `@wirecat/cli-messaging`: that was this package's name up to 0.261.0.
+[zoom-cli](https://github.com/WireCatLabs/zoom-cli) and [drive-cli](https://github.com/WireCatLabs/drive-cli). They
+import it as `@wirecat/cli-core`. Up to 0.261.0 the package was named `@wirecat/cli-messaging`, which is deprecated.
 
 It is built on [`@wirecat/cli-base`](https://github.com/WireCatLabs/cli-base), the layer every CLI needs: two output
 streams, closed error codes, the keyring, injectable clocks, the query parser. cli-base is a peer dependency, so an
 install holds one copy.
 
-In numbers, on `main`: 608 source files and 344 test files, 23 entry points, 27 search fields, 13 search presets.
+It has 26 entry points (the `exports` of `package.json`), 27 search fields and 13 search presets.
 It runs on Node 22.16+ and 24+, and on Bun.
 
 ## Architecture
@@ -206,9 +206,11 @@ they deliberately differ. A rule changes in its own pull request, before the cod
   sleep. A coverage floor: 92% of lines, and at least half of every file.
 - **Contract cases for every adapter.** `contractCases` turns the port's promises into cases any test runner can run,
   over an in-memory fake or a real client.
-- **Checked across tools and runtimes.** CI runs on Node 24 and on Bun; a parity workflow
-  builds tg-cli and max-cli against this repository; macOS and Windows run on a schedule; gitleaks scans the full
-  history.
+- **Checked across tools and runtimes.** CI runs on Linux: the test suite on Node 24, smoke checks on Bun and on
+  Node 22.16, a parity workflow that builds the Telegram, MAX and WhatsApp CLIs against this repository, and
+  gitleaks over the full history. macOS and Windows run only three workflows: the SQLite library build (macOS) and
+  the ONNX runtime probe (macOS and Windows) run monthly and when started by hand; the scheduler test (macOS and
+  Windows) runs only when started by hand. The rest of the suite does not run on macOS or Windows.
 - **One shared toolchain.** Biome, markdownlint, CSpell and Lefthook configs come from the
   [WireCat standards](https://github.com/WireCatLabs/community/blob/main/standards/README.md), and CI fails when a
   copy drifts.
@@ -232,10 +234,10 @@ describe("the adapter keeps the port's promises", () => {
 })
 ```
 
-**Seven entry points are stable:** `.`, `./cli`, `./store`, `./sends`, `./speech`, `./services` and `./background`.
-A change that breaks them waits for a breaking release — at most one a week — whose changelog says what to change.
-Everything else may change in any release and is still listed under "Changed — may break callers". The full list of
-entry points and what each holds is in the [API reference](docs/REFERENCE.md).
+**Before 1.0, any release may break a caller.** Releases are frequent, sometimes several a day, and any of them
+may change any entry point. Every such change is listed in the [changelog](CHANGELOG.md) under "Changed — may break
+callers", with what to change. tg-cli and max-cli pin an exact version and move to a new one in their own pull request.
+The full list of entry points and what each holds is in the [API reference](docs/REFERENCE.md).
 
 ⚠ **Errors are recognised by shape, not by class** (`isCliFailure`). A package linked during development brings its
 own copy of cli-base, and an error built by one copy is not an `instanceof` the other's class.

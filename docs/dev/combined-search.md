@@ -1,7 +1,7 @@
 # One message search: measured design
 
 The implemented integration is an additive `--discover` / MCP `discover=true` / SDK
-`SearchQuery.discover` archive option, described in [the handoff](combined-search-handoff.md).
+`SearchQuery.discover` archive option.
 The single-default replacement proposed below remains unqualified by its approved gates.
 Strict CLI/MCP behavior and no-language SDK compatibility are preserved. The explicit option
 returns partial lexical evidence with visible missing terms and bounded context; it does not
