@@ -10,6 +10,13 @@ shape of this file.
 ### Added
 
 - `createMeetingProjectCandidateReader` suggests existing projects from explicit bounded meeting title/cue evidence and one bounded global project vocabulary read. Canonical names, keys and aliases match literal Unicode word boundaries; title hints remain separate from transcript citations, ambiguity and unknown archive coverage remain visible, and no membership or finding is saved. The SDK captures one provider/account; it adds no automatic preparation behavior or provider transport.
+- **A command can end its wait-until-stopped phase itself and go on with a deadline.** `endUntilStopped()` in a
+  run's environment ends the phase `untilStopped()` began, for example when the link finished or the phone said its
+  history was sent. However the phase ends — by that call, Ctrl-C, a cancel or `--timeout` — the steps after it get
+  the command's one-shot deadline again, started afresh, and Ctrl-C ends the command as any command (130, 143).
+  Before, nothing bounded those steps.
+- **The test-matrix argument log records `--version`.** It ends before any command is parsed, so each CLI had to
+  log it on its own.
 
 ### Fixed
 

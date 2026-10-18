@@ -20,7 +20,7 @@ import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
-import { logParsedArgv } from "./argv-log.js"
+import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { changesAuthority, isLogin, isStoreChange, judgedEffects, judgedTargets } from "./effects.js"
@@ -155,11 +155,19 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   // Ctrl-C or `kill` is how a command that listens until stopped ends: still aborted, but exit 0.
   let listens = false
   // After untilStopped(), a signal or a cancel ends only that phase; the command finishes and says how it went.
-  const phase = new AbortController()
+  let phase = new AbortController()
   let phased = false
   let phaseTimer: NodeJS.Timeout | undefined
   // The deadline a person or a script set, which a phase keeps; the default one it ends.
   let explicitEnd: number | undefined
+  let oneShot: number | undefined
+  // The steps after a phase are one-shot again, however it ended: bounded, and ended by a signal as any command is.
+  const endPhase = () => {
+    if (!phased) return
+    phased = false
+    if (phaseTimer) clearTimeout(phaseTimer)
+    control.start(oneShot)
+  }
   const interrupted = (signal: "SIGINT" | "SIGTERM") => {
     // A second signal ends the command as any signal does: one that ignores its phase can still be stopped.
     if (phased && !phase.signal.aborted)
@@ -203,6 +211,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     untilStopped: () => {
       if (phased) return phase.signal
       phased = true
+      phase = new AbortController()
+      phase.signal.addEventListener("abort", endPhase, { once: true })
       control.start(undefined)
       if (explicitEnd !== undefined)
         phaseTimer = setTimeout(
@@ -217,6 +227,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
         )
       return phase.signal
     },
+    endUntilStopped: endPhase,
   }
   provide(program, environment)
   program.hook("preAction", async (_root, action) => {
@@ -334,6 +345,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       throw new Relayed(code)
     }
     control.start(deadline)
+    oneShot = deadline
     if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
     if (options.relayed) absolutePaths(action, options.relayed.cwd)
     const cooperative = persistent || stopsAtItsPace === true
@@ -416,6 +428,9 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     if (error instanceof PreviewComplete) return 0
     if (signalExit === 0) return 0
     if (isCommanderFailure(error)) {
+      const argvLog = (options.env ?? process.env)[envName(definition.app, "TEST_ARGV_LOG")]
+      // --version ends before any action, so the preAction hook never logs it.
+      if (argvLog && error.code === "commander.version") logVersion(argvLog)
       if (error.exitCode === 0) return 0
       let message = error.message.replace(/^error: /, "")
       if (error.code === "commander.help") {
