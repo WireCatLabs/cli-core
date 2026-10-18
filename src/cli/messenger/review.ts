@@ -103,7 +103,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
         })
         return {
           found,
-          marked: marking ? await markShown(services, found.chats) : undefined,
+          marked: marking ? await markShown(services, found.chats, context.renderer.warn) : undefined,
           reader: await services.messages.reader(),
         }
       })

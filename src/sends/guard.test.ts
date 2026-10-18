@@ -354,10 +354,9 @@ describe("topic creation identities", () => {
 })
 
 describe("a profile whose writes are held", () => {
-  it("**refuses a message before it goes, journals the refusal, and still lets a reaction through**", async () => {
-    const profile = "held"
+  const heldGuard = (profile: string, block: Parameters<FloodMemory["block"]>[0]) => {
     const flood = new FloodMemory(join(env.APP_STATE_DIR, "flood", `${profile}.json`))
-    flood.block({ state: "limited", hint: "Telegram limited this account's messages as spam" })
+    flood.block(block)
     const journal = new SendJournal(sendsPathFor(profile))
     const guard = sendGuard({
       profile,
@@ -367,6 +366,15 @@ describe("a profile whose writes are held", () => {
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
       flood,
       warn: () => {},
+    })
+    return { guard, journal }
+  }
+
+  it("**refuses a message before it goes, and journals the refusal**", async () => {
+    const profile = "held"
+    const { guard, journal } = heldGuard(profile, {
+      state: "limited",
+      hint: "Telegram limited this account's messages as spam",
     })
     const act = vi.fn(async () => ({}))
 
@@ -380,8 +388,48 @@ describe("a profile whose writes are held", () => {
     )
     expect(act).not.toHaveBeenCalled()
     expect(journal.entries().map((entry) => entry.outcome)).toEqual(["refused"])
+  })
 
-    expect(() => guard.check({ chatId: "1", kind: "reaction" })).not.toThrow()
+  it.each([
+    ["a reaction", { kind: "reaction" as const }],
+    ["a read receipt", { kind: "read" as const }],
+    ["a quiet pin", { kind: "pin" as const, notify: false }],
+    ["a title change", { kind: "chat" as const, action: "update" as const }],
+    ["a profile change", { kind: "account" as const, action: "profile" as const }],
+  ])("**holds %s too**, which the hourly limit does not count", (_, request) => {
+    const { guard } = heldGuard("held-uncounted", { state: "frozen", hint: "frozen" })
+
+    expect(() => guard.check({ chatId: "1", ...request })).toThrow(
+      expect.objectContaining({ code: "permission_error" }),
+    )
+  })
+
+  it("**a ban with no end holds until lifted**, and says so instead of a date", () => {
+    const { guard } = heldGuard("banned", { state: "banned", hint: "WhatsApp banned this account" })
+
+    expect(() => guard.check({ chatId: "1", kind: "reaction" })).toThrow(
+      /^profile banned holds its writes until lifted: WhatsApp banned this account/,
+    )
+  })
+
+  it("refuses before it asks the owner about a write it would refuse anyway", async () => {
+    const profile = "held-ask"
+    const flood = new FloodMemory(join(env.APP_STATE_DIR, "flood", `${profile}.json`))
+    flood.block({ state: "banned", hint: "banned" })
+    const ask = vi.fn(async () => {})
+    const guard = sendGuard({
+      profile,
+      permissions: { reactions: "ask" },
+      ask,
+      sendsPerHour: 30,
+      journal: new SendJournal(sendsPathFor(profile)),
+      recipients: new RecipientList(recipientsPathFor(profile), app.command),
+      flood,
+      warn: () => {},
+    })
+
+    await expect(guard.ask?.({ chatId: "1", kind: "reaction" })).rejects.toMatchObject({ code: "permission_error" })
+    expect(ask).not.toHaveBeenCalled()
   })
 })
 

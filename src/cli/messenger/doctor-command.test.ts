@@ -286,6 +286,10 @@ describe("doctor --online", () => {
       clock: { ok: true },
     })
     expect(answer.login).toEqual({ state: "failed" })
+    expect(answer.flood.send_block).toMatchObject({ state: "banned", until: null })
+
+    const active = async () => withHealth(async () => ({ standingChecked: true, serverTime: Date.now() }))
+    expect((await call(["doctor", "--online", "--json"], env, active)).answer.flood.send_block).toBeNull()
   })
 
   it("keeps answering when the health request itself fails", async () => {

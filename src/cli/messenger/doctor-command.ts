@@ -207,18 +207,21 @@ export const floodState = (memory: FloodMemory) => {
 }
 
 /**
- * A frozen account seen here holds writes as a refused one would; one seen active lifts a frozen
- * hold. A spam limit is never lifted here: the messenger does not say when one ends.
+ * A frozen or banned account seen here holds writes as a refused one would; one seen active lifts
+ * either hold. A spam limit is never lifted here: the messenger does not say when one ends.
  */
 const followStanding = (memory: FloodMemory, standing: { state: string; until?: string; hint?: string }) => {
   try {
-    if (standing.state === "frozen") {
+    if (standing.state === "frozen" || standing.state === "banned") {
       memory.block({
-        state: "frozen",
-        hint: standing.hint ?? "the account is frozen",
+        state: standing.state,
+        hint: standing.hint ?? `the account is ${standing.state}`,
         ...(standing.until ? { until: standing.until } : {}),
       })
-    } else if (standing.state === "active") memory.unblock("frozen")
+    } else if (standing.state === "active") {
+      memory.unblock("frozen")
+      memory.unblock("banned")
+    }
   } catch {}
   return memory
 }

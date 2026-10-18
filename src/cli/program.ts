@@ -268,6 +268,14 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     const lock = readOnlyLockOf(definition.app, commandEnv)
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, "change the message store")
+    // A client older than the relay's refusal to forward a login still sends one; on serve it would log out serve.
+    if (options.relayed && isLogin(action))
+      throw new CliError(
+        "permission_error",
+        `\`${command} ${path.join(" ")}\` logs the account in or out, which serve never runs for a client — stop ` +
+          `serve first (\`${command} ${options.relayed.profile} server stop\`), or update ${command}, which then runs it here`,
+        { sent: false },
+      )
     if (lock && changesAuthority(action) && !flags.dryRun)
       throw new CliError(
         "permission_error",

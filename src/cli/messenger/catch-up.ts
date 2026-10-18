@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Id, Message } from "../../domain/models.js"
 import type { MarkedRead } from "../../services/chats.js"
 import type { Services } from "../../services/index.js"
@@ -26,6 +26,7 @@ export const marksRead = (typed: boolean | undefined, settings: Settings): boole
 export const markShown = async (
   services: Services,
   chats: { id: Id; messages: Pick<Message, "id" | "timestamp">[] }[],
+  warn: (message: string) => void,
 ): Promise<MarkedRead[]> => {
   const marked: MarkedRead[] = []
   for (const { id, messages } of chats) {
@@ -34,8 +35,15 @@ export const markShown = async (
       undefined,
     )
     if (newest === undefined) continue
-    const { chatId, until } = await services.chats.markRead({ chat: id, until: newest.id })
-    marked.push({ chatId, until })
+    try {
+      const { chatId, until } = await services.chats.markRead({ chat: id, until: newest.id })
+      marked.push({ chatId, until })
+    } catch (error) {
+      // A hold refuses every chat alike; what was read is still the answer, as reads go on during one.
+      if (!isCliError(error) || error.details.sendBlock === undefined) throw error
+      warn(`${error.message}; nothing more was marked read`)
+      break
+    }
   }
   return marked
 }

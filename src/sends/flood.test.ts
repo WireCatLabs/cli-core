@@ -58,10 +58,28 @@ describe("flood memory", () => {
   it("**holds a spam limit an hour and a frozen account a day** when the messenger gave no end", () => {
     const memory = memoryAt("2026-10-04T10:00:00Z")
     const frozen = memory.block({ state: "frozen", hint: "frozen" })
-    expect(Date.parse(frozen.until) - Date.parse(frozen.since)).toBe(FROZEN_HOLD_MS)
+    expect(Date.parse(frozen.until ?? "") - Date.parse(frozen.since)).toBe(FROZEN_HOLD_MS)
     const block = memory.block({ state: "limited", hint: "spam" })
-    expect(Date.parse(block.until) - Date.parse(block.since)).toBe(LIMITED_HOLD_MS)
+    expect(Date.parse(block.until ?? "") - Date.parse(block.since)).toBe(LIMITED_HOLD_MS)
     expect(LIMITED_HOLD_MS).toBe(60 * 60 * 1000)
+  })
+
+  it("**holds a ban with no end until it is lifted**, however long that takes", () => {
+    const memory = memoryAt("2026-10-04T10:00:00Z")
+    expect(memory.block({ state: "banned", hint: "banned" })).toMatchObject({ state: "banned", until: null })
+
+    const yearsLater = memoryAt("2030-01-01T00:00:00Z", memory.path)
+    expect(yearsLater.sendBlock()).toMatchObject({ state: "banned", until: null })
+    yearsLater.unblock("banned")
+    expect(yearsLater.sendBlock()).toBeUndefined()
+  })
+
+  it("a ban the messenger gave an end for ends then", () => {
+    const memory = memoryAt("2026-10-04T10:00:00Z")
+    memory.block({ state: "banned", hint: "banned", until: "2026-10-05T10:00:00Z" })
+
+    expect(memoryAt("2026-10-05T09:59:00Z", memory.path).sendBlock()).toBeDefined()
+    expect(memoryAt("2026-10-05T10:00:00Z", memory.path).sendBlock()).toBeUndefined()
   })
 
   it("a new refusal sets the hour again", () => {

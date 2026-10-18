@@ -10,7 +10,7 @@ import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { locationVariables, platformFor, readableLog, tail, type Unit } from "../../background/units.js"
 import { parseDuration } from "../../domain/duration.js"
 import type { AppIdentity } from "../../ports/app.js"
-import { FloodMemory, floodPathFor } from "../../sends/flood.js"
+import { FloodMemory, floodPathFor, holdEnd } from "../../sends/flood.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -340,9 +340,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
               ]
             : []),
           unitLine,
-          ...(flood.sendBlock
-            ? [`Writes are held until ${clock(flood.sendBlock.until)}: ${flood.sendBlock.hint}.`]
-            : []),
+          ...(flood.sendBlock ? [`Writes are held ${holdEnd(flood.sendBlock, clock)}: ${flood.sendBlock.hint}.`] : []),
           ...flood.deadlines.map(
             (one) =>
               `Asked to wait before ${one.operation}${one.chatId ? ` in chat ${one.chatId}` : ""} until ${clock(one.until)}.`,

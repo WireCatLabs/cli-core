@@ -5,6 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../../domain/models.js"
 import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
+import { FloodMemory } from "../../sends/flood.js"
 import { INBOX_CHATS, kindsOf, newIn, reviewIn, unreadIn } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
 import { run } from "../program.js"
@@ -353,6 +354,7 @@ describe("inbox --new", () => {
     return {
       inbox,
       review,
+      env,
       marks: scripted.marks,
       configure: (profile: unknown) => {
         mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
@@ -514,5 +516,18 @@ describe("inbox --new", () => {
       ["g", "g-1"],
     ])
     expect((await inbox(["date>1d", "--mark-read", "--offline"])).code).toBe(2)
+  })
+
+  it("**still shows the inbox while writes are held**, and marks nothing read", async () => {
+    const chats = [recentChat("d", 1, "dialog")]
+    const { inbox, marks, env } = setup({ d: [recentMessage("d", 1)] }, chats)
+    new FloodMemory(join(env.CHAT_STATE_DIR, "flood", "default.json")).block({ state: "banned", hint: "banned" })
+
+    const shown = await inbox(["date>1d", "--mark-read"])
+
+    expect(shown.code).toBe(0)
+    expect(chatIds(shown.answer)).toEqual(["d"])
+    expect(marks).toEqual([])
+    expect(shown.stderr).toContain("holds its writes until lifted")
   })
 })
