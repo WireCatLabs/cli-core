@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import { commandsCommand } from "../commands-command.js"
 import { NO_EFFECTS } from "../effects.js"
 import { type ProgramDefinition, run } from "../program.js"
-import { installHelp } from "./first-screen.js"
+import { firstScreen, installHelp } from "./first-screen.js"
 
 const app = { command: "tg", appName: "tg-cli", envPrefix: "TG", description: "Telegram for scripts", version: "1.0.0" }
 
@@ -149,5 +149,13 @@ describe("the first screen", () => {
     expect(out.join("")).toContain("Usage: memo <command> [options]")
     expect(out.join("")).not.toContain("profile")
     expect(out.join("")).not.toContain("  memo context <person>")
+    expect(out.join("")).toMatch(/memo help options\s+the options every command takes/)
+  })
+
+  it("names only the option topics the program has", () => {
+    const program = new Command("memo").option("--json [fields]").option("--timeout <seconds>")
+    program.addCommand(leaf("context", "one person"))
+
+    expect(firstScreen(program, { profile: false })).toMatch(/memo help options\s+output, timeouts\n/)
   })
 })

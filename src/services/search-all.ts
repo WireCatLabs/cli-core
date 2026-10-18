@@ -85,6 +85,14 @@ export interface SearchAllRequest {
 const skippable = (error: unknown): error is CliError =>
   error instanceof CliError && (error.code === "validation_error" || error.code === "not_found")
 
+export type SearchAllMessenger = Partial<Pick<MessengerTraits, "savedChatId" | "app">> & {
+  /**
+   * The tool named in a model-download hint, when it is not `app.command`: memo passes tg's identity for `group:`
+   * lists but has no `models` command. `null` names the tools that have one.
+   */
+  hintCommand?: string | null
+}
+
 /**
  * `search all`: messages, mail and notes from the local store — messages also from the messenger's
  * server, as `search messages` asks it — each list best first, merged by reciprocal rank so no
@@ -94,7 +102,7 @@ export const searchAll = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchAllRequest,
-  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">> = {},
+  messenger: SearchAllMessenger = {},
   searchMessages: (query: SearchQuery) => Promise<SearchFound> = (query) =>
     searchStore(store, account, query, messenger),
 ): Promise<SearchAllFound> => {
@@ -105,7 +113,7 @@ export const searchAll = async (
   // Each resource is read deep enough for the merged page, then the merge is cut.
   const window = offset + request.limit
   const only = request.only ?? RESOURCES_SEARCHED
-  const command = messenger.app?.command
+  const command = messenger.hintCommand === undefined ? messenger.app?.command : (messenger.hintCommand ?? undefined)
   const lists: SearchAllItem[][] = []
   const searched: SearchedResource[] = []
   const accounts: SearchedAccount[] = []

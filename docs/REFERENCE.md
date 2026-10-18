@@ -173,6 +173,10 @@ store operations to one account. The host supplies bounded file/stdin input, can
 close-before-output rendering; Base supplies correlation, budgets and serial execution. See
 [bounded read batches](dev/STANDARD.md#bounded-read-batches) for caps and partial-result semantics.
 
+`searchAll` and the two below take the messenger as `{ app, savedChatId?, hintCommand? }`: `hintCommand` is the tool a
+missing-model hint names when it is not `app.command`, and `null` names the tools with a `models` command — for a tool
+like memo that borrows tg's identity for `group:` lists.
+
 `searchAllIncludingMeetings` from `./services` adds one selected meeting account to the existing
 message, mail and notes search. It leaves `searchAll` and its item references unchanged. The CLI
 reaches it with `search all <query> --source zoom:<account>` (or `zoom`, `meetings`, `all`) and MCP with

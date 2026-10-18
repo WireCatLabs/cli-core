@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **`searchAll(…, { app, hintCommand })`**: the tool a missing-model hint names, apart from `app.command`. memo passes
+  tg's identity for `group:` lists but has no `models` command; `hintCommand: null` names the tools that have one
+  (tg, max or wa) instead of `tg models text download`. `searchAllIncludingMeetings` and `searchAllWithMeetings`
+  take it too (`SearchAllMessenger`).
 - **`commandsText(program, describeProgram(program), scope?)` from `./cli`**: the `<tool> commands` text list by
   section, for a tool that builds its own commander program and keeps its own `commands` command (zm, drive, memo).
   cli-core's groups land in their section on such a program too; before, only `createProgram` put them there.
@@ -25,6 +29,9 @@ shape of this file.
 
 ### Fixed
 
+- **The first screen names only the option topics the tool has.** `help options` was described as "output, offline,
+  timeouts, dry run" on every program; a tool with its own program and none of `--json`, `--offline`, `--timeout`,
+  `--dry-run` (memo, zm, drive) now reads "the options every command takes", and one with some names those.
 - **A guide step may ask for help.** `checkGuide` refused `chat messages list --help` and `-h` ("no option --help")
   and `chat messages --help` ("needs one of: …"); a step with the help flag now only needs its command path to exist.
 

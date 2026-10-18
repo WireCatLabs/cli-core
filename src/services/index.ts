@@ -349,6 +349,7 @@ export {
   RESOURCES_SEARCHED,
   type SearchAllFound,
   type SearchAllItem,
+  type SearchAllMessenger,
   type SearchAllRequest,
   type SearchedResource,
   searchAll,
