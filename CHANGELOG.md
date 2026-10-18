@@ -67,6 +67,10 @@ shape of this file.
   way. Both commands always run in the calling process, never through a running `serve`. A CLI that lists its local
   writes, or refuses only local writes for a read-only `messages` profile, must move `conversations build` to its
   remote writes.
+- **Under the read-only lock an agent can no longer save a new search or set a new alias.** `searches create` and
+  `contacts alias set` (and the MCP tools `searches_create`, `contacts_alias_set`) refuse with `permission_error`
+  even when nothing is overwritten. An agent started with `<PREFIX>_READ_ONLY` that saved searches must save them
+  in an unlocked process.
 - **`isOtherService` is now `isOtherServiceCall`**, named like `isLogin` and `isStoreChange`. No consumer imports it.
 
 ## 0.335.0 — 18.10.2026
