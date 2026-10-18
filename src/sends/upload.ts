@@ -43,7 +43,7 @@ const JPEG = (head: Uint8Array) => head[0] === 0xff && head[1] === 0xd8 && head[
 const SIGNATURES: Record<string, (head: Uint8Array) => boolean> = {
   ".jpg": JPEG,
   ".jpeg": JPEG,
-  ".png": (head) => Buffer.from(head.subarray(0, 4)).toString("latin1") === "\x89PNG",
+  ".png": (head) => Buffer.from(head.subarray(0, 8)).toString("latin1") === "\x89PNG\r\n\x1a\n",
   ".webp": (head) => {
     const text = Buffer.from(head).toString("latin1")
     return text.startsWith("RIFF") && text.slice(8, 12) === "WEBP"
