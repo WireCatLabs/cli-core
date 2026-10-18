@@ -28,6 +28,9 @@ it("upgrades schema 2 aliases additively and keeps person aliases independent of
     alias.run("identity", "Alice Example", "alice example")
     alias.run("identity", "ALICE EXAMPLE", "alice example")
     expect(old.prepare("SELECT max(version) AS version FROM schema_migrations").get()?.version).toBe(2)
+    migrate(old, { migrations: MIGRATIONS.filter((migration) => migration.version <= 3), now: () => 4000 })
+    migrate(old, { migrations: MIGRATIONS.filter((migration) => migration.version <= 2), now: () => 5000 })
+    expect(old.prepare("SELECT count(*) AS count FROM aliases").get()?.count).toBe(3)
   } finally {
     old.close()
   }
@@ -59,7 +62,6 @@ it("upgrades schema 2 aliases additively and keeps person aliases independent of
         )
         .run(),
     ).toThrow()
-    migrate(upgraded, { migrations: MIGRATIONS.filter((migration) => migration.version <= 2), now: () => 5000 })
     expect(upgraded.prepare("SELECT count(*) AS count FROM aliases").get()?.count).toBe(3)
   } finally {
     upgraded.close()
