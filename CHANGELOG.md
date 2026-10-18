@@ -16,6 +16,11 @@ shape of this file.
 
 ### Fixed
 
+- **Node 22 no longer prints `ExperimentalWarning: SQLite is an experimental feature` on every command that opens the
+  store.** Agents read the two stderr lines as a failure. The store now drops that one warning before it loads
+  `node:sqlite`; every other warning still prints, and Node 24 never printed it. A consumer gets it by adopting this
+  version — no code change.
+
 - Tag-consolidation preview budget refusals retain their registered reason and affected table in
   standard CLI/MCP errors.
 - Native `store.tags.removeTags` resolves explicit aliases just as additions do. Removing a tag by

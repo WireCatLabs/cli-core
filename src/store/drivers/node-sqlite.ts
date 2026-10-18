@@ -2,9 +2,8 @@ import { DatabaseSync } from "node:sqlite"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 
 /**
- * ⚠ On Node 22 the import itself prints `ExperimentalWarning: SQLite is an experimental feature`
- * to stderr. Node 24 is silent. Left alone deliberately (`NEED-59`): suppressing warnings
- * process-wide to hide one line costs more than it saves.
+ * Import this module only through a dynamic import that follows `quietSqliteWarning()`: a static import loads
+ * `node:sqlite`, and on Node 22 its ExperimentalWarning, before the filter can run.
  */
 export const openWithNodeSqlite = (path: string): CacheDatabase => cacheOverNodeSqlite(new DatabaseSync(path))
 

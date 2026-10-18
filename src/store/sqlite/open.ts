@@ -1,4 +1,5 @@
 import { type CacheDatabase, PRAGMAS } from "../driver.js"
+import { quietSqliteWarning } from "../sqlite-warning.js"
 import type { SQLiteAsyncDatabase } from "./drizzle/core.js"
 
 /** Drizzle over the store's connection. Synchronous inside: a transaction never awaits (plan D3). */
@@ -37,6 +38,7 @@ export const openSqlite = async (
 }
 
 const openUnderNode = async (path: string, readOnly: boolean): Promise<OpenedSqlite> => {
+  quietSqliteWarning()
   const { DatabaseSync } = await import("node:sqlite")
   const { drizzle } = await import("./drizzle/node.js")
   const { cacheOverNodeSqlite } = await import("../drivers/node-sqlite.js")
