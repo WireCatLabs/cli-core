@@ -128,7 +128,7 @@ describe("the first screen", () => {
   })
 
   it("leaves a subcommand's help and the commands document alone", async () => {
-    expect((await call(["chats", "--help"])).stdout).toContain("Usage: tg chats")
+    expect((await call(["chats", "--help"])).stdout).toContain("Usage: tg <profile> chats")
 
     const { stdout } = await call(["commands", "--json"])
     const document = JSON.parse(stdout)

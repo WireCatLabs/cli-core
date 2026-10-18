@@ -208,7 +208,7 @@ describe("running a messenger CLI", () => {
 
     expect(await usage(["work", "chats", "list", "--help"])).toBe("Usage: app <profile> chats list [options]")
     expect(await usage(["upgrade", "--help"])).toBe("Usage: app upgrade [options]")
-    expect(await usage(["--help"])).toBe("Usage: app [profile] [options] <command>")
+    expect(await usage(["--help-all"])).toBe("Usage: app [profile] [options] <command>")
   })
 
   it("says which word was read as a profile when the command after it is unknown", async () => {
