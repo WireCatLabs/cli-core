@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
+import type { TagConsolidationStore } from "../../domain/tag-consolidation.js"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName, vocabularySimilarity } from "../../domain/vocabulary.js"
 import type { StoreContext } from "./open.js"
+import { tagConsolidationStoreOver } from "./tag-consolidation.js"
 import { tagCreationReview } from "./tag-creation.js"
 import { read, write } from "./transaction.js"
 
@@ -72,7 +74,7 @@ export interface VocabularyAudit {
   complete: boolean
   semantic: "not-requested"
 }
-export interface VocabularyStore {
+export interface VocabularyStore extends TagConsolidationStore {
   vocabulary(options?: VocabularyOptions): Promise<VocabularyCatalog>
   auditVocabulary(options?: VocabularyAuditOptions): Promise<VocabularyAudit>
   resolveVocabulary(name: string, options?: VocabularyOptions): Promise<VocabularyResolution>
@@ -264,6 +266,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
     return entry
   }
   return {
+    ...tagConsolidationStoreOver(context, catalog),
     vocabulary: async (options) => catalog(options),
     auditVocabulary: async (options = {}) =>
       read(database, () => {

@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- `store.knowledge.previewTagConsolidation` inspects two canonical tags against a current unfiltered
+  vocabulary fingerprint. It reports bounded assignment/claim overlaps, aliases and links with a
+  fingerprint of the inspected state, without writing. Its coverage names the four inspected tables;
+  it is not an apply plan and does not merge labels or change saved references.
+
 ### Fixed
 
 - **The commands page no longer calls the embedding, analysis and model-download commands a change in the
