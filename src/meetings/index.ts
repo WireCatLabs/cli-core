@@ -247,6 +247,15 @@ export {
   type MeetingSeriesHistoryStore,
   validateMeetingSeriesHistory,
 } from "./series-history.js"
+export { createMeetingSeriesInventoryReader } from "./series-inventory.js"
+export type {
+  MeetingSeriesCandidate,
+  MeetingSeriesInventoryPage,
+  MeetingSeriesInventoryPort,
+  MeetingSeriesInventoryRead,
+  MeetingSeriesInventoryRequest,
+  MeetingSeriesInventoryResult,
+} from "./series-inventory-types.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,

@@ -374,3 +374,41 @@ Provider hosts must opt in to the global vocabulary grant explicitly. Base regis
 `--meeting-project-candidates`; it does not mount the tool on its own. The SDK and adapters add no
 preparation default or remote provider transport. Confirm a suggested project link through the
 existing reviewed finding workflow; a title match or alias collision never confirms membership.
+
+
+## Bounded series inventory
+
+`createMeetingSeriesInventoryReader` from `/meetings` captures a provider/account and a narrow
+`MeetingSeriesInventoryPort`. The port reads exactly one bounded page; it must not call a full-array
+management API and slice its result. The SDK validates the request before I/O, captures its values,
+passes a frozen scope/window/read budget, validates and detaches the returned candidates, and never
+loops over pages. No database, migration, credentials or provider implementation is added here.
+
+Call `page({after, until, limit?, maxReadBytes?, bytes?, cursor?, signal?})`. Times are absolute
+milliseconds, with an increasing window of at most 366 days. Defaults are one hundred candidates,
+64 KiB normalized provider-page bytes and 64 KiB result JSON bytes. Hard maxima are one hundred
+candidates and 1 MiB for either byte budget; the result budget has a 2 KiB minimum. Titles are
+nullable and at most 8,192 characters; IDs and raw provider cursors are bounded identifiers. A
+returned cursor must also fit the 4,096-character public cursor budget. Input bytes bound the
+normalized DTO; transport adapters must separately bound HTTP response reading before JSON parsing.
+
+Each candidate has an exact provider `meetingId`, nullable title, schedule kind and nullable
+`scheduledStartAt` hint. No join URL or source permalink is accepted. Old recurring start dates,
+undated entries and hints outside the requested window are retained and counted. Inventory hints
+never prove the next occurrence: after selecting the exact ID, call `createUpcomingMeetingReader`
+with the same captured scope and window. Do not choose a series by a similar title alone.
+
+Coverage distinguishes a provider-window selection from a provider inventory, retains partial
+source status and `hasMore`, and always says `calendarCompleteness: "unknown"` and
+`occurrenceProof: "not-read"`. A terminal provider page does not prove that every calendar or
+permission scope was searched. Empty pages with continuation remain resumable; permission errors
+propagate and never become empty successful pages. Oversized input/output pages refuse without
+silently dropping candidates or advancing a page; lower `limit` or raise the appropriate byte bound.
+
+Continue with the returned opaque cursor and the same provider/account and absolute window.
+The cursor binds this selection and carries only the provider continuation, not credentials or
+an authorization grant. The adapter must enforce the captured scope on every request. Repeated
+non-advancing provider cursors are rejected. Caps may be lowered on a later page. Pages are live;
+IDs can repeat across pages and fingerprints describe only the returned packet. No snapshot or
+whole-calendar completeness is implied. CLI/MCP exposure and provider transports are separate
+host work; this SDK does not widen an existing server's tools.
