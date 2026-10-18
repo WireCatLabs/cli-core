@@ -187,6 +187,9 @@ const planFrom = (options: {
 /** What waits on the owner — kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
 export const tasksCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
+  /** Under the read-only lock an unattended agent writes, so the task's history and pair decisions name it, not the owner. */
+  const writerOf = (command: Command): "agent" | "owner" =>
+    readOnlyLockOf(messenger.app, environmentOf(command).env ?? process.env) ? "agent" : "owner"
   const tasks = new Command("tasks").description(
     "what waits on you — unanswered questions, mentions, requests, promises — kept in the local store; review and serve add them",
   )
@@ -299,7 +302,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         "validation_error",
         "give at least one of --title, --description, --due, --remind-time, --category",
       )
-    const planned = await context.withServices((services) => services.tasks.plan(id, plan, "owner"))
+    const planned = await context.withServices((services) => services.tasks.plan(id, plan, writerOf(this)))
     renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
   })
 
@@ -417,7 +420,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, permission)
       const pair = await context.withServices((services) =>
-        services.tasks.decideDuplicate(dup, task, decision, "owner"),
+        services.tasks.decideDuplicate(dup, task, decision, writerOf(this)),
       )
       renderAnswer(this, context, itemOf(snakeKeys(pair)), () => `${pair.decision}  ${pairLine(pair)}\n`)
     }
@@ -460,7 +463,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.merge")
       const { into } = this.opts<{ into: string }>()
-      const merged = await context.withServices((services) => services.tasks.merge(dup, into, "owner"))
+      const merged = await context.withServices((services) => services.tasks.merge(dup, into, writerOf(this)))
       renderAnswer(
         this,
         context,
@@ -482,7 +485,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, dup: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.unmerge")
-      const unmerged = await context.withServices((services) => services.tasks.unmerge(dup, "owner"))
+      const unmerged = await context.withServices((services) => services.tasks.unmerge(dup, writerOf(this)))
       renderAnswer(this, context, itemOf(snakeKeys(unmerged)), () => `${card(unmerged.task)}\n`)
     })
 

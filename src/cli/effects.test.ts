@@ -369,6 +369,7 @@ describe("the read-only lock on the message store", () => {
     ["stats charts", ["stats", "charts", "7", "--output", "OUT"]],
     ["messages sync", ["messages", "sync", "7"]],
     ["contacts sync", ["contacts", "sync"]],
+    ["review --new", ["review", "--new"]],
   ])("lets %s past the lock: it writes nothing the owner keeps, or it receives", async (_, argv) => {
     const { error } = await locked(
       ["ro", ...argv.map((word) => (word === "OUT" ? join(root, "out.svg") : word))],

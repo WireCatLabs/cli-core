@@ -28,8 +28,10 @@ shape of this file.
   `doctor report create`, `server start|stop|restart`), every sync, fetch and `serve`, and the task bookkeeping the
   follow-ups skill does on a timer (`tasks add`, `scan`, `plan`, `link`, `merge`, `unmerge`, `claim`, `release`,
   `close`, `duplicates reject`, `duplicates defer`). Under the lock `tasks close` (and `tasks_close`) only suggests the
-  close for the owner to confirm, and `--as-owner` is refused; `tasks plan` now keeps the old title and description in
-  the task's history. `changesStore` is gone from `./cli`; mark a command with `destroysNothing(command)` instead. A
+  close for the owner to confirm, and `--as-owner` is refused; the task's history names the agent, not the owner, for
+  what it plans, merges or decides under the lock. `tasks plan` keeps the old title and description in the task's
+  history (`TASK_EVENT_KINDS` gains `title` and `description`). An agent — under the lock, or any MCP agent — can no
+  longer change a duplicate pair the owner decided (`tasks duplicates reject|defer`, `merge`, `unmerge`). `changesStore` is gone from `./cli`; mark a command with `destroysNothing(command)` instead. A
   CLI's own local write must be marked too, or it is refused under the lock (max-cli's `doctor report create`).
 
 ## 0.336.0 — 18.10.2026

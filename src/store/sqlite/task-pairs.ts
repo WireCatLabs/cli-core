@@ -161,6 +161,14 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
       )
       .run(decision, actor.type, actor.id, at, at, id)
   }
+  const keepOwners = (held: Row, by: Author) => {
+    if (by !== "owner" && held.decision !== "review" && held.decided_by_type === "person")
+      throw new CliError(
+        "permission_error",
+        `the owner already decided this pair (${String(held.decision)}); an agent does not change it`,
+        { reason: "task.pair-decided" },
+      )
+  }
   /** The pair's row, recorded now with a fresh comparison when it was never offered. */
   const settle = async (task: Row, other: Row, decision: TaskPairDecision, by: Author): Promise<TaskPair> => {
     const scored = heldPair(Number(task.id), Number(other.id))
@@ -171,6 +179,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
       const id = held
         ? Number(held.id)
         : insertPair({ task: Number(task.id), other: Number(other.id), decision }, scored as Similarity, by)
+      if (held) keepOwners(held, by)
       if (held) decide(id, decision, by)
       return pairOf(database.prepare("SELECT * FROM task_pairs WHERE id = ?").get(id) as Row)
     })
@@ -388,6 +397,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
         const id = held
           ? Number(held.id)
           : insertPair({ task: Number(a.id), other: Number(b.id), decision: "merged" }, scored as Similarity, by)
+        if (held) keepOwners(held, by)
         if (held) decide(id, "merged", by)
         return { pair: pairOf(database.prepare("SELECT * FROM task_pairs WHERE id = ?").get(id) as Row), linked }
       })
@@ -436,6 +446,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
         const id = held
           ? Number(held.id)
           : insertPair({ task: Number(a.id), other: Number(b.id), decision: "unmerged" }, scored as Similarity, by)
+        if (held) keepOwners(held, by)
         if (held) decide(id, "unmerged", by)
         return { pair: pairOf(database.prepare("SELECT * FROM task_pairs WHERE id = ?").get(id) as Row) }
       })

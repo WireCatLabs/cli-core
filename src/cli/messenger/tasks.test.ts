@@ -231,6 +231,12 @@ describe("tasks", () => {
     expect([asOwner.code, asOwner.stderr]).toEqual([5, expect.stringContaining("cannot close a task as the owner")])
     expect((await call("tasks", "reject", key, "--json")).code).toBe(5)
 
+    delete call.env.CHAT_READ_ONLY
+    expect((await call("tasks", "duplicates", "reject", scanned, key, "--json")).code).toBe(0)
+    call.env.CHAT_READ_ONLY = "1"
+    const overruled = await call("tasks", "duplicates", "defer", scanned, key, "--json")
+    expect([overruled.code, overruled.stderr]).toEqual([5, expect.stringContaining("the owner already decided")])
+
     const store = await openStore({ path: call.env.MESSAGING_STORE as string })
     try {
       const events = await store.tasks.events(id)
