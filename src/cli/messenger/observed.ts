@@ -1,6 +1,6 @@
 import type { MessageEvent } from "../../domain/models.js"
 import { isCliFailure } from "../../errors/failures.js"
-import { type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
+import { type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { type EventSink, providerErrorKey } from "../../runs/events.js"
 import { currentOperation } from "../../sends/guarded.js"
 
@@ -37,26 +37,27 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
     }
   }
 
-  const counted = async (
+  const counted = async <T>(
     operation: string,
-    onEvent: (event: MessageEvent) => void,
-    work: (onEvent: (event: MessageEvent) => void) => Promise<void>,
+    onItem: (item: T) => void,
+    work: (onItem: (item: T) => void) => Promise<void>,
+    count: (item: T, counts: Record<string, number>) => void,
   ) => {
     const counts: Record<string, number> = {}
     await timed(
       operation,
       {},
       () =>
-        work((event) => {
-          counts[event.event] = (counts[event.event] ?? 0) + 1
-          onEvent(event)
+        work((item) => {
+          count(item, counts)
+          onItem(item)
         }),
       () => ({ counts }),
     )
   }
 
   const mint = messenger.newSendId
-  const { chats, history, contact, around, watch, listen } = messenger
+  const { chats, history, contact, around, watch, listen, listenHistory } = messenger
   // A method not listed here is timed under its own name, with no ids until a line here names them.
   return throughWrapper(
     messenger,
@@ -145,13 +146,29 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
       ...(watch
         ? {
             watch: (onEvent, signal, onReady) =>
-              counted("messages.watch", onEvent, (counting) => watch.call(messenger, counting, signal, onReady)),
+              counted(
+                "messages.watch",
+                onEvent,
+                (counting) => watch.call(messenger, counting, signal, onReady),
+                byEvent,
+              ),
           }
         : {}),
       ...(listen
         ? {
             listen: (onEvent, signal) =>
-              counted("adapter.listen", onEvent, (counting) => listen.call(messenger, counting, signal)),
+              counted("adapter.listen", onEvent, (counting) => listen.call(messenger, counting, signal), byEvent),
+          }
+        : {}),
+      ...(listenHistory
+        ? {
+            listenHistory: (onBatch, signal) =>
+              counted(
+                "adapter.listenHistory",
+                onBatch,
+                (counting) => listenHistory.call(messenger, counting, signal),
+                byPart,
+              ),
           }
         : {}),
       logout: () => timed("session.logout", {}, () => messenger.logout()),
@@ -161,4 +178,14 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
       (...args: unknown[]) =>
         timed(`adapter.${name}`, {}, () => call(...args)),
   )
+}
+
+const byEvent = (event: MessageEvent, counts: Record<string, number>): void => {
+  counts[event.event] = (counts[event.event] ?? 0) + 1
+}
+
+const byPart = (batch: HistoryBatch, counts: Record<string, number>): void => {
+  counts.batches = (counts.batches ?? 0) + 1
+  for (const [part, items] of Object.entries(batch))
+    if (Array.isArray(items) && items.length > 0) counts[part] = (counts[part] ?? 0) + items.length
 }

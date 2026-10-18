@@ -21,7 +21,7 @@ export interface ContractOptions {
   ids?: IdMaker
   /** As the messenger's `fetching.orderBy`: whether `history`'s `before` is a message id or an ISO time. */
   orderBy?: "id" | "time"
-  /** How long `watch` may take to say it listens, and `watch`, `listen` and `feed` to end once aborted. */
+  /** How long `watch` may take to say it listens, and `watch`, `listen`, `listenHistory` and `feed` to end on abort. */
   waitMs?: number
   /** As the messenger's `history`: a `"server"` messenger's adapter must have every `ServerReads` method. */
   history?: "server" | "store"
@@ -59,6 +59,7 @@ export const OPTIONAL_METHODS = [
   "createPoll",
   "watch",
   "listen",
+  "listenHistory",
   "feed",
   "download",
   "transcribe",
@@ -481,6 +482,32 @@ export const contractCases = ({
           assert.equal(await settledSoon(listening), false, "listen ended before the signal aborted")
           controller.abort()
           await within(listening, "listen did not end when the signal aborted", waitMs)
+        },
+      ],
+      [
+        "listenHistory on a signal already aborted resolves at once and does not reject",
+        async (adapter) => {
+          const skipped = lacking(adapter, "listenHistory")
+          if (skipped) return skipped
+          const controller = new AbortController()
+          controller.abort()
+          await within(
+            Promise.resolve(adapter.listenHistory?.(() => {}, controller.signal)),
+            "listenHistory did not resolve on a signal already aborted",
+            waitMs,
+          )
+        },
+      ],
+      [
+        "listenHistory keeps listening until the signal aborts, then resolves",
+        async (adapter) => {
+          const skipped = lacking(adapter, "listenHistory")
+          if (skipped) return skipped
+          const controller = new AbortController()
+          const listening = Promise.resolve(adapter.listenHistory?.(() => {}, controller.signal))
+          assert.equal(await settledSoon(listening), false, "listenHistory ended before the signal aborted")
+          controller.abort()
+          await within(listening, "listenHistory did not end when the signal aborted", waitMs)
         },
       ],
       [

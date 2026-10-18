@@ -2,8 +2,8 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { MessageEvent } from "../../domain/models.js"
-import type { MessengerAdapter } from "../../ports/messenger.js"
+import type { Chat, Message, MessageEvent } from "../../domain/models.js"
+import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
 import type { DiagnosticEvent } from "../../runs/events.js"
 import type { MessageStore } from "../../store/store.js"
 import { connected } from "./context.js"
@@ -14,6 +14,14 @@ let finishWrite: () => void = () => {}
 vi.mock("../../store/store.js", () => ({
   openStore: async () =>
     ({
+      chats: {
+        saveChats: async () => {
+          order.push("chats saved")
+        },
+        rekeyChat: async () => {
+          order.push("rekeyed")
+        },
+      },
       messages: {
         saveMessages: () =>
           new Promise<void>((resolve) => {
@@ -124,32 +132,55 @@ const arrived = (id: string): MessageEvent => ({
   },
 })
 
-/** A messenger that only listens: `deliver` hands on a message, `fail` ends the listen with an error. */
-const passiveFake = (listening: Partial<{ hangs: boolean }> = {}) => {
-  let onEvent: ((event: MessageEvent) => void) | undefined
+/** One passive listen: `deliver` hands on an item, `fail` ends the listen with an error. */
+const passiveListen = <T>(listening: Partial<{ hangs: boolean }> = {}) => {
+  let onItem: ((item: T) => void) | undefined
   let fail: (error: Error) => void = () => {}
   const listens = vi.fn(
-    (handed: (event: MessageEvent) => void, signal: AbortSignal) =>
+    (handed: (item: T) => void, signal: AbortSignal) =>
       new Promise<void>((resolve, reject) => {
-        onEvent = handed
+        onItem = handed
         fail = reject
         if (listening.hangs) return
         signal.addEventListener(
           "abort",
           () => {
-            onEvent = undefined
+            onItem = undefined
             resolve()
           },
           { once: true },
         )
       }),
   )
+  return { listens, deliver: (item: T) => onItem?.(item), fail: (error: Error) => fail(error) }
+}
+
+/** A messenger that only listens for messages. */
+const passiveFake = (listening: Partial<{ hangs: boolean }> = {}) => {
+  const listen = passiveListen<MessageEvent>(listening)
   const adapter = {
     ...arriving,
     watch: async (handed: (event: MessageEvent) => void) => handed(arrived("1")),
-    listen: listens,
+    listen: listen.listens,
   } as unknown as MessengerAdapter
-  return { adapter, listens, deliver: (event: MessageEvent) => onEvent?.(event), fail: (error: Error) => fail(error) }
+  return { adapter, ...listen }
+}
+
+/** A messenger that only listens for pushed history, with a `feed` that pushes one batch. */
+const historyFake = (listening: Partial<{ hangs: boolean }> = {}) => {
+  const listen = passiveListen<HistoryBatch>(listening)
+  const adapter = {
+    ...arriving,
+    feed: async (onBatch: (batch: HistoryBatch) => void) => onBatch(pushed),
+    listenHistory: listen.listens,
+  } as unknown as MessengerAdapter
+  return { adapter, ...listen }
+}
+
+const pushed: HistoryBatch = {
+  rekeys: [{ from: "7", to: "8" }],
+  chats: [{ id: "8", title: "Book club" } as Chat],
+  messages: [{ ...(arrived("2") as { message: Message }).message, chatId: "8" }],
 }
 
 const opened = (
@@ -312,5 +343,119 @@ describe("a one-shot command of a messenger whose history is in the store", () =
     expect(order).toEqual(["connection closed"])
     expect(warnings).toEqual([expect.stringContaining("still handing on messages")])
     expect(codes).toEqual(["store_not_written"])
+  })
+})
+
+describe("a one-shot command of a messenger whose history is pushed", () => {
+  it("saves a pushed batch as feed does, re-keys first, and closes only once it is written", async () => {
+    const fake = historyFake()
+    const { close, warnings } = opened(fake.adapter, "store")
+    await tick()
+    fake.deliver(pushed)
+    await tick()
+
+    const closing = close()
+    await tick()
+    expect(order).toEqual(["rekeyed", "chats saved", "connection closed"])
+    finishWrite()
+    await closing
+
+    expect(fake.listens).toHaveBeenCalledOnce()
+    expect(fake.listens.mock.calls[0]?.[1].aborted).toBe(true)
+    expect(order).toEqual(["rekeyed", "chats saved", "connection closed", "written", "store closed"])
+    expect(warnings).toEqual([])
+  })
+
+  it("records how many batches, and of each part, the listen handed on", async () => {
+    const fake = historyFake()
+    const { close, recorded } = opened(fake.adapter, "store")
+    await tick()
+    fake.deliver(pushed)
+    await tick()
+    finishWrite()
+    await close()
+
+    expect(recorded).toContainEqual(
+      expect.objectContaining({
+        event: "response",
+        operation: "adapter.listenHistory",
+        outcome: "ok",
+        counts: { batches: 1, rekeys: 1, chats: 1, messages: 1 },
+      }),
+    )
+  })
+
+  it("leaves a connection that watches to its feed, so each batch is saved once", async () => {
+    const fake = historyFake()
+    const { adapter, close } = opened(fake.adapter, "store", { listen: true })
+    await adapter.feed?.(() => {}, new AbortController().signal)
+    await tick()
+
+    const closing = close()
+    finishWrite()
+    await closing
+
+    expect(fake.listens).not.toHaveBeenCalled()
+    expect(order).toEqual(["rekeyed", "chats saved", "connection closed", "written", "store closed"])
+  })
+
+  it("does not listen for history of a messenger that answers it from its server", async () => {
+    const fake = historyFake()
+    await opened(fake.adapter, "server").close()
+
+    expect(fake.listens).not.toHaveBeenCalled()
+  })
+
+  it("warns when the history listen fails, and the command goes on", async () => {
+    const fake = historyFake()
+    const { close, warnings, codes } = opened(fake.adapter, "store")
+    await tick()
+    fake.fail(new Error("the engine stopped"))
+    await tick()
+    await close()
+
+    expect(warnings).toEqual([expect.stringMatching(/^history batches .*the engine stopped/)])
+    expect(codes).toEqual(["listen_failed"])
+    expect(order).toEqual(["connection closed"])
+  })
+
+  it("says nothing of a history listen that fails because the connection is closing", async () => {
+    const fake = historyFake()
+    const closingAdapter = {
+      ...fake.adapter,
+      close: async () => {
+        fake.fail(new Error("closed"))
+        order.push("connection closed")
+      },
+    } as unknown as MessengerAdapter
+    const { close, warnings } = opened(closingAdapter, "store")
+    await tick()
+    await close()
+
+    expect(warnings).toEqual([])
+  })
+
+  it("waits at most 5 s in all for both listens that never end, warns for each, and still closes", async () => {
+    vi.useFakeTimers()
+    const messages = passiveFake({ hangs: true })
+    const history = historyFake({ hangs: true })
+    const both = { ...messages.adapter, listenHistory: history.listens } as unknown as MessengerAdapter
+    const { close, warnings, codes, recorded } = opened(both, "store")
+    await vi.advanceTimersByTimeAsync(0)
+
+    const closing = close()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await closing
+
+    expect(order).toEqual(["connection closed"])
+    expect(warnings).toEqual([
+      expect.stringContaining("still handing on messages"),
+      expect.stringContaining("still handing on history batches"),
+    ])
+    expect(codes).toEqual(["store_not_written", "store_not_written"])
+    expect(recorded.filter((event) => event.event === "warning").map((event) => event.operation)).toEqual([
+      "messages.listen",
+      "history.listen",
+    ])
   })
 })

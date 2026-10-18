@@ -495,9 +495,10 @@ it holds (NEED-1389):
   the journal and rendering are the direct run's own code — the guard runs in serve with the client's environment,
   so `<PREFIX>_READ_ONLY` holds and the socket is no way around it.
 - **The borrowed connection** (`serveRelay`, `src/cli/messenger/serve-relay.ts`): serve keeps the raw adapter its
-  `connect` returned; `connectFor` hands a relayed run that adapter with `close` doing nothing, no `feed`, and a
-  `watch` that subscribes to serve's own events. A relayed run for another profile is refused. A CLI's own
-  command that connects goes through `connectFor` too, or inside serve it would open a second connection.
+  `connect` returned; `connectFor` hands a relayed run that adapter with `close` doing nothing, no `feed`, no
+  `listen` or `listenHistory`, and a `watch` that subscribes to serve's own events. A relayed run for another
+  profile is refused. A CLI's own command that connects goes through `connectFor` too, or inside serve it would
+  open a second connection.
 - **Per run, not per process.** A relayed run adds no signal handlers, never prompts (`answer` is null — `ask`
   needs `--yes`), resolves path-named options and arguments (`<file>`, `<path>`, `<dir>`…) against the client's
   directory (`absolutePaths`), keeps its exit code in `environment.exit`, and `mcp` runs its stdio session over
@@ -554,11 +555,15 @@ change names (`people`) and the chat titles `watch` leaves out are looked up amo
 first (`Saving.namesFromStore` in `stored.ts`), with the same matching and the same refusal of an ambiguous name as
 the store reads; only a name the store does not hold reaches the adapter.
 Such a messenger may deliver what it queued while nothing was connected to any connection, once. When its adapter
-has `listen` (`PassiveUpdates`), `connected` runs it for as long as a connection opened without `listen: true` is
-open and saves each event as `watch` would; `close` stops it and waits for it to end before it waits for the saves.
-A connection opened with `listen: true` is left to its `watch`, so nothing is saved twice. A failed `listen` warns
-and never fails the command; it is neither held nor paced, as it only receives. Its run record is an
-`adapter.listen` request and response, and the response counts what it handed on by event, as `messages.watch`'s does.
+has `listen` or `listenHistory` (`PassiveUpdates`), `connected` runs each it has for as long as a connection opened
+without `listen: true` is open: `listen`'s events are saved as `watch`'s are, `listenHistory`'s batches by `feed`'s
+own code (`saveBatches` in `stored.ts`), re-keys first. `close` closes the connection, then stops both and waits
+for them to end, 5 s at most in all, then for the saves, then closes the store. A connection opened with
+`listen: true` is left to its `watch` and `feed`, so nothing is saved twice. A failed listen warns
+(`listen_failed`, `messages.listen` or `history.listen`) and never fails the command; it is neither held nor paced,
+as it only receives. Its run record is an `adapter.listen` or `adapter.listenHistory` request and response; the
+response counts what `listen` handed on by event, as `messages.watch`'s does, and what `listenHistory` handed on as
+`batches` and each part's items.
 
 **A CLI replaces a use case, not a command.** `Messenger.services` is an `Override`: it gets the
 shared services and returns the ones it changes, and can call the shared method inside its own:
