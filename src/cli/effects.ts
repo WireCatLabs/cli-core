@@ -1,7 +1,8 @@
-import { annotate, annotateOption, metaOf, stepTargets } from "@wirecat/cli-base/commands"
+import { annotate, annotateOption, type CommandInfo, metaOf, stepTargets } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
 import { type Command, Option } from "commander"
 import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
+import { keyForCommand } from "../sends/permissions.js"
 import { environmentOf } from "./context.js"
 
 /** Reads the messenger; a page it keeps on the way is incidental. */
@@ -65,7 +66,7 @@ export const destroysNothing = <T extends Command>(command: T): T => {
 /**
  * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
  * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
- * keeps receiving, a remote write meets the send guard, and an authority change has its own refusal.
+ * keeps receiving, a remote write is `changesMessenger`'s, and an authority change has its own refusal.
  */
 export const isStoreChange = (command: Command): boolean => {
   const effects = metaOf(command).effects
@@ -83,6 +84,29 @@ export const STORE_CHANGE_REFUSAL = "change the message store"
 export const refuseStoreChange = (app: AppIdentity, env: NodeJS.ProcessEnv): void => {
   const lock = readOnlyLockOf(app, env)
   if (lock) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
+}
+
+const pathOf = (command: Command): string[] => {
+  const words: string[] = []
+  for (let at: Command | null = command; at.parent; at = at.parent) words.unshift(at.name())
+  return words
+}
+
+/**
+ * A change on the messenger, judged from the command alone, so the read-only lock refuses it before anything connects
+ * (SEC-62): the send guard refuses it too, but only once the command has connected and found its chat. A server that runs until stopped, a call to another service and a login (no key) have rules of their own.
+ */
+export const changesMessenger = (
+  command: Command | Pick<CommandInfo, "path" | "effects" | "lifetime" | "reaches">,
+): boolean => {
+  const { path, effects, lifetime, reaches } =
+    "path" in command ? command : { path: pathOf(command), ...metaOf(command) }
+  return (
+    effects?.remote === "write" &&
+    lifetime !== "persistent" &&
+    reaches !== "other_service" &&
+    Boolean(keyForCommand(path))
+  )
 }
 
 const OTHER_SERVICE = new WeakSet<Command>()

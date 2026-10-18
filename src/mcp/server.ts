@@ -19,6 +19,7 @@ import { syncsFirst } from "../cli/messenger/search-sync-options.js"
 import { stdinFieldOf } from "../cli/stdin-field.js"
 import { rootOf } from "../cli/steps.js"
 import { warmEmbedders } from "../embeddings/embed.js"
+import { readOnlyLockOf } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { guardFor } from "../sends/guard.js"
 import { levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
@@ -138,6 +139,7 @@ export const createServer = (
   const generated = toolsFromCommands(program.commands, {
     exclude: [["bot"]],
     levels: settings.permissions,
+    readOnly: readOnlyLockOf(app, context.env) !== undefined,
     keyOf,
     offline: true,
     stdin,

@@ -30,6 +30,20 @@ shape of this file.
 - **`./skill-validation` resolves for `require()` too.** Its export named only an `import` condition; it now has
   `default`, like every other entry point.
 
+### Security
+
+- **The read-only lock refuses a write to the messenger before anything connects**. Under
+  `<PREFIX>_READ_ONLY`, `messages send`, `edit`, `delete`, `reactions add` and every other command that changes
+  something on the messenger used to connect and resolve the chat first; only the send guard refused, and a broken
+  login turned the refusal into a network failure (exit 10). The shared `run()` now refuses them with exit 5 before
+  the connection opens. Such a refusal is no longer in `sends list`: nothing was resolved to record. A profile level
+  `readonly` still refuses in the send guard, after the chat is resolved, so its refusal stays journaled.
+- **`--dry-run` answers as the write would**: under the lock a preview of a send is refused too, instead of
+  reporting it allowed.
+- **The MCP servers leave out writes to the messenger under the lock**, as they already leave out what a level
+  refuses (`toolsFromCommands` takes `readOnly`). A long-running command (`serve`, `mcp`, `watch`), a call to another
+  service and a schedule keep running under the lock.
+
 ## 0.342.0 — 18.10.2026
 
 ### Changed — may break callers
