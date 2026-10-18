@@ -46,7 +46,7 @@ describe("search notes --source", () => {
       { source: "synthetic:500", code: "validation_error", reason: "messenger messages — search messages reads them" },
     ])
     await expect(searchNotesOf(store, alpha, SHARED_WORD, { accounts: "email:500", limit: 50 })).rejects.toThrow(
-      "--source names nothing tg search notes reads: email:500",
+      "--source names nothing search notes reads: email:500",
     )
   })
 

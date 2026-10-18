@@ -24,6 +24,10 @@ shape of this file.
   drive's notes search — the hint named `tg models text download`, which such a user may not have. Now a tool that
   passes its command gets its own; any other is told to install the model with a WireCat CLI that has
   `models text download` (tg, max or wa), since they share the model folder.
+- **The picture model and `--source` hints no longer fall back to tg either.** A missing picture model named
+  `tg images models download`, and a `--source` that names nothing a search reads said "nothing tg search …", when
+  the caller passed no command. Now the tool's own command is named when it has one; otherwise the picture hint
+  points at the WireCat CLIs that have `images models download`, and the `--source` message names the search alone.
 - **The README's adapter example runs as written.** It called `adapterOver` and `fakeClient`, which do not exist; it
   now uses the kit's `fakeAdapter` and says where your adapter goes. The same fix is in the adapter guide.
 - **The README says who the package is for, gives the install command and its peers,** and advises pinning an exact

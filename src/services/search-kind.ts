@@ -47,7 +47,11 @@ export const listedAccounts = async (
     isKind(source) || (providerNamed(source) !== undefined && !stored.some(({ provider }) => provider === source))
   if (!isAccountList(source) && !registered) return undefined
   const entries = entriesOfList(source, await listContextOf(store, account, app, stored))
-  return fitting(entries, kind ? [kind] : ["messages", "mail"], `${app?.command ?? "tg"} search ${kind ?? "messages"}`)
+  return fitting(
+    entries,
+    kind ? [kind] : ["messages", "mail"],
+    `${app ? `${app.command} ` : ""}search ${kind ?? "messages"}`,
+  )
 }
 
 /**
@@ -59,7 +63,7 @@ export const accountsOfKind = (
   chosen: AccountKey[],
   held: readonly AccountKey[],
   explicit: string | undefined,
-  command = "tg",
+  command: string | undefined = undefined,
   mailAccount?: string,
   listed = false,
 ): AccountKey[] => {
@@ -74,7 +78,7 @@ export const accountsOfKind = (
   if (explicit !== undefined && explicit !== MAIL && explicit !== "all")
     throw new CliError(
       "validation_error",
-      `search mail reads mail only — \`${command} search messages\` searches ${explicit}`,
+      `search mail reads mail only — \`${command === undefined ? "" : `${command} `}search messages\` searches ${explicit}`,
     )
   const mail = (listed ? chosen : held).filter(({ provider }) => kindOf(provider) === "mail")
   if (mail.length === 0)

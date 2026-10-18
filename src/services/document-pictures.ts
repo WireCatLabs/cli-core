@@ -22,16 +22,17 @@ export type DocumentTarget = { ref: string; documentId?: never } | { documentId:
 const refOf = (target: DocumentTarget): string => target.ref ?? `document:${target.documentId}`
 
 /** Opens the picture model, or says which command downloads it. Close the result when done. */
-export const openPictureEmbedderFor = async ({
-  env,
-  command = "tg",
-}: PictureOptions = {}): Promise<PictureEmbedder> => {
+export const openPictureEmbedderFor = async ({ env, command }: PictureOptions = {}): Promise<PictureEmbedder> => {
   const model = imageModel(DEFAULT_IMAGE_MODEL)
   const directory = imageModelsDirectory(env)
   if (!isImageModelInstalled(model, directory))
     throw new CliError(
       "not_found",
-      `the picture model is not downloaded — \`${command} images models download ${model.id}\` fetches it`,
+      `the picture model is not downloaded — ${
+        command === undefined
+          ? "install it with a WireCat CLI that has `images models download` (tg, max or wa); they share the model folder"
+          : `\`${command} images models download ${model.id}\` fetches it`
+      }`,
       { reason: "model.not-downloaded", model: model.id },
     )
   const { openPictureEmbedder } = await import("../images/picture/embedder.js")
