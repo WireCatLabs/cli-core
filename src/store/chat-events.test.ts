@@ -86,19 +86,21 @@ describe("chat events in the store", () => {
     expect(held?.by).toEqual({ id: "9", name: "Olga" })
   })
 
-  it("**follow a chat re-keyed into another**, the same event held once", async () => {
+  it("**follow a chat re-keyed into another**, the same event held once with the people of both copies", async () => {
     const { store } = await fresh()
     await store.chats.saveChats(OWNER, [group(PHONE), group(LID)])
     await store.roster.saveChatEvents(OWNER, PHONE, [
       event("e1", "2026-10-18T10:00:00.000Z"),
       event("e2", "2026-10-18T11:00:00.000Z"),
     ])
-    await store.roster.saveChatEvents(OWNER, LID, [event("e2", "2026-10-18T11:00:00.000Z")])
+    await store.roster.saveChatEvents(OWNER, LID, [event("e2", "2026-10-18T11:00:00.000Z", "join", ["11", "12"])])
 
     expect((await store.chats.rekeyChat(OWNER, PHONE, LID)).outcome).toBe("merged")
 
     expect(await ids(store, OWNER, LID)).toEqual(["e1", "e2"])
     expect(await ids(store, OWNER, PHONE)).toEqual([])
+    const [, merged] = await store.roster.chatEvents(OWNER, LID)
+    expect(merged?.people.map((one) => one.id)).toEqual(["11", "12"])
   })
 
   it("go with the account when it is purged", async () => {

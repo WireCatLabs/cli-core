@@ -182,6 +182,27 @@ describe("chat events of a messenger whose history is pushed to the store", () =
     expect(JSON.parse(stdout).items.map((one: { message_id: string }) => one.message_id)).toEqual(["ev-2", "ev-3"])
   })
 
+  it("**lists the newest 1000** and marks the answer truncated when the store holds more", async () => {
+    const env = sandbox()
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.chats.saveChats(account, [club])
+    const many = Array.from({ length: 1001 }, (_, n) => ({
+      ...promoted,
+      messageId: `ev-${n}`,
+      timestamp: new Date(Date.now() - (1001 - n) * 1000).toISOString(),
+    }))
+    await store.roster.saveChatEvents(account, "7", many)
+    await store.close()
+
+    const { code, stdout } = await call(["chats", "events", "7", "--json"], env, { history: "store" })
+
+    const body = JSON.parse(stdout)
+    expect(code).toBe(0)
+    expect(body.meta.truncated).toBe(true)
+    expect(body.items).toHaveLength(1000)
+    expect([body.items[0].message_id, body.items.at(-1).message_id]).toEqual(["ev-1", "ev-1000"])
+  })
+
   it("**counts the stored joins in `chats stats`**, never asking the messenger", async () => {
     const store = await pushed(sandbox().MESSAGING_STORE)
     await store.messages.saveMessages(account, "7", [], { via: "history" })

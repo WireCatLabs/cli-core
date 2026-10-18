@@ -17,7 +17,7 @@ import { type Messenger, type MessengerContext, messengerContext } from "./conte
 export const watchCommand = (messenger: Messenger): Command =>
   annotate(new Command("watch"), { effects: REMOTE_READ, lifetime: "persistent" })
     .description("print new messages as they arrive, until Ctrl-C or --timeout (either ends it normally)")
-    .option("--events", "also edits, deletions, reactions and poll votes; every line then names its event")
+    .option("--events", "also edits, deletions, reactions, poll votes and chat events; every line then names its event")
     .action(async function (this: Command) {
       const events = this.opts<{ events?: boolean }>().events === true
       const context = messengerContext(this, messenger)
