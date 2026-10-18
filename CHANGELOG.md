@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.342.0 — 18.10.2026
+
 ### Changed — may break callers
 
 - **Core now requires Base `>=0.45.0 <0.46.0`.** Base 0.45.0 moved the vocabulary, lint, audit and field tables from
