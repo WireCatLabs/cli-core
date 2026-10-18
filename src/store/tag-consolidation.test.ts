@@ -46,7 +46,7 @@ it("previews complete selected dependencies, overlaps and bounded samples withou
       .run(Number(tag), origin, author)
     database
       .prepare(
-        "INSERT INTO auto_tag_claims(chat_id,tag_id,algorithm,score,fields,created_at,updated_at) VALUES(500,?,'fixture',0.9,'private evidence',1,2)",
+        "INSERT INTO canonical_auto_tag_claims(chat_id,tag_id,algorithm,score,fields,created_at,updated_at) VALUES(500,?,'fixture',0.9,'private evidence',1,2)",
       )
       .run(Number(tag))
   }
@@ -71,7 +71,7 @@ it("previews complete selected dependencies, overlaps and bounded samples withou
     automaticClaims: { source: 1, survivor: 1, overlappingChats: 1 },
     aliases: { source: 1, survivor: 0 },
     links: { total: 1 },
-    coverage: { completeWithinInspectedTables: true, rows: 6, samplesComplete: false, applySupported: false },
+    coverage: { completeWithinInspectedTables: true, rows: 6, samplesComplete: false, applySupported: true },
   })
   expect(preview.assignments.samples).toHaveLength(1)
   expect(preview.assignments.samples[0]).toMatchObject({ source: "manual", authorType: "person", authorId: "11" })
@@ -99,11 +99,11 @@ it("fingerprints all inspected provenance even when counts and vocabulary stay u
   expect(next.previewFingerprint).not.toBe(first.previewFingerprint)
   database
     .prepare(
-      "INSERT INTO auto_tag_claims(chat_id,tag_id,algorithm,score,fields,created_at,updated_at) VALUES(500,?,'fixture',0.9,'one',1,2)",
+      "INSERT INTO canonical_auto_tag_claims(chat_id,tag_id,algorithm,score,fields,created_at,updated_at) VALUES(500,?,'fixture',0.9,'one',1,2)",
     )
     .run(Number(source.id))
   const claim = await store.knowledge.previewTagConsolidation(input)
-  database.exec("UPDATE auto_tag_claims SET fields='two'")
+  database.exec("UPDATE canonical_auto_tag_claims SET fields='two'")
   expect((await store.knowledge.previewTagConsolidation(input)).previewFingerprint).not.toBe(claim.previewFingerprint)
 })
 

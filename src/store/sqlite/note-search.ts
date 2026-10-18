@@ -20,6 +20,7 @@ import { drainNoteIndex, type NoteIndexState, noteIndexState, noteIndexText } fr
 import { documentOf, type Note, noteOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
+import { canonicalTagNamed } from "./tags.js"
 import { read } from "./transaction.js"
 import { dot } from "./vectors.js"
 
@@ -99,9 +100,9 @@ const CORPORA: Corpus[] = [
     stems: "document_stems",
     tagged: (tag) =>
       bound(
-        "(n.id IN (SELECT g.taggable_id FROM taggings g JOIN tags t ON t.id = g.tag_id WHERE t.name = ? AND g.taggable_type = 'document') " +
-          "OR n.folder_id IN (SELECT g.taggable_id FROM taggings g JOIN tags t ON t.id = g.tag_id WHERE t.name = ? AND g.taggable_type = 'account') " +
-          "OR EXISTS (SELECT 1 FROM links l JOIN tags t ON t.id = l.to_id WHERE l.from_type = 'account' AND l.from_id = n.folder_id " +
+        "(n.id IN (SELECT g.taggable_id FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE t.name = ? AND g.taggable_type = 'document') " +
+          "OR n.folder_id IN (SELECT g.taggable_id FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE t.name = ? AND g.taggable_type = 'account') " +
+          "OR EXISTS (SELECT 1 FROM links l JOIN resolved_tags t ON t.id=l.to_id WHERE l.from_type = 'account' AND l.from_id = n.folder_id " +
           `AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND t.name = ? AND substr(n.path, 1, length(l.anchor) + 1) = l.anchor || '/'))`,
         tag,
         tag,
@@ -115,7 +116,7 @@ const CORPORA: Corpus[] = [
     stems: "note_stems",
     tagged: (tag) =>
       bound(
-        "n.id IN (SELECT g.taggable_id FROM taggings g JOIN tags t ON t.id = g.tag_id WHERE t.name = ? AND g.taggable_type = 'note')",
+        "n.id IN (SELECT g.taggable_id FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE t.name = ? AND g.taggable_type = 'note')",
         tag,
       ),
   },
@@ -248,7 +249,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       const tag = tagOf(value)
       if (tag === undefined) searchError("query.invalid-tag", node.span)
       // A label on a folder or subfolder labels every note under it, at any depth.
-      return corpus.tagged(tag)
+      return corpus.tagged(canonicalTagNamed(database, tag)?.name ?? tag)
     }
     if (field === "source")
       return bound(value.toLowerCase() === (corpus.type === "note" ? "internal" : "file") ? "1" : "0")

@@ -202,6 +202,7 @@
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^5.0.2",
     "@wirecat/cli-base": "0.45.0",
+    "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.342.0",
     "commander": "15.0.0",
     "cspell": "10.3.6",
     "drizzle-kit": "1.0.0-rc.4",

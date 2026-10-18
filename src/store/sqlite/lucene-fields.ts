@@ -13,6 +13,7 @@ import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { linkMatch } from "./mention-links.js"
 import { valueMatch } from "./phone-countries.js"
+import { canonicalTagNamed } from "./tags.js"
 
 export interface Fragment {
   sql: string
@@ -349,14 +350,15 @@ const found: FieldCompiler = ({ field, value }, scope) => {
   )
 }
 
-const tag: FieldCompiler = (node, { corpus }) => {
-  const name = tagOf(node.value)
-  if (name === undefined) searchError("query.invalid-tag", node.span)
+const tag: FieldCompiler = (node, { corpus, database }) => {
+  const selected = tagOf(node.value)
+  if (selected === undefined) searchError("query.invalid-tag", node.span)
+  const name = canonicalTagNamed(database, selected)?.name ?? selected
   return always(
     bound(
-      `m.id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.item}') OR ` +
-        `m.chat_id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.thread}') OR ` +
-        "m.sender_identity_id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='identity')",
+      `m.id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.item}') OR ` +
+        `m.chat_id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.thread}') OR ` +
+        "m.sender_identity_id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='identity')",
       name,
       name,
       name,

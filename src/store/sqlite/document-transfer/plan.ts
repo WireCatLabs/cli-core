@@ -3,6 +3,7 @@ import { digest } from "../../document-transfer/digest.js"
 import type { DocumentTransferPreview, TransferSnapshot } from "../../document-transfer/model.js"
 import type { CacheDatabase } from "../../driver.js"
 import { ownerPerson } from "../actors.js"
+import { tagMemberIds } from "../tag-resolution.js"
 import { canonicalTagNamed } from "../tags.js"
 import { stateOfThing, type Thing, thingOf } from "../things.js"
 import { planPeople } from "./people.js"
@@ -113,7 +114,15 @@ export const planTransfer = (
   if (target && target.organization_id !== organization)
     conflicts.add("the destination collection has a different organization binding")
   for (const tagging of snapshot.taggings) {
+    if (Number(tagging.tag_group_size ?? 1) > 1)
+      conflicts.add(
+        `source tag ${String(tagging.tag_id)} belongs to a consolidated group; annotation transfer cannot preserve that group yet`,
+      )
     const tag = canonicalTagNamed(database, String(tagging.tag_name))
+    if (tag && tagMemberIds(database, tag.id).length > 1)
+      conflicts.add(
+        `destination tag ${String(tag.id)} belongs to a consolidated group; annotation transfer cannot preserve independent contributions yet`,
+      )
     if (tag && tag.name !== tagging.tag_name)
       conflicts.add(`destination vocabulary resolves source tag ${String(tagging.tag_id)} to another canonical label`)
     if (tag && tag.kind !== tagging.tag_kind)

@@ -10,6 +10,7 @@ import type { EntityType } from "./entity-types.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { guardTagCreation, type TagCreationOptions } from "./tag-creation.js"
+import { tagMemberIds } from "./tag-resolution.js"
 import { inboxKey, taskAccountOf } from "./task-keys.js"
 import { emailOf, emailThreadOf, type Thing, taskRowOf } from "./things.js"
 import { toIso } from "./values.js"
@@ -118,7 +119,11 @@ export interface TagRow {
 }
 
 export const tagNamed = (database: CacheDatabase, name: string): TagRow | undefined => {
-  const row = database.prepare("SELECT id, name, kind FROM tags WHERE name = ?").get(name)
+  const row = database
+    .prepare(
+      "SELECT r.canonical_id AS id,r.name,r.kind FROM canonical_tags t JOIN resolved_tags r ON r.id=t.id WHERE t.name=?",
+    )
+    .get(name)
   return row ? { id: Number(row.id), name: String(row.name), kind: row.kind as TagKind } : undefined
 }
 
@@ -128,17 +133,20 @@ export const canonicalTagNamed = (database: CacheDatabase, name: string): TagRow
   // createTag stores the name as given, so "Projects/Acme" must be found again by its folded form.
   const foldedNamed = (): TagRow | undefined => {
     const rows = database
-      .prepare("SELECT id, name, kind FROM tags WHERE lower(name) = lower(?) LIMIT 3")
+      .prepare(
+        "SELECT r.canonical_id AS id,r.name,r.kind,t.name AS original_name FROM canonical_tags t JOIN resolved_tags r ON r.id=t.id WHERE lower(t.name)=lower(?) LIMIT 4097",
+      )
       .all(normalized)
-      .filter((row) => normalizeVocabularyName(String(row.name)) === normalized)
-    if (rows.length > 1) throw new CliError("configuration_error", "the label name has conflicting canonical targets")
-    const row = rows[0]
+      .filter((row) => normalizeVocabularyName(String(row.original_name)) === normalized)
+    const unique = [...new Map(rows.map((row) => [Number(row.id), row])).values()]
+    if (unique.length > 1) throw new CliError("configuration_error", "the label name has conflicting canonical targets")
+    const row = unique[0]
     return row ? { id: Number(row.id), name: String(row.name), kind: row.kind as TagKind } : undefined
   }
   const direct = tagNamed(database, normalized) ?? foldedNamed()
   const aliases = database
     .prepare(
-      "SELECT DISTINCT t.id,t.name,t.kind FROM aliases a JOIN tags t ON t.id=a.aliasable_id " +
+      "SELECT DISTINCT t.canonical_id AS id,t.name,t.kind FROM aliases a JOIN resolved_tags t ON t.id=a.aliasable_id " +
         "WHERE a.aliasable_type='tag' AND a.account_id IS NULL AND a.name_folded=? LIMIT 2",
     )
     .all(normalized)
@@ -175,7 +183,9 @@ export const createTag = (
     )
   guardTagCreation(context, name, kind, by, options)
   const at = now()
-  database.prepare("INSERT INTO tags (name, kind, created_at, updated_at) VALUES (?, ?, ?, ?)").run(name, kind, at, at)
+  database
+    .prepare("INSERT INTO canonical_tags (name, kind, created_at, updated_at) VALUES (?, ?, ?, ?)")
+    .run(name, kind, at, at)
   return tagNamed(database, name) as TagRow
 }
 
@@ -203,19 +213,26 @@ export const addTags = (
   const at = now()
   return tags.filter((name) => {
     const tag = ensureTag(context, name)
+    const held = database
+      .prepare(
+        "SELECT source,author_type,author_id FROM taggings WHERE tag_id IN (SELECT ? UNION ALL SELECT source_id FROM tag_redirects WHERE survivor_id=?) AND taggable_type=? AND taggable_id=?",
+      )
+      .all(tag.id, tag.id, thing.type, thing.id)
+    if (
+      held.some(
+        (row) =>
+          row.source === source && row.author_type === (author?.type ?? null) && row.author_id === (author?.id ?? null),
+      )
+    )
+      return false
     const added =
       insert.run(tag.id, thing.type, thing.id, source, author?.type ?? null, author?.id ?? null, at, at).changes > 0
     if (!added && source === "owner") claim.run(at, tag.id, thing.type, thing.id)
-    return added
+    return added && held.length === 0
   })
 }
 
-const sourceOf = (database: CacheDatabase, thing: Thing, tagId: number) =>
-  database
-    .prepare("SELECT source FROM taggings WHERE tag_id=? AND taggable_type=? AND taggable_id=?")
-    .get(tagId, thing.type, thing.id)?.source as TaggingSource | undefined
-
-/** The tags it had, in the order given. A chat's keyword claim stays apart from the owner's own tag. */
+/** An explicit removal withdraws the effective label, restricted to the requested origin when supplied. */
 export const removeTags = (
   { database }: StoreContext,
   thing: Thing,
@@ -226,27 +243,35 @@ export const removeTags = (
   return tags.filter((name) => {
     const tag = canonicalTagNamed(database, name)
     if (!tag) return false
-    const held = sourceOf(database, thing, tag.id)
-    const automatic =
-      thing.type === "chat" &&
-      database.prepare("SELECT 1 AS held FROM auto_tag_claims WHERE chat_id=? AND tag_id=?").get(thing.id, tag.id)
-    if (source === "manual") {
-      if (held !== "owner") return false
-      if (automatic)
+    let changed = false
+    for (const id of tagMemberIds(database, tag.id)) {
+      const held = database
+        .prepare("SELECT source FROM taggings WHERE tag_id=? AND taggable_type=? AND taggable_id=?")
+        .get(id, thing.type, thing.id)
+      const automatic =
+        thing.type === "chat" &&
         database
-          .prepare("UPDATE taggings SET source='auto' WHERE tag_id=? AND taggable_type=? AND taggable_id=?")
-          .run(tag.id, thing.type, thing.id)
-      else remove.run(tag.id, thing.type, thing.id)
-      return true
+          .prepare("SELECT 1 AS held FROM canonical_auto_tag_claims WHERE chat_id=? AND tag_id=?")
+          .get(thing.id, id)
+      if (source === "manual") {
+        if (held?.source !== "owner") continue
+        if (automatic)
+          database
+            .prepare("UPDATE taggings SET source='auto' WHERE tag_id=? AND taggable_type=? AND taggable_id=?")
+            .run(id, thing.type, thing.id)
+        else remove.run(id, thing.type, thing.id)
+        changed = true
+        continue
+      }
+      if (automatic) {
+        database.prepare("DELETE FROM canonical_auto_tag_claims WHERE chat_id=? AND tag_id=?").run(thing.id, id)
+        changed = true
+      }
+      if (source === "auto") {
+        if (held?.source === "auto") changed = remove.run(id, thing.type, thing.id).changes > 0 || changed
+      } else changed = remove.run(id, thing.type, thing.id).changes > 0 || changed
     }
-    if (thing.type === "chat")
-      database.prepare("DELETE FROM auto_tag_claims WHERE chat_id=? AND tag_id=?").run(thing.id, tag.id)
-    if (source === "auto") {
-      if (!automatic) return false
-      if (held !== "owner") remove.run(tag.id, thing.type, thing.id)
-      return true
-    }
-    return remove.run(tag.id, thing.type, thing.id).changes > 0
+    return changed
   })
 }
 
@@ -260,7 +285,7 @@ export interface Label {
 export const labelsOf = (database: CacheDatabase, thing: Thing): Label[] =>
   database
     .prepare(
-      "SELECT t.name, g.source FROM taggings g JOIN tags t ON t.id = g.tag_id WHERE g.taggable_type=? AND g.taggable_id=? ORDER BY t.name",
+      "SELECT t.name,CASE WHEN min(g.source)='file' AND max(g.source)='file' THEN 'file' ELSE 'owner' END AS source FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE g.taggable_type=? AND g.taggable_id=? GROUP BY t.canonical_id ORDER BY t.name",
     )
     .all(thing.type, thing.id)
     .map((row) => ({ tag: String(row.name), origin: row.source === "file" ? "file" : "owner" }))
@@ -286,14 +311,16 @@ export const setMainTopic = (context: StoreContext, thing: Thing, topic: string 
 }
 
 export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagFilter): StoredTag[] => {
-  const tagged = filter.tag === undefined ? "" : " AND t.name=?"
+  const selectedTag = filter.tag === undefined ? undefined : (canonicalTagNamed(database, filter.tag)?.id ?? -1)
+  const tagged =
+    selectedTag === undefined ? "" : " AND t.canonical_id=(SELECT canonical_id FROM resolved_tags WHERE id=?)"
   const parts: { type: TagType; sql: string; params: SqlValue[] }[] = [
     {
       type: "chat",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, " +
-        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
-        "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN chats c ON c.id=g.taggable_id " +
+        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
+        "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN chats c ON c.id=g.taggable_id " +
         "JOIN accounts a ON a.id=c.account_id WHERE g.taggable_type='chat' AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
     },
@@ -301,8 +328,8 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "contact",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, NULL AS chat_title, " +
-        "i.external_id AS person_id, i.name AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
-        "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN identities i ON i.id=g.taggable_id " +
+        "i.external_id AS person_id, i.name AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
+        "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN identities i ON i.id=g.taggable_id " +
         "WHERE g.taggable_type='identity' AND i.provider=?",
       params: [key.provider],
     },
@@ -310,8 +337,8 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "message",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, " +
-        "NULL AS person_id, NULL AS name, m.external_id AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
-        "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN messages m ON m.id=g.taggable_id JOIN chats c ON c.id=m.chat_id " +
+        "NULL AS person_id, NULL AS name, m.external_id AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
+        "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN messages m ON m.id=g.taggable_id JOIN chats c ON c.id=m.chat_id " +
         "JOIN accounts a ON a.id=c.account_id WHERE g.taggable_type='message' AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
     },
@@ -319,8 +346,8 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "chat",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, " +
-        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
-        "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN email_threads th ON th.id=g.taggable_id " +
+        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
+        "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN email_threads th ON th.id=g.taggable_id " +
         "JOIN accounts a ON a.id=th.account_id WHERE g.taggable_type='email_thread' AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
     },
@@ -328,8 +355,8 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "message",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, " +
-        "NULL AS person_id, NULL AS name, e.external_id AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
-        "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN emails e ON e.id=g.taggable_id " +
+        "NULL AS person_id, NULL AS name, e.external_id AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
+        "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN emails e ON e.id=g.taggable_id " +
         "JOIN email_threads th ON th.id=e.email_thread_id JOIN accounts a ON a.id=e.account_id " +
         "WHERE g.taggable_type='email' AND e.deleted_at IS NULL AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
@@ -338,9 +365,9 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "task",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, k.title AS chat_title, " +
-        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, " +
+        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, " +
         "COALESCE(k.package_id, k.key) AS task_id " +
-        "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN tasks k ON k.id=g.taggable_id JOIN projects p ON p.id=k.project_id " +
+        "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN tasks k ON k.id=g.taggable_id JOIN projects p ON p.id=k.project_id " +
         "WHERE g.taggable_type='task' AND k.deleted_at IS NULL AND p.key=?",
       params: [inboxKey(`${key.provider}:${key.account}`)],
     },
@@ -355,15 +382,15 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
   ]
   const rows = database
     .prepare(
-      "SELECT * FROM (SELECT u.*, CASE u.type WHEN 'identity' THEN 'contact' WHEN 'email_thread' THEN 'chat' " +
+      "SELECT * FROM (SELECT tag,type,min(created_at) AS created_at,chat_id,chat_title,person_id,name,message_id,CASE WHEN max(source='owner') THEN 'owner' ELSE min(source) END AS source,target_id,tag_id,task_id,tag_type,max(auto) AS auto FROM (SELECT u.*, CASE u.type WHEN 'identity' THEN 'contact' WHEN 'email_thread' THEN 'chat' " +
         "WHEN 'email' THEN 'message' ELSE u.type END AS tag_type, (u.type = 'chat' AND EXISTS (SELECT 1 FROM " +
-        `auto_tag_claims ac WHERE ac.chat_id = u.target_id AND ac.tag_id = u.tag_id)) AS auto FROM (${union}) u) x ` +
+        `canonical_auto_tag_claims ac JOIN resolved_tags rt ON rt.id=ac.tag_id WHERE ac.chat_id = u.target_id AND rt.canonical_id = u.tag_id)) AS auto FROM (${union}) u) GROUP BY tag,type,target_id) x ` +
         `WHERE ${where.length === 0 ? "1" : where.map(({ sql }) => `(${sql})`).join(" AND ")} ` +
         "ORDER BY x.tag, x.type, x.created_at, x.chat_id, x.person_id, x.message_id" +
         (filter.window ? " LIMIT ? OFFSET ?" : ""),
     )
     .all(
-      ...chosen.flatMap(({ params }) => (filter.tag === undefined ? params : [...params, filter.tag])),
+      ...chosen.flatMap(({ params }) => (selectedTag === undefined ? params : [...params, selectedTag])),
       ...where.flatMap(({ params }) => params),
       ...(filter.window ? [filter.window.limit, filter.window.offset] : []),
     )

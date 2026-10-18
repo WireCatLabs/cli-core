@@ -289,7 +289,7 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
       }
       const actorSql = "json_each(d.metadata, '$.catalog.folded.people')"
       const tagSql =
-        "SELECT 1 FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type='document' AND g.taggable_id=d.id AND t.name=?"
+        "SELECT 1 FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE g.taggable_type='document' AND g.taggable_id=d.id AND t.name=?"
       const tag = (name: string) => canonicalTagNamed(database, name)?.name ?? normalizeTag(name)
       if (query.parent !== undefined)
         add("EXISTS(SELECT 1 FROM json_each(d.metadata, '$.catalog.parents') WHERE value=?)", query.parent)

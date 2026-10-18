@@ -16,7 +16,7 @@ import {
   type TaskRelationKind,
 } from "../store/index.js"
 import type { AccountKey, Author, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
-import { type ColumnMap, queryFilter } from "../store/store.js"
+import { type ColumnMap, queryFilter, type Where } from "../store/store.js"
 import {
   type ClosedState,
   createTaskService,
@@ -31,6 +31,7 @@ import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
 import { categorize, type TaskCategory, taskCategoryOf, type UnlistedCategory } from "./task-categories.js"
 import { taskAccount } from "./task-rules.js"
+import { taskTagFilters } from "./task-tag-filters.js"
 
 export { TASK_KINDS, TASK_STATES }
 
@@ -103,18 +104,11 @@ export const TASK_PAIR_QUERY = {
 const TIME = (sql: string) => ({ type: "time", sql }) as const
 
 /** `chat:` names the chat as the messenger does; `groups` holds each name already resolved to its stored id. */
-const taskColumns = (groups: ReadonlyMap<string, string>): ColumnMap => ({
+const taskColumns = (groups: ReadonlyMap<string, string>, tags: ReadonlyMap<string, Where>): ColumnMap => ({
   id: { type: "kw", sql: "t.package_id" },
   key: { type: "kw", sql: "t.key" },
   category: { type: "kw", sql: "t.category" },
-  tag: {
-    where: (node) => ({
-      sql:
-        "EXISTS (SELECT 1 FROM taggings g JOIN tags n ON n.id = g.tag_id " +
-        "WHERE g.taggable_type = 'task' AND g.taggable_id = t.id AND n.name = ?)",
-      params: [node.value.trim().toLowerCase()],
-    }),
-  },
+  tag: { where: (node) => tags.get(node.value) ?? { sql: "0", params: [] } },
   title: { type: "kw", sql: "t.title_folded", folded: true },
   kind: { type: "enum", sql: "t.type" },
   state: { type: "enum", sql: "t.status" },
@@ -405,7 +399,8 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         for (const node of query ? walkQuery(query.root) : [])
           if (node.field === "chat" && node.operator !== "wildcard" && !groups.has(node.value))
             groups.set(node.value, await storedChatId(deps.messenger, node.value, store, account))
-        const where = query ? queryFilter(query, taskColumns(groups), { command: "tasks list" }) : undefined
+        const tags = await taskTagFilters(store, query)
+        const where = query ? queryFilter(query, taskColumns(groups, tags), { command: "tasks list" }) : undefined
         const rows = await store.tasks.query(taskAccount(account), where, { limit: limit + 1, offset })
         const shown = rows.slice(0, limit)
         return {

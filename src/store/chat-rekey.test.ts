@@ -244,10 +244,10 @@ describe("re-keying a stored chat", () => {
     const match = [{ tag: "family", score: 1, fields: ["title"] }]
     await store.chats.replaceAutoTags(OWNER, PHONE, "keywords-1", match)
     await store.chats.replaceAutoTags(OWNER, LID, "keywords-1", match)
-    expect(await raw(path, "SELECT count(*) AS n FROM auto_tag_claims")).toEqual([{ n: 2 }])
+    expect(await raw(path, "SELECT count(*) AS n FROM canonical_auto_tag_claims")).toEqual([{ n: 2 }])
 
     expect((await store.chats.rekeyChat(OWNER, PHONE, LID)).outcome).toBe("merged")
-    expect(await raw(path, "SELECT count(*) AS n FROM auto_tag_claims")).toEqual([{ n: 1 }])
+    expect(await raw(path, "SELECT count(*) AS n FROM canonical_auto_tag_claims")).toEqual([{ n: 1 }])
     await store.close()
   })
 

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { existsSync, linkSync, mkdtempSync, readFileSync, statSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -555,4 +556,76 @@ describe("provider-neutral document annotation transfer", () => {
     })
     expect(existsSync(missing)).toBe(false)
   })
+})
+
+const minimalTaggedTransfer = async () => {
+  const root = mkdtempSync(join(tmpdir(), "consolidated-tag-transfer-"))
+  const source = join(root, "source.db"),
+    destination = join(root, "destination.db")
+  const store = await open(source)
+  const folder = await store.notes.addFolder({ name: collection })
+  const document = (
+    await store.notes.saveFileNote({
+      folderId: folder.id,
+      path: "session.md",
+      title: "Synthetic session",
+      text: "Synthetic meeting context",
+    })
+  ).note
+  await store.knowledge.addTags(null, { type: "document", id: document.id }, ["arrival"])
+  return { source, destination, store, options: { source, destination, collection } }
+}
+const consolidateTags = async (store: Awaited<ReturnType<typeof open>>) => {
+  const first = await store.knowledge.createTag("welcome")
+  const catalog = await store.knowledge.vocabulary()
+  const source = catalog.entries.find((row) => row.name === "arrival")
+  if (!source) throw Error("missing synthetic arrival tag")
+  const options = {
+    sourceId: source.id,
+    survivorId: String(first.id),
+    expectedVocabularyFingerprint: catalog.fingerprint,
+  }
+  const preview = await store.knowledge.previewTagConsolidation(options)
+  await store.knowledge.applyTagConsolidation({
+    ...options,
+    expectedPreviewFingerprint: preview.previewFingerprint,
+    by: "owner",
+    idempotencyKey: "transfer-boundary",
+  })
+}
+const image = (path: string) => {
+  const digest = createHash("sha256").update(readFileSync(path))
+  if (existsSync(`${path}-wal`)) digest.update(readFileSync(`${path}-wal`))
+  return digest.digest("hex")
+}
+
+it("refuses a consolidated source label before copying or changing either store", async () => {
+  const fixture = await minimalTaggedTransfer()
+  await consolidateTags(fixture.store)
+  const before = image(fixture.source)
+  const blocked = await previewDocumentTransfer(fixture.options)
+  expect(blocked.ready).toBe(false)
+  expect(blocked.conflicts.some((value) => value.includes("consolidated group"))).toBe(true)
+  await expect(
+    applyDocumentTransfer({ ...fixture.options, expected_fingerprint: blocked.fingerprint }),
+  ).rejects.toMatchObject({ code: "configuration_error" })
+  expect(image(fixture.source)).toBe(before)
+  expect(existsSync(fixture.destination)).toBe(false)
+})
+
+it("refuses a consolidated destination label before changing either store", async () => {
+  const fixture = await minimalTaggedTransfer()
+  const target = await open(fixture.destination)
+  await target.knowledge.createTag("arrival")
+  await consolidateTags(target)
+  const sourceBefore = image(fixture.source),
+    targetBefore = image(fixture.destination)
+  const blocked = await previewDocumentTransfer(fixture.options)
+  expect(blocked.ready).toBe(false)
+  expect(blocked.conflicts.some((value) => value.includes("consolidated group"))).toBe(true)
+  await expect(
+    applyDocumentTransfer({ ...fixture.options, expected_fingerprint: blocked.fingerprint }),
+  ).rejects.toMatchObject({ code: "configuration_error" })
+  expect(image(fixture.source)).toBe(sourceBefore)
+  expect(image(fixture.destination)).toBe(targetBefore)
 })

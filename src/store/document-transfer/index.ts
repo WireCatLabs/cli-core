@@ -7,6 +7,7 @@ import { planTransfer } from "../sqlite/document-transfer/plan.js"
 import { transferSnapshot } from "../sqlite/document-transfer/snapshot.js"
 import { openSqlite } from "../sqlite/open.js"
 import { openStoreContext } from "../sqlite/open-store.js"
+import { assertReadCompatible } from "../sqlite/read-compatibility.js"
 import { digest } from "./digest.js"
 import type { DocumentTransferOptions } from "./model.js"
 
@@ -65,7 +66,16 @@ const openSource = async (path: string) => {
 }
 
 const openPreviewTarget = async (path: string) => {
-  if (statSync(path, { throwIfNoEntry: false })) return openSource(path)
+  if (statSync(path, { throwIfNoEntry: false })) {
+    const opened = await openSource(path)
+    try {
+      assertReadCompatible(opened.database)
+      return opened
+    } catch (error) {
+      opened.database.close()
+      throw error
+    }
+  }
   const target = await openSqlite(":memory:")
   try {
     migrate(target.database)
