@@ -28,20 +28,20 @@ export const flooded = (
   memory: FloodMemory,
   { name, warn, pacer }: { name: string; warn: (message: string) => void; pacer?: Pacer },
 ): MessengerAdapter => {
-  const kept = (what: () => void) => {
+  const kept = async (what: () => void | Promise<void>) => {
     try {
-      what()
+      await what()
     } catch (error) {
       warn(`could not remember ${name}'s wait (${error instanceof Error ? error.message : String(error)})`)
     }
   }
 
-  const noted = (operation: string, chatId: string | undefined, error: unknown) => {
+  const noted = async (operation: string, chatId: string | undefined, error: unknown) => {
     if (!isCliFailure(error)) return
     const details = error.details ?? {}
     const standing = details.standing as AccountStanding | undefined
     if (standing && BLOCKING.has(standing.state)) {
-      kept(() => {
+      await kept(() => {
         const block = memory.block({
           state: standing.state as SendBlock["state"],
           hint: standing.hint ?? error.message,
@@ -54,7 +54,7 @@ export const flooded = (
     const waitMs = Number(details.retry_after_ms)
     if (error.code !== "rate_limited" || details.remembered === true || !Number.isFinite(waitMs) || waitMs <= 0) return
     const providerError = providerErrorKey(details.provider_error)
-    kept(() => {
+    await kept(() => {
       const deadline = memory.remember({
         operation,
         ...(chatId ? { chatId } : {}),
@@ -63,14 +63,14 @@ export const flooded = (
       })
       warn(`${name} asked to wait before ${operation} again — until ${deadline.until}`)
     })
-    if (pacer) kept(() => pacer.holdFor(waitMs))
+    if (pacer) await kept(() => pacer.holdFor(waitMs))
   }
 
   const turn = async () => {
     if (!pacer) return
     let at = Date.now()
-    kept(() => {
-      at = pacer.reserve()
+    await kept(async () => {
+      at = await pacer.reserve()
     })
     const waitMs = at - Date.now()
     if (waitMs <= 0) return
@@ -93,7 +93,7 @@ export const flooded = (
         try {
           return await call(...args)
         } catch (error) {
-          noted(operation, undefined, error)
+          await noted(operation, undefined, error)
           throw error
         }
       }) as never
@@ -117,7 +117,7 @@ export const flooded = (
       try {
         return await call(...args)
       } catch (error) {
-        noted(operation, chatId, error)
+        await noted(operation, chatId, error)
         throw error
       }
     }) as never

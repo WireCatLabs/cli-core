@@ -2,7 +2,7 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../ports/app.js"
-import { withFileLock } from "./file-lock.js"
+import { withFileLockAsync } from "./file-lock.js"
 
 /** How fast one profile may ask its messenger, counted across every process using it. */
 export interface PaceRate {
@@ -36,10 +36,10 @@ export class Pacer {
   }
 
   /** When this call may go; reserved at once, so the next caller in any process lines up behind it. */
-  reserve(): number {
+  async reserve(): Promise<number> {
     const now = this.now()
     if (this.interval === 0) return now
-    return withFileLock(this.path, "the request pace", () => {
+    return withFileLockAsync(this.path, "the request pace", () => {
       const tat = Math.max(this.read(), now)
       this.write(tat + this.interval)
       return Math.max(now, tat - this.rate.burst * this.interval)
@@ -47,17 +47,17 @@ export class Pacer {
   }
 
   /** The messenger asked every caller to wait: nothing goes before `now + waitMs`, in any process. */
-  holdFor(waitMs: number): void {
+  async holdFor(waitMs: number): Promise<void> {
     if (this.interval === 0) return
-    withFileLock(this.path, "the request pace", () => {
+    await withFileLockAsync(this.path, "the request pace", () => {
       const hold = this.now() + waitMs + this.rate.burst * this.interval
       this.write(Math.max(this.read(), hold))
     })
   }
 
   /** The owner's `flood clear`: every process may go again at once. */
-  reset(): void {
-    withFileLock(this.path, "the request pace", () => this.write(0))
+  async reset(): Promise<void> {
+    await withFileLockAsync(this.path, "the request pace", () => this.write(0))
   }
 
   private read(): number {

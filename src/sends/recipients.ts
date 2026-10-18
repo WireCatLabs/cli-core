@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import type { AppIdentity } from "../ports/app.js"
-import { withFileLock } from "./file-lock.js"
+import { withFileLock, withFileLockAsync } from "./file-lock.js"
 
 export interface Recipient {
   id: Id
@@ -54,18 +54,25 @@ export class RecipientList {
 
   /** Whether it was new. Adding one again fills in a partner an older entry was stored without. */
   add(recipient: Recipient): boolean {
-    return this.#locked(() => {
-      const chats = this.read() ?? []
-      const known = chats.find((chat) => chat.id === recipient.id)
-      if (known) {
-        if (recipient.partnerId && !known.partnerId) {
-          this.#write(chats.map((chat) => (chat === known ? { ...known, partnerId: recipient.partnerId } : chat)))
-        }
-        return false
+    return this.#locked(() => this.#added(recipient))
+  }
+
+  /** `add` waiting for the lock on timers: `recipients add` connects, so it runs inside `serve` when one holds the account. */
+  addAsync(recipient: Recipient): Promise<boolean> {
+    return withFileLockAsync(this.path, "the recipient list", () => this.#added(recipient), this.lockWaitMs)
+  }
+
+  #added(recipient: Recipient): boolean {
+    const chats = this.read() ?? []
+    const known = chats.find((chat) => chat.id === recipient.id)
+    if (known) {
+      if (recipient.partnerId && !known.partnerId) {
+        this.#write(chats.map((chat) => (chat === known ? { ...known, partnerId: recipient.partnerId } : chat)))
       }
-      this.#write([...chats, recipient])
-      return true
-    })
+      return false
+    }
+    this.#write([...chats, recipient])
+    return true
   }
 
   /** The id or the title as it was stored; `undefined` when neither matched. */
@@ -85,23 +92,28 @@ export class RecipientList {
    * The chat the messenger now names `to`: its entry, and a partner of that id, follow it. Only an entry already there
    * changes, and no list is created, so the list never opens up. Whether anything changed.
    */
-  rekey(from: Id, to: Id): boolean {
+  async rekey(from: Id, to: Id): Promise<boolean> {
     if (from === to) return false
-    return this.#locked(() => {
-      const chats = this.read()
-      if (!chats?.some((chat) => chat.id === from || chat.partnerId === from)) return false
-      const held = chats.some((chat) => chat.id === to)
-      this.#write(
-        chats
-          .filter((chat) => !(held && chat.id === from))
-          .map((chat) => ({
-            ...chat,
-            ...(chat.id === from ? { id: to } : {}),
-            ...(chat.partnerId === from ? { partnerId: to } : {}),
-          })),
-      )
-      return true
-    })
+    return withFileLockAsync(
+      this.path,
+      "the recipient list",
+      () => {
+        const chats = this.read()
+        if (!chats?.some((chat) => chat.id === from || chat.partnerId === from)) return false
+        const held = chats.some((chat) => chat.id === to)
+        this.#write(
+          chats
+            .filter((chat) => !(held && chat.id === from))
+            .map((chat) => ({
+              ...chat,
+              ...(chat.id === from ? { id: to } : {}),
+              ...(chat.partnerId === from ? { partnerId: to } : {}),
+            })),
+        )
+        return true
+      },
+      this.lockWaitMs,
+    )
   }
 
   /** Whether there was a list to turn off. */
@@ -115,7 +127,9 @@ export class RecipientList {
 
   /**
    * Every change reads and writes under one lock: a `serve` re-keying while the owner removes a chat must not write
-   * the removed chat back. A lock held too long refuses the change and leaves the list as it was.
+   * the removed chat back. A lock held too long refuses the change and leaves the list as it was. Blocks the thread
+   * while it waits: for callers that cannot be async, and `recipients remove` and `clear`, which never
+   * connect and so never run inside `serve`.
    */
   #locked<T>(body: () => T): T {
     return withFileLock(this.path, "the recipient list", body, this.lockWaitMs)

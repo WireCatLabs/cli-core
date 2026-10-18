@@ -19,43 +19,45 @@ const entry = (id: string, extra: Partial<Recipient> = {}): Recipient => ({
 })
 
 describe("a re-keyed chat in the recipient list", () => {
-  it("takes the new id, keeping its title, date and partner", () => {
+  it("takes the new id, keeping its title, date and partner", async () => {
     const list = listAt([entry(PHONE, { partnerId: PHONE }), entry("9@lid", { title: "Bo" })])
 
-    expect(list.rekey(PHONE, LID)).toBe(true)
+    expect(await list.rekey(PHONE, LID)).toBe(true)
     expect(list.read()).toEqual([entry(LID, { partnerId: LID }), entry("9@lid", { title: "Bo" })])
-    expect(list.rekey(PHONE, LID)).toBe(false)
+    expect(await list.rekey(PHONE, LID)).toBe(false)
+    expect(await list.addAsync(entry("5@lid"))).toBe(true)
+    expect(await list.addAsync(entry("5@lid"))).toBe(false)
   })
 
-  it("keeps one entry when the list already held both ids", () => {
+  it("keeps one entry when the list already held both ids", async () => {
     const list = listAt([entry(PHONE), entry(LID)])
 
-    list.rekey(PHONE, LID)
+    await list.rekey(PHONE, LID)
 
     expect(list.read()).toEqual([entry(LID)])
   })
 
-  it("adds nothing when the list did not hold the old id, and creates no list that is off", () => {
+  it("adds nothing when the list did not hold the old id, and creates no list that is off", async () => {
     const list = listAt([entry("9@lid")])
-    expect(list.rekey(PHONE, LID)).toBe(false)
+    expect(await list.rekey(PHONE, LID)).toBe(false)
     expect(list.read()).toEqual([entry("9@lid")])
 
     const off = listAt()
-    expect(off.rekey(PHONE, LID)).toBe(false)
+    expect(await off.rekey(PHONE, LID)).toBe(false)
     expect(existsSync(off.path)).toBe(false)
   })
 
-  it("leaves a list that cannot be read as it is", () => {
+  it("leaves a list that cannot be read as it is", async () => {
     const list = listAt()
     writeFileSync(list.path, "{ not json")
 
-    expect(() => list.rekey(PHONE, LID)).toThrow(/cannot be read/)
+    await expect(list.rekey(PHONE, LID)).rejects.toThrow(/cannot be read/)
     expect(readFileSync(list.path, "utf8")).toBe("{ not json")
   })
 })
 
 describe("two writers of one recipient list", () => {
-  it("does not let a re-key write back a chat the owner removed while it ran", () => {
+  it("does not let a re-key write back a chat the owner removed while it ran", async () => {
     const path = listAt([entry(PHONE), entry("9@lid", { title: "Bo" })]).path
     const owner = new RecipientList(path, "wa", 0)
     let refused: unknown
@@ -74,21 +76,22 @@ describe("two writers of one recipient list", () => {
       }
     }
 
-    new Serve(path, "wa").rekey(PHONE, LID)
+    await new Serve(path, "wa").rekey(PHONE, LID)
     expect(refused).toMatchObject({ code: "timeout" })
     expect(owner.remove("9@lid")?.id).toBe("9@lid")
 
     expect(owner.read()).toEqual([entry(LID)])
   })
 
-  it("refuses a change while another process holds the list, and leaves the file as it was", () => {
+  it("refuses a change while another process holds the list, and leaves the file as it was", async () => {
     const list = new RecipientList(listAt([entry(PHONE), entry("9@lid", { title: "Bo" })]).path, "wa", 0)
     const before = readFileSync(list.path, "utf8")
     writeFileSync(`${list.path}.lock`, "")
 
     expect(() => list.remove("9@lid")).toThrow(expect.objectContaining({ code: "timeout" }))
-    expect(() => list.rekey(PHONE, LID)).toThrow(/stayed locked/)
+    await expect(list.rekey(PHONE, LID)).rejects.toThrow(/stayed locked/)
     expect(() => list.add(entry("5@lid"))).toThrow(/stayed locked/)
+    await expect(list.addAsync(entry("5@lid"))).rejects.toThrow(/stayed locked/)
     expect(() => list.off()).toThrow(/stayed locked/)
     expect(readFileSync(list.path, "utf8")).toBe(before)
   })

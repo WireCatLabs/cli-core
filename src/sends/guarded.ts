@@ -70,9 +70,19 @@ export const guardedWrite = async <T>(
   try {
     await guard.ask?.(attempt)
     refuseStopped(scopes)
-    guard.check(attempt)
+    if (guard.reserve) {
+      guard.check(attempt, { reserve: false })
+      await guard.reserve(attempt)
+    } else guard.check(attempt)
   } catch (error) {
     guard.record({ ...attempt, outcome: "refused", errorCode: codeOf(error) })
+    throw error
+  }
+  try {
+    // The deadline may have ended the command while the reservation waited for the journal lock.
+    refuseStopped(scopes)
+  } catch (error) {
+    guard.record({ ...attempt, outcome: "failed", errorCode: codeOf(error) })
     throw error
   }
   let recorded = false

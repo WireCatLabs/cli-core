@@ -66,6 +66,11 @@ export interface SendGuard {
    */
   check(request: GuardRequest, options?: { reserve?: boolean }): void
   /**
+   * `check` with its reservation taken without blocking the thread: `guardedWrite` runs `check` with `reserve: false`
+   * and then this. A guard built without it is reserved by `check`, which waits for the journal lock synchronously.
+   */
+  reserve?(request: GuardRequest): Promise<void>
+  /**
    * The question a write at level `ask` needs, before `check`: `check` refuses such a write unless
    * this request was answered yes, so a caller that skips it is refused rather than let through.
    */
@@ -275,6 +280,55 @@ export const sendGuard = ({
     return true
   }
 
+  /** `undefined` when the write counts toward nothing; otherwise its count, and its reservation to run under the lock. */
+  const counting = (request: GuardRequest) => {
+    permitted(request)
+    refuseHeld(request)
+    const asked = { ...request, people: request.personIds?.length ?? request.count }
+    const creatingTopic = request.kind === "chat" && request.action === "topic-create"
+    if (!countsTowardLimit(asked) && !creatingTopic) return undefined
+    const checked = (entries: SendEntry[]) => {
+      if (!creatingTopic) return withinLimit(request, entries)
+      if (request.sendId === undefined) throw new CliError("validation_error", "a topic creation needs an attempt id")
+      if (
+        entries.some(
+          (entry) =>
+            entry.action === "topic-create" &&
+            entry.sendId === request.sendId &&
+            ["sent", "outcome_unknown", "reserved"].includes(entry.outcome),
+        )
+      ) {
+        throw new CliError(
+          "validation_error",
+          "this topic creation was already attempted; check topics list and do not repeat an unknown creation",
+          { operation_id: request.sendId, retryable: false },
+        )
+      }
+      return true
+    }
+    const reserving = () => {
+      if (!checked(journal.entries())) return
+      const id = randomUUID()
+      const { chatId, kind, action, sendId, operationId, scheduledFor, notify } = request
+      journal.append({
+        at: now().toISOString(),
+        profile,
+        chatId,
+        outcome: "reserved",
+        reservation: id,
+        ...(kind ? { kind } : {}),
+        ...(action ? { action } : {}),
+        ...(asked.people === undefined ? {} : kind === "delete" ? { count: asked.people } : { people: asked.people }),
+        ...(sendId === undefined ? {} : { sendId }),
+        ...(operationId === undefined ? {} : { operationId }),
+        ...(scheduledFor ? { scheduledFor } : {}),
+        ...(notify === undefined ? {} : { notify }),
+      })
+      reservation = id
+    }
+    return { checked, reserving }
+  }
+
   return {
     ask: async (request) => {
       refuseReadOnly()
@@ -288,54 +342,15 @@ export const sendGuard = ({
     },
 
     check: (request, { reserve = true } = {}) => {
-      permitted(request)
-      refuseHeld(request)
-      const asked = { ...request, people: request.personIds?.length ?? request.count }
-      const creatingTopic = request.kind === "chat" && request.action === "topic-create"
-      if (!countsTowardLimit(asked) && !creatingTopic) return
-      const checked = (entries: SendEntry[]) => {
-        if (!creatingTopic) return withinLimit(request, entries)
-        if (request.sendId === undefined) throw new CliError("validation_error", "a topic creation needs an attempt id")
-        if (
-          entries.some(
-            (entry) =>
-              entry.action === "topic-create" &&
-              entry.sendId === request.sendId &&
-              ["sent", "outcome_unknown", "reserved"].includes(entry.outcome),
-          )
-        ) {
-          throw new CliError(
-            "validation_error",
-            "this topic creation was already attempted; check topics list and do not repeat an unknown creation",
-            { operation_id: request.sendId, retryable: false },
-          )
-        }
-        return true
-      }
-      if (!reserve) {
-        checked(journal.entries())
-        return
-      }
-      journal.locked(() => {
-        if (!checked(journal.entries())) return
-        const id = randomUUID()
-        const { chatId, kind, action, sendId, operationId, scheduledFor, notify } = request
-        journal.append({
-          at: now().toISOString(),
-          profile,
-          chatId,
-          outcome: "reserved",
-          reservation: id,
-          ...(kind ? { kind } : {}),
-          ...(action ? { action } : {}),
-          ...(asked.people === undefined ? {} : kind === "delete" ? { count: asked.people } : { people: asked.people }),
-          ...(sendId === undefined ? {} : { sendId }),
-          ...(operationId === undefined ? {} : { operationId }),
-          ...(scheduledFor ? { scheduledFor } : {}),
-          ...(notify === undefined ? {} : { notify }),
-        })
-        reservation = id
-      })
+      const counted = counting(request)
+      if (!counted) return
+      if (reserve) journal.locked(counted.reserving)
+      else counted.checked(journal.entries())
+    },
+
+    reserve: async (request) => {
+      const counted = counting(request)
+      if (counted) await journal.lockedAsync(counted.reserving)
     },
 
     // After a send, a failure to write here must not become the command's answer: the message is
