@@ -18,6 +18,20 @@ shape of this file.
   `chatArchive`, `chatPin` or `chatMarkUnread` on its `Messenger` and giving its adapter `archiveChat(chatId,
   archived)`, `pinChat(chatId, pinned)` or `markChatUnread(chatId)`; without them nothing changes. The MCP server
   has no tool for them yet.
+- **Messages can be starred.** A messenger CLI that sets `messageStars: true` mounts `messages star <chat> <message>`
+  and `messages unstar`, and offers them to agents as `messages_star` and `messages_unstar`. Its adapter implements
+  `star(chatId, messageId, starred)` (the new `MessageStars` group). Only the owner sees a star, so it never counts
+  toward the hourly limit; the profile's `messages.star` and `messages.unstar` levels apply, and the send journal
+  records it as the owner's own change. Telegram and MAX have no stars and change nothing.
+- **A messenger can say every pin tells the chat's members.** With `quietPins: false`, `messages pin` always pins
+  out loud: the pin tells the members and counts toward the hourly limit, with or without `--notify`. Its help says
+  so, the agents' `messages_pin` takes no `notify`, and its description no longer says a one-to-one pin stays on the
+  owner's side, which is true only of Telegram.
+- **A pin can end by itself.** A messenger that lists `pinDurations` (seconds) gives `messages pin` an
+  `--expire-time` option, such as `--expire-time 24h` (`expire_time` for agents), that takes only those lengths; the
+  adapter's `pin` gets it as `duration`, in seconds. Without the option the messenger's own default applies.
+  Telegram and MAX list none, so their pins are unchanged.
+- `messages pin` and `messages unpin` have examples in their help.
 
 ### Fixed
 

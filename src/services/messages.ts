@@ -4,6 +4,7 @@ import { type FormattedText, validateFormattedText, visibleFormattedText } from 
 import { formatLocator } from "../domain/locator.js"
 import { type MessageLink, messageLinkTarget, validatePermalink } from "../domain/message-link.js"
 import type { Deletion, Discussion, Id, Message, Page, Provider, WindowedMessage } from "../domain/models.js"
+import { pinDurationsText } from "../domain/pin-duration.js"
 import { threadIdOf } from "../domain/thread.js"
 import { type After, capability, type Download, type MessengerAdapter, type Sent } from "../ports/messenger.js"
 import type { MediaOption, MessengerTraits } from "../ports/traits.js"
@@ -181,6 +182,12 @@ export interface Pinned {
   pinned: boolean
 }
 
+export interface Starred {
+  chatId: Id
+  messageId: Id
+  starred: boolean
+}
+
 export interface Reacted {
   chatId: Id
   messageId: Id
@@ -232,9 +239,14 @@ export interface MessagesService {
   forward(
     target: MessageTarget & { to: string; silent: boolean; sendId?: string; sendAs?: Id; threadId?: Id },
   ): Promise<Operated<{ sendId: string; message: Message }>>
-  /** Counts toward the hourly limit only when it notifies. */
-  pin(target: MessageTarget & { notify: boolean }): Promise<Operated<Pinned>>
+  /**
+   * Counts toward the hourly limit only when it notifies, which every pin does where the messenger has no quiet
+   * one. `duration`, in seconds, is one of the messenger's `pinDurations`.
+   */
+  pin(target: MessageTarget & { notify: boolean; duration?: number }): Promise<Operated<Pinned>>
   unpin(target: MessageTarget): Promise<Operated<Pinned>>
+  /** Only the owner sees a star, so it never counts toward the hourly limit. */
+  star(target: MessageTarget & { starred: boolean }): Promise<Operated<Starred>>
   /** `null` takes the reaction off. A reaction never counts toward the hourly limit. */
   react(target: MessageTarget & { emoji: string | null }): Promise<Operated<Reacted>>
 }
@@ -281,8 +293,16 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
   const pinning = async (
     { chat, message }: MessageTarget,
     pinned: boolean,
-    notify: boolean,
+    asked: boolean,
+    duration?: number,
   ): Promise<Operated<Pinned>> => {
+    const allowed = deps.messenger.pinDurations
+    if (duration !== undefined && !allowed?.includes(duration))
+      throw new CliError(
+        "validation_error",
+        allowed?.length ? `a pin lasts ${pinDurationsText(allowed)} here` : "pins here never expire",
+      )
+    const notify = pinned && (asked || deps.messenger.quietPins === false)
     const connection = await deps.connection()
     const act = pinned
       ? capability(connection, "pin", "pin a message")
@@ -292,7 +312,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     await guardedWrite(
       guard,
       { operationId, chatId, kind: "pin", key: pinned ? "messages.pin" : "messages.unpin", messageId: message, notify },
-      () => act(chatId, message, { notify }),
+      () => act(chatId, message, { notify, ...(duration === undefined ? {} : { duration }) }),
     )
     return { operationId, chatId, messageId: message, pinned }
   }
@@ -685,8 +705,27 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       return { operationId: id, sendId: id, message: forwarded }
     },
 
-    pin: ({ notify, ...target }) => pinning(target, true, notify),
+    pin: ({ notify, duration, ...target }) => pinning(target, true, notify, duration),
     unpin: (target) => pinning(target, false, false),
+
+    star: async ({ chat, message, starred }) => {
+      const connection = await deps.connection()
+      const star = capability(connection, "star", starred ? "star a message" : "unstar a message")
+      const { id: chatId } = await connection.resolve(chat)
+      const operationId = newOperationId()
+      await guardedWrite(
+        guard,
+        {
+          operationId,
+          chatId,
+          kind: "account",
+          action: starred ? "message-star" : "message-unstar",
+          messageId: message,
+        },
+        () => star(chatId, message, starred),
+      )
+      return { operationId, chatId, messageId: message, starred }
+    },
 
     react: async ({ chat, message, emoji }) => {
       const connection = await deps.connection()

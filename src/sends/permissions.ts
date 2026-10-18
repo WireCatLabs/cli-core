@@ -45,6 +45,8 @@ const ACCOUNT: Record<AccountAction, Permission> = {
   "chat-pin": "profile",
   "chat-unpin": "profile",
   "chat-mark-unread": "profile",
+  "message-star": "profile",
+  "message-unstar": "profile",
   privacy: "profile",
 }
 
@@ -139,7 +141,7 @@ const OLD_WORDS: Record<Permission, PermissionKey[]> = {
     "topics.delete",
   ],
   contacts: ["contacts"],
-  profile: ["account.update", "account.privacy.set", "chats.mute"],
+  profile: ["account.update", "account.privacy.set", "chats.mute", "messages.star", "messages.unstar"],
   folders: ["chats.folders"],
   sessions: ["account.sessions.end"],
 }
@@ -238,6 +240,8 @@ const ACCOUNT_KEYS: Record<AccountAction, PermissionKey> = {
   "chat-pin": "chats.pin",
   "chat-unpin": "chats.unpin",
   "chat-mark-unread": "chats.mark-unread",
+  "message-star": "messages.star",
+  "message-unstar": "messages.unstar",
   privacy: "account.privacy.set",
 }
 

@@ -96,6 +96,7 @@ export type {
   SearchFound,
   SearchQuery,
   SendRequest,
+  Starred,
 } from "./messages.js"
 export { DELETE_AT_ONCE, messagesService } from "./messages.js"
 export { searchStore } from "./messages-archive-search.js"

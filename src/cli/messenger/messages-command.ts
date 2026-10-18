@@ -33,7 +33,7 @@ import { editCommand } from "./messages-edit-command.js"
 import { evidenceCommand } from "./messages-evidence-command.js"
 import { forwardCommand } from "./messages-forward-command.js"
 import { messageLinkCommand } from "./messages-link-command.js"
-import { pinCommand, unpinCommand } from "./messages-pin-command.js"
+import { pinCommand, starCommands, unpinCommand } from "./messages-pin-command.js"
 import { pressCommand } from "./messages-press-command.js"
 import { scheduledCommand } from "./messages-scheduled-command.js"
 import { sendCommand } from "./messages-send-command.js"
@@ -210,6 +210,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(forwardCommand(messenger))
   messages.addCommand(pinCommand(messenger))
   messages.addCommand(unpinCommand(messenger))
+  if (messenger.messageStars === true) for (const command of starCommands(messenger)) messages.addCommand(command)
   if (messenger.personalBots === true) messages.addCommand(pressCommand(messenger))
   if (messenger.scheduledSends !== false) messages.addCommand(scheduledCommand(messenger))
   messages.addCommand(messageLinkCommand(messenger))

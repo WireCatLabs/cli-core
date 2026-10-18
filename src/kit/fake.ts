@@ -31,6 +31,7 @@ import type {
   MessagePins,
   MessagePolls,
   MessageReactions,
+  MessageStars,
   MessengerCore,
   PushedHistory,
   ReadState,
@@ -49,6 +50,7 @@ export type FakeAdapter = MessengerCore &
   ChatReading &
   MessageEditing &
   MessagePins &
+  MessageStars &
   MessageReactions &
   ReadState &
   TopicReadState &
@@ -110,6 +112,7 @@ export const fakeAdapter = (seed: Seed = contractSeed(), options: { feed?: boole
   let account: Account | null = state.account
   const sends = new Map<string, Sent>()
   const pins = new Map<Id, Id>()
+  const stars = new Set<string>()
   const polls = new Map<string, Poll>()
   const scheduled: Message[] = []
   const admins = new Map<Id, Id[]>()
@@ -317,6 +320,12 @@ export const fakeAdapter = (seed: Seed = contractSeed(), options: { feed?: boole
     },
     unpin: async (chatId, messageId) => {
       if (pins.get(chatId) === messageId) pins.delete(chatId)
+    },
+    star: async (chatId, messageId, starred) => {
+      messageOf(chatId, messageId)
+      const key = JSON.stringify([chatId, messageId])
+      if (starred) stars.add(key)
+      else stars.delete(key)
     },
     react: async (chatId, messageId, emoji) => {
       messageOf(chatId, messageId).reactions =

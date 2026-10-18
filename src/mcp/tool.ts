@@ -204,7 +204,8 @@ export const tierOf = (key: string, definition: Pick<AnyTool, "annotations">): T
   if (/^admin|_admin/.test(key)) return "admin"
   if (/delete|ban|kick|remove|purge|block/.test(key)) return "destructive"
   if (/draft/.test(key)) return "draft"
-  if (/mark_read|read_mark|archive|mute|pin|tag|note|label|folder|alias|save/.test(key)) return "write-private"
+  if (/mark_read|read_mark|archive|mute|pin|tag|note|label|folder|alias|save|_(un)?star$/.test(key))
+    return "write-private"
   return "write-public"
 }
 

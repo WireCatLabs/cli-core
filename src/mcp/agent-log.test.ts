@@ -90,6 +90,8 @@ describe("the MCP agent log", () => {
   it("reads a tool's tier from what it declares", () => {
     expect(tierOf("messages_delete", { annotations: WRITE })).toBe("destructive")
     expect(tierOf("chats_mark_read", { annotations: WRITE })).toBe("write-private")
+    expect(tierOf("messages_unstar", { annotations: WRITE })).toBe("write-private")
+    expect(tierOf("chats_start", { annotations: WRITE })).toBe("write-public")
     expect(tierOf("admin_report", { annotations: WRITE })).toBe("admin")
     expect(tierOf("messages_search", { annotations: READ })).toBe("read")
   })

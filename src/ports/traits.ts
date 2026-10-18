@@ -37,6 +37,13 @@ export interface MessengerTraits {
    * know a newer option is never handed one to drop.
    */
   mediaOptions?: readonly MediaOption[]
+  /**
+   * Whether a pin can stay quiet, telling nobody; yes when unset. No: every pin tells the chat's members, so each
+   * one counts toward the hourly limit (WhatsApp).
+   */
+  quietPins?: boolean
+  /** How many seconds a pin may last — `messages pin --expire-time`; pins never expire when unset. */
+  pinDurations?: readonly number[]
   /** Whether `messages forward --topic` forwards into a forum topic; no when unset. */
   forwardTopic?: boolean
   /** Whether folders take kinds of chat, skip muted, read or archived ones, exclude and pin chats; no when unset. */
