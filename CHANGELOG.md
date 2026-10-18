@@ -53,15 +53,16 @@ shape of this file.
   adapter set while `bytes()` ran on the stored attachment of that account, as downloads have since 0.339.0, through
   the new store write `attachments.keepProviderRefs` (matched as `keepDownloads` matches; a saved path stays). A ref
   that cannot be saved costs only another fetch: transcribe warns without showing it, the photo and the picture are
-  answered anyway. `messages list --transcribe` and the MCP `messages transcribe` tool do not save it yet.
+  answered anyway. Not saved yet: voice messages heard for a list (`messages list --transcribe`, and the MCP
+  `messages list`, `inbox` and `review` tools with `transcribe`) and the MCP `messages transcribe` tool.
 - **`chats admins add` keeps its summary within 80 characters where a messenger gives every right.** Without
   `--can` (`pickAdminRights: false`) the summary is "make a member an admin, with every right"; the rights are named
   in the description `--help` and `commands --json` show. wa's seven rights had pushed it to 88 (WC-CMD-22).
-- **An interactive command's steps after its `untilStopped()` phase have a deadline again.** At a terminal and
-  without `--timeout`, an interactive command (wa's `setup`, after the history a phone pushes) had no deadline once
-  its phase ended, so a dead connection hung it. The steps after the phase now get the default 30 s, the same as any
-  one-shot command; a headless interactive run gets 30 s there too, not its 5 minutes. An explicit `--timeout`, a
-  `persistent` command and a background fetch keep what they had (WC-LIFE-5).
+- **A headless interactive command's steps after its `untilStopped()` phase get the default 30 s, not 5 minutes.**
+  The 5 minutes are for the phase (wa's `setup`, the history a phone pushes); a dead connection after it no longer
+  holds the run that long. At a terminal the steps after the phase stay unbounded, since one may still ask the person
+  (wa's `setup` asks which agent). An explicit `--timeout`, a `persistent` command and a background fetch keep what
+  they had (WC-LIFE-5).
 
 ## 0.339.0 — 18.10.2026
 

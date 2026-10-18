@@ -168,7 +168,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   // The deadline a person or a script set, which a phase keeps; the default one it ends.
   let explicitEnd: number | undefined
   let oneShot: number | undefined
-  // An interactive login has no deadline of its own, but once its phase ends nobody is answering any more.
+  // Headless, an interactive command's 5 minutes are for its phase; a person at a terminal may still be answering.
   let afterPhase: number | undefined
   let finished = false
   // The steps after a phase are one-shot again, however it ended: bounded, and ended by a signal as any command is.
@@ -366,7 +366,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     }
     control.start(deadline)
     oneShot = deadline
-    afterPhase = timeout !== undefined || persistent || job ? deadline : DEFAULT_COMMAND_MS
+    afterPhase = timeout !== undefined || persistent || job || interactiveLogin ? deadline : DEFAULT_COMMAND_MS
     if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
     if (options.relayed) absolutePaths(action, options.relayed.cwd)
     const cooperative = persistent || stopsAtItsPace === true
