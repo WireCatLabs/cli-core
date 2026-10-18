@@ -462,7 +462,10 @@ they do not name. How to write an adapter for a new messenger, and test it with 
 is [the adapter guide](ADAPTERS.md).
 
 The MCP server (`src/mcp/`) holds one connection for minutes and runs one call at a time; each tool
-lives in `src/mcp/tools/<resource>.ts` and answers what the command's `--json` prints.
+lives in `src/mcp/tools/<resource>.ts` and answers what the command's `--json` prints. An argument the input
+schema cannot judge — valibot's `v.check` does not convert to JSON Schema — goes in the tool's `check`, which runs
+before the store or the connection opens, so the tool refuses it when the command does (`messages_pin`'s
+`expire_time`).
 
 `mcp --http` (`src/mcp/http/`, CLI-58) serves the same factory over Streamable HTTP on 127.0.0.1 behind the
 owner's tunnel. `oauth.ts` is a one-owner OAuth server — a token needs the code printed in the terminal, and

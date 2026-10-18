@@ -338,7 +338,8 @@
     },
     "--expire-time": {
       "value": "<time>",
-      "meaning": "it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now"
+      "meaning": "it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now",
+      "note": "messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it — so it differs on purpose (Help text rule 4)"
     },
     "--extract": {
       "meaning": "extract text from files mapped by this download"
@@ -3163,13 +3164,13 @@
       "in": "all",
       "options": {
         "--expire-time": {
-          "in": [],
-          "planned": {
-            "wa": "wa's next cli-core bump"
-          },
+          "in": ["wa"],
           "reason": "Telegram's and MAX's pins stay until someone unpins them"
         },
-        "--notify": "all"
+        "--notify": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp has no quiet pin: every pin tells the chat's members"
+        }
       }
     },
     "messages press": {

@@ -14,6 +14,10 @@ export const pinDurationsText = (allowed: readonly number[]): string => {
   return words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : (words[0] ?? "")
 }
 
+export const pinLengthHelp = (allowed: readonly number[], fallback: number | undefined): string =>
+  `how long the pin lasts: ${pinDurationsText(allowed)}` +
+  (fallback === undefined ? "" : `; ${spokenSeconds(fallback)} by default`)
+
 /** `--expire-time 7d` as seconds, one of the lengths the messenger offers; `undefined` leaves its default. */
 export const pinDurationOf = (
   value: string | undefined,

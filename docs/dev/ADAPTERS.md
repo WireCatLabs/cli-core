@@ -60,10 +60,11 @@ needs it. The ones a new messenger usually sets:
   `disappearingSeconds` never offers them: they are not in the default list. Set `pickAdminRights: false` when
   every admin has every right; `admins add` then takes no `--can`.
 - `savedChatId`, `partnerOf` — the notes-to-self chat, and the other person in a one-to-one chat.
-- `quietPins`, `pinDurations`, `messageStars` — how pins work: `quietPins: false` when every pin tells the chat's
-  members (each then counts toward the hourly limit); `pinDurations`, in seconds, when a pin ends by itself
-  (`messages pin --expire-time`, passed to `pin` as `duration`); `messageStars: true` mounts `messages star` and
-  `unstar` over `MessageStars`.
+- `quietPins`, `pinDurations`, `pinDefaultDuration`, `messageStars` — how pins work: `quietPins: false` when every
+  pin tells the chat's members (each then counts toward the hourly limit, and `messages pin` takes no `--notify`);
+  `pinDurations`, in seconds, when a pin ends by itself (`messages pin --expire-time`, passed to `pin` as
+  `duration`); `pinDefaultDuration`, one of them, when a pin without `--expire-time` lasts that long — the help says
+  so and `pin` is handed it; `messageStars: true` mounts `messages star` and `unstar` over `MessageStars`.
 
 ## Required core and optional groups
 

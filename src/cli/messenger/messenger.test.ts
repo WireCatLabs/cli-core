@@ -898,7 +898,7 @@ describe("the shared read commands", () => {
     ])
   })
 
-  it("**every pin notifies and counts where the messenger has no quiet pin**, and lasts as long as it offers", async () => {
+  it("**every pin notifies and counts where the messenger has no quiet pin**, an unpin does not, and a pin lasts as offered", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
@@ -912,26 +912,36 @@ describe("the shared read commands", () => {
       pin: async (chatId, messageId, options) => {
         pins.push([chatId, messageId, options])
       },
+      unpin: async (chatId, messageId) => {
+        pins.push(["unpin", chatId, messageId])
+      },
     }
-    const loud = { quietPins: false, pinDurations: [86_400, 604_800, 2_592_000] }
+    const loud = { quietPins: false, pinDurations: [86_400, 604_800, 2_592_000], pinDefaultDuration: 604_800 }
 
-    const pinned = await call(
-      ["messages", "pin", "Book", "3", "--expire-time", "24h"],
+    const pinned = await call(["messages", "pin", "Book", "3"], async () => pinning, env, {}, loud)
+    const odd = await call(["messages", "pin", "Book", "3", "--expire-time", "1h"], async () => pinning, env, {}, loud)
+    const notify = await call(["messages", "pin", "Book", "3", "--notify"], async () => pinning, env, {}, loud)
+    const over = await call(
+      ["messages", "pin", "Book", "4", "--expire-time", "24h"],
       async () => pinning,
       env,
       {},
       loud,
     )
-    const odd = await call(["messages", "pin", "Book", "3", "--expire-time", "1h"], async () => pinning, env, {}, loud)
-    const over = await call(["messages", "pin", "Book", "4"], async () => pinning, env, {}, loud)
-    const help = await call(["messages", "pin", "--help"], async () => pinning, env, {}, loud)
+    const unpinned = await call(["messages", "unpin", "Book", "3"], async () => pinning, env, {}, loud)
+    const help = (await call(["messages", "pin", "--help"], async () => pinning, env, {}, loud)).stdout.join("")
     const telegram = await call(["messages", "pin", "Book", "5", "--expire-time", "24h"], async () => pinning, env)
 
-    expect([pinned.code, odd.code, over.code, telegram.code]).toEqual([0, 2, 8, 2])
+    expect([pinned.code, odd.code, notify.code, over.code, unpinned.code, telegram.code]).toEqual([0, 2, 2, 8, 0, 2])
     expect(odd.stderr.join("")).toContain("--expire-time takes 24h, 7d or 30d from now")
-    expect(help.stdout.join("")).toContain("its members are told")
-    expect(help.stdout.join("")).toContain("--expire-time <time>  the pin ends by itself then: 24h, 7d or 30d from now")
-    expect(pins).toEqual([["7", "3", { notify: true, duration: 86_400 }]])
+    expect(notify.stderr.join("")).toContain("--notify")
+    expect(help).toContain("its members are told")
+    expect(help).not.toContain("--notify")
+    expect(help).toContain("--expire-time <time>  how long the pin lasts: 24h, 7d or 30d; 7d by default")
+    expect(pins).toEqual([
+      ["7", "3", { notify: true, duration: 604_800 }],
+      ["unpin", "7", "3"],
+    ])
   })
 
   it("**star a message and take the star off**, journaled as the owner's own mark that never counts", async () => {
