@@ -66,7 +66,10 @@ export interface ChatStats {
   }
   /** The tracked member count per day in the period, from `chats members fetch`; absent when none was recorded. */
   memberCounts?: MemberCount[]
-  /** Absent where the messenger was not asked: `--offline`, or one that does not say who joined. */
+  /**
+   * Absent where the messenger was not asked (`--offline`, or one that does not say who joined), or where the store
+   * holds its history but no chat event for this chat yet (`membersUnrecorded`).
+   */
   members?: MemberChanges
   /**
    * The messenger's history lives in the store and the store holds no chat event for this chat yet, so `members` is

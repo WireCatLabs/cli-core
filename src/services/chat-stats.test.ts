@@ -140,6 +140,10 @@ describe("stats chats show", () => {
       ],
     })
     expect(askedFor).toEqual(["chatEvents", "admins"])
+    expect(stats).not.toHaveProperty("membersUnrecorded")
+    const answer = chatStatsAnswer(stats, account)
+    expect(answer).not.toHaveProperty("missing")
+    expect(answer).not.toHaveProperty("next")
   })
 
   it("starts a week on Monday", async () => {
