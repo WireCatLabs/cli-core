@@ -8,7 +8,7 @@ const DESCRIPTION = 90
 const COLUMN = 52
 
 /** The first clause that fits: a line per command is the point, the whole text is in `--help`. */
-const short = (text: string): string => {
+export const short = (text: string): string => {
   const line = text.replace(/\s+/g, " ").trim()
   if (line.length <= DESCRIPTION) return line
   const cut = line.slice(0, DESCRIPTION)

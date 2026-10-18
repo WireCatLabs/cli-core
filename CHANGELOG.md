@@ -12,6 +12,14 @@ shape of this file.
 - **The run record of a one-shot command's passive listen counts what it received**: the `adapter.listen`
   response carries `counts` by event (`message`, `edit`, …), as `messages.watch` does, so a run shows how many
   messages a store-history messenger handed on and saved during the command.
+- **Every leaf command's `--help` ends with Returns, Next usually and Example**, worked out from its definition when
+  the help is shown. Returns names the declared output entity and its first fields, or repeats the description
+  when there is none. Next usually lists up to three commands whose arguments take what this one returns (a
+  message, a chat, a person, a task…), reads first; `nextUsually(command, { pin, drop })` overrides them. Example
+  is the definition's own `examples`, or one built from the usage with the profile `personal` where the command
+  reads one, a sample value per argument (`Team`, `1234`, `"invoice"`) and the mandatory options.
+  `commandHelpMarkdown(root, path)` gives the same three lines for `docs/commands.md`, and
+  `exampleReport(program)` lists the commands still on a generated example.
 
 ## 0.344.0 — 18.10.2026
 

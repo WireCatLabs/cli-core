@@ -4,6 +4,7 @@ import { Command, Help, Option } from "commander"
 import wrapAnsi from "wrap-ansi"
 import { NO_EFFECTS } from "../effects.js"
 import { commandAt } from "../steps.js"
+import { installCommandHelp } from "./command-help.js"
 
 export interface FirstScreenLine {
   /** The command without the tool's name or the profile: `review --since 1d`. */
@@ -104,9 +105,10 @@ const optionsScreen = (program: Command): string => {
 }
 
 /**
- * Puts the first screen on `--help`, a bare run and `help`; `help options` prints the options for every command and
- * `--help-all` the full commander help. `help` and `--help-all` are hidden, so `commands --json` and MCP do not
- * change. For a tool that builds its own program; `createProgram` calls it for tg, max and wa.
+ * Puts the first screen on `--help`, a bare run and `help`, and Returns, Next usually and Example on every leaf
+ * command's `--help`. `help options` prints the options for every command, `--help-all` the full commander help;
+ * both are hidden, so `commands --json` and MCP do not change. For a tool that builds its own program;
+ * `createProgram` calls it for tg, max and wa.
  */
 export const installHelp = (program: Command, screen: FirstScreen = {}): Command => {
   let full = false
@@ -119,6 +121,7 @@ export const installHelp = (program: Command, screen: FirstScreen = {}): Command
         ? firstScreen(program, screen)
         : (own.formatHelp ?? Help.prototype.formatHelp).call(helper, command, helper),
   })
+  installCommandHelp(program, { profile: screen.profile !== false })
   program.addOption(new Option("--help-all", "the full help: every command and option").hideHelp())
   program.on("option:help-all", () => {
     full = true
