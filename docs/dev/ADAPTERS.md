@@ -225,6 +225,10 @@ release ([README, "How often, and what may break"](../REFERENCE.md#how-often-and
   chats and people in one batch, then each chat's messages in a batch of their own.
 - The `feed` case runs only when the adapter has `feed`. It checks that a batch arrives, that it
   holds only the seed's chats and messages with ids as strings, and that `feed` ends on abort.
+- The `listen` cases run only when the adapter has `listen`. They check that `listen` on a signal already
+  aborted resolves at once and does not reject, and that otherwise it keeps listening until the signal aborts and
+  then resolves. They cannot see whether it connects; test that yourself. `fakeAdapter(seed, { listen: true })`
+  also has `listen`.
 
 Each case checks with `node:assert/strict`, so the kit does not depend on a test runner. Under
 vitest, with `fakeAdapter` where your adapter over your own fake client goes:
