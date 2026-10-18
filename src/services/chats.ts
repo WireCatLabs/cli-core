@@ -252,8 +252,10 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     const until = Date.now()
     const messages = await storedSince(store, chatId, new Date(from).toISOString())
     const connection = fromStore(deps) ? undefined : await deps.connection()
-    const events =
-      deps.reads === "store"
+    const unrecorded = deps.reads === "store" && (await store.roster.chatEvents(chatId, { limit: 1 })).length === 0
+    const events = unrecorded
+      ? undefined
+      : deps.reads === "store"
         ? await storedEvents(store, deps, chatId, from)
         : connection?.chatEvents
           ? await connection.chatEvents(chatId, { since: from })
@@ -270,7 +272,8 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
       timezone: timezoneOf(timezone),
     })
     const counts = await store.roster.memberCounts(chatId, { since: new Date(from).toISOString().slice(0, 10) })
-    const counted = counts.length > 0 ? { ...stats, memberCounts: counts } : stats
+    const known = unrecorded ? { ...stats, complete: false, membersUnrecorded: true as const } : stats
+    const counted = counts.length > 0 ? { ...known, memberCounts: counts } : known
     return completeness.state === "complete" || !syncsOneChat(deps.messenger)
       ? counted
       : { ...counted, fetch: `${deps.messenger.app.command} messages sync ${chatId}` }

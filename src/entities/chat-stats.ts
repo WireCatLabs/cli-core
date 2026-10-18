@@ -4,7 +4,10 @@ import { count, reference, text, time } from "./fields.js"
 const optionalCount = v.optional(count)
 const minutes = v.nullable(v.number())
 
-/** A chat's numbers for a period, counted from the stored messages; joins and leaves asked of the messenger. */
+/**
+ * A chat's numbers for a period, counted from the stored messages; joins and leaves asked of the messenger, or read
+ * from the store where it holds the messenger's history.
+ */
 export const chatStats = v.strictObject({
   chat: reference,
   since: time,
@@ -45,6 +48,7 @@ export const chatStats = v.strictObject({
   member_counts: v.optional(
     v.array(v.strictObject({ day: text, participants: v.nullable(count), listed: count, complete: v.boolean() })),
   ),
+  /** Absent where joins and leaves were not asked, or not recorded for the chat yet (then `missing` says so). */
   members: v.optional(
     v.strictObject({
       joined: count,

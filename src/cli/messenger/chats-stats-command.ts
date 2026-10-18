@@ -7,7 +7,7 @@ import { momentOf } from "../../services/moment.js"
 import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { chatStatsAnswer, refuseJsonl } from "./stats-answers.js"
+import { chatStatsAnswer, MEMBERS_UNRECORDED, refuseJsonl } from "./stats-answers.js"
 
 const PERIODS: StatsPeriod[] = ["day", "week"]
 
@@ -33,11 +33,13 @@ export const statsCommand = (messenger: Messenger): Command =>
         }),
         account: await services.messages.reader(),
       }))
-      if (!stats.complete && stats.completeness.state === "complete")
+      if (stats.membersUnrecorded) context.renderer.note(MEMBERS_UNRECORDED)
+      else if (!stats.complete && stats.completeness.state === "complete")
         context.renderer.note(
           "the messenger stopped reading joins and leaves before the period's start — those are lower bounds",
         )
-      if (!stats.members) context.renderer.note("joins and leaves were not asked of the messenger")
+      if (!stats.members && !stats.membersUnrecorded)
+        context.renderer.note("joins and leaves were not asked of the messenger")
       renderAnswer(this, context, chatStatsAnswer(stats, account), () => view(stats))
     })
 

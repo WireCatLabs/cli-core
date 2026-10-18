@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import type { Chat, ChatEvent, MessageEvent } from "../../domain/models.js"
 import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
@@ -12,6 +13,7 @@ import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { chatsCommand } from "./chats-command.js"
+import { statsCommand } from "./chats-stats-command.js"
 import type { Messenger } from "./context.js"
 import { lackedNeed } from "./lacks.js"
 import { stored } from "./stored.js"
@@ -64,7 +66,12 @@ const sandbox = () => {
   }
 }
 
-const call = async (argv: string[], env: NodeJS.ProcessEnv, own: Partial<Messenger>) => {
+const call = async (
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  own: Partial<Messenger>,
+  commands: (messenger: Messenger) => Command[] = (messenger) => [chatsCommand(messenger)],
+) => {
   const messenger: Messenger = {
     app,
     provider: "chat",
@@ -77,7 +84,7 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, own: Partial<Messeng
     ...own,
   }
   const streams = captureStreams()
-  const code = await run(argv, { app, commands: () => [chatsCommand(messenger)] }, { streams, tty: false, env })
+  const code = await run(argv, { app, commands: () => commands(messenger) }, { streams, tty: false, env })
   return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
 }
 
@@ -212,6 +219,49 @@ describe("chat events of a messenger whose history is pushed to the store", () =
     const stats = await services.chats.stats("7", {})
 
     expect(stats.members).toMatchObject({ joined: 2, left: 0, more: false })
+    await store.close()
+  })
+
+  it("**says joins and leaves are not recorded yet** while the store holds no event for the chat", async () => {
+    const env = sandbox()
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.chats.saveChats(account, [club])
+    await store.messages.saveMessages(account, "7", [], { via: "history" })
+    await store.close()
+    const show = (format: string[], own: Partial<Messenger> = { history: "store" }) =>
+      call(["stats", "chats", "show", "7", ...format], env, own, (messenger) => [
+        new Command("stats").addCommand(new Command("chats").addCommand(statsCommand(messenger))),
+      ])
+
+    const json = await show(["--json"])
+    const body = JSON.parse(json.stdout)
+    expect(json.code).toBe(0)
+    expect(body.item).not.toHaveProperty("members")
+    expect(body.item.complete).toBe(false)
+    expect(body.missing).toContainEqual({ field: "members", why: expect.stringContaining("not recorded") })
+
+    const text = await show([])
+    expect(text.stdout).not.toContain("joined")
+    expect(text.stderr).toContain("joins and leaves are not recorded for this chat yet")
+    expect(text.stderr).not.toContain("not asked of the messenger")
+
+    const serverHistory = await show(["--offline", "--json"], {})
+    expect(JSON.parse(serverHistory.stdout).missing.map((one: { field: string }) => one.field)).toEqual(["messages"])
+    expect((await show(["--offline"], {})).stderr).toContain("joins and leaves were not asked of the messenger")
+  })
+
+  it("counts a measured 0 once any event is stored for the chat, though none falls in the period", async () => {
+    const store = await openStore({ path: sandbox().MESSAGING_STORE })
+    await store.chats.saveChats(account, [club])
+    await store.roster.saveChatEvents(account, "7", [{ ...added, timestamp: "2026-01-01T00:00:00.000Z" }])
+    await store.messages.saveMessages(account, "7", [], { via: "history" })
+    const messenger = { app, provider: "chat", history: "store" as const }
+    const services = servicesFor(storeModeDeps(messenger, store, account, { check: () => {}, record: () => {} }))
+
+    const stats = await services.chats.stats("7", {})
+
+    expect(stats.members).toMatchObject({ joined: 0, left: 0 })
+    expect(stats).not.toHaveProperty("membersUnrecorded")
     await store.close()
   })
 
