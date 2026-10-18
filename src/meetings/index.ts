@@ -256,6 +256,7 @@ export type {
   MeetingSeriesInventoryRequest,
   MeetingSeriesInventoryResult,
 } from "./series-inventory-types.js"
+export { validateMeetingSeriesInventoryCursor } from "./series-inventory-validation.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,

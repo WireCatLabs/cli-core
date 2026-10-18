@@ -13,6 +13,29 @@ const object = (value: unknown, fields: readonly string[], field: string, respon
   if (!value || typeof value !== "object" || Array.isArray(value)) invalid(field, response)
   for (const key of Object.keys(value)) if (!fields.includes(key)) invalid(`${field}.${key}`, response)
 }
+const cursorDetails = (value: unknown) => {
+  if (typeof value !== "string" || value.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(value)) invalid("cursor")
+  try {
+    const decoded: { version: number; selection: string; cursor: string } = JSON.parse(
+      new TextDecoder("utf8", { fatal: true }).decode(Buffer.from(value, "base64url")),
+    )
+    object(decoded, ["version", "selection", "cursor"], "cursor")
+    if (
+      decoded.version !== 1 ||
+      typeof decoded.selection !== "string" ||
+      !/^[a-f0-9]{64}$/.test(decoded.selection) ||
+      !occurrenceId(decoded.cursor)
+    )
+      invalid("cursor")
+    return decoded
+  } catch {
+    return invalid("cursor")
+  }
+}
+export const validateMeetingSeriesInventoryCursor = (value: unknown): void => {
+  cursorDetails(value)
+}
+
 export const inventoryRequest = (scope: MeetingProviderScope, input: MeetingSeriesInventoryRequest) => {
   object(input, ["after", "until", "limit", "maxReadBytes", "bytes", "cursor", "signal"], "request")
   const { after, until, signal } = input
@@ -30,18 +53,9 @@ export const inventoryRequest = (scope: MeetingProviderScope, input: MeetingSeri
   const selection = inventoryHash({ scope, after, until })
   let cursor: string | undefined
   if (input.cursor !== undefined) {
-    if (typeof input.cursor !== "string" || input.cursor.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(input.cursor))
-      invalid("cursor")
-    try {
-      const decoded: { version: number; selection: string; cursor: string } = JSON.parse(
-        Buffer.from(input.cursor, "base64url").toString("utf8"),
-      )
-      object(decoded, ["version", "selection", "cursor"], "cursor")
-      if (decoded.version !== 1 || decoded.selection !== selection || !occurrenceId(decoded.cursor)) invalid("cursor")
-      cursor = decoded.cursor
-    } catch {
-      invalid("cursor")
-    }
+    const decoded = cursorDetails(input.cursor)
+    if (decoded.selection !== selection) invalid("cursor")
+    cursor = decoded.cursor
   }
   return { after, until, limits, signal, selection, cursor }
 }
