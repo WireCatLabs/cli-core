@@ -26,6 +26,11 @@ describe("the level of a command path", () => {
     expect(levelFor(levels, "contacts.add")).toEqual({ level: "allow", key: null })
   })
 
+  it("**leaves help and scenarios to every level**: `help options` and `guide` read no account", () => {
+    expect(keyForCommand(["help"])).toBeNull()
+    expect(keyForCommand(["guide"])).toBeNull()
+  })
+
   it("**lets a built-in default only tighten** a broader key of the owner's", () => {
     expect(levelFor({ messages: "readonly" }, "messages.delete").level).toBe("readonly")
     expect(levelFor({ messages: "allow" }, "messages.delete").level).toBe("ask")

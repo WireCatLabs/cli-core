@@ -2847,6 +2847,13 @@
         "wa": "wa backlog: mount the shared flood command"
       }
     },
+    "guide": {
+      "in": ["max"],
+      "planned": {
+        "tg": "help-navigation pass: mount guide with scenarios",
+        "wa": "help-navigation pass: mount guide with scenarios"
+      }
+    },
     "images": {
       "in": "all"
     },

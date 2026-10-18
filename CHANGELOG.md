@@ -16,6 +16,16 @@ shape of this file.
   wrote, never a file it did not. `qrNeedsTerminal(command)` is the shared refusal when nobody could scan, and
   `atTerminal(input)` the shared test. `parity.json` plans `--qr-file` on `session start` and `setup` for max, beside tg and wa.
 
+### Fixed
+
+- **A list that takes a query prints its help for `--help`.** Since 0.343.0, `chats list --help`, `tasks list --help`,
+  `contacts list --help` and every other list with `[query...]` refused `--help` as a mistyped option (exit 2), because
+  commander looks for it only after the query check had run. A mistyped `--limt` is still refused.
+- **`help` and `guide` need no permission key**: `keyForCommand` returned nothing for them, so a tool that maps every
+  command to a key (max) crashed on `help options`. They are housekeeping now, like `commands` and `skill`.
+- **`parity.json` has a `guide` row**, in max, planned for tg and wa, so `cli-core-parity` stops failing a tool that
+  mounts it with "guide: not in the manifest".
+
 ## 0.346.0 — 18.10.2026
 
 ### Added

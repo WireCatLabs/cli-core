@@ -366,6 +366,8 @@ export const WRITE_KEYS: readonly PermissionKey[] = [
 
 /** Commands that look after the tool and its files and never show a message: no level stops them. */
 const HOUSEKEEPING = new Set([
+  "help",
+  "guide",
   "config",
   "session",
   "doctor",

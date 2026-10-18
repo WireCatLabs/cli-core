@@ -10,7 +10,13 @@ export const queryWordsAfterOptions = (command: Command): Command => {
   command.parseOptions = (args) => {
     const parsed = parse(args)
     const end = parsed.unknown.indexOf("--")
-    const typo = parsed.unknown.slice(0, end < 0 ? undefined : end).find((word) => word.startsWith("--"))
+    // Commander looks for --help in what parseOptions leaves unknown, after it returns.
+    const help = (
+      command as unknown as { _getHelpOption: () => { is: (word: string) => boolean } | null }
+    )._getHelpOption()
+    const typo = parsed.unknown
+      .slice(0, end < 0 ? undefined : end)
+      .find((word) => word.startsWith("--") && !help?.is(word))
     if (typo !== undefined) {
       command.allowUnknownOption(false)
       ;(command as unknown as { unknownOption: (flag: string) => never }).unknownOption(typo)
