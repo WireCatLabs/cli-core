@@ -357,6 +357,30 @@ const NEW = {
       keys: ["UNIQUE (chat_id, message_external_id, identity_id)"],
     },
     {
+      name: "chat_events",
+      doc: "Who joined, left, was added, removed, promoted or demoted in a chat, and its title changes, for a messenger whose history is pushed to the store (WhatsApp); one asked for its history answers these itself.",
+      cols: [
+        id(),
+        fk("chat_id", "chats", { notnull: true }),
+        c("source_id", "text", {
+          notnull: true,
+          note: "the messenger's id for the event, so a replay changes nothing",
+        }),
+        c("action", "text", { notnull: true, note: "join, leave, add, remove, promote, demote, create, title …" }),
+        fk("actor_identity_id", "identities", { note: "who did it; NULL when the messenger does not say" }),
+        c("title", "text", { note: "the chat's title, for create and title" }),
+        c("happened_at", "integer", { notnull: true }),
+        ...ts(),
+      ],
+      keys: ["UNIQUE (chat_id, source_id)", "INDEX (chat_id, happened_at)"],
+    },
+    {
+      name: "chat_event_people",
+      doc: "The people one chat event is about.",
+      cols: [fk("chat_event_id", "chat_events", { notnull: true }), fk("identity_id", "identities", { notnull: true })],
+      keys: ["PRIMARY KEY (chat_event_id, identity_id)"],
+    },
+    {
       name: "member_observations",
       doc: "One read of a chat's member list: when, whether it was the whole list, and how many it reported and returned. Retention reads presence at a checkpoint from these.",
       cols: [

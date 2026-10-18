@@ -63,7 +63,11 @@ export const chatsCommand = (messenger: Messenger): Command => {
   chats.addCommand(
     withQuery(
       annotate(
-        annotate(new Command("events"), { effects: REMOTE_READ, offline: false })
+        annotate(new Command("events"), {
+          effects: storedRead(messenger),
+          // Where the history is pushed, the store answers, --offline too.
+          ...(messenger.history === "store" ? {} : { offline: false }),
+        })
           .description(
             "who joined, left, was added or removed, and by whom — from the chat's service messages; " +
               `the last ${EVENTS_DAYS} days unless the query names time`,

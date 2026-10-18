@@ -137,6 +137,7 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
   foldOpenStays(context, kept, gone)
   for (const table of [
     "poll_votes",
+    "chat_events",
     "message_transcripts",
     "chat_members",
     "member_stays",

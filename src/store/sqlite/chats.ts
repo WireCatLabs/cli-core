@@ -7,6 +7,8 @@ import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
 import { bound, type ColumnMap } from "./query-filter.js"
 import {
+  chatEventPeople,
+  chatEvents,
   chatMembers,
   chats,
   chunks,
@@ -181,6 +183,16 @@ export const purgeChats = ({ orm }: StoreContext, pks: number[]): void => {
     .run()
   orm.delete(messageTranscripts).where(inArray(messageTranscripts.chatId, pks)).run()
   orm.delete(pollVotes).where(inArray(pollVotes.chatId, pks)).run()
+  orm
+    .delete(chatEventPeople)
+    .where(
+      inArray(
+        chatEventPeople.chatEventId,
+        orm.select({ id: chatEvents.id }).from(chatEvents).where(inArray(chatEvents.chatId, pks)),
+      ),
+    )
+    .run()
+  orm.delete(chatEvents).where(inArray(chatEvents.chatId, pks)).run()
   orm.delete(fetchLeases).where(inArray(fetchLeases.chatId, pks)).run()
   orm.delete(chatMembers).where(inArray(chatMembers.chatId, pks)).run()
   const observationsOf = orm

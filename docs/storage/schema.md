@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-89 tables, 19 full-text indexes.
+91 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -540,6 +540,35 @@ Each voter's newest vote in a poll, where the messenger sends votes one by one (
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (chat_id, message_external_id, identity_id)`, `INDEX (identity_id)`
+
+### `chat_events`
+
+Who joined, left, was added, removed, promoted or demoted in a chat, and its title changes, for a messenger whose history is pushed to the store (WhatsApp); one asked for its history answers these itself.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `chat_id` | integer | not null | → `chats.id` | the `chat` it belongs to |
+| `source_id` | text | not null |  | the messenger's id for the event, so a replay changes nothing |
+| `action` | text | not null |  | join, leave, add, remove, promote, demote, create, title … |
+| `actor_identity_id` | integer |  | → `identities.id` | who did it; NULL when the messenger does not say |
+| `title` | text |  |  | the chat's title, for create and title |
+| `happened_at` | integer | not null |  |  |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (chat_id, source_id)`, `INDEX (chat_id, happened_at)`, `INDEX (actor_identity_id)`
+
+### `chat_event_people`
+
+The people one chat event is about.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `chat_event_id` | integer | not null | → `chat_events.id` | the `chat_event` it belongs to |
+| `identity_id` | integer | not null | → `identities.id` | the `identity` it belongs to |
+
+*Keys and indexes:* `PRIMARY KEY (chat_event_id, identity_id)`, `INDEX (identity_id)`
 
 ### `member_observations`
 

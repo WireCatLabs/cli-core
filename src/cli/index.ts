@@ -37,6 +37,7 @@ export type {
   GroupAdmin,
   GroupModeration,
   HistoryBatch,
+  HistoryChatEvent,
   HistoryVote,
   InviteLinks,
   JoinRequests,

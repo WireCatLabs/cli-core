@@ -1,7 +1,7 @@
 import type { CommandInfo } from "@wirecat/cli-base/commands"
 import * as v from "valibot"
 import type { Messenger } from "../cli/messenger/context.js"
-import { COMMAND_NEEDS } from "../cli/messenger/lacks.js"
+import { lackedNeed } from "../cli/messenger/lacks.js"
 import { toolsFromCommands } from "./agent.js"
 import { type AnyTool, commandOf } from "./tool.js"
 
@@ -112,8 +112,7 @@ export const mountedMcpTools = (commands: readonly CommandInfo[], messenger: Mes
     Object.entries(personalMcpTools(messenger)).filter(([name, definition]) => {
       if (definition.agentOnly) return true
       const path = commandOf(name, definition)
-      const need = COMMAND_NEEDS[path]
-      return offered.has(path) && !(need && messenger.lacks?.includes(need[0]))
+      return offered.has(path) && !lackedNeed(messenger, path)
     }),
   )
 }

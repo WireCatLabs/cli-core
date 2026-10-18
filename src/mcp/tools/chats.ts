@@ -49,8 +49,7 @@ const chatTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ chat, query: queryArgument(EVENTS_QUERY) }),
       annotations: READ,
       output: { entity: "chat_event", list: true },
-      online: (adapter, args, { guard }) =>
-        chatEvents(servicesFor(onlineDeps(messenger, adapter, guard)), args.chat, args.query),
+      served: (services, args) => chatEvents(services, args.chat, args.query),
     }),
 
     stats_chats_show: tool({

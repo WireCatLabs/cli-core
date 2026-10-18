@@ -32,6 +32,15 @@ shape of this file.
   adapter's `pin` gets it as `duration`, in seconds. Without the option the messenger's own default applies.
   Telegram and MAX list none, so their pins are unchanged.
 - `messages pin` and `messages unpin` have examples in their help.
+- **Chat events in the store (store version 23).** A messenger whose history is pushed to the store (WhatsApp) can
+  now keep who joined, left, was added, removed, promoted or demoted in a chat, and its title changes: as `events` in
+  a pushed batch (`HistoryBatch.events`, each a `HistoryChatEvent`), or live as a `chat_event` event
+  (`ChatEventNotice`) from `watch` under `serve`. Each event is kept once by its id, so a replay changes nothing, and
+  it moves with a chat that takes a new id. For such a messenger, `chats events` and the `chats_events` tool answer
+  from the store, `--offline` too, and never connect, even when the messenger has no `chatEvents`; `chats stats`
+  counts the joins and leaves from there too. A messenger asked for its history (Telegram, MAX) still asks the
+  server, as before.
+  `store.roster.saveChatEvents` and `store.roster.chatEvents` read and write them.
 
 ### Fixed
 

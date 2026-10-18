@@ -366,7 +366,7 @@ const callRunner = ({
           })
         if (definition.changesStore) refuseStoreChange(messenger.app, defaults.env)
         assertStatsPermissionsCurrent(path, defaults.settings.permissions ?? {})
-        refuseLacking(messenger?.lacks, path)
+        refuseLacking(messenger, path)
         for (const permission of readKeysForCommand(path)) {
           if (levelFor(defaults.settings.permissions ?? {}, permission).level === "deny")
             throw new CliError("permission_error", `profile denies ${permission}`, { permission })

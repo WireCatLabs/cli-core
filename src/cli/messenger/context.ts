@@ -516,7 +516,7 @@ export const messengerContext = (
   const base = baseContext(command, (flags, options) => messenger.resolveSettings(flags, { ...options, ...resolving }))
   const { profile } = base.settings
   refuseDenied(command, base.settings)
-  refuseLacking(messenger.lacks, pathOf(command))
+  refuseLacking(messenger, pathOf(command))
   for (const key of unknownPermissionKeys(
     base.settings.permissions,
     knownPermissionKeys(command, messenger.permissionKey),

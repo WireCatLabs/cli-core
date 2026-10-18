@@ -135,5 +135,10 @@ const describe = (event: MessageEvent, render: (message: MessageHit) => string):
       const choice = answers.length > 0 ? answers.join(", ") : "took it back"
       return `vote in ${event.chatTitle ?? event.chatId} on poll ${event.messageId}: ${person.name ?? person.id} — ${choice}\n`
     }
+    case "chat_event": {
+      const { event: action, by, people } = event.change
+      const who = people.map((one) => one.name ?? one.id).join(", ")
+      return `${action} in ${event.chatTitle ?? event.chatId}${who ? `: ${who}` : ""}${by.id === null ? "" : ` — by ${by.name ?? by.id}`}\n`
+    }
   }
 }

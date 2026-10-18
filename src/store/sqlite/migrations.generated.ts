@@ -516,5 +516,15 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "ALTER TABLE `account_identities` ADD `mail_demoted` integer;"
     ]
+  },
+  {
+    "name": "20261018024850_version-23-chat-events",
+    "statements": [
+      "CREATE TABLE `chat_event_people` (\n\t`chat_event_id` integer NOT NULL,\n\t`identity_id` integer NOT NULL,\n\tCONSTRAINT `chat_event_people_pk` PRIMARY KEY(`chat_event_id`, `identity_id`),\n\tCONSTRAINT `fk_chat_event_people_chat_event_id_chat_events_id_fk` FOREIGN KEY (`chat_event_id`) REFERENCES `chat_events`(`id`),\n\tCONSTRAINT `fk_chat_event_people_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`)\n);",
+      "CREATE TABLE `chat_events` (\n\t`id` integer PRIMARY KEY,\n\t`chat_id` integer NOT NULL,\n\t`source_id` text NOT NULL,\n\t`action` text NOT NULL,\n\t`actor_identity_id` integer,\n\t`title` text,\n\t`happened_at` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_chat_events_chat_id_chats_id_fk` FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`),\n\tCONSTRAINT `fk_chat_events_actor_identity_id_identities_id_fk` FOREIGN KEY (`actor_identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `chat_events_chat_id_source_id_unique` UNIQUE(`chat_id`,`source_id`)\n);",
+      "CREATE INDEX `chat_event_people_by_identity_id` ON `chat_event_people` (`identity_id`);",
+      "CREATE INDEX `chat_events_by_chat_id_happened_at` ON `chat_events` (`chat_id`,`happened_at`);",
+      "CREATE INDEX `chat_events_by_actor_identity_id` ON `chat_events` (`actor_identity_id`);"
+    ]
   }
 ]
