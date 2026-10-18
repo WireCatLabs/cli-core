@@ -9,6 +9,7 @@ shape of this file.
 
 ### Added
 
+- `createMeetingSeriesInventoryReader` discovers one bounded page of series candidates for a captured provider/account and finite window. Scope-bound cursors, unknown calendar completeness and unverified date hints stay explicit; choosing an exact series still uses the existing upcoming-occurrence proof. The SDK does not materialize calendars, open a store or add a provider transport.
 - `createStoredMeetingProjectCandidateReader` authorizes one stored meeting account, hydrates bounded current transcript evidence, and suggests existing projects without writes. Shared `/cli` adapters add `meetings projects scan <ref>` and the opt-in `meeting_project_candidates` MCP tool, with strict arguments, snake_case item envelopes, execution metadata, evidence cursors and retained coverage. Hosts own connector lifetime and explicitly grant the global project vocabulary.
 - `createMeetingProjectCandidateReader` suggests existing projects from explicit bounded meeting title/cue evidence and one bounded global project vocabulary read. Canonical names, keys and aliases match literal Unicode word boundaries; title hints remain separate from transcript citations, ambiguity and unknown archive coverage remain visible, and no membership or finding is saved. The SDK captures one provider/account; it adds no automatic preparation behavior or provider transport.
 - **A command can end its wait-until-stopped phase itself and go on with a deadline.** `endUntilStopped()` in a
