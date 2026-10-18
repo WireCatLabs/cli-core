@@ -15,6 +15,23 @@ shape of this file.
   is refused, as the store reads refuse it. `watch` shows such a chat's stored title where the messenger gives
   none. Telegram and MAX, which answer for their own history, are unchanged.
 
+### Changed — may break callers
+
+- **The read-only lock refuses every local write that deletes or overwrites what the owner keeps.** With
+  `<PREFIX>_READ_ONLY` set, a command that writes only on this machine answers `permission_error` unless it is marked
+  `destroysNothing`, so a new local write is refused until someone marks it. Newly refused: `tags add`, `tags auto`,
+  `mentions confirm`, `mentions reject`, `contacts notes add`, `contacts link`, `contacts unlink`,
+  `attachments text set`, `chats tracking add`, `chats tracking remove`, `conversations links add`,
+  `conversations links clear`, `conversations consents revoke` and `tasks reject`, and their MCP tools. Still allowed:
+  what the store rebuilds or a new file (`images embed`, `mentions rebuild`, `conversations embed clear`,
+  `store jobs cancel|retry|clear`, `store backup`, `store reindex`, `store export`, `stats charts`,
+  `doctor report create`, `server start|stop|restart`), every sync, fetch and `serve`, and the task bookkeeping the
+  follow-ups skill does on a timer (`tasks add`, `scan`, `plan`, `link`, `merge`, `unmerge`, `claim`, `release`,
+  `close`, `duplicates reject`, `duplicates defer`). Under the lock `tasks close` (and `tasks_close`) only suggests the
+  close for the owner to confirm, and `--as-owner` is refused; `tasks plan` now keeps the old title and description in
+  the task's history. `changesStore` is gone from `./cli`; mark a command with `destroysNothing(command)` instead. A
+  CLI's own local write must be marked too, or it is refused under the lock (max-cli's `doctor report create`).
+
 ## 0.336.0 — 18.10.2026
 
 ### Added
@@ -67,7 +84,7 @@ shape of this file.
 - **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
   `searches clear`, `contacts notes edit`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse
   with `permission_error`, and so do their MCP tools, which deleted or overwrote under the lock before. Clearing what
-  the store can rebuild (`store jobs clear`, `conversations embed clear`) still works.
+  the store can rebuild (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
 - **The read-only lock also stops saving a search or an alias.** With `<PREFIX>_READ_ONLY` set, `searches create`
   and `contacts alias set` refuse with `permission_error`, and so do their MCP tools. Before, they could write over a
   saved search (`--replace`) or an alias the owner set.
@@ -87,20 +104,6 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **The read-only lock refuses every local write that deletes or overwrites what the owner keeps.** With
-  `<PREFIX>_READ_ONLY` set, a command that writes only on this machine answers `permission_error` unless it is marked
-  `destroysNothing`, so a new local write is refused until someone marks it. Newly refused: `tags add`, `tags auto`,
-  `mentions confirm`, `mentions reject`, `contacts notes add`, `contacts link`, `contacts unlink`,
-  `attachments text set`, `chats tracking add`, `chats tracking remove`, `conversations links add`,
-  `conversations links clear`, `conversations consents revoke` and `tasks reject`, and their MCP tools. Still allowed:
-  what the store rebuilds or a new file (`images embed`, `mentions rebuild`, `conversations embed clear`,
-  `store jobs cancel|retry|clear`, `store backup`, `store reindex`, `store export`, `stats charts`,
-  `doctor report create`, `server start|stop|restart`), every sync, fetch and `serve`, and the task bookkeeping the
-  follow-ups skill does on a timer (`tasks add`, `scan`, `plan`, `link`, `merge`, `unmerge`, `claim`, `release`,
-  `close`, `duplicates reject`, `duplicates defer`). Under the lock `tasks close` (and `tasks_close`) only suggests the
-  close for the owner to confirm, and `--as-owner` is refused; `tasks plan` now keeps the old title and description in
-  the task's history. `changesStore` is gone from `./cli`; mark a command with `destroysNothing(command)` instead. A
-  CLI's own local write must be marked too, or it is refused under the lock (max-cli's `doctor report create`).
 - **`conversations build` and `search conversations` say they can send text out.** `conversations build --analyze`
   sends chat text to the analysis provider, and `search conversations` sends the query to a remote embedding
   provider. `conversations build` is now declared as a write to an outside service (`{ remote: "write" }`) and
