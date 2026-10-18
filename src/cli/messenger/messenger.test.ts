@@ -687,6 +687,47 @@ describe("the shared read commands", () => {
     expect(sent).toHaveLength(1)
   })
 
+  it("**a sticker file counts toward the hourly limit like a message**, journalled by kind and size, never its name", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 1 } } }),
+    )
+    writeFileSync(join(root, "cat.webp"), "RIFF\0\0\0\0WEBP")
+    const sent: SendOptions[] = []
+    const withStickers: MessengerAdapter = {
+      ...fake,
+      send: async (_chatId, text, options) => {
+        sent.push(options)
+        return { message: { ...message, text }, sendId: options.sendId }
+      },
+    }
+    const send = () =>
+      call(
+        ["messages", "send", "Book", "--sticker-file", join(root, "cat.webp")],
+        async () => withStickers,
+        env,
+        {},
+        {
+          stickerFileBytes: 1024,
+        },
+      )
+
+    const first = await send()
+    const second = await send()
+
+    expect([first.code, second.code]).toEqual([0, 8])
+    expect(sent).toHaveLength(1)
+    const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
+    expect(journal).toMatchObject([
+      { kind: "message", outcome: "sent", attachments: [{ kind: "sticker", bytes: 12 }] },
+      { kind: "message", outcome: "refused" },
+    ])
+    expect(JSON.stringify(journal)).not.toContain("cat")
+  })
+
   it("**send a voice message alone, and a video as a file only with --as-file**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

@@ -417,6 +417,23 @@ describe("chats create, join and leave", () => {
     expect(plain.stdout.join("")).toContain("a new photo for it — an image file")
   })
 
+  it("**a .png photo needs all eight bytes of the PNG header**", async () => {
+    const env = sandbox()
+    const root = mkdtempSync(join(tmpdir(), "photo-"))
+    const truncated = join(root, "truncated.png")
+    writeFileSync(truncated, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00, 0x00, 0x00]))
+    const genuine = join(root, "genuine.png")
+    writeFileSync(genuine, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    const own: Partial<Messenger> = { groupPhoto: true, profilePhotoTypes: [".png"] }
+
+    const refused = await call(["chats", "update", "Book club", "--photo", truncated], base, env, own)
+    const accepted = await call(["chats", "update", "Book club", "--photo", genuine], base, env, own)
+
+    expect(refused.code).toBe(2)
+    expect(refused.stderr.join("\n")).toContain("is not a .png image inside")
+    expect(accepted.stderr.join("\n")).not.toContain("image inside")
+  })
+
   it("**makes another invite link** with approval or a use limit, never both, and an expiry, through the guard", async () => {
     const env = sandbox()
     const asked: unknown[] = []
