@@ -62,6 +62,13 @@ describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
       expect(one.mcp, one.path.join(" ")).toBe(false)
   })
 
+  it("project candidates require a separately granted MCP tool", () => {
+    const document = commands()
+    const scan = flatten(document).find((one) => one.path.join(" ") === "meetings projects scan")
+    expect(scan?.mcp).toBe(false)
+    expect(toolsFromCommands(document).some((tool) => tool.command === "meetings projects scan")).toBe(false)
+  })
+
   it("upgrade", () => {
     expect(metaOf(upgradeCommand(app, "chat-cli", () => ({}) as never)).mcp).toBe(false)
   })
