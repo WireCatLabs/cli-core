@@ -228,6 +228,16 @@ export {
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
 export {
+  checkGuide,
+  checkStep,
+  type GuideOptions,
+  type GuideReference,
+  type GuideStep,
+  guideCommand,
+  loadScenarios,
+  type Scenario,
+} from "./guide.js"
+export {
   type CommandHelp,
   commandHelp,
   commandHelpMarkdown,
