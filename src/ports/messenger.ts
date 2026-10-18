@@ -351,9 +351,17 @@ export interface HistoryChatEvent {
   change: ChatEvent
 }
 
+/** The owner's star on message `messageId` of `chatId`, or its removal, as `MessageStarEvent` has it. */
+export interface HistoryStar {
+  chatId: Id
+  messageId: Id
+  starred: boolean
+}
+
 /**
  * What a messenger pushed in one go: any of chats, the people in them, past messages of any chats, votes in
- * their polls, and changes to who is in them. A vote is saved with its chat's messages, so a poll in the same batch is held before its votes.
+ * their polls, the owner's stars, and changes to who is in them. A vote or a star is saved with its chat's messages,
+ * after them, so a message in the same batch is held before its votes and its star.
  * `rekeys` are chats the messenger now names by another id; they apply first, so the batch's messages under the
  * new id join the chat already stored under the old one.
  */
@@ -363,6 +371,7 @@ export interface HistoryBatch {
   people?: Member[]
   messages?: Message[]
   votes?: HistoryVote[]
+  stars?: HistoryStar[]
   events?: HistoryChatEvent[]
 }
 

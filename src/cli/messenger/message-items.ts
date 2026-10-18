@@ -82,6 +82,7 @@ export const messageItem = (message: ReadMessage, reader: AccountKey): MessageIt
     thread_root_id: message.threadRootId,
     reactions: message.reactions,
     scheduled_for: message.scheduledFor,
+    starred: message.starred === true ? true : undefined,
     email:
       message.email === undefined
         ? undefined

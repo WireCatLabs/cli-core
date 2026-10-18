@@ -463,7 +463,11 @@ const mailbox: FieldCompiler = ({ value }, { mail }) =>
 const is: FieldCompiler = ({ value }, { mail }) => {
   const state = value.toLowerCase()
   return always(
-    !mail ? bound("0") : state === "starred" ? bound("m.flagged = 1") : bound("m.read = ?", state === "read" ? 1 : 0),
+    state === "starred"
+      ? bound(mail ? "m.flagged = 1" : "m.starred = 1")
+      : !mail
+        ? bound("0")
+        : bound("m.read = ?", state === "read" ? 1 : 0),
   )
 }
 

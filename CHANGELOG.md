@@ -19,6 +19,14 @@ shape of this file.
   (seconds, one of `pinDurations`) is stated in `messages pin --expire-time`'s help and the MCP `expire_time`
   description ("24h, 7d or 30d; 7d by default"), and is handed to the adapter's `pin` as `duration` when the caller
   gave none, so the adapter no longer has to pick one itself.
+- **Starred messages are kept in the store (store version 24).** `messages.starred` holds the owner's star per
+  account. `messages star` and `unstar` save it once the messenger took it; a `watch` event
+  `{ event: "star", chatId, chatTitle, messageId, starred }` (`MessageStarEvent`), a pushed `HistoryBatch.stars`
+  (`HistoryStar`) and `Message.starred` on a pushed message set it too, and the same star twice is one. A message
+  saved again without `starred` keeps it, so tg and max fetches change nothing. Stored reads carry `starred: true`
+  (JSON `starred`); a re-keyed chat keeps its stars. A messenger with `messageStars` gets `messages list <chat>
+  starred:true` (and `starred:false`), answered from the store, and `search messages is:starred` finds starred
+  messages in every chat, beside starred mail. Forward-only and additive; `minCompatible` stays 1.
 
 ### Changed — may break callers
 

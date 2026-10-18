@@ -1,0 +1,1 @@
+CREATE INDEX `messages_starred_by_time` ON `messages` (`chat_id`,"sent_at" desc) WHERE starred = 1;

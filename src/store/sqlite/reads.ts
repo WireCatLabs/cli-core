@@ -29,6 +29,7 @@ export const MESSAGE_FIELDS = {
   reactions: messages.reactions,
   providerMetadata: messages.metadata,
   mentions: messages.mentions,
+  starred: messages.starred,
 }
 
 export interface MessageRow {
@@ -49,6 +50,7 @@ export interface MessageRow {
   reactions: string | null
   providerMetadata: string | null
   mentions: string | null
+  starred: number | null
 }
 
 export const selectMessages = ({ orm }: StoreContext) =>
@@ -155,7 +157,8 @@ export const messagePage = (
     since,
     threadId,
     outgoing,
-  }: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean },
+    starred,
+  }: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean; starred?: boolean },
 ): Page<Message> => {
   const anchor =
     anchorId === undefined
@@ -180,6 +183,11 @@ export const messagePage = (
           : outgoing
             ? eq(messages.outgoing, 1)
             : or(eq(messages.outgoing, 0), isNull(messages.outgoing)),
+        starred === undefined
+          ? undefined
+          : starred
+            ? sql`${messages.starred} = 1`
+            : or(eq(messages.starred, 0), isNull(messages.starred)),
       ),
     )
     .orderBy(...newestFirst)
@@ -345,6 +353,7 @@ const toMessage = (row: MessageRow, attachments: Attachment[]): Message => {
     ...present({ threadId: row.threadNativeId }),
     reactions: parsed(row.reactions) ?? null,
     ...present({ providerMetadata: parsed(row.providerMetadata), mentions: parsed(row.mentions) }),
+    ...(row.starred === 1 ? { starred: true } : {}),
   } as Message
 }
 

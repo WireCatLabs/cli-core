@@ -158,6 +158,36 @@ describe("re-keying a stored chat", () => {
     await store.close()
   })
 
+  it("carries the owner's stars into the merged chat, a twin's star filling only where the kept copy has none", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.messages.saveMessages(
+      OWNER,
+      PHONE,
+      [message("A1", PHONE, "starred under the phone"), message("A2", PHONE, "held twice")],
+      { via: "history" },
+    )
+    await store.messages.saveMessages(
+      OWNER,
+      LID,
+      [message("A2", LID, "held twice"), message("A3", LID, "starred under the lid")],
+      {
+        via: "history",
+        stars: [
+          { messageId: "A2", starred: true },
+          { messageId: "A3", starred: true },
+        ],
+      },
+    )
+    await store.messages.saveStar(OWNER, PHONE, "A1", true)
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    const starred = await store.messages.messages(OWNER, LID, { limit: 10, starred: true })
+    expect(starred.items.map((one) => one.id)).toEqual(["A1", "A2", "A3"])
+    await store.close()
+  })
+
   it("keeps a deletion when only one copy of a message held twice was deleted", async () => {
     const path = fresh()
     const store = await openStore({ path })

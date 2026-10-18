@@ -14,15 +14,27 @@ export const HISTORY_QUERY = defineQuery({
   ],
 })
 
-const UNTOPICAL_HISTORY_QUERY = defineQuery({
-  entity: "message",
-  backend: "native",
-  fields: HISTORY_QUERY.fields.filter((field) => field.name !== "topic"),
-})
+const STARRED = nativeField({ name: "starred", type: "bool", operators: ["term"], example: "starred:true" })
 
-/** The history query of a messenger: without `topic:` where it has no forum topics. */
-export const historyQuery = (messenger: { topics?: boolean }) =>
-  messenger.topics === false ? UNTOPICAL_HISTORY_QUERY : HISTORY_QUERY
+const historyQueryOf = (topics: boolean, stars: boolean) =>
+  defineQuery({
+    entity: "message",
+    backend: "native",
+    fields: [...HISTORY_QUERY.fields.filter((field) => topics || field.name !== "topic"), ...(stars ? [STARRED] : [])],
+  })
+
+const HISTORY_QUERIES = {
+  untopical: historyQueryOf(false, false),
+  starred: historyQueryOf(true, true),
+  untopicalStarred: historyQueryOf(false, true),
+}
+
+/** The history query of a messenger: without `topic:` where it has no forum topics, `starred:` where it has stars. */
+export const historyQuery = (messenger: { topics?: boolean; messageStars?: boolean }) => {
+  const stars = messenger.messageStars === true
+  if (messenger.topics === false) return stars ? HISTORY_QUERIES.untopicalStarred : HISTORY_QUERIES.untopical
+  return stars ? HISTORY_QUERIES.starred : HISTORY_QUERY
+}
 
 const COMMENTS_QUERY = defineQuery({
   entity: "message",
@@ -84,10 +96,17 @@ export const historyWindow = (
   registry = HISTORY_QUERY,
 ): Omit<ListWindow, "limit"> => {
   const terms = [...nativeTerms(listQuery(typedQuery(words), registry, command), command).values()]
-  const starts = terms.filter((term) => term.field !== "topic").map((term) => startOf(term, command))
+  const starts = terms
+    .filter((term) => term.field !== "topic" && term.field !== "starred")
+    .map((term) => startOf(term, command))
   if (cursor !== undefined) starts.push(fromCursor(cursor))
   if (starts.length > 1)
     throw new CliError("validation_error", "the query and --cursor name two starting points; give one of them")
   const topic = terms.find((term) => term.field === "topic")?.value
-  return { ...starts[0], ...(topic === undefined ? {} : { threadId: topic }) }
+  const starred = terms.find((term) => term.field === "starred")?.value.toLowerCase()
+  return {
+    ...starts[0],
+    ...(topic === undefined ? {} : { threadId: topic }),
+    ...(starred === undefined ? {} : { starred: starred === "true" }),
+  }
 }

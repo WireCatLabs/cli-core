@@ -19,20 +19,28 @@ export interface AccountMessages {
    * `seenAt` is when the messenger was asked: a message it still returned is not deleted, so a
    * tombstone older than that is lifted. A tombstone set after it stays — the deletion is newer.
    *
-   * `votes` are saved after the messages in the same transaction, as `saveVote` saves each.
+   * `votes` and `stars` are saved after the messages in the same transaction, as `saveVote` and `saveStar` save each.
    */
   saveMessages(
     key: AccountKey,
     chatId: Id,
     messages: Message[],
-    options: { via: IngestedVia; seenAt?: number; votes?: { messageId: Id; vote: PollVote }[] },
+    options: {
+      via: IngestedVia
+      seenAt?: number
+      votes?: { messageId: Id; vote: PollVote }[]
+      stars?: { messageId: Id; starred: boolean }[]
+    },
   ): Promise<void>
   /** Oldest to newest, like a provider's history page. */
-  /** `threadId` keeps one forum topic's; `outgoing` only the owner's (true) or only the others' (false). */
+  /**
+   * `threadId` keeps one forum topic's; `outgoing` only the owner's (true) or only the others' (false); `starred`
+   * only the ones the owner starred (true) or did not (false).
+   */
   messages(
     key: AccountKey,
     chatId: Id,
-    window: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean },
+    window: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean; starred?: boolean },
   ): Promise<Page<Message>>
   /** How many stored messages the chat has, sent at `since` or later when it is given. */
   countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
@@ -78,6 +86,8 @@ export interface AccountMessages {
     reactions: Reactions,
     options?: { observation?: CounterObservations["reactions"] },
   ): Promise<boolean>
+  /** The owner's star on a message, or its removal; answers whether the message is held at all. */
+  saveStar(key: AccountKey, chatId: Id, messageId: Id, starred: boolean): Promise<boolean>
   /** One voter's vote in the poll a message carries, unless the store holds a newer one of theirs; no answers is a take-back. */
   saveVote(key: AccountKey, chatId: Id, messageId: Id, vote: PollVote): Promise<void>
   /** Each voter's newest vote in the poll a message carries, newest first. */
@@ -111,7 +121,7 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
   const { database } = context
   const { accountPk, findAccountPk, findChatPk, chatKeyOf, chatPkFor, upsertMessage } = keysOver(context)
   return {
-    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [] }) =>
+    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [], stars = [] }) =>
       write(database, () => {
         const accountKey = accountPk(key)
         const chatKey = chatPkFor(accountKey, chatId)
@@ -120,6 +130,7 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
         }
         for (const { messageId, vote } of votes)
           messageWrites.saveVote(context, accountKey, key.provider, chatKey, messageId, vote)
+        for (const { messageId, starred } of stars) messageWrites.saveStar(context, chatKey, messageId, starred)
       }),
 
     messages: async (key, chatId, window) => {
@@ -173,6 +184,17 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
           .get(chatKey, messageId)
         if (row && options.observation)
           applyCounterObservations(context, Number(row.pk), { reactions: options.observation })
+      })
+      return saved
+    },
+
+    saveStar: async (key, chatId, messageId, starred) => {
+      const accountKey = findAccountPk(key)
+      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
+      if (chatKey === undefined) return false
+      let saved = false
+      write(database, () => {
+        saved = messageWrites.saveStar(context, chatKey, messageId, starred)
       })
       return saved
     },

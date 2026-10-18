@@ -526,5 +526,17 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE INDEX `chat_events_by_chat_id_happened_at` ON `chat_events` (`chat_id`,`happened_at`);",
       "CREATE INDEX `chat_events_by_actor_identity_id` ON `chat_events` (`actor_identity_id`);"
     ]
+  },
+  {
+    "name": "20261018061512_version-24-message-stars",
+    "statements": [
+      "ALTER TABLE `messages` ADD `starred` integer;"
+    ]
+  },
+  {
+    "name": "20261018063952_version-24-message-stars-index",
+    "statements": [
+      "CREATE INDEX `messages_starred_by_time` ON `messages` (`chat_id`,\"sent_at\" desc) WHERE starred = 1;"
+    ]
   }
 ]

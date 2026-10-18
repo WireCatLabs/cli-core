@@ -73,6 +73,8 @@ export const message = v.strictObject({
     ),
   ),
   scheduled_for: v.optional(time),
+  /** The owner starred it; only where the messenger has stars, and only when set. */
+  starred: v.optional(v.literal(true)),
   email: v.optional(
     v.strictObject({
       subject: v.nullable(text),

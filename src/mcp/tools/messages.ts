@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { itemOf, listOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { COMMENTS_QUERY, cursorOf, historyWindow } from "../../cli/messenger/history-query.js"
+import { COMMENTS_QUERY, cursorOf, historyQuery, historyWindow } from "../../cli/messenger/history-query.js"
 import { evidenceAnswer, threadAnswer } from "../../cli/messenger/message-answers.js"
 import { messageItems, type ReadMessage, selfOf } from "../../cli/messenger/message-items.js"
 import { isLocator, parseLocator } from "../../domain/locator.js"
@@ -67,7 +67,9 @@ const messageTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "Recent messages in a chat, oldest first. Does not mark anything read. `query` says where to start and " +
         "which topic, all terms together: id<42 or date<2h reads back, id>42 or date>2026-10-01 forward, " +
-        "topic:12 one forum topic. When more exist, next has page.next: pass its cursor. A voice message carries " +
+        "topic:12 one forum topic" +
+        (messenger.messageStars === true ? ", starred:true only the ones the owner starred" : "") +
+        ". When more exist, next has page.next: pass its cursor. A voice message carries " +
         "`transcript` once heard; `transcribe` hears the rest.",
       input: v.object({
         chat,
@@ -89,7 +91,12 @@ const messageTools = (messenger: Messenger): Record<string, AnyTool> => {
       output: { entity: "message", list: true },
       served: async (services, args, defaults, connect) => {
         const size = args.limit ?? defaults.limit
-        const window = historyWindow(args.query, args.cursor, "messages list")
+        const window = historyWindow(
+          args.query,
+          args.cursor,
+          "messages list",
+          historyQuery({ messageStars: messenger.messageStars === true }),
+        )
         const found = await services.messages.list(args.chat, { limit: size, ...window })
         const hearing = await hearForTool(
           messenger,
