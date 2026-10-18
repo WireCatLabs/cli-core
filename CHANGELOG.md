@@ -7,11 +7,27 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`<tool> --help` and a bare `<tool>` show a short first screen instead of commander's full help**: the tool's
+  pitch, the usage line, one sentence that account commands start with the profile, what the tool can do, the other
+  WireCat tools, and where to go next (`commands`, `help options`, `skill show`, and `setup` or `guide` when the tool
+  has them). It no longer lists every command or the options for every command, so a test that looks for a command
+  or a global option in the root `--help` must read `--help-all`, which prints the old help, or `help options`.
+  Exit codes are unchanged: `--help` exits 0, a bare run exits 2.
+
 ### Added
 
 - **`registerCommands(server, prefix, commands)` and the `McpCommand` type** (`@wirecat/cli-core/mcp`): the three
   tools `<prefix>_tools_search`, `<prefix>_read` and `<prefix>_write` that tg and max serve in place of one tool per
   command. A CLI without the messenger `mcpCommand`, such as drive, can now serve its own commands the same way.
+- **`ProgramDefinition.firstScreen` and `installHelp(program, screen)`** (`@wirecat/cli-core/cli`): a tool
+  supplies its `pitch` and 6–8 `can` lines (`{ command, does }`, the command without the profile);
+  `installHelp` puts the same screen on a program the tool builds itself, with `profile: false` for a tool
+  whose commands take no leading profile and `start` for its first command. A tool that supplies nothing gets its
+  description and no "What you can do" block.
+- **`<tool> help options`** prints the options for every command; `help <command>` prints that command's help.
+  `help` and `--help-all` are hidden, so `commands --json` and the MCP tools are unchanged.
 
 ## 0.343.0 — 18.10.2026
 
