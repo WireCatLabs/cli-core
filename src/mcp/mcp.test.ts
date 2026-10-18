@@ -1535,7 +1535,7 @@ describe("the MCP server", () => {
     }
   })
 
-  it("under the read-only lock refuses the tools that delete what the owner saved, and deletes nothing", async () => {
+  it("under the read-only lock refuses the tools that delete or overwrite what the owner saved, and changes nothing", async () => {
     const { call } = await connect(scripted(), { extraEnv: { CHAT_READ_ONLY: "1" } })
     await call("chats list")
     const created = await call("searches create", { name: "daily", text: "cat" })
@@ -1545,6 +1545,7 @@ describe("the MCP server", () => {
     for (const [command, args] of [
       ["searches delete", { name: "daily" }],
       ["searches clear", {}],
+      ["contacts notes edit", { person: "Alice", id: "1", text: "x", revision: 1 }],
       ["contacts notes remove", { person: "Alice", id: "1" }],
       ["contacts alias rm", { person: "Alice" }],
       ["tags remove", { chat: "7", tags: ["work"] }],

@@ -84,6 +84,7 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
       ),
   }),
   contacts_notes_edit: tool({
+    changesStore: true,
     title: "Edit a private contact note",
     description: "Replace note text only if its revision still matches the one read.",
     input: v.object({ person, id, text, revision: v.pipe(v.number(), v.integer(), v.minValue(1)) }),
