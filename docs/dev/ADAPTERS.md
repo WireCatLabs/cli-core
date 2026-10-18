@@ -149,6 +149,12 @@ stored value; a key set to `null` is removed. So leave a key out only when you d
 it is gone or a flag turned false: `{ pinned: null }`, `{ username: null }`. `parentChatId` works the same way:
 left out keeps the stored parent, `null` clears it. Every reader treats a `null` key as an absent one.
 
+The same holds for `title`, `unreadCount`, `lastMessageAt` and `participantsCount` (the `ChatUpdate` that
+`saveChats` and `HistoryBatch.chats` take): left out keeps the stored value, `null` stores none. So a push that knows
+only part of a chat sends only that part, such as `{ id, kind, parentChatId: null }` for a group that left its
+community. Send `null` only when the messenger says there is no value; a `null` sent for "not known" erases what the
+store holds.
+
 ## One socket per linked device
 
 Some messengers allow one connection per linked device. A second one pushes the first one off.

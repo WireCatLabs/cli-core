@@ -1,6 +1,6 @@
 import type { TextRange } from "../conversations/chunks.js"
 import type { Link } from "../conversations/link.js"
-import type { Chat, ChatKind, Id, MessageHit, Provider } from "../domain/models.js"
+import type { Chat, ChatKind, ChatUpdate, Id, MessageHit, Provider } from "../domain/models.js"
 import type * as imageChunks from "./sqlite/image-chunks.js"
 import type { Where } from "./sqlite/query-filter.js"
 
@@ -91,7 +91,7 @@ export type MessageFilter = AccountMessageFilter & {
 } & ({ account: AccountKey } | { account?: undefined; chatId?: undefined })
 
 export interface Delta {
-  chats?: Chat[]
+  chats?: ChatUpdate[]
   people?: PersonFacts[]
   members?: Map<Id, Id[]>
   state?: Record<string, string>

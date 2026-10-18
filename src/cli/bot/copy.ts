@@ -70,7 +70,7 @@ export const botCopy = (provider: Provider) => {
       }, warn)
     },
 
-    /** Only a chat the messenger has just described in full: the store replaces a title it is not given. */
+    /** Only a chat the messenger has just described in full: the store takes its title and counts as given. */
     keepChat: async (botId: string, chat: Chat, warn: (message: string) => void) => {
       if (CHAT_ID.test(chat.id)) await quietly((store) => store.chats.saveChats(accountOf(botId), [chat]), warn)
     },

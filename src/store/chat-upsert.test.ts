@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import type { Chat } from "../domain/models.js"
+import type { Chat, ChatUpdate } from "../domain/models.js"
 import { storedChatId } from "../services/message-resolution.js"
 import { type AccountKey, openStore } from "./store.js"
 
@@ -19,7 +19,7 @@ const chat = (id: string, fields: Partial<Chat> = {}): Chat => ({
   ...fields,
 })
 
-const saving = async (...pushes: Chat[][]) => {
+const saving = async (...pushes: ChatUpdate[][]) => {
   const store = await openStore({ path: fresh() })
   for (const push of pushes) await store.chats.saveChats(OWNER, push)
   const stored = (id: string) => store.chats.chats(OWNER, {}).then(({ items }) => items.find((one) => one.id === id))
@@ -63,6 +63,45 @@ describe("saving a chat the store already holds", () => {
       parentChatId: "p2",
       providerMetadata: { username: "new" },
       unreadCount: 0,
+    })
+    await store.close()
+  })
+
+  it("keeps the title, counts and last activity a notice leaves out, and clears the parent it names", async () => {
+    const held = { title: "Team", unreadCount: 4, lastMessageAt: "2026-10-01T09:00:00.000Z", participantsCount: 12 }
+    const { store, stored } = await saving(
+      [chat("group", { ...held, parentChatId: "community" })],
+      [{ id: "group", kind: "group", parentChatId: null }],
+    )
+    const after = await stored("group")
+    expect(after).toMatchObject(held)
+    expect(after?.parentChatId).toBeUndefined()
+    await store.close()
+  })
+
+  it("clears only the fields an update sets to null", async () => {
+    const { store, stored } = await saving(
+      [chat("a", { unreadCount: 4, lastMessageAt: "2026-10-01T09:00:00.000Z", participantsCount: 12 })],
+      [{ id: "a", kind: "group", unreadCount: null, lastMessageAt: null }],
+    )
+    expect(await stored("a")).toMatchObject({
+      title: "Chat a",
+      unreadCount: null,
+      lastMessageAt: null,
+      participantsCount: 12,
+    })
+    await store.chats.saveChats(OWNER, [{ id: "a", kind: "group", title: null }])
+    expect((await stored("a"))?.title).toBeNull()
+    await store.close()
+  })
+
+  it("stores none of the fields a first save leaves out", async () => {
+    const { store, stored } = await saving([{ id: "a", kind: "group" }])
+    expect(await stored("a")).toMatchObject({
+      title: null,
+      unreadCount: null,
+      lastMessageAt: null,
+      participantsCount: null,
     })
     await store.close()
   })
