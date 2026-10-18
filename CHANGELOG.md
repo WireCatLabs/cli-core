@@ -47,6 +47,10 @@ shape of this file.
 
 ### Fixed
 
+- **An empty `tasks list` no longer says "review and serve add them".** On max, `serve` opens tasks only for
+  auto-reply rules, so the note was false there. It now names what adds tasks on every messenger: `review`, `inbox`
+  and `messages sync`.
+
 - **`<cli> mcp --help` and the root help no longer suggest `claude mcp add tg -- tg mcp`.** That command always
   failed with "name a profile", so a newcomer registered a broken server. The hint now reads
   `claude mcp add tg -- tg <profile> mcp`. Run `pnpm generate` after adopting to refresh `docs/commands.md`.
