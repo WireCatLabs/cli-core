@@ -1,7 +1,8 @@
 import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { eq } from "drizzle-orm"
+import { eq, getTableName } from "drizzle-orm"
+import { getTableConfig } from "drizzle-orm/sqlite-core"
 import { afterEach, describe, expect, it } from "vitest"
 import type { CacheDatabase } from "../driver.js"
 import { migrate } from "../migrations.js"
@@ -9,7 +10,7 @@ import { openCache } from "../open.js"
 import { openStore } from "../store.js"
 import { LINK_KINDS } from "./link-kinds.js"
 import { type OpenedSqlite, openSqlite } from "./open.js"
-import { accounts } from "./schema.js"
+import { accounts, tagConsolidations, tagRedirects } from "./schema.js"
 
 const DOC = join(import.meta.dirname, "../../../docs/storage/schema.md")
 const fresh = () => join(mkdtempSync(join(tmpdir(), "schema-")), "messages.db")
@@ -473,4 +474,53 @@ describe("the link kinds", () => {
 
     expect(named.sort()).toEqual([...LINK_KINDS].sort())
   })
+})
+
+it("keeps the tag ORM foreign keys and lookup indexes aligned with the structural migration", async () => {
+  const database = await open()
+  migrate(database)
+  for (const table of [tagRedirects, tagConsolidations]) {
+    const definition = getTableConfig(table)
+    const expected = definition.foreignKeys
+      .flatMap((key) => {
+        const reference = key.reference()
+        return reference.columns.map(
+          (column, index) =>
+            `${column.name}:${getTableName(reference.foreignTable)}.${reference.foreignColumns[index]?.name}`,
+        )
+      })
+      .sort()
+    const actual = database
+      .prepare("SELECT * FROM pragma_foreign_key_list(?)")
+      .all(definition.name)
+      .map((row) => `${row.from}:${row.table}.${row.to}`)
+      .sort()
+    expect(actual).toEqual(expected)
+    expect(actual).toHaveLength(2)
+    for (const index of definition.indexes) {
+      const columns = index.config.columns.map((column) => ("name" in column ? column.name : null))
+      expect(
+        database
+          .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
+          .all(index.config.name)
+          .map((row) => row.name),
+      ).toEqual(columns)
+    }
+    if (definition.name === "tag_consolidations") {
+      expect(definition.columns.filter((column) => column.isUnique).map((column) => column.name)).toContain(
+        "idempotency_key",
+      )
+      const unique = database.prepare("SELECT name FROM pragma_index_list(?) WHERE origin='u'").all(definition.name)
+      expect(
+        unique.some(
+          (index) =>
+            database
+              .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
+              .all(String(index.name))
+              .map((row) => row.name)
+              .join(",") === "idempotency_key",
+        ),
+      ).toBe(true)
+    }
+  }
 })

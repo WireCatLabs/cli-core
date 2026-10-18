@@ -595,7 +595,7 @@ const consolidateTags = async (store: Awaited<ReturnType<typeof open>>) => {
 }
 const image = (path: string) => {
   const digest = createHash("sha256").update(readFileSync(path))
-  if (existsSync(path + "-wal")) digest.update(readFileSync(path + "-wal"))
+  if (existsSync(`${path}-wal`)) digest.update(readFileSync(`${path}-wal`))
   return digest.digest("hex")
 }
 
