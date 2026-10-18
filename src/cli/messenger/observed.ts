@@ -1,3 +1,4 @@
+import type { MessageEvent } from "../../domain/models.js"
 import { isCliFailure } from "../../errors/failures.js"
 import { type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { type EventSink, providerErrorKey } from "../../runs/events.js"
@@ -36,8 +37,26 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
     }
   }
 
+  const counted = async (
+    operation: string,
+    onEvent: (event: MessageEvent) => void,
+    work: (onEvent: (event: MessageEvent) => void) => Promise<void>,
+  ) => {
+    const counts: Record<string, number> = {}
+    await timed(
+      operation,
+      {},
+      () =>
+        work((event) => {
+          counts[event.event] = (counts[event.event] ?? 0) + 1
+          onEvent(event)
+        }),
+      () => ({ counts }),
+    )
+  }
+
   const mint = messenger.newSendId
-  const { chats, history, contact, around } = messenger
+  const { chats, history, contact, around, watch, listen } = messenger
   // A method not listed here is timed under its own name, with no ids until a line here names them.
   return throughWrapper(
     messenger,
@@ -123,25 +142,16 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
           () => messenger.send(chatId, text, options),
           (sent) => ({ ids: { message_id: sent.message.id } }),
         ),
-      ...(messenger.watch
+      ...(watch
         ? {
-            watch: async (onEvent, signal, onReady) => {
-              const counts: Record<string, number> = {}
-              await timed(
-                "messages.watch",
-                {},
-                () =>
-                  messenger.watch?.(
-                    (event) => {
-                      counts[event.event] = (counts[event.event] ?? 0) + 1
-                      onEvent(event)
-                    },
-                    signal,
-                    onReady,
-                  ) ?? Promise.resolve(),
-                () => ({ counts }),
-              )
-            },
+            watch: (onEvent, signal, onReady) =>
+              counted("messages.watch", onEvent, (counting) => watch.call(messenger, counting, signal, onReady)),
+          }
+        : {}),
+      ...(listen
+        ? {
+            listen: (onEvent, signal) =>
+              counted("adapter.listen", onEvent, (counting) => listen.call(messenger, counting, signal)),
           }
         : {}),
       logout: () => timed("session.logout", {}, () => messenger.logout()),
