@@ -98,14 +98,16 @@ describe("command effects", () => {
     )
   })
 
-  it("mark for the read-only lock the commands that rewrite the store or delete or overwrite what the owner saved in it", () => {
+  it("mark for the read-only lock the commands that rewrite the store or write what the owner saved in it", () => {
     const marked = commands.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)
     expect(marked.sort()).toEqual(
       [
         "contacts alias rm",
+        "contacts alias set",
         "contacts notes edit",
         "contacts notes remove",
         "searches clear",
+        "searches create",
         "searches delete",
         "store clear",
         "store copies delete",
@@ -259,7 +261,9 @@ describe("the read-only lock on the message store", () => {
     ["contacts alias rm", ["contacts", "alias", "rm", "Alice"]],
     ["contacts notes edit", ["contacts", "notes", "edit", "Alice", "1", "--revision", "1"]],
     ["tags remove", ["tags", "remove", "work", "--chat", "7"]],
-  ])("refuses %s, which deletes or overwrites what the owner saved", async (name, argv) => {
+    ["searches create", ["searches", "create", "daily", "cat"]],
+    ["contacts alias set", ["contacts", "alias", "set", "Alice", "Al"]],
+  ])("refuses %s, which writes over or deletes what the owner saved", async (name, argv) => {
     const store = kept(`${name}.db`)
 
     const { code, error } = await locked(["ro", ...argv], store)

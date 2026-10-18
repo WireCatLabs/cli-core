@@ -45,8 +45,8 @@ export const isLogin = (command: Command): boolean => LOGIN.has(command)
 const STORE_CHANGE = new WeakSet<Command>()
 
 /**
- * Marks a command that replaces, deletes or rewrites the message store, a file made from it, or what the owner saved
- * in it (saved searches, contact notes). The store is the owner's archive, so `<PREFIX>_READ_ONLY` refuses it even
+ * Marks a command that replaces, deletes or rewrites the message store or a file made from it, or that writes what
+ * the owner saved in it (saved searches, aliases, contact notes). The store is the owner's archive, so `<PREFIX>_READ_ONLY` refuses it even
  * though nothing leaves the machine; `--dry-run` still previews it. What the store can rebuild from its messages —
  * jobs, conversation links, vectors — is not marked.
  */

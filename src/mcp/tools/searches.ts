@@ -54,6 +54,7 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
     }),
 
     searches_create: tool({
+      changesStore: true,
       title: "Save a search",
       description:
         "Saves a search under a name without running it; the query is checked against today's fields. Takes " +

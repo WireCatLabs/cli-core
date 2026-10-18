@@ -42,6 +42,9 @@ shape of this file.
   `searches clear`, `contacts notes edit`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse
   with `permission_error`, and so do their MCP tools, which deleted or overwrote under the lock before. Clearing what
   the store can rebuild (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
+- **The read-only lock also stops saving a search or an alias.** With `<PREFIX>_READ_ONLY` set, `searches create`
+  and `contacts alias set` refuse with `permission_error`, and so do their MCP tools. Before, they could write over a
+  saved search (`--replace`) or an alias the owner set.
 - **Model downloads no longer go through a running `serve`.** `models text download`, `models audio download` and
   `images models download` fetch from a model host, not the messenger, so they always run in the calling process.
 - **A re-keyed chat keeps its place in the recipient list.** When a messenger moves a chat to a new id, the
