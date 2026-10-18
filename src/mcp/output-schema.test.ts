@@ -5,7 +5,8 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { answerSchema, itemOf } from "../cli/envelope.js"
 import { ENTITIES } from "../entities/index.js"
-import { outputOf, registerCommands } from "./surface.js"
+import { registerCommands } from "./index.js"
+import { outputOf } from "./surface.js"
 import { answered } from "./tool.js"
 
 const searched = async (output?: v.GenericSchema) => {
