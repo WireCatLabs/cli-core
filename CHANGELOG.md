@@ -28,6 +28,8 @@ shape of this file.
 
 ### Changed — may break callers
 
+- Core now requires Base `>=0.44.0 <0.45.0` and validates against registry Base 0.44.1. Every command must declare its effects; command discovery can include `runnable` on groups. Consumers must adopt the compatible Base range together and accept that optional discovery field.
+
 - **A hold on writes stops every write, not only the counted ones.** While the messenger has the account frozen,
   limited or banned, a reaction, marking a chat read, a quiet pin, a title change and a profile change are refused
   with `permission_error` too; reads still work. Sending any of them during a ban is what makes it last longer.
