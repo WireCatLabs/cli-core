@@ -402,14 +402,17 @@ const ADDED: Record<string, readonly string[]> = {
   "chats moderate": ["no_block"],
 }
 
-const typeOf = (schema: { type?: string; enum?: unknown[] }) => (schema.enum ? "enum" : schema.type)
+type Schema = { type?: string; enum?: unknown[]; anyOf?: Schema[] }
+// A list also takes `a,b`: its type is the list's.
+const typeOf = (schema: Schema): string | undefined =>
+  schema.enum ? "enum" : schema.anyOf ? typeOf(schema.anyOf[0] ?? {}) : schema.type
 
 describe("the generated bot catalogue", () => {
   const catalogue = async () =>
     Object.fromEntries(
       (await connect()).tools.map((tool) => [
         tool.command,
-        toJsonSchema(tool.input) as { properties: Record<string, { type?: string; enum?: unknown[] }> },
+        toJsonSchema(tool.input) as { properties: Record<string, Schema> },
       ]),
     )
 

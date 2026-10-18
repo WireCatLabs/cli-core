@@ -330,7 +330,7 @@ and the MCP search took 1.4 s.
 | search, related, the merge | `src/services/embeddings-search.ts` |
 | the vector tables and the scan | `src/store/sqlite/vectors.ts` |
 | the commands | `src/cli/messenger/conversations-command.ts` |
-| the MCP tool | `src/mcp/tools/conversations.ts` |
+| the MCP tools | generated from the commands (`src/mcp/agent.ts`) |
 
 
 

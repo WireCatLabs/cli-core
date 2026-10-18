@@ -146,6 +146,7 @@ write conversations embed
 write conversations embed clear
 write conversations links add
 write conversations links clear
+write conversations rebuild
 write images embed
 write mentions confirm
 write mentions rebuild

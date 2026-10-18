@@ -13,6 +13,35 @@ shape of this file.
   vocabulary fingerprint. It reports bounded assignment/claim overlaps, aliases and links with a
   fingerprint of the inspected state, without writing. Its coverage names the four inspected tables;
   it is not an apply plan and does not merge labels or change saved references.
+- **`conversations rebuild`**: build, then embed with the model on this machine, the chats that changed and the group
+  chats never built — or only `--chat` — bounded by `--max-chats` and `--max-chunks`; nothing leaves the machine.
+  Key `conversations.embed`. It replaces the agent-only MCP tool `conversations_refresh`.
+- **`readsStdin(command, { name, description, json? })`** (`cli/stdin-field`): an MCP tool generated from the command
+  takes that field and gives it to the command on stdin. `contacts notes add/edit` (`text`), `attachments text set`
+  (`text`) and `conversations links add` (`answer`, an object or JSON text) use it.
+
+### Changed — may break callers
+
+- **The personal MCP server's tools are the CLI's commands** (wave 3). `createServer` builds its catalogue with
+  `toolsFromCommands` and runs each call through the CLI's own `run` (`runCommandForAgent`), on the server's one
+  connection, one call at a time. Arguments are the commands' own, in snake_case: `search messages` takes `query`
+  (not `text`), `polls create` takes `question`, `tags add` takes `tag`, `chats members add` takes `person`, `inbox`
+  and `review` take `kind` as `group,channel`, `searches delete` takes `name_or_id`, and so on — `tools_search` shows
+  each. The agent gets every command the generator offers, filtered only by the profile's levels, including reads and
+  writes it did not have before; the owner ruled that agents get all of them. `messages photo`,
+  `attachments show` and `stats charts` stay hand-written, since they answer with an image. `search messages` takes no
+  `ast` any more. The hand-written tools in `mcp/tools/*`, `personalMcpTools`, `mountedMcpTools`, `registerTools`
+  and the `cli` exports `answerMessagesSearch`, `messagesSearchInput`, `MessagesSearchArgs` and
+  `MESSAGES_SEARCH_DESCRIPTION` are gone. A CLI needs no change: the server finds the program through `run()`.
+- **The generator** accepts a string where a command takes a query or a comma list, an object for a `<json>` option,
+  `false` on a switch with a `--no-` form, `0` for a count (the command judges the range) and a word for `<n|all>`;
+  an argument named `<name|id>` is the field `name_or_id`. A group that runs on its own (`tasks duplicates`) now runs.
+- **An agent's run** (`runCommandForAgent`) is named `mcp <command>` in run history and the send journal, carries
+  the caller's `traceparent`, acts as the agent (tasks, mentions; `--as-owner` refused), keeps its own `--new` points
+  for `inbox` and `review`, never marks read on `catch_up_marks_read`, and goes ahead with a local write at level
+  `ask`, as its remote writes already did. `MessengerContext.agent` says which.
+- **Off MCP** (`ownerOnlyOption`): `--mark-read` and `--no-mark-read` on `messages list`, `inbox` and `review`,
+  `--as-owner`, `messages send --allow-any-file`, and the `--file` / `--text-file` of the stdin commands.
 
 ### Fixed
 
@@ -45,6 +74,12 @@ shape of this file.
   its baseline entries for these commands and options as stale until it deletes them — `unknown-verb` for
   `chats mute`, `unmute`, `archive`, `unarchive`, `mark-unread`, `messages star`, `unstar`; `option-role` for the
   `account privacy set` options and `chats mute --until`; `unknown-resource` for `account privacy`.
+
+- **`attachments extract --output-dir` refuses credential folders, the CLI's own folders and the message store**, as
+  the MCP tool did; the command never checked.
+- **An MCP client that closes stdin right after its calls gets their answers**: the personal server waits
+  for the last answer before it exits.
+
 
 ## 0.340.0 — 18.10.2026
 

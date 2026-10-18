@@ -1,14 +1,16 @@
 import { Client } from "@modelcontextprotocol/client"
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
+import { createProgram } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
+import { sharedProgram } from "../testing/shared-program.js"
+import { toolsFromCommands } from "./agent.js"
 import { registerPrompts } from "./prompts.js"
-import { inputOf } from "./tool.js"
-import { personalMcpTools } from "./tools.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "synthetic", version: "1.0.0" }
-const messenger: Messenger = {
+const _messenger: Messenger = {
   app,
   provider: "chat",
   chatArgument: "a chat",
@@ -77,18 +79,22 @@ const promptTexts = async () => {
 
 describe("MCP prompts", () => {
   it("name only commands and arguments the tools take", async () => {
-    const tools = personalMcpTools(messenger)
+    const tools = new Map(
+      toolsFromCommands(describeProgram(createProgram(sharedProgram)), { exclude: [["bot"]], offline: true }).map(
+        (tool) => [tool.command, tool],
+      ),
+    )
     const refused: string[] = []
     let seen = 0
     for (const { prompt, text } of await promptTexts()) {
       for (const call of callsIn(text)) {
         seen += 1
-        const tool = tools[call.command.replaceAll(" ", "_").replaceAll("-", "_")]
+        const tool = tools.get(call.command)
         if (!tool) {
           refused.push(`${prompt}: no tool for "${call.command}"`)
           continue
         }
-        const accepted = Object.keys(inputOf(tool, true).entries)
+        const accepted = Object.keys(tool.input.entries)
         for (const name of Object.keys(call.arguments ?? {}))
           if (!accepted.includes(name)) refused.push(`${prompt}: ${call.command} takes no ${name}`)
       }

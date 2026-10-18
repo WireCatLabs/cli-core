@@ -4,9 +4,10 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { contactNote } from "../../entities/index.js"
 import type { ContactNoteItem } from "../../services/private-people.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { LOCAL_READ, LOCAL_WRITE, ownerOnlyOption } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
+import { readsStdin } from "../stdin-field.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { readAll } from "./stdin.js"
 
@@ -64,12 +65,15 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       )
     })
   for (const name of ["add", "edit"] as const) {
-    const command = annotate(notes.command(name), {
-      effects: LOCAL_WRITE,
-      output: { entity: "contact_note" },
-    })
+    const command = readsStdin(
+      annotate(notes.command(name), {
+        effects: LOCAL_WRITE,
+        output: { entity: "contact_note" },
+      }),
+      { name: "text", description: "the note's text" },
+    )
       .argument("<person>")
-      .option("--file <path>", "read note text from a file; omitted or - reads stdin")
+      .addOption(ownerOnlyOption("--file <path>", "read note text from a file; omitted or - reads stdin"))
     if (name === "edit")
       command.argument("<id>").requiredOption("--revision <n>", "the revision you read before editing")
     command.action(async function (this: Command, person: string, id?: string) {

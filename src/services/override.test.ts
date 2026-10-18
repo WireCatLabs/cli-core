@@ -8,11 +8,8 @@ import { messagesCommand } from "../cli/messenger/messages-command.js"
 import { run } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
 import type { Message } from "../domain/models.js"
-import { messagesTools } from "../mcp/tools/messages.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
-import type { SendGuard } from "../sends/guard.js"
-import { onlineDeps } from "./deps.js"
-import { type Override, servicesFor } from "./index.js"
+import { type Override } from "./index.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 
@@ -57,7 +54,7 @@ const messenger: Messenger = {
 }
 
 describe("a messenger's override", () => {
-  it("replaces one method for commands and MCP tools alike, with the shared one inside", async () => {
+  it("replaces one method for the commands, with the shared one inside", async () => {
     const root = mkdtempSync(join(tmpdir(), "override-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     const streams = captureStreams()
@@ -70,16 +67,8 @@ describe("a messenger's override", () => {
         env,
       },
     )
-    const guard = {} as SendGuard
-    const tool = await messagesTools(messenger).messages_list?.served?.(
-      servicesFor(onlineDeps(messenger, adapter, guard)),
-      { chat: "7" },
-      { limit: 20, guard, settings: { configured: {}, shared: {}, profile: "default" }, env },
-      (work) => work(adapter),
-    )
 
     expect(code).toBe(0)
     expect(JSON.parse(streams.stdout.join("")).items[0].text).toBe("CHAPTER ONE")
-    expect((tool as { items: Message[] }).items[0]?.text).toBe("CHAPTER ONE")
   })
 })

@@ -1,39 +1,99 @@
-import type { Readable, Writable } from "node:stream"
-import { McpServer } from "@modelcontextprotocol/server"
+import { PassThrough, type Readable, Writable } from "node:stream"
+import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, mcpErrorResult } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
 import { skillResource } from "@wirecat/cli-base/skill"
+import type { ErrorObject } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
+import { findCommand } from "../cli/command-contract.js"
 import { environmentOf } from "../cli/context.js"
 import { judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
+import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
+import { wholeList } from "../cli/messenger/chat-answers.js"
 import { connectedFor, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
+import { lackedNeed } from "../cli/messenger/lacks.js"
 import { syncsFirst } from "../cli/messenger/search-sync-options.js"
+import { stdinFieldOf } from "../cli/stdin-field.js"
 import { rootOf } from "../cli/steps.js"
 import { warmEmbedders } from "../embeddings/embed.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
 import { guardFor } from "../sends/guard.js"
-import { levelFor, readKeysForCommand } from "../sends/permissions.js"
+import { levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
 import { openStore } from "../store/store.js"
+import { type AgentAnswer, type AgentProgram, type AgentTool, runCommandForAgent, toolsFromCommands } from "./agent.js"
 import { agentLog } from "./agent-log.js"
 import type { HttpOptions } from "./http/serve.js"
 import { instructions } from "./instructions.js"
 import { registerPrompts } from "./prompts.js"
 import { registerResources } from "./resources.js"
-import { MessengerSession, type SessionOptions } from "./session.js"
-import { registerSurface } from "./surface.js"
-import { commandOf, READ, tool, toolKey } from "./tool.js"
-import { mountedMcpTools } from "./tools.js"
+import { harmless, MessengerSession, type SessionOptions } from "./session.js"
+import { type McpCommand, outputOf, registerCommands, surfaceCommands } from "./surface.js"
+import { agentJson } from "./text.js"
+import {
+  answered,
+  commandOf,
+  failed,
+  outcomeOf,
+  READ,
+  type Registration,
+  type ToolCall,
+  tierOf,
+  tool,
+  toolKey,
+  WRITE,
+} from "./tool.js"
+import { pictureTools } from "./tools.js"
 
 export type ServerOptions = SessionOptions & { spawnJob?: import("../services/backfill-jobs.js").SpawnJob }
 
 type Invocation = Parameters<Messenger["connect"]>[0]
 
+/** What `run()` sets for each run itself; everything else a test or the CLI handed the server reaches its commands. */
+const PER_RUN = new Set([
+  "streams",
+  "stdin",
+  "stdout",
+  "stderr",
+  "tty",
+  "signal",
+  "commandSignal",
+  "trackCloseable",
+  "exit",
+  "runCommand",
+  "app",
+  "relayed",
+  "agent",
+  "answer",
+  "untilStopped",
+  "endUntilStopped",
+  "handled",
+  "mcp",
+])
+
+const SYNC_FIELDS = ["sync_first", "sync_time", "max_chats", "max_messages"]
+
+/** A command an agent may run, as the tool name `instructions` and the audit tier read it: `chats_mark_read`. */
+const keyOfCommand = (command: string) => command.replace(/[ -]/g, "_")
+
+/** A command's `--json` answer is already an envelope; a bare list or value is wrapped as one. */
+const envelope = (command: string, value: unknown): object =>
+  Array.isArray(value)
+    ? wholeList(command, value)
+    : value !== null && typeof value === "object" && ("item" in value || "items" in value)
+      ? value
+      : itemOf(value !== null && typeof value === "object" ? value : { value })
+
 /**
  * A factory of servers over one session. `serveStdio` may build a probe instance and throw it away
  * before settling on the protocol era, so each call is a fresh server — and all of them share the
  * one connection, which is the thing that must not be opened twice.
+ *
+ * Every tool is a command of this CLI (`toolsFromCommands`), run in this process through the CLI's own `run`
+ * (`runCommandForAgent`) on the session's connection. The few answers a command cannot give — a picture handed to
+ * the model — stay definitions of their own (`pictureTools`).
  */
 export const createServer = (
   command: Invocation,
@@ -44,25 +104,70 @@ export const createServer = (
   const { app, provider } = messenger
   const name = messenger.name ?? app.command
   const { settings } = context
+  const root = rootOf(command)
+  const environment = environmentOf(command)
+  if (!environment.runCommand) throw new Error("the MCP server runs inside run(), which hands it the program")
+  const program: AgentProgram = { run: environment.runCommand, commands: describeProgram(root) }
+  const overrides = command.optsWithGlobals<{ permission?: string[] }>().permission ?? []
   const refreshPermissions = () => {
     const current = messenger.resolveSettings(command.optsWithGlobals(), { env: context.env })
     settings.permissions = current.permissions
     settings.permissionSources = current.permissionSources
   }
   const levelOf = (key: string | null | undefined) => (key ? levelFor(settings.permissions, key).level : "allow")
-  // A tool the level would refuse is not offered: an agent is not handed a tool that cannot work.
-  const offered = Object.fromEntries(
-    Object.entries(mountedMcpTools(describeProgram(rootOf(command)), messenger)).filter(([key, one]) => {
+  const keyOf = (path: readonly string[]): PermissionKey | null | undefined => {
+    if (!messenger.permissionKey) return undefined
+    try {
+      return messenger.permissionKey(findCommand(root, path))
+    } catch {
+      return undefined
+    }
+  }
+  const stdin = (path: readonly string[]) => {
+    try {
+      return stdinFieldOf(findCommand(root, path))
+    } catch {
+      return undefined
+    }
+  }
+  const syncAllowed = (path: readonly string[]) =>
+    syncsFirst(messenger) &&
+    levelOf("messages.sync-first") === "allow" &&
+    (path[0] !== "stats" || levelOf(`${path.join(".")}.sync-first`) === "allow")
+  // A command the level refuses is not offered: an agent is not handed a tool that cannot work.
+  const generated = toolsFromCommands(program.commands, {
+    exclude: [["bot"]],
+    levels: settings.permissions,
+    keyOf,
+    offline: true,
+    stdin,
+  }).map((one) =>
+    "sync_first" in one.input.entries && !syncAllowed(one.path)
+      ? {
+          ...one,
+          input: v.object(
+            Object.fromEntries(Object.entries(one.input.entries).filter(([field]) => !SYNC_FIELDS.includes(field))),
+          ),
+        }
+      : one,
+  )
+  const mounted = new Set(toolsFromCommands(program.commands, { exclude: [["bot"]] }).map((one) => one.command))
+  const pictures = Object.fromEntries(
+    Object.entries(pictureTools(messenger)).filter(([key, one]) => {
+      const path = commandOf(key, one).split(" ")
+      if (!one.agentOnly && (!mounted.has(path.join(" ")) || lackedNeed(messenger, path.join(" ")))) return false
       const level = levelOf(toolKey(key, one))
-      const writes = one.permission !== undefined || one.annotations.readOnlyHint !== true
       return (
         level !== "deny" &&
-        !(writes && level === "readonly") &&
-        readKeysForCommand(commandOf(key, one).split(" ")).every((data) => levelOf(data) !== "deny")
+        !(one.annotations.readOnlyHint !== true && level === "readonly") &&
+        readKeysForCommand(path).every((data) => levelOf(data) !== "deny")
       )
     }),
   )
-  const writes = Object.fromEntries(Object.entries(offered).filter(([, one]) => one.annotations.readOnlyHint !== true))
+  const pictured = new Set(Object.entries(pictures).map(([key, one]) => commandOf(key, one)))
+  // A command whose one adapter method the messenger lacks only refuses: an agent is not handed it.
+  const commands = generated.filter((one) => !pictured.has(one.command) && !lackedNeed(messenger, one.command))
+  const writes = commands.filter((one) => one.writes).map((one) => one.command)
   // No one is at a terminal to answer the guard's question: over MCP a write at level `ask` goes ahead.
   const goAhead = async () => {}
   const guard =
@@ -86,13 +191,103 @@ export const createServer = (
       itemOf({
         profile: settings.profile,
         account: recalledAccount(app, provider, settings.profile, context.env)?.account ?? null,
-        writes: Object.entries(writes).map(([name, definition]) => commandOf(name, definition)),
+        writes,
         permissions: settings.permissions,
         ...(messenger.diagnose ? { [messenger.provider]: await messenger.diagnose(command, context) } : {}),
       }),
   })
   const skill = messenger.skill ? skillResource(app, messenger.skill) : undefined
   const log = agentLog(() => openStore({ env: context.env, command: app.command }))
+  const audit = async (call: ToolCall) => {
+    if (!recalledAccount(app, provider, settings.profile, context.env)) return
+    await log.record({ actor: { bot: `${app.command}-mcp` }, ...call })
+  }
+  const targets = judgedTargets(root)
+  const passed = Object.fromEntries(Object.entries(environment).filter(([key]) => !PER_RUN.has(key)))
+  const agentEnvironment = {
+    ...passed,
+    embedders,
+    ...(sessionOptions.spawnJob ? { spawnJob: sessionOptions.spawnJob } : {}),
+  }
+
+  /**
+   * One command at a time, on the session's connection, opened only if the command asks for it. A failure that may
+   * have been the connection's drops it, as the session does for its own calls.
+   */
+  const invoke = (one: AgentTool, input: Record<string, unknown>, env: NodeJS.ProcessEnv): Promise<AgentAnswer> =>
+    new Promise<AgentAnswer>((resolve) => {
+      let finish: ((drop: boolean) => void) | undefined
+      let held: Promise<unknown> | undefined
+      const connection = () =>
+        new Promise<MessengerAdapter>((lend, refuse) => {
+          held = session.use(
+            `mcp ${one.command}`,
+            (adapter, release) =>
+              new Promise<void>((done) => {
+                finish = (drop) => void (drop ? release().finally(done) : done())
+                lend(adapter)
+              }),
+          )
+          held.catch(refuse)
+        })
+      void runCommandForAgent(program, one.path, input, {
+        profile: settings.profile,
+        env,
+        levels: () => {
+          refreshPermissions()
+          return settings.permissions
+        },
+        overrides,
+        keyOf,
+        stdin,
+        connection,
+        environment: agentEnvironment,
+      }).then(async (answer) => {
+        finish?.("error" in answer && !harmless(answer.error.error.code))
+        await held?.catch(() => undefined)
+        resolve(answer)
+      })
+    })
+  let queue: Promise<unknown> = Promise.resolve()
+  const queued = (one: AgentTool, input: Record<string, unknown>, env: NodeJS.ProcessEnv): Promise<AgentAnswer> => {
+    const next = queue.then(() => invoke(one, input, env))
+    queue = next.catch(() => undefined)
+    return next
+  }
+
+  const asCommand = (one: AgentTool): McpCommand => ({
+    title: one.title,
+    description: one.description,
+    writes: one.writes,
+    input: one.input,
+    ...(one.output ? { output: outputOf(one.output) } : {}),
+    run: async (args, ctx) => {
+      const startedAt = Date.now()
+      // The caller's trace reaches the run, its send journal lines and its record, as `TRACEPARENT` does.
+      const traceparent = ctx?.mcpReq?._meta?.traceparent
+      const env = typeof traceparent === "string" ? { ...context.env, TRACEPARENT: traceparent } : context.env
+      const answer = await queued(one, args, env)
+      const result =
+        "error" in answer
+          ? (mcpErrorResult(JSON.parse(agentJson(answer.error)) as ErrorObject) as CallToolResult)
+          : (() => {
+              try {
+                return answered(envelope(one.command, answer.result), DEFAULT_OUTPUT_BYTES, targets)
+              } catch (error) {
+                return failed(error, app.errors)
+              }
+            })()
+      // The audit row must not cost the agent its answer: a store that cannot be written is not this call's failure.
+      await audit({
+        tool: keyOfCommand(one.command),
+        tier: tierOf(keyOfCommand(one.command), { annotations: one.writes ? WRITE : READ }, messenger),
+        ...outcomeOf(result),
+        startedAt,
+        finishedAt: Date.now(),
+      }).catch(() => undefined)
+      return result
+    },
+  })
 
   const build = (): McpServer => {
     const server = new McpServer(
@@ -102,47 +297,52 @@ export const createServer = (
           command: app.command,
           name,
           profile: settings.profile,
-          writes: Object.keys(writes),
+          writes: [
+            ...writes,
+            ...Object.keys(pictures).filter((key) => pictures[key]?.annotations.readOnlyHint !== true),
+          ].map(keyOfCommand),
           ...(skill ? { skill: skill.instruction } : {}),
         }),
       },
     )
-    registerSurface(
-      server,
-      { ...offered, status },
-      {
-        command: app.command,
-        messenger,
-        session,
-        withStore: context.withStore,
-        targets: judgedTargets(rootOf(command)),
-        log: async (call) => {
-          if (!recalledAccount(app, provider, settings.profile, context.env)) return
-          await log.record({ actor: { bot: `${app.command}-mcp` }, ...call })
-        },
-        around: (key, definition, work) => {
-          refreshPermissions()
-          const level = levelOf(toolKey(key, definition))
-          if (level === "deny" || (definition.annotations.readOnlyHint !== true && level === "readonly"))
-            throw new CliError("permission_error", "the current profile does not allow this command", {
-              permission: toolKey(key, definition),
-            })
-          return work()
-        },
-        defaults: {
-          spawnJob: sessionOptions.spawnJob,
-          limit: settings.limit,
-          get syncAllowed() {
-            return syncsFirst(messenger) && levelOf("messages.sync-first") === "allow"
-          },
-          guard,
-          settings,
-          env: context.env,
-          ...(context.keyring ? { keyring: context.keyring } : {}),
-          embedders,
-          history: settings.keepFailedRuns,
-        },
+    const registration: Registration = {
+      command: app.command,
+      messenger,
+      session,
+      withStore: context.withStore,
+      targets,
+      log: audit,
+      around: (key, definition, work) => {
+        refreshPermissions()
+        const level = levelOf(toolKey(key, definition))
+        if (level === "deny" || (definition.annotations.readOnlyHint !== true && level === "readonly"))
+          throw new CliError("permission_error", "the current profile does not allow this command", {
+            permission: toolKey(key, definition),
+          })
+        return work()
       },
+      defaults: {
+        spawnJob: sessionOptions.spawnJob,
+        limit: settings.limit,
+        get syncAllowed() {
+          return syncsFirst(messenger) && levelOf("messages.sync-first") === "allow"
+        },
+        guard,
+        settings,
+        env: context.env,
+        ...(context.keyring ? { keyring: context.keyring } : {}),
+        embedders,
+        history: settings.keepFailedRuns,
+      },
+    }
+    registerCommands(
+      server,
+      app.command,
+      {
+        ...Object.fromEntries(commands.map((one) => [one.command, asCommand(one)])),
+        ...surfaceCommands({ ...pictures, status }, registration),
+      },
+      app.errors,
     )
     // The prompts and resources show messages, so a profile that may not read them gets neither.
     if (levelOf("messages") !== "deny") registerPrompts(server, { command: app.command, name })
@@ -169,7 +369,75 @@ export const createServer = (
     }
     return server
   }
-  return { session, embedders, build, log }
+  return { session, embedders, build, log, offered: [...commands.map((one) => one.command), ...pictured] }
+}
+
+type JsonRpc = { id?: unknown; method?: unknown }
+
+const lineReader = (onMessage: (message: JsonRpc) => void) => {
+  let rest = ""
+  return (chunk: Buffer | string) => {
+    const lines = (rest + chunk.toString()).split("\n")
+    rest = lines.pop() ?? ""
+    for (const line of lines) {
+      try {
+        const message = JSON.parse(line) as JsonRpc
+        if (message !== null && typeof message === "object") onMessage(message)
+      } catch {
+        // Not a message; the transport answers it as a parse error.
+      }
+    }
+  }
+}
+
+/**
+ * Stdin and stdout as the transport sees them, noting each request that comes in and each answer that goes out, so
+ * the server can tell when everything asked has been answered. The transport's stdin never ends by itself: the server
+ * closes it, after the client's stdin ended and the last answer went out.
+ */
+const answeredWire = (source: Readable, sink: Writable) => {
+  const asked = new Set<string>()
+  let settle: (() => void) | undefined
+  const input = new PassThrough()
+  const onData = lineReader(({ id, method }) => {
+    if (id !== undefined && typeof method === "string") asked.add(JSON.stringify(id))
+  })
+  const output = new Writable({
+    write: (chunk: Buffer, _encoding, done) => {
+      noteAnswer(chunk)
+      sink.write(chunk, done)
+    },
+  })
+  const noteAnswer = lineReader(({ id, method }) => {
+    if (id === undefined || method !== undefined) return
+    asked.delete(JSON.stringify(id))
+    if (asked.size === 0) settle?.()
+  })
+  const forward = (chunk: Buffer) => {
+    onData(chunk)
+    input.write(chunk)
+  }
+  source.on("data", forward)
+  const ended = new Promise<void>((resolve) => {
+    source.once("end", resolve)
+    source.once("close", resolve)
+  })
+  return {
+    input,
+    output,
+    ended,
+    answered: () =>
+      new Promise<void>((resolve) => {
+        if (asked.size === 0) resolve()
+        else settle = resolve
+      }),
+    /** Lets go of the real stdin, so it no longer holds the process open. */
+    release: () => {
+      source.off("data", forward)
+      if (source.listenerCount("data") === 0) source.pause()
+      input.end()
+    },
+  }
 }
 
 /**
@@ -187,24 +455,25 @@ export const serveOverStdio = async (
   // Relayed by serve, or given by a test's `run()`, the session's bytes are not this process's stdio.
   const { stdin, stdout, signal } = environmentOf(command)
   const own = stdin && stdout && stdin !== process.stdin
-  const input = own ? stdin : process.stdin
-  const transport = own ? new StdioServerTransport(stdin as Readable, stdout as Writable) : undefined
+  const wire = answeredWire((own ? stdin : process.stdin) as Readable, (own ? stdout : process.stdout) as Writable)
   const handle = serveStdio(build, {
-    ...(transport ? { transport } : {}),
+    transport: new StdioServerTransport(wire.input, wire.output),
     onerror: (error) => context.renderer.note(`mcp: ${error.message}`),
   })
 
-  await new Promise<void>((resolve) => {
-    input.once("end", resolve)
-    input.once("close", resolve)
-    if (transport) signal?.addEventListener("abort", () => resolve(), { once: true })
+  const ended = await new Promise<"input" | "stopped">((resolve) => {
+    wire.ended.then(() => resolve("input"))
+    if (own) signal?.addEventListener("abort", () => resolve("stopped"), { once: true })
     else {
-      process.once("SIGINT", resolve)
-      process.once("SIGTERM", resolve)
+      process.once("SIGINT", () => resolve("stopped"))
+      process.once("SIGTERM", () => resolve("stopped"))
     }
   })
 
   try {
+    // A one-shot pipe writes its calls and closes stdin: what it asked is still answered (FIND-1514).
+    if (ended === "input") await wire.answered()
+    wire.release()
     await handle.close()
     await session.close()
   } finally {

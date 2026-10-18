@@ -13,6 +13,9 @@ export interface SessionOptions {
 /** The caller's mistake, not the connection's — nothing about the socket is in doubt after these. */
 const HARMLESS = new Set(["validation_error", "not_found", "permission_error", "confirmation_required", "rate_limited"])
 
+/** Whether a failure with this code leaves the connection worth keeping. */
+export const harmless = (code: string): boolean => HARMLESS.has(code)
+
 /** Opens a connection whose run events go to `events`, and says how to close it and what it opened. */
 export type Open = (events: EventSink) => Promise<{ adapter: MessengerAdapter; close: () => Promise<void> }>
 

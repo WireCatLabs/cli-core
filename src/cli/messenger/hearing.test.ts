@@ -4,14 +4,10 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../../domain/models.js"
-import { reviewTools } from "../../mcp/tools/review.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
-import { onlineDeps } from "../../services/deps.js"
-import { servicesFor } from "../../services/index.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
-import { rememberAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
 import { inboxCommand } from "./inbox.js"
 import { messagesCommand } from "./messages-command.js"
@@ -201,27 +197,6 @@ describe("read hearing lifecycle", () => {
     expect(answer.body.items).toEqual([])
   })
 
-  it("applies hearing before unanswered filtering in shared MCP", async () => {
-    const test = fixture()
-    const store = await openStore({ env: test.env })
-    try {
-      await store.messages.keepTranscript({ provider: "chat", account: "500" }, "9", "1", question, "chat")
-      rememberAccount(app, "default", "500", test.env)
-      const connection = test.adapter()
-      const guard = { check: () => {}, record: () => {} }
-      const services = servicesFor({ ...onlineDeps(test.messenger, connection, guard), store: async () => store })
-      const settings = test.messenger.resolveSettings({}, { env: test.env })
-      const answer = await reviewTools(test.messenger).review?.served?.(
-        services,
-        { query: "date>1d chat:9", unanswered: 0 },
-        { settings, env: test.env, guard, limit: 20 },
-        (work) => work(connection),
-      )
-      expect(answer).toMatchObject({ items: [{ text: "", transcript: question }] })
-    } finally {
-      await store.close()
-    }
-  })
   it("marks read only when requested, on the held connection before hearing", async () => {
     const test = fixture()
     const answer = await test.execute(["messages", "list", "9", "--transcribe", "--mark-read"])

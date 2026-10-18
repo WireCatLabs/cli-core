@@ -7,10 +7,10 @@ import { renderMessages } from "../../render/messages.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf, REVIEW_DAYS, reviewStart, UNANSWERED_HOURS } from "../../services/inbox.js"
 import { type Hearing, modelWith } from "../../speech/hearing.js"
-import { REMOTE_READ } from "../effects.js"
+import { ownerOnlyOption, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
-import { MARK_READ_OPTION, markShown, marksRead, NO_MARK_READ_OPTION } from "./catch-up.js"
+import { MARK_READ_OPTION, markShown, marksRead, NO_MARK_READ_OPTION, pointsOf } from "./catch-up.js"
 import { catchUpQuery, REVIEW_QUERY, reviewAnswer } from "./catch-up-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { heardItems, hearForCommand, MODEL_OPTION, spokenItems, TRANSCRIBE_OPTION } from "./hearing-command.js"
@@ -49,8 +49,8 @@ export const reviewCommand = (messenger: Messenger): Command =>
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
     .option("--new", "what changed since the last `review --new`, a point per chat — for scheduled runs")
-    .option(...MARK_READ_OPTION)
-    .option(...NO_MARK_READ_OPTION)
+    .addOption(ownerOnlyOption(...MARK_READ_OPTION))
+    .addOption(ownerOnlyOption(...NO_MARK_READ_OPTION))
     .action(async function (this: Command, query: string[]) {
       const options = this.opts<{
         new?: boolean
@@ -71,14 +71,14 @@ export const reviewCommand = (messenger: Messenger): Command =>
       }
       const saved = options.new
         ? checkPoints(messenger.app, {
-            command: "review",
+            command: pointsOf(this, "review"),
             profile: settings.profile,
             env,
             firstLookMs: REVIEW_DAYS * 86_400_000,
           })
         : undefined
       const since = from ?? saved?.first ?? reviewStart()
-      const marking = marksRead(options.markRead, settings)
+      const marking = marksRead(options.markRead, settings, this)
       const hours = options.unanswered === undefined ? undefined : unansweredHours(options.unanswered)
       const kinds = options.kind === undefined ? undefined : kindsOf(options.kind)
       let hearing: Hearing | undefined

@@ -5,7 +5,7 @@ import { sendTime } from "../../domain/send-time.js"
 import { threadIdOf } from "../../domain/thread.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { readAttachments, readStickerFile } from "../../sends/upload.js"
-import { REMOTE_WRITE } from "../effects.js"
+import { ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
@@ -41,7 +41,9 @@ export const sendCommand = (messenger: Messenger): Command => {
     .option("--photo <file>", "attach a .jpg, .png or .webp as a photo; the text becomes its caption")
     .option("--as-file", "send the --file as a file to download, a video included")
     .option("--voice <file>", "send an Ogg Opus file as a voice message, alone, with no text")
-    .option("--allow-any-file", "send a file even from credential folders or this CLI's own folders")
+    .addOption(
+      ownerOnlyOption("--allow-any-file", "send a file even from credential folders or this CLI's own folders"),
+    )
   if (messenger.scheduledSends !== false)
     send.option(
       "--at-time <time>",

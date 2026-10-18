@@ -315,8 +315,7 @@ messages over the fields a note has (`text`, `exact`, `body`, `tag`, `date`, `in
 **One `search` group (plan, STANDARD.md "Search hierarchy").**
 `src/cli/messenger/search-command.ts` mounts `search all|messages|mail|notes|conversations` (and
 `topics` where the messenger has forum topics); `bot search messages` sits under `bot`. Each leaf calls
-the service the old command called, and the MCP tools are named after the leaves
-(`src/mcp/tools/search-tools.ts`). `searchAll` (`src/services/search-all.ts`) runs messages (every
+the service the old command called, and the MCP tools are the leaves themselves. `searchAll` (`src/services/search-all.ts`) runs messages (every
 messenger account, never mail), mail and notes in turn and merges their lists by reciprocal rank, so
 no resource's own scores are compared with another's. A resource that cannot answer the query — a
 field it lacks, or nothing stored — is listed in `skipped` with the reason instead of failing the search.
@@ -461,11 +460,12 @@ adapter method is optional and reached with `capability()`; the wrappers pass th
 they do not name. How to write an adapter for a new messenger, and test it with the contract cases,
 is [the adapter guide](ADAPTERS.md).
 
-The MCP server (`src/mcp/`) holds one connection for minutes and runs one call at a time; each tool
-lives in `src/mcp/tools/<resource>.ts` and answers what the command's `--json` prints. An argument the input
-schema cannot judge — valibot's `v.check` does not convert to JSON Schema — goes in the tool's `check`, which runs
-before the store or the connection opens, so the tool refuses it when the command does (`messages_pin`'s
-`expire_time`).
+The MCP server (`src/mcp/server.ts`) holds one connection for minutes and runs one call at a time. Its tools are
+the CLI's commands (`toolsFromCommands`, `src/mcp/agent.ts`), each run in-process through the CLI's own `run`
+(`runCommandForAgent`) on that connection, so a tool answers and refuses exactly as the command does. What only an
+agent needs comes from the command's metadata: `mcp: false` and `ownerOnlyOption` keep a command or an option off
+MCP, `readsStdin` turns what a command reads on stdin into an input field. The tools that answer with an image
+(`messages photo`, `attachments show`, `stats charts`) stay definitions of their own (`src/mcp/tools.ts`).
 
 `mcp --http` (`src/mcp/http/`, CLI-58) serves the same factory over Streamable HTTP on 127.0.0.1 behind the
 owner's tunnel. `oauth.ts` is a one-owner OAuth server — a token needs the code printed in the terminal, and

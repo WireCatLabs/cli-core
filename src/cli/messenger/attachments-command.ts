@@ -4,13 +4,15 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { engineHint } from "../../attachments/extract.js"
 import { gatewayOcr } from "../../attachments/gateway-ocr.js"
+import { refusedPlace } from "../../sends/upload.js"
 import { ATTACHMENT_QUERY, type AttachmentItem, type ExtractItem, type ExtractRun } from "../../services/attachments.js"
 import { downloadMessage } from "../../services/file-download.js"
 import { environmentOf } from "../context.js"
-import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
+import { FETCH, LOCAL_WRITE, ownerOnlyOption, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
+import { readsStdin } from "../stdin-field.js"
 import { nextStep } from "../steps.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { stopOnSignal } from "./patience.js"
@@ -80,6 +82,11 @@ const extractCommand = (messenger: Messenger): Command =>
         throw new CliError("validation_error", "--download saves the files first: name the folder with --output-dir")
       if (outputDir !== undefined && !download)
         throw new CliError("validation_error", "--output-dir is where --download saves; add --download")
+      if (outputDir !== undefined && refusedPlace(outputDir, messenger.app, context.env))
+        throw new CliError(
+          "validation_error",
+          "--output-dir cannot write credential folders, the CLI's own folders or the message store",
+        )
       const stop = stopOnSignal(this)
       const deadline = new AbortController()
       context.track({ close: async () => deadline.abort() })
@@ -210,12 +217,15 @@ const showCommand = (messenger: Messenger): Command =>
 
 const textCommand = (messenger: Messenger): Command => {
   const text = new Command("text").description("the text of one file, as an agent read it")
-  annotate(text.command("set"), { effects: LOCAL_WRITE })
+  readsStdin(annotate(text.command("set"), { effects: LOCAL_WRITE }), {
+    name: "text",
+    description: "the text of the file",
+  })
     .description("keep the text an agent read from a file — a scan, a photo — so search finds it; nothing is sent")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
     .option("--attachment <n>", "which file of the message, from 1; needed when it has more than one", count)
-    .option("--text-file <path>", "read the text from this file; - or none reads stdin")
+    .addOption(ownerOnlyOption("--text-file <path>", "read the text from this file; - or none reads stdin"))
     .action(async function (this: Command, chat: string, message: string | undefined) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "attachments.text.set")

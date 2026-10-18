@@ -5,9 +5,7 @@ import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
 import type { Chat, GroupCard } from "../../domain/models.js"
-import { adminTools } from "../../mcp/tools/admin.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
-import { guardFor } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { commandsCommand } from "../commands-command.js"
 import { run } from "../program.js"
@@ -106,14 +104,12 @@ const base: MessengerAdapter = {
   close: async () => {},
 }
 
-it("omits unsupported invite link list/revoke in CLI and MCP discovery", () => {
+it("omits unsupported invite link list/revoke", () => {
   const messenger = { inviteLinkList: false, inviteLinkRevoke: false, chatArgument: "stored chat" } as Messenger
   const link = groupCommands(messenger).find((command) => command.name() === "link")
   expect(link?.commands.map((command) => command.name())).not.toContain("list")
   expect(link?.commands.map((command) => command.name())).not.toContain("revoke")
   expect(link?.commands.map((command) => command.name())).toContain("reset")
-  expect(adminTools(messenger)).not.toHaveProperty("chats_link_list")
-  expect(adminTools(messenger)).not.toHaveProperty("chats_link_revoke")
 })
 
 it("lists chats link update only for a messenger that says it can", () => {
@@ -124,9 +120,7 @@ it("lists chats link update only for a messenger that says it can", () => {
   const unset = { chatArgument: "stored chat" } as Messenger
   const able = { ...unset, inviteLinkUpdate: true } as Messenger
   expect(names(unset)).not.toContain("update")
-  expect(adminTools(unset)).not.toHaveProperty("chats_link_update")
   expect(names(able)).toContain("update")
-  expect(adminTools(able)).toHaveProperty("chats_link_update")
 })
 
 describe("chats create, join and leave", () => {
@@ -354,30 +348,13 @@ describe("chats create, join and leave", () => {
       whatsapp,
     )
     const elsewhere = await call(["chats", "update", "Book club", "--remove-photo"], adapter, env, { groupPhoto: true })
-    const tool = (messenger: Partial<Messenger>) =>
-      Object.keys(
-        adminTools({ app, chatArgument: "a chat", ...messenger } as Messenger).chats_update?.input.entries ?? {},
-      )
 
     expect(removed.code).toBe(0)
     expect(changes).toEqual([{ removePhoto: true }])
     expect(both.code).toBe(2)
     expect(both.stderr.join("\n")).toContain("not both")
     expect(elsewhere.stderr.join("\n")).toContain("unknown option '--remove-photo'")
-    const overMcp = await adminTools({ app, chatArgument: "a chat", ...whatsapp } as Messenger).chats_update?.online?.(
-      adapter,
-      { chat: "Book club", remove_photo: true },
-      { guard: guardFor(app, settingsFor(app).resolveSettings({}, { env }), () => {}, env), limit: 20 } as never,
-    )
-
-    expect(overMcp).toMatchObject({ item: { chat: { id: "7" } } })
-    expect(changes).toEqual([{ removePhoto: true }, { removePhoto: true }])
-    expect(tool(whatsapp)).toContain("remove_photo")
-    expect(tool({ groupPhoto: true })).not.toContain("remove_photo")
-    expect(new SendJournal(sendsPathFor(app, "default", env)).entries().map((one) => one.action)).toEqual([
-      "update",
-      "update",
-    ])
+    expect(new SendJournal(sendsPathFor(app, "default", env)).entries().map((one) => one.action)).toEqual(["update"])
   })
 
   it("**takes only the photo types the messenger names**, refused before connecting, and says them in help", async () => {
@@ -776,17 +753,9 @@ describe("chats create, join and leave", () => {
 
     const made = await call(["chats", "admins", "add", "Book club", "Ivan", "--json"], adapter, env, whatsapp)
     const can = await call(["chats", "admins", "add", "Book club", "Ivan", "--can", "pin"], adapter, env, whatsapp)
-    const tool = adminTools({
-      app,
-      provider: "chat",
-      chatArgument: "a chat",
-      ...whatsapp,
-    } as unknown as Messenger).chats_admins_add
-
     expect(answer(made)).toMatchObject({ person_id: "91", rights: ["members", "pin"] })
     expect(can.stderr.join("\n")).toContain("unknown option '--can'")
     expect(done).toEqual([["7", "91", ["members", "pin"]]])
-    expect(Object.keys(tool?.input.entries ?? {})).toEqual(["chat", "person"])
   })
 
   it("keeps the summary of admins add within 80 characters where every right is given, and still names them", async () => {

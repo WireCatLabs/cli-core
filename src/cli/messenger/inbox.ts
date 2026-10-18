@@ -6,11 +6,11 @@ import { renderMessages } from "../../render/messages.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { modelWith } from "../../speech/hearing.js"
-import { REMOTE_READ } from "../effects.js"
+import { ownerOnlyOption, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
-import { MARK_READ_OPTION, markShown, marksRead, NO_MARK_READ_OPTION } from "./catch-up.js"
+import { MARK_READ_OPTION, markShown, marksRead, NO_MARK_READ_OPTION, pointsOf } from "./catch-up.js"
 import { catchUpQuery, INBOX_QUERY, inboxAnswer } from "./catch-up-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { hearForCommand, MODEL_OPTION, spokenItems, TRANSCRIBE_OPTION } from "./hearing-command.js"
@@ -48,8 +48,8 @@ export const inboxCommand = (messenger: Messenger): Command =>
     .option("--kind <kinds>", `only chats of these kinds, comma-separated: ${CHAT_KINDS.join(", ")}`)
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
-    .option(...MARK_READ_OPTION)
-    .option(...NO_MARK_READ_OPTION)
+    .addOption(ownerOnlyOption(...MARK_READ_OPTION))
+    .addOption(ownerOnlyOption(...NO_MARK_READ_OPTION))
     .action(async function (this: Command, query: string[]) {
       const {
         new: fresh,
@@ -76,11 +76,16 @@ export const inboxCommand = (messenger: Messenger): Command =>
         throw new CliError("validation_error", "--new keeps its own point — not with a date in the query")
       const saved =
         fresh && since === undefined
-          ? checkPoints(app, { command: "inbox", profile: settings.profile, env, firstLookMs: FIRST_LOOK_MS })
+          ? checkPoints(app, {
+              command: pointsOf(this, "inbox"),
+              profile: settings.profile,
+              env,
+              firstLookMs: FIRST_LOOK_MS,
+            })
           : undefined
       const from = since ?? saved?.first
       const points = saved?.chats
-      const marking = marksRead(markRead, settings)
+      const marking = marksRead(markRead, settings, this)
       const { inbox, hearing, marked, reader } = await context.withServices(async (services, connect) => {
         const inbox = await services.inbox.read({
           ...(from === undefined ? {} : { since: from }),

@@ -3,9 +3,8 @@ import { Argument, Command } from "commander"
 import { MENTION_KINDS, type MentionKind } from "../../domain/mentions.js"
 import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
-import { authorOf } from "../author.js"
-import { environmentOf } from "../context.js"
-import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { actorOf } from "../author.js"
+import { destroysNothing, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList, queryHelp } from "../list-query.js"
 import { positiveCount, window } from "../paging.js"
@@ -164,11 +163,16 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       "person:<uid> or organization:<id> that owns the phone or the e-mail address; person:<uid> a name means; a document or a street address needs none",
     )
     .option("--all-in-chat", "a name: also every undecided place of the same name in its chat")
-    .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
+    .addOption(
+      ownerOnlyOption(
+        "--as-owner",
+        "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)",
+      ),
+    )
     .action(async function (this: Command, id: number, person: string | undefined) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, tool, "mentions.confirm")
-      const by = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
+      const by = actorOf(this, this.opts<{ asOwner?: boolean }>().asOwner)
       const inChat = this.opts<{ allInChat?: boolean }>().allInChat === true
       const decided = await context.withServices((services) => services.mentions.confirm(id, person, by, inChat))
       renderAnswer(this, context, itemOf(snakeKeys(decided)))
@@ -182,11 +186,16 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     .description("not a real mention: dismiss its value everywhere and on later syncs; a name only where it is")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
     .option("--all-in-chat", "a name: also every undecided place of the same name in its chat")
-    .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
+    .addOption(
+      ownerOnlyOption(
+        "--as-owner",
+        "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)",
+      ),
+    )
     .action(async function (this: Command, id: number) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, tool, "mentions.reject")
-      const by = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
+      const by = actorOf(this, this.opts<{ asOwner?: boolean }>().asOwner)
       const inChat = this.opts<{ allInChat?: boolean }>().allInChat === true
       const decided = await context.withServices((services) => services.mentions.reject(id, by, inChat))
       renderAnswer(this, context, itemOf(snakeKeys(decided)))

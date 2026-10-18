@@ -268,12 +268,12 @@ describe("toolsFromCommands", () => {
     }
     const removing = toJsonSchema(remove?.input ?? ({} as never)) as typeof listed
 
-    expect(listed.properties.limit).toMatchObject({ type: "integer", minimum: 1 })
-    expect(listed.properties.types).toMatchObject({ type: "array" })
+    expect(listed.properties.limit).toMatchObject({ type: "integer", minimum: 0 })
+    expect(listed.properties.types).toMatchObject({ anyOf: [{ type: "array" }, { type: "string" }] })
     expect(listed.properties.order).toMatchObject({ enum: ["newest", "oldest"] })
     expect(listed.properties.offline_only).toMatchObject({ type: "boolean" })
     expect(listed.required).toEqual(["chat"])
-    expect(removing.properties.messages).toMatchObject({ type: "array", minItems: 1 })
+    expect(removing.properties.messages).toMatchObject({ anyOf: [{ type: "array", minItems: 1 }, { type: "string" }] })
     expect(removing.properties).not.toHaveProperty("for_everyone")
     expect(removing.required.sort()).toEqual(["chat", "messages", "reason"])
     expect(remove?.writes).toBe(true)

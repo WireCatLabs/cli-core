@@ -85,7 +85,8 @@ export interface RelayedRun {
   profile: string
   /** The client's working directory, which its relative paths mean. */
   cwd: string
-  connection: () => MessengerAdapter
+  /** A promise when the lender opens it on first use. */
+  connection: () => MessengerAdapter | Promise<MessengerAdapter>
 }
 
 /** A partial answer's exit code, for this run alone. */
@@ -191,7 +192,8 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
         ? recorded(
             {
               app: environment.app,
-              command: name ?? commandPath(command),
+              // An agent's run is named `mcp <command>`, so `runs search` and `sends list` tell it from the owner's.
+              command: name ?? `${environment.agent ? "mcp " : ""}${commandPath(command)}`,
               profile: settings.profile,
               record: settings.record,
               keepFailed: settings.keepFailedRuns,

@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { PassThrough } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
@@ -54,5 +55,41 @@ describe("mcpOverStdio", () => {
 
   it("fails at once when the CLI exits before it answers", async () => {
     await expect(mcpOverStdio(async () => 2)).rejects.toThrow("exited before it answered")
+  })
+})
+
+describe("an MCP server whose client closes stdin", () => {
+  it("**answers the calls that arrived first**, then exits (FIND-1514)", async () => {
+    const { env, program } = cli()
+    const stdin = new PassThrough()
+    const stdout = new PassThrough()
+    let written = ""
+    stdout.on("data", (chunk: Buffer) => {
+      written += chunk.toString()
+    })
+    const lines = [
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "pipe", version: "1" } },
+      },
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "chat_read", arguments: { command: "polls show", arguments: { chat: "7", message: "1" } } },
+      },
+    ]
+    const exited = run(["mcp"], program, { streams: captureStreams(), tty: false, env, stdin, stdout })
+    stdin.end(`${lines.map((line) => JSON.stringify(line)).join("\n")}\n`)
+
+    expect(await exited).toBe(0)
+    const answers = written
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { id?: number })
+    expect(answers.map((one) => one.id)).toEqual([1, 2])
   })
 })

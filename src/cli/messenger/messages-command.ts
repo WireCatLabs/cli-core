@@ -8,7 +8,7 @@ import { renderThreadLinks } from "../../render/thread-context.js"
 import { readMail } from "../../services/mail-search.js"
 import { modelWith, spoken } from "../../speech/hearing.js"
 import type { AccountKey } from "../../store/store.js"
-import { REMOTE_READ } from "../effects.js"
+import { ownerOnlyOption, REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -63,7 +63,12 @@ export const messagesCommand = (messenger: Messenger): Command => {
     .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it")
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
-    .option("--mark-read", "also mark the chat read up to the newest message shown; the other person sees it")
+    .addOption(
+      ownerOnlyOption(
+        "--mark-read",
+        "also mark the chat read up to the newest message shown; the other person sees it",
+      ),
+    )
     .action(async function (this: Command, chat: string, query: string[]) {
       const context = messengerContext(this, messenger)
       const { cursor, transcribe, model, markRead } = this.opts<{

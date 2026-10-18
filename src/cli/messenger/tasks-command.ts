@@ -21,9 +21,9 @@ import {
   taskTypeOf,
 } from "../../services/tasks.js"
 import type { CloseSuggestion, TaskPair } from "../../store/index.js"
-import { authorOf, holderOf as holderIn } from "../author.js"
+import { actorOf, holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
-import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, queryTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -189,7 +189,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
   /** Under the read-only lock an unattended agent writes, so the task's history and pair decisions name it, not the owner. */
   const writerOf = (command: Command): "agent" | "owner" =>
-    readOnlyLockOf(messenger.app, environmentOf(command).env ?? process.env) ? "agent" : "owner"
+    readOnlyLockOf(messenger.app, environmentOf(command).env ?? process.env) || environmentOf(command).agent
+      ? "agent"
+      : "owner"
   const tasks = new Command("tasks").description(
     "what waits on you — unanswered questions, mentions, requests, promises — kept in the local store; review and serve add them",
   )
@@ -255,7 +257,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       followUpOf,
       card: planned,
     } = await context.withServices((services) =>
-      services.tasks.add(message, options.type, "owner", plan, {
+      services.tasks.add(message, options.type, writerOf(this), plan, {
         ...(into === undefined ? {} : { attach: into }),
         ...(anyway ? { new: true } : {}),
       }),
@@ -330,7 +332,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const { chat = [], kind = "related-to" } = this.opts<{ chat?: string[]; kind?: TaskLinkOptionKind }>()
       if (targets.length === 0 && chat.length === 0) throw new CliError("validation_error", "give a target or --chat")
       const linked = await context.withServices((services) =>
-        services.tasks.link(id, { references: targets, chats: chat }, { kind, by: "owner" }),
+        services.tasks.link(id, { references: targets, chats: chat }, { kind, by: writerOf(this) }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(linked)), () =>
         "relations" in linked
@@ -666,7 +668,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
       "an agent's: how sure it is, 0 to 1, that the task needs nothing more",
       certaintyArgument,
     )
-    .option("--as-owner", "close it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
+    .addOption(
+      ownerOnlyOption(
+        "--as-owner",
+        "close it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)",
+      ),
+    )
     .action(async function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.close")
@@ -679,7 +686,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const env = environmentOf(this).env ?? process.env
       const lock = readOnlyLockOf(messenger.app, env)
       if (lock && asOwner) throw readOnlyRefusal(lock, "close a task as the owner")
-      const author = authorOf(env, asOwner)
+      const author = actorOf(this, asOwner)
       const byAgent = author !== "owner" || lock !== undefined
       const closed = await context.withServices((services) =>
         services.tasks.close(id, {
@@ -705,11 +712,16 @@ export const tasksCommand = (messenger: Messenger): Command => {
       "refuse the close an agent suggested: the task stays open and leaves close:suggested; the agent may close it again",
     )
     .argument("<task>", "the task's id or key, as tasks list shows it")
-    .option("--as-owner", "refuse it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
+    .addOption(
+      ownerOnlyOption(
+        "--as-owner",
+        "refuse it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)",
+      ),
+    )
     .action(async function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.reject")
-      const author = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
+      const author = actorOf(this, this.opts<{ asOwner?: boolean }>().asOwner)
       const rejected = await context.withServices((services) =>
         services.tasks.reject(id, author === "owner" ? "owner" : "agent"),
       )

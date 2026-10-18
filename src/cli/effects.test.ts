@@ -112,6 +112,7 @@ describe("command effects", () => {
     expect(kept.sort()).toEqual(
       [
         "conversations embed clear",
+        "conversations rebuild",
         "doctor report create",
         "mentions rebuild",
         "server restart",
