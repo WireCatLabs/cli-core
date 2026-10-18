@@ -3118,6 +3118,13 @@
     "messages pin": {
       "in": "all",
       "options": {
+        "--expire-time": {
+          "in": [],
+          "planned": {
+            "wa": "wa's next cli-core bump"
+          },
+          "reason": "Telegram's and MAX's pins stay until someone unpins them"
+        },
         "--notify": "all"
       }
     },
@@ -3192,6 +3199,13 @@
     "messages show": {
       "in": "all"
     },
+    "messages star": {
+      "in": [],
+      "planned": {
+        "wa": "wa's next cli-core bump"
+      },
+      "reason": "Telegram and MAX have no starred messages"
+    },
     "messages sync": {
       "in": "all",
       "options": {
@@ -3224,6 +3238,13 @@
     },
     "messages unpin": {
       "in": "all"
+    },
+    "messages unstar": {
+      "in": [],
+      "planned": {
+        "wa": "wa's next cli-core bump"
+      },
+      "reason": "Telegram and MAX have no starred messages"
     },
     "metadata": {
       "in": ["max", "tg"],

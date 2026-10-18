@@ -197,14 +197,20 @@ export interface ToolCall {
 
 /**
  * How far a tool reaches, read from what it declares: a read; an admin tool; one that removes or bans; a
- * draft; a write only the owner sees (marking read, tagging, notes); or a write others see.
+ * draft; a write only the owner sees (marking read, tagging, notes, a pin that may be quiet); or a write others see.
  */
-export const tierOf = (key: string, definition: Pick<AnyTool, "annotations">): ToolTier => {
+export const tierOf = (
+  key: string,
+  definition: Pick<AnyTool, "annotations">,
+  messenger?: Pick<Messenger, "quietPins">,
+): ToolTier => {
   if (definition.annotations.readOnlyHint === true) return "read"
   if (/^admin|_admin/.test(key)) return "admin"
   if (/delete|ban|kick|remove|purge|block/.test(key)) return "destructive"
   if (/draft/.test(key)) return "draft"
-  if (/mark_read|read_mark|archive|mute|pin|tag|note|label|folder|alias|save/.test(key)) return "write-private"
+  if (key === "messages_pin" && messenger?.quietPins === false) return "write-public"
+  if (/mark_read|read_mark|archive|mute|pin|tag|note|label|folder|alias|save|_(un)?star$/.test(key))
+    return "write-private"
   return "write-public"
 }
 
@@ -323,7 +329,7 @@ export const entryRunner = (registration: Registration): RunEntry => {
     // The audit row must not cost the agent its answer: a store that cannot be written is not this call's failure.
     await log?.({
       tool: key,
-      tier: tierOf(key, definition),
+      tier: tierOf(key, definition, registration.messenger),
       ...outcomeOf(result),
       startedAt,
       finishedAt: Date.now(),

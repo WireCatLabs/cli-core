@@ -49,6 +49,7 @@ export type {
   MessagePolls,
   MessageReactions,
   MessageSearch,
+  MessageStars,
   MessengerAdapter,
   MessengerCore,
   NewPoll,
@@ -309,7 +310,7 @@ export { messagesCommand, sendCommand } from "./messenger/messages-command.js"
 export { deleteCommand } from "./messenger/messages-delete-command.js"
 export { editCommand } from "./messenger/messages-edit-command.js"
 export { forwardCommand } from "./messenger/messages-forward-command.js"
-export { pinCommand, unpinCommand } from "./messenger/messages-pin-command.js"
+export { pinCommand, starCommands, unpinCommand } from "./messenger/messages-pin-command.js"
 export { metadataCommand } from "./messenger/metadata-command.js"
 export { modelsCommand } from "./messenger/models-command.js"
 export { pollsCommand } from "./messenger/polls-command.js"

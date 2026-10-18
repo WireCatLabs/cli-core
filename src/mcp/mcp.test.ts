@@ -2868,6 +2868,52 @@ describe("sending over MCP", () => {
     expect(connects).toEqual([])
   })
 
+  it("pins out loud for as long as the messenger offers where it has no quiet pin, and stars only where it can", async () => {
+    const writes: unknown[] = []
+    const whatsapp = scripted({
+      pin: async (chatId, messageId, options) => {
+        writes.push(["pin", chatId, messageId, options])
+      },
+      star: async (chatId, messageId, starred) => {
+        writes.push(["star", chatId, messageId, starred])
+      },
+    })
+    const { call, client, raw } = await connect(whatsapp, {
+      own: { quietPins: false, pinDurations: [86_400, 604_800], messageStars: true },
+    })
+    const plain = await connect(scripted())
+
+    const pinned = await call("messages pin", { chat: "7", message: "1", expire_time: "7d" })
+    const refused = [
+      await call("messages pin", { chat: "7", message: "1", notify: false }),
+      await call("messages pin", { chat: "7", message: "1", expire_time: "30d" }),
+      await plain.call("messages pin", { chat: "7", message: "1", expire_time: "24h" }),
+    ]
+    const starred = await call("messages star", { chat: "7", message: "1" })
+    const unstarred = await call("messages unstar", { chat: "7", message: "1" })
+    const described = async (from: typeof raw) => {
+      const found = await from.callTool({ name: "chat_tools_search", arguments: { query: "messages pin" } })
+      return (found.content as { text: string }[])[0]?.text ?? ""
+    }
+
+    expect([pinned.isError, starred.isError, unstarred.isError]).toEqual([false, false, false])
+    expect(refused.map((one) => one.body.error?.code)).toEqual([
+      "validation_error",
+      "validation_error",
+      "validation_error",
+    ])
+    expect(writes).toEqual([
+      ["pin", "7", "1", { notify: true, duration: 604_800 }],
+      ["star", "7", "1", true],
+      ["star", "7", "1", false],
+    ])
+    expect(await described(raw)).not.toContain("owner's side only")
+    expect(await described(plain.raw)).toContain("owner's side only")
+    expect((await client.describe("messages pin"))?.arguments.properties).not.toHaveProperty("notify")
+    expect(await client.commands()).toContain("messages star")
+    expect(await plain.client.commands()).not.toContain("messages star")
+  })
+
   it("preserves topic addressing through MCP send and poll tools", async () => {
     const validations: unknown[] = []
     const sends: unknown[] = []

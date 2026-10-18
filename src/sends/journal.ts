@@ -69,6 +69,8 @@ export type AccountAction =
   | "chat-pin"
   | "chat-unpin"
   | "chat-mark-unread"
+  | "message-star"
+  | "message-unstar"
   | "privacy"
 
 /** One attempt to send. **Never the text** — only its length. */

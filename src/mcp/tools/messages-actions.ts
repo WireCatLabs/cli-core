@@ -3,6 +3,7 @@ import { itemOf, snakeKeys } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { selfOf } from "../../cli/messenger/message-items.js"
 import { writtenAnswer } from "../../cli/messenger/message-writes.js"
+import { pinDurationOf, pinDurationsText } from "../../domain/pin-duration.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
@@ -33,6 +34,23 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       v.pipe(v.string(), v.minLength(1), v.description("a forum topic id of the to chat, from `topics list`")),
     ),
   }
+  const quietPins = messenger.quietPins !== false
+  const durations = messenger.pinDurations?.length ? messenger.pinDurations : undefined
+  const pinInput = {
+    chat,
+    message,
+    notify: v.optional(v.pipe(v.boolean(), v.description("tell the chat's members"))),
+    expire_time: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(`the pin ends by itself then: ${pinDurationsText(durations ?? [])} from now`),
+      ),
+    ),
+  }
+  // Refused rather than dropped: a quiet pin asked for here would otherwise go out loud.
+  if (!quietPins) delete (pinInput as Partial<typeof pinInput>).notify
+  if (!durations) delete (pinInput as Partial<typeof pinInput>).expire_time
   if (!messenger.forwardTopic) delete (forwardInput as Partial<typeof forwardInput>).topic
   if (messenger.silentSends === false) delete (forwardInput as Partial<typeof forwardInput>).silent
   if (messenger.sendAs === false) delete (forwardInput as Partial<typeof forwardInput>).send_as
@@ -94,26 +112,26 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
     }),
     messages_pin: tool({
       title: "Pin a message",
-      description:
-        "Pin one message in a chat, quietly unless notify is true. Only when the owner asked for this pin. " +
-        "In a one-to-one chat the pin is on the owner's side only.",
-      input: v.object({
-        chat,
-        message,
-        notify: v.optional(v.pipe(v.boolean(), v.description("tell the chat's members"))),
-      }),
+      description: quietPins
+        ? "Pin one message in a chat, quietly unless notify is true. Only when the owner asked for this pin. " +
+          "In a one-to-one chat the pin is on the owner's side only."
+        : "Pin one message in a chat; every member sees the pin and is told. Only when the owner asked for this pin.",
+      input: v.object(pinInput),
       annotations: WRITE,
       permission: "pin",
-      online: async (adapter, args, { guard }) =>
-        itemOf(
+      online: async (adapter, args, { guard }) => {
+        const duration = pinDurationOf(args.expire_time, durations, "expire_time")
+        return itemOf(
           snakeKeys(
             await messages(adapter, guard).pin({
               chat: args.chat,
               message: args.message,
               notify: args.notify === true,
+              ...(duration === undefined ? {} : { duration }),
             }),
           ),
-        ),
+        )
+      },
     }),
     messages_unpin: tool({
       title: "Unpin a message",
@@ -124,5 +142,21 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       online: async (adapter, args, { guard }) =>
         itemOf(snakeKeys(await messages(adapter, guard).unpin({ chat: args.chat, message: args.message }))),
     }),
+    ...Object.fromEntries(
+      (messenger.messageStars === true ? [true, false] : []).map((starred) => [
+        starred ? "messages_star" : "messages_unstar",
+        tool({
+          title: starred ? "Star a message" : "Take the star off a message",
+          description:
+            (starred ? "Star one message so the owner finds it again. " : "Take the owner's star off one message. ") +
+            "Only the owner sees a star; nobody in the chat is told. Only when the owner asked for it.",
+          input: v.object({ chat, message }),
+          annotations: WRITE,
+          permission: "profile",
+          online: async (adapter, args, { guard }) =>
+            itemOf(snakeKeys(await messages(adapter, guard).star({ chat: args.chat, message: args.message, starred }))),
+        }),
+      ]),
+    ),
   }
 }

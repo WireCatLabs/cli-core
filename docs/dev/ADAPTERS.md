@@ -60,12 +60,16 @@ needs it. The ones a new messenger usually sets:
   `disappearingSeconds` never offers them: they are not in the default list. Set `pickAdminRights: false` when
   every admin has every right; `admins add` then takes no `--can`.
 - `savedChatId`, `partnerOf` — the notes-to-self chat, and the other person in a one-to-one chat.
+- `quietPins`, `pinDurations`, `messageStars` — how pins work: `quietPins: false` when every pin tells the chat's
+  members (each then counts toward the hourly limit); `pinDurations`, in seconds, when a pin ends by itself
+  (`messages pin --expire-time`, passed to `pin` as `duration`); `messageStars: true` mounts `messages star` and
+  `unstar` over `MessageStars`.
 
 ## Required core and optional groups
 
 `MessengerCore` is required: `self`, `me`, `resolve`, `chat`, `send`, `logout` and `close`. Every
 other group is optional: `ServerReads`, `ChatReading`, `MessageEditing`,
-`MessagePins`, `MessageReactions`, `ReadState`, `TopicReadState`, `MessagePolls`, `LiveUpdates`, `PushedHistory`,
+`MessagePins`, `MessageStars`, `MessageReactions`, `ReadState`, `TopicReadState`, `MessagePolls`, `LiveUpdates`, `PushedHistory`,
 `MessageMedia`, `ScheduledMessages`, `GroupModeration`, `AccountTools`, `GroupAdmin`, `ChatFolders`, `ContactBook`
 and `AccountEditing`.
 

@@ -49,6 +49,7 @@ export const OPTIONAL_METHODS = [
   "delete",
   "pin",
   "unpin",
+  "star",
   "react",
   "markRead",
   "markTopicRead",

@@ -33,12 +33,13 @@ const refusing = tool({
   },
 })
 
-const runner = (store: MessageStore) =>
+const runner = (store: MessageStore, messenger?: { quietPins: boolean }) =>
   entryRunner({
     log: async (call: ToolCall) => {
       await store.agentActions.record({ actor: { bot: "test-mcp" }, ...call })
     },
     defaults: { settings: {}, env: {} },
+    messenger,
   } as unknown as Registration)
 
 const ctx = { mcpReq: { signal: new AbortController().signal } } as unknown as ServerContext
@@ -63,6 +64,16 @@ describe("the MCP agent log", () => {
     const raw = JSON.stringify(database.prepare("SELECT * FROM agent_actions").all())
     database.close()
     expect(raw).not.toContain("secret")
+  })
+
+  it("logs a pin as a write others see where every pin tells the chat's members", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "agent-log-")), "store.db") })
+    live.push(store)
+
+    await runner(store, { quietPins: false })("messages_pin", echo as AnyTool, { text: "" }, ctx)
+    await runner(store)("messages_pin", echo as AnyTool, { text: "" }, ctx)
+
+    expect((await store.agentActions.list()).map(({ tier }) => tier).sort()).toEqual(["write-private", "write-public"])
   })
 
   it("opens its store once for many calls, and again only after it is closed", async () => {
@@ -90,6 +101,11 @@ describe("the MCP agent log", () => {
   it("reads a tool's tier from what it declares", () => {
     expect(tierOf("messages_delete", { annotations: WRITE })).toBe("destructive")
     expect(tierOf("chats_mark_read", { annotations: WRITE })).toBe("write-private")
+    expect(tierOf("messages_unstar", { annotations: WRITE })).toBe("write-private")
+    expect(tierOf("chats_start", { annotations: WRITE })).toBe("write-public")
+    expect(tierOf("messages_pin", { annotations: WRITE })).toBe("write-private")
+    expect(tierOf("messages_pin", { annotations: WRITE }, { quietPins: false })).toBe("write-public")
+    expect(tierOf("messages_unpin", { annotations: WRITE }, { quietPins: false })).toBe("write-private")
     expect(tierOf("admin_report", { annotations: WRITE })).toBe("admin")
     expect(tierOf("messages_search", { annotations: READ })).toBe("read")
   })

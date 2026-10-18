@@ -204,6 +204,8 @@ export interface Messenger extends ServiceMessenger {
   chatPin?: boolean
   /** Whether `chats mark-unread` exists; no when unset. */
   chatMarkUnread?: boolean
+  /** Whether `messages star` and `unstar` exist; no when unset. */
+  messageStars?: boolean
   /** Whether `chats delete` and `chats clear` exist; no when unset. */
   chatDeletion?: boolean
   /** Whether `messages press`, `chats start` and `chats app` exist — a bot met on the personal account; no when unset. */

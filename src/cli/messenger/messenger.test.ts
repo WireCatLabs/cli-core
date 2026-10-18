@@ -898,6 +898,103 @@ describe("the shared read commands", () => {
     ])
   })
 
+  it("**every pin notifies and counts where the messenger has no quiet pin**, and lasts as long as it offers", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 1 } } }),
+    )
+    const pins: unknown[] = []
+    const pinning: MessengerAdapter = {
+      ...fake,
+      pin: async (chatId, messageId, options) => {
+        pins.push([chatId, messageId, options])
+      },
+    }
+    const loud = { quietPins: false, pinDurations: [86_400, 604_800, 2_592_000] }
+
+    const pinned = await call(
+      ["messages", "pin", "Book", "3", "--expire-time", "24h"],
+      async () => pinning,
+      env,
+      {},
+      loud,
+    )
+    const odd = await call(["messages", "pin", "Book", "3", "--expire-time", "1h"], async () => pinning, env, {}, loud)
+    const over = await call(["messages", "pin", "Book", "4"], async () => pinning, env, {}, loud)
+    const help = await call(["messages", "pin", "--help"], async () => pinning, env, {}, loud)
+    const telegram = await call(["messages", "pin", "Book", "5", "--expire-time", "24h"], async () => pinning, env)
+
+    expect([pinned.code, odd.code, over.code, telegram.code]).toEqual([0, 2, 8, 2])
+    expect(odd.stderr.join("")).toContain("--expire-time takes 24h, 7d or 30d from now")
+    expect(help.stdout.join("")).toContain("its members are told")
+    expect(help.stdout.join("")).toContain("--expire-time <time>  the pin ends by itself then: 24h, 7d or 30d from now")
+    expect(pins).toEqual([["7", "3", { notify: true, duration: 86_400 }]])
+  })
+
+  it("**star a message and take the star off**, journaled as the owner's own mark that never counts", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 1 } } }),
+    )
+    const stars: unknown[] = []
+    const starring: MessengerAdapter = {
+      ...fake,
+      star: async (chatId, messageId, starred) => {
+        stars.push([chatId, messageId, starred])
+      },
+    }
+
+    const on = await call(
+      ["messages", "star", "Book", "3", "--json"],
+      async () => starring,
+      env,
+      {},
+      { messageStars: true },
+    )
+    const again = await call(["messages", "star", "Book", "4"], async () => starring, env, {}, { messageStars: true })
+    const off = await call(["messages", "unstar", "Book", "3"], async () => starring, env, {}, { messageStars: true })
+    const elsewhere = await call(["messages", "star", "Book", "3"], async () => starring, env)
+
+    expect(JSON.parse(on.stdout[0] ?? "").item).toEqual({
+      operation_id: expect.any(String),
+      chat_id: "7",
+      message_id: "3",
+      starred: true,
+    })
+    expect([again.code, off.code, elsewhere.code]).toEqual([0, 0, 2])
+    expect(stars).toEqual([
+      ["7", "3", true],
+      ["7", "4", true],
+      ["7", "3", false],
+    ])
+    const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
+    expect(journal.filter((entry) => entry.outcome === "sent")).toMatchObject([
+      { kind: "account", action: "message-star", messageId: "3" },
+      { kind: "account", action: "message-star", messageId: "4" },
+      { kind: "account", action: "message-unstar", messageId: "3" },
+    ])
+
+    const locked = { ...env, CHAT_CONFIG_DIR: join(root, "locked") }
+    mkdirSync(locked.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(locked.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ defaults: { permissions: { "messages.unstar": "readonly" } }, profiles: {} }),
+    )
+    const codes = await Promise.all(
+      ["star", "unstar"].map(
+        async (verb) =>
+          (await call(["messages", verb, "Book", "5"], async () => starring, locked, {}, { messageStars: true })).code,
+      ),
+    )
+    expect(codes).toEqual([0, 5])
+  })
+
   it("**react with one emoji and take it off**, journaled as reactions that do not count toward the limit", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

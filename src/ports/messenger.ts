@@ -230,9 +230,17 @@ export interface MessageEditing {
 }
 
 export interface MessagePins {
-  /** `notify` tells the chat's members; without it the pin is quiet. */
-  pin(chatId: Id, messageId: Id, options: { notify: boolean }): Promise<void>
+  /**
+   * `notify` tells the chat's members; without it the pin is quiet. `duration` is how many seconds the pin lasts,
+   * one of `MessengerTraits.pinDurations`; the messenger's own default when absent.
+   */
+  pin(chatId: Id, messageId: Id, options: { notify: boolean; duration?: number }): Promise<void>
   unpin(chatId: Id, messageId: Id): Promise<void>
+}
+
+export interface MessageStars {
+  /** Stars one message, or takes the star off; only the owner sees it. */
+  star(chatId: Id, messageId: Id, starred: boolean): Promise<void>
 }
 
 export interface MessageReactions {
@@ -622,6 +630,7 @@ export interface MessengerAdapter
     Partial<MessageSearch>,
     Partial<MessageEditing>,
     Partial<MessagePins>,
+    Partial<MessageStars>,
     Partial<MessageReactions>,
     Partial<ReadState>,
     Partial<TopicReadState>,
