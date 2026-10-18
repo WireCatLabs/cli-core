@@ -1,6 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { keepsNoOwnerData, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -15,7 +15,7 @@ const DEFAULT_LIMIT = 100
 export const imagesCommand = (messenger: Messenger): Command => {
   const images = new Command("images").description("search pictures by what they show, with a model on this machine")
 
-  keepsNoOwnerData(
+  destroysNothing(
     annotate(images.command("embed"), {
       effects: LOCAL_WRITE,
       examples: [`${messenger.app.command} images embed`, `${messenger.app.command} images embed --limit 500`],

@@ -5,7 +5,7 @@ import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
 import { authorOf } from "../author.js"
 import { environmentOf } from "../context.js"
-import { keepsNoOwnerData, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList, queryHelp } from "../list-query.js"
 import { positiveCount, window } from "../paging.js"
@@ -192,7 +192,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(decided)))
     })
 
-  keepsNoOwnerData(
+  destroysNothing(
     annotate(mentions.command("rebuild"), {
       effects: LOCAL_WRITE,
       examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild person-name`],

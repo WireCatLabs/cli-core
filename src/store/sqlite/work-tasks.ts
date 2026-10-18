@@ -17,6 +17,8 @@ import { write } from "./transaction.js"
 export const TASK_ROLES = ["assignee", "reviewer", "watcher"] as const
 export const TASK_EVENT_KINDS = [
   "created",
+  "title",
+  "description",
   "status",
   "assigned",
   "unassigned",
@@ -251,7 +253,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
   const rowById = (id: number) => database.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Row
   const details = (id: number) => detailsOf(rowById(id))
 
-  const edit = (task: number, fields: TaskFields, actor: Actor) => {
+  const edit = (task: number, fields: TaskFields, actor: Actor, created = false) => {
     const before = rowById(task)
     const at = now()
     const set: string[] = []
@@ -264,11 +266,15 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     }
     if (fields.title !== undefined) {
       const title = textOf(fields.title, "a task's title", 300)
-      change("title", title)
+      change("title", title, created ? undefined : "title")
       change("title_folded", folded(title))
     }
     if (fields.description !== undefined)
-      change("description", fields.description === null ? null : textOf(fields.description, "a description", 20000))
+      change(
+        "description",
+        fields.description === null ? null : textOf(fields.description, "a description", 20000),
+        created ? undefined : "description",
+      )
     if (fields.priority !== undefined) change("priority", priorityOf(fields.priority), "priority")
     if (fields.parent !== undefined)
       change("parent_id", fields.parent === null ? null : parentOf(task, Number(before.project_id), fields.parent))
@@ -343,7 +349,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         )
         recordTaskEvent(database, id, actor, "created", null, at)
         const { title: _title, project: _project, type: _type, ...fields } = input
-        edit(id, fields, actor)
+        edit(id, fields, actor, true)
         return id
       })
       return details(made)

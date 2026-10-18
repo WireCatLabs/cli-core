@@ -13,7 +13,7 @@ import { momentOf } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { applyTaskRulesSinceLastPass, type RuleResult } from "../../services/task-rules.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { FETCH, keepsNoOwnerData, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -323,7 +323,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys({ ...jobDetails(job), ...(held ? { held } : {}), log: job.log })))
     })
 
-  keepsNoOwnerData(annotate(command.command("cancel"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(annotate(command.command("cancel"), { effects: LOCAL_WRITE, mcp: false }))
     .description("stop a running background job after its current page; a later sync resumes where it stopped")
     .argument("<job>", "the job id")
     .action(function (this: Command, id: string) {
@@ -337,7 +337,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ job: job.id, cancelled: true }))
     })
 
-  keepsNoOwnerData(annotate(command.command("retry"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(annotate(command.command("retry"), { effects: LOCAL_WRITE, mcp: false }))
     .description("start a partial, failed or died job again, as a new job; the sync resumes where the store stopped")
     .argument("[job]", "the job id")
     .option("--failed", "every chat whose newest job partial, failed or died")
@@ -378,7 +378,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
         context.renderer.note("no partial, failed or died jobs to retry")
     })
 
-  keepsNoOwnerData(annotate(command.command("clear"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(annotate(command.command("clear"), { effects: LOCAL_WRITE, mcp: false }))
     .description("forget finished jobs and remove their logs; a running job is kept")
     .action(function (this: Command) {
       const context = messengerContext(this, messenger)

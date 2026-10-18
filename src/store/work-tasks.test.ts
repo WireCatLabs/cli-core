@@ -113,7 +113,12 @@ describe("tasks made in the store", () => {
       title: "Answer Bob Sample",
       source: "msg:telegram:100:-1001:42",
     })
-    expect((await store.tasks.events(task.id)).map((event) => event.kind)).toEqual(["created", "status", "priority"])
+    expect((await store.tasks.events(task.id)).map((event) => event.kind)).toEqual([
+      "created",
+      "status",
+      "title",
+      "priority",
+    ])
     await store.close()
   })
 })

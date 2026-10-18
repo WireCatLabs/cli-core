@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { readOnlyLockOf, readOnlyRefusal } from "../../ports/app.js"
 import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
 import { storedChatId } from "../../services/message-resolution.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
@@ -22,7 +23,7 @@ import {
 import type { CloseSuggestion, TaskPair } from "../../store/index.js"
 import { authorOf, holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, queryTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -217,7 +218,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   planOptions(
-    annotate(tasks.command("add"), { effects: LOCAL_WRITE })
+    destroysNothing(annotate(tasks.command("add"), { effects: LOCAL_WRITE }))
       .description("add a task for a stored message or note — a promise, a request")
       .argument("<message>", "a message locator, msg:<provider>/<account>/<chat>/<message>, or note:<id>")
       .requiredOption("--type <type>", "the task's type: question, request, mention or promise", taskTypeOf)
@@ -281,7 +282,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
   })
 
   planOptions(
-    annotate(tasks.command("plan"), { effects: LOCAL_WRITE })
+    destroysNothing(annotate(tasks.command("plan"), { effects: LOCAL_WRITE }))
       .summary("set a task's title, description, due date, next check, category and assignee")
       .description(
         "set a task's title, description, due date, next check, category and assignee; nothing reaches the messenger",
@@ -302,7 +303,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
   })
 
-  annotate(tasks.command("link"), { effects: LOCAL_WRITE })
+  destroysNothing(annotate(tasks.command("link"), { effects: LOCAL_WRITE }))
     .description("link a task to messages, chats, people or URLs — or to another task: task:<id>")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .argument(
@@ -421,27 +422,33 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(pair)), () => `${pair.decision}  ${pairLine(pair)}\n`)
     }
 
-  annotate(duplicates.command("reject"), {
-    effects: LOCAL_WRITE,
-    examples: [`${tool} tasks duplicates reject PR-14 PR-12`],
-  })
+  destroysNothing(
+    annotate(duplicates.command("reject"), {
+      effects: LOCAL_WRITE,
+      examples: [`${tool} tasks duplicates reject PR-14 PR-12`],
+    }),
+  )
     .summary("two tasks are not the same job: the pair is never offered again")
     .description("two tasks are not the same job: the pair leaves the list and is never offered again")
     .argument("<dup>", "the task listed as the duplicate, by its id or key")
     .argument("<task>", "the task it was paired with")
     .action(decided("rejected", "tasks.duplicates.reject"))
 
-  annotate(duplicates.command("defer"), {
-    effects: LOCAL_WRITE,
-    examples: [`${tool} tasks duplicates defer PR-14 PR-12`],
-  })
+  destroysNothing(
+    annotate(duplicates.command("defer"), {
+      effects: LOCAL_WRITE,
+      examples: [`${tool} tasks duplicates defer PR-14 PR-12`],
+    }),
+  )
     .summary("the fields and the text cannot tell: leave the pair to the owner")
     .description("the fields and the text cannot tell: leave the pair to the owner, who lists it with decision:unsure")
     .argument("<dup>", "the task listed as the duplicate, by its id or key")
     .argument("<task>", "the task it was paired with")
     .action(decided("unsure", "tasks.duplicates.defer"))
 
-  annotate(tasks.command("merge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks merge PR-14 --into PR-12`] })
+  destroysNothing(
+    annotate(tasks.command("merge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks merge PR-14 --into PR-12`] }),
+  )
     .summary("one job seen twice: fold the duplicate into the task that stays")
     .description(
       "one job seen twice: link every message of the duplicate to the task and close the duplicate dismissed, " +
@@ -464,7 +471,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(tasks.command("unmerge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks unmerge PR-14`] })
+  destroysNothing(
+    annotate(tasks.command("unmerge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks unmerge PR-14`] }),
+  )
     .summary("undo a merge: reopen the task and remove its duplicate-of relation")
     .description(
       "undo a merge: reopen the task and remove its duplicate-of relation; messages the merge linked stay linked",
@@ -554,10 +563,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(tasks.command("scan"), {
-    effects: LOCAL_WRITE,
-    examples: [`${tool} tasks scan <chat>`, `${tool} tasks scan <chat> --last 300 --yes`],
-  })
+  destroysNothing(
+    annotate(tasks.command("scan"), {
+      effects: LOCAL_WRITE,
+      examples: [`${tool} tasks scan <chat>`, `${tool} tasks scan <chat> --last 300 --yes`],
+    }),
+  )
     .summary("build tasks from a chat's stored history: unanswered questions and mentions")
     .description(
       "the task rules over a chat's newest stored messages: in a one-to-one chat a question you did not answer, in a " +
@@ -592,7 +603,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(tasks.command("claim"), { effects: LOCAL_WRITE, examples: [`${tool} tasks claim PR-12 --lease 2h`] })
+  destroysNothing(
+    annotate(tasks.command("claim"), { effects: LOCAL_WRITE, examples: [`${tool} tasks claim PR-12 --lease 2h`] }),
+  )
     .description("take an open task so no other agent works it at once; the claim lapses by itself")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .option(
@@ -609,7 +622,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(claimed)), () => `${card(claimed)}\n`)
     })
 
-  annotate(tasks.command("release"), { effects: LOCAL_WRITE, examples: [`${tool} tasks release PR-12`] })
+  destroysNothing(
+    annotate(tasks.command("release"), { effects: LOCAL_WRITE, examples: [`${tool} tasks release PR-12`] }),
+  )
     .description("give back a task you claimed, before the claim lapses; the owner may release any")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .option("--holder <name>", HOLDER_HELP)
@@ -620,13 +635,15 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(released)), () => `${card(released)}\n`)
     })
 
-  annotate(tasks.command("close"), {
-    effects: LOCAL_WRITE,
-    examples: [
-      `${tool} tasks close Q-15 --as done --certainty 0.9 --reason answered-in-chat`,
-      `${tool} tasks close Q-15`,
-    ],
-  })
+  destroysNothing(
+    annotate(tasks.command("close"), {
+      effects: LOCAL_WRITE,
+      examples: [
+        `${tool} tasks close Q-15 --as done --certainty 0.9 --reason answered-in-chat`,
+        `${tool} tasks close Q-15`,
+      ],
+    }),
+  )
     .summary("close a task: done, or dismissed when it needs no answer; an agent's unsure close waits on the owner")
     .description(
       "close a task: done, or dismissed when it needs no answer. An agent (AI_AGENT or CLAUDECODE set) states its " +
@@ -656,11 +673,16 @@ export const tasksCommand = (messenger: Messenger): Command => {
         certainty?: number
         asOwner?: boolean
       }>()
-      const author = authorOf(environmentOf(this).env ?? process.env, asOwner)
+      const env = environmentOf(this).env ?? process.env
+      const lock = readOnlyLockOf(messenger.app, env)
+      if (lock && asOwner) throw readOnlyRefusal(lock, "close a task as the owner")
+      const author = authorOf(env, asOwner)
+      const byAgent = author !== "owner" || lock !== undefined
       const closed = await context.withServices((services) =>
         services.tasks.close(id, {
-          by: author === "owner" ? "owner" : "agent",
+          by: byAgent ? "agent" : "owner",
           ...(author === "owner" ? {} : { agent: author }),
+          ...(lock ? { suggestOnly: true } : {}),
           ...(as === undefined ? {} : { as }),
           ...(reason === undefined ? {} : { reason }),
           ...(certainty === undefined ? {} : { certainty }),

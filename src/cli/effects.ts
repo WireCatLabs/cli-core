@@ -45,17 +45,19 @@ export const isLogin = (command: Command): boolean => LOGIN.has(command)
 const KEPT_UNDER_LOCK = new WeakSet<Command>()
 
 /**
- * Marks a local write `<PREFIX>_READ_ONLY` lets through: what the store rebuilds from its messages (vectors, a
- * backfill job, the mention index) or a file that holds nothing the owner wrote (a backup, a chart, a report).
+ * Marks a local write `<PREFIX>_READ_ONLY` lets through, because it deletes or overwrites nothing that cannot be got
+ * back: what the store rebuilds from its messages (vectors, a backfill job, the mention index), a new file (a backup,
+ * a chart, a report), or the task bookkeeping a scheduled agent does, which only adds, is undone by its pair
+ * (merge/unmerge, claim/release) or keeps the old value in the task's history; under the lock a close only suggests.
  */
-export const keepsNoOwnerData = <T extends Command>(command: T): T => {
+export const destroysNothing = <T extends Command>(command: T): T => {
   KEPT_UNDER_LOCK.add(command)
   return command
 }
 
 /**
  * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
- * is refused unless `keepsNoOwnerData` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
+ * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
  * keeps receiving, a remote write meets the send guard, and an authority change has its own refusal.
  */
 export const isStoreChange = (command: Command): boolean => {

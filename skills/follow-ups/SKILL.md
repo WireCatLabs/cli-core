@@ -102,9 +102,12 @@ stop. The owner sends what they choose.
 ## On a timer
 
 `{{command}} schedule agent follow-ups claude "<prompt>" --at 08:30` runs this every morning. Then you run
-with the CLI's read-only variable set (`MAX_READ_ONLY=1` for max): every send, reaction and edit is
-refused, and so is every change to schedules, settings, the recipient list or auto-replies, so do not try. What you print is the report the owner opens; its first line shows in the desktop notification, so make it the count that
-matters ("3 overdue, 2 owe a reply, 1 waiting since 24.09").
+with the CLI's read-only variable set (`MAX_READ_ONLY=1` for max). The task work above still runs: `tasks scan --yes`,
+`add`, `plan`, `link`, `merge`, `unmerge`, `duplicates reject`, `duplicates defer`, `claim`, `release` and `close`
+— but every `tasks close` then waits on the owner as a suggestion, whatever your certainty, and `--as-owner` is
+refused. Everything else that writes is refused, so do not try: every send, reaction and edit; changes to schedules,
+settings, the recipient list or auto-replies; tags, contact notes and aliases, saved searches, `tasks reject`. What you print is the report the owner opens; its first line shows in the desktop
+notification, so make it the count that matters ("3 overdue, 2 owe a reply, 1 waiting since 24.09").
 
 ## Recipes
 

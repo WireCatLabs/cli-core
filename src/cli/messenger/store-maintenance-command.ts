@@ -43,7 +43,7 @@ import {
   stemsState,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
-import { keepsNoOwnerData, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { answerOf } from "./ask.js"
@@ -494,7 +494,7 @@ const buildNoteIndex = (database: CacheDatabase, note: (text: string) => void, {
 }
 
 const reindexCommand = (messenger: Messenger): Command =>
-  keepsNoOwnerData(annotate(new Command("reindex"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(annotate(new Command("reindex"), { effects: LOCAL_WRITE, mcp: false }))
     .description(
       "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored; loses nothing",
     )
@@ -551,7 +551,7 @@ const vacuumInto = async (path: string, target: string) => {
 const stampNow = () => new Date().toISOString().replace(/[:.]/g, "-")
 
 const backupCommand = (): Command =>
-  keepsNoOwnerData(annotate(new Command("backup"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(annotate(new Command("backup"), { effects: LOCAL_WRITE, mcp: false }))
     .description("copy the store into a new file, while it is in use; never overwrites a file")
     .argument("<file>", "the new file")
     .option(...ENCRYPT_OPTION)

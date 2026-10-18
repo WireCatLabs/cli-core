@@ -10,12 +10,12 @@ import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
 import {
   changesAuthority,
+  destroysNothing,
   FETCH,
   isOtherServiceCall,
   isStoreChange,
   judgedEffects,
   judgedTargets,
-  keepsNoOwnerData,
   LOCAL_WRITE,
   logsInOrOut,
   refuseUnderReadOnly,
@@ -101,7 +101,7 @@ describe("command effects", () => {
     )
   })
 
-  it("refuse under the read-only lock every local write but what the store rebuilds or holds no owner data", () => {
+  it("refuse under the read-only lock every local write but what destroys nothing that cannot be got back", () => {
     const localWrites = commands.filter(({ command }) => {
       const effects = metaOf(command).effects
       return effects?.remote === "none" && effects.local === "write" && !changesAuthority(command)
@@ -125,6 +125,17 @@ describe("command effects", () => {
         "store jobs clear",
         "store jobs retry",
         "store reindex",
+        "tasks add",
+        "tasks claim",
+        "tasks close",
+        "tasks duplicates defer",
+        "tasks duplicates reject",
+        "tasks link",
+        "tasks merge",
+        "tasks plan",
+        "tasks release",
+        "tasks scan",
+        "tasks unmerge",
       ].sort(),
     )
     expect(refused.sort()).toEqual(
@@ -157,18 +168,7 @@ describe("command effects", () => {
         "tags add",
         "tags auto",
         "tags remove",
-        "tasks add",
-        "tasks claim",
-        "tasks close",
-        "tasks duplicates defer",
-        "tasks duplicates reject",
-        "tasks link",
-        "tasks merge",
-        "tasks plan",
         "tasks reject",
-        "tasks release",
-        "tasks scan",
-        "tasks unmerge",
       ].sort(),
     )
     expect(
@@ -176,10 +176,21 @@ describe("command effects", () => {
     ).toEqual([])
   })
 
+  it("let through every task write the follow-ups skill makes on a timer, but the owner's tasks reject", () => {
+    const skill = readFileSync(new URL("../../skills/follow-ups/SKILL.md", import.meta.url), "utf8")
+    const named = [
+      ...new Set([...skill.matchAll(/`(?:\{\{command\}\} )?(tasks (?:duplicates )?[a-z]+)/g)].map((m) => m[1])),
+    ]
+    const used = commands.filter(({ path }) => named.includes(path))
+
+    expect(used.length).toBeGreaterThan(10)
+    expect(used.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)).toEqual(["tasks reject"])
+  })
+
   it("refuse a local write nobody marked, so a new command fails closed", () => {
     const fresh = annotate(new Command("fresh"), { effects: LOCAL_WRITE })
     expect(isStoreChange(fresh)).toBe(true)
-    expect(isStoreChange(keepsNoOwnerData(annotate(new Command("kept"), { effects: LOCAL_WRITE })))).toBe(false)
+    expect(isStoreChange(destroysNothing(annotate(new Command("kept"), { effects: LOCAL_WRITE })))).toBe(false)
     expect(isStoreChange(annotate(new Command("fetch"), { effects: FETCH }))).toBe(false)
   })
 
@@ -327,8 +338,6 @@ describe("the read-only lock on the message store", () => {
     ["contacts alias set", ["contacts", "alias", "set", "Alice", "Al"]],
     ["tags add", ["tags", "add", "work", "--chat", "7"]],
     ["tags auto", ["tags", "auto"]],
-    ["tasks add", ["tasks", "add", "note:1", "--type", "request", "--category", "work"]],
-    ["tasks close", ["tasks", "close", "1"]],
     ["mentions confirm", ["mentions", "confirm", "1"]],
     ["contacts notes add", ["contacts", "notes", "add", "Alice", "--file", "/dev/null"]],
     ["contacts link", ["contacts", "link", "Alice", "Bob"]],
