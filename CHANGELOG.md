@@ -16,6 +16,18 @@ shape of this file.
   dead one. A ref the store cannot place on an attachment is dropped with a warning that never shows the ref. Other
   readers of `bytes()` (`messages transcribe --local`, photo and picture readers) do not save it yet.
 
+### Fixed
+
+- **`store gaps repair --background` runs its job instead of failing at once.** The command and the MCP tool handed
+  the job `--timeout 0`, which the job's own parser refuses, so every background gap repair died before it connected.
+  The job now gets no deadline of its own, like a `messages sync --background` job: its `--repair-time` bounds it, and
+  only a `--timeout` typed on the command is passed on.
+- **`server status` names the profile in the commands it suggests.** After a refused login it said
+  `<cli> session start`, then `<cli> server start`; it now says `<cli> <profile> session start`, then
+  `<cli> <profile> server start`, and the same for `server logs` after another exit that a restart would not fix.
+- **`metadata get` and `metadata refresh` have help and examples**, so the command lint no longer lists them under
+  missing help or missing examples.
+
 ## 0.338.0 — 18.10.2026
 
 ### Added
