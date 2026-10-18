@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { expect, it, vi } from "vitest"
+import type { RemoteFile } from "../ports/messenger.js"
 import { batchProgress } from "./batch.js"
 import { safeName, saveFiles } from "./file-download.js"
 
@@ -85,4 +86,53 @@ it("returns 99 saved files and the failed 50th ID/position instead of discarding
     failures: [{ id: "100", attachment: 50, stage: "download" }],
   })
   expect(result.batch.stopReason).toBeUndefined()
+})
+
+it("hands the store a ref the adapter set while the bytes streamed", async () => {
+  const root = mkdtempSync(join(tmpdir(), "refreshed-ref-"))
+  const keepDownloaded = vi.fn(async () => 1)
+  const file: RemoteFile = {
+    kind: "photo",
+    position: 0,
+    bytes: async function* () {
+      yield Buffer.from("synthetic")
+      file.providerRef = { directPath: "/synthetic/fresh" }
+    },
+  }
+  const result = await saveFiles({ keepDownloaded }, "7", "50", [file], root, { warn: vi.fn() })
+  expect(keepDownloaded).toHaveBeenCalledWith("7", "50", [
+    expect.objectContaining({ position: 0, providerRef: { directPath: "/synthetic/fresh" } }),
+  ])
+  expect(JSON.stringify(result.saved)).not.toContain("synthetic/fresh")
+})
+
+it("warns, without the ref, when the store could not place a refreshed ref", async () => {
+  const root = mkdtempSync(join(tmpdir(), "unplaced-ref-"))
+  const warn = vi.fn()
+  const file: RemoteFile = {
+    kind: "photo",
+    providerRef: { directPath: "/synthetic/fresh" },
+    bytes: async function* () {
+      yield Buffer.from("synthetic")
+    },
+  }
+  await saveFiles({ keepDownloaded: vi.fn(async () => 0) }, "7", "50", [file], root, { warn })
+  expect(warn).toHaveBeenCalledOnce()
+  expect(warn.mock.calls[0]?.[0]).toContain("message 50")
+  expect(warn.mock.calls[0]?.[0]).not.toContain("synthetic/fresh")
+})
+
+it("stays quiet when every file is placed or no ref was refreshed", async () => {
+  const root = mkdtempSync(join(tmpdir(), "placed-ref-"))
+  const warn = vi.fn()
+  const file = (providerRef?: RemoteFile["providerRef"]): RemoteFile => ({
+    kind: "photo",
+    ...(providerRef ? { providerRef } : {}),
+    bytes: async function* () {
+      yield Buffer.from("synthetic")
+    },
+  })
+  await saveFiles({ keepDownloaded: vi.fn(async () => 1) }, "7", "50", [file({ directPath: "/x" })], root, { warn })
+  await saveFiles({ keepDownloaded: vi.fn(async () => 0) }, "7", "51", [file()], root, { warn, unique: true })
+  expect(warn).not.toHaveBeenCalled()
 })
