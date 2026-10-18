@@ -122,6 +122,7 @@ export const createProgram = (
     if (PROFILE_FREE.has(top.name())) continue
     forEachCommand(top, (command) =>
       command.configureHelp({
+        ...command.configureHelp(),
         commandUsage: (shown) => `${app.command} <profile>${new Help().commandUsage(shown).slice(app.command.length)}`,
       }),
     )

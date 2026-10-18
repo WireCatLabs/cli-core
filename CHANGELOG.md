@@ -44,6 +44,9 @@ shape of this file.
   `--dry-run` (memo, zm, drive) now reads "the options every command takes", and one with some names those.
 - **A guide step may ask for help.** `checkGuide` refused `chat messages list --help` and `-h` ("no option --help")
   and `chat messages --help` ("needs one of: …"); a step with the help flag now only needs its command path to exist.
+- **A command's own help settings survive the `<profile>` usage line.** `createProgram` replaced each command's help
+  configuration when it set the usage line, so tg's `setup --help` lost its "Global Options" block
+  (`showGlobalOptions`). It now adds the usage line to what the command set.
 
 ## 0.347.0 — 18.10.2026
 

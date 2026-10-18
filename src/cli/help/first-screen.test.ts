@@ -136,6 +136,14 @@ describe("the first screen", () => {
     expect(JSON.stringify(document.global_options)).not.toContain("help-all")
   })
 
+  it("keeps a command's own help settings, such as the global options, beside the <profile> usage line", async () => {
+    const setup = leaf("setup", "guided first run").configureHelp({ showGlobalOptions: true })
+    const { stdout } = await call(["setup", "--help"], { ...fakeTool, commands: () => [setup] })
+
+    expect(stdout).toContain("Usage: tg <profile> setup")
+    expect(stdout).toContain("Global Options:")
+  })
+
   it("installs on a program a tool builds itself, without the profile when it has none", async () => {
     const out: string[] = []
     const program = new Command("memo")
