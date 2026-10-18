@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The contract kit checks `listen`** when the adapter has it: on a signal already aborted it resolves at once
+  and does not reject, and otherwise it keeps listening until the signal aborts, then resolves. `OPTIONAL_METHODS`
+  lists `listen`, and `fakeAdapter(seed, { listen: true })` has it. The cases cannot see whether `listen` connects.
+
 ## 0.345.0 — 18.10.2026
 
 ### Added

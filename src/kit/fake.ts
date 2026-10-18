@@ -33,6 +33,7 @@ import type {
   MessageReactions,
   MessageStars,
   MessengerCore,
+  PassiveUpdates,
   PushedHistory,
   ReadState,
   ScheduledMessages,
@@ -64,7 +65,8 @@ export type FakeAdapter = MessengerCore &
   ChatFolders &
   ContactBook &
   AccountEditing &
-  Partial<PushedHistory>
+  Partial<PushedHistory> &
+  Partial<PassiveUpdates>
 
 const NO_SETTINGS: GroupSettings = {
   allCanPin: null,
@@ -98,6 +100,7 @@ const missing = (what: string): CliError => new CliError("not_found", `the fake 
  *
  * With `{ feed: true }` it also pushes its history, as a messenger with `history: "store"` does:
  * the chats and people in one batch, then each chat's messages in a batch of their own.
+ * With `{ listen: true }` it also has `listen`, which hands on what `watch` does.
  */
 const withRules = (folder: Folder, { emoji, include, skip, exclude, pin }: FolderRules): void => {
   if (emoji !== undefined) folder.emoji = emoji
@@ -107,7 +110,10 @@ const withRules = (folder: Folder, { emoji, include, skip, exclude, pin }: Folde
   if (pin?.length) folder.pinnedChatIds = [...new Set([...(folder.pinnedChatIds ?? []), ...pin])]
 }
 
-export const fakeAdapter = (seed: Seed = contractSeed(), options: { feed?: boolean } = {}): FakeAdapter => {
+export const fakeAdapter = (
+  seed: Seed = contractSeed(),
+  options: { feed?: boolean; listen?: boolean } = {},
+): FakeAdapter => {
   const state = structuredClone(seed)
   let account: Account | null = state.account
   const sends = new Map<string, Sent>()
@@ -375,6 +381,17 @@ export const fakeAdapter = (seed: Seed = contractSeed(), options: { feed?: boole
       await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
       listeners.delete(onEvent)
     },
+
+    ...(options.listen
+      ? {
+          listen: async (onEvent: (event: MessageEvent) => void, signal: AbortSignal) => {
+            if (signal.aborted) return
+            listeners.add(onEvent)
+            await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
+            listeners.delete(onEvent)
+          },
+        }
+      : {}),
 
     ...(options.feed
       ? {

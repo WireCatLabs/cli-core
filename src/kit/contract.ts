@@ -21,7 +21,7 @@ export interface ContractOptions {
   ids?: IdMaker
   /** As the messenger's `fetching.orderBy`: whether `history`'s `before` is a message id or an ISO time. */
   orderBy?: "id" | "time"
-  /** How long `watch` may take to say it listens, and to end once aborted. */
+  /** How long `watch` may take to say it listens, and `watch`, `listen` and `feed` to end once aborted. */
   waitMs?: number
   /** As the messenger's `history`: a `"server"` messenger's adapter must have every `ServerReads` method. */
   history?: "server" | "store"
@@ -58,6 +58,7 @@ export const OPTIONAL_METHODS = [
   "closePoll",
   "createPoll",
   "watch",
+  "listen",
   "feed",
   "download",
   "transcribe",
@@ -111,6 +112,20 @@ const within = async (work: Promise<unknown>, failure: string, ms: number): Prom
   } finally {
     clearTimeout(timer)
   }
+}
+
+const settledSoon = async (work: Promise<unknown>): Promise<boolean> => {
+  let settled = false
+  work.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    },
+  )
+  for (let turn = 0; turn < 5; turn += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+  return settled
 }
 
 const idsOf = (messages: Message[]) => messages.map((message) => message.id)
@@ -441,6 +456,32 @@ export const contractCases = ({
           await within(Promise.resolve(watching), "watch did not end when the signal aborted", waitMs)
         },
         "`connect` opens a connection that listens, as `{ listen: true }` does",
+      ],
+      [
+        "listen on a signal already aborted resolves at once and does not reject",
+        async (adapter) => {
+          const skipped = lacking(adapter, "listen")
+          if (skipped) return skipped
+          const controller = new AbortController()
+          controller.abort()
+          await within(
+            Promise.resolve(adapter.listen?.(() => {}, controller.signal)),
+            "listen did not resolve on a signal already aborted",
+            waitMs,
+          )
+        },
+      ],
+      [
+        "listen keeps listening until the signal aborts, then resolves",
+        async (adapter) => {
+          const skipped = lacking(adapter, "listen")
+          if (skipped) return skipped
+          const controller = new AbortController()
+          const listening = Promise.resolve(adapter.listen?.(() => {}, controller.signal))
+          assert.equal(await settledSoon(listening), false, "listen ended before the signal aborted")
+          controller.abort()
+          await within(listening, "listen did not end when the signal aborted", waitMs)
+        },
       ],
       [
         "feed pushes only the seed's chats and messages, with ids as strings, and ends when the signal aborts",
