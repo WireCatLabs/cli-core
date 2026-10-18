@@ -218,7 +218,9 @@ describe("command effects", () => {
         .map(({ path }) => path)
         .sort(),
     )
-    expect(described.find(({ path }) => path.join(" ") === "messages send")?.reaches).toBeUndefined()
+    const send = described.find(({ path }) => path.join(" ") === "messages send")
+    expect(send).toBeDefined()
+    expect(send?.reaches).toBeUndefined()
   })
 
   it("judge retry on the remote side, and keep a local-only write from running unasked", () => {
