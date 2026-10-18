@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.345.0 — 18.10.2026
+
 ### Added
 
 - **`gatherProjectEvidence` collects cited evidence for one project** from explicitly selected stored messages,
