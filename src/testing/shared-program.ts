@@ -74,13 +74,9 @@ export const messenger: Messenger = {
     "lastSeen",
   ],
   chatMute: true,
-<<<<<<< HEAD
   stickerFileBytes: 500 * 1024,
-||||||| parent of 4fec7028 (feat(chats): chats update --remove-photo, and a messenger's own photo types)
-=======
   groupPhoto: true,
   groupPhotoRemoval: true,
->>>>>>> 4fec7028 (feat(chats): chats update --remove-photo, and a messenger's own photo types)
 }
 
 /** Every shared command over `over`, as tg, max and wa mount them between them; its switches drop what they drop. */
