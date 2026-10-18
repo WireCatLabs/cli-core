@@ -551,6 +551,11 @@ Names come from the store too. A write still connects, but the chat it names (`r
 change names (`people`) and the chat titles `watch` leaves out are looked up among the stored chats and people
 first (`Saving.namesFromStore` in `stored.ts`), with the same matching and the same refusal of an ambiguous name as
 the store reads; only a name the store does not hold reaches the adapter.
+Such a messenger may deliver what it queued while nothing was connected to any connection, once. When its adapter
+has `listen` (`PassiveUpdates`), `connected` runs it for as long as a connection opened without `listen: true` is
+open and saves each event as `watch` would; `close` stops it and waits for it to end before it waits for the saves.
+A connection opened with `listen: true` is left to its `watch`, so nothing is saved twice. A failed `listen` warns
+and never fails the command; it is neither held nor paced, as it only receives.
 
 **A CLI replaces a use case, not a command.** `Messenger.services` is an `Override`: it gets the
 shared services and returns the ones it changes, and can call the shared method inside its own:

@@ -234,6 +234,15 @@ export const stored = (
           },
         }
       : {}),
+    ...(messenger.listen
+      ? {
+          listen: (onEvent, signal) =>
+            messenger.listen?.((event) => {
+              void save("messages.listen", (opened) => keep(opened, account, event, Date.now(), deletedWithoutChat))
+              onEvent(event)
+            }, signal) ?? Promise.resolve(),
+        }
+      : {}),
     ...(messenger.feed
       ? {
           feed: (onBatch, signal) => {

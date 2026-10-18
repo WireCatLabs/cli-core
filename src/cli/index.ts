@@ -50,6 +50,7 @@ export type {
   MessengerCore,
   NewPoll,
   OfficialStats,
+  PassiveUpdates,
   PersonProfiles,
   ProfileChange,
   ProfilePhotos,

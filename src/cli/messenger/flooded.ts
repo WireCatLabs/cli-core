@@ -7,7 +7,7 @@ import type { Pacer } from "../../sends/pace.js"
 
 const LONG_LIVED = new Set(["self", "newSendId", "close", "formatMarkdown", "formatHtml"])
 /** Neither held nor paced, as they listen for as long as the run does; what ends them is still remembered. */
-const LISTENING = new Set(["watch", "feed"])
+const LISTENING = new Set(["watch", "feed", "listen"])
 const BLOCKING = new Set<AccountStanding["state"]>(["frozen", "limited", "banned"])
 /** Shorter waits for the pace pass unannounced; a person at a terminal would not notice them. */
 const ANNOUNCE_WAIT_MS = 5_000

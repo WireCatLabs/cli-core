@@ -23,6 +23,7 @@ import { imagesCommand } from "./images-command.js"
 import { mcpCommand } from "./mcp-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { serveCommand } from "./serve-command.js"
+import { lentConnection } from "./serve-relay.js"
 import { watchCommand } from "./watch-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
@@ -523,4 +524,12 @@ it.skipIf(process.platform === "win32")("keeps the relay socket path short when 
   } finally {
     vi.unstubAllEnvs()
   }
+})
+
+describe("a lent connection", () => {
+  it("never listens on its own: serve already saves what its connection hears", () => {
+    const own = { self: () => "1", close: async () => {}, listen: async () => {} } as unknown as MessengerAdapter
+
+    expect(lentConnection(own).listen).toBeUndefined()
+  })
 })

@@ -75,7 +75,7 @@ needs it. The ones a new messenger usually sets:
 
 `MessengerCore` is required: `self`, `me`, `resolve`, `chat`, `send`, `logout` and `close`. Every
 other group is optional: `ServerReads`, `ChatReading`, `MessageEditing`,
-`MessagePins`, `MessageStars`, `MessageReactions`, `ReadState`, `TopicReadState`, `MessagePolls`, `LiveUpdates`, `PushedHistory`,
+`MessagePins`, `MessageStars`, `MessageReactions`, `ReadState`, `TopicReadState`, `MessagePolls`, `LiveUpdates`, `PassiveUpdates`, `PushedHistory`,
 `MessageMedia`, `ScheduledMessages`, `GroupModeration`, `AccountTools`, `GroupAdmin`, `ChatFolders`, `ContactBook`
 and `AccountEditing`.
 
@@ -182,7 +182,8 @@ Some messengers push history to the client instead of answering a request for it
 - A vote in `votes` is `{ chatId, messageId, vote: { person, answers, votedAt } }` (`HistoryVote`): the poll
   message's chat and id, and the vote as `PollVoteEvent` carries it. `votedAt` is when the person voted, not when the
   push came: a voter's older vote never replaces a newer one, so a push dated now would hide a later change. No
-  `answers` is a take-back. Send pushed votes here, not as `watch` events: only `serve` and `watch` keep those.
+  `answers` is a take-back. Send pushed votes here, not as `watch` events: only `serve`, `watch` and `listen` keep
+  those.
 - A star in `stars` is `{ chatId, messageId, starred }` (`HistoryStar`): the owner starred the message, or took the
   star off. A pushed message may carry `starred` itself instead; leave it out unless the messenger says, since an
   absent `starred` keeps what the store holds. A live one comes from `watch` as `{ event: "star", chatId, chatTitle,
@@ -201,6 +202,13 @@ Some messengers push history to the client instead of answering a request for it
 - A batch the store cannot take is a warning on stderr. It does not stop `serve`. A `feed` that
   rejects stops `serve` and `watch` with its error.
 - New messages still come through `watch`, not through `feed`.
+- Give the adapter `PassiveUpdates` when the messenger delivers, on any connection, what it queued while nothing was
+  connected, and cannot deliver it again. `listen(onEvent, signal)` hands on the same `MessageEvent`s as `watch`, from
+  a connection opened without `{ listen: true }`, until `signal` aborts. It only listens: it must not connect or wait
+  for the connection, since it starts as soon as the command has connected. Resolve once nothing more will be handed
+  on. A command that does not watch (`messages send`, `doctor --online`, an MCP session) then saves those events to
+  the store. A connection opened with `{ listen: true }` is never asked to `listen`: its `watch` saves them, and a
+  command serve runs for a client borrows a connection without `listen`.
 
 ## Running the contract cases
 
