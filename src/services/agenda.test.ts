@@ -9,7 +9,7 @@ import { agenda as agendaEntity } from "../entities/agenda.js"
 import { openStore } from "../store/store.js"
 import { AGENDA_QUERY, agendaItem, agendaService } from "./agenda.js"
 import { storeOnlyDeps } from "./deps.js"
-import { type TaskCard, tasksService } from "./tasks.js"
+import { TASK_QUERY, type TaskCard, tasksService } from "./tasks.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const account = { provider: "chat", account: "500" }
@@ -198,6 +198,43 @@ it("plans and links a task, refusing a date on a closed one and a mistyped refer
     expect(await tasks.plan(task.id, { title: "Sent Alex the token" }, "owner")).toMatchObject({
       title: "Sent Alex the token",
     })
+  } finally {
+    await store.close()
+  }
+})
+
+it("finds tagged tasks and agenda items by every inherited name after consolidation", async () => {
+  const { store, tasks, agenda } = await seeded()
+  try {
+    const first = await tasks.add("msg:chat/500/1/10", "promise", "owner", { dueAt: new Date(now - DAY) })
+    const second = await tasks.add("msg:chat/500/2/21", "promise", "owner", { dueAt: new Date(now - DAY) })
+    await tasks.add("msg:chat/500/3/31", "promise", "owner", { dueAt: new Date(now - DAY) })
+    const source = await store.knowledge.createTag("arrival"),
+      survivor = await store.knowledge.createTag("welcome")
+    await store.knowledge.addVocabularyAlias({ kind: "tag", id: String(source.id) }, "arriving")
+    await store.knowledge.addTags(account, { type: "task", id: first.task.id }, [source.name])
+    await store.knowledge.addTags(account, { type: "task", id: second.task.id }, [survivor.name])
+    const catalog = await store.knowledge.vocabulary()
+    const selection = {
+      sourceId: String(source.id),
+      survivorId: String(survivor.id),
+      expectedVocabularyFingerprint: catalog.fingerprint,
+    }
+    const preview = await store.knowledge.previewTagConsolidation(selection)
+    await store.knowledge.applyTagConsolidation({
+      ...selection,
+      expectedPreviewFingerprint: preview.previewFingerprint,
+      by: "owner",
+      idempotencyKey: "task-and-agenda-tags",
+    })
+    for (const name of ["arrival", "arriving", "welcome"]) {
+      const query = listQuery(`tag:${name}`, TASK_QUERY, "tasks list")
+      const listed = await tasks.list({ limit: 20, offset: 0, previews: true, ...(query ? { query } : {}) })
+      expect(listed.previews?.map((row) => row.id).sort()).toEqual([first.task.id, second.task.id].sort())
+      expect((await agenda.show({ query: kinds(`tag:${name}`) })).tasks.map((row) => row.id).sort()).toEqual(
+        [first.task.id, second.task.id].sort(),
+      )
+    }
   } finally {
     await store.close()
   }

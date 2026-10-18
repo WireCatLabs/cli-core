@@ -17,6 +17,7 @@ import { folded } from "./folded.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
+import { canonicalTagNamed } from "./tags.js"
 import { type TaskSimilarity, taskSimilarityOver } from "./task-candidates.js"
 import {
   savedTaskCategories,
@@ -54,6 +55,8 @@ export interface StoreTaskStore
   unlistedCategories(): Promise<UnlistedCategory[]>
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined
+  /** A canonical/alias-aware label predicate for the task query's `t` row. */
+  tagWhere(name: string): Promise<Where>
   /** One account's tasks a list query keeps, oldest first, each with its title and last change. */
   query(
     account: string,
@@ -143,6 +146,10 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     categoriesFile: () => context.sharedConfig,
     saveCategories: async (categories) => write(database, () => saveTaskCategories(database, categories, now())),
     unlistedCategories: async () => unlistedTaskCategories(database, listOf()),
+    tagWhere: async (name) => ({
+      sql: "EXISTS (SELECT 1 FROM taggings g JOIN resolved_tags r ON r.id=g.tag_id WHERE g.taggable_type='task' AND g.taggable_id=t.id AND r.canonical_id=?)",
+      params: [canonicalTagNamed(database, name)?.id ?? -1],
+    }),
     query: async (account, where, { limit, offset }) => {
       const project = inbox(account, false)
       if (project === undefined) return []
