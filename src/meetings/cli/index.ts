@@ -157,7 +157,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     })
   output(
-    annotate(group.command("sync"), { effects: FETCH }).description(
+    annotate(group.command("sync"), { effects: FETCH, offline: false }).description(
       "bring the stored meetings up to date from the connected account",
     ),
   )

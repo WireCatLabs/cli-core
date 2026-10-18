@@ -64,7 +64,7 @@ const FOLDERS_QUERY = unfilteredQuery("folder", folderEntity)
 
 /** `chats folders …`, in max-cli's words. */
 export const foldersCommand = (messenger: Messenger): Command => {
-  const folders = new Command("folders").description("your chat folders")
+  const folders = annotate(new Command("folders"), { offline: false }).description("your chat folders")
   folders.addCommand(
     withQuery(
       annotate(new Command("list"), { effects: REMOTE_READ }).description(

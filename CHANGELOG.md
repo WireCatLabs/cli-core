@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **An agent is no longer offered `offline` on a command that refuses it.** The MCP catalogue offered an `offline`
+  input on every command that reads the messenger. Now it skips commands marked `offline: false` in their metadata,
+  and an agent that passes `offline` to one gets `validation_error` before the command runs. Marked: `topics` (and
+  `search topics`), `chats events`, `chats inspect`, `chats send-as`, `chats members audit`, `chats members fetch`,
+  every `chats folders` command and `meetings sync`. `inbox` and `review` keep the input, because a messenger whose
+  history lives in the store answers them offline.
+
 ## 0.334.0 — 18.10.2026
 
 ### Added

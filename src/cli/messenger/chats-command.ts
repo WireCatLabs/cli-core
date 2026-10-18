@@ -56,7 +56,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
   chats.addCommand(
     withQuery(
       annotate(
-        annotate(new Command("events"), { effects: REMOTE_READ })
+        annotate(new Command("events"), { effects: REMOTE_READ, offline: false })
           .description(
             "who joined, left, was added or removed, and by whom — from the chat's service messages; " +
               `the last ${EVENTS_DAYS} days unless the query names time`,
@@ -80,7 +80,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  annotate(chats.command("inspect"), { effects: REMOTE_READ })
+  annotate(chats.command("inspect"), { effects: REMOTE_READ, offline: false })
     .description("what an invite or public link leads to, without joining it")
     .argument("<link>", "an invite link or a public one")
     .action(async function (this: Command, link: string) {
@@ -106,7 +106,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
   )
 
   if (messenger.sendAs !== false)
-    annotate(chats.command("send-as"), { effects: REMOTE_READ })
+    annotate(chats.command("send-as"), { effects: REMOTE_READ, offline: false })
       .description("who this account may post as in a chat; changes no saved choice")
       .argument("<chat>", messenger.chatArgument)
       .action(async function (this: Command, chat: string) {
