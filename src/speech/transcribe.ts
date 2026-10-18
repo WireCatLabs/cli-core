@@ -2,6 +2,7 @@ import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { fromFile, type Settings } from "../cli/settings.js"
 import { capability, type MessengerAdapter, type RemoteFile, type Transcript } from "../ports/messenger.js"
+import { typedCommand } from "../runs/scope.js"
 import { installedBytes, isInstalled, megabytes, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { orderedModels, type SpeechModel, speechModel } from "./models.js"
 import type { Recognizer } from "./recognize.js"
@@ -55,7 +56,7 @@ export const notDownloaded = (messenger: Messenger, model: SpeechModel): CliErro
   new CliError(
     "not_found",
     `the speech model ${model.id} is not on this machine — the owner downloads it once with ` +
-      `\`${messenger.app.command} models audio download ${model.id}\` (${megabytes(installedBytes(model))})`,
+      `\`${typedCommand(messenger.app.command, `models audio download ${model.id}`)}\` (${megabytes(installedBytes(model))})`,
     { reason: "model.not-downloaded", model: model.id },
   )
 

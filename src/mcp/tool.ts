@@ -299,10 +299,12 @@ export const entryRunner = (registration: Registration): RunEntry => {
             ...(traceId === undefined ? {} : { traceId }),
           })
         : undefined
+    const profile = registration.defaults.settings.profile
     const scope = {
       runId: recording?.runId ?? newRunId(new Date(startedAt), command),
       command,
       startedAt,
+      ...(profile === undefined ? {} : { profile }),
       ...(traceId === undefined ? {} : { traceId }),
     }
     const result = await inRun(scope, () => {

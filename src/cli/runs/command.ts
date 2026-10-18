@@ -7,6 +7,7 @@ import { environmentOf, outputFor } from "../context.js"
 import { LOCAL_READ, NO_EFFECTS } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
+import { lineOf } from "../steps.js"
 import { type RunSearch, runsFound, searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */
@@ -15,7 +16,7 @@ export const runsCommand = (app: AppIdentity): Command => {
   const dir = (from: Command) => runsDirFor(app, environmentOf(from).env ?? process.env)
   const runOrRefuse = (from: Command, id: string) => {
     const found = findRun(dir(from), id)
-    if (!found) throw new CliError("not_found", `no recorded run "${id}" — \`${app.command} runs list\` shows them`)
+    if (!found) throw new CliError("not_found", `no recorded run "${id}" — \`${lineOf(from, "runs list")}\` shows them`)
     return found
   }
 
@@ -61,7 +62,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       )
       if (shown.length < events.length)
         renderer.note(
-          `${events.length - shown.length} other events — \`${app.command} runs show ${id}\` shows them all`,
+          `${events.length - shown.length} other events — \`${lineOf(this, `runs show ${id}`)}\` shows them all`,
         )
     })
 

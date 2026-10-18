@@ -4,6 +4,7 @@ import { isCliFailure } from "../errors/failures.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { MessengerTraits } from "../ports/traits.js"
+import { typedCommand } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
 import type { AccountStore } from "../store/account-store.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -112,7 +113,7 @@ export const fromStore = (deps: Pick<ServiceDeps, "offline" | "reads">): boolean
 
 /** What a store-mode read answers for a chat the store holds nothing of. */
 export const nothingStored = (messenger: MessengerTraits): string =>
-  `nothing stored for this chat yet — keep \`${messenger.app.command} serve\` running`
+  `nothing stored for this chat yet — keep \`${typedCommand(messenger.app.command, "serve")}\` running`
 
 /** Where a store-mode messenger's history comes from, for what it cannot do. */
 export const PUSHED = "this messenger's history is read from the local store"

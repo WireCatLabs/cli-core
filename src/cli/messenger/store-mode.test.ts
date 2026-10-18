@@ -384,7 +384,7 @@ describe("a messenger whose history is read from the store", () => {
       expect(code).not.toBe(0)
       expect(stdout).toBe("")
       expect(stderr).toContain('"code":"not_found"')
-      expect(stderr).toContain("nothing stored for this chat yet — keep `chat serve` running")
+      expect(stderr).toContain("nothing stored for this chat yet — keep `chat default serve` running")
     }
     const shown = await call(["chats", "show", "Nobody", "--json"], env, connect, "store")
     expect(shown.stderr).toContain("nothing stored for this chat yet")
@@ -507,7 +507,7 @@ describe("a messenger whose history is read from the store", () => {
     const { code, stderr } = await call(["review", "chat:Zoe", "--json"], env, connect, "store")
 
     expect(code).not.toBe(0)
-    expect(stderr).toContain("nothing stored for this chat yet — keep `chat serve` running")
+    expect(stderr).toContain("nothing stored for this chat yet — keep `chat default serve` running")
     expect(connects).toEqual([])
   })
 
@@ -520,7 +520,7 @@ describe("a messenger whose history is read from the store", () => {
     const served = await call(["messages", "list", "Book", "--json"], env, connect, "store")
 
     expect(alone.stderr).toContain(
-      'no `chat serve` keeps profile "default" up to date — the newest stored message is from 2026-09-27T10:02:00.000Z',
+      'no `chat default serve` keeps profile "default" up to date — the newest stored message is from 2026-09-27T10:02:00.000Z',
     )
     expect(JSON.parse(alone.stdout).items).toHaveLength(3)
     expect(served.stderr).toBe("")

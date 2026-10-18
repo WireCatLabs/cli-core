@@ -13,6 +13,7 @@ import { DEFAULT_TEXT_MODEL, textModel, vectorModelKey } from "../embeddings/mod
 import { remoteKey } from "../embeddings/remote.js"
 import { CONTEXT_MESSAGES, CONTEXT_MINUTES } from "../images/context/index.js"
 import { registeredImageProviders } from "../images/registry.js"
+import { typedCommand } from "../runs/scope.js"
 import type { StoredReadiness } from "../store/store.js"
 import { type Built, conversationsService } from "./conversations.js"
 import type { ServiceDeps } from "./deps.js"
@@ -30,15 +31,19 @@ const PER_REQUEST = 256
 const CHARS_PER_TOKEN_AT_LEAST = 3
 
 const notDownloaded = (deps: ServiceDeps, id: string) =>
-  new CliError("not_found", `${id} is not downloaded — \`${deps.messenger.app.command} models text download ${id}\``, {
-    reason: "model.not-downloaded",
-    model: id,
-  })
+  new CliError(
+    "not_found",
+    `${id} is not downloaded — \`${typedCommand(deps.messenger.app.command, `models text download ${id}`)}\``,
+    {
+      reason: "model.not-downloaded",
+      model: id,
+    },
+  )
 
 export const notBuiltError = (deps: ServiceDeps, chatId: Id) =>
   new CliError(
     "not_found",
-    `chat ${chatId} has no conversations yet — \`${deps.messenger.app.command} conversations build --chat ${chatId}\``,
+    `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations build --chat ${chatId}`)}\``,
   )
 
 export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT_TEXT_MODEL) => {

@@ -574,7 +574,7 @@ const warnUnserved = async (
     .map((one) => one.newestAt)
     .reduce<string | null>((latest, at) => (at !== null && (latest === null || at > latest) ? at : latest), null)
   renderer.warn(
-    `no \`${messenger.app.command} serve\` keeps profile "${profile}" up to date — ` +
+    `no \`${messenger.app.command} ${profile} serve\` keeps profile "${profile}" up to date — ` +
       (newest === null ? "the local store holds no messages yet" : `the newest stored message is from ${newest}`),
   )
 }

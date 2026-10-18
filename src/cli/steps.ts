@@ -8,6 +8,7 @@ import {
   writes,
 } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import { typedCommand } from "../runs/scope.js"
 import { judgedTargets } from "./effects.js"
 
 /**
@@ -220,6 +221,13 @@ export const nextStep = (id: string, input: StepInput): NextStep => {
   if (!definition) throw new Error(`no step "${id}"`)
   const args = Object.fromEntries(Object.entries(input.args ?? {}).filter(([, value]) => value !== undefined))
   return stepOf(definition, { ...input, args })
+}
+
+/** `typedCommand` with the profile this command line named, else the run's. */
+export const lineOf = (command: Command, words: string): string => {
+  const root = rootOf(command)
+  const profile: unknown = root.getOptionValue("profile")
+  return typedCommand(root.name(), words, typeof profile === "string" && profile !== "" ? profile : undefined)
 }
 
 export const rootOf = (command: Command): Command => {

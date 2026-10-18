@@ -2340,7 +2340,7 @@ describe("the photo tool", () => {
 
     for (const refused of [voice, large, unsized, unknown]) {
       expect(refused.isError).toBe(true)
-      expect(refused.content[0]?.text).toContain("chat messages download 7 1")
+      expect(refused.content[0]?.text).toContain("chat default messages download 7 1")
     }
   })
 
@@ -2422,7 +2422,7 @@ describe("the transcribe tool", () => {
     const { isError, body } = await (await connect()).call("messages transcribe", { chat: "7", message: "5" })
 
     expect(isError).toBe(true)
-    expect(body.error.message).toContain("chat models audio download parakeet-v3")
+    expect(body.error.message).toContain("chat default models audio download parakeet-v3")
   })
 })
 

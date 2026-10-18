@@ -17,7 +17,7 @@ import { destroysNothing, FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
-import { nextStep } from "../steps.js"
+import { lineOf, nextStep } from "../steps.js"
 import {
   finishJob,
   type Job,
@@ -120,7 +120,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         throw new CliError(
           "validation_error",
           `--all walks the messenger's chat list, and ${messenger.name ?? messenger.app.command} pushes its chats ` +
-            `instead — keep \`${messenger.app.command} serve\` running${messenger.historyOnDemand ? ", or name one chat" : ""}`,
+            `instead — keep \`${lineOf(this, "serve")}\` running${messenger.historyOnDemand ? ", or name one chat" : ""}`,
         )
       }
       if (since !== undefined && last !== undefined) {
@@ -161,7 +161,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         renderAnswer(this, context, itemOf(snakeKeys(answer)))
         if (answer.missing === null) {
           context.renderer.note(
-            `nothing held of this chat to measure by — \`${messenger.app.command} messages sync ${chat} --limit ${pageSize}\` gives the estimate something to go on`,
+            `nothing held of this chat to measure by — \`${lineOf(this, `messages sync ${chat} --limit ${pageSize}`)}\` gives the estimate something to go on`,
           )
         } else if (answer.missing > 0) context.renderer.note("an estimate: provider waits (FloodWait) come on top")
         return
@@ -249,12 +249,12 @@ export const syncCommand = (messenger: Messenger): Command => {
         if (tasks?.held)
           context.renderer.note(
             `the first sync left ${tasks.held} possible task(s) in ${tasks.heldChats ?? 0} chat(s) unopened ` +
-              `(config task_first_pass_per_chat) — ask the owner, then \`${messenger.app.command} tasks scan <chat>\``,
+              `(config task_first_pass_per_chat) — ask the owner, then \`${lineOf(this, "tasks scan <chat>")}\``,
           )
         if (toReview > 0)
           context.renderer.note(
             `${shown} mention${toReview === 1 ? "" : "s"} found since the last review — ` +
-              `\`${messenger.app.command} mentions list --new\``,
+              `\`${lineOf(this, "mentions list --new")}\``,
           )
       } catch (error) {
         if (jobId) {
@@ -475,7 +475,7 @@ const launchJob = (
   if (running) {
     throw new CliError(
       "validation_error",
-      `job ${running.id} is already fetching ${chat} (PID ${running.pid}) — \`${app.command} store jobs show ${running.id}\``,
+      `job ${running.id} is already fetching ${chat} (PID ${running.pid}) — \`${app.command} ${context.profile} store jobs show ${running.id}\``,
     )
   }
   const now = new Date()

@@ -43,7 +43,7 @@ import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
-import { commandAt, withLines } from "./steps.js"
+import { commandAt, lineOf, withLines } from "./steps.js"
 
 export interface ProgramDefinition {
   app: AppIdentity
@@ -413,7 +413,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     }
     // Not inside the scheduled run itself: its own failure is already on its way to last.json.
     if (!flags.quiet && commandEnv[envName(definition.app, "SCHEDULED")] === undefined && path[0] !== "schedule") {
-      const notice = failingNoticeFor(definition.app, commandEnv)
+      const notice = failingNoticeFor(definition.app, commandEnv, program)
       if (notice) streams.diagnostic(notice)
     }
     await definition.prepare?.(program, environment)
@@ -534,10 +534,10 @@ const quietBrokenPipes = () => {
     })
 }
 
-const failingNoticeFor = (app: AppIdentity, env: NodeJS.ProcessEnv) => {
+const failingNoticeFor = (app: AppIdentity, env: NodeJS.ProcessEnv, program: Command) => {
   try {
     const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
-    return failingNotice(app.command, scheduledRuns(state), `${app.command} schedule list`)
+    return failingNotice(app.command, scheduledRuns(state), lineOf(program, "schedule list"))
   } catch {
     return undefined
   }

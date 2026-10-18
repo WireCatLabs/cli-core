@@ -12,7 +12,7 @@ import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { nextStep } from "../steps.js"
+import { lineOf, nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { privateFiles, withSqliteSidecars } from "./private-files.js"
@@ -67,7 +67,7 @@ const reportCommand = (messenger: Messenger): Command => {
     .description("what a problem report holds; writes nothing")
     .action(function (this: Command) {
       const output = outputFor(this)
-      const create = `${app.command} doctor report create`
+      const create = lineOf(this, "doctor report create")
       renderAnswer(
         this,
         output,
@@ -85,7 +85,7 @@ const reportCommand = (messenger: Messenger): Command => {
             `It never holds: ${EXCLUDES.join(", ")}.`,
             "",
             `Create one:          ${create}`,
-            `About a given run:   ${create} --run <id>   (ids: ${app.command} runs list)`,
+            `About a given run:   ${create} --run <id>   (ids: ${lineOf(this, "runs list")})`,
           ].join("\n"),
       )
     })

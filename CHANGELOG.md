@@ -53,6 +53,11 @@ shape of this file.
 - **A command's own help settings survive the `<profile>` usage line.** `createProgram` replaced each command's help
   configuration when it set the usage line, so tg's `setup --help` lost its "Global Options" block
   (`showGlobalOptions`). It now adds the usage line to what the command set.
+- **Hints in errors and notes name the profile**: "the store is behind this build — `max personal store migrate`"
+  instead of `max store migrate`, which fails with "name a profile" when copied. Covers about 30 hints (store, runs,
+  schedules, sync, models, conversations, serve, MCP's photo and transcribe tools). `typedCommand(tool, words)`
+  (run scope) and `lineOf(command, words)` build them; a run's scope now carries its `profile`. Consumers' tests
+  that match these messages change on bump.
 
 ## 0.347.0 — 18.10.2026
 
