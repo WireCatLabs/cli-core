@@ -189,9 +189,12 @@ export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export {
   changesAuthority,
+  changesStore,
   FETCH,
   grantsAuthority,
   isLogin,
+  isOtherService,
+  isStoreChange,
   judgedEffects,
   judgedTargets,
   LOCAL_READ,
@@ -201,6 +204,7 @@ export {
   ownerOnlyOption,
   REMOTE_READ,
   REMOTE_WRITE,
+  reachesOtherService,
   refuseUnderReadOnly,
 } from "./effects.js"
 export {

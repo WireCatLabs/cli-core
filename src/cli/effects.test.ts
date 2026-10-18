@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
@@ -5,7 +8,14 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
-import { changesAuthority, judgedEffects, judgedTargets, logsInOrOut, refuseUnderReadOnly } from "./effects.js"
+import {
+  changesAuthority,
+  isStoreChange,
+  judgedEffects,
+  judgedTargets,
+  logsInOrOut,
+  refuseUnderReadOnly,
+} from "./effects.js"
 import { chatsCommand } from "./messenger/chats-command.js"
 import { createProgram, run } from "./program.js"
 import { commandAt } from "./steps.js"
@@ -87,12 +97,28 @@ describe("command effects", () => {
     )
   })
 
+  it("mark the store commands that replace, delete or rewrite the store for the read-only lock", () => {
+    const marked = commands.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)
+    expect(marked.sort()).toEqual(
+      [
+        "store clear",
+        "store copies delete",
+        "store decrypt",
+        "store migrate",
+        "store repair",
+        "store reset",
+        "store restore",
+      ].sort(),
+    )
+  })
+
   it("judge retry on the remote side, and keep a local-only write from running unasked", () => {
     expect(judgedEffects({ remote: "read", local: "write" })).toEqual({ remote: "read", local: "none" })
     expect(judgedEffects(undefined)).toBeUndefined()
     const targets = judgedTargets(program)
     expect(targets("messages sync")?.effects).toEqual({ remote: "read", local: "none" })
     expect(targets("messages send")?.effects).toEqual({ remote: "write", local: "none" })
+    expect(targets("conversations embed")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("server restart")?.effects).toEqual({ remote: "none", local: "write" })
   })
 })
@@ -161,6 +187,51 @@ describe("refuseUnderReadOnly", () => {
 
   it("refuses to guess whose lock it is outside run()", () => {
     expect(() => refuseUnderReadOnly(new Command("end"), "unlink the device")).toThrow(/inside run\(\)/)
+  })
+})
+
+describe("the read-only lock on the message store", () => {
+  const root = mkdtempSync(join(tmpdir(), "read-only-store-"))
+  const kept = (name: string) => {
+    const path = join(root, name)
+    writeFileSync(path, "kept")
+    return path
+  }
+  const locked = async (argv: string[], store: string) => {
+    const streams = captureStreams()
+    const code = await run([...argv, "--json"], sharedProgram, {
+      streams,
+      tty: false,
+      env: { ...process.env, CHAT_READ_ONLY: "1", MESSAGING_STORE: store },
+    })
+    const error = JSON.parse(streams.stderr.find((line) => line.startsWith("{")) ?? "{}").error
+    return { code, error }
+  }
+
+  it.each([
+    ["reset", ["store", "reset", "--yes"]],
+    ["restore", ["store", "restore", "BACKUP"]],
+    ["clear", ["store", "clear", "--left", "--allow-dangerous"]],
+    ["migrate", ["store", "migrate"]],
+    ["repair", ["store", "repair"]],
+    ["copies delete", ["store", "copies", "delete", "old_messages"]],
+    ["decrypt", ["store", "decrypt", "BACKUP", "--output", "OUT"]],
+  ])("refuses store %s and leaves the store file as it was", async (name, argv) => {
+    const store = kept(`${name}.db`)
+    const backup = kept(`${name}.backup`)
+    const output = join(root, `${name}.out`)
+    const words = argv.map((word) => (word === "BACKUP" ? backup : word === "OUT" ? output : word))
+
+    const { code, error } = await locked(["ro", ...words], store)
+
+    expect([code, error.code]).toEqual([5, "permission_error"])
+    expect(error.message).toBe("this process is read-only (CHAT_READ_ONLY) — it cannot change the message store")
+    expect(readFileSync(store, "utf8")).toBe("kept")
+    expect(existsSync(output)).toBe(false)
+  })
+
+  it("still previews store repair with --dry-run", async () => {
+    expect((await locked(["ro", "store", "repair", "--dry-run"], join(root, "preview.db"))).code).toBe(0)
   })
 })
 

@@ -7,7 +7,7 @@ import { alive } from "../background/processes.js"
 import { RELAY_PROTOCOL } from "../background/relay.js"
 import type { AppIdentity } from "../ports/app.js"
 import { commandPathOf } from "./command-contract.js"
-import { isLogin } from "./effects.js"
+import { isLogin, isOtherService } from "./effects.js"
 
 /** Not through serve: serve itself, its unit, and what has no messenger profile. */
 const LOCAL_ROOTS = new Set(["serve", "server", "bot"])
@@ -30,7 +30,13 @@ export const relayTarget = (
   env: NodeJS.ProcessEnv,
 ): RelayTarget | undefined => {
   const { effects, lifetime } = metaOf(action)
-  if (effects === undefined || effects.remote === "none" || lifetime === "interactive" || isLogin(action))
+  if (
+    effects === undefined ||
+    effects.remote === "none" ||
+    lifetime === "interactive" ||
+    isLogin(action) ||
+    isOtherService(action)
+  )
     return undefined
   const path = commandPathOf(action)
   if (LOCAL_ROOTS.has(path[0] ?? "") || flags.offline === true) return undefined

@@ -43,7 +43,7 @@ import {
   stemsState,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { changesStore, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { answerOf } from "./ask.js"
@@ -138,7 +138,7 @@ const refuseWhileServing = (command: Command, messenger: Messenger) => {
 }
 
 const repairCommand = (messenger: Messenger): Command =>
-  annotate(new Command("repair"), { effects: LOCAL_WRITE, mcp: false })
+  changesStore(annotate(new Command("repair"), { effects: LOCAL_WRITE, mcp: false }))
     .description(
       "bring every table to this build's shape, deleting nothing: a table of the wrong shape is kept as a copy beside a new one",
     )
@@ -189,7 +189,7 @@ const notesOf = (report: RepairReport, command: string): string[] => {
 
 const copiesCommand = (): Command =>
   new Command("copies").description("the tables `store repair` kept as copies").addCommand(
-    annotate(new Command("delete"), { effects: LOCAL_WRITE, mcp: false })
+    changesStore(annotate(new Command("delete"), { effects: LOCAL_WRITE, mcp: false }))
       .description("delete one copy `store repair` kept, named exactly; refuses any other table")
       .argument("<name>", "the copy's name, as `store repair` printed it")
       .action(async function (this: Command, name: string) {
@@ -425,7 +425,7 @@ const chatsBehind = (database: CacheDatabase) =>
     }))
 
 const migrateCommand = (messenger: Messenger): Command =>
-  annotate(new Command("migrate"), { effects: LOCAL_WRITE, mcp: false })
+  changesStore(annotate(new Command("migrate"), { effects: LOCAL_WRITE, mcp: false }))
     .description(
       "bring the store up to this build's schema, then normalize, index and stem the messages and notes stored before it",
     )
@@ -591,7 +591,7 @@ const backupCommand = (): Command =>
 
 /** The only way back into a sealed file: the format is this tool's own. */
 const decryptCommand = (): Command =>
-  annotate(new Command("decrypt"), { effects: LOCAL_WRITE, mcp: false })
+  changesStore(annotate(new Command("decrypt"), { effects: LOCAL_WRITE, mcp: false }))
     .description("open a file written with --encrypt into a new file; asks for its password")
     .argument("<file>", "a file `store backup --encrypt` or `store export --encrypt` wrote")
     .requiredOption("--output <file>", "the new file, readable only by you")
@@ -612,7 +612,7 @@ const decryptCommand = (): Command =>
  * `serve` runs: that opens the store on its first write, so until then it holds nothing to see.
  */
 const restoreCommand = (messenger: Messenger): Command =>
-  annotate(new Command("restore"), { effects: LOCAL_WRITE, mcp: false })
+  changesStore(annotate(new Command("restore"), { effects: LOCAL_WRITE, mcp: false }))
     .description("put a backup in place of the store; the store it replaces is kept beside it, never deleted")
     .argument("<file>", "a file `store backup` wrote; one written with --encrypt asks for its password")
     .action(async function (this: Command, file: string) {
@@ -734,7 +734,7 @@ const quiesce = async (path: string, messenger: Messenger, then: string, warn: (
  * schema. The backup is made before anything is deleted, and its path is said before the delete.
  */
 const resetCommand = (messenger: Messenger): Command =>
-  annotate(new Command("reset"), { effects: LOCAL_WRITE, mcp: false })
+  changesStore(annotate(new Command("reset"), { effects: LOCAL_WRITE, mcp: false }))
     .description(
       "back the store up beside itself, then delete it and start an empty one at this build's schema; asks first, or --yes",
     )
