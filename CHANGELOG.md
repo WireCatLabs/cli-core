@@ -19,7 +19,7 @@ shape of this file.
   mode `0600`, renamed over the path, never chmodded afterwards). On a terminal too narrow for the code it draws
   nothing and says to widen the terminal or pass `--qr-file`; it opens nothing. `close()` removes the image.
   `qrNeedsTerminal(command)` is the shared refusal when nobody could scan, and `atTerminal(input)` the shared test.
-  `parity.json` now expects `--qr-file` on `session start` and `setup` in all three CLIs, max included.
+  `parity.json` plans `--qr-file` on `session start` and `setup` for max, beside tg and wa.
 
 ### Changed — may break callers
 

@@ -4045,7 +4045,12 @@
           "in": ["tg"],
           "reason": "Telegram asks each client for its own app from my.telegram.org; MAX has no such step; WhatsApp has no application registration"
         },
-        "--qr-file": "all",
+        "--qr-file": {
+          "in": ["tg", "wa"],
+          "planned": {
+            "max": "max-cli#736, on the cli-core release that exports loginQr"
+          }
+        },
         "--sms": {
           "in": ["tg"],
           "reason": "asks Telegram to resend its login code by SMS; MAX has no such choice; WhatsApp links a device by QR or pairing code, never by an SMS code"
@@ -4061,7 +4066,12 @@
           "reason": "Telegram requires an application from my.telegram.org; MAX has no application registration step; WhatsApp has no application registration"
         },
         "--method": "all",
-        "--qr-file": "all"
+        "--qr-file": {
+          "in": ["tg", "wa"],
+          "planned": {
+            "max": "max-cli#736, on the cli-core release that exports loginQr"
+          }
+        }
       }
     },
     "skill": {
