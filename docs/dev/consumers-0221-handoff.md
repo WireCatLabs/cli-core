@@ -14,7 +14,7 @@ and cli-base only).
 ## 2. Orient in one call
 
 ```sh
-{ A=/home/leemour/Projects/AI
+{ A=~/Projects/AI
   echo "== waiting lint fixes"; for r in tg-cli max-cli cli-memo cli-tasks community; do w=$A/$r/.worktrees/lint-from-worktrees
     echo "-- $r: $(git -C $w branch --show-current) upstream=$(git -C $w rev-parse --abbrev-ref @{u} 2>/dev/null)"; git -C $w diff --stat; done
   echo "== the script that writes the bad pattern"; sed -n '52,60p' $A/community/.worktrees/lint-from-worktrees/scripts/adopt-standards.py

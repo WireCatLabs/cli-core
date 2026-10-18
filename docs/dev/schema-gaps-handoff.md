@@ -14,7 +14,7 @@ while open).
 ## 2. Orient in one call
 
 ```sh
-{ M=/home/leemour/Projects/AI/cli-messaging; git -C $M fetch -q
+{ M=~/Projects/AI/cli-messaging; git -C $M fetch -q
   echo "== the sub-stores"; git -C $M show origin/main:src/store/store.ts | sed -n '586,604p'
   echo "== who calls each (outside tests)"
   for api in botUpdates decisions memories proposedActions 'agentActions.list'; do

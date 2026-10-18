@@ -19,15 +19,15 @@ the site pins tg v0.66.0 with the mentions page current (cli-docs#281, 2026-10-1
 ## 2. Orient in one call
 
 ```sh
-{ cd /home/leemour/Projects/AI/cli-messaging && git fetch -q origin
+{ cd ~/Projects/AI/cli-messaging && git fetch -q origin
   echo "== plan: phases";            git show origin/main:docs/dev/mentions-plan.md | sed -n '229,256p'
   echo "== MENTIONS: flow, review";  git show origin/main:docs/dev/MENTIONS.md | sed -n '48,80p;119,128p;145,154p'
   echo "== writer: original, sources"; git show origin/main:src/store/sqlite/mention-drain.ts | sed -n '43,72p;108,151p'
   echo "== memo's store reads";      git show origin/main:src/store/sqlite/mention-sources.ts | sed -n '20,58p'
   echo "== service: domains, list";  git show origin/main:src/services/mentions.ts | sed -n '77,125p'
   echo "== versions"; for p in cli-core tg-cli max-cli cli-memo; do echo "$p $(npm view @wirecat/$p version 2>/dev/null)"; done
-  git -C /home/leemour/Projects/AI/cli-docs fetch -q origin
-  git -C /home/leemour/Projects/AI/cli-docs show origin/main:tools.json | grep -E '"name"|"docsRef"'
+  git -C ~/Projects/AI/cli-docs fetch -q origin
+  git -C ~/Projects/AI/cli-docs show origin/main:tools.json | grep -E '"name"|"docsRef"'
 } > ~/.cache/mentions-next-orient.txt 2>&1
 ```
 

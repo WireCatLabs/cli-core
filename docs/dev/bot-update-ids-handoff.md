@@ -11,7 +11,7 @@ in tg-cli, after the cli-core release that carries `BotEvent.update`.
 ## 2. Orient in one call
 
 ```sh
-{ T=/home/leemour/Projects/AI/tg-cli
+{ T=~/Projects/AI/tg-cli
   echo "== toEvent"; grep -n "export const toEvent" -A40 $T/src/bot/map.ts
   echo "== callers"; grep -rn "toEvent(" $T/src | grep -v test
   echo "== messaging version"; grep -n "cli-core" $T/package.json

@@ -14,6 +14,11 @@ shape of this file.
   are enabled. The consolidation guide records the old-reader/writer compatibility and provenance
   requirements that must be met before applying a merge.
 
+### Fixed
+
+- The README no longer says macOS and Windows run on a schedule as if the whole suite did. It names what
+  runs there: a monthly SQLite and ONNX build and probe, and the `schedule` timers when started by hand.
+
 ## 0.342.0 — 18.10.2026
 
 ### Changed — may break callers

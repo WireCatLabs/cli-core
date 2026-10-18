@@ -2,10 +2,10 @@
 
 ## 1. What this is
 
-cli-memo (`/home/leemour/Projects/AI/cli-memo`, `WireCatLabs/cli-memo`) imports mail through Himalaya and stores
+cli-memo (`~/Projects/AI/cli-memo`, `WireCatLabs/cli-memo`) imports mail through Himalaya and stores
 every email as an ordinary message of an `email` account: a thread is a chat, an attachment's text is a fake
 message, and folders and coverage live in sync-state keys. This package
-(`/home/leemour/Projects/AI/cli-messaging`) has dedicated mail tables (`email_threads`, `emails`,
+(`~/Projects/AI/cli-messaging`) has dedicated mail tables (`email_threads`, `emails`,
 `email_recipients`, `mailboxes`, `email_mailboxes`) behind `store.mail`, which nobody calls yet. Goal: memo
 writes mail through `store.mail`, and every memo feature that reads mail (search, context, answers, tags,
 knowledge) reads it from there. The owner decided this on 2026-10-11; old mail comes back by importing again,
@@ -14,7 +14,7 @@ nothing is migrated.
 ## 2. Orient in one call
 
 ```sh
-{ M=/home/leemour/Projects/AI/cli-messaging; E=/home/leemour/Projects/AI/cli-memo
+{ M=~/Projects/AI/cli-messaging; E=~/Projects/AI/cli-memo
   git -C $M fetch -q; git -C $E fetch -q
   echo "== versions"; npm view @wirecat/cli-core version; git -C $E show origin/main:package.json | grep -E '"version"|cli-core"'
   echo "== store.mail: input, filter, API"; git -C $M show origin/main:src/store/sqlite/emails.ts | sed -n '20,50p;120,145p'

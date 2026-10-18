@@ -12,7 +12,7 @@ pull request in cli-core (store side, if needed) and one in cli-memo (commands a
 ## 2. Orient in one call
 
 ```sh
-{ M=/home/leemour/Projects/AI/cli-messaging C=/home/leemour/Projects/AI/cli-memo T=/home/leemour/Projects/AI/cli-tasks
+{ M=~/Projects/AI/cli-messaging C=~/Projects/AI/cli-memo T=~/Projects/AI/cli-tasks
   for r in $M $C $T; do git -C $r fetch -q; done
   echo "== decisions store"; git -C $M show origin/main:src/store/sqlite/decisions.ts | sed -n '10,50p'
   echo "== store exports"; git -C $M show origin/main:src/store/index.ts | grep -n 'decisions.js\|memories.js\|proposed-actions.js'

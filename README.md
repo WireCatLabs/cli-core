@@ -206,9 +206,10 @@ they deliberately differ. A rule changes in its own pull request, before the cod
   sleep. A coverage floor: 92% of lines, and at least half of every file.
 - **Contract cases for every adapter.** `contractCases` turns the port's promises into cases any test runner can run,
   over an in-memory fake or a real client.
-- **Checked across tools and runtimes.** CI runs on Node 24 and on Bun; a parity workflow
-  builds tg-cli and max-cli against this repository; macOS and Windows run on a schedule; gitleaks scans the full
-  history.
+- **Checked across tools and runtimes.** CI runs on Linux, on Node 24 and on Bun; a parity workflow
+  builds tg-cli and max-cli against this repository; gitleaks scans the full history. The unit suite does not run on
+  macOS or Windows. Once a month the bundled SQLite is built and probed on macOS, and the ONNX runtime on macOS and
+  Windows; the `schedule` timers run on both only when started by hand.
 - **One shared toolchain.** Biome, markdownlint, CSpell and Lefthook configs come from the
   [WireCat standards](https://github.com/WireCatLabs/community/blob/main/standards/README.md), and CI fails when a
   copy drifts.
