@@ -930,6 +930,7 @@ describe("the shared read commands", () => {
     expect([pinned.code, odd.code, over.code, telegram.code]).toEqual([0, 2, 8, 2])
     expect(odd.stderr.join("")).toContain("--expire-time takes 24h, 7d or 30d from now")
     expect(help.stdout.join("")).toContain("its members are told")
+    expect(help.stdout.join("")).toContain("--expire-time <time>  the pin ends by itself then: 24h, 7d or 30d from now")
     expect(pins).toEqual([["7", "3", { notify: true, duration: 86_400 }]])
   })
 
