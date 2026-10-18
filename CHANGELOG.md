@@ -16,6 +16,12 @@ shape of this file.
 
 ### Fixed
 
+- Tag-consolidation preview budget refusals retain their registered reason and affected table in
+  standard CLI/MCP errors.
+- Native `store.tags.removeTags` resolves explicit aliases just as additions do. Removing a tag by
+  its alias preserves account boundaries and manual/automatic claim behavior; competing legacy
+  aliases refuse the whole transaction instead of selecting a label.
+
 - **The commands page no longer calls the embedding, analysis and model-download commands a change in the
   messenger.** `conversations embed`, `conversations build`, `search conversations` and the model downloads say
   `reaches: "other_service"` in `commands --json`, so a CLI's generated `docs/commands.md` labels them "Sends text to

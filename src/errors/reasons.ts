@@ -73,6 +73,7 @@ const OTHERS: Entry[] = [
   ["upgrade.install-failed", "provider_error", "the installer failed; the old version stays"],
   ["topic.owner-only", "permission_error", "only the owner may use this topic"],
   ["vocabulary.alias-conflict", "configuration_error", "two vocabulary entries claim one alias"],
+  validation("vocabulary.consolidation-over-budget", "the selected tag dependencies exceed the preview budget"),
   validation("vocabulary.over-byte-budget", "the vocabulary is over its size budget"),
   validation("vocabulary.over-entry-budget", "the vocabulary has too many entries"),
   ["vocabulary.stale", "configuration_error", "the vocabulary changed meanwhile"],
@@ -81,7 +82,12 @@ const OTHERS: Entry[] = [
 /** Every reason this package raises; cli-base's own are known to the handler already. */
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
-  ...[...QUERY, ...OTHERS].map(([reason, code, message]) => ({ reason, code, message, details: [] })),
+  ...[...QUERY, ...OTHERS].map(([reason, code, message]) => ({
+    reason,
+    code,
+    message,
+    details: reason === "vocabulary.consolidation-over-budget" ? ["table"] : [],
+  })),
 ])
 
 /**
