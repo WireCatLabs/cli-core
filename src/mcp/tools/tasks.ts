@@ -118,6 +118,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_add: tool({
+      changesStore: true,
       title: "Add a task",
       description:
         'Adds a task for a message the rules cannot see — "I\'ll send it tomorrow" has no question mark. `message` ' +
@@ -160,6 +161,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_close: tool({
+      changesStore: true,
       title: "Close a task",
       description:
         "Closes a task as done, or as dismissed when it needs no answer; `reason` is kept with it. State your " +
@@ -197,6 +199,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_plan: tool({
+      changesStore: true,
       title: "Plan a task",
       description:
         "Sets a task's title, description, due date, category and remind_time — when you should look at it again " +
@@ -213,6 +216,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_link: tool({
+      changesStore: true,
       title: "Link a task",
       description:
         "Links a task to what it concerns, so the next look starts from there: msg: locators, chats, person:<id>, " +
@@ -298,6 +302,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_duplicates_reject: tool({
+      changesStore: true,
       title: "Not the same job",
       description:
         "Records that two tasks are different jobs: the pair leaves the review list and is never offered again. " +
@@ -313,6 +318,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_duplicates_defer: tool({
+      changesStore: true,
       title: "Leave a pair to the owner",
       description:
         "Marks a pair the fields and the text cannot decide — a gift for mum or for dad — so the owner decides it; " +
@@ -329,6 +335,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_merge: tool({
+      changesStore: true,
       title: "Merge a duplicate task",
       description:
         "One job seen twice: links every message of `dup` to `into`, closes `dup` dismissed with a duplicate-of " +
@@ -345,6 +352,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_unmerge: tool({
+      changesStore: true,
       title: "Undo a merge",
       description:
         "Reopens a merged task and removes its duplicate-of relation; the messages the merge linked stay linked. " +
@@ -377,6 +385,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_scan: tool({
+      changesStore: true,
       title: "Build tasks from a chat's history",
       description:
         "The task rules over a chat's newest stored messages: a question nobody answered and a mention of the owner " +
@@ -411,6 +420,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_claim: tool({
+      changesStore: true,
       title: "Claim a task",
       description:
         "Takes an open task so no other agent works it at once; the claim lapses by itself (default 30m), and " +
@@ -436,6 +446,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tasks_release: tool({
+      changesStore: true,
       title: "Release a task",
       description:
         "Gives back a task you claimed, before the claim lapses; only its holder or the owner may. Writes only to " +

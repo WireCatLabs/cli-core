@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { TAGGING_QUERY, type TaggingItem, type TagTargetInput, type TagTargetView } from "../../services/tags.js"
-import { changesStore, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -83,7 +83,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
   })
 
   targetOptions(
-    changesStore(annotate(tags.command("remove"), { effects: LOCAL_WRITE })).description(
+    annotate(tags.command("remove"), { effects: LOCAL_WRITE }).description(
       "take tags off one chat, person, message or task",
     ),
     messenger,

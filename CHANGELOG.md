@@ -67,7 +67,7 @@ shape of this file.
 - **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
   `searches clear`, `contacts notes edit`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse
   with `permission_error`, and so do their MCP tools, which deleted or overwrote under the lock before. Clearing what
-  the store can rebuild (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
+  the store can rebuild (`store jobs clear`, `conversations embed clear`) still works.
 - **The read-only lock also stops saving a search or an alias.** With `<PREFIX>_READ_ONLY` set, `searches create`
   and `contacts alias set` refuse with `permission_error`, and so do their MCP tools. Before, they could write over a
   saved search (`--replace`) or an alias the owner set.
@@ -87,6 +87,20 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **The read-only lock refuses every local write the owner keeps.** With `<PREFIX>_READ_ONLY` set, a command that
+  writes only on this machine answers `permission_error` unless it is marked as keeping no owner data. Newly
+  refused: `tags add`, `tags auto`, every `tasks` write (`add`, `plan`, `link`, `merge`, `unmerge`, `scan`, `claim`,
+  `release`, `close`, `reject`, `duplicates reject`, `duplicates defer`), `mentions confirm`, `mentions reject`,
+  `contacts notes add`, `contacts link`, `contacts unlink`, `attachments text set`, `chats tracking add`,
+  `chats tracking remove`, `conversations links add`, `conversations links clear` and `conversations consents
+  revoke`, and their MCP tools. An agent under the lock that tagged chats or added tasks now gets
+  `permission_error`. Still allowed: what the store rebuilds or what holds no owner data — `images embed`,
+  `mentions rebuild`, `conversations embed clear`, `store jobs cancel`, `store jobs retry`, `store jobs clear`,
+  `store backup`, `store reindex`, `store export`, `stats charts`, `doctor report create`, `server start`,
+  `server stop`, `server restart` — and every sync, fetch and `serve`, so receiving goes on. A new local write is
+  refused until it is marked. `changesStore` is gone from `./cli`; mark a command the lock may let through with
+  `keepsNoOwnerData(command)`. A CLI's own local write that holds no owner data (max-cli's `doctor report create`)
+  must be marked, or it is refused under the lock too.
 - **`conversations build` and `search conversations` say they can send text out.** `conversations build --analyze`
   sends chat text to the analysis provider, and `search conversations` sends the query to a remote embedding
   provider. `conversations build` is now declared as a write to an outside service (`{ remote: "write" }`) and

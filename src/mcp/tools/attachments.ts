@@ -203,6 +203,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
     }),
 
     attachments_text_set: tool({
+      changesStore: true,
       title: "Keep the text read from a file",
       description:
         "Keeps text you read from one file of a stored message — a scan, a photo, a PDF of pictures — in the local " +

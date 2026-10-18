@@ -99,7 +99,7 @@ interface Tool<S extends Input> {
   _meta?: Record<string, unknown>
   /** A write, and what the profile's `allow` must name for it to be offered. */
   permission?: Permission
-  /** Deletes or overwrites what the owner saved, as its command's `changesStore`: `<PREFIX>_READ_ONLY` refuses it. */
+  /** Writes what the owner keeps, as its command (`isStoreChange`): `<PREFIX>_READ_ONLY` refuses it. */
   changesStore?: true
   /** The CLI command it answers as, where its name does not spell it: `chats send-as`. Its level is read from it. */
   command?: string

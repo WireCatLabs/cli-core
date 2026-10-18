@@ -1535,7 +1535,7 @@ describe("the MCP server", () => {
     }
   })
 
-  it("under the read-only lock refuses the tools that write over or delete what the owner saved, and changes nothing", async () => {
+  it("under the read-only lock refuses the tools that write what the owner keeps, and changes nothing", async () => {
     const root = mkdtempSync(join(tmpdir(), "mcp-"))
     const unlocked = await connect(scripted(), { root })
     await unlocked.call("chats list")
@@ -1553,6 +1553,9 @@ describe("the MCP server", () => {
       ["tags remove", { chat: "7", tags: ["work"] }],
       ["searches create", { name: "daily", text: "dog", replace: true }],
       ["contacts alias set", { person: "Alice", alias: "Al" }],
+      ["tags add", { chat: "7", tags: ["work"] }],
+      ["contacts notes add", { person: "Alice", text: "met at the fair" }],
+      ["tasks close", { task: "1", as: "done", certainty: 1 }],
     ] as const) {
       const { isError, body } = await call(command, args)
       expect([command, isError, body.error?.code, body.error?.message]).toEqual([

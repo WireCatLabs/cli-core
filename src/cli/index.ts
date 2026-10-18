@@ -193,7 +193,6 @@ export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export {
   changesAuthority,
-  changesStore,
   FETCH,
   grantsAuthority,
   isLogin,
@@ -201,6 +200,7 @@ export {
   isStoreChange,
   judgedEffects,
   judgedTargets,
+  keepsNoOwnerData,
   LOCAL_READ,
   LOCAL_WRITE,
   logsInOrOut,

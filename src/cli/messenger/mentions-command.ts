@@ -5,7 +5,7 @@ import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
 import { authorOf } from "../author.js"
 import { environmentOf } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { keepsNoOwnerData, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList, queryHelp } from "../list-query.js"
 import { positiveCount, window } from "../paging.js"
@@ -192,10 +192,12 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(decided)))
     })
 
-  annotate(mentions.command("rebuild"), {
-    effects: LOCAL_WRITE,
-    examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild person-name`],
-  })
+  keepsNoOwnerData(
+    annotate(mentions.command("rebuild"), {
+      effects: LOCAL_WRITE,
+      examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild person-name`],
+    }),
+  )
     .description("find the mentions of every stored message again; decisions are kept")
     .addArgument(
       new Argument("[kind]", "only this kind: person-name after people were added or renamed").choices(MENTION_KINDS),
