@@ -404,6 +404,15 @@ describe("a profile whose writes are held", () => {
     )
   })
 
+  it.each(["messages.sync-first", "messages.server-search", "store.gaps.repair", "attachments.extract"])(
+    "**still lets %s read**, which asks the guard only for its level",
+    (key) => {
+      const { guard } = heldGuard("held-reads", { state: "banned", hint: "banned" })
+
+      expect(() => guard.check({ chatId: null, kind: "reaction", key }, { reserve: false })).not.toThrow()
+    },
+  )
+
   it("**a ban with no end holds until lifted**, and says so instead of a date", () => {
     const { guard } = heldGuard("banned", { state: "banned", hint: "WhatsApp banned this account" })
 

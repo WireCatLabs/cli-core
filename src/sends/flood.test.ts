@@ -1,4 +1,4 @@
-import { mkdtempSync, statSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -72,6 +72,14 @@ describe("flood memory", () => {
     expect(yearsLater.sendBlock()).toMatchObject({ state: "banned", until: null })
     yearsLater.unblock("banned")
     expect(yearsLater.sendBlock()).toBeUndefined()
+  })
+
+  it("**keeps a hold with no end as a date an older cli-core still holds to**", () => {
+    const memory = memoryAt("2026-10-04T10:00:00Z")
+    memory.block({ state: "banned", hint: "banned" })
+
+    const kept = JSON.parse(readFileSync(memory.path, "utf8")).sendBlock
+    expect(Date.parse(kept.until)).toBeGreaterThan(Date.parse("9000-01-01T00:00:00Z"))
   })
 
   it("a ban the messenger gave an end for ends then", () => {

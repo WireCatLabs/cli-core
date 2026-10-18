@@ -36,6 +36,11 @@ const MOST_DEADLINES = 50
  */
 export const LIMITED_HOLD_MS = 60 * 60 * 1000
 export const FROZEN_HOLD_MS = 24 * 60 * 60 * 1000
+/**
+ * How a hold with no end is kept on disk: a cli-core before `until: null` reads a date it has not reached and keeps
+ * holding, where `null` would read as over and let a banned account write.
+ */
+const NO_END = "9999-12-31T23:59:59.999Z"
 
 /** "until 2026-…", or "until lifted" for a hold with no known end. */
 export const holdEnd = (block: Pick<SendBlock, "until">, show: (iso: string) => string = (iso) => iso): string =>
@@ -69,7 +74,7 @@ export class FloodMemory {
     const deadlines = Array.isArray(raw.deadlines)
       ? raw.deadlines.filter((one) => typeof one?.operation === "string" && alive(one.until))
       : []
-    const block = raw.sendBlock
+    const block = raw.sendBlock && (raw.sendBlock.until === NO_END ? { ...raw.sendBlock, until: null } : raw.sendBlock)
     const held = block && (block.until === null || alive(block.until))
     return { deadlines, ...(held ? { sendBlock: block } : {}) }
   }
@@ -121,7 +126,8 @@ export class FloodMemory {
     return cleared
   }
 
-  #write(state: FloodState): void {
+  #write({ sendBlock, ...rest }: FloodState): void {
+    const state = sendBlock ? { ...rest, sendBlock: { ...sendBlock, until: sendBlock.until ?? NO_END } } : rest
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
     const temporary = `${this.path}.${process.pid}.tmp`
     writeFileSync(temporary, `${JSON.stringify(state)}\n`, { mode: 0o600 })

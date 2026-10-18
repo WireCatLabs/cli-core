@@ -16,6 +16,23 @@ import { RecipientList, recipientsPathFor } from "./recipients.js"
 
 const HOUR_MS = 60 * 60 * 1000
 
+/**
+ * Asked of the guard for their permission level, yet they only read from the messenger or work here: reads go on
+ * during a hold.
+ */
+const READS_UNDER_HOLD = new Set<PermissionKey>([
+  "attachments.extract",
+  "conversations.embed",
+  "conversations.links",
+  "messages.server-search",
+  "messages.sync-first",
+  "stats.contacts.top.sync-first",
+  "stats.messages.counters.refresh",
+  "stats.messages.show.sync-first",
+  "stats.messages.top.sync-first",
+  "store.gaps.repair",
+])
+
 /** One write, as the guard is asked about it. `personIds` are checked and never journaled. */
 export interface GuardRequest {
   /** `null` for a chat that does not exist yet — joining or creating one — or for the account itself: no list can name either. */
@@ -142,7 +159,8 @@ export const sendGuard = ({
   }
 
   // Every write, counted or not: a reaction or a read receipt sent through a ban is what makes the ban stick.
-  const refuseHeld = () => {
+  const refuseHeld = ({ key }: GuardRequest) => {
+    if (key !== undefined && READS_UNDER_HOLD.has(key)) return
     const block = flood?.sendBlock()
     if (!block) return
     throw new CliError(
@@ -264,14 +282,14 @@ export const sendGuard = ({
       if (levels === undefined) return
       const key = request.key ?? keyForWrite(request.kind ?? "message", request.action)
       if (levelFor(levels, key, permissionDefaults).level !== "ask") return
-      refuseHeld()
+      refuseHeld(request)
       await ask(key, request)
       answered.add(request)
     },
 
     check: (request, { reserve = true } = {}) => {
       permitted(request)
-      refuseHeld()
+      refuseHeld(request)
       const asked = { ...request, people: request.personIds?.length ?? request.count }
       const creatingTopic = request.kind === "chat" && request.action === "topic-create"
       if (!countsTowardLimit(asked) && !creatingTopic) return
