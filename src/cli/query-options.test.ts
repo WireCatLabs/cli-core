@@ -35,6 +35,17 @@ describe("a command that takes a query", () => {
     expect(error).toBe("unknown option '--limt' (Did you mean --limit?)")
   })
 
+  it("**prints its help for `--help`**, as a command without a query does", async () => {
+    const out: string[] = []
+    const list = queryWordsAfterOptions(new Command("list")).argument("[query...]").option("--limit <n>")
+    list.exitOverride().configureOutput({ writeOut: (text) => out.push(text) })
+
+    await expect(list.parseAsync(["kind:group", "--help"], { from: "user" })).rejects.toMatchObject({
+      code: "commander.helpDisplayed",
+    })
+    expect(out.join("")).toContain("Usage: list [options] [query...]")
+  })
+
   it("reads a negated term as query", async () => {
     expect((await call(["work", "chats", "list", "-kind:channel", "--limit", "5"])).query).toEqual(["-kind:channel"])
   })
