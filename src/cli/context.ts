@@ -63,7 +63,8 @@ export interface BaseEnvironment {
   /**
    * Set by `run()`: ends the phase `untilStopped()` began without aborting its signal — the command saw it finish.
    * However a phase ends, the steps after it get the command's one-shot deadline again, started afresh, and a signal
-   * or a cancel ends the command once more.
+   * or a cancel ends the command once more. Without `--timeout` that is the default 30 s, even for an interactive
+   * command, which has none while it waits on a person; a `persistent` command and a background fetch stay unbounded.
    */
   endUntilStopped?: () => void
 }

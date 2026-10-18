@@ -57,6 +57,11 @@ shape of this file.
 - **`chats admins add` keeps its summary within 80 characters where a messenger gives every right.** Without
   `--can` (`pickAdminRights: false`) the summary is "make a member an admin, with every right"; the rights are named
   in the description `--help` and `commands --json` show. wa's seven rights had pushed it to 88 (WC-CMD-22).
+- **An interactive command's steps after its `untilStopped()` phase have a deadline again.** At a terminal and
+  without `--timeout`, an interactive command (wa's `setup`, after the history a phone pushes) had no deadline once
+  its phase ended, so a dead connection hung it. The steps after the phase now get the default 30 s, the same as any
+  one-shot command; a headless interactive run gets 30 s there too, not its 5 minutes. An explicit `--timeout`, a
+  `persistent` command and a background fetch keep what they had (WC-LIFE-5).
 
 ## 0.339.0 — 18.10.2026
 

@@ -168,6 +168,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   // The deadline a person or a script set, which a phase keeps; the default one it ends.
   let explicitEnd: number | undefined
   let oneShot: number | undefined
+  // An interactive login has no deadline of its own, but once its phase ends nobody is answering any more.
+  let afterPhase: number | undefined
   let finished = false
   // The steps after a phase are one-shot again, however it ended: bounded, and ended by a signal as any command is.
   const endPhase = () => {
@@ -176,7 +178,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     if (phaseTimer) clearTimeout(phaseTimer)
     // A later phase keeps the --timeout the steps after this one got, not the one this phase already used up.
     if (explicitEnd !== undefined && oneShot !== undefined) explicitEnd = Date.now() + oneShot
-    control.start(oneShot)
+    control.start(afterPhase)
   }
   const interrupted = (signal: "SIGINT" | "SIGTERM") => {
     // A second signal ends the command as any signal does: one that ignores its phase can still be stopped.
@@ -364,6 +366,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     }
     control.start(deadline)
     oneShot = deadline
+    afterPhase = timeout !== undefined || persistent || job ? deadline : DEFAULT_COMMAND_MS
     if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
     if (options.relayed) absolutePaths(action, options.relayed.cwd)
     const cooperative = persistent || stopsAtItsPace === true
