@@ -507,18 +507,22 @@ export const connectedFor = async (
   }
 }
 
-const unrecorded = (command: Command, messenger: Messenger, profile: string): CliError => {
-  const tool = messenger.app.command
-  const setup = rootOf(command).commands.some((one) => one.name() === "setup")
-    ? `\`${tool} ${asFirstWord(profile)}setup\``
-    : undefined
+const unrecorded = (command: Command, messenger: Messenger, profile: string, offline: boolean): CliError => {
+  const words = `${messenger.app.command} ${asFirstWord(profile)}`
+  const setup = rootOf(command).commands.some((one) => one.name() === "setup") ? `\`${words}setup\`` : undefined
+  if (messenger.history === "store")
+    return new CliError(
+      "not_found",
+      `nothing recorded for profile "${profile}" yet — ${setup ? `link it with ${setup}, then ` : ""}run ` +
+        `\`${words}serve\` or \`${words}watch\` once to fill the local store`,
+    )
+  const ways = [
+    ...(setup ? [`log in with ${setup}`] : []),
+    ...(offline ? ["run the command once without --offline"] : []),
+  ]
   return new CliError(
     "not_found",
-    messenger.history === "store"
-      ? `nothing recorded for profile "${profile}" yet — ${setup ? `link it with ${setup}, then ` : ""}run ` +
-          `\`${tool} serve\` or \`${tool} watch\` once to fill the local store`
-      : `nothing recorded for profile "${profile}" yet — ${setup ? `log in with ${setup}, or ` : ""}run the ` +
-          "command once without --offline",
+    `nothing recorded for profile "${profile}" yet — ${ways.length > 0 ? ways.join(", or ") : "log in to it first"}`,
   )
 }
 
@@ -601,7 +605,7 @@ export const messengerContext = (
   const warn = (text: string) => base.renderer.warn(text)
   const accountFor = (): AccountKey => {
     const account = messenger.accountOf?.(command) ?? recalledAccount(app, provider, profile, base.env)
-    if (!account) throw unrecorded(command, messenger, profile)
+    if (!account) throw unrecorded(command, messenger, profile, base.settings.offline)
     return account
   }
   const guard =

@@ -94,7 +94,7 @@ describe("running a messenger CLI", () => {
 
     expect(code).toBe(2)
     expect(terminal.stdout).toEqual([])
-    expect(help).toContain("Usage: app chats")
+    expect(help).toContain("Usage: app <profile> chats")
     expect(help).toMatch(/^\s+list\b/m)
     expect(help).not.toContain("(outputHelp)")
   })
@@ -190,6 +190,25 @@ describe("running a messenger CLI", () => {
 
     expect(code).toBe(0)
     expect(stdout.join("\n")).toContain("list")
+  })
+
+  it("**says a mistyped command on one line**, with commander's suggestion", async () => {
+    const { stderr } = await call(["work", "chts"])
+
+    expect(JSON.parse(stderr[0] ?? "").error.message).toMatch(/^unknown command 'chts' \(Did you mean chats\?\) /)
+  })
+
+  it("**puts the profile in the usage line** of a profile's command, and not in one that reads none", async () => {
+    const commands = () => [new Command("chats").addCommand(new Command("list")), new Command("upgrade")]
+    const usage = async (argv: string[]) => {
+      const streams = captureStreams()
+      await run(argv, { app, commands }, { streams, tty: false, env: process.env })
+      return streams.stdout.join("\n").split("\n")[0]
+    }
+
+    expect(await usage(["work", "chats", "list", "--help"])).toBe("Usage: app <profile> chats list [options]")
+    expect(await usage(["upgrade", "--help"])).toBe("Usage: app upgrade [options]")
+    expect(await usage(["--help"])).toBe("Usage: app [profile] [options] <command>")
   })
 
   it("says which word was read as a profile when the command after it is unknown", async () => {

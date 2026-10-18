@@ -17,7 +17,10 @@ import { topicsSearchCommand } from "./topics-command.js"
 const onlyOf = (value: string): SourceSearched[] => {
   const chosen = value.split(",").map((one) => one.trim())
   if (chosen.includes("mail"))
-    throw new CliError("validation_error", "mail is memo's: install @wirecat/cli-memo, then `memo search mail …`")
+    throw new CliError(
+      "validation_error",
+      "mail is searched by the separate memo CLI: install @wirecat/cli-memo, then `memo search mail …`",
+    )
   const unknown = chosen.find((one) => !(SOURCE_SEARCHED as readonly string[]).includes(one))
   if (unknown !== undefined || chosen.length === 0)
     throw new CliError(
@@ -46,7 +49,7 @@ const allCommand = (messenger: Messenger): Command => {
         ? "search messenger messages and notes in the local store, and the messenger's server for messages " +
           "(--backend; notes are local only)"
         : "search messenger messages and notes in the local store") +
-        ", and a meeting account's transcripts when --source names one — best match first; not mail (memo search mail), " +
+        ", and a meeting account's transcripts when --source names one — best match first; not mail (the separate memo CLI searches it: memo search mail), " +
         "tasks, people, memories or projects. Use it when you do not know where something was written; search messages " +
         "or notes reads one kind with all its fields",
     )
@@ -221,7 +224,7 @@ const notesCommand = (messenger: Messenger): Command =>
  */
 export const searchCommand = (messenger: Messenger, { topics = false }: { topics?: boolean } = {}): Command => {
   const search = new Command("search").description(
-    "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; mail is memo search mail",
+    "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; for mail, the separate memo CLI: memo search mail",
   )
   search
     .addCommand(allCommand(messenger))

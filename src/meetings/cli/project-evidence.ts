@@ -6,6 +6,7 @@ import type { MeetingProjectDiscoveryReader } from "../project-discovery.js"
 import { readMeetingProjectEvidence } from "../project-evidence.js"
 import type { MeetingProjectEvidenceAnswer } from "../project-evidence-answer.js"
 import { MEETING_PROJECT_EVIDENCE_QUERY, type MeetingProjectEvidenceRequest } from "../project-evidence-query.js"
+import { queryWordsAfterOptions } from "./query-options.js"
 
 const integer = (value: string) => {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))
@@ -27,14 +28,15 @@ export const addMeetingProjectEvidenceCommand = (
     group.commands.find((command) => command.name() === "projects") ??
     group.command("projects").description("project-name evidence in stored meetings")
   return annotate(
-    projects
-      .command("evidence")
-      .description(
-        "find cited project-name and alias evidence in the local meeting index; does not refresh it or confirm membership",
-      )
+    queryWordsAfterOptions(
+      projects
+        .command("evidence")
+        .description(
+          "find cited project-name and alias evidence in the local meeting index; does not refresh it or confirm membership",
+        ),
+    )
       .argument("<project>", "existing project name, key or explicit alias")
       .argument("[query...]", "exact ID fields and a UTC started_at range, joined by AND")
-      .allowUnknownOption()
       .addHelpText("after", `\n${fieldsHelp(MEETING_PROJECT_EVIDENCE_QUERY)}`)
       .option("--limit <n>", "hits in one name page, 1 through 1000 (default 100)", integer)
       .option("--cursor <cursor>", "continue with the same project and frozen selection from next")

@@ -19,6 +19,7 @@ import {
 } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
 import * as v from "valibot"
+import { queryWordsAfterOptions } from "../meetings/cli/index.js"
 import { type ListBody, type ListInput, listOf } from "./envelope.js"
 import type { Settings } from "./settings.js"
 
@@ -32,15 +33,12 @@ export const withQuery = (command: Command, registry: QueryRegistry): Command =>
   const query = defineQuery(registry)
   annotate(command, { query, output: { entity: registry.entity } })
   const shown = askable(query)
-  // `-kind:channel` is a negated term, not an option; a mistyped option still fails, as a query word.
-  command
-    .allowUnknownOption()
-    .argument(
-      "[query...]",
-      shown.length > 0
-        ? "field:value terms that narrow the list — the fields are below"
-        : "field:value terms; this list filters by none yet",
-    )
+  queryWordsAfterOptions(command).argument(
+    "[query...]",
+    shown.length > 0
+      ? "field:value terms that narrow the list — the fields are below"
+      : "field:value terms; this list filters by none yet",
+  )
   if (shown.length > 0) command.addHelpText("after", `\n${fieldsHelp({ ...query, fields: shown }, LIST_QUERY_GUIDE)}`)
   return command
 }

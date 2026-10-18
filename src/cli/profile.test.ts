@@ -30,6 +30,17 @@ describe("the first word", () => {
     expect(liftProfile(["--json", "chats", "list"], words())).toEqual({ rest: ["--json", "chats", "list"] })
   })
 
+  it("**comes after the options before it**, and an option's value is never the profile", () => {
+    expect(liftProfile(["--json", "personal", "chats", "list"], words())).toEqual({
+      profile: "personal",
+      rest: ["--json", "chats", "list"],
+    })
+    expect(liftProfile(["--timeout", "5s", "personal", "chats"], words(), new Set(["--timeout"]))).toEqual({
+      profile: "personal",
+      rest: ["--timeout", "5s", "chats"],
+    })
+  })
+
   it("is nothing at all when there are no arguments", () => {
     expect(liftProfile([], words())).toEqual({ rest: [] })
   })

@@ -67,8 +67,8 @@ coverage says what was searched and coverage.next what would improve it.`
           : `Search reads the local archive: what \`${messenger.app.command} serve\` has kept since the account was linked.
 Keep serve running so new messages are searchable.`
       } Notes are
-\`${messenger.app.command} search notes\`, messages and notes at once \`${messenger.app.command} search all\`; mail is memo's:
-\`memo search mail\`.
+\`${messenger.app.command} search notes\`, messages and notes at once \`${messenger.app.command} search all\`; for mail,
+the separate memo CLI: \`memo search mail\`.
 A bare word looks in message text, voice transcripts, file names and file text. text:, transcript:,
 content: (the text of files) and filename: (their names) narrow it to one —
 \`${messenger.app.command} search messages 'content:invoice'\`. chat: narrows it to one chat; has:voice, has:file and

@@ -49,6 +49,34 @@ const setup = () => {
   return { env, call }
 }
 
+describe("complete --help", () => {
+  it("prints the help and succeeds", async () => {
+    const streams = captureStreams()
+    const code = await run(
+      ["complete", "--help"],
+      {
+        app,
+        commands: () => [
+          completeCommand(
+            {
+              app,
+              provider: "chat",
+              chatArgument: "a chat",
+              connect: vi.fn(),
+              resolveSettings: settingsFor(app).resolveSettings,
+            },
+            { configuredProfiles: () => [] },
+          ),
+        ],
+      },
+      { streams, tty: false, env: process.env },
+    )
+
+    expect(code).toBe(0)
+    expect(streams.stdout.join("\n")).toContain("Usage: chat complete")
+  })
+})
+
 describe("local completion", () => {
   it("uses stored person ids rather than dialog ids, scoped to the recalled account", async () => {
     const { env, call } = setup()

@@ -21,6 +21,7 @@ import {
 import { SAVE_HELP } from "../save-hints.js"
 import type { MeetingSource } from "../source.js"
 import type { MeetingStore } from "../store.js"
+import { queryWordsAfterOptions } from "./query-options.js"
 
 export interface MeetingCommandDeps {
   store: MeetingStore
@@ -63,10 +64,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     const opts = command.optsWithGlobals()
     deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
   }
-  const list = group
-    .command("list")
-    .description("stored meetings, newest first")
-    .allowUnknownOption()
+  const list = queryWordsAfterOptions(group.command("list").description("stored meetings, newest first"))
     .argument("[query...]", "field:value terms that narrow the list — the fields are below")
     .addHelpText("after", `\n${fieldsHelp(MEETING_QUERY, MEETING_QUERY_GUIDE)}`)
   annotate(list, { effects: LOCAL_READ, query: defineQuery(MEETING_QUERY), output: { entity: "meeting" } })
@@ -202,6 +200,7 @@ export {
   meetingPassageRequest,
 } from "./passage.js"
 export { addMeetingProjectEvidenceCommand } from "./project-evidence.js"
+export { queryWordsAfterOptions } from "./query-options.js"
 export {
   addMeetingSearchCommand,
   createMeetingSearchCommand,

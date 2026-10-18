@@ -48,6 +48,7 @@ export const completeCommand = (
       // Commander drops the `--` from the operands, so only the raw words tell a request from a shell name.
       const raw = (root as Command & { rawArgs: string[] }).rawArgs
       if (!raw.includes("--")) {
+        if (words.includes("--help") || words.includes("-h")) this.help()
         const [shell] = words
         if (!shell || !SHELLS.includes(shell)) {
           throw new CliError("validation_error", `name a shell: ${app.command} complete ${SHELLS.join(" | ")}`)

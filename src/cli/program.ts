@@ -12,7 +12,7 @@ import {
 } from "@wirecat/cli-base"
 import { metaOf, refuseJoinedPath } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
-import { Command } from "commander"
+import { Command, Help } from "commander"
 import { relayCommand } from "../background/relay.js"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { parseDuration } from "../domain/duration.js"
@@ -40,7 +40,7 @@ import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { movedPath, movedPointer } from "./moved.js"
 import { PreviewComplete, preview } from "./preview.js"
-import { commandWords, liftProfile } from "./profile.js"
+import { commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 import { commandAt } from "./steps.js"
@@ -116,6 +116,16 @@ export const createProgram = (
   for (const command of commands()) program.addCommand(command)
   configure?.(program)
   installHelp(program, { pitch: app.description, ...firstScreen })
+
+  // Commander builds a usage line from the command tree, where the profile is not a word.
+  for (const top of program.commands) {
+    if (PROFILE_FREE.has(top.name())) continue
+    forEachCommand(top, (command) =>
+      command.configureHelp({
+        commandUsage: (shown) => `${app.command} <profile>${new Help().commandUsage(shown).slice(app.command.length)}`,
+      }),
+    )
+  }
 
   // Depth-first: Commander does not pass `configureOutput` down to a command added with
   // `addCommand`, so `tg messages --help` would write to the real terminal.
@@ -413,7 +423,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
 
   // Before commander, not inside it: commander has no hook that runs before it decides which
   // subcommand it is looking at.
-  const { profile, rest: lifted } = liftProfile(argv, commandWords(program))
+  const { profile, rest: lifted } = liftProfile(argv, commandWords(program), valuedOptions(program))
   // `wa 'chats list' --help` reads "chats list" as a profile and prints the root help with exit 0.
   try {
     // Only before `--`: what follows is a positional, an agent's text among them, never a command word.
@@ -470,7 +480,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       // --version ends before any action, so the preAction hook never logs it.
       if (argvLog && error.code === "commander.version") logVersion(argvLog)
       if (error.exitCode === 0) return 0
-      let message = error.message.replace(/^error: /, "")
+      // Commander puts its "(Did you mean …?)" on a line of its own; an error is one line.
+      let message = error.message.replace(/^error: /, "").replace(/\s*\n\s*/g, " ")
       if (error.code === "commander.help") {
         if (reporting.tty ?? process.stdout.isTTY === true) {
           streams.diagnostic(help.replace(/\n$/, ""))

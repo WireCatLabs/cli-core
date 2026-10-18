@@ -76,6 +76,20 @@ shape of this file.
   permission governs those commands. Commands that a profile's permissions govern still need one.
 - **`serve`'s relay socket fits on macOS with a deep `TMPDIR`.** When the temporary folder is too deep for a socket
   path too, the socket goes under `/tmp` (still in an owner-only folder). It made tg's macOS release check fail.
+- **Help and errors say what a person typed.** The usage line of every command that uses a profile now reads
+  `<tool> <profile> …` (`Usage: tg <profile> mcp`); `commands`, `complete`, `help`, `skill` and `upgrade` keep the bare
+  form. Consumers' help snapshots change with this version.
+- A command that takes a free query (`chats list`, `meetings list`, `meetings projects evidence`) refuses a word that
+  starts with `--` as an unknown option, with commander's suggestion (`unknown option '--limt' (Did you mean
+  --limit?)`), instead of reading it as query text; a negated term like `-kind:channel` is still query, and after `--`
+  every word is.
+- A commander error is one line: `unknown command 'chts' (Did you mean chats?) …`.
+- The profile may follow global options: `tg --json personal chats list` works.
+- `complete --help` prints the help and exits 0.
+- A bot with no token, given a chat by name, says to store a token (exit 4) instead of "no chat matches".
+- "nothing recorded for profile" says "run the command once without --offline" only when `--offline` was given, and
+  names the profile in `serve`/`watch`.
+- `mcp setup` says "1 tool that may write"; the search help calls memo "the separate memo CLI".
 
 ### Security
 

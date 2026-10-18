@@ -1055,7 +1055,9 @@ describe("the MCP server", () => {
     expect(notes.body).toMatchObject({ items: [], page: { has_more: false } })
     const mail = await call("search mail", { query: "chapter" })
     expect(mail.isError).toBe(true)
-    expect(JSON.stringify(mail.body)).toContain("mail is memo's: install @wirecat/cli-memo, then `memo search mail …`")
+    expect(JSON.stringify(mail.body)).toContain(
+      "mail is searched by the separate memo CLI: install @wirecat/cli-memo, then `memo search mail …`",
+    )
     expect(telegram.opened()).toBe(1)
   })
 

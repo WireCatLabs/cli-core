@@ -4,7 +4,7 @@
  * "unknown command"; a path the program still mounts never reaches it.
  */
 export const MOVED_TO_MEMO: Readonly<Record<string, { what: string; memo: string }>> = {
-  "search mail": { what: "mail is memo's", memo: "memo search mail …" },
+  "search mail": { what: "mail is searched by the separate memo CLI", memo: "memo search mail …" },
 }
 
 export const movedPointer = (path: string): string | undefined => {

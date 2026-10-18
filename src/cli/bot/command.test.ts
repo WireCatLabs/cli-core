@@ -91,6 +91,13 @@ describe("bot auth", () => {
     expect(connected).toEqual([])
   })
 
+  it("**asks for a token, not a chat**, when a bot without one is given a chat by name", async () => {
+    const done = await call(["sales", "bot", "messages", "send", "Book club", "hi", "--json"])
+
+    expect(done.code).toBe(4)
+    expect(done.stderr).toContain("chat sales bot auth set")
+  })
+
   it("**hands the client the run's events**, so --trace shows each request", async () => {
     await call(["sales", "bot", "auth", "set"])
     const done = await call(["sales", "bot", "auth", "show", "--trace", "--json"])
