@@ -26,6 +26,10 @@ const answer = (service: ReturnType<typeof servicesFor>["admin"], args: Answerin
 export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
   const admin = (adapter: MessengerAdapter, guard: SendGuard) =>
     servicesFor(onlineDeps(messenger, adapter, guard)).admin
+  const photoRemoval: v.ObjectEntries =
+    messenger.groupPhotoRemoval === true
+      ? { remove_photo: v.optional(v.pipe(v.literal(true), v.description("take the group's photo away"))) }
+      : {}
   const definitions: Record<string, AnyTool> = {
     chats_create: tool({
       title: "Create a group",
@@ -94,6 +98,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
             v.description("true turns a setting on, false off; one left out stays as it is"),
           ),
         ),
+        ...photoRemoval,
       }),
       annotations: WRITE,
       permission: "groups",
@@ -104,6 +109,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
               ...(args.title === undefined ? {} : { title: args.title }),
               ...(args.description === undefined ? {} : { description: args.description }),
               ...(args.settings === undefined ? {} : { settings: args.settings }),
+              ...((args as { remove_photo?: true }).remove_photo === true ? { removePhoto: true } : {}),
             }),
           ),
         ),

@@ -17,6 +17,15 @@ shape of this file.
   comes with text or another file is refused before anything connects. The adapter's `send` gets it as one `Upload` of the new kind `sticker`, and the
   send journal records the kind and size. `--sticker <id>` and `stickers: true` are unchanged, so tg and max see
   no difference.
+- **`chats update --remove-photo` takes a group's photo away.** A messenger turns it on with the new `Messenger`
+  trait `groupPhotoRemoval`; the adapter's `updateGroup` then gets `GroupChange.removePhoto: true`. The MCP
+  `chats_update` tool takes `remove_photo: true` on the same messenger. A new photo and its removal in one call are
+  refused before connecting; the removal is journaled as an `update`, like a new photo, and is not counted against the
+  hourly limit. tg and max offer neither the flag nor the field.
+- **A messenger names the photo types it takes.** The new `Messenger` trait `profilePhotoTypes` (extensions, such as
+  `[".jpg", ".jpeg"]` for WhatsApp) narrows `chats update --photo` and `account update --photo`: their help says
+  "a .jpg or .jpeg file", and another file — by its extension or its first bytes — is refused before connecting. Unset, both stay as they were: "an image
+  file", `.jpg`, `.png` or `.webp`. `messages send --photo` does not read it.
 
 ### Changed — may break callers
 

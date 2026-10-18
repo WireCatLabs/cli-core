@@ -962,6 +962,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--record` |  | keep this run under `runs` — ids and timings, never message content. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--remind-time` | `<time>` | when to look at it again: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks plan` |
 | `--remove` | `<chat>` | take a chat out of a folder; repeat it for more |  | `chats folders update` |
+| `--remove-photo` |  | take a group's photo away; not with --photo |  | `chats update` (planned) |
 | `--repair-time` | `<duration>` | time budget for interior archive gap repair |  | `store gaps repair` |
 | `--replace` |  | overwrite a saved search of the same name |  | `searches create` |
 | `--reply` | `<mode>` | answer all or only listed senders and chats: all, listed |  | `replies audience` |

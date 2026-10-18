@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 import type { Chat, GroupCard } from "../../domain/models.js"
 import { adminTools } from "../../mcp/tools/admin.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { guardFor } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -319,6 +320,91 @@ describe("chats create, join and leave", () => {
     expect(changes).toEqual([{ photo: "group.jpg" }])
     expect(elsewhere.stderr.join("\n")).toContain("unknown option '--photo'")
     expect(new SendJournal(sendsPathFor(app, "default", env)).entries().map((one) => one.action)).toEqual(["update"])
+  })
+
+  it("**takes a group's photo away only where the messenger offers it**, never beside a new one", async () => {
+    const env = sandbox()
+    const photo = join(mkdtempSync(join(tmpdir(), "photo-")), "group.jpg")
+    writeFileSync(photo, new Uint8Array([0xff, 0xd8, 0xff]))
+    const changes: unknown[] = []
+    const adapter: MessengerAdapter = {
+      ...base,
+      updateGroup: async (chatId, change) => {
+        changes.push(change)
+        return card(chatId, "Book club")
+      },
+    }
+    const whatsapp = { groupPhoto: true, groupPhotoRemoval: true }
+
+    const removed = await call(["chats", "update", "Book club", "--remove-photo", "--json"], adapter, env, whatsapp)
+    const both = await call(
+      ["chats", "update", "Book club", "--photo", photo, "--remove-photo"],
+      adapter,
+      env,
+      whatsapp,
+    )
+    const elsewhere = await call(["chats", "update", "Book club", "--remove-photo"], adapter, env, { groupPhoto: true })
+    const tool = (messenger: Partial<Messenger>) =>
+      Object.keys(
+        adminTools({ app, chatArgument: "a chat", ...messenger } as Messenger).chats_update?.input.entries ?? {},
+      )
+
+    expect(removed.code).toBe(0)
+    expect(changes).toEqual([{ removePhoto: true }])
+    expect(both.code).toBe(2)
+    expect(both.stderr.join("\n")).toContain("not both")
+    expect(elsewhere.stderr.join("\n")).toContain("unknown option '--remove-photo'")
+    const overMcp = await adminTools({ app, chatArgument: "a chat", ...whatsapp } as Messenger).chats_update?.online?.(
+      adapter,
+      { chat: "Book club", remove_photo: true },
+      { guard: guardFor(app, settingsFor(app).resolveSettings({}, { env }), () => {}, env), limit: 20 } as never,
+    )
+
+    expect(overMcp).toMatchObject({ item: { chat: { id: "7" } } })
+    expect(changes).toEqual([{ removePhoto: true }, { removePhoto: true }])
+    expect(tool(whatsapp)).toContain("remove_photo")
+    expect(tool({ groupPhoto: true })).not.toContain("remove_photo")
+    expect(new SendJournal(sendsPathFor(app, "default", env)).entries().map((one) => one.action)).toEqual([
+      "update",
+      "update",
+    ])
+  })
+
+  it("**takes only the photo types the messenger names**, refused before connecting, and says them in help", async () => {
+    const env = sandbox()
+    const root = mkdtempSync(join(tmpdir(), "photo-"))
+    const png = join(root, "group.png")
+    writeFileSync(png, new Uint8Array([0x89, 0x50]))
+    const renamed = join(root, "renamed.jpg")
+    writeFileSync(renamed, new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
+    const jpeg = join(root, "group.jpeg")
+    writeFileSync(jpeg, new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))
+    let connected = 0
+    const own: Partial<Messenger> = {
+      groupPhoto: true,
+      profilePhotoTypes: [".jpg", ".jpeg"],
+      connect: async () => {
+        connected += 1
+        return base
+      },
+    }
+
+    const group = await call(["chats", "update", "Book club", "--photo", png], base, env, own)
+    const profile = await call(["account", "update", "--photo", png], base, env, own)
+    const disguised = await call(["chats", "update", "Book club", "--photo", renamed], base, env, own)
+    const help = await call(["chats", "update", "--help"], base, env, own)
+    const plain = await call(["chats", "update", "--help"], base, env, { groupPhoto: true })
+
+    expect([group.code, profile.code, disguised.code]).toEqual([2, 2, 2])
+    expect(disguised.stderr.join("\n")).toContain("is not a .jpg or .jpeg image inside")
+    expect(group.stderr.join("\n")).toContain("must be a .jpg or .jpeg file")
+    expect(profile.stderr.join("\n")).toContain("must be a .jpg or .jpeg file")
+    expect(connected).toBe(0)
+    const genuine = await call(["chats", "update", "Book club", "--photo", jpeg], base, env, own)
+    expect(genuine.stderr.join("\n")).not.toContain("image inside")
+    expect(connected).toBe(1)
+    expect(help.stdout.join("")).toContain("a new photo for it — a .jpg or .jpeg file")
+    expect(plain.stdout.join("")).toContain("a new photo for it — an image file")
   })
 
   it("**makes another invite link** with approval or a use limit, never both, and an expiry, through the guard", async () => {

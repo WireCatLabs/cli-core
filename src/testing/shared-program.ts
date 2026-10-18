@@ -75,6 +75,8 @@ export const messenger: Messenger = {
   ],
   chatMute: true,
   stickerFileBytes: 500 * 1024,
+  groupPhoto: true,
+  groupPhotoRemoval: true,
 }
 
 /** Every shared command over `over`, as tg, max and wa mount them between them; its switches drop what they drop. */
