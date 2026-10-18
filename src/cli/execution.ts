@@ -69,7 +69,8 @@ export const execution = (
   }
   const start = (timeoutMs?: number) => {
     if (timer) clearTimeout(timer)
-    if (timeoutMs === undefined) return
+    // A command may keep its environment past the run, and a deadline started then would outlive it.
+    if (!active || timeoutMs === undefined) return
     timer = setTimeout(
       () =>
         abort(

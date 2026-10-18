@@ -18,3 +18,7 @@ export const logParsedArgv = (file: string, action: Command): void => {
   }
   appendFileSync(file, `${JSON.stringify({ command: words.join(" "), options })}\n`)
 }
+
+export const logVersion = (file: string): void => {
+  appendFileSync(file, `${JSON.stringify({ command: "", options: ["--version"] })}\n`)
+}

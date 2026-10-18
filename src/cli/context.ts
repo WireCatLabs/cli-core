@@ -60,6 +60,12 @@ export interface BaseEnvironment {
    * what each step brings and may stop at any point: the history a phone pushes after linking.
    */
   untilStopped?: () => AbortSignal
+  /**
+   * Set by `run()`: ends the phase `untilStopped()` began without aborting its signal — the command saw it finish.
+   * However a phase ends, the steps after it get the command's one-shot deadline again, started afresh, and a signal
+   * or a cancel ends the command once more.
+   */
+  endUntilStopped?: () => void
 }
 
 /**

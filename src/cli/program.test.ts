@@ -7,6 +7,7 @@ import { Command, Option } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
+import { writesInFlight } from "../sends/guarded.js"
 import { baseContext, environmentOf } from "./context.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -126,6 +127,22 @@ describe("running a messenger CLI", () => {
     expect(readFileSync(file, "utf8")).toBe(
       `${JSON.stringify({ command: "chats list", options: ["--json", "--timeout"] })}\n`,
     )
+  })
+
+  it("logs --version to <PREFIX>_TEST_ARGV_LOG, which ends before any command is parsed", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "argv-")), "argv.jsonl")
+    const code = await run(
+      ["--version"],
+      definition(async () => {}),
+      {
+        streams: captureStreams(),
+        tty: false,
+        env: { ...process.env, APP_TEST_ARGV_LOG: file },
+      },
+    )
+
+    expect(code).toBe(0)
+    expect(readFileSync(file, "utf8")).toBe(`${JSON.stringify({ command: "", options: ["--version"] })}\n`)
   })
 
   it("hands the command its platform, the process's unless a test gives one", async () => {
@@ -395,6 +412,158 @@ describe("a phase that runs until stopped", () => {
     expect(await done).toBe(0)
     expect(reason).toMatchObject({ code: "timeout" })
     expect(streams.stdout).toEqual(["kept 1 batch"])
+  })
+
+  const ending = (
+    argv: string[],
+    rest: (stop: AbortSignal | undefined, command: Command) => Promise<void>,
+    options: { signal?: AbortSignal; streams?: ReturnType<typeof captureStreams> } = {},
+  ) => {
+    let entered: (stop: AbortSignal | undefined) => void = () => {}
+    const started = new Promise<AbortSignal | undefined>((resolve) => {
+      entered = resolve
+    })
+    const done = run(
+      argv,
+      definition(async (command) => {
+        const stop = environmentOf(command).untilStopped?.()
+        entered(stop)
+        await rest(stop, command)
+      }),
+      { streams: captureStreams(), tty: false, env: { ...process.env }, ...options },
+    )
+    return { done, started }
+  }
+
+  it("gives the steps after an ended phase the default deadline again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started } = ending(["chats", "list"], async (_stop, command) => {
+      await new Promise((resolve) => setTimeout(resolve, 10 * 60_000))
+      environmentOf(command).endUntilStopped?.()
+      await new Promise(() => {})
+    })
+    const stop = await started
+    await vi.advanceTimersByTimeAsync(10 * 60_000 + 29_000)
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1_100)
+    vi.useRealTimers()
+
+    expect(await done).toBe(9)
+    expect(stop?.aborted).toBe(false)
+  })
+
+  it("ends the command, not a phase, on Ctrl-C after the phase ended", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started } = ending(["chats", "list"], async (_stop, command) => {
+      environmentOf(command).endUntilStopped?.()
+      await new Promise(() => {})
+    })
+    const stop = await started
+
+    process.emit("SIGINT")
+    await vi.advanceTimersByTimeAsync(1_100)
+    vi.useRealTimers()
+
+    expect(await done).toBe(130)
+    expect(stop?.aborted).toBe(false)
+  })
+
+  it("reports a write the fresh deadline cut as an unknown outcome", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const streams = captureStreams()
+    const { done } = ending(
+      ["chats", "list", "--json"],
+      async (_stop, command) => {
+        environmentOf(command).endUntilStopped?.()
+        writesInFlight.getStore()?.add({ operationId: "op-after-phase", cut: () => {} })
+        await new Promise(() => {})
+      },
+      { streams },
+    )
+
+    await vi.advanceTimersByTimeAsync(31_100)
+    vi.useRealTimers()
+    await done
+
+    expect(JSON.parse(streams.stderr[0] ?? "").error).toMatchObject({
+      code: "outcome_unknown",
+      details: { operation_ids: ["op-after-phase"] },
+    })
+  })
+
+  it("starts no deadline when a command ends its phase after the run returned", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    let end: (() => void) | undefined
+    const { done } = ending(["chats", "list"], async (_stop, command) => {
+      end = environmentOf(command).endUntilStopped
+    })
+    await vi.advanceTimersByTimeAsync(1_100)
+    expect(await done).toBe(0)
+
+    end?.()
+
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it("gives the steps after a phase that --timeout ended a fresh full --timeout", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started } = ending(["chats", "list", "--timeout", "2m"], async (stop) => {
+      await new Promise((resolve) => stop?.addEventListener("abort", resolve, { once: true }))
+      await new Promise(() => {})
+    })
+    const stop = await started
+    await vi.advanceTimersByTimeAsync(121_000)
+    expect(stop?.reason).toMatchObject({ code: "timeout" })
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(118_000)
+    expect(ended).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(2_100)
+    vi.useRealTimers()
+
+    expect(await done).toBe(9)
+  })
+
+  it("bounds the steps after a phase that Ctrl-C ended", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started } = ending(["chats", "list"], async (stop) => {
+      await new Promise((resolve) => stop?.addEventListener("abort", resolve, { once: true }))
+      await new Promise(() => {})
+    })
+    await started
+    process.emit("SIGINT")
+
+    await vi.advanceTimersByTimeAsync(30_100)
+    vi.useRealTimers()
+
+    expect(await done).toBe(9)
+  })
+
+  it("stops the --timeout timer of a phase that ended, and starts the command's deadline afresh", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started } = ending(["chats", "list", "--timeout", "2m"], async (_stop, command) => {
+      await new Promise((resolve) => setTimeout(resolve, 60_000))
+      environmentOf(command).endUntilStopped?.()
+      await new Promise(() => {})
+    })
+    const stop = await started
+    await vi.advanceTimersByTimeAsync(179_000)
+    expect(stop?.aborted).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1_100)
+    vi.useRealTimers()
+
+    expect(await done).toBe(9)
   })
 
   it("ends 0 with its answer when the caller cancels", async () => {
