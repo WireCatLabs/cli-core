@@ -102,6 +102,8 @@ describe("the MCP agent log", () => {
     expect(tierOf("messages_delete", { annotations: WRITE })).toBe("destructive")
     expect(tierOf("chats_mark_read", { annotations: WRITE })).toBe("write-private")
     expect(tierOf("messages_unstar", { annotations: WRITE })).toBe("write-private")
+    for (const key of ["chats_unmute", "chats_unarchive", "chats_unpin", "chats_mark_unread"])
+      expect(tierOf(key, { annotations: WRITE }), key).toBe("write-private")
     expect(tierOf("chats_start", { annotations: WRITE })).toBe("write-public")
     expect(tierOf("messages_pin", { annotations: WRITE })).toBe("write-private")
     expect(tierOf("messages_pin", { annotations: WRITE }, { quietPins: false })).toBe("write-public")

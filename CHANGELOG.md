@@ -16,6 +16,11 @@ shape of this file.
   first, and asks the messenger only for a name the store does not hold. A name that matches several stored chats
   is refused, as the store reads refuse it. `watch` shows such a chat's stored title where the messenger gives
   none. Telegram and MAX, which answer for their own history, are unchanged.
+- **Agents mute, archive, pin and mark unread a chat over MCP.** The personal server now offers `chats mute`,
+  `chats unmute`, `chats archive`, `chats unarchive`, `chats pin`, `chats unpin` and `chats mark-unread`, each only
+  where the CLI's `Messenger` switch mounts the command (`chatMute`, `chatArchive`, `chatPin`, `chatMarkUnread`). Each
+  is checked under its own key (`chats.unmute` apart from `chats.mute`), passes the read-only lock and the write
+  guard as its command does, and is audited as a private write: nobody in the chat is told.
 
 ### Changed — may break callers
 
