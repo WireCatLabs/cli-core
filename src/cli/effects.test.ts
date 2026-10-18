@@ -357,10 +357,12 @@ describe("the read-only lock on the message store", () => {
 
   it.each([
     ["store export", ["store", "export", "--output", "OUT"]],
-    ["stats charts", ["stats", "charts", "--output", "OUT"]],
-  ])("lets %s past the lock, which writes nothing the owner keeps", async (_, argv) => {
+    ["stats charts", ["stats", "charts", "7", "--output", "OUT"]],
+    ["messages sync", ["messages", "sync", "7"]],
+    ["contacts sync", ["contacts", "sync"]],
+  ])("lets %s past the lock: it writes nothing the owner keeps, or it receives", async (_, argv) => {
     const { error } = await locked(
-      ["ro", ...argv.map((word) => (word === "OUT" ? join(root, "out") : word))],
+      ["ro", ...argv.map((word) => (word === "OUT" ? join(root, "out.svg") : word))],
       join(root, "absent.db"),
     )
 
