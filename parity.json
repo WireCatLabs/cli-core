@@ -2848,8 +2848,9 @@
       }
     },
     "guide": {
-      "in": ["max"],
+      "in": [],
       "planned": {
+        "max": "help-navigation pass: max-cli#737 mounts guide with scenarios",
         "tg": "help-navigation pass: mount guide with scenarios",
         "wa": "help-navigation pass: mount guide with scenarios"
       }
