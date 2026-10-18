@@ -51,8 +51,11 @@ already taken it moves to the next free one and renames the changelog heading wi
 ## Development check budget
 
 Local commits check only staged lint and secrets. There is no pre-push check.
-Config integrity, repository lint, Markdown, and secret detection run in PR CI.
-The bounded `ci:quick` step adds typechecking for CLI packages or synthetic unit tests for the docs site.
-Full tests, coverage, builds and parity also run once on each merge to `main` (Linux only, no publishing).
+Every pull request runs two checks. The fast standards job (`standards.yml`) checks config integrity,
+lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
+The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
+with the coverage floor, build, `docs:check`, the schema and dist checks, Bun, old Node, the SQLite restart
+and parity, which builds tg-cli, max-cli and whatsapp-cli against the branch. The same `ci.yml` runs again
+on each merge to `main` (no publishing).
 Browser and platform suites run for releases, explicit manual validation, and monthly nonpublishing validation. See the
 [shared policy](https://github.com/WireCatLabs/community/blob/main/standards/README.md#ci-and-hooks).

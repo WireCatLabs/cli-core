@@ -10,12 +10,15 @@ pnpm test:slow      # the 20 slowest tests and the 10 slowest files
 pnpm smoke:bun      # the SQLite seam, the store and run records, executed under Bun
 ```
 
-A pull request runs only the fast checks ([`.github/workflows/standards.yml`](../../.github/workflows/standards.yml)):
+A pull request runs the fast checks ([`.github/workflows/standards.yml`](../../.github/workflows/standards.yml)):
 `pnpm standards:check`, `pnpm lint`, `pnpm docs:lint`, `pnpm ci:quick` (the typecheck and the command lint) and a
-secret scan of the new commits, beside the changelog guard. Run the rest yourself before you push. Full validation
-([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), through cli-base's shared `node-ci.yml`) runs all of the
-commands above except `test:slow`, plus `pnpm build`, on each push to `main`, in the release and in the monthly run —
-after a merge, not before it.
+secret scan of the new commits, beside the changelog guard. It also runs full validation
+([`.github/workflows/pr.yml`](../../.github/workflows/pr.yml), which calls
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) and through it cli-base's shared `node-ci.yml`): all of
+the commands above except `test:slow`, with the coverage floor, plus `pnpm build`, the schema and dist checks, old
+Node, the SQLite restart and parity, which builds tg-cli, max-cli and whatsapp-cli against the branch
+([WC-CI-5](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/ci.md#wc-ci-5--run-the-full-linux-validation-on-every-pull-request-and-keep-platform-suites-out)).
+The same full validation runs again on each push to `main`, in the release and in the monthly run.
 
 ## No test touches the owner's store, keyring or network
 
