@@ -74,7 +74,7 @@ it.each(["example-calendar", "example-conference"])(
       maxStoreCalls: 8,
     })
     expect(result.association).toBe("unconfirmed-literal-evidence")
-    expect(readFileSync(f.path)).toEqual(before)
+    expect(readFileSync(f.path).equals(before)).toBe(true)
   },
 )
 
