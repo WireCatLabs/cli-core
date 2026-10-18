@@ -274,7 +274,10 @@ every command, and `<cli> --help-all` the full commander help.
 
 `<cli> commands` without `--json` lists every command that runs, one line each, by section (Read, Write,
 Organise, Automate, Set up, Other); `<cli> commands <path>` narrows it. cli-core's groups carry their section; a
-tool puts its own groups in one with `inSection(command, "setup")`.
+tool puts its own groups in one with `inSection(command, "setup")`. A tool that builds its own program and keeps its own
+`commands` command gets the same list from `commandsText(program, describeProgram(program), scope?)` (`scope` is the
+path asked for, with `describeProgram` narrowed to it) and prints it when `--json` is not given; its `--json` stays
+cli-base's `commandsDocument`, which is the same document.
 
 Each leaf command's `--help` ends with **Returns** (the declared output entity and its first fields, or the
 description), **Next usually** (up to three commands whose arguments take what it returns; `nextUsually(command,

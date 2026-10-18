@@ -1,8 +1,9 @@
 import { captureStreams } from "@wirecat/cli-base"
-import { annotate } from "@wirecat/cli-base/commands"
+import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { commandsCommand } from "./commands-command.js"
+import { commandsText } from "./help/commands-text.js"
 import { inSection } from "./help/sections.js"
 import { run } from "./program.js"
 
@@ -185,6 +186,17 @@ describe("commands as text", () => {
     expect(stdout).toContain("app messages commands, by section")
     expect(stdout).toContain("app messages send <chat> [text]")
     expect(stdout).not.toContain("tags")
+  })
+
+  it("lists a program a tool builds itself the same way, cli-core's groups in their sections", () => {
+    const program = new Command("memo")
+      .addCommand(new Command("people").addCommand(leaf("show", "one person")))
+      .addCommand(new Command("mcp").addCommand(leaf("serve", "serve memo to an agent")))
+
+    const listed = commandsText(program, describeProgram(program))
+
+    expect(listed).toContain("Automate\n  memo mcp serve")
+    expect(listed).toContain("Other\n  memo people show")
   })
 
   it("keeps the JSON document on --json and --jsonl", async () => {
