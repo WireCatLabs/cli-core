@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.347.0 — 18.10.2026
+
 ### Added
 
 - **`loginQr` shows a login QR code the same way in every messenger CLI**: drawn on the diagnostic stream, which
