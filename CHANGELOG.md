@@ -38,6 +38,13 @@ shape of this file.
   chat text to an embedding or analysis provider, or fetch a model, and never write to the messenger. The label needs
   cli-base 0.44.3 (the dev pin now); on 0.44.0–0.44.2 the field is ignored and nothing breaks. Run `pnpm generate`
   after adopting to regenerate `docs/commands.md`.
+- **cli-base 0.44.4 is the dev pin; `cli-dev lint` now checks `chats archive`, `unarchive`, `mark-unread` and
+  `messages star`, `unstar`.** cli-base 0.44.4 lists these verbs, `mute`/`unmute`, the `privacy` resource and the
+  privacy and `--until` option roles, so cli-core's own lint baseline drops 13 entries. The peer range stays
+  `>=0.44.0 <0.45.0`: nothing at run time needs 0.44.4. Watch for: a CLI that takes 0.44.4 fails `cli-dev lint` on
+  its baseline entries for these commands and options as stale until it deletes them — `unknown-verb` for
+  `chats mute`, `unmute`, `archive`, `unarchive`, `mark-unread`, `messages star`, `unstar`; `option-role` for the
+  `account privacy set` options and `chats mute --until`; `unknown-resource` for `account privacy`.
 
 ## 0.340.0 — 18.10.2026
 

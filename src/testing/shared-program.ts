@@ -60,7 +60,10 @@ export const messenger: Messenger = {
   resolveSettings: config.resolveSettings,
   connect: refuse,
   groupSettings: [...GROUP_SETTINGS, "joinApproval", "onlyAdminsSend", "onlyAdminsEditInfo", "disappearingSeconds"],
+  chatArchive: true,
   chatPin: true,
+  chatMarkUnread: true,
+  messageStars: true,
   privacy: true,
   privacySettings: [
     "findByPhone",

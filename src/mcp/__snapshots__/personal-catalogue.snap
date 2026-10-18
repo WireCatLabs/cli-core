@@ -98,6 +98,7 @@ write attachments extract
 write attachments text set
 write chats admins add
 write chats admins remove
+write chats archive
 write chats create
 write chats folders create
 write chats folders delete
@@ -110,6 +111,7 @@ write chats link create
 write chats link reset
 write chats link revoke
 write chats mark-read
+write chats mark-unread
 write chats members add
 write chats members fetch
 write chats members remove
@@ -120,6 +122,7 @@ write chats requests accept
 write chats requests decline
 write chats tracking add
 write chats tracking remove
+write chats unarchive
 write chats unmute
 write chats unpin
 write chats update
@@ -153,8 +156,10 @@ write messages edit
 write messages forward
 write messages pin
 write messages send
+write messages star
 write messages sync
 write messages unpin
+write messages unstar
 write metadata refresh
 write polls close
 write polls create

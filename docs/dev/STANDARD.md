@@ -154,13 +154,20 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `forward` | send an existing message on to another chat |  |
 | `pin` | pin a message or chat |  |
 | `unpin` | unpin a message or chat |  |
+| `star` | mark a message so the owner finds it again; only the owner sees the star |  |
+| `unstar` | take the owner's star off a message |  |
 | `vote` | answer a poll |  |
 | `close` | close a thing that stays: a poll, a task |  |
 | `join` | join a chat |  |
 | `leave` | leave a chat |  |
+| `mute` | stop notifications from a chat for the owner; nobody in it is told |  |
+| `unmute` | undo a mute |  |
 | `block` | block a person |  |
 | `unblock` | unblock a person |  |
 | `mark-read` | mark a chat read; the other person sees it |  |
+| `mark-unread` | mark a chat unread on the owner's own devices; nobody in it is told |  |
+| `archive` | move a chat into the messenger's archive, out of the main chat list; nobody in it is told |  |
+| `unarchive` | bring an archived chat back to the main chat list |  |
 | `reset` | replace a thing; the old one stops working |  |
 | `moderate` | apply a chat's rules: delete what breaks them, act on who broke them |  |
 | `confirm` | the owner accepts what an agent proposed | `accept`, `approve` |
@@ -258,6 +265,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `flood` | singular | what the messenger told this profile to hold off on |  |
 | `vocabulary` | singular | the owner's catalogue of canonical names, with their aliases |  |
 | `api` | singular | the source's own API, one command per operation |  |
+| `privacy` | singular | who may find, see, call or add the account |  |
 
 <!-- resources: end -->
 
@@ -568,6 +576,16 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--revote` |  | switch | people may change their vote |  |
 | `--send-as` | `<id>` | id | send as this identity of the chat |  |
 | `--voice` | `<file>` | path | an Ogg Opus file sent as a voice message |  |
+| `--about-text` | `<who>` | choice | who sees the about text: everyone, contacts or nobody |  |
+| `--calls` | `<who>` | choice | whose calls ring: everyone, contacts or nobody |  |
+| `--chat-invites` | `<who>` | choice | who may add the account to groups and channels: everyone, contacts or nobody |  |
+| `--find-by-phone` | `<who>` | choice | who finds the account by its number: everyone, contacts or nobody |  |
+| `--hide-online` | `<on\|off>` | choice | hide online status and last seen |  |
+| `--last-seen` | `<who>` | choice | who sees when the account was last online: everyone, contacts or nobody |  |
+| `--phone-number` | `<who>` | choice | who sees the number: everyone, contacts or nobody |  |
+| `--profile-photo` | `<who>` | choice | who sees the profile photo: everyone, contacts or nobody |  |
+| `--read-receipts` | `<on\|off>` | choice | send read receipts |  |
+| `--until` | `<time>` | time | only until then: a local time, or a duration from now |  |
 | `--agenda` | `<text>` | string | the meeting's agenda |  |
 | `--allow-chats` | `<ids>` | list | the chats allowed, by comma-separated ids; empty clears |  |
 | `--allow-people` | `<ids>` | list | the senders allowed, by comma-separated ids; empty clears |  |
