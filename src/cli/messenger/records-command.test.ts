@@ -332,6 +332,12 @@ describe("reads only the server answers", () => {
       last_seen: "nobody",
     })
     expect([chosen.code, notListed.code, byDefault.code]).toEqual([2, 2, 2])
+    expect(JSON.parse(chosen.stderr).error).toMatchObject({
+      code: "validation_error",
+      message: '--profile-photo takes everyone, contacts, nobody, not "contacts_except"',
+    })
+    expect(notListed.stderr).toContain("unknown option '--find-by-phone'")
+    expect(byDefault.stderr).toContain("unknown option '--read-receipts'")
     expect(changes).toHaveLength(1)
   })
 
