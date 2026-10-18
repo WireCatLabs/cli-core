@@ -30,6 +30,16 @@ const failing = (error: unknown) => ({
 })
 
 describe("error reasons", () => {
+  it("retains the tag-preview budget reason and selected dependency table", () => {
+    const error = new CliError("validation_error", "tag preview exceeds its budget", {
+      reason: "vocabulary.consolidation-over-budget",
+      table: "links",
+    })
+    const object = errorObjectOf(error, failureContext())
+    expect(object.error).toMatchObject({ reason: "vocabulary.consolidation-over-budget", details: { table: "links" } })
+    expect(failed(error).structuredContent).toEqual(object)
+  })
+
   it("registers every dotted reason the source raises", () => {
     const known = new Set([...REASONS, ...BASE_REASONS].map((entry) => entry.reason))
     const raised = sources(join(import.meta.dirname, "..")).flatMap((path) =>

@@ -72,6 +72,57 @@ const found = async (store: MessageStore, text: string) =>
   (await searchStore(store, OWNER, { text, limit: 100 })).items.map(({ id }) => id).sort()
 
 describe("tags in the store (version 16)", () => {
+  it("removes the same canonical tag through its explicit alias without touching another account", async () => {
+    const { store } = await seeded()
+    const tag = await store.knowledge.createTag("onboarding")
+    await store.knowledge.addVocabularyAlias({ kind: "tag", id: String(tag.id) }, "arrival")
+    await store.chats.saveChats(OTHER, [chat("1")])
+    const target = { type: "chat" as const, chatId: "1" }
+    expect(await store.tags.addTags(OWNER, target, ["arrival"])).toEqual(["arrival"])
+    await store.tags.addTags(OTHER, target, ["onboarding"])
+    expect(await store.tags.removeTags(OWNER, target, ["arrival"])).toEqual(["arrival"])
+    expect(await store.tags.tags(OWNER)).toEqual([])
+    expect((await store.tags.tags(OTHER)).map(({ tag }) => tag)).toEqual(["onboarding"])
+  })
+
+  it("preserves an automatic claim when manual removal names the tag's alias", async () => {
+    const { store } = await seeded()
+    const tag = await store.knowledge.createTag("onboarding")
+    await store.knowledge.addVocabularyAlias({ kind: "tag", id: String(tag.id) }, "arrival")
+    await store.chats.replaceAutoTags(OWNER, "1", "fixture", [{ tag: "onboarding", score: 0.9, fields: ["title"] }])
+    const target = { type: "chat" as const, chatId: "1" }
+    await store.tags.addTags(OWNER, target, ["arrival"])
+    expect(await store.tags.removeTags(OWNER, target, ["arrival"], "manual")).toEqual(["arrival"])
+    expect((await store.tags.tags(OWNER)).map(({ tag, sources }) => ({ tag, sources }))).toEqual([
+      { tag: "onboarding", sources: ["auto"] },
+    ])
+    expect(await store.tags.removeTags(OWNER, target, ["arrival"], "auto")).toEqual(["arrival"])
+    expect(await store.tags.tags(OWNER)).toEqual([])
+  })
+
+  it("rolls back the whole removal when a legacy alias has competing canonical targets", async () => {
+    const { store, path } = await seeded()
+    const first = await store.knowledge.createTag("onboarding")
+    const second = await store.knowledge.createTag("delivery")
+    await store.knowledge.addVocabularyAlias({ kind: "tag", id: String(first.id) }, "arrival")
+    const target = { type: "chat" as const, chatId: "1" }
+    await store.tags.addTags(OWNER, target, ["onboarding", "delivery"])
+    const database = await openCache(path)
+    try {
+      database
+        .prepare(
+          "INSERT INTO aliases(aliasable_type,aliasable_id,name,name_folded,source,created_at,updated_at) VALUES('tag',?,'arrival','arrival','owner',1,1)",
+        )
+        .run(second.id)
+    } finally {
+      database.close()
+    }
+    await expect(store.tags.removeTags(OWNER, target, ["delivery", "arrival"])).rejects.toMatchObject({
+      code: "configuration_error",
+    })
+    expect((await store.tags.tags(OWNER)).map(({ tag }) => tag)).toEqual(["delivery", "onboarding"])
+  })
+
   it("finds a label stored with capitals or a slash again instead of reviewing it as a new one", async () => {
     const { store } = await seeded()
     const email = { type: "message" as const, chatId: "2", messageId: "4" }

@@ -224,7 +224,7 @@ export const removeTags = (
 ): string[] => {
   const remove = database.prepare("DELETE FROM taggings WHERE tag_id=? AND taggable_type=? AND taggable_id=?")
   return tags.filter((name) => {
-    const tag = tagNamed(database, name)
+    const tag = canonicalTagNamed(database, name)
     if (!tag) return false
     const held = sourceOf(database, thing, tag.id)
     const automatic =
