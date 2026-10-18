@@ -410,5 +410,43 @@ The cursor binds this selection and carries only the provider continuation, not 
 an authorization grant. The adapter must enforce the captured scope on every request. Repeated
 non-advancing provider cursors are rejected. Caps may be lowered on a later page. Pages are live;
 IDs can repeat across pages and fingerprints describe only the returned packet. No snapshot or
-whole-calendar completeness is implied. CLI/MCP exposure and provider transports are separate
-host work; this SDK does not widen an existing server's tools.
+whole-calendar completeness is implied. Optional shared CLI/MCP adapters are described below. Provider transports and an explicit host
+grant remain required; the SDK does not widen an existing server's tools.
+
+
+## Inventory CLI and MCP adapters
+
+`addMeetingSeriesInventoryCommand`, `readMeetingSeriesInventory`, `meetingSeriesInventoryTool`
+and `callMeetingSeriesInventoryTool` from `/cli` take an injected provider/account-bound reader.
+The command mounts `meetings scheduled` under an existing meetings group. It is a remote read,
+marked `offline: false` and `mcp: false`; generic command routers must not grant inventory access.
+A host explicitly mounts the raw `meeting_series_inventory` tool and owns any credential, request
+and resource lifetime. No provider or default server tool is mounted by Core.
+
+The CLI accepts `--since-time`, `--before-time`, `--limit`, `--max-read-bytes`, `--bytes` and
+`--cursor`. MCP accepts `after`, `until`, `limit`, `max_read_bytes`, `bytes` and `cursor`. ISO
+windows default to now and seven days ahead. Syntax, absolute dates, the 366-day window bound,
+unknown fields and cursor structure are checked before the host callback; errors name the field.
+The selected account/window binding is checked again by the SDK before provider I/O. The public
+`validateMeetingSeriesInventoryCursor` helper checks bounded structure and strict UTF-8 without
+returning or authorizing a provider continuation.
+
+Success is a registered `meeting_series_inventory` item envelope with execution metadata.
+Provider series IDs stay strings in `items[].meeting_id`; they are not stored meeting references.
+Start hints and the absolute window become zoned ISO timestamps. The standard cursor `page`,
+source fingerprint, requested limits and mandatory coverage remain. A zero-row page can still
+have `page.has_more: true`. `meta.complete` reflects partial-source status and `meta.truncated`
+reflects continuation; neither is a claim of complete calendar discovery or a verified next call.
+No join or evidence URLs are added.
+
+Replay `page.next_cursor` with the returned absolute `after` and `until`; reusing a relative default
+clock with an old cursor can change the selection. The page can repeat IDs because reads are live.
+A provider response naming different window bounds, contradictory continuation, invalid
+schema or oversized item fails explicitly. Wire-format bytes are checked again after ISO mapping
+and MCP text escaping. The adapter never silently drops candidates or advances another provider
+page to satisfy an output budget. Lower `limit` or increase the relevant bounded byte grant.
+
+The shared command is included in command lint and the unchanged generic personal-MCP catalogue
+proof. Synthetic CLI/MCP tests exercise two invented providers, identical wire items, strict raw
+arguments, frozen continuations, unknown coverage, cancellation, invalid provider dates and budgets.
+Native providers must separately prove bounded HTTP and selected-credential behavior.

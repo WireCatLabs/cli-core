@@ -3,6 +3,7 @@ import { botCommand } from "../cli/bot/command.js"
 import { commandsCommand } from "../cli/commands-command.js"
 import { configCommand } from "../cli/config-command.js"
 import { addMeetingProjectCandidatesCommand } from "../cli/meeting-project-candidates-command.js"
+import { addMeetingSeriesInventoryCommand } from "../cli/meeting-series-inventory-command.js"
 import { accountCommand } from "../cli/messenger/account-command.js"
 import { storeCommand } from "../cli/messenger/archive-commands.js"
 import { attachmentsCommand } from "../cli/messenger/attachments-command.js"
@@ -119,6 +120,7 @@ export const sharedProgram: ProgramDefinition = {
   commands: () => sharedCommands(),
   configure: (program) => {
     program.command("meetings").description("stored meetings")
+    addMeetingSeriesInventoryCommand(program, { read: refuse, output: () => undefined, signal: () => undefined })
     addMeetingProjectCandidatesCommand(program, { read: refuse, output: () => undefined, signal: () => undefined })
   },
 }

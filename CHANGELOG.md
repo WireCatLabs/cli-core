@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- Shared `/cli` inventory adapters add `meetings scheduled` and the explicitly mounted `meeting_series_inventory` MCP tool over the bounded provider series reader. They preserve unverified date hints, unknown calendar coverage, absolute continuation windows, strict named-field validation, snake_case envelopes and output budgets. Generic MCP routers do not expose the CLI path; hosts supply the captured provider binding and explicit tool grant.
+
 ### Fixed
 
 - **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
