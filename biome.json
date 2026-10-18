@@ -1,21 +1,6 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["./config/wirecat/biome.base.json"],
-  "linter": {
-    "rules": {
-      "suspicious": {
-        "noImportCycles": "error"
-      },
-      "style": {
-        "noExcessiveLinesPerFile": {
-          "level": "error",
-          "options": {
-            "maxLines": 1000
-          }
-        }
-      }
-    }
-  },
   "files": {
     "includes": [
       "**",
@@ -585,16 +570,6 @@
                 ]
               }
             }
-          }
-        }
-      }
-    },
-    {
-      "includes": ["**/*.test.ts", "test/**", "**/generated/**"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noExcessiveLinesPerFile": "off"
           }
         }
       }
