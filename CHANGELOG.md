@@ -7,6 +7,27 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
+  `searches clear`, `contacts notes edit`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse
+  with `permission_error`, and so do their MCP tools, which deleted or overwrote under the lock before. Clearing what
+  the store can rebuild (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
+- **Model downloads no longer go through a running `serve`.** `models text download`, `models audio download` and
+  `images models download` fetch from a model host, not the messenger, so they always run in the calling process.
+
+### Changed — may break callers
+
+- **`conversations build` and `search conversations` say they can send text out.** `conversations build --analyze`
+  sends chat text to the analysis provider, and `search conversations` sends the query to a remote embedding
+  provider. `conversations build` is now declared as a write to an outside service (`{ remote: "write" }`) and
+  `search conversations` as a read from one. Under the read-only lock each refuses before it sends anything to a
+  remote provider; a local model or a local server still works. The MCP tool `search_conversations` refuses the same
+  way. Both commands always run in the calling process, never through a running `serve`. A CLI that lists its local
+  writes, or refuses only local writes for a read-only `messages` profile, must move `conversations build` to its
+  remote writes.
+- **`isOtherService` is now `isOtherServiceCall`**, named like `isLogin` and `isStoreChange`. No consumer imports it.
+
 ## 0.335.0 — 18.10.2026
 
 ### Fixed
@@ -60,18 +81,6 @@ shape of this file.
   one-shot command had met it.
 - **serve refuses a login or logout an older client relays to it** with `permission_error`, instead of logging its
   own connection in or out. Stop serve first, or update the client, which runs it locally.
-- **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
-  `searches clear`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse with `permission_error`,
-  and so do their MCP tools, which deleted under the lock before. Clearing what the store can rebuild
-  (`store jobs clear`, `conversations embed clear`, `conversations links clear`) still works.
-- **`conversations build` and `search conversations` say they can send text out.** `conversations build --analyze`
-  sends chat text to the analysis provider, and `search conversations` sends the query to a remote embedding
-  provider. `conversations build` is now declared as a write to an outside service and `search conversations` as a
-  read from one. Under the read-only lock each refuses before it sends anything to a remote provider; a local model
-  or a local server still works. The MCP tool `search_conversations` refuses the same way. Both commands always run
-  in the calling process, never through a running `serve`.
-- **Model downloads no longer go through a running `serve`.** `models text download`, `models audio download` and
-  `images models download` fetch from a model host, not the messenger, so they always run in the calling process.
 
 ### Changed — may break callers
 
