@@ -95,6 +95,7 @@ export const gapsCommand = (messenger: Messenger) => {
         const planned = await context.withServices((services) => services.gaps.plan(chat))
         if (args.fingerprint && args.fingerprint !== planned.fingerprint)
           throw new CliError("validation_error", "the gap plan changed; inspect it again")
+        const { timeout } = this.optsWithGlobals<{ timeout?: string }>()
         const argv = [
           "store",
           "gaps",
@@ -117,8 +118,7 @@ export const gapsCommand = (messenger: Messenger) => {
           ...(args.catchUpMessages === undefined ? [] : ["--catch-up-messages", String(args.catchUpMessages)]),
           ...(args.catchUpTime === undefined ? [] : ["--catch-up-time", args.catchUpTime]),
           "--json",
-          "--timeout",
-          "0",
+          ...(timeout ? ["--timeout", timeout] : []),
         ]
         const spawn = environmentOf<BaseEnvironment & { spawnJob?: SpawnJob }>(this).spawnJob
         const started = startArchiveJob(

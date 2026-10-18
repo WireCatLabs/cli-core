@@ -7,8 +7,10 @@ import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
 export const metadataCommand = (messenger: Messenger): Command => {
+  const tool = messenger.app.command
   const command = new Command("metadata").description("cached group/channel descriptions for local automatic tags")
-  annotate(command.command("get"), { effects: LOCAL_READ })
+  annotate(command.command("get"), { effects: LOCAL_READ, examples: [`${tool} metadata get --chat 7`] })
+    .description("a stored chat's cached description, as automatic tags read it")
     .requiredOption("--chat <chat>", "a stored chat")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -19,7 +21,11 @@ export const metadataCommand = (messenger: Messenger): Command => {
         itemOf(snakeKeys(await context.withServices((services) => services.metadata.get(chat)))),
       )
     })
-  annotate(command.command("refresh"), { effects: FETCH })
+  annotate(command.command("refresh"), {
+    effects: FETCH,
+    examples: [`${tool} metadata refresh --chat 7 --chat 8`, `${tool} metadata refresh --only-missing --limit 20`],
+  })
+    .description("fetch group and channel descriptions again and cache them")
     .option(
       "--chat <chat>",
       "stored group/channel; repeat for several",

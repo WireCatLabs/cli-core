@@ -442,7 +442,7 @@ describe("store restore", () => {
 
       const { code, stderr } = await call(["store", "restore", file, "--json"], env)
       expect(code).not.toBe(0)
-      expect(stderr.join("\n")).toContain("chat serve is running for default")
+      expect(stderr.join("\n")).toContain("chat serve is running for default — `chat default server stop` first")
     } finally {
       serve.kill()
     }

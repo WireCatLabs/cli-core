@@ -132,7 +132,7 @@ const refuseWhileServing = (command: Command, messenger: Messenger) => {
   if (serving.length > 0) {
     throw new CliError(
       "validation_error",
-      `${messenger.app.command} serve is running for ${serving.join(", ")} — \`${messenger.app.command} server stop\` first`,
+      `${messenger.app.command} serve is running for ${serving.join(", ")} — ${serving.map((profile) => `\`${messenger.app.command} ${profile} server stop\``).join(", ")} first`,
     )
   }
 }
@@ -619,13 +619,7 @@ const restoreCommand = (messenger: Messenger): Command =>
       const path = storePath(environmentOf(this).env ?? process.env)
       const given = resolve(file)
       if (!existsSync(given)) throw new CliError("not_found", `no file at ${given}`)
-      const serving = servingProfiles(messenger.app, environmentOf(this).env ?? process.env)
-      if (serving.length > 0) {
-        throw new CliError(
-          "validation_error",
-          `${messenger.app.command} serve is running for ${serving.join(", ")} — \`${messenger.app.command} server stop\` first`,
-        )
-      }
+      refuseWhileServing(this, messenger)
       if (!isSealed(given)) return restoreFrom(this, messenger, given, given)
       const opened = `${path}.unsealing-${process.pid}`
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
@@ -710,7 +704,7 @@ const quiesce = async (path: string, messenger: Messenger, then: string, warn: (
   } else if (holders.length > 0) {
     throw new CliError(
       "validation_error",
-      `the store is open in process ${holders.join(", ")} — stop it first (a serve: \`${command} server stop\`, ` +
+      `the store is open in process ${holders.join(", ")} — stop it first (a serve: \`${command} <profile> server stop\`, ` +
         `or the other CLI's; an mcp: its client), then ${then}`,
     )
   }

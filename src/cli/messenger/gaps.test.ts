@@ -134,4 +134,21 @@ describe("gap plan and repair commands", () => {
     )
     expect(connect).not.toHaveBeenCalled()
   })
+
+  it("runs the background job it starts to the end, bounded by its repair time", async () => {
+    const { call, connect } = await fixture()
+    const spawn = vi.fn((_argv: string[], _env: NodeJS.ProcessEnv, _log: string) => 999999)
+    const started = await call(
+      ["store", "gaps", "repair", "7", "--pause", "1ms", "--no-catch-up", "--background", "--json"],
+      { spawnJob: spawn },
+    )
+    expect(started.code, started.stderr).toBe(0)
+    const [argv = [], jobEnv = {}] = spawn.mock.calls[0] ?? []
+
+    const ran = await call(argv, { env: jobEnv })
+    expect(ran, ran.stderr).toMatchObject({ code: 0, body: { complete: true, after: { gaps: [] } } })
+    expect(connect).toHaveBeenCalledOnce()
+    const job = await call(["store", "jobs", "show", started.body.job, "--json"], { env: jobEnv })
+    expect(job.body).toMatchObject({ state: "done" })
+  })
 })

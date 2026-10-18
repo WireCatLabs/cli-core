@@ -152,8 +152,6 @@
   "messages show",
   "messages sync",
   "messages transcribe",
-  "metadata get",
-  "metadata refresh",
   "models audio download",
   "models audio list",
   "models text download",
