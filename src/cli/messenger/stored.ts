@@ -74,6 +74,33 @@ export const stored = (
       return undefined
     }
   }
+  const saveBatches = (operation: string, onBatch: (batch: HistoryBatch) => void) => {
+    // In order: a batch's messages may belong to chats only an earlier batch named.
+    let previous: Promise<void> = Promise.resolve()
+    return (batch: HistoryBatch) => {
+      if (namesFromStore) {
+        for (const { from, to } of batch.rekeys ?? []) {
+          const title = titles.get(from)
+          titles.delete(from)
+          if (title && !titles.has(to)) titles.set(to, title)
+        }
+        for (const chat of batch.chats ?? []) if (chat.title) titles.set(chat.id, chat.title)
+      }
+      // Each re-key apart: one refused leaves the chat split, never the batch's history unsaved.
+      const saving = previous.then(async () => {
+        for (const { from, to } of batch.rekeys ?? [])
+          await attempt("history.rekey", async (opened) => {
+            await opened.chats.rekeyChat(account, from, to)
+            await rekeyed?.(from, to)
+          })
+        await attempt(operation, (opened) => fill(opened, account, batch))
+      })
+      previous = saving
+      pending?.add(saving)
+      void saving.finally(() => pending?.delete(saving))
+      onBatch(batch)
+    }
+  }
   // A method not listed here saves nothing and passes through; a lane that should save adds its line.
   return throughWrapper(messenger, {
     ...(messenger.forumState
@@ -245,35 +272,14 @@ export const stored = (
       : {}),
     ...(messenger.feed
       ? {
-          feed: (onBatch, signal) => {
-            // In order: a batch's messages may belong to chats only an earlier batch named.
-            let previous: Promise<void> = Promise.resolve()
-            return (
-              messenger.feed?.((batch) => {
-                if (namesFromStore) {
-                  for (const { from, to } of batch.rekeys ?? []) {
-                    const title = titles.get(from)
-                    titles.delete(from)
-                    if (title && !titles.has(to)) titles.set(to, title)
-                  }
-                  for (const chat of batch.chats ?? []) if (chat.title) titles.set(chat.id, chat.title)
-                }
-                // Each re-key apart: one refused leaves the chat split, never the batch's history unsaved.
-                const saving = previous.then(async () => {
-                  for (const { from, to } of batch.rekeys ?? [])
-                    await attempt("history.rekey", async (opened) => {
-                      await opened.chats.rekeyChat(account, from, to)
-                      await rekeyed?.(from, to)
-                    })
-                  await attempt("history.feed", (opened) => fill(opened, account, batch))
-                })
-                previous = saving
-                pending?.add(saving)
-                void saving.finally(() => pending?.delete(saving))
-                onBatch(batch)
-              }, signal) ?? Promise.resolve()
-            )
-          },
+          feed: (onBatch, signal) =>
+            messenger.feed?.(saveBatches("history.feed", onBatch), signal) ?? Promise.resolve(),
+        }
+      : {}),
+    ...(messenger.listenHistory
+      ? {
+          listenHistory: (onBatch, signal) =>
+            messenger.listenHistory?.(saveBatches("history.listen", onBatch), signal) ?? Promise.resolve(),
         }
       : {}),
     ...(messenger.edit

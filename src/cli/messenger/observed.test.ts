@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Message, MessageEvent } from "../../domain/models.js"
-import type { MessengerAdapter } from "../../ports/messenger.js"
+import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
 import type { DiagnosticEvent } from "../../runs/events.js"
 import { startRun } from "../../runs/run.js"
 import { searchRuns } from "../runs/search.js"
@@ -79,5 +79,31 @@ describe("observed watch", () => {
       }),
     ])
     expect("listen" in wrapped).toBe(false)
+  })
+})
+
+describe("observed listenHistory", () => {
+  it("counts the batches it hands on, and each part's items, on the adapter.listenHistory response", async () => {
+    const adapter = {
+      self: () => "9",
+      close: async () => {},
+      listenHistory: async (onBatch: (batch: HistoryBatch) => void) => {
+        onBatch({ rekeys: [{ from: "1", to: "2" }], messages: [message, message], people: [] })
+        onBatch({ messages: [message] })
+      },
+    } as unknown as MessengerAdapter
+    const recorded: DiagnosticEvent[] = []
+    const wrapped = observed(adapter, (event) => recorded.push(event))
+
+    await wrapped.listenHistory?.(() => {}, new AbortController().signal)
+
+    expect(recorded).toContainEqual(
+      expect.objectContaining({
+        event: "response",
+        operation: "adapter.listenHistory",
+        outcome: "ok",
+        counts: { batches: 2, rekeys: 1, messages: 3 },
+      }),
+    )
   })
 })

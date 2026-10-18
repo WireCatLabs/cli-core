@@ -39,6 +39,17 @@ shape of this file.
   wrote, never a file it did not. `qrNeedsTerminal(command)` is the shared refusal when nobody could scan, and
   `atTerminal(input)` the shared test. `parity.json` plans `--qr-file` on `session start` and `setup` for max, beside tg and wa.
 
+- **A messenger whose history is in the store can save the history pushed during any command, not only `serve`
+  and `watch`.** `PassiveUpdates` may now also have `listenHistory(onBatch, signal)`: it hands on the same
+  `HistoryBatch`es as `feed`, re-keys included, from a connection that does not watch, without connecting. A one-shot
+  command and an MCP session then save them through `feed`'s own code, and `close` stops it with `listen` (both
+  within 5 s in all) before it waits for the saves. Without it, a WhatsApp history push that came during such a
+  command was acknowledged and then lost. An adapter without it behaves as before. Its run record is an
+  `adapter.listenHistory` request whose response counts `batches` and each part's items (`rekeys`, `chats`,
+  `messages`, …); a failure is a `listen_failed` warning for `history.listen`. The contract kit checks it as it
+  checks `listen` when the adapter has it, `OPTIONAL_METHODS` lists it, and `fakeAdapter(seed, { listenHistory: true })`
+  has it.
+
 ### Fixed
 
 - **A list that takes a query prints its help for `--help`.** Since 0.343.0, `chats list --help`, `tasks list --help`,

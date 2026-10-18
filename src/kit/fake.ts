@@ -100,7 +100,8 @@ const missing = (what: string): CliError => new CliError("not_found", `the fake 
  *
  * With `{ feed: true }` it also pushes its history, as a messenger with `history: "store"` does:
  * the chats and people in one batch, then each chat's messages in a batch of their own.
- * With `{ listen: true }` it also has `listen`, which hands on what `watch` does.
+ * With `{ listen: true }` it also has `listen`, which hands on what `watch` does, and with `{ listenHistory: true }`
+ * `listenHistory`, which hands on what `feed` does.
  */
 const withRules = (folder: Folder, { emoji, include, skip, exclude, pin }: FolderRules): void => {
   if (emoji !== undefined) folder.emoji = emoji
@@ -112,7 +113,7 @@ const withRules = (folder: Folder, { emoji, include, skip, exclude, pin }: Folde
 
 export const fakeAdapter = (
   seed: Seed = contractSeed(),
-  options: { feed?: boolean; listen?: boolean } = {},
+  options: { feed?: boolean; listen?: boolean; listenHistory?: boolean } = {},
 ): FakeAdapter => {
   const state = structuredClone(seed)
   let account: Account | null = state.account
@@ -128,6 +129,16 @@ export const fakeAdapter = (
   const folders: Folder[] = []
   const listeners = new Set<(event: MessageEvent) => void>()
   let counter = 0
+
+  const pushHistory = async (onBatch: (batch: HistoryBatch) => void, signal: AbortSignal) => {
+    if (signal.aborted) return
+    onBatch({ chats: structuredClone(state.chats), people: state.people.map(asMember) })
+    for (const chat of state.chats) {
+      const messages = messagesOf(chat.id)
+      if (messages.length > 0) onBatch({ messages: structuredClone(messages) })
+    }
+    await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
+  }
 
   const ownId = (): Id => {
     if (!account) throw new CliError("authentication_error", "the fake adapter is not logged in")
@@ -393,19 +404,8 @@ export const fakeAdapter = (
         }
       : {}),
 
-    ...(options.feed
-      ? {
-          feed: async (onBatch: (batch: HistoryBatch) => void, signal: AbortSignal) => {
-            if (signal.aborted) return
-            onBatch({ chats: structuredClone(state.chats), people: state.people.map(asMember) })
-            for (const chat of state.chats) {
-              const messages = messagesOf(chat.id)
-              if (messages.length > 0) onBatch({ messages: structuredClone(messages) })
-            }
-            await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
-          },
-        }
-      : {}),
+    ...(options.feed ? { feed: pushHistory } : {}),
+    ...(options.listenHistory ? { listenHistory: pushHistory } : {}),
 
     download: async (reference, messageId) => {
       const message = messageOf(chatOf(reference).id, messageId)

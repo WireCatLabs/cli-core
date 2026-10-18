@@ -36,7 +36,7 @@ describe("the fake adapter keeps every promise of the port", () => {
   describe("pushing its history", () => {
     runAll(
       contractCases({
-        connect: (seed) => fakeAdapter(seed, { feed: true, listen: true }),
+        connect: (seed) => fakeAdapter(seed, { feed: true, listen: true, listenHistory: true }),
         ids: wordIds,
         orderBy: "time",
       }),
@@ -173,9 +173,30 @@ describe("the contract cases catch an adapter that breaks a promise", () => {
   })
 
   it("skips the listen cases for an adapter that does not listen", async () => {
-    const listening = contractCases({ connect: fakeAdapter }).filter((one) => one.name.startsWith("listen"))
+    const listening = contractCases({ connect: fakeAdapter }).filter((one) => one.name.startsWith("listen "))
     expect(listening).toHaveLength(2)
     for (const one of listening) expect(await one.run()).toEqual({ skipped: "the adapter has no listen" })
+  })
+
+  it("a listenHistory that rejects, ends at once, or never ends", async () => {
+    const run = (listenHistory: MessengerAdapter["listenHistory"], name: string) =>
+      broken(() => ({ listenHistory }))
+        .find((one) => one.name.startsWith(name))
+        ?.run()
+    const rejecting: MessengerAdapter["listenHistory"] = async () => {
+      throw new Error("not connected")
+    }
+    await expect(run(rejecting, "listenHistory on a signal already aborted")).rejects.toThrow(/not connected/)
+    await expect(run(async () => {}, "listenHistory keeps listening")).rejects.toThrow(/ended before the signal/)
+    const endless: MessengerAdapter["listenHistory"] = () => new Promise<void>(() => {})
+    await expect(run(endless, "listenHistory on a signal already aborted")).rejects.toThrow(/did not resolve/)
+    await expect(run(endless, "listenHistory keeps listening")).rejects.toThrow(/did not end/)
+  })
+
+  it("skips the listenHistory cases for an adapter that does not listen for history", async () => {
+    const listening = contractCases({ connect: fakeAdapter }).filter((one) => one.name.startsWith("listenHistory"))
+    expect(listening).toHaveLength(2)
+    for (const one of listening) expect(await one.run()).toEqual({ skipped: "the adapter has no listenHistory" })
   })
 
   it("skips the feed case for an adapter that does not push its history", async () => {

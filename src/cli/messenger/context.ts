@@ -352,29 +352,37 @@ const settled = async (pending: Set<Promise<void>>, ms: number): Promise<boolean
   }
 }
 
+/** What a one-shot connection hands on and saves passively, and what its warnings call it. */
+interface Passive {
+  run: (signal: AbortSignal) => Promise<void> | undefined
+  operation: string
+  what: string
+}
+
 /**
- * Runs the adapter's `listen` until `stop`, which answers whether it ended in time. A listen that fails warns and
+ * Runs one passive listen until `stop`, which answers whether it ended in time. A listen that fails warns and
  * never fails the command; one that fails once the connection is `closing` is the close, not news. It still listens
  * while the connection closes, so what arrives then is saved too.
  */
 const listened = (
-  adapter: MessengerAdapter,
+  { run, operation, what }: Passive,
   events: EventSink,
   warn: (message: string) => void,
-): { closing: () => void; stop: () => Promise<boolean> } | undefined => {
-  if (!adapter.listen) return undefined
+): { closing: () => void; stop: () => Promise<boolean>; operation: string; what: string } => {
   const abort = new AbortController()
   let closing = false
   const ended = Promise.resolve()
-    .then(() => adapter.listen?.(() => {}, abort.signal))
+    .then(() => run(abort.signal))
     .catch((error: unknown) => {
       if (closing) return
-      events({ event: "warning", code: "listen_failed", operation: "messages.listen" })
+      events({ event: "warning", code: "listen_failed", operation })
       warn(
-        `messages arriving during this command are not saved: ${error instanceof Error ? error.message : String(error)}`,
+        `${what} arriving during this command are not saved: ${error instanceof Error ? error.message : String(error)}`,
       )
     })
   return {
+    operation,
+    what,
     closing: () => {
       closing = true
     },
@@ -384,6 +392,28 @@ const listened = (
     },
   }
 }
+
+/** The passive listens a connection of a `history: "store"` messenger runs: the ones its adapter has. */
+const passivesOf = (adapter: MessengerAdapter): Passive[] => [
+  ...(adapter.listen
+    ? [
+        {
+          run: (signal: AbortSignal) => adapter.listen?.(() => {}, signal),
+          operation: "messages.listen",
+          what: "messages",
+        },
+      ]
+    : []),
+  ...(adapter.listenHistory
+    ? [
+        {
+          run: (signal: AbortSignal) => adapter.listenHistory?.(() => {}, signal),
+          operation: "history.listen",
+          what: "history batches",
+        },
+      ]
+    : []),
+]
 
 /** A list that cannot be read stays as it is, which refuses every send: the warning says why. */
 const rekeyRecipients = async (
@@ -406,9 +436,9 @@ const rekeyRecipients = async (
  * the reads answer saved to the store. `close` closes the connection and the store it opened. One
  * function, so a command and an MCP tool call save and record exactly alike.
  *
- * A `history: "store"` messenger with `listen` saves what arrives for as long as a connection that does not
- * `watch` is open: what it queued while nothing was connected is delivered once and cannot be fetched again. A
- * connection opened with `listen: true` is left to its `watch`, which saves the same events.
+ * A `history: "store"` messenger with `listen` or `listenHistory` saves what arrives for as long as a connection that
+ * does not `watch` is open: what it queued while nothing was connected is delivered once and cannot be fetched again.
+ * A connection opened with `listen: true` is left to its `watch` and `feed`, which save the same.
  */
 export const connected = (
   connection: MessengerAdapter,
@@ -454,20 +484,24 @@ export const connected = (
           rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
           ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
         })
-  const passive =
-    history === "store" && self !== null && !watching ? listened(saving, events, renderer.warn) : undefined
+  const passives =
+    history === "store" && self !== null && !watching
+      ? passivesOf(saving).map((passive) => listened(passive, events, renderer.warn))
+      : []
   return {
     adapter: saving,
     close: async () => {
-      passive?.closing()
+      for (const passive of passives) passive.closing()
       try {
         await connection.close()
       } finally {
         try {
-          if (passive && !(await passive.stop())) {
-            events({ event: "warning", code: "store_not_written", operation: "messages.listen" })
-            renderer.warn("not saved to the local store: the messenger was still handing on messages at exit")
-          }
+          const ended = await Promise.all(passives.map((passive) => passive.stop()))
+          passives.forEach(({ operation, what }, at) => {
+            if (ended[at]) return
+            events({ event: "warning", code: "store_not_written", operation })
+            renderer.warn(`not saved to the local store: the messenger was still handing on ${what} at exit`)
+          })
           if (!(await settled(pending, SAVES_WAIT_MS))) {
             events({ event: "warning", code: "store_not_written", operation: "close" })
             renderer.warn("not saved to the local store: the last messages were still being written at exit")

@@ -12,7 +12,9 @@ const wait = (seconds: number) =>
   new CliError("rate_limited", `wait ${seconds} s`, { retry_after_ms: seconds * 1000, provider_error: "FLOOD_WAIT" })
 
 const setup = (
-  answers: Partial<Record<"history" | "send" | "watch" | "feed" | "listen", () => Promise<unknown>>> = {},
+  answers: Partial<
+    Record<"history" | "send" | "watch" | "feed" | "listen" | "listenHistory", () => Promise<unknown>>
+  > = {},
 ) => {
   const memory = new FloodMemory(join(mkdtempSync(join(tmpdir(), "flooded-")), "p.json"))
   const inner = {
@@ -22,6 +24,7 @@ const setup = (
     watch: vi.fn(answers.watch ?? (async () => {})),
     feed: vi.fn(answers.feed ?? (async () => {})),
     listen: vi.fn(answers.listen ?? (async () => {})),
+    listenHistory: vi.fn(answers.listenHistory ?? (async () => {})),
   }
   const warnings: string[] = []
   const adapter = flooded(inner as unknown as MessengerAdapter, memory, {
@@ -113,6 +116,20 @@ describe("a call the messenger asked to hold off on", () => {
       code: "rate_limited",
     })
     expect(inner.listen).toHaveBeenCalledTimes(2)
+  })
+
+  it("a history listen runs while a remembered wait holds the profile, as it only receives", async () => {
+    const { adapter, inner } = setup({
+      history: () => Promise.reject(wait(60)),
+      listenHistory: () => Promise.reject(wait(60)),
+    })
+
+    await expect(adapter.history?.("42", { limit: 1 })).rejects.toMatchObject({ code: "rate_limited" })
+    for (let turn = 0; turn < 2; turn += 1)
+      await expect(adapter.listenHistory?.(() => {}, new AbortController().signal)).rejects.toMatchObject({
+        code: "rate_limited",
+      })
+    expect(inner.listenHistory).toHaveBeenCalledTimes(2)
   })
 
   it("a remembered wait that cannot be written warns, and the messenger's own error still comes through", async () => {

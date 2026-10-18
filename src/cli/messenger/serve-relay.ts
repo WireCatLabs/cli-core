@@ -19,6 +19,7 @@ export const lentConnection = (
     close: async () => {},
     feed: undefined,
     listen: undefined,
+    listenHistory: undefined,
     ...(connection.watch && watchers
       ? {
           // A watcher that throws (its output limit, a closed reader) ends its own watch, never serve's.

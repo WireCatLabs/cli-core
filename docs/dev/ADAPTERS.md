@@ -220,6 +220,12 @@ Some messengers push history to the client instead of answering a request for it
   on. A command that does not watch (`messages send`, `doctor --online`, an MCP session) then saves those events to
   the store. A connection opened with `{ listen: true }` is never asked to `listen`: its `watch` saves them, and a
   command serve runs for a client borrows a connection without `listen`.
+- When the messenger also pushes history to any connection once, give `PassiveUpdates` `listenHistory(onBatch,
+  signal)` too. It hands on the same `HistoryBatch`es as `feed`, re-keys included, under the same rules as `listen`:
+  only on a connection opened without `{ listen: true }`, never connecting or waiting for the connection, resolving
+  once nothing more will be handed on after `signal` aborts. Each batch is saved as `feed`'s is. A connection that
+  watches leaves it to `feed`, and a borrowed connection has no `listenHistory`. A logout or close that ends the
+  connection must end `listenHistory` without an error, as it ends `listen`, or the command warns `listen_failed`.
 
 ## Running the contract cases
 
@@ -240,6 +246,8 @@ release ([README, "How often, and what may break"](../REFERENCE.md#how-often-and
   aborted resolves at once and does not reject, and that otherwise it keeps listening until the signal aborts and
   then resolves. They cannot see whether it connects; test that yourself. `fakeAdapter(seed, { listen: true })`
   also has `listen`.
+- The `listenHistory` cases check the same of `listenHistory`, and run only when the adapter has it.
+  `fakeAdapter(seed, { listenHistory: true })` has it: it hands on what its `feed` pushes.
 
 Each case checks with `node:assert/strict`, so the kit does not depend on a test runner. Under
 vitest, with `fakeAdapter` where your adapter over your own fake client goes:

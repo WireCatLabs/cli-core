@@ -528,8 +528,14 @@ it.skipIf(process.platform === "win32")("keeps the relay socket path short when 
 
 describe("a lent connection", () => {
   it("never listens on its own: serve already saves what its connection hears", () => {
-    const own = { self: () => "1", close: async () => {}, listen: async () => {} } as unknown as MessengerAdapter
+    const own = {
+      self: () => "1",
+      close: async () => {},
+      listen: async () => {},
+      listenHistory: async () => {},
+    } as unknown as MessengerAdapter
 
     expect(lentConnection(own).listen).toBeUndefined()
+    expect(lentConnection(own).listenHistory).toBeUndefined()
   })
 })
