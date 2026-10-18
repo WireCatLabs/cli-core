@@ -35,6 +35,7 @@ export const recordPaths = async (
     path: one.path,
     ...(files[index]?.name === undefined ? {} : { name: files[index]?.name }),
     ...(files[index]?.position === undefined ? {} : { position: files[index]?.position }),
+    ...(files[index]?.providerRef === undefined ? {} : { providerRef: files[index]?.providerRef }),
   }))
   try {
     return await messages.keepDownloaded(chat, message, downloaded)

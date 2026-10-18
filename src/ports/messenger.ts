@@ -39,6 +39,7 @@ import type {
   PollVote,
   PrivacySettings,
   ProfileFacts,
+  ProviderMetadata,
   SenderIdentity,
   Sticker,
   StickerSet,
@@ -57,6 +58,12 @@ export interface RemoteFile {
   /** Its place among the message's attachments, from 0. Without it the store matches files by kind and name. */
   position?: number
   bytes(): AsyncIterable<Uint8Array>
+  /**
+   * Set by the adapter while `bytes()` runs when the messenger handed out a new reference for the file (WhatsApp
+   * re-uploads an expired one). The whole ref, not a patch: it replaces the stored one, so a later download or a
+   * forward uses it. Read only after `bytes()` ends; needs `position` to reach the stored attachment.
+   */
+  providerRef?: ProviderMetadata
 }
 
 /** A message's files, and the kinds of attachment it has that are not files — a poll, a location. */

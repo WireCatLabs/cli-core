@@ -1,3 +1,5 @@
+import type { ProviderMetadata } from "./models.js"
+
 /** Attachments that are never a file, so their messages cost no download request. */
 export const NOT_FILES: ReadonlySet<string> = new Set(["webpage", "share", "poll", "location", "contact"])
 
@@ -11,6 +13,8 @@ export interface DownloadedFile {
   /** The attachment's place in the message, where the adapter knows it. */
   position?: number
   path: string
+  /** A new reference the messenger gave while downloading; it replaces the stored one. */
+  providerRef?: ProviderMetadata
 }
 
 export interface StoredAttachment {

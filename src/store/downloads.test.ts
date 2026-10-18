@@ -96,6 +96,31 @@ describe("where downloads went", () => {
     ])
   })
 
+  it("**replaces the stored ref with one the messenger gave while downloading, and a later read sees it**", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    const attachments: Attachment[] = [
+      { kind: "photo", providerRef: { directPath: "/synthetic/expired" } },
+      { kind: "file", name: "a.pdf", providerRef: { directPath: "/synthetic/kept" } },
+    ]
+    await store.messages.saveMessages(OWNER, "-1", [message(attachments)], { via: "history" })
+
+    await store.attachments.keepDownloads(OWNER, "-1", "42", [
+      { kind: "photo", position: 0, path: "/saved/42-1.jpg", providerRef: { directPath: "/synthetic/fresh" } },
+      { kind: "file", position: 1, path: "/saved/a.pdf", providerRef: {} },
+    ])
+    await store.attachments.keepDownloads({ provider: "tg", account: "2" }, "-1", "42", [
+      { kind: "photo", position: 0, path: "/other", providerRef: { directPath: "/synthetic/other-account" } },
+    ])
+    const read = await store.messages.message(OWNER, "42", { chatId: "-1" })
+    await store.close()
+
+    expect(read?.attachments.map((one) => one.providerRef)).toEqual([
+      { directPath: "/synthetic/fresh" },
+      { directPath: "/synthetic/kept" },
+    ])
+  })
+
   it("records nothing for a message or chat the store does not hold", async () => {
     const path = fresh()
     const store = await openStore({ path })

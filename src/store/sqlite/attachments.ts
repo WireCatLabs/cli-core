@@ -5,7 +5,7 @@ import { folded } from "./folded.js"
 import type { StoreContext } from "./open.js"
 import { attachments, messages } from "./schema.js"
 
-/** Records where each saved file went; answers how many attachments it could name with certainty. */
+/** Records where each saved file went, and a new reference the messenger gave for it; answers how many attachments it could name with certainty. */
 export const keepDownloads = (
   { orm }: StoreContext,
   chatKey: number,
@@ -30,7 +30,13 @@ export const keepDownloads = (
     if (position === undefined || !file) return
     orm
       .update(attachments)
-      .set({ localPath: file.path, localPathFolded: folded(file.path) })
+      .set({
+        localPath: file.path,
+        localPathFolded: folded(file.path),
+        ...(file.providerRef && Object.keys(file.providerRef).length > 0
+          ? { providerRef: JSON.stringify(file.providerRef) }
+          : {}),
+      })
       .where(
         and(
           and(eq(attachments.attachableType, "message"), eq(attachments.attachableId, message.pk)),
