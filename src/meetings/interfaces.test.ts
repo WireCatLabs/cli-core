@@ -1,9 +1,10 @@
+import { describeProgram, flatten } from "@wirecat/cli-base/commands"
 import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { meetingDetails, meetingSummary, meetingTranscript } from "./answers.js"
-import { addMeetingCommands, type MeetingCommandDeps } from "./cli/index.js"
+import { addMeetingCommands, addMeetingProjectEvidenceCommand, type MeetingCommandDeps } from "./cli/index.js"
 import { meeting } from "./item.js"
 import { callMeetingTool, meetingTools } from "./mcp/index.js"
 import { meetingDetailsAnswer, meetingsList, meetingsQuery } from "./reads.js"
@@ -32,6 +33,30 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
   return { store, d, outputs, run }
 }
 describe("meeting commands", () => {
+  it("declares effects on every command it registers, and none on a group that only holds commands", () => {
+    const program = new Command("meet")
+    addMeetingCommands(program, { store: memoryMeetingStore(), accountId: 1, write() {} })
+    addMeetingProjectEvidenceCommand(program, { read: async () => ({}) as never, signal: () => undefined, output() {} })
+    const effects = Object.fromEntries(
+      flatten(describeProgram(program)).map((info) => [info.path.join(" "), info.effects ?? null]),
+    )
+
+    expect(effects).toEqual({
+      meetings: null,
+      "meetings list": { remote: "none", local: "read" },
+      "meetings show": { remote: "none", local: "read" },
+      "meetings transcript": { remote: "none", local: "read" },
+      "meetings summary": { remote: "none", local: "read" },
+      "meetings export": { remote: "none", local: "write" },
+      "meetings people": { remote: "none", local: "read" },
+      "meetings sync": { remote: "read", local: "write" },
+      "meetings import": { remote: "none", local: "write" },
+      "meetings projects": null,
+      "meetings projects evidence": { remote: "none", local: "read" },
+      events: null,
+      "events list": { remote: "none", local: "read" },
+    })
+  })
   it("lists, shows, reads transcripts, finds participants and lists events", async () => {
     const { run, outputs, d } = await setup()
     await run(["meetings", "list", "--json", "--limit", "1", "--page", "1", "started_at:[1970-01-01 TO 1970-01-02]"])

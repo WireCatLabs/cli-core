@@ -1,5 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery, fieldsHelp } from "@wirecat/cli-base/query"
+import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
@@ -44,6 +45,10 @@ const date = (text: string) => {
   if (!Number.isFinite(Date.parse(text))) throw new InvalidArgumentError("expected an ISO date or timestamp")
   return Date.parse(text)
 }
+const LOCAL_READ: Effects = { remote: "none", local: "read" }
+const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
+const FETCH: Effects = { remote: "read", local: "write" }
+
 export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): void => {
   const group = program.command("meetings").description("stored meetings and their records")
   const output = (command: Command) =>
@@ -64,7 +69,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     .allowUnknownOption()
     .argument("[query...]", "field:value terms that narrow the list — the fields are below")
     .addHelpText("after", `\n${fieldsHelp(MEETING_QUERY, MEETING_QUERY_GUIDE)}`)
-  annotate(list, { query: defineQuery(MEETING_QUERY), output: { entity: "meeting" } })
+  annotate(list, { effects: LOCAL_READ, query: defineQuery(MEETING_QUERY), output: { entity: "meeting" } })
   output(list)
     .option("--limit <n>", "meetings per page", integer, 100)
     .option("--page <n>", "page number", integer, 1)
@@ -80,7 +85,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     })
   output(
-    annotate(group.command("show"), { output: { entity: "meeting_details" } })
+    annotate(group.command("show"), { effects: LOCAL_READ, output: { entity: "meeting_details" } })
       .description("show a stored meeting")
       .argument("<meeting>", "stored meeting id", integer)
       .addHelpText("after", SAVE_HELP),
@@ -88,7 +93,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     print(await meetingDetailsAnswer(deps.store, id, deps.accountId), command)
   })
   output(
-    annotate(group.command("transcript"), { output: { entity: "meeting_transcript" } })
+    annotate(group.command("transcript"), { effects: LOCAL_READ, output: { entity: "meeting_transcript" } })
       .description("show current meeting transcripts")
       .argument("<meeting>", "stored meeting id", integer)
       .option("--history", "include superseded transcript versions")
@@ -97,15 +102,14 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     print(await meetingTranscriptAnswer(deps.store, id, deps.accountId, { history: opts.history }), command)
   })
   output(
-    annotate(group.command("summary"), { output: { entity: "meeting_summary" } })
+    annotate(group.command("summary"), { effects: LOCAL_READ, output: { entity: "meeting_summary" } })
       .description("show stored meeting summaries")
       .argument("<meeting>", "stored meeting id", integer),
   ).action(async (id: number, _opts: unknown, command: Command) => {
     print(await meetingSummaryAnswer(deps.store, id, deps.accountId), command)
   })
   output(
-    group
-      .command("export")
+    annotate(group.command("export"), { effects: LOCAL_WRITE })
       .description("export a meeting as Markdown or one transcript as WebVTT")
       .argument("<meeting>", "stored meeting id", integer)
       .addOption(new Option("--format <format>", "export format").choices(["markdown", "vtt"]).default("markdown"))
@@ -133,8 +137,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     },
   )
   output(
-    group
-      .command("people")
+    annotate(group.command("people"), { effects: LOCAL_READ })
       .description("find meeting participants by name or email")
       .argument("<query>", "a name or an email address"),
   )
@@ -153,7 +156,11 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
         command,
       )
     })
-  output(group.command("sync").description("bring the stored meetings up to date from the connected account"))
+  output(
+    annotate(group.command("sync"), { effects: FETCH }).description(
+      "bring the stored meetings up to date from the connected account",
+    ),
+  )
     .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
     .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)
     .action(async (opts: { sinceTime?: number; lookbackDays: number }, command: Command) => {
@@ -169,8 +176,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     })
   output(
-    group
-      .command("import")
+    annotate(group.command("import"), { effects: LOCAL_WRITE })
       .description("import downloaded meeting transcripts")
       .argument("<folder>", "folder of transcripts downloaded from the provider"),
   ).action(async (folder: string, _opts: unknown, command: Command) => {
@@ -181,11 +187,9 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     print(await importFiles(files, deps.store, deps.now?.()), command)
   })
   output(
-    program
-      .command("events")
-      .description("the owner's stored events")
-      .command("list")
-      .description("list stored events"),
+    annotate(program.command("events").description("the owner's stored events").command("list"), {
+      effects: LOCAL_READ,
+    }).description("list stored events"),
   ).action(async (_opts: unknown, command: Command) => {
     print(listed(await deps.store.events()), command)
   })
