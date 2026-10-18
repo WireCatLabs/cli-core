@@ -329,11 +329,11 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
             : `Not serving profile ${unit.profile}.${isInstalled && gaveUp === undefined && state.detail?.startsWith("failed") ? ` The unit failed — \`${app.command} server logs\`.` : ""}`,
           ...(gaveUp === exitCodeFor("authentication_error")
             ? [
-                `It stopped because the login is no longer valid, and it will not restart by itself — \`${app.command} session start\`, then \`${app.command} server start\`.`,
+                `It stopped because the login is no longer valid, and it will not restart by itself — \`${app.command} ${unit.profile} session start\`, then \`${app.command} ${unit.profile} server start\`.`,
               ]
             : gaveUp !== undefined
               ? [
-                  `It stopped with ${gaveUpReason ?? `exit code ${gaveUp}`}, which a restart would not fix, so it will not restart by itself — \`${app.command} server logs\`, then \`${app.command} server start\`.`,
+                  `It stopped with ${gaveUpReason ?? `exit code ${gaveUp}`}, which a restart would not fix, so it will not restart by itself — \`${app.command} ${unit.profile} server logs\`, then \`${app.command} ${unit.profile} server start\`.`,
                 ]
               : []),
           ...(left

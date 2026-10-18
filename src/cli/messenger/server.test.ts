@@ -575,7 +575,7 @@ describe("a CLI's own server process", () => {
     })
     const said = (await call(["status"], env, system, true, options)).text
     expect(said).toContain("the login is no longer valid")
-    expect(said).toContain("`chat session start`, then `chat server start`")
+    expect(said).toContain("`chat default session start`, then `chat default server start`")
     expect(said).not.toContain("The unit failed")
 
     const darwin = machine("darwin", {
@@ -583,7 +583,7 @@ describe("a CLI's own server process", () => {
     }).system
     await call(["install"], env, darwin, false, options)
     expect((await call(["status"], env, darwin, true, options)).text).toContain(
-      "It stopped with rate_limited, which a restart would not fix",
+      "It stopped with rate_limited, which a restart would not fix, so it will not restart by itself — `chat default server logs`, then `chat default server start`",
     )
   })
 
