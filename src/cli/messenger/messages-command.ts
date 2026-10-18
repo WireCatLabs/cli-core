@@ -53,9 +53,11 @@ export const messagesCommand = (messenger: Messenger): Command => {
     .argument("<chat>", messenger.chatArgument)
     .argument(
       "[query...]",
-      messenger.topics === false
-        ? "where to start: id<42, date>2026-10-01"
-        : "where to start and which topic: id<42, date>2026-10-01, topic:12",
+      `${
+        messenger.topics === false
+          ? "where to start: id<42, date>2026-10-01"
+          : "where to start and which topic: id<42, date>2026-10-01, topic:12"
+      }${messenger.messageStars === true ? "; starred:true keeps the ones you starred" : ""}`,
     )
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it")

@@ -356,6 +356,123 @@ describe("votes in a pushed history batch", () => {
   })
 })
 
+describe("the owner's stars in the store", () => {
+  const starredIds = async (store: MessageStore, chatId = "7") =>
+    (await store.messages.messages(account, chatId, { limit: 10, starred: true })).items.map((one) => one.id)
+  const star = (messageId: string, starred: boolean) => ({
+    event: "star" as const,
+    chatId: "7",
+    chatTitle: "Book club",
+    messageId,
+    starred,
+  })
+
+  it("a star set here is kept once the messenger took it, and an unstar takes it off", async () => {
+    const { store } = await setUp()
+    const asked: unknown[] = []
+    const wrapped = await listening(store, [], { star: async (...args: unknown[]) => asked.push(args) })
+
+    await wrapped.star?.("7", "1", true)
+    expect(await starredIds(store)).toEqual(["1"])
+    expect((await store.messages.message(account, "1", { chatId: "7" }))?.starred).toBe(true)
+
+    await wrapped.star?.("7", "1", false)
+    expect(asked).toEqual([
+      ["7", "1", true],
+      ["7", "1", false],
+    ])
+    expect(await starredIds(store)).toEqual([])
+  })
+
+  it("a star the messenger refused is not kept", async () => {
+    const { store } = await setUp()
+    const wrapped = await listening(store, [], {
+      star: async () => {
+        throw new Error("refused")
+      },
+    })
+
+    await expect(wrapped.star?.("7", "1", true)).rejects.toThrow("refused")
+    expect(await starredIds(store)).toEqual([])
+  })
+
+  it("keeps the stars `watch` hears, the same one twice as one, the last word winning", async () => {
+    const { store } = await setUp()
+    await store.messages.saveMessages(account, "7", [message("2", "the venue")], { via: "history" })
+
+    await listening(store, [star("1", true), star("1", true), star("2", true), star("2", false)])
+
+    expect(await starredIds(store)).toEqual(["1"])
+  })
+
+  it("keeps a pushed batch's stars after its messages, and a message's own star", async () => {
+    const { store } = await setUp()
+    const pending = new Set<Promise<void>>()
+    const batch: HistoryBatch = {
+      messages: [message("40", "When?"), { ...message("41", "Where?", "8"), starred: true }],
+      stars: [{ chatId: "7", messageId: "40", starred: true }],
+    }
+    const adapter = { self: () => "500", feed: async (onBatch: (one: HistoryBatch) => void) => onBatch(batch) }
+    const wrapped = stored(adapter as unknown as MessengerAdapter, {
+      account,
+      store: async () => store,
+      warn: () => {},
+      events: () => {},
+      pending,
+    })
+    await wrapped.feed?.(() => {}, new AbortController().signal)
+    await Promise.all(pending)
+
+    expect(await starredIds(store)).toEqual(["40"])
+    expect(await starredIds(store, "8")).toEqual(["41"])
+  })
+
+  it("a message saved again without a word on its star keeps it", async () => {
+    const { store } = await setUp()
+    await store.messages.saveStar(account, "7", "1", true)
+
+    await listening(store, [
+      {
+        event: "edit",
+        message: { ...message("1", "on wednesday"), editedAt: "2026-09-26T11:00:00.000Z", chatTitle: "Book club" },
+      },
+    ])
+    await store.messages.saveMessages(account, "7", [message("1", "on wednesday")], { via: "history" })
+
+    expect(await starredIds(store)).toEqual(["1"])
+    await store.messages.saveMessages(account, "7", [{ ...message("1", "on wednesday"), starred: false }], {
+      via: "history",
+    })
+    expect(await starredIds(store)).toEqual([])
+  })
+
+  it("a star on a message the store does not hold, or holds as deleted, keeps nothing", async () => {
+    const { store } = await setUp()
+    await store.messages.markDeleted(account, ["1"], { chatId: "7" })
+
+    expect(await store.messages.saveStar(account, "7", "1", true)).toBe(false)
+    expect(await store.messages.saveStar(account, "7", "404", true)).toBe(false)
+    expect(await store.messages.saveStar(account, "99", "1", true)).toBe(false)
+  })
+
+  it("is the account's own: another account's message with the same ids stays unstarred", async () => {
+    const { store } = await setUp()
+    const other = { provider: "test", account: "600" }
+    await store.chats.saveChats(other, [
+      { id: "7", title: "Book club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 },
+    ])
+    await store.messages.saveMessages(other, "7", [message("1", "the meeting is on tuesday")], { via: "history" })
+
+    await store.messages.saveStar(account, "7", "1", true)
+
+    expect(await starredIds(store)).toEqual(["1"])
+    expect((await store.messages.messages(other, "7", { limit: 10, starred: true })).items).toEqual([])
+    expect(
+      (await store.messages.messages(other, "7", { limit: 10, starred: false })).items.map((one) => one.id),
+    ).toEqual(["1"])
+  })
+})
+
 describe("the stored-messages lookup an adapter gets", () => {
   const at = (id: string, chatId: string, timestamp: string, outgoing = true): Message => ({
     ...message(id, `message ${id}`, chatId),

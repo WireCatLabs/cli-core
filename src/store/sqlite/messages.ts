@@ -211,6 +211,12 @@ export const upsertMessage = (
   }
 
   if (message.counterObservations) applyCounterObservations(context, pk, message.counterObservations)
+  if (message.starred !== undefined)
+    orm
+      .update(messages)
+      .set({ starred: message.starred ? 1 : 0 })
+      .where(eq(messages.id, pk))
+      .run()
 
   const root = message.threadRootId ?? message.threadId
   if (root !== undefined) {
@@ -285,6 +291,15 @@ export const saveReactions = ({ orm }: StoreContext, chatKey: number, messageId:
   orm
     .update(messages)
     .set({ reactions: JSON.stringify(reactions) })
+    .where(and(eq(messages.chatId, chatKey), eq(messages.externalId, messageId), isNull(messages.deletedAt)))
+    .returning({ pk: messages.id })
+    .all().length > 0
+
+/** Answers whether the message is held; a deleted one keeps no star. */
+export const saveStar = ({ orm }: StoreContext, chatKey: number, messageId: Id, starred: boolean): boolean =>
+  orm
+    .update(messages)
+    .set({ starred: starred ? 1 : 0 })
     .where(and(eq(messages.chatId, chatKey), eq(messages.externalId, messageId), isNull(messages.deletedAt)))
     .returning({ pk: messages.id })
     .all().length > 0

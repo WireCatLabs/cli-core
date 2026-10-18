@@ -149,11 +149,12 @@ export const QUERY_FIELDS: readonly MessageField[] = [
   {
     name: "is",
     example: "is:unread",
-    index: "emails.read / emails.flagged",
+    index: "emails.read / emails.flagged / messages.starred",
     aliases: [],
     type: "enum",
     operators: terms,
-    normalization: "lowercase; mail only; starred is flagged; an unknown state matches neither read nor unread",
+    normalization:
+      "lowercase; read and unread are mail only; starred is a flagged email or a message the owner starred; an unknown state matches neither read nor unread",
     support: "A1",
     values: ["unread", "read", "starred"],
   },

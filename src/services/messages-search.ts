@@ -166,7 +166,9 @@ export const prepareLucene = async (
   )
   const scopeAccounts = accounts.map(({ provider, account }) => ({ provider, account }))
   const chatLookup = scopeAccounts.some(({ provider }) => provider === MAIL) ? withMailThreads(store) : store
-  const mailField = leaves.find(({ field }) => MAIL_FIELDS.has(field))
+  const mailField = leaves.find(
+    ({ field, value }) => MAIL_FIELDS.has(field) && !(field === "is" && value.toLowerCase() === "starred"),
+  )
   if (mailField && !scopeAccounts.some(({ provider }) => provider === MAIL))
     searchError(
       "query.unsupported-field",

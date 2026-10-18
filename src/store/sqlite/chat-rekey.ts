@@ -110,11 +110,16 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
     .map((row) => ({ gone: Number(row.gone), kept: Number(row.kept), deleted: Boolean(row.deleted) }))
   const moveMessagePointers = pointerMover(context, "message")
   const threads = database.prepare("UPDATE messages SET thread_root_id = ? WHERE thread_root_id = ?")
+  // Without a time on either star, the kept copy's word stands and the absorbed one only fills a gap.
+  const star = database.prepare(
+    "UPDATE messages SET starred = (SELECT starred FROM messages WHERE id = ?) WHERE id = ? AND starred IS NULL",
+  )
   const links = ["message_id", "parent_id"].map((column) =>
     database.prepare(`UPDATE OR IGNORE message_links SET ${column} = ? WHERE ${column} = ?`),
   )
   for (const pair of pairs) {
     threads.run(pair.kept, pair.gone)
+    star.run(pair.gone, pair.kept)
     // Both copies become tombstones before anything moves, so only what a deletion keeps (the owner's links) moves.
     if (pair.deleted) {
       tombstone(context, pair.gone)

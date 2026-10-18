@@ -307,6 +307,15 @@ export const stored = (
           },
         }
       : {}),
+    ...(messenger.star
+      ? {
+          // The messenger may not echo the owner's own star back, and `messages list starred:true` reads the store.
+          star: async (chatId, messageId, starred) => {
+            await capability(messenger, "star", "star a message")(chatId, messageId, starred)
+            await save("messages.star", (opened) => opened.messages.saveStar(account, chatId, messageId, starred))
+          },
+        }
+      : {}),
     ...(messenger.forward
       ? {
           forward: async (fromChatId, messageId, toChatId, options) => {
@@ -392,22 +401,26 @@ const titled = (event: MessageEvent, titles: Map<Id, string>): MessageEvent => {
 
 /**
  * A pushed batch as the store keeps it. No `markChatsLeft`: a push names some chats, never all of them.
- * No `seenAt`: a pushed snapshot may be older than a deletion this store already holds. A chat's votes go in the
- * transaction of its messages, after them, so a poll in the batch is held, or known deleted, before its votes.
+ * No `seenAt`: a pushed snapshot may be older than a deletion this store already holds. A chat's votes and stars go
+ * in the transaction of its messages, after them, so a message in the batch is held, or known deleted, before them.
  */
 const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatch): Promise<void> => {
   if (batch.chats?.length) await store.chats.saveChats(account, batch.chats)
   if (batch.people?.length) await store.people.savePeople(account, batch.people)
-  const byChat = new Map<Id, { messages: Message[]; votes: { messageId: Id; vote: PollVote }[] }>()
+  const byChat = new Map<
+    Id,
+    { messages: Message[]; votes: { messageId: Id; vote: PollVote }[]; stars: { messageId: Id; starred: boolean }[] }
+  >()
   const of = (chatId: Id) => {
-    const held = byChat.get(chatId) ?? { messages: [], votes: [] }
+    const held = byChat.get(chatId) ?? { messages: [], votes: [], stars: [] }
     byChat.set(chatId, held)
     return held
   }
   for (const message of batch.messages ?? []) of(message.chatId).messages.push(message)
   for (const { chatId, messageId, vote } of batch.votes ?? []) of(chatId).votes.push({ messageId, vote })
-  for (const [chatId, { messages, votes }] of byChat)
-    await store.messages.saveMessages(account, chatId, messages, { via: "history", votes })
+  for (const { chatId, messageId, starred } of batch.stars ?? []) of(chatId).stars.push({ messageId, starred })
+  for (const [chatId, { messages, votes, stars }] of byChat)
+    await store.messages.saveMessages(account, chatId, messages, { via: "history", votes, stars })
   const changes = new Map<Id, ChatEvent[]>()
   for (const { chatId, change } of batch.events ?? []) changes.set(chatId, [...(changes.get(chatId) ?? []), change])
   for (const [chatId, events] of changes) await store.roster.saveChatEvents(account, chatId, events)
@@ -415,7 +428,7 @@ const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatc
 
 /**
  * Each change as the store keeps it: a message or an edit upserted, a deletion a tombstone, reactions replaced, a
- * voter's vote replacing their older one, a chat event kept once.
+ * voter's vote replacing their older one, a star set or taken off, a chat event kept once.
  */
 const keep = async (
   store: MessageStore,
@@ -440,6 +453,9 @@ const keep = async (
       return
     case "vote":
       await store.messages.saveVote(account, event.chatId, event.messageId, event.vote)
+      return
+    case "star":
+      await store.messages.saveStar(account, event.chatId, event.messageId, event.starred)
       return
     case "chat_event":
       await store.roster.saveChatEvents(account, event.chatId, [event.change])

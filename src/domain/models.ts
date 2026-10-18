@@ -341,6 +341,11 @@ export interface Message {
   /** ISO 8601 — when the provider will send it. Present only on a message still waiting in the queue. */
   scheduledFor?: string
   providerMetadata?: ProviderMetadata
+  /**
+   * The owner's star, where the messenger has stars (`messageStars`). Read back only when set. On a save, absent
+   * keeps what the store holds: a fetch, an edit or another messenger's message says nothing about it.
+   */
+  starred?: boolean
 }
 
 /**
@@ -402,6 +407,15 @@ export interface PollVoteEvent {
   vote: PollVote
 }
 
+/** The owner starred a message or took the star off, here or on another device; saved, the same twice is one. */
+export interface MessageStarEvent {
+  event: "star"
+  chatId: Id
+  chatTitle: string | null
+  messageId: Id
+  starred: boolean
+}
+
 /** Who joined, left, was added, removed, promoted or demoted, or a new title, as it happens; saved for `chats events`. */
 export interface ChatEventNotice {
   event: "chat_event"
@@ -410,8 +424,13 @@ export interface ChatEventNotice {
   change: ChatEvent
 }
 
-/** What a listening connection reports: a new message, a change to one, a vote in a poll, or a change to a chat. */
-export type MessageEvent = { event: "message"; message: MessageHit } | MessageChange | PollVoteEvent | ChatEventNotice
+/** What a listening connection reports: a new message, a change to one, a vote, a star, or a change to a chat. */
+export type MessageEvent =
+  | { event: "message"; message: MessageHit }
+  | MessageChange
+  | PollVoteEvent
+  | MessageStarEvent
+  | ChatEventNotice
 
 /** One chat's share of `inbox`: other people's messages since the last check, oldest first. */
 export interface InboxChat extends Pick<Chat, "id" | "title" | "kind" | "unreadCount"> {

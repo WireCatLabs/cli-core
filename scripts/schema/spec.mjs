@@ -177,6 +177,7 @@ const EDITS = {
           note: "the message a thread hangs from: a Slack thread, comments under a channel post, replies in a topic; null outside a thread",
         },
       ],
+      ["starred", "integer", { note: "1 when the owner starred the message; only this account sees the star" }],
     ],
     keys: [
       "INDEX (chat_id, sent_at DESC)",

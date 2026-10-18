@@ -54,6 +54,8 @@ export interface ListWindow {
   beforeTime?: number
   /** Read forward from this message or moment, parsed by the caller in its own words (`afterOf`). */
   after?: After
+  /** Only the messages the owner starred (true) or did not (false); the store answers it, never the messenger. */
+  starred?: boolean
   /** Only this forum topic. */
   threadId?: string
 }
@@ -341,8 +343,21 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
 
   const listPage = async (
     chat: string,
-    { limit, before, beforeTime, after, threadId: typedThread }: ListWindow,
+    { limit, before, beforeTime, after, threadId: typedThread, starred }: ListWindow,
   ): Promise<Page<Message>> => {
+    if (starred !== undefined) {
+      if (!fromStore(deps))
+        throw new CliError("validation_error", "starred: reads the local store; not while reading from the messenger")
+      if (typedThread !== undefined || beforeTime !== undefined || after !== undefined)
+        throw new CliError("validation_error", "starred: pages back through the whole chat; give only id< with it")
+      return inStore(async (store, account) =>
+        store.messages.messages(account, await readChatId(deps, chat, store, account), {
+          limit,
+          ...(before === undefined ? {} : { before }),
+          starred,
+        }),
+      )
+    }
     const threadId = threadIdOf(typedThread)
     if (threadId !== undefined) return topicPage(chat, threadId, { limit, before, beforeTime, after })
     if (beforeTime !== undefined) {
