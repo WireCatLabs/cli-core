@@ -97,7 +97,12 @@ describe("saving a chat the store already holds", () => {
 
   it("stores none of the fields a first save leaves out", async () => {
     const { store, stored } = await saving([{ id: "a", kind: "group" }])
-    expect(await stored("a")).toMatchObject({ title: null, unreadCount: null, lastMessageAt: null })
+    expect(await stored("a")).toMatchObject({
+      title: null,
+      unreadCount: null,
+      lastMessageAt: null,
+      participantsCount: null,
+    })
     await store.close()
   })
 

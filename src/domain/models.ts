@@ -32,7 +32,10 @@ export interface Chat {
   id: Id
   title: string | null
   kind: ChatKind
-  /** `null` means the provider did not say, which is not the same as zero. */
+  /**
+   * `null` means the provider did not say, which is not the same as zero. A save that does not know it leaves it
+   * out.
+   */
   unreadCount: number | null
   /** ISO 8601, or `null` when the chat has never had a message. */
   lastMessageAt: string | null
