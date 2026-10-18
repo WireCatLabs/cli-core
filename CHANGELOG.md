@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`commandsText(program, describeProgram(program), scope?)` from `./cli`**: the `<tool> commands` text list by
+  section, for a tool that builds its own commander program and keeps its own `commands` command (zm, drive, memo).
+  cli-core's groups land in their section on such a program too; before, only `createProgram` put them there.
+
 ### Changed — may break callers
 
 - **Saving a chat keeps a `title`, `unreadCount`, `lastMessageAt` or `participantsCount` the update leaves out**, the
@@ -16,6 +22,11 @@ shape of this file.
   `HistoryBatch.chats` take the new `ChatUpdate` type, a `Chat` with those four fields optional; a full `Chat` still
   fits, and every adapter today sends all four, so none has to change. To clear a field, send `null`, never leave it
   out. Code that reads `HistoryBatch.chats` or `Delta.chats` now sees the four fields as possibly absent.
+
+### Fixed
+
+- **A guide step may ask for help.** `checkGuide` refused `chat messages list --help` and `-h` ("no option --help")
+  and `chat messages --help` ("needs one of: …"); a step with the help flag now only needs its command path to exist.
 
 ## 0.347.0 — 18.10.2026
 

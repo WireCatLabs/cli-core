@@ -241,6 +241,9 @@ export const checkStep = (program: Command, run: string): string[] => {
     at = next
   }
   if (at === program) return [`no command "${rest[0] ?? ""}" — steps leave out the profile`]
+  const help = (at as unknown as { _getHelpOption: () => Option | null })._getHelpOption()
+  const beforeDashes = rest.slice(index, rest.includes("--") ? rest.indexOf("--") : undefined)
+  if (help && beforeDashes.some((word) => word === help.long || word === help.short)) return []
   if (at.commands.length > 0) return [`needs one of: ${at.commands.map((one) => one.name()).join(", ")}`]
   for (const command of chain) silent(command)
   const problems: string[] = []

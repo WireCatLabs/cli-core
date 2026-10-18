@@ -21,10 +21,13 @@ export const inSection = <T extends Command>(command: T, section: HelpSection): 
   return command
 }
 
-/** The nearest section on the command or above it; `other` when none is set. */
+/**
+ * The nearest section on the command or above it, then cli-core's own for a top-level group of that name; `other`
+ * when neither is set. Looked up when listed, so a tool with its own program needs no install step.
+ */
 export const sectionOf = (command: Command): keyof typeof SECTIONS => {
   for (let at: Command | null = command; at; at = at.parent) {
-    const section = sections.get(at)
+    const section = sections.get(at) ?? (at.parent && !at.parent.parent ? CORE_SECTIONS[at.name()] : undefined)
     if (section) return section
   }
   return "other"
@@ -72,12 +75,4 @@ const CORE_SECTIONS: Readonly<Record<string, HelpSection>> = {
   skill: "setup",
   store: "setup",
   upgrade: "setup",
-}
-
-/** Puts each of cli-core's groups mounted on `program` in its section, unless the tool already chose one. */
-export const sectionCoreGroups = (program: Command): void => {
-  for (const command of program.commands) {
-    const section = CORE_SECTIONS[command.name()]
-    if (section && !sections.has(command)) inSection(command, section)
-  }
 }

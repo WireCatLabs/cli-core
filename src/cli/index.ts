@@ -246,6 +246,7 @@ export {
   type NextChoice,
   nextUsually,
 } from "./help/command-help.js"
+export { commandsText } from "./help/commands-text.js"
 export {
   type FirstScreen,
   type FirstScreenLine,

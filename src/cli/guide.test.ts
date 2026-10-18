@@ -109,6 +109,10 @@ describe("checkGuide", () => {
     expect(checkStep(createProgram(sharedProgram), line).join("; ")).toContain(problem)
   })
 
+  it.each(["chat messages list --help", "chat messages list -h", "chat messages --help"])("accepts %s", (line) => {
+    expect(checkStep(createProgram(sharedProgram), line)).toEqual([])
+  })
+
   it("accepts the root's options and quoted words", () => {
     expect(checkStep(createProgram(sharedProgram), 'chat messages list "Book club" --json --limit=5')).toEqual([])
   })
