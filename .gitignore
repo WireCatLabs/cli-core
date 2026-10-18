@@ -11,3 +11,7 @@ coverage/
 packages/sqlite/lib/
 packages/sqlite/*.tgz
 /.live/
+
+# Internal working files: kept on the machine, not published.
+/CLEANUP.md
+/docs/dev/*-handoff.md

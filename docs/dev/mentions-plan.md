@@ -1,6 +1,6 @@
 # Plan — mentions: phones, e-mail, links, documents, names and places found in text
 
-Next steps: [mentions-next-handoff.md](mentions-next-handoff.md). What is built is described in [MENTIONS.md](MENTIONS.md) and, for the user, [mentions.md](../mentions.md).
+What is built is described in [MENTIONS.md](MENTIONS.md) and, for the user, [mentions.md](../mentions.md).
 
 Status: **approved 2026-10-13 (owner, NEED-1015 A); phones in the clear (NEED-1016 B); name `mentions` (NEED-1027 A).** The owner's words (cli-private
 journal `2026-10-13-field-test-followups.md`, NEED-1006): a command that pulls such values out and records
