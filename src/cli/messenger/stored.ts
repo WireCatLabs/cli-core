@@ -197,7 +197,12 @@ export const stored = (
             let previous: Promise<void> = Promise.resolve()
             return (
               messenger.feed?.((batch) => {
-                const saving = previous.then(() => attempt("history.feed", (opened) => fill(opened, account, batch)))
+                // Each re-key apart: one refused leaves the chat split, never the batch's history unsaved.
+                const saving = previous.then(async () => {
+                  for (const { from, to } of batch.rekeys ?? [])
+                    await attempt("history.rekey", (opened) => opened.chats.rekeyChat(account, from, to))
+                  await attempt("history.feed", (opened) => fill(opened, account, batch))
+                })
                 previous = saving
                 pending?.add(saving)
                 void saving.finally(() => pending?.delete(saving))

@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **A stored chat can take a new id.** When a messenger starts naming a chat by another id (WhatsApp moving a person
+  from their phone number to a private id), `store.chats.rekeyChat(account, from, to)` renames the stored chat, or
+  merges it with the chat already stored under the new id, so one conversation stays one chat. Messages, files, tags,
+  notes, votes, history markers and task sources move with it; a message both held is kept once, and stays deleted
+  if either copy was. A messenger that pushes its history sends it as `rekeys` in a pushed batch, which the store
+  applies before the batch's messages. Running it again changes nothing. No store migration.
+
 ## 0.334.0 — 18.10.2026
 
 ### Added
