@@ -1,12 +1,13 @@
 import { CliError, EXIT_CODES, GENERIC_FAILURE } from "@wirecat/cli-base"
-import { annotate, type CommandInfo, describeOptions, describeProgram, flatten } from "@wirecat/cli-base/commands"
-import { CRASH_CODE, writes } from "@wirecat/cli-base/standards"
+import { annotate, type CommandInfo, describeOptions, describeProgram } from "@wirecat/cli-base/commands"
+import { CRASH_CODE } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
 import { commandContract, findCommand } from "./command-contract.js"
-import { outputFor } from "./context.js"
+import { environmentOf, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
 import { renderDocument } from "./envelope.js"
+import { commandsText } from "./help/commands-text.js"
 import { rootOf } from "./profile.js"
 
 /**
@@ -21,25 +22,19 @@ export const CONTRACT = 3
  */
 export const commandsCommand = (app: AppIdentity): Command => {
   const command = annotate(new Command("commands"), { effects: NO_EFFECTS })
-    .description("commands, options and exit codes as JSON — inspect one command path per call")
+    .description("every command by section, one line each; --json: the contract, one path per call")
     .argument("[path...]", "one command path, for example: search messages; inspect other groups in separate calls")
     .action(function (this: Command, path: string[]) {
       const root = rootOf(this)
       const output = outputFor(this)
-      const { renderer, format } = output
       const all = describeProgram(root)
       const scoped = path.length > 0 ? scopeOf(root, all, path) : undefined
       const commands = scoped ? [scoped.command] : all
+      const { json, jsonl } = this.optsWithGlobals<{ json?: unknown; jsonl?: boolean }>()
 
-      if (format === "pretty") {
-        renderer.result(
-          flatten(commands).map(({ usage, summary, description, effects, state }) => ({
-            command: usage,
-            description: summary ?? description,
-            writes: effects !== undefined && writes(effects) ? "yes" : "",
-            ...(state ? { state } : {}),
-          })),
-        )
+      // Asked by format, not by terminal: piped, an agent got the whole JSON tree it never asked for.
+      if (json === undefined && !jsonl && !environmentOf(this).agent) {
+        output.streams.data(commandsText(root, commands, scoped?.command.path).replace(/\n$/, ""))
         return
       }
 

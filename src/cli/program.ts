@@ -36,6 +36,7 @@ import {
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
+import { sectionCoreGroups } from "./help/sections.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { movedPath, movedPointer } from "./moved.js"
@@ -115,6 +116,7 @@ export const createProgram = (
 
   for (const command of commands()) program.addCommand(command)
   configure?.(program)
+  sectionCoreGroups(program)
   installHelp(program, { pitch: app.description, ...firstScreen })
 
   // Commander builds a usage line from the command tree, where the profile is not a word.

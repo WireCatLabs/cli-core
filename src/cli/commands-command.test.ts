@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { commandsCommand } from "./commands-command.js"
+import { inSection } from "./help/sections.js"
 import { run } from "./program.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "Discovery", version: "1.2.3" }
@@ -123,5 +124,71 @@ describe("scoped command discovery", () => {
     expect(error.message).toContain("app commands chats --json")
     expect(error.details.at).toBe("chats")
     expect(error.details.available).toEqual(["search"])
+  })
+})
+
+describe("commands as text", () => {
+  const leaf = (name: string, description: string, remote: "read" | "write" = "read") =>
+    annotate(new Command(name), { effects: { remote, local: "read" } })
+      .description(description)
+      .action(() => {})
+  const tool = {
+    app,
+    commands: () => [
+      commandsCommand(app),
+      new Command("messages")
+        .addCommand(leaf("list", "a chat's messages, oldest to newest").argument("<chat>"))
+        .addCommand(leaf("send", "send a message", "write").argument("<chat>").argument("[text]")),
+      new Command("tags").addCommand(leaf("list", "what is tagged")),
+      new Command("schedule").addCommand(leaf("add", "run a command on a timer", "write").argument("<when>")),
+      inSection(new Command("session"), "setup").addCommand(leaf("start", "log in", "write")),
+      new Command("extras").addCommand(leaf("show", "something no section claims")),
+    ],
+  }
+  const text = async (argv: string[]) => {
+    const streams = captureStreams()
+    const code = await run(argv, tool, { streams, tty: false, env: {} })
+    return { code, stdout: streams.stdout.join("\n"), stderr: streams.stderr.join("\n") }
+  }
+
+  it("prints every command by section, one line each, when piped without --json", async () => {
+    const { code, stdout } = await text(["commands"])
+
+    expect(code).toBe(0)
+    expect(stdout).toMatchInlineSnapshot(`
+      "app commands, by section. One command's arguments and options: app <command> --help.
+      As JSON: app commands --json. (writes) marks a command that changes something.
+
+      Read
+        app messages list <chat>                              a chat's messages, oldest to newest
+        app messages send <chat> [text]                       send a message (writes)
+
+      Organise
+        app tags list                                         what is tagged
+
+      Automate
+        app schedule add <when>                               run a command on a timer (writes)
+
+      Set up
+        app commands [path]                                   every command by section, one line each; --json: the contract, one path per call
+        app commands schema <path>                            one command's argv and result schemas, effects, permissions and retry guidance
+        app session start                                     log in (writes)
+
+      Other
+        app extras show                                       something no section claims"
+    `)
+  })
+
+  it("narrows to one group", async () => {
+    const { stdout } = await text(["commands", "messages"])
+
+    expect(stdout).toContain("app messages commands, by section")
+    expect(stdout).toContain("app messages send <chat> [text]")
+    expect(stdout).not.toContain("tags")
+  })
+
+  it("keeps the JSON document on --json and --jsonl", async () => {
+    expect(JSON.parse((await text(["commands", "--json"])).stdout).contract).toBe(3)
+    expect(JSON.parse((await text(["commands", "--jsonl"])).stdout.split("\n")[0] ?? "").cli).toBe("app")
   })
 })
