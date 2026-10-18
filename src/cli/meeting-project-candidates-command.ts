@@ -51,6 +51,7 @@ export const addMeetingProjectCandidatesCommand = (
       ),
     {
       origin: "handwritten",
+      mcp: false,
       effects: LOCAL_READ,
       output: { entity: "meeting_project_candidates" },
       examples: [`${program.name()} meetings projects scan meeting:1/2 --json`],

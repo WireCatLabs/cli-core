@@ -16,6 +16,10 @@ shape of this file.
   if either copy was. A messenger that pushes its history sends it as `rekeys` in a pushed batch, which the store
   applies before the batch's messages. Running it again changes nothing. No store migration.
 
+### Fixed
+
+- Project-candidate CLI scanning stays off generic MCP command routers. Hosts expose the separate read-only tool only after explicitly granting access to the shared project vocabulary; default server catalogues remain unchanged.
+
 ## 0.334.0 — 18.10.2026
 
 ### Added
