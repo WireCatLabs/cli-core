@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Meeting transcripts in bounded context reads:** `ContextSource.kind` accepts `meeting`; the native
+  reader returns current transcript cue references with `timeKind: "meeting-start"`. Account/time scope,
+  cursor validation, read-only snapshots and pre-hydration byte limits apply. Deleted/superseded and
+  queued cues are excluded; missing indexes and unknown archive coverage remain explicit. Hosts must
+  opt in to meeting sources; the reader does not fetch recordings, fill indexes or infer project links.
+
 ## 0.357.0 — 19.10.2026
 
 ### Added

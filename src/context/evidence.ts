@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 
-export const CONTEXT_SOURCE_KINDS = ["message", "mail", "document"] as const
+export const CONTEXT_SOURCE_KINDS = ["message", "mail", "document", "meeting"] as const
 export interface ContextSource {
   kind: (typeof CONTEXT_SOURCE_KINDS)[number]
   accountId: number
@@ -26,7 +26,7 @@ export interface ContextEvidenceItem {
   url: string | null
   text: string
   at: number
-  timeKind: "sent" | "source-modified" | "stored-update"
+  timeKind: "sent" | "source-modified" | "stored-update" | "meeting-start"
   updatedAt: number
   revision: number | null
 }

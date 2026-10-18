@@ -11,6 +11,7 @@ import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { SqlValue } from "../driver.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import { contextDocumentTime, contextDocumentTimeKind, contextDocumentUrl } from "./context-document-source.js"
+import { readMeetingContextEvidence } from "./context-meeting-source.js"
 import { drainEmailIndex } from "./email-index.js"
 import { drainNoteIndex } from "./note-index.js"
 import type { StoreContext } from "./open.js"
@@ -64,10 +65,11 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
   async read(original) {
     const request = contextEvidenceRequest(original)
     const { source, words, after, before, limit, maxReadBytes, cursor, signal } = request
+    if (source.kind === "meeting") return readMeetingContextEvidence(database, request)
+    const corpus = corpora[source.kind]
     const scope = contextCursorScope({ source, query: request.query, after, before })
     signal?.throwIfAborted()
     return read(database, () => {
-      const corpus = corpora[source.kind]
       const coverage: ContextEvidencePage["coverage"] = {
         available: false,
         index: "unknown",

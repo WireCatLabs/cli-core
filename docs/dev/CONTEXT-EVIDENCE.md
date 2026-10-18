@@ -1,6 +1,6 @@
 # Bounded stored context readers
 
-For SDK hosts reading explicitly selected local messages, mail or imported documents. These readers
+For SDK hosts reading explicitly selected local messages, mail, imported documents or meeting transcript cues. These readers
 can feed the optional [meeting communications assembler](MEETING-COMMUNICATIONS.md). A host
 must explicitly bind authorized selections; omitted communications retain existing preparation
 output and coverage. Production provider bindings are separate from this SDK capability.
@@ -12,7 +12,7 @@ Core's optional `MessageStore.contextEvidence` is the native read port. Wrap it 
 Account discovery is not authorization. Capture the selection from trusted profile/folder binding,
 not arbitrary account IDs supplied by a request.
 
-Only whole message/mail accounts and whole imported folders are supported in this slice.
+Whole message/mail/meeting accounts and whole imported folders are supported.
 Chat, mailbox, thread, document-list or other selectors are refused by name instead of ignored.
 Requests, sources, cursors and allowance options reject unknown fields.
 
@@ -67,11 +67,22 @@ The native raw port bounds one page; the factory additionally enforces the per-i
 below. The later preparation assembler must enforce final output budgets and preserve source
 coverage separately.
 
-Each item retains its canonical message/document reference, provider/account identity, text, title,
+Each item retains its canonical message/document/cue reference, provider/account identity, text, title,
 available source URL, timestamp, update time and document revision. Imported document time prefers
 the stored remote modification time, including existing Drive front-matter provenance; a local
 update fallback is explicitly `stored-update`. Internal owner notes are excluded: the existing
 [preparation notes reader](MEETING-PREPARATION.md) applies their own association rules.
+
+Sources with `kind: "meeting"` search current, nondeleted transcript cues through the existing
+literal word index. Their date is the meeting's start (`timeKind: "meeting-start"`), not the
+transcript import date or the cue offset. A hit has a canonical
+`meeting:<accountId>/<meetingId>/<transcriptId>/<cuePosition>` reference, including position zero;
+`readMeetingHitContext` can expand that reference separately. The title is the meeting title, the
+URL and numeric document revision are null, and the update time includes meeting/transcript
+updates and cue creation. No join URL or participant contact data is returned. Superseded/deleted
+transcripts and deleted meetings are excluded. A title-only match, summary or meeting chat message
+is not a transcript hit. The reader uses the same account/date/cursor and pre-hydration byte limits
+as the other sources and never fills an index or loads a model.
 
 ## One invocation's read allowance
 
@@ -94,8 +105,11 @@ make arbitrary third-party backend work safe if that backend violates its read c
 `available` describes the selected account identity, not archive completeness. Index coverage is
 `ready`, `pending`, `missing` or `unknown`; readiness concerns local words in the selected window.
 Queued document/mail rows and unnormalized messages are excluded from matches until an explicit
-indexing workflow makes them current. Empty pages and exhausted pagination still have unknown
-archive completeness. Undated mail/messages are reported separately rather than assigned a date.
+indexing workflow makes them current. Queued transcript cues are likewise excluded; their presence
+in the selected account/window reports `pending`, and an absent meeting word index reports `missing`.
+Empty pages and exhausted pagination still have unknown archive completeness, including missing
+transcripts and meetings that were never archived. Undated mail/messages and meetings with current
+transcript cues are reported separately rather than assigned a date.
 
 Use `next` as the next request's `cursor`, keeping the same source, query and dates. Scope changes
 are refused before source access; the scope hash also carries the reader protocol version. A cursor binds scope, not a historical snapshot: every native
