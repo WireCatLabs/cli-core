@@ -338,7 +338,8 @@
     },
     "--expire-time": {
       "value": "<time>",
-      "meaning": "it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now"
+      "meaning": "it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now",
+      "note": "messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it — so it differs on purpose (Help text rule 4)"
     },
     "--extract": {
       "meaning": "extract text from files mapped by this download"
