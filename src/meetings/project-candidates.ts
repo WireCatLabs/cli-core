@@ -46,6 +46,7 @@ export interface MeetingProjectCandidates {
     sourceEvidence: "not-revalidated"
     association: "unconfirmed-literal-evidence"
     archiveCompleteness: "unknown"
+    omittedMatches: number
     candidatesTotal: number
     hasMore: boolean
     outputLimited: boolean

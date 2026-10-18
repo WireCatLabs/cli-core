@@ -178,7 +178,7 @@ it.each([
   { ...input(), cues: [{ ...cue(), reference: "meeting:11/22/33" }] },
   { ...input(), cues: [{ ...cue(), reference: "meeting:12/22/33/0" }] },
   { ...input(), cues: [{ ...cue(), fingerprint: "bad" }] },
-  { ...input(), cues: [{ ...cue(), text: "x".repeat(4097) }] },
+  { ...input(), cues: [{ ...cue(), text: "x".repeat(65537) }] },
   { ...input(), cues: [{ ...cue(), hidden: true }] },
   { ...input(), cues: Array.from({ length: 101 }, () => cue()) },
   { ...input(), cues: Array.from({ length: 20 }, (_, i) => cue("界".repeat(2000), i)) },

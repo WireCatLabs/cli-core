@@ -6,6 +6,7 @@ export { botInstructions } from "../mcp/bot/instructions.js"
 export type { BotServerOptions, RunBotCommand } from "../mcp/bot/server.js"
 export type { HttpOptions } from "../mcp/http/serve.js"
 export { callMeetingPreparationTool, meetingPreparationTool } from "../mcp/meeting-preparation.js"
+export { callMeetingProjectCandidatesTool, meetingProjectCandidatesTool } from "../mcp/meeting-project-candidates.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
 export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
 export {
@@ -272,6 +273,8 @@ export {
   meetingPreparationInput,
   readMeetingPreparation,
 } from "./meeting-preparation-read.js"
+export { addMeetingProjectCandidatesCommand } from "./meeting-project-candidates-command.js"
+export { readMeetingProjectCandidates } from "./meeting-project-candidates-read.js"
 export { accountCommand } from "./messenger/account-command.js"
 export { accountFileFor, profilesHere, rememberAccount } from "./messenger/accounts.js"
 export { storeCommand } from "./messenger/archive-commands.js"
