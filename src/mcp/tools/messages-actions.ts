@@ -143,7 +143,7 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
         itemOf(snakeKeys(await messages(adapter, guard).unpin({ chat: args.chat, message: args.message }))),
     }),
     ...Object.fromEntries(
-      [true, false].map((starred) => [
+      (messenger.messageStars === true ? [true, false] : []).map((starred) => [
         starred ? "messages_star" : "messages_unstar",
         tool({
           title: starred ? "Star a message" : "Take the star off a message",
