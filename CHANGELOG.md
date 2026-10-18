@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.343.0 — 18.10.2026
+
 ### Added
 
 - **`downloadTextModel(id, { env, acceptTerms?, progress? })` and `downloadImageModel(id, { env, progress? })`**
