@@ -38,7 +38,10 @@ export const recordPaths = async (
     ...(files[index]?.providerRef === undefined ? {} : { providerRef: files[index]?.providerRef }),
   }))
   try {
-    return await messages.keepDownloaded(chat, message, downloaded)
+    const kept = await messages.keepDownloaded(chat, message, downloaded)
+    if (kept < downloaded.length && downloaded.some(({ providerRef }) => Object.keys(providerRef ?? {}).length > 0))
+      warn(`message ${message}: a new file reference from the messenger was not saved; the next download asks again`)
+    return kept
   } catch (error) {
     onFailure?.(error)
     warn(`not recorded in the local store where message ${message}'s files went: ${(error as Error).message}`)

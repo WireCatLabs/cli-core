@@ -13,7 +13,8 @@ shape of this file.
   while it downloads (WhatsApp asks the phone to upload an expired file again) sets `providerRef` on the
   `RemoteFile`, and `messages download`, `attachments extract --download` and the MCP attachments tool save it on
   the stored attachment of that account. A later download and `messages forward` then use the new path, not the
-  dead one. Other readers of `bytes()` (`messages transcribe --local`, photo and picture readers) do not save it yet.
+  dead one. A ref the store cannot place on an attachment is dropped with a warning that never shows the ref. Other
+  readers of `bytes()` (`messages transcribe --local`, photo and picture readers) do not save it yet.
 
 ## 0.338.0 — 18.10.2026
 

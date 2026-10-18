@@ -5,7 +5,10 @@ import { folded } from "./folded.js"
 import type { StoreContext } from "./open.js"
 import { attachments, messages } from "./schema.js"
 
-/** Records where each saved file went, and a new reference the messenger gave for it; answers how many attachments it could name with certainty. */
+/**
+ * Records where each saved file went, and a new reference the messenger gave for it; answers how many attachments
+ * it could name with certainty.
+ */
 export const keepDownloads = (
   { orm }: StoreContext,
   chatKey: number,

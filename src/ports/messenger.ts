@@ -61,7 +61,8 @@ export interface RemoteFile {
   /**
    * Set by the adapter while `bytes()` runs when the messenger handed out a new reference for the file (WhatsApp
    * re-uploads an expired one). The whole ref, not a patch: it replaces the stored one, so a later download or a
-   * forward uses it. Read only after `bytes()` ends; needs `position` to reach the stored attachment.
+   * forward uses it. Read only after `bytes()` ends. Saved only on the stored attachment the file matches, which
+   * `position` makes certain; a ref the store could not place is dropped with a warning.
    */
   providerRef?: ProviderMetadata
 }
