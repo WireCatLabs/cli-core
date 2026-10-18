@@ -8,7 +8,7 @@ on:
         default: false
       app_ref:
         type: string
-        default: main
+        default: ""
     outputs:
       package-sha256:
         value: ${{ jobs.ci.outputs.package-sha256 }}
@@ -118,4 +118,4 @@ jobs:
   parity:
     uses: ./.github/workflows/parity.yml
     with:
-      app_ref: ${{ inputs.app_ref || 'main' }}
+      app_ref: ${{ inputs.app_ref }}
