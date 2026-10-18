@@ -641,8 +641,10 @@ const restoreFrom = async (command: Command, messenger: Messenger, backup: strin
 
   const stamp = stampNow()
   const kept = existsSync(path) ? `${path}.before-restore-${stamp}` : null
-  if (kept) await quiesce(path, messenger, "restore", (message) => renderer.warn(message))
-  else mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  if (kept) {
+    const waitMs = environmentOf(command).storeLockWaitMs
+    await quiesce(path, messenger, "restore", (message) => renderer.warn(message), waitMs)
+  } else mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
 
   const incoming = `${path}.restoring-${stamp}`
   copyFileSync(backup, incoming, constants.COPYFILE_EXCL)
@@ -688,12 +690,20 @@ const backupSchema = async (backup: string) => {
   return schema
 }
 
+const STORE_LOCK_WAIT_MS = 1_000
+
 /**
  * No other process has the file open, no write is under way, and the write-ahead log is folded in,
  * so the file set aside is whole on its own. In WAL mode SQLite cannot say who has the file open —
  * `EXCLUSIVE` behaves as `IMMEDIATE` — so that is asked of the system.
  */
-const quiesce = async (path: string, messenger: Messenger, then: string, warn: (message: string) => void) => {
+const quiesce = async (
+  path: string,
+  messenger: Messenger,
+  then: string,
+  warn: (message: string) => void,
+  waitMs = STORE_LOCK_WAIT_MS,
+) => {
   const { command } = messenger.app
   const files = [path, `${path}-wal`, `${path}-shm`]
     .filter((file) => existsSync(file))
@@ -710,7 +720,7 @@ const quiesce = async (path: string, messenger: Messenger, then: string, warn: (
   }
   const database = await openCache(path)
   try {
-    database.exec("PRAGMA busy_timeout = 1000")
+    database.exec(`PRAGMA busy_timeout = ${waitMs}`)
     database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
     try {
       database.exec("BEGIN IMMEDIATE")
@@ -751,7 +761,7 @@ const resetCommand = (messenger: Messenger): Command =>
         if (answer === null) throw new CliError("confirmation_required", `${what} — add --yes to go ahead`)
         if (!/^\s*y(es)?\s*$/i.test(answer)) throw new CliError("cancelled", "cancelled — the store is unchanged")
       }
-      await quiesce(path, messenger, "reset", (message) => renderer.warn(message))
+      await quiesce(path, messenger, "reset", (message) => renderer.warn(message), environmentOf(this).storeLockWaitMs)
 
       const backup = keep ? `${path}.backup-${stampNow()}` : null
       let backedUp = null

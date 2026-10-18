@@ -2,8 +2,9 @@ import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import type { Message } from "../../domain/models.js"
+import type { Message, MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import type { DiagnosticEvent } from "../../runs/events.js"
 import { startRun } from "../../runs/run.js"
 import { searchRuns } from "../runs/search.js"
 import { observed } from "./observed.js"
@@ -48,4 +49,35 @@ describe("observed message IDs in recorded runs", () => {
       expect(searchRuns(runsDir, { query: message.id, profile: "other" }).items).toHaveLength(0)
     })
   }
+})
+
+describe("observed watch", () => {
+  it("counts each event it hands on, by event, on the messages.watch response", async () => {
+    const arrived = { event: "message", message } as MessageEvent
+    const adapter = {
+      self: () => "9",
+      close: async () => {},
+      watch: async (onEvent: (event: MessageEvent) => void) => {
+        onEvent(arrived)
+        onEvent(arrived)
+      },
+    } as unknown as MessengerAdapter
+    const recorded: DiagnosticEvent[] = []
+    const handed: MessageEvent[] = []
+    const wrapped = observed(adapter, (event) => recorded.push(event))
+
+    await wrapped.watch?.((event) => handed.push(event), new AbortController().signal)
+
+    expect(handed).toHaveLength(2)
+    expect(recorded).toEqual([
+      { event: "request", operation: "messages.watch" },
+      expect.objectContaining({
+        event: "response",
+        operation: "messages.watch",
+        outcome: "ok",
+        counts: { message: 2 },
+      }),
+    ])
+    expect("listen" in wrapped).toBe(false)
+  })
 })

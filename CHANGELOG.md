@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The run record of a one-shot command's passive listen counts what it received**: the `adapter.listen`
+  response carries `counts` by event (`message`, `edit`, …), as `messages.watch` does, so a run shows how many
+  messages a store-history messenger handed on and saved during the command.
+
 ## 0.344.0 — 18.10.2026
 
 ### Changed — may break callers

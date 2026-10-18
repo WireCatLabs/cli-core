@@ -36,6 +36,8 @@ export interface BaseEnvironment {
   platform?: NodeJS.Platform
   /** The local speech recognizer in place of the downloaded model; tests hand one in. */
   recognizer?: OpenRecognizer
+  /** How long `store restore` and `store reset` wait on another connection's write, 1 s unless a test hands one in. */
+  storeLockWaitMs?: number
   /** Where raw bytes go when stdout is not this process's own — an MCP session relayed by serve. */
   stdout?: NodeJS.WritableStream
   /** Where a prompt and what is typed at it go, in place of the process's stderr; tests hand one in. */

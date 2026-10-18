@@ -555,7 +555,8 @@ Such a messenger may deliver what it queued while nothing was connected to any c
 has `listen` (`PassiveUpdates`), `connected` runs it for as long as a connection opened without `listen: true` is
 open and saves each event as `watch` would; `close` stops it and waits for it to end before it waits for the saves.
 A connection opened with `listen: true` is left to its `watch`, so nothing is saved twice. A failed `listen` warns
-and never fails the command; it is neither held nor paced, as it only receives.
+and never fails the command; it is neither held nor paced, as it only receives. Its run record is an
+`adapter.listen` request and response, and the response counts what it handed on by event, as `messages.watch`'s does.
 
 **A CLI replaces a use case, not a command.** `Messenger.services` is an `Override`: it gets the
 shared services and returns the ones it changes, and can call the shared method inside its own:

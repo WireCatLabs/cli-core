@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import type { DiagnosticEvent } from "../../runs/events.js"
 import type { MessageStore } from "../../store/store.js"
 import { connected } from "./context.js"
 
@@ -158,6 +159,7 @@ const opened = (
 ) => {
   const warnings: string[] = []
   const codes: string[] = []
+  const recorded: DiagnosticEvent[] = []
   const held = connected(
     adapter,
     { app, provider: "chat", ...(history ? { history } : {}) },
@@ -167,12 +169,13 @@ const opened = (
       renderer: { warn: (line: string) => warnings.push(line) } as never,
     },
     (event) => {
+      recorded.push(event)
       if (event.event === "warning") codes.push(event.code)
     },
     undefined,
     connect,
   )
-  return { ...held, warnings, codes }
+  return { ...held, warnings, codes, recorded }
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve))
@@ -193,6 +196,27 @@ describe("a one-shot command of a messenger whose history is in the store", () =
     expect(fake.listens).toHaveBeenCalledOnce()
     expect(fake.listens.mock.calls[0]?.[1].aborted).toBe(true)
     expect(order).toEqual(["connection closed", "written", "store closed"])
+  })
+
+  it("records how many of each event the listen handed on, as watch does", async () => {
+    const fake = passiveFake()
+    const { close, recorded } = opened(fake.adapter, "store")
+    await tick()
+    for (const id of ["2", "3"]) {
+      fake.deliver(arrived(id))
+      await tick()
+      finishWrite()
+    }
+    await close()
+
+    expect(recorded).toContainEqual(
+      expect.objectContaining({
+        event: "response",
+        operation: "adapter.listen",
+        outcome: "ok",
+        counts: { message: 2 },
+      }),
+    )
   })
 
   it("saves a message the connection hands on while it closes, before the store closes", async () => {

@@ -59,7 +59,7 @@ const seeded = async (env: NodeJS.ProcessEnv, version = latest) => {
   return database
 }
 
-const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
+const call = async (argv: string[], env: NodeJS.ProcessEnv, storeLockWaitMs?: number) => {
   const messenger: Messenger = {
     app,
     provider: "chat",
@@ -76,7 +76,11 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
     mentionsCommand(messenger),
     configCommand(app, settingsFor(app)),
   ]
-  const code = await run(argv, { app, commands }, { streams, tty: false, env })
+  const code = await run(
+    argv,
+    { app, commands },
+    { streams, tty: false, env, ...(storeLockWaitMs ? { storeLockWaitMs } : {}) },
+  )
   const body = JSON.parse(streams.stdout[0] ?? "null")
   return { code, stdout: streams.stdout, stderr: streams.stderr, body, answer: body?.item ?? body }
 }
@@ -399,7 +403,7 @@ describe("store restore", () => {
     const writer = await openCache(String(env.MESSAGING_STORE))
     writer.exec("BEGIN IMMEDIATE")
     try {
-      const { code, stderr } = await call(["store", "restore", file, "--json"], env)
+      const { code, stderr } = await call(["store", "restore", file, "--json"], env, 10)
       expect(code).not.toBe(0)
       expect(stderr.join("\n")).toContain("a write to the store is under way")
     } finally {
@@ -475,7 +479,7 @@ describe("store reset", () => {
     const writer = await openCache(path)
     writer.exec("BEGIN IMMEDIATE")
     try {
-      const held = await call(["store", "reset", "--yes", "--json"], env)
+      const held = await call(["store", "reset", "--yes", "--json"], env, 10)
       expect(held.code).not.toBe(0)
       expect(held.stderr.join("\n")).toContain("a write to the store is under way")
     } finally {
