@@ -23,6 +23,11 @@ shape of this file.
 
 ### Fixed
 
+- **`upgrade --check` runs under `<PREFIX>_READ_ONLY`.** It only asks npm for the newest version, so the lock lets it
+  through; `upgrade` without `--check` is still refused, as a change to what a later run may do. `grantsAuthority`
+  takes `{ unless: "<option>" }` for a flag that makes a run only look. `upgrade` with `--offline`, `--check`
+  included, now refuses with `validation_error` instead of asking npm anyway.
+
 - **A change to the recipient list can no longer undo another one made at the same time.** `recipients add`,
   `recipients remove`, `recipients clear` and the re-key `serve` applies each read and write the list under one lock,
   so a chat removed while `serve` re-keys stays removed. A list held by another process for 5 s refuses the change

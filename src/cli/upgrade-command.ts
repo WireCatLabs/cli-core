@@ -1,4 +1,4 @@
-import type { Renderer, RenderFormat, Streams } from "@wirecat/cli-base"
+import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
@@ -21,12 +21,19 @@ export const upgradeCommand = (
     annotate(new Command("upgrade"), {
       effects: LOCAL_WRITE,
       mcp: false,
+      offline: false,
       examples: [`${app.command} upgrade --check`, `${app.command} upgrade`],
     }),
+    { unless: "check" },
   )
     .description(`upgrade ${app.command} with the package manager that installed it; --check only looks`)
     .option("--check", "say whether a newer version exists, and install nothing")
     .action(async function (this: Command, { check }: { check?: boolean }) {
+      if (this.optsWithGlobals<{ offline?: boolean }>().offline)
+        throw new CliError(
+          "validation_error",
+          `\`${app.command} upgrade\` asks npm for the newest version; not with --offline`,
+        )
       const context = contextFor(this)
       const { renderer } = context
       const { result, reason, left } = await upgradePackage(

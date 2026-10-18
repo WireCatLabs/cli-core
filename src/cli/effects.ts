@@ -14,19 +14,26 @@ export const LOCAL_READ: Effects = { remote: "none", local: "read" }
 export const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 export const NO_EFFECTS: Effects = { remote: "none", local: "none" }
 
-const AUTHORITY = new WeakSet<Command>()
+const AUTHORITY = new WeakMap<Command, string | undefined>()
 
 /**
  * Marks a local write that changes what a later run may do: a schedule, a setting, the recipient list, an
  * auto-reply, an agent's setup. `<PREFIX>_READ_ONLY` refuses it, or an agent under the lock could hand an
  * unlocked run the send it may not make itself (SEC-47). For the same reason no MCP server offers it (`mcp: false`).
+ * `unless` names a flag that makes the run only look (`upgrade --check`), which the lock lets through.
  */
-export const grantsAuthority = <T extends Command>(command: T): T => {
-  AUTHORITY.add(command)
+export const grantsAuthority = <T extends Command>(command: T, { unless }: { unless?: string } = {}): T => {
+  AUTHORITY.set(command, unless)
   return annotate(command, { mcp: false })
 }
 
 export const changesAuthority = (command: Command): boolean => AUTHORITY.has(command)
+
+export const changesAuthorityNow = (command: Command): boolean => {
+  if (!AUTHORITY.has(command)) return false
+  const unless = AUTHORITY.get(command)
+  return unless === undefined || command.opts()[unless] !== true
+}
 
 const LOGIN = new WeakSet<Command>()
 
