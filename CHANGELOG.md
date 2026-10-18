@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Saving a chat keeps a `title`, `unreadCount`, `lastMessageAt` or `participantsCount` the update leaves out**, the
+  rule #1596 set for `providerMetadata` keys and `parentChatId`: left out keeps the stored value, `null` stores none,
+  a value replaces it. So a push that knows only part of a chat, such as WhatsApp's notice that a group left its
+  community, sends `{ id, kind, parentChatId: null }` and no longer erases the rest. `saveChats`, `Delta.chats` and
+  `HistoryBatch.chats` take the new `ChatUpdate` type, a `Chat` with those four fields optional; a full `Chat` still
+  fits, and every adapter today sends all four, so none has to change. To clear a field, send `null`, never leave it
+  out. Code that reads `HistoryBatch.chats` or `Delta.chats` now sees the four fields as possibly absent.
+
 ## 0.347.0 — 18.10.2026
 
 ### Added
@@ -17,16 +27,6 @@ shape of this file.
   nothing and says to widen the terminal or pass `--qr-file`; it opens nothing. `close()` removes the image it
   wrote, never a file it did not. `qrNeedsTerminal(command)` is the shared refusal when nobody could scan, and
   `atTerminal(input)` the shared test. `parity.json` plans `--qr-file` on `session start` and `setup` for max, beside tg and wa.
-
-### Changed — may break callers
-
-- **Saving a chat keeps a `title`, `unreadCount`, `lastMessageAt` or `participantsCount` the update leaves out**, the
-  rule #1596 set for `providerMetadata` keys and `parentChatId`: left out keeps the stored value, `null` stores none,
-  a value replaces it. So a push that knows only part of a chat, such as WhatsApp's notice that a group left its
-  community, sends `{ id, kind, parentChatId: null }` and no longer erases the rest. `saveChats`, `Delta.chats` and
-  `HistoryBatch.chats` take the new `ChatUpdate` type, a `Chat` with those four fields optional; a full `Chat` still
-  fits, and every adapter today sends all four, so none has to change. To clear a field, send `null`, never leave it
-  out. Code that reads `HistoryBatch.chats` or `Delta.chats` now sees the four fields as possibly absent.
 
 ### Fixed
 
