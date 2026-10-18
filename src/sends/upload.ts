@@ -1,5 +1,5 @@
 import { openAsBlob, realpathSync } from "node:fs"
-import { stat } from "node:fs/promises"
+import { open, stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { Upload, UploadKind, UploadSource } from "../domain/attachments.js"
@@ -174,6 +174,9 @@ export const readUpload = async (
   if (kind === "voice" && !VOICE.has(extname(path).toLowerCase())) {
     throw new CliError("validation_error", `a voice message is Ogg Opus: .ogg, .oga or .opus — send ${path} as a file`)
   }
+  if (kind === "sticker" && extname(path).toLowerCase() !== ".webp") {
+    throw new CliError("validation_error", `a sticker is a .webp — send ${path} as a photo or a file instead`)
+  }
   if (!anyFile && refusedPlace(path, app, env)) {
     throw new CliError(
       "validation_error",
@@ -192,29 +195,44 @@ export const readUpload = async (
   }
 }
 
-/**
- * What a send attaches, as `messages send` and its tool take it. A voice message goes alone, as the
- * messengers' own apps send one.
- */
 const checkFilename = (filename: string, file: string | undefined): void => {
   if (file === undefined) throw new CliError("validation_error", "--filename names a --file; give one")
   if (filename.trim() === "" || /[/\\\0]/.test(filename) || filename.length > 255)
     throw new CliError("validation_error", "--filename is a name, not a path: no / or \\, at most 255 characters")
 }
 
+/**
+ * What a send attaches, as `messages send` and its tool take it. A voice message and a sticker go alone, as the
+ * messengers' own apps send them; `stickerBytes` is the largest sticker the messenger takes.
+ */
 export const readAttachments = async (
   {
     photo,
     file,
     voice,
+    sticker,
     asFile,
     filename,
     text,
-  }: { photo?: string; file?: string; voice?: string; asFile?: boolean; filename?: string; text?: string },
-  read: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean },
+  }: {
+    photo?: string
+    file?: string
+    voice?: string
+    sticker?: string
+    asFile?: boolean
+    filename?: string
+    text?: string
+  },
+  read: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean; stickerBytes?: number },
 ): Promise<Upload[]> => {
   if (voice !== undefined && (photo !== undefined || file !== undefined || (text ?? "").trim() !== "")) {
     throw new CliError("validation_error", "a voice message goes alone — no text, no file, no photo beside it")
+  }
+  if (
+    sticker !== undefined &&
+    (photo !== undefined || file !== undefined || voice !== undefined || (text ?? "").trim() !== "")
+  ) {
+    throw new CliError("validation_error", "a sticker goes alone — no text, no file, no photo")
   }
   if (asFile && file === undefined) throw new CliError("validation_error", "--as-file is about a --file; give one")
   if (filename !== undefined) checkFilename(filename, file)
@@ -230,5 +248,35 @@ export const readAttachments = async (
           },
         ]),
     ...(voice === undefined ? [] : [await readUpload("voice", voice, read)]),
+    ...(sticker === undefined ? [] : [await readSticker(sticker, read)]),
   ]
+}
+
+const readSticker = async (
+  path: string,
+  read: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean; stickerBytes?: number },
+): Promise<Upload> => {
+  if (read.stickerBytes === undefined) throw new CliError("validation_error", "this messenger sends no sticker files")
+  const upload = await readUpload("sticker", path, read)
+  if (!(await isWebp(path)))
+    throw new CliError("validation_error", `${path} is named .webp but is not a WebP image — nothing was sent`)
+  const size = uploadSize(upload.source)
+  if (size > read.stickerBytes)
+    throw new CliError(
+      "validation_error",
+      `the sticker is ${Math.ceil(size / 1024)} KiB, and this messenger takes at most ` +
+        `${Math.floor(read.stickerBytes / 1024)} KiB — nothing was sent`,
+    )
+  return upload
+}
+
+const isWebp = async (path: string): Promise<boolean> => {
+  const handle = await open(path, "r")
+  try {
+    const head = Buffer.alloc(12)
+    const { bytesRead } = await handle.read(head, 0, 12, 0)
+    return bytesRead === 12 && head.toString("latin1", 0, 4) === "RIFF" && head.toString("latin1", 8, 12) === "WEBP"
+  } finally {
+    await handle.close()
+  }
 }

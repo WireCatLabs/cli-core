@@ -960,6 +960,10 @@
       "value": "<id>",
       "meaning": "send this sticker, alone; stickers list finds its id"
     },
+    "--sticker-file": {
+      "value": "<file>",
+      "meaning": "send a .webp file as a sticker, alone, with no text"
+    },
     "--store-token": {
       "value": "<profile>",
       "meaning": "keep a returned authentication token only in this bot profile's OS keyring; never print it"
@@ -3230,9 +3234,16 @@
         "--sticker": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: stickers",
+            "tg": "tg-cli backlog: stickers"
+          },
+          "reason": "WhatsApp has no sticker sets to take an id from; wa sends a sticker from a file, --sticker-file"
+        },
+        "--sticker-file": {
+          "in": [],
+          "planned": {
             "wa": "wa backlog: stickers"
-          }
+          },
+          "reason": "Telegram and MAX send a sticker from a set, by its id: --sticker"
         },
         "--topic": {
           "in": ["tg"],

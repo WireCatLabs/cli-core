@@ -48,7 +48,7 @@ export const matchDownloads = (stored: readonly StoredAttachment[], files: reado
   })
 }
 
-export type UploadKind = "photo" | "file" | "voice"
+export type UploadKind = "photo" | "file" | "voice" | "sticker"
 
 /** Where an upload's bytes are: a file read only when it is sent, or bytes made in memory (a converted voice). */
 export type UploadSource = { kind: "file"; path: string; size: number } | { kind: "bytes"; bytes: Uint8Array }

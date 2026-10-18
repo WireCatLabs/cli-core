@@ -65,6 +65,11 @@ needs it. The ones a new messenger usually sets:
   `pinDurations`, in seconds, when a pin ends by itself (`messages pin --expire-time`, passed to `pin` as
   `duration`); `pinDefaultDuration`, one of them, when a pin without `--expire-time` lasts that long — the help says
   so and `pin` is handed it; `messageStars: true` mounts `messages star` and `unstar` over `MessageStars`.
+- `stickers`, `stickerFileBytes` — how a sticker is sent: `stickers: true` mounts `messages send --sticker <id>`
+  for a sticker from a set (`stickers list`); `stickerFileBytes`, the largest file in bytes, mounts
+  `messages send --sticker-file <file>` and the MCP `sticker_file` for a messenger whose sticker is an uploaded
+  .webp. `send` then gets it as `attachments: [{ kind: "sticker" }]`, alone, read through the same file guard as
+  `--file`.
 
 ## Required core and optional groups
 
