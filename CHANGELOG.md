@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.348.0 — 19.10.2026
+
 ### Added
 
 - **A next step in `--json` output and in an error carries `line`, the whole command with the profile**:
