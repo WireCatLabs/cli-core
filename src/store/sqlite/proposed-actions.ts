@@ -68,10 +68,16 @@ const NAMED =
   "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
 const json = (value: unknown) => (value == null ? null : JSON.parse(String(value)))
 
-type ProposalOperations = {
-  [K in keyof ProposedActionsStore]: ProposedActionsStore[K] extends (...args: infer A) => Promise<infer R>
-    ? (...args: A) => R
-    : never
+type ProposalOperations = Omit<
+  {
+    [K in keyof ProposedActionsStore]: ProposedActionsStore[K] extends (...args: infer A) => Promise<infer R>
+      ? (...args: A) => R
+      : never
+  },
+  "approve"
+> & {
+  /** `by` records an agent deciding for the owner; the public store always records the owner. */
+  approve(id: string, result?: unknown, by?: Author): ProposedAction
 }
 
 export const proposalOperationsOver = (context: StoreContext): ProposalOperations => {
@@ -133,8 +139,8 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         .run(to, now(), ...(values as (string | number | null)[]), Number(id))
       return actionOf(rowOf(id))
     })
-  const decide = (id: string, to: "approved" | "rejected", result?: unknown) => {
-    const { actor } = authorActor(context, "owner")
+  const decide = (id: string, to: "approved" | "rejected", result?: unknown, by: Author = "owner") => {
+    const { actor } = authorActor(context, by)
     return move(id, ["proposed"], to, ", decided_by_type = ?, decided_by_id = ?, decided_at = ?, result = ?", [
       actor.type,
       actor.id,
@@ -200,7 +206,7 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         .all(status ?? null, status ?? null, Math.min(Math.max(limit, 1), 500))
         .map(actionOf)
     },
-    approve: (id, result) => decide(id, "approved", result),
+    approve: (id, result, by) => decide(id, "approved", result, by),
     reject: (id) => decide(id, "rejected"),
     executed: (id, result) =>
       move(id, ["approved"], "executed", ", executed_at = ?, result = ?", [

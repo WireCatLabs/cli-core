@@ -44,6 +44,14 @@ export {
   meetingFindingFingerprint,
   validateMeetingFindings,
 } from "./findings.js"
+export {
+  type Finding,
+  type FindingsInput,
+  type FindingsReceipt,
+  type FindingsRules,
+  findingFingerprint,
+  validateFindings,
+} from "./findings-rules.js"
 export { type ImportFile, importFiles } from "./import.js"
 export { MEETING_QUERY, type MeetingItem, type MeetingOwner, meeting, meetingItem } from "./item.js"
 export {
