@@ -74,6 +74,9 @@ On 2026-09-29 the slowest test here took 57 ms. The waits that exist are reached
 - The MCP session takes `idleMs`, `maxAgeMs` and `now` (`src/mcp/session.ts`); a test hands in its
   own clock.
 - `--timeout` is a setting a test sets short.
+- A connection's close waits 5 s on its saves and passive listens, and chat re-keys pause between
+  passes. A test sets `closeWaitMs` and `rekeyPacing` in its run environment, as it sets
+  `storeLockWaitMs` for `store restore` and `store reset`.
 
 A new wait in the code gets a seam like these, never a longer timeout in the test.
 

@@ -313,6 +313,21 @@ describe("the adapter keeps the port's promises", () => {
 `close` is the one promise the cases cannot check. Test it yourself: after `close`, nothing keeps
 the process alive.
 
+A command test of a `history: "store"` messenger closes its connection the way a real run does: it
+waits up to 5 s for a passive listen that does not end, and paces chat re-keys with real pauses. Shorten
+both in the environment the test hands to `run()`, next to `keyring`:
+
+```ts
+await run(argv, definition, {
+  env,
+  keyring: memoryKeyring(),
+  closeWaitMs: 10,
+  rekeyPacing: { lockMs: 0, pauseMs: 0 },
+})
+```
+
+A listen that hangs still warns `store_not_written`, only sooner. No flag, variable or MCP call sets them.
+
 ### Testing `mcp` over stdin and stdout
 
 `mcpOverStdio(start)` drives your CLI's `mcp` the way an agent's client does, through your own
