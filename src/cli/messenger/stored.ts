@@ -8,8 +8,7 @@ import { codeOf } from "../../sends/guarded.js"
 import { chatIdIn } from "../../services/message-resolution.js"
 import type { AccountKey, DeletionScope, IngestedVia, MessageStore } from "../../store/store.js"
 
-const REKEY_LOCK_MS = 50
-const REKEY_PAUSE_MS = 25
+const REKEY_PACING = { lockMs: 50, pauseMs: 25 }
 
 export interface Saving {
   account: AccountKey
@@ -26,6 +25,8 @@ export interface Saving {
   profile?: { app: string; name: string }
   /** After a re-key is saved: what outside the store spells the chat id follows it. */
   rekeyed?: (from: Id, to: Id) => void | Promise<void>
+  /** How long one pass of re-keys may hold the write lock, and the pause after it. */
+  rekeyPacing?: { lockMs: number; pauseMs: number }
   /**
    * Chat and partner ids this account's recipient list names, told to `storedChats` apart from the stored ones: an
    * entry saved before any chat was stored under its id would otherwise never be re-keyed, and the send guard would
@@ -59,6 +60,7 @@ export const stored = (
     deletedWithoutChat,
     profile,
     rekeyed,
+    rekeyPacing = REKEY_PACING,
     namesFromStore,
     recipientIds,
   }: Saving,
@@ -127,21 +129,21 @@ export const stored = (
   const saveRekeys = async (pairs: readonly { from: Id; to: Id }[]): Promise<void> => {
     let rest = pairs
     while (rest.length > 0) {
-      // A pass that failed whole rolled back: only its first pair is given up, as when each re-key was its own write.
-      let taken = 1
-      let held = false
+      let taken = 0
       await attempt("history.rekey", async (opened) => {
-        const pass = await opened.chats.rekeyChats(account, rest, REKEY_LOCK_MS)
+        const pass = await opened.chats.rekeyChats(account, rest, rekeyPacing.lockMs)
         taken = pass.taken
-        held = true
         for (const { from, to } of pass.applied)
           await Promise.resolve()
             .then(() => rekeyed?.(from, to))
             .catch((error: unknown) => notWritten("history.rekey", error))
         for (const { error } of pass.refused) notWritten("history.rekey", error)
       })
+      // A store that refused a whole pass (closed at exit, busy past its timeout) would refuse each pass after it;
+      // the chats left keep their old ids, and the next serve re-keys them.
+      if (taken === 0) return
       rest = rest.slice(taken)
-      if (held && rest.length > 0) await new Promise((resolve) => setTimeout(resolve, REKEY_PAUSE_MS))
+      if (rest.length > 0) await new Promise((resolve) => setTimeout(resolve, rekeyPacing.pauseMs))
     }
   }
   const saveBatches = (operation: string, onBatch: (batch: HistoryBatch) => void) => {

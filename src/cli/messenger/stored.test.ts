@@ -974,41 +974,62 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     )
   })
 
-  it("gives up only the first re-key of a pass the store refused whole, and saves the rest", async () => {
-    const { store } = await setUp()
+  const rekeysOf = (ids: string[]) => ids.map((id) => ({ from: id, to: `${id}@lid` }))
+
+  const passing = (store: MessageStore, afterPass: (pass: number) => Promise<void> = async () => {}) => {
     const rekeyChats = store.chats.rekeyChats.bind(store.chats)
-    let calls = 0
-    const flaky = {
+    const taken: number[] = []
+    const wrapped = {
       ...store,
       chats: {
         ...store.chats,
-        rekeyChats: (...args: Parameters<typeof rekeyChats>) => {
-          calls += 1
-          return calls === 1 ? Promise.reject(new Error("database is locked")) : rekeyChats(...args)
+        rekeyChats: async (...args: Parameters<typeof rekeyChats>) => {
+          const pass = await rekeyChats(...args)
+          taken.push(pass.taken)
+          await afterPass(taken.length)
+          return pass
         },
       },
     } as MessageStore
+    return { wrapped, taken }
+  }
+
+  it("saves a run longer than one pass's lock time in several passes", async () => {
+    const { store } = await setUp()
+    const { wrapped, taken } = passing(store)
     const moved: string[] = []
 
-    const { codes } = await feeding(
-      flaky,
-      {
-        storedChats: async () => {},
-        feed: async (onBatch) => {
-          onBatch({
-            rekeys: [
-              { from: "7", to: "7@lid" },
-              { from: "8", to: "8@lid" },
-            ],
-          })
-        },
-      },
-      { rekeyed: (from, to) => void moved.push(`${from}>${to}`) },
+    await feeding(
+      wrapped,
+      { storedChats: async () => {}, feed: async (onBatch) => onBatch({ rekeys: rekeysOf(["7", "8"]) }) },
+      { rekeyed: (from, to) => void moved.push(`${from}>${to}`), rekeyPacing: { lockMs: 0, pauseMs: 0 } },
     )
 
+    expect(taken).toEqual([1, 1])
+    expect(moved).toEqual(["7>7@lid", "8>8@lid"])
+  })
+
+  it("stops re-keying once the store refuses a whole pass, as when it closes at exit", async () => {
+    const { store } = await setUp()
+    const ids = ["100", "101", "102", "103"]
+    await store.chats.saveChats(
+      account,
+      ids.map((id) => ({ id, title: id, kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 })),
+    )
+    const { wrapped, taken } = passing(store, async (pass) => {
+      if (pass > 1) return
+      opened.splice(opened.indexOf(store), 1)
+      await store.close()
+    })
+
+    const { codes } = await feeding(
+      wrapped,
+      { storedChats: async () => {}, feed: async (onBatch) => onBatch({ rekeys: rekeysOf(ids) }) },
+      { rekeyPacing: { lockMs: 0, pauseMs: 0 } },
+    )
+
+    expect(taken).toEqual([1])
     expect(codes).toEqual(["store_not_written"])
-    expect(moved).toEqual(["8>8@lid"])
-    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8@lid"])
   })
 
   it("hands over the recipient list's ids too, and a re-key of one with no stored chat moves the entry", async () => {

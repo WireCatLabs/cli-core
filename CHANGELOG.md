@@ -14,7 +14,9 @@ shape of this file.
   lock as long as the re-keys ran: up to 3.4 s for 5,000 re-keys on a synthetic 10,000-chat store. They now go
   through the new `store.chats.rekeyChats` in passes of one transaction, each holding the lock for about 50 ms with
   a pause after it. Each re-key keeps its own savepoint, privacy merge and account scope, and a refused one still
-  warns and leaves the others applied. `ChatsStore` gains `rekeyChats`, so a hand-written `ChatsStore` must add it.
+  warns and leaves the others applied. A pass the store refuses whole (closed at exit, busy past its timeout) ends
+  the run, and the next `serve` re-keys what is left. `ChatsStore` gains `rekeyChats`, so a hand-written
+  `ChatsStore` must add it.
 
 ## 0.358.0 — 19.10.2026
 
