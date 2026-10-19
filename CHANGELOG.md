@@ -11,6 +11,12 @@ shape of this file.
 
 ### Fixed
 
+- **A recipient-list entry saved by an id with no stored chat follows the messenger's re-key.** `serve` and `watch`
+  told the adapter's `storedChats` only the store's chat ids, so a WhatsApp recipient added by phone number before
+  any chat was stored under it was never re-keyed to its LID, and the send guard refused it until it was added
+  again. The profile's recipient-list ids (chat and partner) now join that call, deduplicated; the re-key the
+  messenger sends back moves the entry as before, with or without a chat row. An unreadable list is a warning, and
+  the store's ids are still handed over.
 - **A failed scheduled run no longer keeps a chat title or a name in `last.json`** (privacy). Its `reason` was the
   last line the run printed, which is the whole error object, message included: "no chat matches …" and the list of
   chats or people an ambiguous name matches reached the file and the "scheduled … failing" notice. `last.json` now

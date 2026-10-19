@@ -24,6 +24,11 @@ export interface Saving {
   /** After a re-key is saved: what outside the store spells the chat id follows it. */
   rekeyed?: (from: Id, to: Id) => void | Promise<void>
   /**
+   * Chat ids this account's recipient list names, told to `storedChats` beside the stored ones: an entry saved before
+   * any chat was stored under its id would otherwise never be re-keyed, and the send guard would refuse it for good.
+   */
+  recipientIds?: () => Id[]
+  /**
    * Set for a messenger whose history is pushed into the store (`history: "store"`): chat and person names, and the
    * titles `watch` leaves out, are answered from the store first. Its server has no directory to ask.
    */
@@ -40,7 +45,19 @@ export interface Saving {
  */
 export const stored = (
   messenger: MessengerAdapter,
-  { account, store, warn, events, pending, announcing, deletedWithoutChat, profile, rekeyed, namesFromStore }: Saving,
+  {
+    account,
+    store,
+    warn,
+    events,
+    pending,
+    announcing,
+    deletedWithoutChat,
+    profile,
+    rekeyed,
+    namesFromStore,
+    recipientIds,
+  }: Saving,
 ): MessengerAdapter => {
   let warned = false
   let recorded = profile === undefined
@@ -274,7 +291,7 @@ export const stored = (
       ? {
           feed: (onBatch, signal) => {
             if (messenger.storedChats) {
-              const announced = announceStoredChats(messenger, store, account, events, warn)
+              const announced = announceStoredChats(messenger, store, account, events, warn, recipientIds)
               announcing?.add(announced)
               void announced.finally(() => announcing?.delete(announced))
             }
@@ -405,12 +422,19 @@ const announceStoredChats = async (
   account: AccountKey,
   events: EventSink,
   warn: (message: string) => void,
+  recipientIds: Saving["recipientIds"],
 ): Promise<void> => {
+  let listed: Id[] = []
+  try {
+    listed = recipientIds?.() ?? []
+  } catch (error) {
+    warn(`the messenger was not told the recipient list: ${error instanceof Error ? error.message : String(error)}`)
+  }
   try {
     const opened = await store()
-    if (!opened) return
-    const ids = (await opened.forAccount(account).chats.chats({})).items.map((chat) => chat.id)
-    await messenger.storedChats?.(ids)
+    const held = opened ? (await opened.forAccount(account).chats.chats({})).items.map((chat) => chat.id) : []
+    const ids = [...new Set([...held, ...listed])]
+    if (opened || ids.length > 0) await messenger.storedChats?.(ids)
   } catch (error) {
     events({ event: "warning", code: "stored_chats_failed", operation: "history.stored_chats" })
     warn(`the messenger was not told the stored chats: ${error instanceof Error ? error.message : String(error)}`)

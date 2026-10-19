@@ -5,9 +5,10 @@ import { afterEach, describe, expect, it } from "vitest"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import { countedPoll } from "../../domain/polls.js"
 import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
+import { RecipientList } from "../../sends/recipients.js"
 import { type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { storedMessages } from "./context.js"
-import { stored } from "./stored.js"
+import { type Saving, stored } from "./stored.js"
 
 const account = { provider: "test", account: "500" }
 
@@ -824,6 +825,7 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
   const feeding = async (
     store: MessageStore,
     adapter: Partial<MessengerAdapter>,
+    options: Partial<Saving> = {},
   ): Promise<{ warnings: string[]; codes: string[] }> => {
     const pending = new Set<Promise<void>>()
     const warnings: string[] = []
@@ -836,6 +838,7 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
         if (event.event === "warning") codes.push(event.code)
       },
       pending,
+      ...options,
     })
     await wrapped.feed?.(() => {}, new AbortController().signal)
     while (pending.size > 0) await Promise.all(pending)
@@ -870,6 +873,75 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
 
     expect([...told].sort()).toEqual(["7", "8"])
     expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8@lid"])
+  })
+
+  it("hands over the recipient list's ids too, and a re-key of one with no stored chat moves the entry", async () => {
+    const { store } = await setUp()
+    const list = new RecipientList(join(mkdtempSync(join(tmpdir(), "recipients-")), "work.recipients.json"), "chat")
+    list.add({ id: "8", title: "Olga", addedAt: "2026-10-19T00:00:00.000Z" })
+    list.add({ id: "34@phone", title: "Ana", addedAt: "2026-10-19T00:00:00.000Z" })
+    list.add({ id: "50", title: "Group", partnerId: "35@phone", addedAt: "2026-10-19T00:00:00.000Z" })
+    let told: readonly string[] = []
+    let heard = () => {}
+    const toldOnce = new Promise<void>((resolve) => {
+      heard = resolve
+    })
+
+    await feeding(
+      store,
+      {
+        storedChats: async (ids) => {
+          told = ids
+          heard()
+        },
+        feed: async (onBatch) => {
+          await toldOnce
+          onBatch({
+            rekeys: [
+              { from: "34@phone", to: "34@lid" },
+              { from: "35@phone", to: "35@lid" },
+            ],
+          })
+        },
+      },
+      {
+        recipientIds: () => (list.read() ?? []).flatMap((one) => [one.id, ...(one.partnerId ? [one.partnerId] : [])]),
+        rekeyed: async (from, to) => {
+          await list.rekey(from, to)
+        },
+      },
+    )
+
+    expect([...told].sort()).toEqual(["34@phone", "35@phone", "50", "7", "8"])
+    expect(list.read()?.map(({ id, partnerId }) => [id, partnerId])).toEqual([
+      ["8", undefined],
+      ["34@lid", undefined],
+      ["50", "35@lid"],
+    ])
+    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8"])
+  })
+
+  it("an unreadable recipient list is a warning, and the stored chats are still handed over", async () => {
+    const { store } = await setUp()
+    let told: readonly string[] = []
+
+    const { warnings } = await feeding(
+      store,
+      {
+        storedChats: async (ids) => {
+          told = ids
+        },
+        feed: async () => {},
+      },
+      {
+        recipientIds: () => {
+          throw new Error("no `chats` array")
+        },
+      },
+    )
+
+    expect([...told].sort()).toEqual(["7", "8"])
+    expect(warnings).toEqual([expect.stringContaining("recipient list")])
   })
 
   it.each([

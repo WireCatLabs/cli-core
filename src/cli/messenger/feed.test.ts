@@ -169,6 +169,34 @@ describe("a messenger that pushes its history", () => {
     expect(JSON.parse(readFileSync(list, "utf8")).chats.map((chat: { id: string }) => chat.id)).toEqual(["9990001"])
   })
 
+  it("**serve tells the messenger a recipient no chat is stored under, and its re-key moves the entry**", async () => {
+    const { root, env } = sandbox()
+    const list = join(root, "state", "profiles", "default.recipients.json")
+    mkdirSync(join(root, "state", "profiles"), { recursive: true })
+    writeFileSync(list, JSON.stringify({ chats: [{ id: "5550002", title: "Ben", addedAt: "2026-10-01T00:00:00Z" }] }))
+    const stop = new AbortController()
+    let told: readonly string[] = []
+    let heard = () => {}
+    const toldOnce = new Promise<void>((resolve) => {
+      heard = resolve
+    })
+    const { connect } = pushing(stop, {
+      storedChats: async (ids) => {
+        told = ids
+        heard()
+      },
+      feed: async (onBatch) => {
+        await toldOnce
+        onBatch({ rekeys: [{ from: "5550002", to: "9990002" }] })
+        stop.abort()
+      },
+    })
+
+    expect((await call(["serve", "--json"], env, connect, stop.signal, "store")).code).toBe(0)
+    expect(told).toContain("5550002")
+    expect(JSON.parse(readFileSync(list, "utf8")).chats.map((chat: { id: string }) => chat.id)).toEqual(["9990002"])
+  })
+
   it("a refused re-key leaves the chat split and still keeps the batch's messages", async () => {
     const { env } = sandbox()
     const stop = new AbortController()

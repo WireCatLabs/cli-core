@@ -222,7 +222,8 @@ Some messengers push history to the client instead of answering a request for it
 - New messages still come through `watch`, not through `feed`.
 - When a stored chat can move to a new id that only your engine learns, give `PushedHistory` `storedChats(ids)` too.
   `serve` and `watch` call it once as `feed` starts, with every chat id the store holds for this account and no
-  other's; a chat marked left is not in it. Ids only, never messages, in one call
+  other's; a chat marked left is not in it. The profile's recipient list adds its chat and partner ids, stored or not,
+  so an entry saved by an id the messenger later drops moves too. Ids only, never messages, in one call
   ([measured](https://github.com/WireCatLabs/cli-testing/tree/main/performance/store/stored-chat-ids)). Pick the ones
   to move and send each later as a batch's `rekeys` (`{ from, to }`), which the store already applies. One-shot
   commands and a connection lent by `serve` never call it. A reject is a `stored_chats_failed` warning; `feed` goes on.
