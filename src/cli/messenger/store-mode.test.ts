@@ -415,6 +415,22 @@ describe("a messenger whose history is read from the store", () => {
     expect(connects).toEqual([])
   })
 
+  it("**says a left chat with no stored messages was left**, not that serve should run", async () => {
+    const env = await filled()
+    const { connect } = pushing()
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.chats.saveChats({ provider: "chat", account: "500" }, [
+      { id: "g1@g.us", kind: "group", membershipState: "left" },
+    ])
+    await store.close()
+
+    const { code, stderr } = await call(["messages", "list", "g1@g.us", "--json"], env, connect, "store")
+
+    expect(code).not.toBe(0)
+    expect(stderr).toContain("you left this chat, and the store holds none of its messages")
+    expect(stderr).not.toContain("nothing stored")
+  })
+
   it("**still connects to write**, through the guard", async () => {
     const env = await filled()
     const { connects, sent, connect } = pushing()

@@ -240,6 +240,21 @@ describe("chats create, join and leave", () => {
     expect(await membership(env, owner, "7")).toMatchObject({ membershipState: null })
   })
 
+  it("**leaves nothing and changes no membership under the read-only lock**", async () => {
+    const env = sandbox()
+    await seed(env, [[owner, "7", null]])
+    const left: string[] = []
+    const adapter = leaving(async () => {
+      left.push("7")
+    })
+
+    const locked = await call(["chats", "leave", "Book club", "--json"], adapter, { ...env, CHAT_READ_ONLY: "1" })
+
+    expect(locked.code).not.toBe(0)
+    expect(left).toEqual([])
+    expect(await membership(env, owner, "7")).toMatchObject({ membershipState: null })
+  })
+
   it("**takes the left mark off after a join**, keeping archived and other accounts as they were", async () => {
     const env = sandbox()
     await seed(env, [
