@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.357.0 — 19.10.2026
+
 ### Added
 
 - **An adapter can say "member again" without clearing other states.** `ChatUpdate.membershipState` (in `saveChats`
