@@ -20,6 +20,9 @@ export interface AccountMessages {
    * tombstone older than that is lifted. A tombstone set after it stays — the deletion is newer.
    *
    * `votes` and `stars` are saved after the messages in the same transaction, as `saveVote` and `saveStar` save each.
+   *
+   * `typedChatId` is the id the owner wrote to when the messenger answered `chatId`: a chat row made for `chatId`
+   * takes the typed row's title, kind and privacy, and is never more visible than it.
    */
   saveMessages(
     key: AccountKey,
@@ -30,6 +33,7 @@ export interface AccountMessages {
       seenAt?: number
       votes?: { messageId: Id; vote: PollVote }[]
       stars?: { messageId: Id; starred: boolean }[]
+      typedChatId?: Id
     },
   ): Promise<void>
   /** Oldest to newest, like a provider's history page. */
@@ -119,12 +123,14 @@ export interface MessagesStore extends AccountMessages {
 
 export const accountMessagesOver = (context: StoreContext): AccountMessages => {
   const { database } = context
-  const { accountPk, findAccountPk, findChatPk, chatKeyOf, chatPkFor, upsertMessage } = keysOver(context)
+  const { accountPk, findAccountPk, findChatPk, chatKeyOf, chatPkFor, answeredChatPk, upsertMessage } =
+    keysOver(context)
   return {
-    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [], stars = [] }) =>
+    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [], stars = [], typedChatId }) =>
       write(database, () => {
         const accountKey = accountPk(key)
-        const chatKey = chatPkFor(accountKey, chatId)
+        const chatKey =
+          typedChatId === undefined ? chatPkFor(accountKey, chatId) : answeredChatPk(accountKey, chatId, typedChatId)
         for (const message of messages) {
           if (message.scheduledFor === undefined) upsertMessage(key, accountKey, chatKey, message, via, seenAt)
         }

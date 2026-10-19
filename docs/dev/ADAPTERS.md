@@ -123,8 +123,8 @@ Each `send` gets a `sendId`. It is the send's identity.
 - `forward` and `createPoll` take a `sendId` too, with the same rule.
 - The message that `send`, `createPoll`, `forward` and `edit` return has the `chatId` the messenger answered with,
   in the form its live events carry. Do not echo the id you were given. cli-core saves the message, and creates
-  its chat row, under that id. When it differs from the id that was typed, the send journal records it as
-  `resultChatId`. For example, WhatsApp answers a send to a re-keyed person's phone-form id with the LID chat; an
+  its chat row with the typed chat's title, kind and privacy, under that id; an edited message stays in the row
+  that holds it. When it differs from the id that was typed, the send journal records it as `resultChatId`. For example, WhatsApp answers a send to a re-keyed person's phone-form id with the LID chat; an
   echo of the phone-form id would create a second chat for the same person.
 
 ## Errors

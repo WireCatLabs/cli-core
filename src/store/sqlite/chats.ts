@@ -60,6 +60,36 @@ export const chatPkFor = (context: StoreContext, accountKey: number, chatId: Id)
       .get()?.pk,
   )
 
+/**
+ * The row a send to `typed` lands in when the messenger answered `chatId`. A new row takes the typed row's title,
+ * kind and privacy; an existing one is hidden from search when the typed one is. Neither ever becomes more visible.
+ */
+export const answeredChatPk = (context: StoreContext, accountKey: number, chatId: Id, typed: Id): number => {
+  const { orm, now } = context
+  const like =
+    typed === chatId
+      ? undefined
+      : orm
+          .select({ kind: chats.kind, title: chats.title, searchable: chats.searchable, scope: chats.scope })
+          .from(chats)
+          .where(and(eq(chats.accountId, accountKey), eq(chats.externalId, typed)))
+          .get()
+  if (like === undefined) return chatPkFor(context, accountKey, chatId)
+  const found = findChatPk(context, accountKey, chatId)
+  if (found !== undefined) {
+    if (like.searchable === 0)
+      orm.update(chats).set({ searchable: 0, updatedAt: now() }).where(eq(chats.id, found)).run()
+    return found
+  }
+  return Number(
+    orm
+      .insert(chats)
+      .values({ accountId: accountKey, externalId: chatId, ...like, createdAt: now(), updatedAt: now() })
+      .returning({ pk: chats.id })
+      .get()?.pk,
+  )
+}
+
 export const upsertChat = (context: StoreContext, accountKey: number, chat: ChatUpdate): void => {
   const { orm, now } = context
   const parent = chat.parentChatId == null ? null : chatPkFor(context, accountKey, chat.parentChatId)

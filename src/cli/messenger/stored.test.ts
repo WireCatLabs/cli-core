@@ -96,6 +96,61 @@ describe("what the writes leave in the store", () => {
     expect((await store.chats.chats(account, {})).items.map((chat) => chat.id)).not.toContain("phone-form")
   })
 
+  it("a chat row made for the answered id takes the typed chat's title and kind", async () => {
+    const { store } = await setUp()
+    const wrapped = await listening(store, [], {
+      send: async () => ({ message: message("41", "hello again", "lid"), sendId: "s" }),
+    })
+
+    await wrapped.send("8", "hello again", { sendId: "s" })
+
+    const made = (await store.chats.chats(account, {})).items.find((chat) => chat.id === "lid")
+    expect(made).toMatchObject({ title: "Olga", kind: "dialog" })
+  })
+
+  it("a poll and a forward are saved under the chat the messenger answered", async () => {
+    const { store } = await setUp()
+    const wrapped = await listening(store, [], {
+      createPoll: async () => ({ message: message("42", "which day", "lid"), sendId: "p" }),
+      forward: async () => message("43", "the meeting is on tuesday", "lid"),
+    })
+
+    await wrapped.createPoll?.(
+      "8",
+      { question: "which day", answers: ["mon", "tue"], multiple: false, anonymous: false },
+      { sendId: "p" },
+    )
+    await wrapped.forward?.("7", "1", "8", { sendId: "f" })
+
+    for (const id of ["42", "43"]) expect((await store.messages.message(account, id, { chatId: "lid" }))?.id).toBe(id)
+    expect(await store.messages.message(account, "42", { chatId: "8" })).toBeUndefined()
+  })
+
+  it("an edited message stays in the chat row that holds it", async () => {
+    const { store } = await setUp()
+    const wrapped = await listening(store, [], {
+      edit: async (_chatId: string, messageId: string, text: string) => message(messageId, text, "lid"),
+    })
+
+    await wrapped.edit?.("7", "1", "the meeting moved to friday", {})
+
+    expect((await store.messages.message(account, "1", { chatId: "7" }))?.text).toBe("the meeting moved to friday")
+    expect(await store.messages.message(account, "1", { chatId: "lid" })).toBeUndefined()
+  })
+
+  it("an edit of a message the typed chat does not hold is saved under the answered chat", async () => {
+    const { store } = await setUp()
+    await store.messages.saveMessages(account, "lid", [message("2", "see you")], { via: "history" })
+    const wrapped = await listening(store, [], {
+      edit: async (_chatId: string, messageId: string, text: string) => message(messageId, text, "lid"),
+    })
+
+    await wrapped.edit?.("8", "2", "see you soon", {})
+
+    expect((await store.messages.message(account, "2", { chatId: "lid" }))?.text).toBe("see you soon")
+    expect(await store.messages.message(account, "2", { chatId: "8" })).toBeUndefined()
+  })
+
   it("a forward keeps its copy in the chat it went to", async () => {
     const { wrapped, found } = await setUp()
 

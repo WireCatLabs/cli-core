@@ -6,7 +6,7 @@ import { isId, type PeopleLookup, pickPerson } from "../../resolve.js"
 import type { EventSink } from "../../runs/events.js"
 import { codeOf } from "../../sends/guarded.js"
 import { chatIdIn } from "../../services/message-resolution.js"
-import type { AccountKey, DeletionScope, MessageStore } from "../../store/store.js"
+import type { AccountKey, DeletionScope, IngestedVia, MessageStore } from "../../store/store.js"
 
 export interface Saving {
   account: AccountKey
@@ -293,9 +293,10 @@ export const stored = (
           edit: async (chatId, messageId, text, options) => {
             const seenAt = Date.now()
             const edited = await capability(messenger, "edit", "edit")(chatId, messageId, text, options)
-            await save("messages.edit", (opened) =>
-              opened.messages.saveMessages(account, answeredChat(chatId, edited), [edited], { via: "update", seenAt }),
-            )
+            await save("messages.edit", async (opened) => {
+              const held = (await opened.messages.message(account, messageId, { chatId })) !== undefined
+              await saveSent(opened, account, chatId, edited, { via: "update", seenAt }, held ? chatId : undefined)
+            })
             return edited
           },
         }
@@ -305,11 +306,7 @@ export const stored = (
           // A messenger that never echoes a device's own message back would otherwise never hold the poll.
           createPoll: async (chatId, poll, options) => {
             const sent = await capability(messenger, "createPoll", "create a poll")(chatId, poll, options)
-            await save("polls.create", (opened) =>
-              opened.messages.saveMessages(account, answeredChat(chatId, sent.message), [sent.message], {
-                via: "send",
-              }),
-            )
+            await save("polls.create", (opened) => saveSent(opened, account, chatId, sent.message, { via: "send" }))
             return sent
           },
         }
@@ -343,9 +340,7 @@ export const stored = (
       ? {
           forward: async (fromChatId, messageId, toChatId, options) => {
             const copy = await capability(messenger, "forward", "forward")(fromChatId, messageId, toChatId, options)
-            await save("messages.forward", (opened) =>
-              opened.messages.saveMessages(account, answeredChat(toChatId, copy), [copy], { via: "send" }),
-            )
+            await save("messages.forward", (opened) => saveSent(opened, account, toChatId, copy, { via: "send" }))
             return copy
           },
         }
@@ -363,9 +358,7 @@ export const stored = (
       const sent = await messenger.send(chatId, text, options)
       // A scheduled message is not in the chat yet, and it will arrive under another id.
       if (options.at === undefined) {
-        await save("messages.send", (opened) =>
-          opened.messages.saveMessages(account, answeredChat(chatId, sent.message), [sent.message], { via: "send" }),
-        )
+        await save("messages.send", (opened) => saveSent(opened, account, chatId, sent.message, { via: "send" }))
       }
       return sent
     },
@@ -375,8 +368,16 @@ export const stored = (
 /**
  * A write is saved under the chat the messenger answered, not the one typed: WhatsApp answers a re-keyed person's
  * phone-form id with the LID chat, and saving under the typed id would split the chat until the next re-key.
+ * `into` overrides it for an edit, whose message stays in the row that already holds it.
  */
-const answeredChat = (typed: Id, message: Message): Id => message.chatId || typed
+const saveSent = (
+  opened: MessageStore,
+  account: AccountKey,
+  typed: Id,
+  message: Message,
+  options: { via: IngestedVia; seenAt?: number },
+  into: Id = message.chatId || typed,
+): Promise<void> => opened.messages.saveMessages(account, into, [message], { ...options, typedChatId: typed })
 
 /**
  * The chat id a name or id names, as the store reads it, and the stored chat when there is one. Neither when the
