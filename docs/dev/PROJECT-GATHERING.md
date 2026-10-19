@@ -1,7 +1,7 @@
 # Project evidence gathering
 
 `gatherProjectEvidence` from `@wirecat/cli-core/services` collects cited evidence for one project from
-explicitly selected stored sources: messages, mail and imported documents. It plans and bounds the reads,
+explicitly selected stored sources: messages, mail, imported documents and meeting transcript cues. It plans and bounds the reads,
 deduplicates references across search lanes and returns a reference-only checkpoint to resume from. It
 writes nothing: no entity, relationship, fact, task or migration. Interpreting the evidence is the agent's
 job; matching it to entities is a later slice.

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator, parseLocator } from "../domain/locator.js"
+import { formatMeetingReference, parseMeetingReference } from "../meetings/index.js"
 import {
   type ContextEvidencePage,
   type ContextEvidenceRequest,
@@ -65,9 +66,9 @@ export const validateContextEvidencePage = (page: ContextEvidencePage, request: 
         fail()
       if (item.revision !== null && (!Number.isSafeInteger(item.revision) || item.revision < 1)) fail()
       if (
-        !["source-modified", "stored-update", "sent"].includes(item.timeKind) ||
-        (source.kind !== "document" && item.timeKind !== "sent") ||
-        (source.kind === "document" && item.timeKind === "sent")
+        source.kind === "document"
+          ? !["source-modified", "stored-update"].includes(item.timeKind)
+          : item.timeKind !== (source.kind === "meeting" ? "meeting-start" : "sent")
       )
         fail()
       const text = [item.text, item.title, item.url, item.provider, item.account, item.timeKind]
@@ -75,6 +76,16 @@ export const validateContextEvidencePage = (page: ContextEvidencePage, request: 
       if (source.kind === "document") {
         const id = Number(item.ref.slice(9))
         if (!Number.isSafeInteger(id) || id < 1 || item.ref !== `document:${id}`) fail()
+      } else if (source.kind === "meeting") {
+        const reference = parseMeetingReference(item.ref)
+        if (
+          reference.accountId !== source.accountId ||
+          reference.transcriptId === undefined ||
+          reference.cuePosition === undefined ||
+          formatMeetingReference(reference) !== item.ref
+        )
+          fail()
+        text.push(item.ref)
       } else {
         const locator = parseLocator(item.ref)
         if (
