@@ -37,16 +37,9 @@ shape of this file.
   drops `--qr-file` and its refusal of a QR login without a terminal. `parity.json` no longer expects `--qr-file` on
   `session start` or `setup`.
 
-## 0.361.0 — 19.10.2026
-
 ### Fixed
 
-- **A warning in `serve`'s log now says which warning it was.** Off a terminal, a re-key given up at exit, a write
-  the store did not take, a passive listen that failed and a stored-chats call that failed each wrote a bare
-  `serve.warning` record, so the log could not tell them apart. The record now carries the warning's `code`,
-  `operation` and `counts` (`rekeys_not_applied` with `counts.rekeys`), never its sentence, which can quote an
-  error or a chat.
-- **The other warnings in `serve`'s log now carry a code too.** A flood wait (`flood_wait`, with `counts.seconds`),
+- **More warnings in `serve`'s log now carry a code.** A flood wait (`flood_wait`, with `counts.seconds`),
   a long wait for the profile's pace (`pace_wait`, with `counts.seconds`), a held account (`account_frozen`,
   `account_limited`, `account_banned`), a wait that could not be remembered (`wait_not_remembered`), a send missing
   from the send journal (`send_not_journaled`), a recipient list that could not be re-keyed or read
@@ -55,6 +48,16 @@ shape of this file.
   (`reply_legacy_placeholders`, `reply_legacy_may_reword`, `reply_template_warning`) each log their code and
   operation instead of a bare `serve.warning`. The record never holds the sentence, a chat id, a name or an error
   message; the sentence at a terminal is unchanged.
+
+## 0.361.0 — 19.10.2026
+
+### Fixed
+
+- **A warning in `serve`'s log now says which warning it was.** Off a terminal, a re-key given up at exit, a write
+  the store did not take, a passive listen that failed and a stored-chats call that failed each wrote a bare
+  `serve.warning` record, so the log could not tell them apart. The record now carries the warning's `code`,
+  `operation` and `counts` (`rekeys_not_applied` with `counts.rekeys`), never its sentence, which can quote an
+  error or a chat. Warnings that have no code yet still log a bare record.
 - **The adapter test example in [ADAPTERS.md](docs/dev/ADAPTERS.md#running-the-contract-cases) no longer gives up
   re-keys.** It handed `run()` `rekeyPacing: { lockMs: 0 }`, one re-key per transaction, so a few hundred re-keys
   outlasted `closeWaitMs: 10` and were given up. It now hands `{ lockMs: 1000, pauseMs: 0 }` and says what each
