@@ -22,8 +22,17 @@ shape of this file.
   `rememberChats` (`src/record.ts`), `else await db.chats.rejoinChats(key, ids)`; without it a chat rejoined while
   the session list is cut stays "left", is hidden from `max chats list`, and `archive clear --left` deletes it.
   A caller that learns of a rejoin any other way sends `membershipState: null`.
+- **`ChatsStore.leftChats` also names each chat** in a new `left` list (`id`, `title`, `messages`), the ones holding
+  most messages first; with `clear` it is what was deleted. A test that compares its whole answer, such as max-cli's
+  `src/record.test.ts`, adds `left`.
 
 ### Added
+
+- **`store clear --left` shows which chats it deletes**: the refusal without `--allow-dangerous` lists the first 20
+  by id, title and message count, and says how many more; the new `--dry-run` answers every one in `left` and
+  deletes nothing, also under `<PREFIX>_READ_ONLY`; the answer after deleting lists what was deleted. The titles go
+  only to the terminal or the JSON answer — the refusal's message, which a scheduled run's `last.json` keeps, holds
+  only the counts.
 
 - **`ChatsStore.rejoinChats(key, ids)`** takes the "left" mark off the chats a messenger's chat list names, from any
   page of it, and says how many.

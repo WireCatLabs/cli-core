@@ -300,7 +300,7 @@ describe("re-keying a stored chat", () => {
 
     await store.chats.rekeyChat(OWNER, PHONE, LID)
 
-    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 0, messages: 0 })
+    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 0, messages: 0, left: [] })
     await store.close()
   })
 
@@ -311,7 +311,11 @@ describe("re-keying a stored chat", () => {
 
     await store.chats.rekeyChat(OWNER, PHONE, LID)
 
-    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 1, messages: 0 })
+    expect(await store.chats.leftChats(OWNER)).toEqual({
+      chats: 1,
+      messages: 0,
+      left: [{ id: LID, title: "Ana", messages: 0 }],
+    })
     await store.close()
   })
 

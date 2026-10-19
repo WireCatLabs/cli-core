@@ -179,19 +179,39 @@ export const markLeft = (context: StoreContext, accountKey: number, present: Id[
     .all().length
 }
 
-/** The chats marked left, and how many messages they hold. */
-export const leftChats = ({ orm }: StoreContext, accountKey: number): { pks: number[]; messages: number } => {
-  const pks = orm
-    .select({ pk: chats.id })
+/** A chat marked left: its id, its title, and how many messages it holds. */
+export interface LeftChat {
+  id: Id
+  title: string | null
+  messages: number
+}
+
+/** The chats marked left, the ones holding the most messages first, and how many messages they hold. */
+export const leftChats = (
+  { orm }: StoreContext,
+  accountKey: number,
+): { pks: number[]; chats: LeftChat[]; messages: number } => {
+  const found = orm
+    .select({ pk: chats.id, id: chats.externalId, title: chats.title })
     .from(chats)
     .where(and(eq(chats.accountId, accountKey), eq(chats.membershipState, "left")))
     .all()
-    .map(({ pk }) => pk)
-  const count =
+  const pks = found.map(({ pk }) => pk)
+  const counts = new Map(
     pks.length === 0
-      ? 0
-      : Number(orm.select({ n: sql<number>`count(*)` }).from(messages).where(inArray(messages.chatId, pks)).get()?.n)
-  return { pks, messages: count }
+      ? []
+      : orm
+          .select({ pk: messages.chatId, n: sql<number>`count(*)` })
+          .from(messages)
+          .where(inArray(messages.chatId, pks))
+          .groupBy(messages.chatId)
+          .all()
+          .map(({ pk, n }) => [pk, Number(n)]),
+  )
+  const left = found
+    .map(({ pk, id, title }) => ({ id, title, messages: counts.get(pk) ?? 0 }))
+    .sort((a, b) => b.messages - a.messages || a.id.localeCompare(b.id))
+  return { pks, chats: left, messages: left.reduce((sum, chat) => sum + chat.messages, 0) }
 }
 
 /** These chats and everything under them, children before parents: the foreign keys are enforced. */

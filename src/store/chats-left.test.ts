@@ -65,7 +65,11 @@ describe("a chat the account left", () => {
     await store.chats.saveChats(OWNER, [{ id: "-2", kind: "group", parentChatId: "-9" }])
     await store.chats.saveChats(OWNER, [chat("-2")])
 
-    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 1, messages: 0 })
+    expect(await store.chats.leftChats(OWNER)).toEqual({
+      chats: 1,
+      messages: 0,
+      left: [{ id: "-2", title: "Chat -2", messages: 0 }],
+    })
     await store.close()
   })
 
@@ -132,9 +136,10 @@ describe("a chat the account left", () => {
     await store.roster.saveMembers(OWNER, "-2", ["7"])
     await store.chats.markChatsLeft(OWNER, ["-1"])
 
-    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 1, messages: 2 })
-    expect(await store.chats.leftChats(OWNER, { clear: true })).toEqual({ chats: 1, messages: 2 })
-    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 0, messages: 0 })
+    const left = { chats: 1, messages: 2, left: [{ id: "-2", title: "Chat -2", messages: 2 }] }
+    expect(await store.chats.leftChats(OWNER)).toEqual(left)
+    expect(await store.chats.leftChats(OWNER, { clear: true })).toEqual(left)
+    expect(await store.chats.leftChats(OWNER)).toEqual({ chats: 0, messages: 0, left: [] })
     expect(await store.messages.message(OWNER, "20")).toBeUndefined()
     expect(await store.messages.message(OWNER, "10")).toBeDefined()
     expect(await store.roster.members(OWNER, "-2")).toEqual([])

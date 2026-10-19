@@ -3,7 +3,7 @@ import type { ChannelTagMatch } from "../domain/channel-tags.js"
 import type { Chat, ChatKind, ChatUpdate, Id, Page } from "../domain/models.js"
 import { keysOver } from "./keys.js"
 import { type ChatRekey, rekeyChat } from "./sqlite/chat-rekey.js"
-import type { ChatMetadata } from "./sqlite/chats.js"
+import type { ChatMetadata, LeftChat } from "./sqlite/chats.js"
 import * as chatQueries from "./sqlite/chats.js"
 import type { ChatCompleteness } from "./sqlite/completeness.js"
 import * as completeness from "./sqlite/completeness.js"
@@ -12,6 +12,15 @@ import type { Where } from "./sqlite/query-filter.js"
 import * as reads from "./sqlite/reads.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey, ChatActivity, ChatStats, StoredChatFilter } from "./types.js"
+
+export type { LeftChat }
+
+/** The chats marked left: how many, the messages they hold, and each one. */
+export interface LeftChats {
+  chats: number
+  messages: number
+  left: LeftChat[]
+}
 
 export interface ChatsStore {
   saveChats(key: AccountKey, chats: ChatUpdate[]): Promise<void>
@@ -36,8 +45,11 @@ export interface ChatsStore {
    * `to`. Replaying it changes nothing.
    */
   rekeyChat(key: AccountKey, from: Id, to: Id): Promise<ChatRekey>
-  /** The chats marked left and the messages they hold; with `clear`, deletes them and all under them. */
-  leftChats(key: AccountKey, options?: { clear?: boolean }): Promise<{ chats: number; messages: number }>
+  /**
+   * The chats marked left and the messages they hold, each named in `left`; with `clear`, deletes them and all under
+   * them — `left` is then what was deleted.
+   */
+  leftChats(key: AccountKey, options?: { clear?: boolean }): Promise<LeftChats>
   /** Per chat: whether its history is held up to date, without gaps, back to its start. */
   chatCompleteness(key: AccountKey, chatIds: Id[]): Promise<ChatCompleteness[]>
   /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
@@ -108,13 +120,13 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
 
     leftChats: async (key, { clear = false } = {}) => {
       const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return { chats: 0, messages: 0 }
-      let found = { pks: [] as number[], messages: 0 }
+      if (accountKey === undefined) return { chats: 0, messages: 0, left: [] }
+      let found: ReturnType<typeof chatQueries.leftChats> = { pks: [], chats: [], messages: 0 }
       write(database, () => {
         found = chatQueries.leftChats(context, accountKey)
         if (clear) chatQueries.purgeChats(context, found.pks)
       })
-      return { chats: found.pks.length, messages: found.messages }
+      return { chats: found.pks.length, messages: found.messages, left: found.chats }
     },
 
     chatCompleteness: async (key, chatIds) => {

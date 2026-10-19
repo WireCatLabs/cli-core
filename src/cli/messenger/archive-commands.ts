@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Readable } from "node:stream"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, singleLine } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { Id } from "../../domain/models.js"
@@ -11,6 +11,7 @@ import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
+import type { LeftChat } from "../../store/chats.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { jobsCommand } from "./backfill-command.js"
@@ -54,18 +55,41 @@ const statusCommand = (messenger: Messenger): Command =>
         context.renderer.note("the store holds no messages for this profile yet")
     })
 
+const LISTED = 20
+
+/** Titles are the owner's: these lines go to a person's terminal, never into an error message. */
+const leftLines = (left: LeftChat[]): string[] => {
+  const shown = left.slice(0, LISTED)
+  const width = shown.reduce((widest, { id }) => Math.max(widest, id.length), 0)
+  return [
+    ...shown.map(
+      ({ id, title, messages }) =>
+        `  ${id.padEnd(width)}  ${title === null ? "(no title)" : singleLine(title)}  ${messages}`,
+    ),
+    ...(left.length > shown.length
+      ? [`  and ${left.length - shown.length} more — --dry-run --json lists every one`]
+      : []),
+  ]
+}
+
 /**
  * Deletes from the store, which is the archive: only what `--left` names, and only with
  * `--allow-dangerous`, since a chat the account left cannot be fetched again. Emptying the whole
- * store is not offered.
+ * store is not offered. The refusal names the chats to a person but keeps them out of its message,
+ * which a scheduled run's `last.json` keeps.
  */
 const clearCommand = (messenger: Messenger): Command =>
   annotate(new Command("clear"), { effects: LOCAL_WRITE, mcp: false })
     .description("delete from the store the chats this account has left, with their messages")
     .option("--left", "the chats this account has left — the only thing this clears")
     .option("--allow-dangerous", "yes, delete — it cannot be undone, and a chat you left cannot be fetched again")
+    .option("--dry-run", "list the chats it would delete, and delete nothing")
     .action(async function (this: Command) {
-      const { left, allowDangerous } = this.opts<{ left?: boolean; allowDangerous?: boolean }>()
+      const { left, allowDangerous, dryRun } = this.opts<{
+        left?: boolean
+        allowDangerous?: boolean
+        dryRun?: boolean
+      }>()
       if (!left) {
         throw new CliError(
           "validation_error",
@@ -74,17 +98,26 @@ const clearCommand = (messenger: Messenger): Command =>
       }
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) => services.archive.left())
+      const pretty = context.format === "pretty"
+      if (dryRun) {
+        renderAnswer(this, context, itemOf(snakeKeys({ cleared: false, dryRun: true, ...found })))
+        return
+      }
       if (found.chats > 0 && !allowDangerous) {
+        if (pretty) {
+          context.renderer.note("it would delete these chats — id, title, messages:")
+          for (const line of leftLines(found.left)) context.renderer.note(line)
+        }
         throw new CliError(
           "confirmation_required",
           `this deletes ${found.chats} chat(s) this account has left and their ${found.messages} message(s) ` +
-            "from the store, and it cannot be undone — add --allow-dangerous to go ahead",
+            "from the store, and it cannot be undone — --dry-run lists them; add --allow-dangerous to go ahead",
         )
       }
       const cleared =
         found.chats > 0 ? await context.withServices((services) => services.archive.left({ clear: true })) : found
       renderAnswer(this, context, itemOf(snakeKeys({ cleared: cleared.chats > 0, ...cleared })))
-      if (context.format !== "pretty") return
+      if (!pretty) return
       if (cleared.chats === 0) context.renderer.note("the store holds no chats this account has left")
       else context.renderer.success(`deleted ${cleared.chats} chat(s) and ${cleared.messages} message(s)`)
     })
