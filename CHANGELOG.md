@@ -20,6 +20,11 @@ shape of this file.
   never drawn. `scan` is optional and nothing changes without it: an adapter drops its own scan note before
   `show()` and passes that text as `show(link, scan)` instead.
 
+### Fixed
+
+- **A `storedChats` hook that never finishes no longer says messages were not saved** at exit: after the 5 s wait
+  it is a `stored_chats_failed` warning that the hook was abandoned, since it only reads chat ids.
+
 ## 0.349.0 — 19.10.2026
 
 ### Added

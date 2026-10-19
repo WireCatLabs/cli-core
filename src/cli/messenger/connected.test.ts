@@ -31,6 +31,7 @@ vi.mock("../../store/store.js", () => ({
             }
           }),
       },
+      forAccount: () => ({ chats: { chats: async () => ({ items: [{ id: "7" }] }) } }),
       close: async () => {
         order.push("store closed")
       },
@@ -110,6 +111,31 @@ describe("closing a connection", () => {
 
     expect(order).toEqual(["connection closed", "store closed"])
     expect(warnings).toEqual([expect.stringContaining("still being written")])
+  })
+
+  it("abandons a stored-chats hook that never ends without saying anything went unsaved", async () => {
+    vi.useFakeTimers()
+    const handed: (readonly string[])[] = []
+    const adapter = {
+      ...arriving,
+      feed: async () => {},
+      storedChats: (ids: readonly string[]) => {
+        handed.push(ids)
+        return new Promise<void>(() => {})
+      },
+    } as unknown as MessengerAdapter
+    const { adapter: saving, close, warnings, codes } = opened(adapter, "store", { listen: true })
+    await saving.feed?.(() => {}, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const closing = close()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await closing
+
+    expect(handed).toEqual([["7"]])
+    expect(order).toEqual(["connection closed", "store closed"])
+    expect(codes).toEqual(["stored_chats_failed"])
+    expect(warnings).toEqual([expect.stringContaining("stored-chats hook did not finish and was abandoned")])
   })
 })
 

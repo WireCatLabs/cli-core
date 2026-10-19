@@ -219,6 +219,7 @@ Some messengers push history to the client instead of answering a request for it
   ([measured](https://github.com/WireCatLabs/cli-testing/tree/main/performance/store/stored-chat-ids)). Pick the ones
   to move and send each later as a batch's `rekeys` (`{ from, to }`), which the store already applies. One-shot
   commands and a connection lent by `serve` never call it. A reject is a `stored_chats_failed` warning; `feed` goes on.
+  A call still running at exit is abandoned after the 5 s save wait, with the same warning.
 - Give the adapter `PassiveUpdates` when the messenger delivers, on any connection, what it queued while nothing was
   connected, and cannot deliver it again. `listen(onEvent, signal)` hands on the same `MessageEvent`s as `watch`, from
   a connection opened without `{ listen: true }`, until `signal` aborts. It only listens: it must not connect or wait

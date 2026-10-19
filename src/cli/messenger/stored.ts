@@ -16,6 +16,8 @@ export interface Saving {
   events: EventSink
   /** Saves still writing, for the closer to wait on: `watch` does not hold the next event for one. */
   pending?: Set<Promise<void>>
+  /** `storedChats` calls still running, apart from `pending`: one abandoned at exit leaves nothing unsaved. */
+  announcing?: Set<Promise<void>>
   deletedWithoutChat?: DeletionScope
   /** The app command and profile running, recorded with the first save so another app can name this account. */
   profile?: { app: string; name: string }
@@ -38,7 +40,7 @@ export interface Saving {
  */
 export const stored = (
   messenger: MessengerAdapter,
-  { account, store, warn, events, pending, deletedWithoutChat, profile, rekeyed, namesFromStore }: Saving,
+  { account, store, warn, events, pending, announcing, deletedWithoutChat, profile, rekeyed, namesFromStore }: Saving,
 ): MessengerAdapter => {
   let warned = false
   let recorded = profile === undefined
@@ -274,9 +276,9 @@ export const stored = (
       ? {
           feed: (onBatch, signal) => {
             if (messenger.storedChats) {
-              const announcing = announceStoredChats(messenger, store, account, events, warn)
-              pending?.add(announcing)
-              void announcing.finally(() => pending?.delete(announcing))
+              const announced = announceStoredChats(messenger, store, account, events, warn)
+              announcing?.add(announced)
+              void announced.finally(() => announcing?.delete(announced))
             }
             return messenger.feed?.(saveBatches("history.feed", onBatch), signal) ?? Promise.resolve()
           },
