@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.354.0 — 19.10.2026
+
 ### Fixed
 
 - **Meeting preparation and project gathering leave out a chat hidden from search** (security). The stored-context
