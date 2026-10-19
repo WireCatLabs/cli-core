@@ -198,6 +198,9 @@ describe("reviewed meeting findings", () => {
     await expect(
       f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: ["decision"] }),
     ).rejects.toMatchObject({ details: { reason: "meeting-findings.stale" } })
+    expect(
+      await f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: [] }),
+    ).toMatchObject({ status: "reviewed", receipt: { accepted: [] } })
     await expect(f.store.meetingFindings.stage(account, { ...f.input, key: "changed" }, agent)).rejects.toMatchObject({
       details: { reason: "meeting-findings.stale" },
     })

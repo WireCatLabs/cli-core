@@ -172,7 +172,8 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           return batch
         }
         const input = proposal.payload as StoredInput
-        if (snapshot(batch.input) !== input.snapshotHash) return stale()
+        // Rejecting creates nothing, so a batch whose evidence changed can still be closed.
+        if (accepted.length && snapshot(batch.input) !== input.snapshotHash) return stale()
         if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
         const agent = {
