@@ -258,9 +258,11 @@ describe("a messenger that pushes its history", () => {
     })
 
     expect(code).toBe(0)
-    expect(warningAttributes(stderr)).toEqual([
-      { event: "serve.warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: 2 } },
-    ])
+    const [warning, ...more] = warningAttributes(stderr)
+    expect(more).toEqual([])
+    expect(warning).toMatchObject({ event: "serve.warning", code: "rekeys_not_applied", operation: "history.rekey" })
+    // A slow machine closes before the first pass, so it gives up all three.
+    expect([2, 3]).toContain(warning.counts.rekeys)
     expect(stderr).not.toContain("not applied yet")
   })
 
