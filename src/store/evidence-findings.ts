@@ -1,0 +1,40 @@
+import type { FindingOutcome, FindingsInput, FindingsReceipt } from "../meetings/index.js"
+
+export const EVIDENCE_FINDINGS_KIND = "evidence_findings"
+
+/** Who decided: the owner, or an agent the host let decide for the owner, with its reason. */
+export type EvidenceFindingsDecider = "owner" | { bot: string; model?: string; reason: string }
+
+export interface EvidenceFindingsReceipt extends FindingsReceipt {
+  decision: { by: "owner" } | { by: "agent"; bot: string; model: string | null; reason: string }
+}
+export interface EvidenceFindingsBatch {
+  id: string
+  project: string
+  input: FindingsInput
+  fingerprint: string
+  status: "proposed" | "reviewed"
+  author: { type: "person" | "bot"; id: string; name: string | null }
+  decidedBy: { type: "person" | "bot"; id: string } | null
+  decidedAt: string | null
+  previous: FindingOutcome[]
+  receipt: EvidenceFindingsReceipt | null
+}
+/**
+ * Cited facts and follow-ups about one project from stored messages, mail and documents, staged by an agent for
+ * review. A sibling of meeting findings: the same rules, evidence checked against the current stored text.
+ */
+export interface EvidenceFindingsStore {
+  stage(input: FindingsInput, agent: { bot: string; model?: string }): Promise<EvidenceFindingsBatch>
+  get(id: string): Promise<EvidenceFindingsBatch>
+  list(options?: {
+    project?: string
+    limit?: number
+    offset?: number
+    status?: "proposed" | "reviewed"
+  }): Promise<{ items: EvidenceFindingsBatch[]; hasMore: boolean }>
+  review(
+    id: string,
+    input: { fingerprint: string; accept: string[]; by?: EvidenceFindingsDecider },
+  ): Promise<EvidenceFindingsBatch>
+}

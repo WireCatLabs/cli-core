@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
+import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
 import type { AccountKey } from "../types.js"
 import type { Actor } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
@@ -233,15 +234,22 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
 export const proposedActionsStoreOver = (context: StoreContext): ProposedActionsStore => {
   const operations = proposalOperationsOver(context)
   const generic = (id: string) => {
-    if (operations.get(id).kind === MEETING_FINDINGS_KIND)
+    const kind = operations.get(id).kind
+    if (kind === MEETING_FINDINGS_KIND)
       throw new CliError("validation_error", "review meeting findings through the dedicated findings command", {
         reason: "meeting-findings.dedicated-review",
+      })
+    if (kind === EVIDENCE_FINDINGS_KIND)
+      throw new CliError("validation_error", "review evidence findings through the dedicated findings command", {
+        reason: "evidence-findings.dedicated-review",
       })
   }
   return {
     propose: async (input) => {
       if (input.kind === MEETING_FINDINGS_KIND)
         throw new CliError("validation_error", "stage meeting findings through the dedicated findings command")
+      if (input.kind === EVIDENCE_FINDINGS_KIND)
+        throw new CliError("validation_error", "stage evidence findings through the dedicated findings command")
       return operations.propose(input)
     },
     get: async (id) => operations.get(id),

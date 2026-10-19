@@ -198,45 +198,50 @@ export const contextIndexOver = (
 })
 
 /** The cited record by reference, read with the context reader's own columns, so fingerprints agree. */
+export const contextRecordOf = (
+  database: StoreContext["database"],
+  ref: string,
+): { ref: string; title: string | null; text: string; revision: number | null } | null => {
+  if (typeof ref !== "string") return null
+  const document = /^document:([1-9]\d*)$/.exec(ref)
+  if (document) {
+    const corpus = corpora.document
+    const row = database
+      .prepare(
+        `SELECT ${corpus.title} AS title,${corpus.body} AS body,${corpus.revision} AS revision FROM documents n
+         WHERE n.id=? AND n.deleted_at IS NULL AND ${corpus.where}`,
+      )
+      .get(Number(document[1]))
+    return row
+      ? {
+          ref,
+          title: row.title == null ? null : String(row.title),
+          text: String(row.body),
+          revision: row.revision == null ? null : Number(row.revision),
+        }
+      : null
+  }
+  let at: ReturnType<typeof parseLocator>
+  try {
+    at = parseLocator(ref)
+  } catch {
+    return null
+  }
+  const corpus = at.provider === "email" ? corpora.mail : corpora.message
+  const row = database
+    .prepare(
+      `SELECT ${corpus.title} AS title,${corpus.body} AS body FROM ${corpus.table} n JOIN accounts a ON a.id=n.account_id
+       ${corpus.join} WHERE a.provider=? AND a.external_id=? AND c.external_id=? AND n.external_id=?
+       AND n.deleted_at IS NULL AND ${corpus.where}`,
+    )
+    .get(at.provider, at.account, at.chat, at.message)
+  return row
+    ? { ref, title: row.title == null ? null : String(row.title), text: String(row.body), revision: null }
+    : null
+}
+
 export const contextRecordsOver = ({ database }: Pick<StoreContext, "database">): ContextRecordReader => ({
   async read(ref) {
-    if (typeof ref !== "string") return null
-    return read(database, () => {
-      const document = /^document:([1-9]\d*)$/.exec(ref)
-      if (document) {
-        const corpus = corpora.document
-        const row = database
-          .prepare(
-            `SELECT ${corpus.title} AS title,${corpus.body} AS body,${corpus.revision} AS revision FROM documents n
-             WHERE n.id=? AND n.deleted_at IS NULL AND ${corpus.where}`,
-          )
-          .get(Number(document[1]))
-        return row
-          ? {
-              ref,
-              title: row.title == null ? null : String(row.title),
-              text: String(row.body),
-              revision: row.revision == null ? null : Number(row.revision),
-            }
-          : null
-      }
-      let at: ReturnType<typeof parseLocator>
-      try {
-        at = parseLocator(ref)
-      } catch {
-        return null
-      }
-      const corpus = at.provider === "email" ? corpora.mail : corpora.message
-      const row = database
-        .prepare(
-          `SELECT ${corpus.title} AS title,${corpus.body} AS body FROM ${corpus.table} n JOIN accounts a ON a.id=n.account_id
-           ${corpus.join} WHERE a.provider=? AND a.external_id=? AND c.external_id=? AND n.external_id=?
-           AND n.deleted_at IS NULL AND ${corpus.where}`,
-        )
-        .get(at.provider, at.account, at.chat, at.message)
-      return row
-        ? { ref, title: row.title == null ? null : String(row.title), text: String(row.body), revision: null }
-        : null
-    })
+    return read(database, () => contextRecordOf(database, ref))
   },
 })

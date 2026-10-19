@@ -39,6 +39,13 @@ export type {
 export { applyDocumentTransfer, previewDocumentTransfer } from "./document-transfer/index.js"
 export type { CacheDatabase, CacheStatement, OpenDatabase, SqlValue } from "./driver.js"
 export { PRAGMAS } from "./driver.js"
+export {
+  EVIDENCE_FINDINGS_KIND,
+  type EvidenceFindingsBatch,
+  type EvidenceFindingsDecider,
+  type EvidenceFindingsReceipt,
+  type EvidenceFindingsStore,
+} from "./evidence-findings.js"
 export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"
 export { openCache } from "./open.js"

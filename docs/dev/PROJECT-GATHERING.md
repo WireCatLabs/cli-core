@@ -93,3 +93,27 @@ scope, window or fetch mode is refused. Budgets may change between invocations.
 
 `items` holds only references new to the run, with a 300-character excerpt and the lanes that found them;
 a reference returned earlier and found by another lane later appears in `matchedAgain`.
+
+## Staging findings for review
+
+Every item carries `fingerprint`: a hash of its reference, title, full stored text and revision.
+`store.contextRecords.read(ref)` reads the same record by reference, so `contextEvidenceFingerprint(record)` is
+the item's fingerprint for as long as the text is unchanged.
+
+`store.evidenceFindings` stages an agent's cited facts and follow-ups about one project, from message, mail and
+document references, and reviews them. It is a sibling of [reviewed meeting findings](MEETING-FINDINGS.md) and
+shares their rules and code: 1–16 findings, a stable batch key (the same key and input returns the same batch;
+other input under that key is refused), facts of an existing type, tasks with an explicit or inferred commitment,
+dates and assignees only with supporting references, and a receipt that reuses earlier decisions on unchanged
+candidates and refuses to accept one rejected before. What differs:
+
+- **Evidence.** Each reference must name a stored message, email or document whose current fingerprint matches;
+  otherwise the batch is stale (`evidence-findings.stale`), at staging and again at review. There is no
+  membership check: the project must exist, and whether the evidence belongs to it is what the reviewer decides.
+- **One project per batch**, held as the proposal's target, so `list({ project })` reads one project's batches.
+- **Who decides.** `review(id, { fingerprint, accept, by })` takes `by: "owner"` (the default) or
+  `{ bot, model?, reason }` — an agent the host lets decide for the owner. The receipt records the decision and
+  its reason, and the proposal's decider is the agent. Created facts and tasks are attributed to the authoring
+  agent either way and stay editable through the usual fact and task commands.
+
+Generic proposal approval, rejection and staging refuse this kind (`evidence-findings.dedicated-review`).
