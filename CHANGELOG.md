@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.349.0 — 19.10.2026
+
 ### Added
 
 - **`gatherProjectEvidence` brings the mail and document index up to date before reading** through the new
