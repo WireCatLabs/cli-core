@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A recipient-list entry saved by an id with no stored chat follows the messenger's re-key.** `serve` and `watch`
+  told the adapter's `storedChats` only the store's chat ids, so a WhatsApp recipient added by phone number before
+  any chat was stored under it was never re-keyed to its LID, and the send guard refused it until it was added
+  again. `storedChats(ids, recipients?)` now takes, as an optional second argument, the recipient-list ids (chat and
+  partner) the store does not hold: typed ids an adapter maps from local data only, never looks up or records. The
+  re-key the messenger sends back moves the entry as before, with or without a chat row. An unreadable list is a
+  warning, and the store's ids are still handed over. Additive: the one-argument signature is unchanged.
+
 ## 0.355.0 — 19.10.2026
 
 ### Fixed

@@ -484,6 +484,10 @@ export const connected = (
           announcing,
           ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
           rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
+          recipientIds: () =>
+            (new RecipientList(recipientsPathFor(app, settings.profile, env), app.command).read() ?? []).flatMap(
+              (recipient) => [recipient.id, ...(recipient.partnerId ? [recipient.partnerId] : [])],
+            ),
           ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
         })
   const passives =
