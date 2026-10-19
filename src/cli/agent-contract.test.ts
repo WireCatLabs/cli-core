@@ -52,9 +52,7 @@ const invoke = async (
           { effects: { remote: "write", local: "write" } },
         ),
         new Command("setup").option("--agent <agent>").action(performed),
-        new Command("session").addCommand(
-          new Command("start").argument("[method]").option("--qr-file <path>").action(performed),
-        ),
+        new Command("session").addCommand(new Command("start").argument("[method]").action(performed)),
         annotate(new Command("watch"), { lifetime: "persistent" })
           .option("--term")
           .action(async function (this: Command) {
@@ -120,13 +118,10 @@ describe("agent CLI contract", () => {
     expect((await invoke(["wait", "--term", "--json"])).result).toBe(143)
   })
 
-  it("allows an explicit QR artifact while keeping headless prompts disabled", async () => {
-    const result = await invoke(["session", "start", "qr", "--qr-file", "synthetic.png", "--json"])
-    expect(result.result).toBe(0)
-    expect(result.performed).toHaveBeenCalledOnce()
+  it("keeps prompts off for a login asked for --json, even on a terminal", async () => {
     const input = Object.assign(new PassThrough(), { isTTY: true })
     const prompted = await invoke(
-      ["session", "start", "qr", "--qr-file", "synthetic.png", "--json"],
+      ["session", "start", "qr", "--json"],
       { tty: true, stdin: input },
       async (command) => {
         await readSecret("credential", { input: environmentOf(command).stdin })

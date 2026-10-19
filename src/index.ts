@@ -46,7 +46,7 @@ export {
   type LoginQr,
   type LoginQrOptions,
   loginQr,
-  qrNeedsTerminal,
+  PASTE_QR,
 } from "./terminal/login-qr.js"
 export { readSecret, type SecretInput } from "./terminal/prompt.js"
-export { qrPng, terminalQr } from "./terminal/qr.js"
+export { plainQr, terminalQr } from "./terminal/qr.js"

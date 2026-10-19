@@ -153,7 +153,7 @@ class Relayed extends Error {
 }
 
 /**
- * An interactive command run without a terminal — an agent's `session start --qr-file` — waits on a person scanning a
+ * An interactive command run without a terminal — an agent's `session start qr` — waits on a person scanning a
  * code somewhere else, which 30 s does not cover.
  */
 export const HEADLESS_INTERACTIVE_MS = 5 * 60_000

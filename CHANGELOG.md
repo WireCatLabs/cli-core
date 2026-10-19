@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Without a terminal, `loginQr` prints the QR code as text an agent pastes into the chat; the PNG is gone.** The
+  owner signed in through a PNG an agent opened in an image viewer, a window the person can lose. Now, when the
+  diagnostic stream is not a terminal (`terminal: false`, by default whether stderr is one), `show` prints
+  `plainQr(link)` on it: half blocks with no colours, the light modules and the quiet zone drawn, so the code reads
+  dark on light in a dark terminal theme and every line starts and ends with a block. A WhatsApp-sized code stays
+  under 80 columns. Then it notes `PASTE_QR` (paste the block in a code block, exactly as printed; paste a renewed one
+  and say the old one expired) and where to scan. With `json: true` each code is also one line on stderr,
+  `{"event":"qr","qr":{"text","expires_at","scan"}}`; stdout keeps only the answer. `show` takes the code's expiry as
+  a third argument. In a terminal the code is drawn as before.
+- Removed: `loginQr`'s `qrFile` option, `LoginQr.path` and `LoginQr.close()`, `qrPng` and `qrNeedsTerminal`. A CLI
+  drops `--qr-file` and its refusal of a QR login without a terminal. `parity.json` no longer expects `--qr-file` on
+  `session start` or `setup`.
+
 ## 0.361.0 — 19.10.2026
 
 ### Fixed
