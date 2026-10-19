@@ -540,7 +540,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
-    "name": "20261019115025_version-26-chat-revisions",
+    "name": "20261019115025_version-25-chat-revisions",
     "statements": [
       "CREATE TABLE `chat_revision_source` (\n\t`id` integer PRIMARY KEY,\n\t`source` text NOT NULL,\n\t`at` integer NOT NULL\n);",
       "CREATE TABLE `chat_revisions` (\n\t`id` integer PRIMARY KEY,\n\t`chat_id` integer NOT NULL,\n\t`account_id` integer NOT NULL,\n\t`field` text NOT NULL,\n\t`old_value` text,\n\t`new_value` text,\n\t`source` text,\n\t`created_at` integer NOT NULL\n);",
@@ -549,7 +549,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
-    "name": "20261019115027_version-26-chat-revisions-triggers",
+    "name": "20261019115027_version-25-chat-revisions-triggers",
     "statements": [
       "CREATE TRIGGER chat_revisions_au AFTER UPDATE OF external_id, title, membership_state, scope, searchable, parent_chat_id ON chats BEGIN\n  INSERT INTO chat_revisions (chat_id, account_id, field, old_value, new_value, source, created_at)\n  SELECT new.id, new.account_id, f.field, f.old_value, f.new_value, s.source,\n    coalesce(s.at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER))\n  FROM (\n    SELECT 'external_id' AS field, old.external_id AS old_value, new.external_id AS new_value\n    UNION ALL SELECT 'title', old.title, new.title\n    UNION ALL SELECT 'membership_state', old.membership_state, new.membership_state\n    UNION ALL SELECT 'scope', old.scope, new.scope\n    UNION ALL SELECT 'searchable', old.searchable, new.searchable\n    UNION ALL SELECT 'parent_chat_id', old.parent_chat_id, new.parent_chat_id\n  ) f\n  LEFT JOIN chat_revision_source s ON s.id = 1\n  WHERE f.old_value IS NOT f.new_value;\nEND;",
       "CREATE TRIGGER chat_revisions_ad AFTER DELETE ON chats BEGIN\n  DELETE FROM chat_revisions WHERE chat_id = old.id;\nEND;"

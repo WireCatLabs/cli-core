@@ -204,7 +204,7 @@ in the running profile's recipient list (`RecipientList.rekey`); a list that is 
 
 **A chat's history** is `chat_revisions`, one row per field that changed: `external_id`, `title`,
 `membership_state`, `scope`, `searchable` and `parent_chat_id`, the old and new value as text, the time and the
-source (store version 26). A trigger on `chats` writes it, so the row is in the changing statement's transaction, is
+source (store version 25). A trigger on `chats` writes it, so the row is in the changing statement's transaction, is
 written only when the value differs (`IS NOT`), and covers every writer: an older build still pinned by a consumer
 and SQL by hand included. The trigger takes the source and time from `chat_revision_source`, one row that
 `revisedBy` (`src/store/sqlite/chats.ts`) sets inside the store's write and deletes before the commit: `chats`
@@ -215,7 +215,7 @@ an older build purges chats without knowing the table, and `chat_revisions_ad` d
 moves the absorbed chat's rows to the kept one first. Old titles are private data under the chat's own rules:
 nothing indexes the table for search, mentions, involvements or embeddings, and no warning, event or run record
 carries its values; `renamedChatId` reads only the old-id rows, to find a chat. Creating a chat is not a change and
-records nothing, and nothing from before version 26 was recorded. A heavy account (about 2,000 chats) writes some
+records nothing, and nothing from before version 25 was recorded. A heavy account (about 2,000 chats) writes some
 10,000–20,000 rows a year, most of them the first `serve`'s re-keys and title changes: a few MB (about 130 bytes a
 row with its indexes), so nothing prunes it. The table grows without bound only when a value flips on every sync (a
 chat list and `saveChatMetadata` that disagree on a title, a chat that drops in and out of the list): each flip is two

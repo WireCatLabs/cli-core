@@ -6,8 +6,8 @@ import { rollBackTo } from "../testing/older-store.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
-it("**a store from before version 26 keeps its chats** and records a re-key after the upgrade", async () => {
-  const path = join(mkdtempSync(join(tmpdir(), "version-26-")), "wirecat.db")
+it("**a store from before version 25 keeps its chats** and records a re-key after the upgrade", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "version-25-")), "wirecat.db")
   const owner = { provider: "whatsapp", account: "1@lid" }
   const store = await openStore({ path })
   await store.chats.saveChats(owner, [
@@ -16,7 +16,7 @@ it("**a store from before version 26 keeps its chats** and records a re-key afte
   await store.close()
 
   const database = await openCache(path)
-  rollBackTo(database, 26)
+  rollBackTo(database, 25)
   database.prepare("UPDATE chats SET title = 'Ana L'").run()
   database.close()
 

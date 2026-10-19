@@ -9,7 +9,7 @@ shape of this file.
 
 ### Added
 
-- **A chat's history in the store (store version 26).** `chat_revisions` keeps one row per change to a chat's id,
+- **A chat's history in the store (store version 25).** `chat_revisions` keeps one row per change to a chat's id,
   title, membership, scope, search visibility or parent, with the old and new value, the time and the store write
   that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`; NULL for an older build or SQL
   by hand). A trigger writes it in the changing transaction, only for a real change. A read by the id a chat was
