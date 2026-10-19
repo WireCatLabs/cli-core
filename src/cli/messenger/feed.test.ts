@@ -266,6 +266,24 @@ describe("a messenger that pushes its history", () => {
     expect(stderr).not.toContain("not applied yet")
   })
 
+  it("a stored-chats hook that fails logs its code, never the error it quotes", async () => {
+    const { env } = sandbox()
+    const stop = new AbortController()
+    const { connect } = pushing(stop, {
+      storedChats: async () => {
+        throw new Error("MARKER-Fake Book Club +10000000000")
+      },
+    })
+
+    const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
+
+    expect(code).toBe(0)
+    expect(warningAttributes(stderr)).toEqual([
+      { event: "serve.warning", code: "stored_chats_failed", operation: "history.stored_chats" },
+    ])
+    expect(stderr).not.toContain("MARKER")
+  })
+
   it("a feed that fails ends serve with its error and leaves no lock", async () => {
     const { root, env } = sandbox()
     const stop = new AbortController()
