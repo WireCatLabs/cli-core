@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`findEvidenceMentions(vocabulary, result, { exclude })`** names the existing projects, tags and topics whose
+  name, key or alias appears in a `gatherProjectEvidence` result's excerpts and their neighbours, each match cited
+  and marked when the term belongs to more than one entry; a vocabulary over its budget is skipped, not fatal. The
+  project matcher behind `createMeetingProjectCandidateReader` is the same code (`matchVocabularyTerms`).
+- **`storedNeighbours(store)`**: the neighbours port for chat messages and mail; a mail hit carries the emails
+  before and after it in its thread. `storedMessageNeighbours` returns nothing for a mail reference.
+
 ## 0.350.0 — 19.10.2026
 
 ### Added

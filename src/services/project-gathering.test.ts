@@ -3,7 +3,8 @@ import { afterEach, expect, it, vi } from "vitest"
 import type { ContextEvidenceReader, ContextSource } from "../context/evidence.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
 import { gatherProjectEvidence, type ProjectSourceFetcher } from "./project-gathering.js"
-import { storedMessageNeighbours } from "./project-gathering-around.js"
+import { storedMessageNeighbours, storedNeighbours } from "./project-gathering-around.js"
+import { findEvidenceMentions } from "./project-gathering-mentions.js"
 import type { ProjectGatheringRequest } from "./project-gathering-request.js"
 
 const DAY = 86400000
@@ -249,7 +250,7 @@ it("attaches the messages next to a message hit as cited context, not as new mat
     ["4", false],
   ])
   expect(result.items.some((i) => i.ref.endsWith("/planning/4"))).toBe(false)
-  expect(result.items.find((i) => i.kind === "mail")?.around).toBeUndefined()
+  expect(result.items.find((i) => i.kind === "mail")?.around).toEqual([])
   expect(result.usage.aroundBytes).toBeGreaterThan(0)
 
   const plain = await gatherProjectEvidence(
@@ -270,4 +271,57 @@ it("attaches the messages next to a message hit as cited context, not as new mat
     { ...f.request, around: { before: 0, after: 0 } },
   )
   expect(none.items.every((i) => i.around === undefined)).toBe(true)
+})
+
+it("names the other projects the returned excerpts mention, cited and unconfirmed, without the gathered one", async () => {
+  const f = await fixture()
+  const launch = await f.store.knowledge.addProject({ name: "Launch", key: "LCH" })
+  const checklist = await f.store.knowledge.addProject({ name: "Checklist" })
+  const gathering = await gatherProjectEvidence({ evidence: f.port }, f.request)
+  const all = await findEvidenceMentions(f.store.knowledge, gathering)
+  expect(all).toMatchObject({ association: "unconfirmed-literal-evidence", coverage: { skipped: [], hasMore: false } })
+  const launchMention = all.items.find((m) => m.target.reference === `project:${launch.id}`)
+  expect(launchMention?.matches.length).toBeGreaterThan(1)
+  expect(launchMention?.matches[0]).toMatchObject({ term: { name: "Launch", kind: "canonical" }, in: "hit" })
+  expect(all.items.find((m) => m.target.reference === `project:${checklist.id}`)?.matches).toEqual([
+    expect.objectContaining({ reference: f.doc.ref, in: "hit" }),
+  ])
+  const others = await findEvidenceMentions(f.store.knowledge, gathering, { exclude: `project:${launch.id}` })
+  expect(others.items.map((m) => m.target.reference)).not.toContain(`project:${launch.id}`)
+
+  const failing = {
+    vocabulary: async (options?: { kind?: string }) => {
+      if (options?.kind === "tag")
+        throw new CliError("validation_error", "too many", { reason: "vocabulary.over-entry-budget" })
+      return f.store.knowledge.vocabulary(options as Parameters<typeof f.store.knowledge.vocabulary>[0])
+    },
+  }
+  const partial = await findEvidenceMentions(failing, gathering)
+  expect(partial.coverage.skipped).toEqual([
+    { kind: "tag", code: "validation_error", reason: "vocabulary.over-entry-budget" },
+  ])
+  expect(partial.items.length).toBe(all.items.length)
+})
+
+it("gives a mail hit the emails before and after it in its thread", async () => {
+  const f = await fixture()
+  f.db
+    .prepare(
+      "INSERT INTO emails(id,account_id,email_thread_id,external_id,subject,body_text,from_name,sent_at,created_at,updated_at) VALUES(2,?,1,'reply','Re: Harbour','Thanks, signed',?,250,0,0)",
+    )
+    .run(f.mailId, "Rita Example")
+  const result = await gatherProjectEvidence(
+    { evidence: f.port, neighbours: storedNeighbours(f.store) },
+    { ...f.request, sources: [f.sources[1]] as ContextSource[] },
+  )
+  const letter = result.items.find((i) => i.ref === "msg:email/example-mail/thread/letter")
+  expect(letter?.around).toEqual([
+    {
+      ref: "msg:email/example-mail/thread/reply",
+      at: 250,
+      sender: "Rita Example",
+      text: "Re: Harbour — Thanks, signed",
+      found: false,
+    },
+  ])
 })
