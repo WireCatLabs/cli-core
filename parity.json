@@ -810,10 +810,6 @@
       "value": "<url>",
       "meaning": "the tunnel's https address the browser apps use"
     },
-    "--qr-file": {
-      "value": "<png>",
-      "meaning": "write the QR code to this PNG instead of drawing it, for an agent to pass on"
-    },
     "--question": {
       "meaning": "match only questions"
     },
@@ -4053,7 +4049,6 @@
           "in": ["tg"],
           "reason": "Telegram asks each client for its own app from my.telegram.org; MAX has no such step; WhatsApp has no application registration"
         },
-        "--qr-file": "all",
         "--sms": {
           "in": ["tg"],
           "reason": "asks Telegram to resend its login code by SMS; MAX has no such choice; WhatsApp links a device by QR or pairing code, never by an SMS code"
@@ -4068,8 +4063,7 @@
           "in": ["tg"],
           "reason": "Telegram requires an application from my.telegram.org; MAX has no application registration step; WhatsApp has no application registration"
         },
-        "--method": "all",
-        "--qr-file": "all"
+        "--method": "all"
       }
     },
     "skill": {
