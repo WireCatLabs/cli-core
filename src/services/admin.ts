@@ -13,7 +13,7 @@ import { sendTime } from "../domain/send-time.js"
 import { capability } from "../ports/messenger.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
-import type { ServiceDeps } from "./deps.js"
+import { accountStoreIfOpen, type ServiceDeps } from "./deps.js"
 
 export interface NewGroup {
   title: string
@@ -110,15 +110,23 @@ export const adminService = (deps: ServiceDeps): AdminService => {
         () => join(link.trim()),
         (answer) => ("requested" in answer ? {} : { chatId: answer.id }),
       )
-      return "requested" in joined ? { operationId, requested: true } : { operationId, chat: joined }
+      if ("requested" in joined) return { operationId, requested: true }
+      await (await accountStoreIfOpen(deps))?.chats.rejoinChats([joined.id])
+      return { operationId, chat: joined }
     },
 
     leave: async (chat) => {
       const connection = await online("chats leave")
       const leave = capability(connection, "leave", "leave a chat")
-      const { id: chatId } = await connection.resolve(chat)
+      const { id: chatId, kind } = await connection.resolve(chat)
       const operationId = newOperationId()
       await guardedWrite(deps.guard, { operationId, chatId, kind: "chat", action: "leave" }, () => leave(chatId))
+      const held = await accountStoreIfOpen(deps)
+      // A save always writes the kind, and a resolve may know less of it than the store does.
+      if (held)
+        await held.chats.saveChats([
+          { id: chatId, kind: (await held.chats.chatKind(chatId)) ?? kind, membershipState: "left" },
+        ])
       return { operationId, chatId }
     },
 

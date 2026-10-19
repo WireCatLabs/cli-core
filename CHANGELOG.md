@@ -35,6 +35,15 @@ shape of this file.
   own id for the same chat, so nothing changes; max echoes the typed id, so nothing changes; wa maps a known
   person's phone-form id to their LID chat, so a send to a re-keyed person's old phone number no longer creates a
   second, phone-form chat.
+- **`chats leave` and `chats join` now update the store, for every messenger.** After a leave that succeeds, the chat
+  is marked left in the store, so `store clear --left` finds it; a leave that fails changes nothing. After a join
+  that gets in, the left mark comes off, and a chat stored as archived stays archived. A join that waits for an
+  admin's approval changes nothing. Only the running account's chat changes.
+- **`chats show` on a chat you left shows it**, with `membership_state: "left"`, and says that you left it and that
+  `<tool> <profile> store clear --left --dry-run` lists the chats you left. Where the history is read from the store,
+  it said "nothing stored for this chat yet — keep … serve running", which was wrong; `messages list` and `messages
+  context` of such a chat said the same and now answer with its stored messages. `chats list` still leaves left
+  chats out, and search still finds their messages.
 
 ## 0.355.0 — 19.10.2026
 

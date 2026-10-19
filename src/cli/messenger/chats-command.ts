@@ -1,6 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
+import { typedCommand } from "../../runs/scope.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -113,6 +114,10 @@ export const chatsCommand = (messenger: Messenger): Command => {
         account: await services.chats.account(),
       }))
       renderAnswer(this, context, chatShown(account, card))
+      if (card.membershipState === "left")
+        context.renderer.note(
+          `you left this chat; its stored messages are kept — \`${typedCommand(messenger.app.command, "store clear --left --dry-run", context.settings.profile)}\` lists the chats you left and deletes nothing`,
+        )
     }),
   )
 
