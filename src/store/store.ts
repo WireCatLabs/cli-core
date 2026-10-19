@@ -1,4 +1,4 @@
-import type { ContextEvidenceReader } from "../context/evidence.js"
+import type { ContextEvidenceReader, ContextIndex } from "../context/evidence.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
 import {
@@ -23,7 +23,7 @@ import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-ac
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
-import { contextEvidenceOver } from "./sqlite/context-evidence.js"
+import { contextEvidenceOver, contextIndexOver } from "./sqlite/context-evidence.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
@@ -48,6 +48,7 @@ import { type AccountVectors, accountVectorsOver, type VectorsStore, vectorsStor
 
 export interface MessageStore {
   readonly contextEvidence?: ContextEvidenceReader
+  readonly contextIndex?: ContextIndex
   /** Accounts, account groups and which account each app profile is. */
   readonly accounts: AccountsStore
   /** One account's chats: the list, what left, what is complete, their metadata. */
@@ -178,6 +179,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     ),
   }
   const contextEvidence = once(() => contextEvidenceOver(context))
+  const contextIndex = once(() => contextIndexOver(context, stemmerFor))
   const searches = once(() => searchesStoreOver(context))
   const queries = once(() => queriesStoreOver(context, stemmerFor))
   const searchIndex = once(() => searchIndexStoreOver(context))
@@ -198,6 +200,9 @@ const storeOver = (context: StoreContext): MessageStore => {
   const store: MessageStore = {
     get contextEvidence() {
       return contextEvidence()
+    },
+    get contextIndex() {
+      return contextIndex()
     },
     meetingVectors: meetingVectorsOver(context),
     get accounts() {

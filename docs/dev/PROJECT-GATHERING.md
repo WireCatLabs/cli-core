@@ -12,9 +12,9 @@ job; matching it to entities is a later slice.
 import { gatherProjectEvidence } from "@wirecat/cli-core/services"
 
 const result = await gatherProjectEvidence(
-  { evidence: store.contextEvidence, fetcher },
+  { evidence: store.contextEvidence, index: store.contextIndex, fetcher },
   {
-    project: { name: "Harbour", background: "Port expansion bid", aliases: ["NBB"] },
+    project: { name: "Harbour", key: "HRB", background: "Port expansion bid", aliases: ["NBB"] },
     keywords: ["berth tender", "crane"],
     people: [{ name: "Alice Example", reference: "person:12" }],
     sources,
@@ -28,14 +28,14 @@ const result = await gatherProjectEvidence(
   [`createContextEvidenceReader`](CONTEXT-EVIDENCE.md) takes. `scope` is required: `explicit`, or
   `all-connected` when the host froze every connected account into `sources`. An omitted scope or an empty
   list is refused before any read. Core never expands scope itself.
-- **Lanes.** The project name, each alias, each keyword and each person's name is one lane: 1–16 literal
+- **Lanes.** The project name, its key, each alias, each keyword and each person's name is one lane: 1–16 literal
   words, all of which must match. Lanes are alternatives (OR); the same query given twice is one lane with
   both kinds. At most 16 lanes.
 - **People.** A person's lane finds what mentions the name. A name is not an identity, and a person's other
   conversations are not project membership: an item found only through person lanes has
   `context: "person-only"`.
 - **Window.** `lookbackDays` (default 60, at most 730) before `asOf` (default now), or an explicit
-  half-open `after`/`before`. Windows longer than 90 days are read in 90-day chunks, newest first. Each
+  half-open `after`/`before`; `before` left out is `asOf`, frozen with the run. Windows longer than 90 days are read in 90-day chunks, newest first. Each
   item keeps its `timeKind`: an imported document's `stored-update` time is when it was stored, not when
   its content happened.
 - **Fetch.** `fetch: "before-read"` calls the host's `ProjectSourceFetcher` once per source before reading.
@@ -43,9 +43,24 @@ const result = await gatherProjectEvidence(
   becomes that source's `failed` state with its code. A failed fetch is coverage, not absence: the store is
   still read.
 
+- **Index.** New mail and imported documents wait in a queue before the word index holds them, and the
+  context reader reads only the index. With `index: "update"` (the default) the service first runs the host's
+  `ContextIndex` (`store.contextIndex`): the same fills a mail search and the notes search run. `index: "as-is"`
+  skips it. The result's `index` says `updated` (with counts), `as-is`, `unavailable` (the host gave no port) or
+  `failed` (with the error code, such as a read-only store); reads go on either way, and a source still behind
+  shows `index-pending` on its units. A message is indexed when it is saved. The fill is a local write to the
+  index, never to the records, and is not bounded by the read budgets.
+
+- **Around a hit.** With the host's `neighbours` port (`storedMessageNeighbours(store.messages)`), each message
+  hit carries `around`: up to `around.before` and `around.after` (default 2 each, at most 5) stored messages next
+  to it in its chat, as 200-character excerpts with their references. They are context for reading the hit, not
+  matches: they never join `items`, and `found` says whether a neighbour is a hit itself. Their bytes count
+  against `maxReadBytes` (`usage.aroundBytes`); when it runs out, a hit has `aroundIssue: "read-bytes"`.
+
 ## Budgets and order
 
-`budgets` are per invocation: `maxReads` (default 48), `maxReadBytes` (2 MiB), `maxPageBytes` (64 KiB),
+`budgets` are per invocation: `maxReads` (default 48, or one read per lane × source × chunk when that is more, up
+to 512, so one round always finishes), `maxReadBytes` (2 MiB), `maxPageBytes` (64 KiB),
 `maxElapsedMs` (60 s) and `maxItems` (100 new items). Each read is a fresh single-source scoped reader, so
 authorization and response validation are the context reader's own.
 

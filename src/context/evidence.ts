@@ -49,6 +49,14 @@ export interface ContextEvidenceReader {
   read(request: ContextEvidenceRequest): Promise<ContextEvidencePage>
 }
 
+/** Brings the word index of stored mail and imported documents up to date, so the reads that follow find new text. */
+export interface ContextIndex {
+  catchUp(request: { kinds: readonly ContextSource["kind"][]; signal?: AbortSignal }): Promise<{
+    mail: number
+    documents: number
+  }>
+}
+
 export const contextCursorScope = (request: Pick<ContextEvidenceRequest, "source" | "query" | "after" | "before">) =>
   createHash("sha256")
     .update(

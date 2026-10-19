@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it, vi } from "vitest"
-import type { ContextEvidenceReader } from "../context/evidence.js"
+import type { ContextEvidenceReader, ContextSource } from "../context/evidence.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
 import { gatherProjectEvidence, type ProjectSourceFetcher } from "./project-gathering.js"
+import { storedMessageNeighbours } from "./project-gathering-around.js"
 import type { ProjectGatheringRequest } from "./project-gathering-request.js"
 
 const DAY = 86400000
@@ -166,4 +167,107 @@ it.each([
     gatherProjectEvidence({ evidence: f.port }, { ...f.request, ...change } as ProjectGatheringRequest),
   ).rejects.toMatchObject({ details: { param } })
   expect(read).not.toHaveBeenCalled()
+})
+
+it("brings the mail and document index up to date before reading, unless asked to read it as it is", async () => {
+  const f = await fixture()
+  const pend = () => {
+    f.db
+      .prepare("INSERT OR REPLACE INTO document_index_pending(indexable_type,id) VALUES('document',?)")
+      .run(Number(f.doc.id))
+  }
+  pend()
+  const asIs = await gatherProjectEvidence(
+    { evidence: f.port, index: f.store.contextIndex },
+    { ...f.request, index: "as-is" },
+  )
+  expect(asIs.index).toEqual({ state: "as-is", mail: 0, documents: 0, code: null })
+  expect(asIs.units.filter((u) => u.source === 2).every((u) => u.issue === "index-pending")).toBe(true)
+  expect(asIs.items.some((i) => i.kind === "document")).toBe(false)
+
+  const updated = await gatherProjectEvidence({ evidence: f.port, index: f.store.contextIndex }, f.request)
+  expect(updated.index).toMatchObject({ state: "updated", code: null })
+  expect(updated.units.every((u) => u.issue === null)).toBe(true)
+  expect(updated.items.some((i) => i.kind === "document")).toBe(true)
+
+  pend()
+  const hostless = await gatherProjectEvidence({ evidence: f.port }, f.request)
+  expect(hostless.index.state).toBe("unavailable")
+  const failing = await gatherProjectEvidence(
+    { evidence: f.port, index: { catchUp: () => Promise.reject(new CliError("permission_error", "read-only store")) } },
+    f.request,
+  )
+  expect(failing.index).toMatchObject({ state: "failed", code: "permission_error" })
+})
+
+it("searches the project key as its own lane and lets a window start without an end", async () => {
+  const f = await fixture()
+  const result = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, project: { name: "Zeppelin", key: "Harbour" }, after: 0, before: undefined, asOf: 10000 },
+  )
+  expect(result.lanes[1]).toEqual({ id: "l2", kinds: ["key"], query: "Harbour", people: [] })
+  expect(result.items.every((i) => i.lanes.join() === "l2" && i.context === "project")).toBe(true)
+  expect(result.window).toMatchObject({ after: 0, before: 10000, basis: "explicit" })
+  await expect(
+    gatherProjectEvidence({ evidence: f.port }, { ...f.request, after: undefined, before: 10000 }),
+  ).rejects.toMatchObject({ details: { param: "after" } })
+})
+
+it("raises the default read budget to finish one round of every search over every source", async () => {
+  const f = await fixture()
+  const keywords = Array.from({ length: 14 }, (_, n) => `word${n}`)
+  const result = await gatherProjectEvidence({ evidence: f.port }, { ...f.request, keywords, before: 91 * DAY })
+  expect(result.units).toHaveLength(16 * 3 * 2)
+  expect(result).toMatchObject({ stopped: null, complete: true, usage: { reads: 96 } })
+  const capped = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, keywords, before: 91 * DAY, budgets: { maxReads: 48 } },
+  )
+  expect(capped).toMatchObject({ stopped: "reads", usage: { reads: 48 } })
+})
+
+it("attaches the messages next to a message hit as cited context, not as new matches", async () => {
+  const f = await fixture()
+  f.db
+    .prepare(
+      "INSERT INTO messages(chat_id,account_id,external_id,sent_at,text,normalized_text,normalizer_version,created_at,updated_at,source) VALUES(?,?,'4',250,'Ok, tomorrow','ok tomorrow',1,0,0,'history')",
+    )
+    .run(f.accountId, f.accountId)
+  const neighbours = storedMessageNeighbours(f.store.messages)
+  const result = await gatherProjectEvidence(
+    { evidence: f.port, neighbours },
+    { ...f.request, sources: [f.sources[0], f.sources[1]] as ContextSource[], around: { before: 1, after: 1 } },
+  )
+  const third = result.items.find((i) => i.ref.endsWith("/planning/3"))
+  expect(third?.around).toEqual([
+    expect.objectContaining({ ref: third?.ref.replace(/3$/, "4"), text: "Ok, tomorrow", found: false }),
+  ])
+  const second = result.items.find((i) => i.ref.endsWith("/planning/2"))
+  expect(second?.around?.map((n) => [n.ref.split("/").pop(), n.found])).toEqual([
+    ["1", true],
+    ["4", false],
+  ])
+  expect(result.items.some((i) => i.ref.endsWith("/planning/4"))).toBe(false)
+  expect(result.items.find((i) => i.kind === "mail")?.around).toBeUndefined()
+  expect(result.usage.aroundBytes).toBeGreaterThan(0)
+
+  const plain = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, sources: [f.sources[0]] as ContextSource[] },
+  )
+  const tight = await gatherProjectEvidence(
+    { evidence: f.port, neighbours },
+    {
+      ...f.request,
+      sources: [f.sources[0]] as ContextSource[],
+      budgets: { maxReadBytes: plain.usage.readBytes + 10, maxPageBytes: 65536 },
+    },
+  )
+  expect(tight.items.some((i) => i.aroundIssue === "read-bytes")).toBe(true)
+  const none = await gatherProjectEvidence(
+    { evidence: f.port, neighbours },
+    { ...f.request, around: { before: 0, after: 0 } },
+  )
+  expect(none.items.every((i) => i.around === undefined)).toBe(true)
 })

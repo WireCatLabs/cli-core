@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ContextEvidenceItem, ContextEvidenceReader, ContextSource } from "../context/evidence.js"
+import type { ContextEvidenceItem, ContextEvidenceReader, ContextIndex, ContextSource } from "../context/evidence.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
+import { attachNeighbours, type ProjectNeighbour, type ProjectNeighbourReader } from "./project-gathering-around.js"
 import {
   decodeCheckpoint,
   encodeCheckpoint,
@@ -25,7 +26,15 @@ export interface ProjectSourceFetcher {
 export interface ProjectGatheringPorts {
   evidence: ContextEvidenceReader
   fetcher?: ProjectSourceFetcher
+  index?: ContextIndex
+  neighbours?: ProjectNeighbourReader
   now?: () => number
+}
+export interface ProjectIndexCatchUp {
+  state: "updated" | "as-is" | "unavailable" | "failed"
+  mail: number
+  documents: number
+  code: string | null
 }
 export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   kind: ContextSource["kind"]
@@ -34,6 +43,8 @@ export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   textTruncated: boolean
   lanes: string[]
   context: "project" | "person-only"
+  around?: ProjectNeighbour[] | null
+  aroundIssue?: string | null
 }
 export type ProjectGatheringStop = "reads" | "read-bytes" | "elapsed" | "items" | null
 
@@ -48,6 +59,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   const previous = plan.checkpoint === undefined ? null : decodeCheckpoint(plan.checkpoint, plan)
   const window = previous ?? plan.window
   const units = projectUnits(plan, window)
+  // A default that cannot finish one round would leave whole searches or sources unread; an explicit one is kept.
+  if (request.budgets?.maxReads === undefined) plan.budgets.maxReads = Math.min(512, Math.max(48, units.length))
   if (previous && (previous.units.length !== units.length || previous.fetched.length !== plan.sources.length))
     throw new CliError("validation_error", "invalid project gathering checkpoint", { param: "checkpoint" })
   const progress: ProjectUnitProgress[] =
@@ -82,7 +95,25 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       }
     }
 
-  const usage = { reads: 0, readBytes: 0, items: 0 }
+  const indexed: ProjectIndexCatchUp = { state: "as-is", mail: 0, documents: 0, code: null }
+  const kinds = [...new Set(plan.sources.map((source) => source.kind))].filter((kind) => kind !== "message")
+  if (plan.index === "update" && kinds.length) {
+    signal?.throwIfAborted()
+    if (!ports.index || typeof ports.index.catchUp !== "function") indexed.state = "unavailable"
+    else
+      try {
+        const done = await ports.index.catchUp({ kinds, signal })
+        if (!Number.isSafeInteger(done?.mail) || !Number.isSafeInteger(done?.documents))
+          throw new CliError("invalid_response", "index catch-up returned invalid counts")
+        Object.assign(indexed, { state: "updated", mail: done.mail, documents: done.documents })
+      } catch (error) {
+        signal?.throwIfAborted()
+        if (!(error instanceof CliError)) throw error
+        Object.assign(indexed, { state: "failed", code: error.code })
+      }
+  }
+
+  const usage = { reads: 0, readBytes: 0, aroundBytes: 0, items: 0 }
   const items: ProjectEvidenceItem[] = []
   const byRef = new Map<string, ProjectEvidenceItem>()
   const matchedAgain = new Map<string, Set<string>>()
@@ -177,6 +208,20 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     }
   }
 
+  await attachNeighbours(
+    items,
+    ports.neighbours,
+    plan.around,
+    {
+      remaining: () => plan.budgets.maxReadBytes - usage.readBytes - usage.aroundBytes,
+      charge: (bytes) => {
+        usage.aroundBytes += bytes
+      },
+    },
+    (ref) => byRef.has(ref) || seen.has(seenKey(ref)),
+    signal,
+  )
+
   const totals = {
     reads: (previous?.totals.reads ?? 0) + usage.reads,
     readBytes: (previous?.totals.readBytes ?? 0) + usage.readBytes,
@@ -213,6 +258,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     scope: { origin: plan.scope, sources: plan.sources },
     lanes: plan.lanes,
     fetch: fetched.map((f, index) => ({ source: index, ...f })),
+    index: indexed,
     units: units.map((unit, index) => ({
       lane: unit.lane.id,
       source: unit.sourceIndex,
