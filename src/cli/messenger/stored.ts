@@ -294,7 +294,7 @@ export const stored = (
             const seenAt = Date.now()
             const edited = await capability(messenger, "edit", "edit")(chatId, messageId, text, options)
             await save("messages.edit", (opened) =>
-              opened.messages.saveMessages(account, chatId, [edited], { via: "update", seenAt }),
+              opened.messages.saveMessages(account, answeredChat(chatId, edited), [edited], { via: "update", seenAt }),
             )
             return edited
           },
@@ -306,7 +306,9 @@ export const stored = (
           createPoll: async (chatId, poll, options) => {
             const sent = await capability(messenger, "createPoll", "create a poll")(chatId, poll, options)
             await save("polls.create", (opened) =>
-              opened.messages.saveMessages(account, chatId, [sent.message], { via: "send" }),
+              opened.messages.saveMessages(account, answeredChat(chatId, sent.message), [sent.message], {
+                via: "send",
+              }),
             )
             return sent
           },
@@ -342,7 +344,7 @@ export const stored = (
           forward: async (fromChatId, messageId, toChatId, options) => {
             const copy = await capability(messenger, "forward", "forward")(fromChatId, messageId, toChatId, options)
             await save("messages.forward", (opened) =>
-              opened.messages.saveMessages(account, toChatId, [copy], { via: "send" }),
+              opened.messages.saveMessages(account, answeredChat(toChatId, copy), [copy], { via: "send" }),
             )
             return copy
           },
@@ -362,13 +364,19 @@ export const stored = (
       // A scheduled message is not in the chat yet, and it will arrive under another id.
       if (options.at === undefined) {
         await save("messages.send", (opened) =>
-          opened.messages.saveMessages(account, chatId, [sent.message], { via: "send" }),
+          opened.messages.saveMessages(account, answeredChat(chatId, sent.message), [sent.message], { via: "send" }),
         )
       }
       return sent
     },
   })
 }
+
+/**
+ * A write is saved under the chat the messenger answered, not the one typed: WhatsApp answers a re-keyed person's
+ * phone-form id with the LID chat, and saving under the typed id would split the chat until the next re-key.
+ */
+const answeredChat = (typed: Id, message: Message): Id => message.chatId || typed
 
 /**
  * The chat id a name or id names, as the store reads it, and the stored chat when there is one. Neither when the

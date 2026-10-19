@@ -4,7 +4,7 @@ import { threadIdOf } from "../domain/thread.js"
 import type { MessengerAdapter, NewPoll, Sent } from "../ports/messenger.js"
 import { capability } from "../ports/messenger.js"
 import type { SendGuard } from "./guard.js"
-import { guardedWrite, type Operated } from "./guarded.js"
+import { guardedWrite, type Operated, sentIds } from "./guarded.js"
 import { sendAsCheck } from "./send-as.js"
 import { newOperationId, newSendId } from "./send-id.js"
 
@@ -106,7 +106,7 @@ export const guardedCreatePoll = async (
         ...(threadId === undefined ? {} : { threadId }),
         ...(sendAs === undefined ? {} : { sendAs }),
       }),
-    (done) => ({ messageId: done.message.id }),
+    (done) => sentIds(chatId, done.message),
     validate === undefined || threadId === undefined ? undefined : () => validate(chatId, threadId, {}),
   )
   return { ...sent, operationId: id }

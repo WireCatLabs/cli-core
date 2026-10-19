@@ -141,7 +141,7 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
             },
           },
           () => messenger.send(chatId, text, options),
-          (sent) => ({ ids: { message_id: sent.message.id } }),
+          (sent) => ({ ids: { chat: sent.message.chatId || chatId, message_id: sent.message.id } }),
         ),
       ...(watch
         ? {
