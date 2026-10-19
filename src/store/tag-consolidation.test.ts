@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -8,6 +9,7 @@ import { openSqlite } from "./sqlite/open.js"
 import { vocabularyStoreOver } from "./sqlite/vocabulary.js"
 import { type MessageStore, openStore } from "./store.js"
 
+const digest = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex")
 const opened: { close(): unknown }[] = []
 afterEach(async () => {
   for (const store of opened.splice(0)) await store.close()
@@ -56,7 +58,7 @@ it("previews complete selected dependencies, overlaps and bounded samples withou
     )
     .run(Number(source.id), Number(survivor.id))
   database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
-  const before = readFileSync(path)
+  const before = digest(path)
   const input = await options()
   const preview = await store.knowledge.previewTagConsolidation({ ...input, sampleLimit: 1 })
   expect(preview).toMatchObject({
@@ -81,7 +83,7 @@ it("previews complete selected dependencies, overlaps and bounded samples withou
     coverage: { samplesComplete: true },
   })
   database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
-  expect(readFileSync(path)).toEqual(before)
+  expect(digest(path)).toEqual(before)
 })
 
 it("fingerprints all inspected provenance even when counts and vocabulary stay unchanged", async () => {
