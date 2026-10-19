@@ -560,10 +560,10 @@ without `listen: true` is open: `listen`'s events are saved as `watch`'s are, `l
 own code (`saveBatches` in `stored.ts`), re-keys first. `close` closes the connection, then stops both and waits
 for them to end, 5 s at most in all, then for the saves, then closes the store. A connection opened with
 `listen: true` is left to its `watch` and `feed`, so nothing is saved twice. A failed listen warns
-(`listen_failed`, `messages.listen` or `history.listen`) and never fails the command; it is neither held nor paced,
-as it only receives. Its run record is an `adapter.listen` or `adapter.listenHistory` request and response; the
-response counts what `listen` handed on by event, as `messages.watch`'s does, and what `listenHistory` handed on as
-`batches` and each part's items.
+(`listen_failed`) and never fails the command; it is neither held nor paced, as it only receives. Its run record is a
+`messages.listen` or `history.listen` request and response, the operation its warnings name too; the response counts
+what `listen` handed on by event, as `messages.watch`'s does, and what `listenHistory` handed on as `batches` and each
+part's items.
 
 **A CLI replaces a use case, not a command.** `Messenger.services` is an `Override`: it gets the
 shared services and returns the ones it changes, and can call the shared method inside its own:

@@ -83,7 +83,7 @@ describe("observed watch", () => {
 })
 
 describe("observed listenHistory", () => {
-  it("counts the batches it hands on, and each part's items, on the adapter.listenHistory response", async () => {
+  it("counts the batches it hands on, and each part's items, on the history.listen response", async () => {
     const adapter = {
       self: () => "9",
       close: async () => {},
@@ -100,7 +100,7 @@ describe("observed listenHistory", () => {
     expect(recorded).toContainEqual(
       expect.objectContaining({
         event: "response",
-        operation: "adapter.listenHistory",
+        operation: "history.listen",
         outcome: "ok",
         counts: { batches: 2, rekeys: 1, messages: 3 },
       }),

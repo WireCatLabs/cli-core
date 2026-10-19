@@ -34,6 +34,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **A one-shot command's passive listen keeps one operation name in its run record and its warnings**:
+  `messages.listen` for `listen` and `history.listen` for `listenHistory`, as `messages.watch` does for `watch`.
+  Before, the run record said `adapter.listen` or `adapter.listenHistory`, so `runs --operation adapter.listen`
+  no longer matches a new run.
 - **Peer `@wirecat/cli-base` is `>=0.47.0 <0.48.0`** (was `>=0.45.0 <0.47.0`): 0.47.0 is the first whose strict
   `nextStepSchema` accepts `line`, so a tool on an older cli-base would refuse cli-core's own answers in its schema
   checks. Bump cli-base with cli-core.

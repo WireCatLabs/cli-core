@@ -157,18 +157,13 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
       ...(listen
         ? {
             listen: (onEvent, signal) =>
-              counted("adapter.listen", onEvent, (counting) => listen.call(messenger, counting, signal), byEvent),
+              counted("messages.listen", onEvent, (counting) => listen.call(messenger, counting, signal), byEvent),
           }
         : {}),
       ...(listenHistory
         ? {
             listenHistory: (onBatch, signal) =>
-              counted(
-                "adapter.listenHistory",
-                onBatch,
-                (counting) => listenHistory.call(messenger, counting, signal),
-                byPart,
-              ),
+              counted("history.listen", onBatch, (counting) => listenHistory.call(messenger, counting, signal), byPart),
           }
         : {}),
       logout: () => timed("session.logout", {}, () => messenger.logout()),
