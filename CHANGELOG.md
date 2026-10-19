@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.358.0 — 19.10.2026
+
 ### Added
 
 - **Meeting transcripts in bounded context reads:** `ContextSource.kind` accepts `meeting`; the native
