@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.360.0 — 19.10.2026
+
 ### Added
 
 - **Adapter test authors can shorten a connection's close wait and re-key pauses.** The run environment takes
