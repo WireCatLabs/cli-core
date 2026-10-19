@@ -1034,6 +1034,17 @@ describe("a stored chat id the messenger now names by another id", () => {
     expect(await chatIds(other)).toContain(PHONE)
   })
 
+  it("answers the messenger's id when the re-key cannot be written", async () => {
+    const { wrapped, store, rekeys, chatIds } = await following({ [PHONE]: LID })
+    store.chats.rekeyChat = async () => {
+      throw new Error("attempt to write a readonly database")
+    }
+
+    expect((await wrapped.resolve(PHONE)).id).toBe(LID)
+    expect(rekeys).toEqual([])
+    expect(await chatIds(account)).toContain(PHONE)
+  })
+
   it("keeps the stored chat when the messenger answers the same id", async () => {
     const { wrapped, rekeys, chatIds } = await following({})
 
