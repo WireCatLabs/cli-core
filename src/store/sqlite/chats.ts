@@ -150,7 +150,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       lastMessageAt: toMs(chat.lastMessageAt),
       participantsCount: chat.participantsCount ?? null,
       metadata: mergedMetadata(stored?.metadata ?? null, chat.providerMetadata),
-      membershipState: chat.membershipState ?? null,
+      membershipState: chat.membershipState === "member" ? null : (chat.membershipState ?? null),
       createdAt: now(),
       updatedAt: now(),
     })
@@ -165,11 +165,17 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
         ...(chat.lastMessageAt === undefined ? {} : { lastMessageAt: sql`excluded.last_message_at` }),
         ...(chat.participantsCount === undefined ? {} : { participantsCount: sql`excluded.participants_count` }),
         metadata: sql`excluded.metadata`,
-        ...(chat.membershipState === undefined ? {} : { membershipState: sql`excluded.membership_state` }),
+        ...membershipSet(chat.membershipState),
         updatedAt: sql`excluded.updated_at`,
       },
     })
     .run()
+}
+
+const membershipSet = (state: ChatUpdate["membershipState"]) => {
+  if (state === undefined) return {}
+  if (state === "member") return { membershipState: sql`nullif(${chats.membershipState}, 'left')` }
+  return { membershipState: sql`excluded.membership_state` }
 }
 
 const mergedMetadata = (stored: string | null, incoming: ProviderMetadata | undefined): string | null => {
