@@ -23,6 +23,8 @@ vulnerabilities are reported as the [security policy](SECURITY.md) says.
 4. **A change reaches tg-cli and max-cli only through a release.** Both pin an exact version.
 5. **Release when a consumer needs the merged code; there is no fixed gap between releases** —
    [README, "How often, and what may break"](docs/REFERENCE.md#how-often-and-what-may-break).
+   A change to a stable export that makes a CLI change its code ships at most once a week
+   ([WC-REL-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-9--a-change-to-a-stable-shared-library-export-that-makes-a-cli-change-its-code-ships-at-most-once-a-week)); when in doubt, it counts.
    `bin/release` publishes the next free version through GitHub; a change that may break a
    caller goes under "Changed — may break callers" in the changelog.
 
