@@ -24,8 +24,8 @@ export interface Saving {
   /** After a re-key is saved: what outside the store spells the chat id follows it. */
   rekeyed?: (from: Id, to: Id) => void | Promise<void>
   /**
-   * Chat ids this account's recipient list names, told to `storedChats` beside the stored ones: an entry saved before
-   * any chat was stored under its id would otherwise never be re-keyed, and the send guard would refuse it for good.
+   * Chat ids this account's recipient list names, told to `storedChats` apart from the stored ones: an entry saved
+   * before any chat was stored under its id would otherwise never be re-keyed, and the send guard would refuse it.
    */
   recipientIds?: () => Id[]
   /**
@@ -433,8 +433,9 @@ const announceStoredChats = async (
   try {
     const opened = await store()
     const held = opened ? (await opened.forAccount(account).chats.chats({})).items.map((chat) => chat.id) : []
-    const ids = [...new Set([...held, ...listed])]
-    if (opened || ids.length > 0) await messenger.storedChats?.(ids)
+    const recipients = [...new Set(listed)].filter((id) => !held.includes(id))
+    if (recipients.length > 0) await messenger.storedChats?.(held, recipients)
+    else if (opened) await messenger.storedChats?.(held)
   } catch (error) {
     events({ event: "warning", code: "stored_chats_failed", operation: "history.stored_chats" })
     warn(`the messenger was not told the stored chats: ${error instanceof Error ? error.message : String(error)}`)

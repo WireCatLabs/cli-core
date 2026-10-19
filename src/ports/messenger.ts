@@ -402,11 +402,12 @@ export interface PushedHistory {
   /** Chats, people and past messages as the messenger pushes them, until `signal` aborts. */
   feed(onBatch: (batch: HistoryBatch) => void, signal: AbortSignal): Promise<void>
   /**
-   * Every chat id the store holds for this account, and the ids its profile's recipient list names, handed over once as
-   * `feed` starts, so a chat nothing names again can still be re-keyed through a later batch's `rekeys`. A reject is
-   * a warning; `feed` goes on.
+   * Every chat id the store holds for this account, handed over once as `feed` starts, so a chat nothing names again
+   * can still be re-keyed through a later batch's `rekeys`. `recipients`, when given, are ids the profile's recipient
+   * list names and the store does not hold: typed by the owner, to be mapped from local data only, never looked up
+   * over the network or recorded. A reject is a warning; `feed` goes on.
    */
-  storedChats?(ids: readonly Id[]): void | Promise<void>
+  storedChats?(ids: readonly Id[], recipients?: readonly Id[]): void | Promise<void>
 }
 
 /** A message's files and its speech, fetched from the messenger. */

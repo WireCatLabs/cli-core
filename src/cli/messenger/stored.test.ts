@@ -882,6 +882,7 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     list.add({ id: "34@phone", title: "Ana", addedAt: "2026-10-19T00:00:00.000Z" })
     list.add({ id: "50", title: "Group", partnerId: "35@phone", addedAt: "2026-10-19T00:00:00.000Z" })
     let told: readonly string[] = []
+    let typed: readonly string[] | undefined
     let heard = () => {}
     const toldOnce = new Promise<void>((resolve) => {
       heard = resolve
@@ -890,8 +891,9 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     await feeding(
       store,
       {
-        storedChats: async (ids) => {
+        storedChats: async (ids, recipients) => {
           told = ids
+          typed = recipients
           heard()
         },
         feed: async (onBatch) => {
@@ -912,7 +914,8 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
       },
     )
 
-    expect([...told].sort()).toEqual(["34@phone", "35@phone", "50", "7", "8"])
+    expect([...told].sort()).toEqual(["7", "8"])
+    expect([...(typed ?? [])].sort()).toEqual(["34@phone", "35@phone", "50"])
     expect(list.read()?.map(({ id, partnerId }) => [id, partnerId])).toEqual([
       ["8", undefined],
       ["34@lid", undefined],
@@ -924,12 +927,14 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
   it("an unreadable recipient list is a warning, and the stored chats are still handed over", async () => {
     const { store } = await setUp()
     let told: readonly string[] = []
+    let typed: readonly string[] | undefined = []
 
     const { warnings } = await feeding(
       store,
       {
-        storedChats: async (ids) => {
+        storedChats: async (ids, recipients) => {
           told = ids
+          typed = recipients
         },
         feed: async () => {},
       },
@@ -941,6 +946,7 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     )
 
     expect([...told].sort()).toEqual(["7", "8"])
+    expect(typed).toBeUndefined()
     expect(warnings).toEqual([expect.stringContaining("recipient list")])
   })
 

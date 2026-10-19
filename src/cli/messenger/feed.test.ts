@@ -176,13 +176,15 @@ describe("a messenger that pushes its history", () => {
     writeFileSync(list, JSON.stringify({ chats: [{ id: "5550002", title: "Ben", addedAt: "2026-10-01T00:00:00Z" }] }))
     const stop = new AbortController()
     let told: readonly string[] = []
+    let typed: readonly string[] | undefined
     let heard = () => {}
     const toldOnce = new Promise<void>((resolve) => {
       heard = resolve
     })
     const { connect } = pushing(stop, {
-      storedChats: async (ids) => {
+      storedChats: async (ids, recipients) => {
         told = ids
+        typed = recipients
         heard()
       },
       feed: async (onBatch) => {
@@ -193,7 +195,8 @@ describe("a messenger that pushes its history", () => {
     })
 
     expect((await call(["serve", "--json"], env, connect, stop.signal, "store")).code).toBe(0)
-    expect(told).toContain("5550002")
+    expect(told).not.toContain("5550002")
+    expect(typed).toEqual(["5550002"])
     expect(JSON.parse(readFileSync(list, "utf8")).chats.map((chat: { id: string }) => chat.id)).toEqual(["9990002"])
   })
 
