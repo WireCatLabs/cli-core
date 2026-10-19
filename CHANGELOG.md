@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.353.0 — 19.10.2026
+
 ### Changed — may break callers
 
 - **`ChatsStore.leftChats` also names each chat** in a new `left` list (`id`, `title`, `messages`), the ones holding
