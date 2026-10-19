@@ -86,8 +86,10 @@ and `AccountEditing`.
   `history: "store"`. With the default `"server"`, the shared reads call it, and an adapter without
   it gets "this messenger cannot list chats" on every read.
 - With `history: "store"`, `resolve` and `people` see only what the store has no answer for: a chat or person named
-  by a stored name or id never reaches them, and `watch` events get a missing `chatTitle` from the stored chats.
-  Such an adapter needs no chat directory of its own to answer names.
+  by a stored name never reaches them, and `watch` events get a missing `chatTitle` from the stored chats.
+  Such an adapter needs no chat directory of its own to answer names. A stored chat named by its exact id still
+  reaches `resolve`, and an answer under another id re-keys the stored chat to it, as a pushed `rekeys` entry would:
+  answer another id only when the messenger now names that same chat by it.
 - Prefer a whole group to part of one. Write `implements MessageEditing` on the class, so the
   compiler holds you to all of it. `ReadState` is `markRead` alone; `markTopicRead` is
   `TopicReadState`, for a messenger with forum topics.

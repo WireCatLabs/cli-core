@@ -16,6 +16,12 @@ shape of this file.
   partner) the store does not hold: typed ids an adapter maps from local data only, never looks up or records. The
   re-key the messenger sends back moves the entry as before, with or without a chat row. An unreadable list is a
   warning, and the store's ids are still handed over. Additive: the one-argument signature is unchanged.
+- **A write by a stored chat's old id reaches the chat the messenger now names**. For a messenger whose
+  history is pushed (`history: "store"`), `resolve` answered a stored chat named by its exact id from the store and
+  never asked the adapter, so WhatsApp's phone-form id kept taking deletes, stars and votes while sends landed under
+  the LID: a deleted text stayed searchable. Such an id now goes to the adapter's `resolve`; an answer under another
+  id re-keys the stored chat to it (as a pushed `rekeys` entry does, recipient list included), within the account,
+  so one-shot commands close the split without a `serve`. An adapter `not_found` keeps the stored chat.
 
 ## 0.355.0 — 19.10.2026
 
