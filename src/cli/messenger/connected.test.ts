@@ -243,7 +243,7 @@ describe("a one-shot command of a messenger whose history is in the store", () =
     expect(recorded).toContainEqual(
       expect.objectContaining({
         event: "response",
-        operation: "adapter.listen",
+        operation: "messages.listen",
         outcome: "ok",
         counts: { message: 2 },
       }),
@@ -378,7 +378,7 @@ describe("a one-shot command of a messenger whose history is pushed", () => {
     expect(recorded).toContainEqual(
       expect.objectContaining({
         event: "response",
-        operation: "adapter.listenHistory",
+        operation: "history.listen",
         outcome: "ok",
         counts: { batches: 1, rekeys: 1, chats: 1, messages: 1 },
       }),

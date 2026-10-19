@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`feed` and a one-shot command's passive listen keep one operation name in their run records and warnings**:
+  `history.feed` for `feed`, `messages.listen` for `listen` and `history.listen` for `listenHistory`, as
+  `messages.watch` does for `watch`. Before, the run record said `adapter.feed`, `adapter.listen` or
+  `adapter.listenHistory`, so `runs --operation adapter.feed` and `adapter.listen` stop matching new runs.
+
 ## 0.348.0 — 19.10.2026
 
 ### Added

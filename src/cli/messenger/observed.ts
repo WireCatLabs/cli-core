@@ -57,7 +57,7 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
   }
 
   const mint = messenger.newSendId
-  const { chats, history, contact, around, watch, listen, listenHistory } = messenger
+  const { chats, history, contact, around, watch, feed, listen, listenHistory } = messenger
   // A method not listed here is timed under its own name, with no ids until a line here names them.
   return throughWrapper(
     messenger,
@@ -154,21 +154,19 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
               ),
           }
         : {}),
+      ...(feed
+        ? { feed: (onBatch, signal) => timed("history.feed", {}, () => feed.call(messenger, onBatch, signal)) }
+        : {}),
       ...(listen
         ? {
             listen: (onEvent, signal) =>
-              counted("adapter.listen", onEvent, (counting) => listen.call(messenger, counting, signal), byEvent),
+              counted("messages.listen", onEvent, (counting) => listen.call(messenger, counting, signal), byEvent),
           }
         : {}),
       ...(listenHistory
         ? {
             listenHistory: (onBatch, signal) =>
-              counted(
-                "adapter.listenHistory",
-                onBatch,
-                (counting) => listenHistory.call(messenger, counting, signal),
-                byPart,
-              ),
+              counted("history.listen", onBatch, (counting) => listenHistory.call(messenger, counting, signal), byPart),
           }
         : {}),
       logout: () => timed("session.logout", {}, () => messenger.logout()),

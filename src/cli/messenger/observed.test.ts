@@ -83,7 +83,7 @@ describe("observed watch", () => {
 })
 
 describe("observed listenHistory", () => {
-  it("counts the batches it hands on, and each part's items, on the adapter.listenHistory response", async () => {
+  it("counts the batches it hands on, and each part's items, on the history.listen response", async () => {
     const adapter = {
       self: () => "9",
       close: async () => {},
@@ -100,10 +100,33 @@ describe("observed listenHistory", () => {
     expect(recorded).toContainEqual(
       expect.objectContaining({
         event: "response",
-        operation: "adapter.listenHistory",
+        operation: "history.listen",
         outcome: "ok",
         counts: { batches: 2, rekeys: 1, messages: 3 },
       }),
     )
+  })
+})
+
+describe("observed feed", () => {
+  it("records its request and response as history.feed, the name its save warnings use", async () => {
+    const adapter = {
+      self: () => "9",
+      close: async () => {},
+      feed: async (onBatch: (batch: HistoryBatch) => void) => onBatch({ messages: [message] }),
+    } as unknown as MessengerAdapter
+    const recorded: DiagnosticEvent[] = []
+    const batches: HistoryBatch[] = []
+
+    await observed(adapter, (event) => recorded.push(event)).feed?.(
+      (batch) => batches.push(batch),
+      new AbortController().signal,
+    )
+
+    expect(batches).toHaveLength(1)
+    expect(recorded.map(({ event, operation }) => `${event} ${operation}`)).toEqual([
+      "request history.feed",
+      "response history.feed",
+    ])
   })
 })
