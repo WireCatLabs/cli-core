@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.364.0 — 19.10.2026
+
 ### Fixed
 
 - **More warnings in `serve`'s log now carry a code.** A flood wait (`flood_wait`, with `counts.seconds`),
