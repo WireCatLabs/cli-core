@@ -41,13 +41,20 @@ export const storedChatId = async (
   reference: string,
   store: MessageStore,
   account: AccountKey,
-): Promise<string> => chatIdAmong(messenger, reference, account, () => store.chats.chats(account, {}))
+): Promise<string> =>
+  chatIdAmong(messenger, reference, account, {
+    held: () => store.chats.chats(account, {}),
+    renamed: (id) => store.chats.renamedChatId(account, id),
+  })
 
 /** `storedChatId`, then among the chats the account left: their history is kept, so a read of it still finds them. */
 const keptChatId = (messenger: Saved, reference: string, store: MessageStore, account: AccountKey): Promise<string> =>
   storedChatId(messenger, reference, store, account).catch((error: unknown) => {
     if (codeOf(error) !== "not_found") throw error
-    return chatIdAmong(messenger, reference, account, () => store.chats.chats(account, { includeLeft: true }))
+    return chatIdAmong(messenger, reference, account, {
+      held: () => store.chats.chats(account, { includeLeft: true }),
+      renamed: (id) => store.chats.renamedChatId(account, id),
+    })
   })
 
 /** `storedChatId`, among the chats of the account the store is bound to; `includeLeft` tries the left ones last. */
@@ -57,11 +64,15 @@ export const chatIdIn = (
   store: AccountStore,
   { includeLeft = false }: { includeLeft?: boolean } = {},
 ): Promise<string> => {
-  const among = chatIdAmong(messenger, reference, store.account, () => store.chats.chats({}))
+  const renamed = (id: Id) => store.chats.renamedChatId(id)
+  const among = chatIdAmong(messenger, reference, store.account, { held: () => store.chats.chats({}), renamed })
   if (!includeLeft) return among
   return among.catch((error: unknown) => {
     if (codeOf(error) !== "not_found") throw error
-    return chatIdAmong(messenger, reference, store.account, () => store.chats.chats({ includeLeft: true }))
+    return chatIdAmong(messenger, reference, store.account, {
+      held: () => store.chats.chats({ includeLeft: true }),
+      renamed,
+    })
   })
 }
 
@@ -69,16 +80,18 @@ const chatIdAmong = async (
   messenger: Saved,
   reference: string,
   account: AccountKey,
-  held: () => Promise<Page<Chat>>,
+  { held, renamed }: { held: () => Promise<Page<Chat>>; renamed: (id: Id) => Promise<Id | undefined> },
 ): Promise<string> => {
   const trimmed = reference.trim()
   if (messenger.savedChatId && ["me", "self", "saved"].includes(trimmed.toLowerCase())) {
     return messenger.savedChatId(account)
   }
-  if (/^-?\d+$/.test(trimmed)) return trimmed
+  if (/^-?\d+$/.test(trimmed)) return (await renamed(trimmed)) ?? trimmed
   const chats = (await held()).items
   const exact = chats.find((one) => one.id === trimmed)
   if (exact) return exact.id
+  const moved = await renamed(trimmed)
+  if (moved !== undefined && chats.some((one) => one.id === moved)) return moved
   if (trimmed.startsWith("@")) {
     const username = trimmed.slice(1).toLowerCase()
     const found = chats.find((one) => String(one.providerMetadata?.username ?? "").toLowerCase() === username)

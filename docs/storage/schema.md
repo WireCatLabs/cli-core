@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-91 tables, 19 full-text indexes.
+93 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -541,6 +541,33 @@ Each voter's newest vote in a poll, where the messenger sends votes one by one (
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (chat_id, message_external_id, identity_id)`, `INDEX (identity_id)`
+
+### `chat_revisions`
+
+One row per field a chat changed: its external id on a re-key, title, membership, scope, search visibility or parent. A trigger on `chats` writes it in the changing statement's transaction, for every build and writer, and only when the value differs. No foreign keys, so an older build's purge still works; a trigger drops a purged chat's rows. Nothing indexes it for search.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `chat_id` | integer | not null |  | the `chats` row; follows the row through re-keys |
+| `account_id` | integer | not null |  | the chat's account |
+| `field` | text | not null |  | `external_id`, `title`, `membership_state`, `scope`, `searchable` or `parent_chat_id` |
+| `old_value` | text |  |  | as stored before, as text; `parent_chat_id` is a `chats` row id |
+| `new_value` | text |  |  | as stored after |
+| `source` | text |  |  | the store write that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (chat_id, created_at)`, `INDEX (account_id, old_value) WHERE field = 'external_id'`
+
+### `chat_revision_source`
+
+At most one row, and only inside a write transaction: what the `chat_revisions` trigger records as the source and time of the change. The store sets it before its write and deletes it before the commit.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  | always 1 |
+| `source` | text | not null |  |  |
+| `at` | integer | not null |  | the store's clock, in ms |
 
 ### `chat_events`
 

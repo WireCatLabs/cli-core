@@ -42,7 +42,8 @@ export interface ChatsStore {
   rejoinChats(key: AccountKey, present: Id[]): Promise<number>
   /**
    * The chat the messenger now names `to` instead of `from`: renamed, or merged into the chat already stored as
-   * `to`. Replaying it changes nothing.
+   * `to`, with `from` recorded in `chat_revisions` (`renamedChatId`), also when only `to` is stored. Replaying it
+   * changes nothing.
    */
   rekeyChat(key: AccountKey, from: Id, to: Id): Promise<ChatRekey>
   /**
@@ -59,6 +60,11 @@ export interface ChatsStore {
   chatCompleteness(key: AccountKey, chatIds: Id[]): Promise<ChatCompleteness[]>
   /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
   chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
+  /**
+   * The id a chat re-keyed from `chatId` has now, from `chat_revisions`; `undefined` while a chat is stored under
+   * `chatId` itself. Only for finding the chat: the old id and its history are never shown or searched.
+   */
+  renamedChatId(key: AccountKey, chatId: Id): Promise<Id | undefined>
   /** A stored chat's kind, with or without messages; `undefined` when the store does not know the chat. */
   chatKind(key: AccountKey, chatId: Id): Promise<ChatKind | undefined>
   /** Per chat that spoke since `since` (ms): its newest message and who sent it when stored, never the text. */
@@ -81,7 +87,9 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     saveChats: async (key, list) =>
       write(database, () => {
         const accountKey = accountPk(key)
-        for (const chat of list) chatQueries.upsertChat(context, accountKey, chat)
+        chatQueries.revisedBy(context, "chats", () => {
+          for (const chat of list) chatQueries.upsertChat(context, accountKey, chat)
+        })
       }),
 
     chats: async (key, window) => {
@@ -106,7 +114,7 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
       if (accountKey === undefined) return 0
       let marked = 0
       write(database, () => {
-        marked = chatQueries.markLeft(context, accountKey, present)
+        marked = chatQueries.revisedBy(context, "left", () => chatQueries.markLeft(context, accountKey, present))
         writeState(accountKey, completeness.CHAT_LIST_KEY, String(present.length))
       })
       return marked
@@ -114,7 +122,11 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
 
     rejoinChats: async (key, present) => {
       const accountKey = findAccountPk(key)
-      return accountKey === undefined ? 0 : write(database, () => chatQueries.rejoin(context, accountKey, present))
+      return accountKey === undefined
+        ? 0
+        : write(database, () =>
+            chatQueries.revisedBy(context, "rejoin", () => chatQueries.rejoin(context, accountKey, present)),
+          )
     },
 
     rekeyChat: async (key, from, to) => {
@@ -153,6 +165,11 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
       return accountKey === undefined ? [] : reads.chatStats(context, accountKey, chatId)
     },
 
+    renamedChatId: async (key, chatId) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined ? undefined : chatQueries.renamedChatId(context, accountKey, chatId)
+    },
+
     chatKind: async (key, chatId) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) return undefined
@@ -170,7 +187,7 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     },
 
     chatMetadata: async (key, chatId) => chatQueries.metadata(context, key, chatId),
-    saveChatMetadata: async (key, entry) => chatQueries.saveMetadata(context, key, entry),
+    saveChatMetadata: async (key, entry) => write(database, () => chatQueries.saveMetadata(context, key, entry)),
     replaceAutoTags: async (key, chatId, algorithm, matches) =>
       write(database, () => chatQueries.replaceAutoTags(context, key, chatId, algorithm, matches)),
 
