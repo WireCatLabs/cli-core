@@ -88,8 +88,7 @@ export const recordRun = (
           failingSince: before?.exitCode ? (before.failingSince ?? before.at) : run.at,
           failures: before?.exitCode ? (before.failures ?? 1) + 1 : 1,
         }
-  mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 })
-  writeFileSync(path, `${JSON.stringify(last, null, 2)}\n`, { mode: 0o600 })
+  writeSecurely(path, `${JSON.stringify(last, null, 2)}\n`, 0o600)
   return last
 }
 

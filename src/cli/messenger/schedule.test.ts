@@ -1,4 +1,13 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, errorObjectOf, NOT_ALLOWED, renderError } from "@wirecat/cli-base"
@@ -413,6 +422,10 @@ describe("a run", () => {
       .filter((entry) => entry.isFile())
       .map((entry) => join(entry.parentPath, entry.name))
     expect(files).toContain(join(file, "..", "last.json"))
+    if (process.platform !== "win32") {
+      for (const path of [last.output, join(file, "..", "last.json")]) expect(statSync(path).mode & 0o777).toBe(0o600)
+      expect(statSync(join(file, "..", "runs")).mode & 0o777).toBe(0o700)
+    }
     for (const path of files.filter((path) => path !== last.output)) {
       expect(readFileSync(path, "utf8"), path).not.toContain("Book club")
     }

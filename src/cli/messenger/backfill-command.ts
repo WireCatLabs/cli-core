@@ -260,7 +260,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         if (jobId) {
           const code = isCliFailure(error) ? error.code : "generic_failure"
           // The job file outlives the run; the message can name a chat, so only the job's log keeps it.
-          const message = `${code} — the job's log has the whole error`
+          const message = `${code} — \`store jobs show ${jobId}\` names the log with the whole error`
           finishJob(messenger.app, jobs, jobId, { finishedAt: new Date().toISOString(), error: { code, message } })
         }
         throw error

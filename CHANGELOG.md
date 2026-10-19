@@ -14,9 +14,11 @@ shape of this file.
   chats or people an ambiguous name matches reached the file and the "scheduled … failing" notice. `last.json` now
   keeps the error's `code` as the new `errorCode` and a `reason` of the code and its reason id, such as
   `validation_error (input.invalid)`; a last line that is not an error object, such as an agent harness's, is kept
-  only as `exit <n>`. The full message stays on stderr and in the run's log. `reasonOf(stderr, exitCode?)` follows
-  and always answers a string, and `recordRun` takes the optional `errorCode`. A background `store` sync job's file
-  likewise keeps only the error's code; its log has the message.
+  only as `exit <n>`. The full message stays on stderr and in the run's log, whose path `schedule list` now prints
+  after a failing schedule's reason. `last.json` is written atomically with mode 0600 even over an older file.
+  `reasonOf(stderr, exitCode?)` follows and always answers a string, and `recordRun` takes the optional `errorCode`.
+  A background `store` sync job's file likewise keeps only the error's code and names `store jobs show <id>`, which
+  prints the path of the job's log.
 
 ## 0.354.0 — 19.10.2026
 

@@ -231,7 +231,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
                 ? `last ${last.at.slice(0, 16).replace("T", " ")} exit ${last.exitCode}` +
                   (last.failures
                     ? ` — failing since ${(last.failingSince ?? last.at).slice(0, 16).replace("T", " ")}, ` +
-                      `${last.failures} in a row${last.reason ? `: ${last.reason}` : ""}`
+                      `${last.failures} in a row${last.reason ? `: ${last.reason}` : ""} — ${last.output}`
                     : "")
                 : "not run yet",
             ].join("  "),
