@@ -7,6 +7,7 @@ import { resolvePersonLinks } from "./person-resolution.js"
 import {
   accountIdentities,
   accounts,
+  chats,
   identities,
   identityLinkEvents,
   identityLinks,
@@ -205,6 +206,7 @@ export const mentioning = (
     username === null ? undefined : sql`instr(lower(${messages.text}), ${`@${username.toLowerCase()}`}) > 0`
   const where = and(
     eq(messages.accountId, accountKey),
+    eq(chats.searchable, 1),
     isNull(messages.deletedAt),
     byHandle ? sql`(${byId} OR ${byHandle})` : byId,
   )
