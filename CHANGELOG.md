@@ -7,20 +7,8 @@ shape of this file.
 
 ## Unreleased
 
-### Changed — may break callers
-
-- **`feed` and a one-shot command's passive listen keep one operation name in their run records and warnings**:
-  `history.feed` for `feed`, `messages.listen` for `listen` and `history.listen` for `listenHistory`, as
-  `messages.watch` does for `watch`. Before, the run record said `adapter.feed`, `adapter.listen` or
-  `adapter.listenHistory`, so `runs --operation adapter.feed` and `adapter.listen` stop matching new runs.
-
-## 0.348.0 — 19.10.2026
-
 ### Added
 
-- **A next step in `--json` output and in an error carries `line`, the whole command with the profile**:
-  `"line": "max personal mcp config"` beside `"command": "mcp config"`. A copied `command` alone failed with "name a
-  profile". MCP answers leave it out; `command` is unchanged.
 - **`gatherProjectEvidence` brings the mail and document index up to date before reading** through the new
   optional `MessageStore.contextIndex` port (`ContextIndex.catchUp`), the same fills a mail search and the notes
   search run. `index: "as-is"` skips it; the result's `index` says what happened. On a store just synced, new
@@ -35,6 +23,21 @@ shape of this file.
   than 48 (at most 512), so `--source all` with several searches no longer stops before every search ran once.
 - **`ProjectFetchState`, `ProjectUnitState`, `ProjectIndexCatchUp` and `ContextIndex` are exported** from
   `@wirecat/cli-core/services`, so a host can name the result type.
+
+### Changed — may break callers
+
+- **`feed` and a one-shot command's passive listen keep one operation name in their run records and warnings**:
+  `history.feed` for `feed`, `messages.listen` for `listen` and `history.listen` for `listenHistory`, as
+  `messages.watch` does for `watch`. Before, the run record said `adapter.feed`, `adapter.listen` or
+  `adapter.listenHistory`, so `runs --operation adapter.feed` and `adapter.listen` stop matching new runs.
+
+## 0.348.0 — 19.10.2026
+
+### Added
+
+- **A next step in `--json` output and in an error carries `line`, the whole command with the profile**:
+  `"line": "max personal mcp config"` beside `"command": "mcp config"`. A copied `command` alone failed with "name a
+  profile". MCP answers leave it out; `command` is unchanged.
 - **`searchAll(…, { app, hintCommand })`**: the tool a missing-model hint names, apart from `app.command`. memo passes
   tg's identity for `group:` lists but has no `models` command; `hintCommand: null` names the tools that have one
   (tg, max or wa) instead of `tg models text download`. `searchAllIncludingMeetings` and `searchAllWithMeetings`
