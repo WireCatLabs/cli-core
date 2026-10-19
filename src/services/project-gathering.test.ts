@@ -212,3 +212,16 @@ it("searches the project key as its own lane and lets a window start without an 
     gatherProjectEvidence({ evidence: f.port }, { ...f.request, after: undefined, before: 10000 }),
   ).rejects.toMatchObject({ details: { param: "after" } })
 })
+
+it("raises the default read budget to finish one round of every search over every source", async () => {
+  const f = await fixture()
+  const keywords = Array.from({ length: 14 }, (_, n) => `word${n}`)
+  const result = await gatherProjectEvidence({ evidence: f.port }, { ...f.request, keywords, before: 91 * DAY })
+  expect(result.units).toHaveLength(16 * 3 * 2)
+  expect(result).toMatchObject({ stopped: null, complete: true, usage: { reads: 96 } })
+  const capped = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, keywords, before: 91 * DAY, budgets: { maxReads: 48 } },
+  )
+  expect(capped).toMatchObject({ stopped: "reads", usage: { reads: 48 } })
+})

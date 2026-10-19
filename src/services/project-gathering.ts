@@ -55,6 +55,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   const previous = plan.checkpoint === undefined ? null : decodeCheckpoint(plan.checkpoint, plan)
   const window = previous ?? plan.window
   const units = projectUnits(plan, window)
+  // A default that cannot finish one round would leave whole searches or sources unread; an explicit one is kept.
+  if (request.budgets?.maxReads === undefined) plan.budgets.maxReads = Math.min(512, Math.max(48, units.length))
   if (previous && (previous.units.length !== units.length || previous.fetched.length !== plan.sources.length))
     throw new CliError("validation_error", "invalid project gathering checkpoint", { param: "checkpoint" })
   const progress: ProjectUnitProgress[] =

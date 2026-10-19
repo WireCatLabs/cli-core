@@ -53,7 +53,8 @@ const result = await gatherProjectEvidence(
 
 ## Budgets and order
 
-`budgets` are per invocation: `maxReads` (default 48), `maxReadBytes` (2 MiB), `maxPageBytes` (64 KiB),
+`budgets` are per invocation: `maxReads` (default 48, or one read per lane × source × chunk when that is more, up
+to 512, so one round always finishes), `maxReadBytes` (2 MiB), `maxPageBytes` (64 KiB),
 `maxElapsedMs` (60 s) and `maxItems` (100 new items). Each read is a fresh single-source scoped reader, so
 authorization and response validation are the context reader's own.
 

@@ -27,6 +27,8 @@ shape of this file.
   mail and imported documents were missed before.
 - **The project key is a search lane of its own** (`project.key`, lane kind `key`), and an explicit window may
   give `after` alone: `before` is `asOf`, frozen with the run.
+- **The default read budget covers one full round**: one read per search × source × 90-day chunk when that is more
+  than 48 (at most 512), so `--source all` with several searches no longer stops before every search ran once.
 - **`ProjectFetchState`, `ProjectUnitState`, `ProjectIndexCatchUp` and `ContextIndex` are exported** from
   `@wirecat/cli-core/services`, so a host can name the result type.
 - **`searchAll(…, { app, hintCommand })`**: the tool a missing-model hint names, apart from `app.command`. memo passes
