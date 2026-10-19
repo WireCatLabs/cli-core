@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.356.0 — 19.10.2026
+
 ### Fixed
 
 - **A recipient-list entry saved by an id with no stored chat follows the messenger's re-key.** `serve` and `watch`
