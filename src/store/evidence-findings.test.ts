@@ -90,6 +90,9 @@ it("refuses evidence whose text changed or was never stored", async () => {
   await expect(
     f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["launch"] }),
   ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
+  expect(await f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: [] })).toMatchObject(
+    { status: "reviewed", receipt: { accepted: [], items: [{ status: "rejected" }, { status: "rejected" }] } },
+  )
 })
 
 it("lets the owner, or an agent with a reason, decide; later batches reuse the decisions", async () => {

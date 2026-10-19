@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A findings batch whose evidence changed can still be rejected.** Review rechecked the cited sources even when
+  it accepted nothing, so a stale meeting or evidence findings batch could never be closed and stayed open in
+  every list. Accepting still requires current evidence.
+
 ## 0.364.0 — 19.10.2026
 
 ### Fixed
