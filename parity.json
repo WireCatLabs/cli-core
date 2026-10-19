@@ -4401,6 +4401,7 @@
       "in": "all",
       "options": {
         "--allow-dangerous": "all",
+        "--dry-run": "all",
         "--left": "all"
       }
     },

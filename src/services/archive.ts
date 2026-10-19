@@ -5,6 +5,7 @@ import type { ActionableError } from "../domain/recovery.js"
 import { capability } from "../ports/messenger.js"
 import type { Fetching } from "../ports/traits.js"
 import { typedCommand } from "../runs/scope.js"
+import type { LeftChats } from "../store/chats.js"
 import {
   type AccountKey,
   type ChatStats,
@@ -142,7 +143,7 @@ export interface ArchiveService {
    */
   fetchAll(options: FetchOptions): Promise<FetchedAll>
   /** The chats this account has left, with their messages; `clear` deletes them. From the store alone. */
-  left(options?: { clear?: boolean }): Promise<{ chats: number; messages: number }>
+  left(options?: { clear?: boolean }): Promise<LeftChats>
 }
 
 export const archiveService = (deps: ServiceDeps): ArchiveService => {

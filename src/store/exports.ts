@@ -2,7 +2,7 @@ export type { CounterField, CounterObservations, CounterState } from "../domain/
 export type { RetentionOptions } from "../domain/retention.js"
 export type { AccountAccounts, AccountsStore } from "./accounts.js"
 export type { AccountAttachments, AttachmentsStore } from "./attachments.js"
-export type { ChatsStore } from "./chats.js"
+export type { ChatsStore, LeftChat, LeftChats } from "./chats.js"
 export type { ConversationsStore } from "./conversations.js"
 export type { AccountCounters, CountersStore } from "./counters.js"
 export type { AccountMentions, MentionsStore } from "./mentions.js"

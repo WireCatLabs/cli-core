@@ -3645,14 +3645,70 @@ describe("the shared read commands", () => {
     }
 
     expect((await call(["store", "clear"], never, env)).code).toBe(2)
-    const unconfirmed = await call(["store", "clear", "--left"], never, env)
-    expect(unconfirmed.code).not.toBe(0)
+    const unconfirmed = await call(["store", "clear", "--left"], never, env, { tty: true })
+    expect(unconfirmed.code).toBe(7)
     expect(unconfirmed.stderr.join("\n")).toContain("1 chat(s) this account has left and their 3 message(s)")
+    expect(unconfirmed.stderr.join("\n")).toMatch(/7 {2}Book club {2}3/)
+    const quiet = await call(["store", "clear", "--left", "--quiet"], never, env, { tty: true })
+    expect(quiet.stderr.join("\n")).toMatch(/7 {2}Book club {2}3/)
+    const refused = await call(["store", "clear", "--left", "--json"], never, env)
+    expect(refused.stderr.join("\n")).not.toContain("Book club")
+    const preview = await call(["store", "clear", "--left", "--dry-run", "--json"], never, env)
+    expect(JSON.parse(preview.stdout[0] ?? "").item).toEqual({
+      cleared: false,
+      dry_run: true,
+      chats: 1,
+      messages: 3,
+      left: [{ id: "7", title: "Book club", messages: 3 }],
+    })
     const cleared = await call(["store", "clear", "--left", "--allow-dangerous", "--json"], never, env)
-    expect(JSON.parse(cleared.stdout[0] ?? "").item).toEqual({ cleared: true, chats: 1, messages: 3 })
+    expect(JSON.parse(cleared.stdout[0] ?? "").item).toEqual({
+      cleared: true,
+      chats: 1,
+      messages: 3,
+      left: [{ id: "7", title: "Book club", messages: 3 }],
+    })
+    expect(readdirSync(join(root, "state"), { recursive: true, encoding: "utf8" }).length).toBeGreaterThan(0)
+    for (const file of readdirSync(join(root, "state"), { recursive: true, encoding: "utf8" })) {
+      const path = join(root, "state", file)
+      if (statSync(path).isFile()) expect(readFileSync(path, "utf8"), file).not.toContain("Book club")
+    }
     const again = await call(["store", "clear", "--left", "--json"], never, env)
-    expect(JSON.parse(again.stdout[0] ?? "").item).toEqual({ cleared: false, chats: 0, messages: 0 })
+    expect(JSON.parse(again.stdout[0] ?? "").item).toEqual({ cleared: false, chats: 0, messages: 0, left: [] })
     expect(JSON.parse((await call(["store", "status", "--json"], never, env)).stdout[0] ?? "").items).toEqual([])
+  })
+
+  it("**store clear --left names the first 20 chats it would delete** and counts the rest", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const many = Array.from({ length: 23 }, (_, n) => ({ ...chat, id: `${100 + n}`, title: `Group ${n}` }))
+    await call(
+      ["chats", "list", "--json"],
+      async () => ({ ...fake, chats: async () => ({ items: many, hasMore: false }) }),
+      env,
+    )
+    await call(
+      ["chats", "list", "--json"],
+      async () => ({ ...fake, chats: async () => ({ items: people, hasMore: false }) }),
+      env,
+    )
+    const never = async (): Promise<MessengerAdapter> => {
+      throw new Error("store clear must never connect")
+    }
+
+    const refused = (await call(["store", "clear", "--left"], never, env, { tty: true })).stderr.join("\n")
+    const preview = await call(["store", "clear", "--left", "--dry-run", "--json"], never, env)
+
+    expect(refused).toContain("Group 0")
+    expect(refused).not.toContain("Group 22")
+    expect(refused).toContain("and 3 more — --dry-run --json lists every one")
+    expect(JSON.parse(preview.stdout[0] ?? "").item.left).toHaveLength(23)
+    const locked = { ...env, CHAT_READ_ONLY: "1" }
+    expect((await call(["store", "clear", "--left", "--dry-run", "--json"], never, locked)).code).toBe(0)
+    expect((await call(["store", "clear", "--left", "--allow-dangerous", "--json"], never, locked)).code).not.toBe(0)
+    expect(
+      JSON.parse((await call(["store", "clear", "--left", "--json"], never, env)).stderr[0] ?? "").error.code,
+    ).toBe("confirmation_required")
   })
 
   it("**export to a new file only the owner can read**, from --since on, and never over a file", async () => {

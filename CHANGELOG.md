@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`ChatsStore.leftChats` also names each chat** in a new `left` list (`id`, `title`, `messages`), the ones holding
+  most messages first; with `clear` it is what was deleted. A test that compares its whole answer, such as max-cli's
+  `src/record.test.ts`, adds `left`.
+
+### Added
+
+- **`store clear --left` shows which chats it deletes**: the refusal without `--allow-dangerous` lists the first 20
+  by id, title and message count, and says how many more; the new `--dry-run` answers every one in `left` and
+  deletes nothing, also under `<PREFIX>_READ_ONLY`; the answer after deleting lists what was deleted. The titles go
+  only to the terminal or the JSON answer — the refusal's message, which a scheduled run's `last.json` keeps, holds
+  only the counts.
+
 ## 0.352.0 — 19.10.2026
 
 ### Changed — may break callers
