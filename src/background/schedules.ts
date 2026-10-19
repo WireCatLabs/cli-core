@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { CliError, writeSecurely } from "@wirecat/cli-base"
+import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
 import { type AppIdentity, readOnlyLockOf } from "../ports/app.js"
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
@@ -28,25 +28,37 @@ export interface LastRun {
   output: string
   /** Shared by every command the run started (`TRACEPARENT`), so `runs list` names them. */
   traceId?: string
-  /** Why a failed run failed, in one line: the last thing it said, not its whole output. */
+  /** Why a failed run failed, in one line: the error's code and reason id, never its message. */
   reason?: string
+  /** The `code` of the error the run printed, as run records keep it. */
+  errorCode?: string
   /** The first failure of the failures in a row, so "failing since" survives every retry. */
   failingSince?: string
   /** Failed runs in a row; absent once a run succeeds. */
   failures?: number
 }
 
-const REASON_CHARS = 200
+const REASON_ID = /^[a-z0-9][a-z0-9.-]{0,79}$/
 
-/** The last line a failed run printed, which is where a CLI says why it stopped. */
-export const reasonOf = (output: string): string | undefined => {
-  const line = output
-    .split("\n")
-    .map((text) => text.trim())
-    .filter(Boolean)
-    .at(-1)
-  return line === undefined ? undefined : line.length > REASON_CHARS ? `${line.slice(0, REASON_CHARS - 1)}…` : line
+/**
+ * Why a failed run failed, from the error object the CLI printed last: its code and reason id. Never the
+ * message, which can name a chat or a person; the run's log keeps that. Any other line is another program's
+ * text and is not kept either.
+ */
+export const failureOf = (stderr: string, exitCode: number): { reason: string; errorCode?: string } => {
+  for (const line of stderr.split("\n").reverse()) {
+    try {
+      const { code, reason } = (JSON.parse(line) as { error?: { code?: unknown; reason?: unknown } }).error ?? {}
+      if ((errorCodes as readonly unknown[]).includes(code) && typeof reason === "string" && REASON_ID.test(reason)) {
+        return { reason: `${code} (${reason})`, errorCode: code as string }
+      }
+    } catch {}
+  }
+  return { reason: `exit ${exitCode}` }
 }
+
+/** The one-line reason `failureOf` keeps, for a timer that reads a run's stderr itself. */
+export const reasonOf = (stderr: string, exitCode = 1): string => failureOf(stderr, exitCode).reason
 
 const readRun = (path: string): LastRun | undefined => {
   try {
@@ -62,16 +74,17 @@ const readRun = (path: string): LastRun | undefined => {
  */
 export const recordRun = (
   path: string,
-  run: { at: string; exitCode: number; output: string; traceId?: string; reason?: string },
+  run: { at: string; exitCode: number; output: string; traceId?: string; reason?: string; errorCode?: string },
 ): LastRun => {
   const before = readRun(path)
-  const { reason, ...rest } = run
+  const { reason, errorCode, ...rest } = run
   const last: LastRun =
     run.exitCode === 0
       ? rest
       : {
           ...rest,
           ...(reason === undefined ? {} : { reason }),
+          ...(errorCode === undefined ? {} : { errorCode }),
           failingSince: before?.exitCode ? (before.failingSince ?? before.at) : run.at,
           failures: before?.exitCode ? (before.failures ?? 1) + 1 : 1,
         }
@@ -471,13 +484,12 @@ export const runSchedule = async (
     exitCode,
     durationMs: ended.getTime() - began,
   })
-  const said = exitCode === 0 ? undefined : reasonOf(readFileSync(errors, "utf8"))
   const last = recordRun(join(folder, "last.json"), {
     at: ended.toISOString(),
     exitCode,
     output,
     traceId: trace.traceId,
-    ...(said === undefined ? {} : { reason: said }),
+    ...(exitCode === 0 ? {} : failureOf(readFileSync(errors, "utf8"), exitCode)),
   })
   if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
 

@@ -1,14 +1,16 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams, NOT_ALLOWED } from "@wirecat/cli-base"
+import { captureStreams, errorObjectOf, NOT_ALLOWED, renderError } from "@wirecat/cli-base"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
+import type { Chat } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { pickChat } from "../../resolve.js"
 import { type BaseEnvironment, provide } from "../context.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -360,7 +362,7 @@ describe("a run", () => {
     expect(readFileSync(last.output, "utf8")).toBe("1\n")
   })
 
-  it("counts failures in a row with the first one's time and the last line said, and a success clears them", async () => {
+  it("counts failures in a row with the first one's time, and a success clears them", async () => {
     const { env } = setup()
     const failing = machine("linux", [
       process.execPath,
@@ -375,13 +377,45 @@ describe("a run", () => {
       exitCode: 8,
       failures: 2,
       failingSince: "2026-10-14T00:58:00.000Z",
-      reason: "vault has no folder id",
+      reason: "exit 8",
     })
 
     const passing = machine("linux", [process.execPath, "-e", ""])
     const third = await runSchedule(app, passing.system, env, file)
     expect(third).not.toHaveProperty("failures")
     expect(third).not.toHaveProperty("reason")
+  })
+
+  it("keeps a chat's title out of every state file but the run's log, which the failure was printed to", async () => {
+    const { env } = setup()
+    const chats = [
+      { id: "7", title: "Book club" },
+      { id: "8", title: "Book club notes" },
+    ] as Chat[]
+    const refused = (() => {
+      try {
+        return pickChat("Book", chats)
+      } catch (error) {
+        return renderError(errorObjectOf(error), { cli: "chat", interactive: false })
+      }
+    })()
+    const failing = machine("linux", [
+      process.execPath,
+      "-e",
+      `console.error(${JSON.stringify(refused)}); process.exit(2)`,
+    ])
+    const file = scheduled(env.CHAT_STATE_DIR, { name: "digest", kind: "command", argv: [], when: { every: 5 } })
+    const last = await runSchedule(app, failing.system, env, file)
+
+    expect(last).toMatchObject({ errorCode: "validation_error", reason: "validation_error (input.invalid)" })
+    expect(readFileSync(last.output, "utf8")).toContain("Book club")
+    const files = readdirSync(env.CHAT_STATE_DIR, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => join(entry.parentPath, entry.name))
+    expect(files).toContain(join(file, "..", "last.json"))
+    for (const path of files.filter((path) => path !== last.output)) {
+      expect(readFileSync(path, "utf8"), path).not.toContain("Book club")
+    }
   })
 })
 

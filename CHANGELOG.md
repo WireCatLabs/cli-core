@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A failed scheduled run no longer keeps a chat title or a name in `last.json`** (privacy). Its `reason` was the
+  last line the run printed, which is the whole error object, message included: "no chat matches …" and the list of
+  chats or people an ambiguous name matches reached the file and the "scheduled … failing" notice. `last.json` now
+  keeps the error's `code` as the new `errorCode` and a `reason` of the code and its reason id, such as
+  `validation_error (input.invalid)`; a last line that is not an error object, such as an agent harness's, is kept
+  only as `exit <n>`. The full message stays on stderr and in the run's log. `reasonOf(stderr, exitCode?)` follows
+  and always answers a string, and `recordRun` takes the optional `errorCode`. A background `store` sync job's file
+  likewise keeps only the error's code; its log has the message.
+
 ## 0.354.0 — 19.10.2026
 
 ### Fixed
