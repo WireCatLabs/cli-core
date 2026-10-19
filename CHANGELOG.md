@@ -15,7 +15,8 @@ shape of this file.
   Evidence is checked against the current text by fingerprint: project evidence items carry `fingerprint`, and
   `store.contextRecords.read(ref)` reproduces it. Meeting and evidence findings share their validation and review
   code (`validateFindings`); meeting findings behave as before. A host reads a staged batch from snake_case JSON
-  with `parseEvidenceFindingsJson` from `./cli`.
+  with `parseEvidenceFindingsJson` from `./cli`. `./services` also exports `contextEvidenceFingerprint`,
+  `ContextRecordReader` and `excerpt`, for a host that shows a cited record's text.
 
 ## 0.362.0 — 19.10.2026
 
