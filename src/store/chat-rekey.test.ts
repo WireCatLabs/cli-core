@@ -51,6 +51,37 @@ const raw = async (path: string, sql: string, ...parameters: string[]) => {
 const texts = async (store: Awaited<ReturnType<typeof openStore>>, chatId: string) =>
   (await store.messages.messages(OWNER, chatId, { limit: 50 })).items.map((one) => one.text).sort()
 
+type Settings = { searchable: number; scope: string | null }
+
+const settle = async (path: string, key: AccountKey, chatId: string, { searchable, scope }: Settings) => {
+  const database = await openCache(path)
+  try {
+    database
+      .prepare(
+        "UPDATE chats SET searchable = ?, scope = ? WHERE external_id = ? AND account_id = (SELECT id FROM accounts WHERE external_id = ?)",
+      )
+      .run(searchable, scope, chatId, key.account)
+  } finally {
+    database.close()
+  }
+}
+
+const settings = (path: string, key: AccountKey) =>
+  raw(
+    path,
+    "SELECT c.external_id AS id, c.searchable, c.scope FROM chats c JOIN accounts a ON a.id = c.account_id WHERE a.external_id = ? ORDER BY c.external_id",
+    key.account,
+  )
+
+const accountScope = async (path: string, key: AccountKey, scope: string) => {
+  const database = await openCache(path)
+  try {
+    database.prepare("UPDATE accounts SET scope = ? WHERE external_id = ?").run(scope, key.account)
+  } finally {
+    database.close()
+  }
+}
+
 describe("re-keying a stored chat", () => {
   it("**renames a chat stored only under the old id**, with its messages, tags, cursors and task locators", async () => {
     const path = fresh()
@@ -339,6 +370,69 @@ describe("re-keying a stored chat", () => {
     expect((await store.messages.messages(OTHER, LID, { limit: 5 })).items.map((one) => one.text)).toEqual([
       "theirs too",
     ])
+    await store.close()
+  })
+
+  it.each([
+    { phone: 1, lid: 0, merged: 0 },
+    { phone: 0, lid: 1, merged: 0 },
+    { phone: 1, lid: 1, merged: 1 },
+  ])(
+    "keeps a chat hidden from search when either half was (phone $phone, lid $lid)",
+    async ({ phone, lid, merged }) => {
+      const path = fresh()
+      const store = await openStore({ path })
+      await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana")])
+      await settle(path, OWNER, PHONE, { searchable: phone, scope: null })
+      await settle(path, OWNER, LID, { searchable: lid, scope: null })
+
+      expect((await store.chats.rekeyChat(OWNER, PHONE, LID)).outcome).toBe("merged")
+
+      expect(await settings(path, OWNER)).toEqual([{ id: LID, searchable: merged, scope: null }])
+      await store.close()
+    },
+  )
+
+  it.each([
+    { account: "work", phone: "work", lid: "personal", merged: "personal" },
+    { account: "work", phone: "personal", lid: "work", merged: "personal" },
+    { account: "work", phone: "work", lid: null, merged: "work" },
+    { account: "work", phone: null, lid: "personal", merged: "personal" },
+    { account: "personal", phone: "work", lid: null, merged: "personal" },
+    { account: "personal", phone: null, lid: "work", merged: "personal" },
+    { account: "personal", phone: null, lid: null, merged: null },
+  ])(
+    "keeps the personal side when the halves differ (account $account, phone $phone, lid $lid)",
+    async ({ account, phone, lid, merged }) => {
+      const path = fresh()
+      const store = await openStore({ path })
+      await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana")])
+      await accountScope(path, OWNER, account)
+      await settle(path, OWNER, PHONE, { searchable: 1, scope: phone })
+      await settle(path, OWNER, LID, { searchable: 1, scope: lid })
+
+      await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+      expect(await settings(path, OWNER)).toEqual([{ id: LID, searchable: 1, scope: merged }])
+      await store.close()
+    },
+  )
+
+  it("never reads or changes another account's chats of the same ids when it merges", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana")])
+    await store.chats.saveChats(OTHER, [chat(PHONE, "Ana"), chat(LID, "Ana")])
+    await settle(path, OWNER, PHONE, { searchable: 1, scope: "work" })
+    await settle(path, OWNER, LID, { searchable: 1, scope: "work" })
+    await settle(path, OTHER, PHONE, { searchable: 0, scope: "personal" })
+    await settle(path, OTHER, LID, { searchable: 1, scope: null })
+    const before = await settings(path, OTHER)
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    expect(await settings(path, OWNER)).toEqual([{ id: LID, searchable: 1, scope: "work" }])
+    expect(await settings(path, OTHER)).toEqual(before)
     await store.close()
   })
 
