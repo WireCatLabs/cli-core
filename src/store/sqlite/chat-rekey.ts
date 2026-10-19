@@ -7,6 +7,7 @@ import { pointerPairs } from "./entity-types.js"
 import { tombstone } from "./messages.js"
 import { targetKey } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { write } from "./transaction.js"
 
 export interface ChatRekey {
   outcome: "renamed" | "merged" | "unchanged"
@@ -14,6 +15,13 @@ export interface ChatRekey {
   messages: number
   /** Messages both chats held under one id; the kept chat's copy stays. */
   duplicates: number
+}
+
+export interface ChatRekeys {
+  /** How many of the pairs this pass got to, from the first: the rest wait for another pass. */
+  taken: number
+  applied: { from: Id; to: Id; rekey: ChatRekey }[]
+  refused: { from: Id; to: Id; error: unknown }[]
 }
 
 const chatRow = (context: StoreContext, accountKey: number, chatId: Id) =>
@@ -245,4 +253,33 @@ export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: nu
   context.database.prepare("UPDATE chats SET external_id = ?, updated_at = ? WHERE id = ?").run(to, context.now(), kept)
   renameText(context, key, accountKey, from, to)
   return { outcome: twin ? "merged" : "renamed", ...moved }
+}
+
+/**
+ * Re-keys in order, each in its own savepoint so a refused one leaves the others applied, and stops once `lockMs` has
+ * passed: the caller lets the other processes at the write lock before the next pass. Runs inside `write`.
+ */
+export const rekeyChats = (
+  context: StoreContext,
+  key: AccountKey,
+  accountKey: number,
+  pairs: readonly { from: Id; to: Id }[],
+  lockMs: number,
+): ChatRekeys => {
+  const done: ChatRekeys = { taken: 0, applied: [], refused: [] }
+  const started = performance.now()
+  for (const { from, to } of pairs) {
+    if (done.taken > 0 && performance.now() - started >= lockMs) break
+    done.taken += 1
+    try {
+      done.applied.push({
+        from,
+        to,
+        rekey: write(context.database, () => rekeyChat(context, key, accountKey, from, to)),
+      })
+    } catch (error) {
+      done.refused.push({ from, to, error })
+    }
+  }
+  return done
 }

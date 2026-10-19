@@ -182,8 +182,13 @@ compiles to one exact condition over the three (`src/store/sqlite/lucene.ts`), a
 MCP tools write through `services.tags` with their own permission keys (`tags.add`, `tags.remove`).
 
 **A chat that takes a new id** (WhatsApp moving a person from phone number to LID) goes through
-`store.chats.rekeyChat` (`src/store/sqlite/chat-rekey.ts`), which a pushed `HistoryBatch.rekeys` reaches
-before the batch's messages. Everything hangs off `chats.id`, so a chat stored only under the old id is
+`store.chats.rekeyChat` (`src/store/sqlite/chat-rekey.ts`). A pushed `HistoryBatch.rekeys` reaches it
+before the batch's messages through `rekeyChats`: the pairs in order, each in its own savepoint, in passes of
+one transaction that each hold the write lock for about 50 ms, with a 25 ms pause between passes. The first
+`serve` after an upgrade re-keys every phone-form chat; one transaction per re-key kept the lock so busy that
+another command waited seconds for it. Once the store is about to close or refuses a whole pass, every re-key still
+queued is given up with one warning and one `rekeys_not_applied` event that counts them; the next `serve` hands the
+stored chats over again, and the messenger re-keys them then. Everything hangs off `chats.id`, so a chat stored only under the old id is
 renamed in place. When both ids are stored, the old row is kept and the other merged into it: messages
 move, a message id held in both keeps the old row's copy (deleted if either was), every `chat` and
 `message` pointer (`pointerPairs`) moves, and the emptied chat is purged. The `sync_cursors` keys, task

@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **The first `serve` after an upgrade no longer locks other commands out of the store while it re-keys chats.**
+  A pushed batch's `rekeys` were saved one transaction each, back to back, so another command waited for the write
+  lock as long as the re-keys ran: up to 3.4 s for 5,000 re-keys on a synthetic 10,000-chat store. They now go
+  through the new `store.chats.rekeyChats` in passes of one transaction, each holding the lock for about 50 ms with
+  a pause after it. Each re-key keeps its own savepoint, privacy merge and account scope, and a refused one still
+  warns and leaves the others applied. Once the store is about to close (`Saving.closing`, which `connected`
+  aborts) or refuses a whole pass (closed, busy past its timeout), every re-key still queued, in any batch, is given
+  up with one warning: "N chat re-keys not applied yet; the next serve applies them", and one
+  `rekeys_not_applied` event whose new `counts` field (`WarningEvent.counts`) holds N. Before, a messenger that sends
+  each re-key as its own batch (wa) got one `store_not_written` per chat left. `ChatsStore` gains `rekeyChats`, so a
+  hand-written `ChatsStore` must add it.
+
 ## 0.358.0 — 19.10.2026
 
 ### Added

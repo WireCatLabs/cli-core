@@ -9,6 +9,7 @@ import type { MessageStore } from "../../store/store.js"
 import { connected } from "./context.js"
 
 const order: string[] = []
+let rekeysPerPass: number | undefined
 let finishWrite: () => void = () => {}
 
 vi.mock("../../store/store.js", () => ({
@@ -20,6 +21,10 @@ vi.mock("../../store/store.js", () => ({
         },
         rekeyChat: async () => {
           order.push("rekeyed")
+        },
+        rekeyChats: async (_key: unknown, pairs: unknown[]) => {
+          order.push("rekeyed")
+          return { taken: rekeysPerPass ?? pairs.length, applied: [], refused: [] }
         },
       },
       messages: {
@@ -85,6 +90,7 @@ const watched = async () => {
 
 afterEach(() => {
   order.length = 0
+  rekeysPerPass = undefined
   vi.useRealTimers()
 })
 
@@ -390,6 +396,28 @@ describe("a one-shot command of a messenger whose history is pushed", () => {
     expect(fake.listens.mock.calls[0]?.[1].aborted).toBe(true)
     expect(order).toEqual(["rekeyed", "chats saved", "connection closed", "written", "store closed"])
     expect(warnings).toEqual([])
+  })
+
+  it("gives up the re-keys still queued at close with one plain warning, not one per chat", async () => {
+    vi.useFakeTimers()
+    rekeysPerPass = 1
+    const fake = historyFake()
+    const { close, warnings, recorded } = opened(fake.adapter, "store")
+    await vi.advanceTimersByTimeAsync(0)
+    fake.deliver({ rekeys: Array.from({ length: 400 }, (_, at) => ({ from: `${at}`, to: `${at}@lid` })) })
+
+    const closing = close()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await closing
+    const passes = order.filter((step) => step === "rekeyed").length
+
+    expect(passes).toBeGreaterThan(1)
+    expect(passes).toBeLessThan(400)
+    expect(warnings).toEqual([`${400 - passes} chat re-keys not applied yet; the next serve applies them`])
+    expect(recorded.filter((event) => event.event === "warning")).toEqual([
+      { event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: 400 - passes } },
+    ])
+    expect(order.at(-1)).toBe("store closed")
   })
 
   it("records how many batches, and of each part, the listen handed on", async () => {
