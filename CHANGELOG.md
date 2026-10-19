@@ -25,7 +25,8 @@ shape of this file.
 
 - **A re-keyed chat keeps the stricter of its two halves' privacy settings** (security). When `rekeyChat` merges a
   phone-form chat into its LID twin, the merged chat is hidden from search if either half was, and is personal if the
-  halves sit on different sides (`personal` and `work`, after the account's default). Before, the old row's
+  halves sit on different sides (`personal` and `work`, after the account's default). A scope either half pinned
+  stays pinned on the merged chat, so a later change to the account's default cannot loosen it. Before, the old row's
   `searchable` and `scope` always won, so a chat the owner had hidden became searchable again when a stray
   phone-form row merged into it; wa reaches this at every `wa serve` start. No released code sets either column, so
   only a store edited by hand could have been affected.
