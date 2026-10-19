@@ -10,6 +10,7 @@ import { replyRenderer } from "../../replies/rendering.js"
 import { audienceWarnings, readReplies, repliesPathFor } from "../../replies/rules.js"
 import { NO_RULES, type Replied, replyTo } from "../../replies/serve.js"
 import { repliesStatePathFor } from "../../replies/state.js"
+import type { Warn } from "../../runs/events.js"
 import { levelFor } from "../../sends/permissions.js"
 import { newSendId } from "../../sends/send-id.js"
 import { onlineDeps } from "../../services/deps.js"
@@ -176,7 +177,8 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
   // A file that does not read is said on each message instead; it must not stop serve.
   try {
     const { rules, audience } = readReplies(repliesPathFor(app, profile, env), provider)
-    if (rules.length > 0) for (const warning of audienceWarnings(audience)) renderer.warn(warning)
+    const warn: Warn = renderer.warn
+    if (rules.length > 0) for (const { text, warning } of audienceWarnings(audience)) warn(text, warning)
   } catch {}
 
   const handle = async (message: Message) => {

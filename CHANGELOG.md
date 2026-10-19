@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **More warnings in `serve`'s log now carry a code.** A flood wait (`flood_wait`, with `counts.seconds`),
+  a long wait for the profile's pace (`pace_wait`, with `counts.seconds`), a held account (`account_frozen`,
+  `account_limited`, `account_banned`), a wait that could not be remembered (`wait_not_remembered`), a send missing
+  from the send journal (`send_not_journaled`), a recipient list that could not be re-keyed or read
+  (`recipients_not_rekeyed`, `recipients_not_read`), the reply audience warnings (`audience_person_on_both_lists`,
+  `audience_chat_on_both_lists`, `audience_allow_unused`, `audience_allow_empty`) and the reply template warnings
+  (`reply_legacy_placeholders`, `reply_legacy_may_reword`, `reply_template_warning`) each log their code and
+  operation instead of a bare `serve.warning`. The record never holds the sentence, a chat id, a name or an error
+  message; the sentence at a terminal is unchanged.
+
 ## 0.363.0 — 19.10.2026
 
 ### Added

@@ -5,7 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { defaultRule } from "../../replies/rules.js"
@@ -143,6 +143,10 @@ describe("serve", () => {
 })
 
 describe("serve with reply rules", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   const rulesFor = (env: NodeJS.ProcessEnv, permissions?: object) => {
     const config = env.CHAT_CONFIG_DIR ?? ""
     mkdirSync(config, { recursive: true })
@@ -206,7 +210,7 @@ describe("serve with reply rules", () => {
         },
       },
     )
-    return { sent, answer: JSON.parse(streams.stdout[0] ?? "{}").item }
+    return { sent, answer: JSON.parse(streams.stdout[0] ?? "{}").item, stderr: streams.stderr }
   }
 
   it("**answers only the allowed person, and the send journal names the rule**", async () => {
@@ -234,6 +238,34 @@ describe("serve with reply rules", () => {
     expect(sent).toEqual([])
     expect(answer.replies).toBeUndefined()
     expect(answer.kept).toMatchObject({ message: 2 })
+  })
+
+  it("logs the audience, template and send-journal warnings by code, never an id, a name or the error", async () => {
+    const append = SendJournal.prototype.append
+    vi.spyOn(SendJournal.prototype, "append").mockImplementation(function (this: SendJournal, entry) {
+      if (entry.outcome === "sent") throw new Error("MARKER-Fake Book Club")
+      return append.call(this, entry)
+    })
+    const { root, env } = setup()
+    const withConfig = { ...env, CHAT_CONFIG_DIR: join(root, "config") }
+    rulesFor(withConfig, { "replies.send": "allow" })
+    const rules = join(withConfig.CHAT_CONFIG_DIR, "default.replies.json")
+    const file = JSON.parse(readFileSync(rules, "utf8"))
+    file.audience = { reply: "listed", allow: { people: ["77", "10000000001"] }, deny: { people: ["10000000001"] } }
+    file.rules[0].reply.template = "Back soon, {firstName}."
+    writeFileSync(rules, JSON.stringify(file))
+
+    const { sent, stderr } = await serving(withConfig)
+
+    expect(sent).toEqual([{ chatId: "77", text: "Back soon, Olga." }])
+    const records = stderr.map((line) => JSON.parse(line).attributes)
+    for (const expected of [
+      { event: "serve.warning", code: "audience_person_on_both_lists", operation: "replies.audience" },
+      { event: "serve.warning", code: "reply_legacy_placeholders", operation: "replies.render" },
+      { event: "serve.warning", code: "send_not_journaled", operation: "sends.journal" },
+    ])
+      expect(records).toContainEqual(expected)
+    expect(stderr.join("\n")).not.toMatch(/MARKER|10000000001|Olga|Back soon|both lists/)
   })
 
   it("sends nothing while replies.send is not allow", async () => {

@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { AppIdentity } from "../ports/app.js"
+import type { WarningEvent } from "../runs/events.js"
 
 export const REPLY_ACTIONS = ["reply", "task"] as const
 export const REPLY_MODELS = ["fill-only", "may-reword"] as const
@@ -192,19 +193,46 @@ export const outsideAudience = (audience: Audience, person: string | null, chat:
   return listed ? null : "not on the allow list"
 }
 
+export interface AudienceWarning {
+  text: string
+  warning: WarningEvent
+}
+
+const audienceWarning = (code: string, text: string): AudienceWarning => ({
+  text,
+  warning: { event: "warning", code, operation: "replies.audience" },
+})
+
 /** What in the audience does not do what it seems to say — said, never refused. */
-export const audienceWarnings = ({ reply, allow, deny }: Audience): string[] => [
+export const audienceWarnings = ({ reply, allow, deny }: Audience): AudienceWarning[] => [
   ...allow.people
     .filter((id) => deny.people.includes(id))
-    .map((id) => `person ${id} is on both lists: deny wins, nobody answers them`),
+    .map((id) =>
+      audienceWarning("audience_person_on_both_lists", `person ${id} is on both lists: deny wins, nobody answers them`),
+    ),
   ...allow.chats
     .filter((id) => deny.chats.includes(id))
-    .map((id) => `chat ${id} is on both lists: deny wins, nothing is answered there`),
+    .map((id) =>
+      audienceWarning(
+        "audience_chat_on_both_lists",
+        `chat ${id} is on both lists: deny wins, nothing is answered there`,
+      ),
+    ),
   ...(reply === "all" && allow.people.length + allow.chats.length > 0
-    ? ['the allow list does nothing while audience.reply is "all" — set it to "listed" to answer only those']
+    ? [
+        audienceWarning(
+          "audience_allow_unused",
+          'the allow list does nothing while audience.reply is "all" — set it to "listed" to answer only those',
+        ),
+      ]
     : []),
   ...(reply === "listed" && allow.people.length + allow.chats.length === 0
-    ? ['audience.reply is "listed" and the allow list is empty: nobody is answered']
+    ? [
+        audienceWarning(
+          "audience_allow_empty",
+          'audience.reply is "listed" and the allow list is empty: nobody is answered',
+        ),
+      ]
     : []),
 ]
 

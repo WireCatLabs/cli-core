@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
-import { renderReplyTemplate, type TemplateInput } from "./template.js"
+import { renderReplyTemplate, type TemplateInput, templateWarning } from "./template.js"
 
 const input: TemplateInput = {
   senderName: "Ana Example",
@@ -144,7 +144,15 @@ describe("reply templates", () => {
     expect(filled.warnings).toHaveLength(1)
     const old = await render("Thanks, {firstName}", {}, "may-reword")
     expect(old.text).toBe("Thanks, Ana")
-    expect(old.warnings).toHaveLength(2)
+    expect(old.warnings.map((text) => templateWarning(text).code)).toEqual([
+      "reply_legacy_placeholders",
+      "reply_legacy_may_reword",
+    ])
+    expect(templateWarning("a CLI renderer's own words")).toEqual({
+      event: "warning",
+      code: "reply_template_warning",
+      operation: "replies.render",
+    })
     expect((await render("{{ firstName }}")).text).toBeNull()
   })
 

@@ -2,6 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type AudienceEdits, addRule, editAudience, editRule, type RuleEdits, switchRule } from "../../replies/edit.js"
 import { audienceWarnings, repliesPathFor } from "../../replies/rules.js"
+import type { Warn } from "../../runs/events.js"
 import { grantsAuthority, LOCAL_WRITE } from "../effects.js"
 import { renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -96,7 +97,8 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
       messenger.provider,
       this.opts<AudienceEdits>(),
     )
-    for (const warning of audienceWarnings(answer)) renderer.warn(warning)
+    const warn: Warn = renderer.warn
+    for (const { text, warning } of audienceWarnings(answer)) warn(text, warning)
     renderItem(this, context, answer)
   })
   replies.addCommand(audience)

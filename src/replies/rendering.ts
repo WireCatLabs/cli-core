@@ -3,9 +3,10 @@ import type { Chat, Message } from "../domain/models.js"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { type ModelSettings, type ModelTarget, modelGateway, modelTarget } from "../models/index.js"
 import type { AppIdentity } from "../ports/app.js"
+import type { Warn } from "../runs/events.js"
 import { mayModelReply, replyConsentPathFor, replyModelIdentity } from "./consents.js"
 import type { ReplyRule } from "./rules.js"
-import { renderReplyTemplate, type TemplateResult } from "./template.js"
+import { renderReplyTemplate, type TemplateResult, templateWarning } from "./template.js"
 
 export type ReplyChat = Pick<Chat, "id" | "kind"> & { title?: string | null }
 export type ReplyRender = (rule: ReplyRule, message: Message, chat: ReplyChat, now: number) => Promise<TemplateResult>
@@ -16,7 +17,7 @@ export const replyRenderer =
     profile: string,
     settings: () => { models?: ModelSettings },
     env: NodeJS.ProcessEnv,
-    warn: (message: string) => void,
+    warn: Warn,
     options: { ai?: boolean; preview?: boolean; signal?: AbortSignal; keyring?: KeyringStore | undefined } = {
       ai: true,
     },
@@ -77,6 +78,6 @@ export const replyRenderer =
         return result
       },
     })
-    for (const warning of result.warnings) warn(warning)
+    for (const warning of result.warnings) warn(warning, templateWarning(warning))
     return result
   }

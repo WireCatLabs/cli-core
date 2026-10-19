@@ -4,9 +4,12 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import type { Warn } from "../../runs/events.js"
 import { FloodMemory } from "../../sends/flood.js"
 import { Pacer } from "../../sends/pace.js"
+import type { MessengerContext } from "./context.js"
 import { flooded } from "./flooded.js"
+import { recordDiagnostics } from "./serve-notice.js"
 
 const wait = (seconds: number) =>
   new CliError("rate_limited", `wait ${seconds} s`, { retry_after_ms: seconds * 1000, provider_error: "FLOOD_WAIT" })
@@ -181,5 +184,82 @@ describe("the profile's pace", () => {
       details: { remembered: true },
     })
     expect(other.inner.send).not.toHaveBeenCalled()
+  })
+})
+
+describe("a wait or a hold in serve's log", () => {
+  const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
+  const PHONE = "10000000001"
+
+  const logged = (inner: Record<string, () => Promise<unknown>>, pacer?: Pacer) => {
+    const lines: string[] = []
+    const context = {
+      format: "json",
+      settings: { quiet: false },
+      renderer: {},
+      streams: { diagnostic: (line: string) => lines.push(line) },
+    } as unknown as MessengerContext
+    const warn = recordDiagnostics(context, app).renderer.warn as Warn
+    const memory = new FloodMemory(join(mkdtempSync(join(tmpdir(), "flooded-log-")), "p.json"))
+    const adapter = flooded({ self: () => "1", ...inner } as unknown as MessengerAdapter, memory, {
+      name: "Chat",
+      warn,
+      ...(pacer ? { pacer } : {}),
+    })
+    return { adapter, memory, lines, records: () => lines.map((line) => JSON.parse(line).attributes) }
+  }
+
+  it("a flood wait logs its code, operation and seconds, never the chat", async () => {
+    const flood = new CliError("rate_limited", "MARKER-Fake Book Club", { retry_after_ms: 299_500 })
+    const { adapter, lines, records } = logged({ history: () => Promise.reject(flood) })
+
+    await expect(adapter.history?.(PHONE, { limit: 1 })).rejects.toBe(flood)
+
+    expect(records()).toEqual([
+      { event: "serve.warning", code: "flood_wait", operation: "history", counts: { seconds: 300 } },
+    ])
+    expect(lines.join("\n")).not.toMatch(new RegExp(`MARKER|${PHONE}|until`))
+  })
+
+  it("a held account logs its state as the code, never the messenger's hint", async () => {
+    const frozen = new CliError("permission_error", "frozen", {
+      standing: { state: "frozen", hint: "MARKER-Fake Book Club" },
+    })
+    const { adapter, lines, records } = logged({ send: () => Promise.reject(frozen) })
+
+    await expect(adapter.send(PHONE, "hi", { sendId: "9" })).rejects.toBe(frozen)
+
+    expect(records()).toEqual([{ event: "serve.warning", code: "account_frozen", operation: "send" }])
+    expect(lines.join("\n")).not.toMatch(new RegExp(`MARKER|${PHONE}`))
+  })
+
+  it("a wait that cannot be remembered logs its code, never the error", async () => {
+    const { adapter, memory, lines, records } = logged({ history: () => Promise.reject(wait(60)) })
+    vi.spyOn(memory, "remember").mockImplementation(() => {
+      throw new Error("MARKER-Fake Book Club")
+    })
+
+    await expect(adapter.history?.(PHONE, { limit: 1 })).rejects.toMatchObject({ code: "rate_limited" })
+
+    expect(records()).toEqual([{ event: "serve.warning", code: "wait_not_remembered", operation: "history" }])
+    expect(lines.join("\n")).not.toMatch(new RegExp(`MARKER|${PHONE}`))
+  })
+
+  it("a long wait for the profile's pace logs its code, operation and seconds", async () => {
+    vi.useFakeTimers()
+    try {
+      const pacer = { reserve: async () => Date.now() + 6_000, holdFor: async () => {} } as unknown as Pacer
+      const { adapter, records } = logged({ history: async () => ({ items: [] }) }, pacer)
+
+      const reading = adapter.history?.(PHONE, { limit: 1 })
+      await vi.advanceTimersByTimeAsync(6_000)
+      await reading
+
+      expect(records()).toEqual([
+        { event: "serve.warning", code: "pace_wait", operation: "history", counts: { seconds: 6 } },
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

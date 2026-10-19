@@ -272,7 +272,7 @@ export interface Messenger extends ServiceMessenger {
    * `ask`, when given, answers a write at level `ask` instead of the messenger's own prompt: the MCP
    * server has no terminal to ask at.
    */
-  guard?: (command: Command, settings: Settings, warn: (message: string) => void, ask?: Asker) => SendGuard
+  guard?: (command: Command, settings: Settings, warn: Warn, ask?: Asker) => SendGuard
   /** The permission key of one of this CLI's own commands, when `keyForCommand` does not know it. */
   permissionKey?: PermissionKeyOf
   /** The CLI's SKILL.md, which the MCP server also serves as `<command>://skill`. */
@@ -423,14 +423,18 @@ const rekeyRecipients = async (
   app: Messenger["app"],
   profile: string,
   env: NodeJS.ProcessEnv,
-  warn: (message: string) => void,
+  warn: Warn,
   from: Id,
   to: Id,
 ): Promise<void> => {
   try {
     await new RecipientList(recipientsPathFor(app, profile, env), app.command, REKEY_LOCK_WAIT_MS).rekey(from, to)
   } catch (error) {
-    warn(`the recipient list still names ${from}: ${error instanceof Error ? error.message : String(error)}`)
+    warn(`the recipient list still names ${from}: ${error instanceof Error ? error.message : String(error)}`, {
+      event: "warning",
+      code: "recipients_not_rekeyed",
+      operation: "recipients.rekey",
+    })
   }
 }
 
@@ -678,7 +682,7 @@ export const messengerContext = (
     base.renderer.warn(`permissions.${key} names no command and does nothing — \`config unset permissions.${key}\``)
   }
   // Read when warning, not now: serve swaps the renderer's methods for log records after this.
-  const warn = (text: string) => base.renderer.warn(text)
+  const warn: Warn = (text, warning) => (base.renderer.warn as Warn)(text, warning)
   const accountFor = (): AccountKey => {
     const account = messenger.accountOf?.(command) ?? recalledAccount(app, provider, profile, base.env)
     if (!account) throw unrecorded(command, messenger, profile, base.settings.offline)

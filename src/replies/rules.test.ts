@@ -145,14 +145,26 @@ describe("who may be answered", () => {
         }),
       ),
     ).toEqual([
-      "person p2 is on both lists: deny wins, nobody answers them",
-      "chat g1 is on both lists: deny wins, nothing is answered there",
+      {
+        text: "person p2 is on both lists: deny wins, nobody answers them",
+        warning: { event: "warning", code: "audience_person_on_both_lists", operation: "replies.audience" },
+      },
+      {
+        text: "chat g1 is on both lists: deny wins, nothing is answered there",
+        warning: { event: "warning", code: "audience_chat_on_both_lists", operation: "replies.audience" },
+      },
     ])
     expect(audienceWarnings(audienceOf({ reply: "all", allow: { people: ["p1"] } }))).toEqual([
-      'the allow list does nothing while audience.reply is "all" — set it to "listed" to answer only those',
+      {
+        text: 'the allow list does nothing while audience.reply is "all" — set it to "listed" to answer only those',
+        warning: { event: "warning", code: "audience_allow_unused", operation: "replies.audience" },
+      },
     ])
     expect(audienceWarnings(audienceOf({ reply: "listed" }))).toEqual([
-      'audience.reply is "listed" and the allow list is empty: nobody is answered',
+      {
+        text: 'audience.reply is "listed" and the allow list is empty: nobody is answered',
+        warning: { event: "warning", code: "audience_allow_empty", operation: "replies.audience" },
+      },
     ])
     expect(audienceWarnings(audienceOf({ reply: "all" }))).toEqual([])
     expect(() => audienceOf({ reply: "some" })).toThrow(/audience\.reply/)

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { isCliFailure } from "../../errors/failures.js"
 import { type AccountStanding, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
-import { providerErrorKey } from "../../runs/events.js"
+import { providerErrorKey, type Warn } from "../../runs/events.js"
 import { type FloodMemory, holdEnd, type SendBlock } from "../../sends/flood.js"
 import type { Pacer } from "../../sends/pace.js"
 
@@ -26,13 +26,17 @@ const chatOf = (args: unknown[]): string | undefined =>
 export const flooded = (
   messenger: MessengerAdapter,
   memory: FloodMemory,
-  { name, warn, pacer }: { name: string; warn: (message: string) => void; pacer?: Pacer },
+  { name, warn, pacer }: { name: string; warn: Warn; pacer?: Pacer },
 ): MessengerAdapter => {
-  const kept = async (what: () => void | Promise<void>) => {
+  const kept = async (operation: string, what: () => void | Promise<void>) => {
     try {
       await what()
     } catch (error) {
-      warn(`could not remember ${name}'s wait (${error instanceof Error ? error.message : String(error)})`)
+      warn(`could not remember ${name}'s wait (${error instanceof Error ? error.message : String(error)})`, {
+        event: "warning",
+        code: "wait_not_remembered",
+        operation,
+      })
     }
   }
 
@@ -41,35 +45,44 @@ export const flooded = (
     const details = error.details ?? {}
     const standing = details.standing as AccountStanding | undefined
     if (standing && BLOCKING.has(standing.state)) {
-      await kept(() => {
+      await kept(operation, () => {
         const block = memory.block({
           state: standing.state as SendBlock["state"],
           hint: standing.hint ?? error.message,
           ...(standing.until ? { until: standing.until } : {}),
         })
-        warn(`writes from this profile are held ${holdEnd(block)}: ${block.hint}`)
+        warn(`writes from this profile are held ${holdEnd(block)}: ${block.hint}`, {
+          event: "warning",
+          code: `account_${block.state}`,
+          operation,
+        })
       })
       return
     }
     const waitMs = Number(details.retry_after_ms)
     if (error.code !== "rate_limited" || details.remembered === true || !Number.isFinite(waitMs) || waitMs <= 0) return
     const providerError = providerErrorKey(details.provider_error)
-    await kept(() => {
+    await kept(operation, () => {
       const deadline = memory.remember({
         operation,
         ...(chatId ? { chatId } : {}),
         ...(providerError ? { providerError } : {}),
         waitMs,
       })
-      warn(`${name} asked to wait before ${operation} again — until ${deadline.until}`)
+      warn(`${name} asked to wait before ${operation} again — until ${deadline.until}`, {
+        event: "warning",
+        code: "flood_wait",
+        operation,
+        counts: { seconds: Math.ceil(waitMs / 1000) },
+      })
     })
-    if (pacer) await kept(() => pacer.holdFor(waitMs))
+    if (pacer) await kept(operation, () => pacer.holdFor(waitMs))
   }
 
-  const turn = async () => {
+  const turn = async (operation: string) => {
     if (!pacer) return
     let at = Date.now()
-    await kept(async () => {
+    await kept(operation, async () => {
       at = await pacer.reserve()
     })
     const waitMs = at - Date.now()
@@ -81,8 +94,15 @@ export const flooded = (
         { retry_after_ms: waitMs, retry_at: new Date(at).toISOString(), remembered: true },
       )
     }
-    if (waitMs >= ANNOUNCE_WAIT_MS)
-      warn(`waiting ${Math.ceil(waitMs / 1000)} s to keep this profile's pace with ${name}`)
+    if (waitMs >= ANNOUNCE_WAIT_MS) {
+      const seconds = Math.ceil(waitMs / 1000)
+      warn(`waiting ${seconds} s to keep this profile's pace with ${name}`, {
+        event: "warning",
+        code: "pace_wait",
+        operation,
+        counts: { seconds },
+      })
+    }
     await new Promise((resolve) => setTimeout(resolve, waitMs))
   }
 
@@ -113,7 +133,7 @@ export const flooded = (
           },
         )
       }
-      await turn()
+      await turn(operation)
       try {
         return await call(...args)
       } catch (error) {

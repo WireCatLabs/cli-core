@@ -522,7 +522,11 @@ const announceStoredChats = async (
   try {
     listed = recipientIds?.() ?? []
   } catch (error) {
-    warn(`the messenger was not told the recipient list: ${error instanceof Error ? error.message : String(error)}`)
+    warn(`the messenger was not told the recipient list: ${error instanceof Error ? error.message : String(error)}`, {
+      event: "warning",
+      code: "recipients_not_read",
+      operation: "history.stored_chats",
+    })
   }
   try {
     const opened = await store()
