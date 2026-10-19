@@ -13,6 +13,8 @@ shape of this file.
   `history.feed` for `feed`, `messages.listen` for `listen` and `history.listen` for `listenHistory`, as
   `messages.watch` does for `watch`. Before, the run record said `adapter.feed`, `adapter.listen` or
   `adapter.listenHistory`, so `runs --operation adapter.feed` and `adapter.listen` stop matching new runs.
+- **`parity.json` expects `--qr-file` on `session start` and `setup` in all three CLIs**: max has it since
+  max-cli#736, so the rows are `all` instead of planned for max.
 
 ## 0.348.0 — 19.10.2026
 
