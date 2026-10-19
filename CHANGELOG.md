@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.361.0 — 19.10.2026
+
 ### Fixed
 
 - **A warning in `serve`'s log now says which warning it was.** Off a terminal, a re-key given up at exit, a write
