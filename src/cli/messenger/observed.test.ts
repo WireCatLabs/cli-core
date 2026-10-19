@@ -107,3 +107,26 @@ describe("observed listenHistory", () => {
     )
   })
 })
+
+describe("observed feed", () => {
+  it("records its request and response as history.feed, the name its save warnings use", async () => {
+    const adapter = {
+      self: () => "9",
+      close: async () => {},
+      feed: async (onBatch: (batch: HistoryBatch) => void) => onBatch({ messages: [message] }),
+    } as unknown as MessengerAdapter
+    const recorded: DiagnosticEvent[] = []
+    const batches: HistoryBatch[] = []
+
+    await observed(adapter, (event) => recorded.push(event)).feed?.(
+      (batch) => batches.push(batch),
+      new AbortController().signal,
+    )
+
+    expect(batches).toHaveLength(1)
+    expect(recorded.map(({ event, operation }) => `${event} ${operation}`)).toEqual([
+      "request history.feed",
+      "response history.feed",
+    ])
+  })
+})
