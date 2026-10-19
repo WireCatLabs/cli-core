@@ -89,12 +89,17 @@ export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT
   }
 }
 
-export const readinessOf = async (deps: ServiceDeps, chatId: Id | undefined, key: string): Promise<ChatReadiness[]> => {
+export const readinessOf = async (
+  deps: ServiceDeps,
+  chatId: Id | undefined,
+  key: string,
+  searchableOnly = false,
+): Promise<ChatReadiness[]> => {
   const store = await deps.store()
   const account = await deps.account()
-  return (await store.vectors.readiness(account, { ...(chatId === undefined ? {} : { chatId }), model: key })).map(
-    shaped,
-  )
+  return (
+    await store.vectors.readiness(account, { ...(chatId === undefined ? {} : { chatId }), model: key, searchableOnly })
+  ).map(shaped)
 }
 
 type EmbeddingTarget = ReturnType<typeof embeddingTarget>

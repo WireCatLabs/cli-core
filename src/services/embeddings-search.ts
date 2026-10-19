@@ -227,7 +227,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           .map(({ chat }) => chat)
         const rows =
           eligibleChats === undefined
-            ? await store.vectors.readiness(one, { ...scope, model: target.key })
+            ? await store.vectors.readiness(one, { ...scope, model: target.key, searchableOnly: true })
             : (
                 await Promise.all(
                   eligibleChats.map((chatId) => store.vectors.readiness(one, { chatId, model: target.key })),
@@ -317,7 +317,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         hits: hits
           .slice(0, limit)
           .map(({ summary, chunk, score, stale }) => ({ summary, chunk, score, by: ["meaning"], stale })),
-        readiness: searchReadiness(await readinessOf(deps, undefined, target.key), true, new Set()),
+        readiness: searchReadiness(await readinessOf(deps, undefined, target.key, true), true, new Set()),
       }
     },
   }

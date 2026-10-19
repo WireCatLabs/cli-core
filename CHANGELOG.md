@@ -29,6 +29,14 @@ shape of this file.
   `searchable` and `scope` always won, so a chat the owner had hidden became searchable again when a stray
   phone-form row merged into it; wa reaches this at every `wa serve` start. No released code sets either column, so
   only a store edited by hand could have been affected.
+- **A chat hidden from search stays out of every search that does not name it** (security). A chat with
+  `searchable = 0` was already left out of `search messages`, `search all`, rankings and statistics, but still came
+  back from `store.messages.search` and `find` (the plain text and sender search, also behind `bot people`, person
+  context and botcheck), `mentioning`, and the meaning half of `conversations search`, `conversations related` and
+  the picture search; the search answers also listed it in their readiness and "embedded only with another model"
+  lists. Each now leaves it out unless the call names the chat, as the Lucene search does. A sender-only `find`
+  therefore no longer counts the hidden chat's messages. No released code sets `searchable = 0`, so only a store
+  edited by hand was affected.
 
 ## 0.352.0 — 19.10.2026
 

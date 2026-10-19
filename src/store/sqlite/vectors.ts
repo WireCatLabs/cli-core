@@ -299,7 +299,7 @@ export const nearestChunks = (
           ${projectId === undefined ? sql`` : sql`AND k.project_id=${projectId}`}
           ${before === undefined ? sql`` : sql`AND k.occurred_at < ${before}`}
           ${personId === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM conversation_messages pcm JOIN messages pm ON pm.id=pcm.message_id JOIN identity_links pil ON pil.identity_id=pm.sender_identity_id WHERE pcm.conversation_id=c.id AND pil.person_id=${personId})`}
-          ${chatKey === undefined ? sql`` : sql`AND c.chat_id = ${chatKey}`}
+          ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND c.chat_id = ${chatKey}`}
           ${since === undefined ? sql`` : sql`AND k.occurred_at >= ${since}`}
           ${exclude === undefined ? sql`` : sql`AND c.id <> ${exclude}`}
           ${conversations === undefined ? sql`` : sql`AND c.id IN (SELECT value FROM json_each(${JSON.stringify(conversations)}))`}
@@ -347,7 +347,7 @@ export const embeddedOnlyElsewhere = (
   return orm
     .all<{ id: string }>(
       sql`SELECT ch.external_id AS id FROM chats ch
-        WHERE ch.account_id = ${accountPk} ${chatKey === undefined ? sql`` : sql`AND ch.id = ${chatKey}`}
+        WHERE ch.account_id = ${accountPk} ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND ch.id = ${chatKey}`}
           AND ${hasVectorOf(sql`IN (${sql.join(others, sql`, `)})`)}
           AND NOT ${hasVectorOf(sql`= ${model}`)}
         ORDER BY ch.external_id`,
@@ -371,10 +371,14 @@ export const messageIds = ({ orm }: StoreContext, pks: number[]): Map<number, st
   )
 
 /** Chats of the account whose conversations were ever built, or started to be. */
-export const builtChats = ({ orm }: StoreContext, accountPk: number): { chatKey: number; id: string }[] =>
+export const builtChats = (
+  { orm }: StoreContext,
+  accountPk: number,
+  searchableOnly = false,
+): { chatKey: number; id: string }[] =>
   orm.all<{ chatKey: number; id: string }>(
     sql`SELECT ch.id AS chatKey, ch.external_id AS id FROM conversation_state s JOIN chats ch ON ch.id = s.chat_id
-      WHERE ch.account_id = ${accountPk} ORDER BY ch.external_id`,
+      WHERE ch.account_id = ${accountPk} ${searchableOnly ? sql`AND ch.searchable = 1` : sql``} ORDER BY ch.external_id`,
   )
 
 /** Group chats of the account with stored messages and no build ever started, the newest message first. */

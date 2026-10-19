@@ -72,9 +72,13 @@ export interface AccountVectors {
   conversationVectors(key: AccountKey, id: string, model: string): Promise<{ chunks: number; vectors: Float32Array[] }>
   /**
    * How fresh each built chat's conversations and `model`'s vectors are — one chat, or every chat whose
-   * conversations were ever built. A chat never built answers `builtAt: null`.
+   * conversations were ever built. A chat never built answers `builtAt: null`. `searchableOnly` leaves out the chats
+   * the owner hid from searches that do not name them.
    */
-  readiness(key: AccountKey, options: { chatId?: Id; model: string }): Promise<StoredReadiness[]>
+  readiness(
+    key: AccountKey,
+    options: { chatId?: Id; model: string; searchableOnly?: boolean },
+  ): Promise<StoredReadiness[]>
   /** Group chats with stored messages whose conversations were never built, the newest message first. */
   unbuiltGroups(key: AccountKey): Promise<Id[]>
   /** Chats in scope embedded with another model and not with `model`, which a search with it cannot see. */
@@ -279,12 +283,12 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
       return vectors.conversationVectors(context, pk, model)
     },
 
-    readiness: async (key, { chatId, model }) => {
+    readiness: async (key, { chatId, model, searchableOnly = false }) => {
       const accountPk = findAccountPk(key)
       if (accountPk === undefined) return []
       const chats =
         chatId === undefined
-          ? vectors.builtChats(context, accountPk)
+          ? vectors.builtChats(context, accountPk, searchableOnly)
           : [{ chatKey: chatKeyOf(key, chatId), id: chatId }].flatMap(({ chatKey, id }) =>
               chatKey === undefined ? [] : [{ chatKey, id }],
             )

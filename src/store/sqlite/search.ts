@@ -51,7 +51,7 @@ export const matching = (
     scopeProvider === undefined ? undefined : eq(accounts.provider, scopeProvider),
     account ? eq(accounts.externalId, account.account) : undefined,
     within ? inArray(accounts.externalId, within) : undefined,
-    chatId === undefined ? undefined : eq(chats.externalId, chatId),
+    chatId === undefined ? eq(chats.searchable, 1) : eq(chats.externalId, chatId),
     ids ? and(eq(identities.provider, accounts.provider), inArray(identities.externalId, ids)) : undefined,
     ids && together ? inArray(messages.chatId, everyoneWrote(context, ids, scopeProvider)) : undefined,
   )

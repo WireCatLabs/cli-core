@@ -179,7 +179,7 @@ export const nearestImages = (
           JOIN embeddings v ON v.model = ${model} AND v.content_hash = k.content_hash
         WHERE k.chunkable_type = 'image' AND k.position = ${position} AND ch.account_id = ${accountPk}
           AND k.id > ${after}
-          ${chatKey === undefined ? sql`` : sql`AND m.chat_id = ${chatKey}`}
+          ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND m.chat_id = ${chatKey}`}
           ${since === undefined ? sql`` : sql`AND k.occurred_at >= ${since}`}
         ORDER BY k.id LIMIT ${SCAN_PAGE}`,
     )
