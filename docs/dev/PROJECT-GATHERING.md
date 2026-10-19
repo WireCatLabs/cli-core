@@ -51,11 +51,21 @@ const result = await gatherProjectEvidence(
   shows `index-pending` on its units. A message is indexed when it is saved. The fill is a local write to the
   index, never to the records, and is not bounded by the read budgets.
 
-- **Around a hit.** With the host's `neighbours` port (`storedMessageNeighbours(store.messages)`), each message
-  hit carries `around`: up to `around.before` and `around.after` (default 2 each, at most 5) stored messages next
+- **Around a hit.** With the host's `neighbours` port (`storedNeighbours(store)`; `storedMessageNeighbours(store.messages)`
+  for chat messages only), each message or mail hit carries `around` — for mail, the emails before and after it in
+  its thread, with sender and subject: up to `around.before` and `around.after` (default 2 each, at most 5) stored messages next
   to it in its chat, as 200-character excerpts with their references. They are context for reading the hit, not
   matches: they never join `items`, and `found` says whether a neighbour is a hit itself. Their bytes count
   against `maxReadBytes` (`usage.aroundBytes`); when it runs out, a hit has `aroundIssue: "read-bytes"`.
+
+## Other names in the evidence
+
+`findEvidenceMentions(store.knowledge, result, { exclude: "project:<id>" })` reads the project, tag and topic
+vocabularies and names every entry whose name, key or alias stands as whole words in the returned excerpts and
+their neighbours. Each match cites the reference it was found in (`in: "hit"` or `"around"`) and says whether the
+term belongs to more than one entry (`ambiguous`). It is evidence to review, never membership: a meeting about
+the project can name three others. A vocabulary too large for its read budget is listed in `coverage.skipped`
+instead of failing the run. It writes nothing.
 
 ## Budgets and order
 
