@@ -602,6 +602,37 @@ export const pollVotes = sqliteTable(
   ],
 )
 
+/**
+ * One row per field a chat changed, written by a trigger on `chats` in the changing statement's transaction. No foreign
+ * keys: an older build purges chats without knowing this table, and a trigger drops a purged chat's rows instead.
+ */
+export const chatRevisions = sqliteTable(
+  "chat_revisions",
+  {
+    id: integer("id").primaryKey(),
+    chatId: integer("chat_id").notNull(),
+    accountId: integer("account_id").notNull(),
+    field: text("field").notNull(),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    source: text("source"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("chat_revisions_by_chat_id_created_at").on(table.chatId, table.createdAt),
+    index("chat_revisions_by_account_id_old_value")
+      .on(table.accountId, table.oldValue)
+      .where(sql`field = 'external_id'`),
+  ],
+)
+
+/** The source and time the `chat_revisions` trigger records, set by the store inside its write and gone by commit. */
+export const chatRevisionSource = sqliteTable("chat_revision_source", {
+  id: integer("id").primaryKey(),
+  source: text("source").notNull(),
+  at: integer("at").notNull(),
+})
+
 /** Changes to who is in a chat, and to its title, for a messenger whose history is pushed to the store. */
 export const chatEvents = sqliteTable(
   "chat_events",

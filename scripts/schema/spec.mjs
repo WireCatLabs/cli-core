@@ -359,6 +359,35 @@ const NEW = {
       keys: ["UNIQUE (chat_id, message_external_id, identity_id)"],
     },
     {
+      name: "chat_revisions",
+      doc: "One row per field a chat changed: its external id on a re-key, title, membership, scope, search visibility or parent. A trigger on `chats` writes it in the changing statement's transaction, for every build and writer, and only when the value differs. No foreign keys, so an older build's purge still works; a trigger drops a purged chat's rows. Nothing indexes it for search.",
+      cols: [
+        id(),
+        c("chat_id", "integer", { notnull: true, note: "the `chats` row; follows the row through re-keys" }),
+        c("account_id", "integer", { notnull: true, note: "the chat's account" }),
+        c("field", "text", {
+          notnull: true,
+          note: "`external_id`, `title`, `membership_state`, `scope`, `searchable` or `parent_chat_id`",
+        }),
+        c("old_value", "text", { note: "as stored before, as text; `parent_chat_id` is a `chats` row id" }),
+        c("new_value", "text", { note: "as stored after" }),
+        c("source", "text", {
+          note: "the store write that made it (`chats`, `history`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand",
+        }),
+        c("created_at", "integer", { notnull: true }),
+      ],
+      keys: ["INDEX (chat_id, created_at)", "INDEX (account_id, old_value) WHERE field = 'external_id'"],
+    },
+    {
+      name: "chat_revision_source",
+      doc: "At most one row, and only inside a write transaction: what the `chat_revisions` trigger records as the source and time of the change. The store sets it before its write and deletes it before the commit.",
+      cols: [
+        c("id", "integer", { pk: true, note: "always 1" }),
+        c("source", "text", { notnull: true }),
+        c("at", "integer", { notnull: true, note: "the store's clock, in ms" }),
+      ],
+    },
+    {
       name: "chat_events",
       doc: "Who joined, left, was added, removed, promoted or demoted in a chat, and its title changes, for a messenger whose history is pushed to the store (WhatsApp); one asked for its history answers these itself.",
       cols: [

@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A chat's history in the store (store version 26).** `chat_revisions` keeps one row per change to a chat's id,
+  title, membership, scope, search visibility or parent, with the old and new value, the time and the store write
+  that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`; NULL for an older build or SQL
+  by hand). A trigger writes it in the changing transaction, only for a real change. A read by the id a chat was
+  re-keyed from, `messages list <old id> --offline` included, now finds the chat it became, per account
+  (`store.chats.renamedChatId`). The history is never indexed for search; a purged chat's history goes with it.
+
 ## 0.365.0 — 19.10.2026
 
 ### Fixed

@@ -60,6 +60,42 @@ export const chatPkFor = (context: StoreContext, accountKey: number, chatId: Id)
       .get()?.pk,
   )
 
+/** The store write a `chat_revisions` row names; a writer that sets none is recorded as NULL. */
+export type ChatRevisionSource = "chats" | "delta" | "left" | "rejoin" | "rekey" | "merge" | "send" | "details"
+
+/**
+ * Runs `body` with `source` as what the `chat_revisions` trigger records, inside the caller's transaction. The row is
+ * gone again before the commit, so an older build's write in a later transaction records no source rather than this
+ * one; a nested call puts the outer source back.
+ */
+export const revisedBy = <T>({ database, now }: StoreContext, source: ChatRevisionSource, body: () => T): T => {
+  const outer = database.prepare("SELECT source, at FROM chat_revision_source WHERE id = 1").get()
+  const set = database.prepare("INSERT OR REPLACE INTO chat_revision_source (id, source, at) VALUES (1, ?, ?)")
+  set.run(source, now())
+  try {
+    return body()
+  } finally {
+    if (outer) set.run(String(outer.source), Number(outer.at))
+    else database.prepare("DELETE FROM chat_revision_source").run()
+  }
+}
+
+/**
+ * The id the chat once stored as `chatId` has now, from its newest re-key in this account; `undefined` while a chat is
+ * stored under `chatId` itself, or none ever was.
+ */
+export const renamedChatId = ({ database }: StoreContext, accountKey: number, chatId: Id): Id | undefined => {
+  const row = database
+    .prepare(
+      `SELECT c.external_id AS id FROM chat_revisions r JOIN chats c ON c.id = r.chat_id
+        WHERE r.account_id = ? AND r.field = 'external_id' AND r.old_value = ? AND c.account_id = r.account_id
+          AND NOT EXISTS (SELECT 1 FROM chats WHERE account_id = ? AND external_id = ?)
+        ORDER BY r.created_at DESC, r.id DESC LIMIT 1`,
+    )
+    .get(accountKey, chatId, accountKey, chatId)
+  return row ? String(row.id) : undefined
+}
+
 interface ChatPrivacy {
   searchable: number
   scope: string | null
@@ -113,11 +149,13 @@ export const answeredChatPk = (context: StoreContext, accountKey: number, chatId
   if (found !== undefined) {
     const strict = stricterPrivacy(context, accountKey, found, like)
     if (strict.searchable !== found.searchable || strict.scope !== found.scope)
-      orm
-        .update(chats)
-        .set({ ...strict, updatedAt: now() })
-        .where(eq(chats.id, found.pk))
-        .run()
+      revisedBy(context, "send", () =>
+        orm
+          .update(chats)
+          .set({ ...strict, updatedAt: now() })
+          .where(eq(chats.id, found.pk))
+          .run(),
+      )
     return found.pk
   }
   return Number(
@@ -482,16 +520,18 @@ export const metadata = (context: StoreContext, key: AccountKey, chatId: string)
 }
 
 export const saveMetadata = (context: StoreContext, key: AccountKey, entry: Omit<ChatMetadata, "fetchedAt">) => {
-  context.database
-    .prepare("UPDATE chats SET title=?, username=?, description=?, details_fetched_at=?, updated_at=? WHERE id=?")
-    .run(
-      entry.title,
-      entry.username,
-      entry.description,
-      context.now(),
-      context.now(),
-      metadataChatPk(context, key, entry.chatId),
-    )
+  revisedBy(context, "details", () =>
+    context.database
+      .prepare("UPDATE chats SET title=?, username=?, description=?, details_fetched_at=?, updated_at=? WHERE id=?")
+      .run(
+        entry.title,
+        entry.username,
+        entry.description,
+        context.now(),
+        context.now(),
+        metadataChatPk(context, key, entry.chatId),
+      ),
+  )
   return metadata(context, key, entry.chatId) as ChatMetadata
 }
 

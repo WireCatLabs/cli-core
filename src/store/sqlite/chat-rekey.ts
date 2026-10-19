@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../../domain/locator.js"
 import type { Id } from "../../domain/models.js"
 import type { AccountKey } from "../types.js"
-import { purgeChats, stricterPrivacy } from "./chats.js"
+import { purgeChats, revisedBy, stricterPrivacy } from "./chats.js"
 import { pointerPairs } from "./entity-types.js"
 import { tombstone } from "./messages.js"
 import { targetKey } from "./notes.js"
@@ -156,6 +156,7 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
   foldOpenStays(context, kept, gone)
   for (const table of [
     "poll_votes",
+    "chat_revisions",
     "chat_events",
     "message_transcripts",
     "chat_members",
@@ -216,13 +217,43 @@ const MESSENGER_FIELDS = [
 ] as const
 
 /**
+ * The re-key of a chat stored only under its new id changes no row, so the trigger records nothing; the old id is
+ * written by hand, once, so a read by it still finds the chat.
+ */
+const recordOldId = ({ database, now }: StoreContext, accountKey: number, chat: number, from: Id, to: Id): void => {
+  database
+    .prepare(
+      `INSERT INTO chat_revisions (chat_id, account_id, field, old_value, new_value, source, created_at)
+        SELECT ?, ?, 'external_id', ?, ?, 'rekey', ? WHERE NOT EXISTS (SELECT 1 FROM chat_revisions
+          WHERE chat_id = ? AND field = 'external_id' AND old_value = ?)`,
+    )
+    .run(chat, accountKey, from, to, now(), chat, from)
+}
+
+/**
  * A chat the messenger now names by another id: renamed in place, or merged into the row already stored under the
- * new id's twin. Replaying it, or naming a chat the store does not hold, changes nothing. Runs inside `write`.
+ * new id's twin, each change recorded in `chat_revisions`. Replaying it changes nothing; naming a chat the store does
+ * not hold records only the old id, when the new one is stored. Runs inside `write`.
  */
 export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: number, from: Id, to: Id): ChatRekey => {
   const old = from === to ? undefined : chatRow(context, accountKey, from)
-  if (!old) return { outcome: "unchanged", messages: 0, duplicates: 0 }
-  const twin = chatRow(context, accountKey, to)
+  const twin = from === to ? undefined : chatRow(context, accountKey, to)
+  if (!old) {
+    if (twin) recordOldId(context, accountKey, Number(twin.id), from, to)
+    return { outcome: "unchanged", messages: 0, duplicates: 0 }
+  }
+  return revisedBy(context, twin ? "merge" : "rekey", () => moveChat(context, key, accountKey, old, twin, from, to))
+}
+
+const moveChat = (
+  context: StoreContext,
+  key: AccountKey,
+  accountKey: number,
+  old: Row,
+  twin: Row | undefined,
+  from: Id,
+  to: Id,
+): ChatRekey => {
   const kept = Number(old.id)
   let moved = { messages: 0, duplicates: 0 }
   if (twin) {

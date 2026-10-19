@@ -56,7 +56,9 @@ export const syncStoreOver = (context: StoreContext): SyncStore => {
     applyDelta: async (key, { chats = [], people = [], members = new Map(), state = {} }) =>
       write(database, () => {
         const accountKey = accountPk(key)
-        for (const chat of chats) chatQueries.upsertChat(context, accountKey, chat)
+        chatQueries.revisedBy(context, "delta", () => {
+          for (const chat of chats) chatQueries.upsertChat(context, accountKey, chat)
+        })
         for (const person of people) identityPk(accountKey, key.provider, person.id, person.name, person)
         for (const [chatId, ids] of members) writeMembers(key, accountKey, chatId, ids)
         for (const [name, value] of Object.entries(state)) writeState(accountKey, name, value)
