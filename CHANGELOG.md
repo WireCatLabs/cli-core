@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.351.0 — 19.10.2026
+
 ### Added
 
 - **`findEvidenceMentions(vocabulary, result, { exclude })`** names the existing projects, tags and topics whose
