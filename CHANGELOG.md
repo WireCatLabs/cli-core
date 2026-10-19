@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.362.0 — 19.10.2026
+
 ### Changed — may break callers
 
 - **Without a terminal, `loginQr` prints the QR code as text an agent pastes into the chat; the PNG is gone.** The
