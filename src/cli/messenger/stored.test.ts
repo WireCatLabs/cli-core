@@ -94,7 +94,11 @@ describe("what the writes leave in the store", () => {
 })
 
 describe("what a chat list leaves in the store", () => {
-  const listing = async (pages: { items: string[]; hasMore: boolean }, window: { limit?: number; offset: number }) => {
+  const listing = async (
+    pages: { items: string[]; hasMore: boolean },
+    window: { limit?: number; offset: number },
+    left: string[] = [],
+  ) => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "stored-")), "m.db") })
     opened.push(store)
     const chat = (id: string) => ({
@@ -106,6 +110,10 @@ describe("what a chat list leaves in the store", () => {
       participantsCount: 2,
     })
     await store.chats.saveChats(account, [chat("7"), chat("8")])
+    await store.chats.saveChats(
+      account,
+      left.map((id) => ({ ...chat(id), membershipState: "left" as const })),
+    )
     const adapter = { self: () => "500", chats: async () => ({ items: pages.items.map(chat), hasMore: pages.hasMore }) }
     const wrapped = stored(adapter as unknown as MessengerAdapter, {
       account,
@@ -125,6 +133,10 @@ describe("what a chat list leaves in the store", () => {
     expect(await listing({ items: ["7"], hasMore: false }, { offset: 20 })).toEqual(["7", "8"])
     expect(await listing({ items: ["7"], hasMore: true }, { limit: 1, offset: 0 })).toEqual(["7", "8"])
     expect(await listing({ items: [], hasMore: false }, { offset: 0 })).toEqual(["7", "8"])
+  })
+
+  it("any page that names a chat marked left has it rejoined", async () => {
+    expect(await listing({ items: ["8"], hasMore: true }, { limit: 1, offset: 0 }, ["8"])).toEqual(["7", "8"])
   })
 })
 

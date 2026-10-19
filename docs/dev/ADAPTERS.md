@@ -155,6 +155,12 @@ only part of a chat sends only that part, such as `{ id, kind, parentChatId: nul
 community. Send `null` only when the messenger says there is no value; a `null` sent for "not known" erases what the
 store holds.
 
+`membershipState` follows the same rule: left out keeps it, a value sets it, `null` clears it. A chat marked left
+stays left through a save that leaves membership out, such as a community notice. It is rejoined by a chat list
+page from your adapter's `chats` that names it, by a complete list given to `markChatsLeft`, or by a save that sends
+`membershipState: null` (or another state). An adapter that learns of a rejoin any other way, from a push or a
+lookup, sends `membershipState: null` with the chat.
+
 ## One socket per linked device
 
 Some messengers allow one connection per linked device. A second one pushes the first one off.
