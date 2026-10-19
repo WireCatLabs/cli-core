@@ -86,6 +86,26 @@ export const stored = (
   }
 
   const { chats, history, around, people } = messenger
+  /**
+   * A chat stored under an id the messenger no longer names it by (WhatsApp: a phone-form chat whose LID it now knows)
+   * would take every write by that id, while what the messenger answers lands under the new one. So a stored id still
+   * goes to the messenger, and an answer under another id re-keys the chat: a one-shot command closes the split too.
+   */
+  const followed = async (opened: MessageStore, scoped: AccountKey, held: Chat): Promise<Chat | undefined> => {
+    let answered: Chat
+    try {
+      answered = await messenger.resolve(held.id)
+    } catch (error) {
+      if (codeOf(error) === "not_found") return undefined
+      throw error
+    }
+    if (answered.id === held.id) return undefined
+    await attempt("history.rekey", async (store) => {
+      await store.chats.rekeyChat(scoped, held.id, answered.id)
+      await rekeyed?.(held.id, answered.id)
+    })
+    return (await storedChat(opened, scoped, namesFromStore ?? {}, answered.id)).held ?? answered
+  }
   const titles = new Map<Id, string>()
   const storedPeople = async (): Promise<PeopleLookup | undefined> => {
     try {
@@ -186,6 +206,7 @@ export const stored = (
           return remote ?? (namesFromStore ? chats[0] : messenger.resolve(chats[0].id))
         }
       }
+      if (held && held.id === reference.trim()) return (await followed(opened, scoped, held)) ?? held
       return held ?? messenger.resolve(id ?? reference)
     },
     chat: (reference) => messenger.chat(reference),

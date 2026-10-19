@@ -974,3 +974,71 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     expect((await store.chats.chats(account, {})).items.map((chat) => chat.id)).toContain("10")
   })
 })
+
+describe("a stored chat id the messenger now names by another id", () => {
+  const PHONE = "34000000000@s.whatsapp.net"
+  const LID = "100000000000000@lid"
+  const dialog = (id: string) => ({
+    id,
+    title: "Olga",
+    kind: "dialog" as const,
+    unreadCount: 0,
+    lastMessageAt: null,
+    participantsCount: 2,
+  })
+
+  const following = async (answers: Record<string, string>) => {
+    const { store } = await setUp()
+    const other = { provider: "test", account: "600" }
+    await store.chats.saveChats(account, [dialog(PHONE)])
+    await store.chats.saveChats(other, [dialog(PHONE)])
+    await store.messages.saveMessages(account, PHONE, [message("41", "the keys are under the mat", PHONE)], {
+      via: "history",
+    })
+    const asked: string[] = []
+    const rekeys: string[] = []
+    const adapter = {
+      self: () => "500",
+      resolve: async (reference: string) => {
+        asked.push(reference)
+        return { ...dialog(answers[reference] ?? reference), kind: "unknown", title: null }
+      },
+      delete: async () => {},
+    }
+    const wrapped = stored(adapter as unknown as MessengerAdapter, {
+      account,
+      store: async () => store,
+      warn: () => {},
+      events: () => {},
+      namesFromStore: {},
+      rekeyed: (from, to) => {
+        rekeys.push(`${from}>${to}`)
+      },
+    })
+    const chatIds = async (key: typeof account) => (await store.chats.chats(key, {})).items.map((chat) => chat.id)
+    return { wrapped, store, other, asked, rekeys, chatIds }
+  }
+
+  it("asks the messenger, re-keys the stored chat to its answer, and a delete by the old id reaches the message", async () => {
+    const { wrapped, store, other, asked, rekeys, chatIds } = await following({ [PHONE]: LID })
+
+    const chat = await wrapped.resolve(PHONE)
+    await wrapped.delete?.(chat.id, ["41"], { forEveryone: true })
+
+    expect(asked).toEqual([PHONE])
+    expect(chat).toMatchObject({ id: LID, title: "Olga", kind: "dialog" })
+    expect(rekeys).toEqual([`${PHONE}>${LID}`])
+    expect(await chatIds(account)).not.toContain(PHONE)
+    expect(await chatIds(account)).toContain(LID)
+    expect((await store.messages.search("keys", { limit: 10, account })).items).toEqual([])
+    expect(await chatIds(other)).toContain(PHONE)
+  })
+
+  it("keeps the stored chat when the messenger answers the same id", async () => {
+    const { wrapped, rekeys, chatIds } = await following({})
+
+    expect((await wrapped.resolve(PHONE)).title).toBe("Olga")
+    expect(rekeys).toEqual([])
+    expect(await chatIds(account)).toContain(PHONE)
+  })
+})
