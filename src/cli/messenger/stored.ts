@@ -202,12 +202,8 @@ export const stored = (
             const page = await chats.call(messenger, window)
             // Only a page that names every chat says the others were left; an empty one is a hiccup.
             const complete = window.offset === 0 && !page.hasMore && page.items.length > 0
-            // The messenger lists only chats the owner is in, so a chat it names that was left has been rejoined.
             await save("chats.list", async (opened) => {
-              await opened.chats.saveChats(
-                account,
-                page.items.map((chat) => ({ ...chat, membershipState: chat.membershipState ?? null })),
-              )
+              await opened.chats.saveChats(account, page.items)
               if (complete)
                 await opened.chats.markChatsLeft(
                   account,

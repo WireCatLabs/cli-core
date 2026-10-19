@@ -12,9 +12,9 @@ shape of this file.
 - **A saved chat keeps its membership when the update leaves it out**: `saveChats`, `Delta.chats` and
   `HistoryBatch.chats` no longer take a "left" mark off a chat that comes without `membershipState`. So a late
   community notice for a group the owner left no longer marks it rejoined. A value sets the membership; `null`
-  (newly allowed on `ChatUpdate`) clears it. Pages from the adapter's own `chats` list still rejoin the chats they
-  name, and `markChatsLeft` now also takes the mark off the chats its complete list names. A caller that saves a
-  rejoined chat any other way must send `membershipState: null`.
+  (newly allowed on `ChatUpdate`) clears it. `markChatsLeft` now also takes the mark off the chats its complete list
+  names, so a complete chat list still rejoins them; a page with more after it no longer does. A caller that saves
+  a rejoined chat any other way must send `membershipState: null`.
 
 ## 0.351.0 — 19.10.2026
 

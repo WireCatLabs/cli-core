@@ -77,6 +77,7 @@ describe("a chat the account left", () => {
     expect(await ids(store, OWNER)).toEqual([])
     await store.chats.saveChats(OWNER, [{ id: "-1", kind: "group", membershipState: "archived" }])
     await store.chats.saveChats(OWNER, [chat("-1")])
+    await store.chats.markChatsLeft(OWNER, ["-1"])
     expect((await store.chats.chats(OWNER, {})).items[0]?.membershipState).toBe("archived")
     await store.chats.saveChats(OWNER, [{ id: "-1", kind: "group", membershipState: "left" }])
     await store.chats.saveChats(OWNER, [{ id: "-1", kind: "group", membershipState: null }])
