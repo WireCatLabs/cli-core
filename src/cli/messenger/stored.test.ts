@@ -974,6 +974,43 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     )
   })
 
+  it("gives up only the first re-key of a pass the store refused whole, and saves the rest", async () => {
+    const { store } = await setUp()
+    const rekeyChats = store.chats.rekeyChats.bind(store.chats)
+    let calls = 0
+    const flaky = {
+      ...store,
+      chats: {
+        ...store.chats,
+        rekeyChats: (...args: Parameters<typeof rekeyChats>) => {
+          calls += 1
+          return calls === 1 ? Promise.reject(new Error("database is locked")) : rekeyChats(...args)
+        },
+      },
+    } as MessageStore
+    const moved: string[] = []
+
+    const { codes } = await feeding(
+      flaky,
+      {
+        storedChats: async () => {},
+        feed: async (onBatch) => {
+          onBatch({
+            rekeys: [
+              { from: "7", to: "7@lid" },
+              { from: "8", to: "8@lid" },
+            ],
+          })
+        },
+      },
+      { rekeyed: (from, to) => void moved.push(`${from}>${to}`) },
+    )
+
+    expect(codes).toEqual(["store_not_written"])
+    expect(moved).toEqual(["8>8@lid"])
+    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8@lid"])
+  })
+
   it("hands over the recipient list's ids too, and a re-key of one with no stored chat moves the entry", async () => {
     const { store } = await setUp()
     const list = new RecipientList(join(mkdtempSync(join(tmpdir(), "recipients-")), "work.recipients.json"), "chat")

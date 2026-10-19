@@ -127,15 +127,21 @@ export const stored = (
   const saveRekeys = async (pairs: readonly { from: Id; to: Id }[]): Promise<void> => {
     let rest = pairs
     while (rest.length > 0) {
-      let taken = rest.length
+      // A pass that failed whole rolled back: only its first pair is given up, as when each re-key was its own write.
+      let taken = 1
+      let held = false
       await attempt("history.rekey", async (opened) => {
         const pass = await opened.chats.rekeyChats(account, rest, REKEY_LOCK_MS)
         taken = pass.taken
-        for (const { from, to } of pass.applied) await rekeyed?.(from, to)
+        held = true
+        for (const { from, to } of pass.applied)
+          await Promise.resolve()
+            .then(() => rekeyed?.(from, to))
+            .catch((error: unknown) => notWritten("history.rekey", error))
         for (const { error } of pass.refused) notWritten("history.rekey", error)
       })
       rest = rest.slice(taken)
-      if (rest.length > 0) await new Promise((resolve) => setTimeout(resolve, REKEY_PAUSE_MS))
+      if (held && rest.length > 0) await new Promise((resolve) => setTimeout(resolve, REKEY_PAUSE_MS))
     }
   }
   const saveBatches = (operation: string, onBatch: (batch: HistoryBatch) => void) => {
