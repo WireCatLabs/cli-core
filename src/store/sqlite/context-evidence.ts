@@ -28,7 +28,7 @@ const corpora = {
     chat: "c.external_id",
     timeKind: "'sent'",
     join: "JOIN chats c ON c.id=n.chat_id AND c.account_id=n.account_id",
-    where: "1",
+    where: "c.searchable=1",
   },
   mail: {
     table: "emails",
