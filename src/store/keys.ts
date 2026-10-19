@@ -20,6 +20,8 @@ export const keysOver = (context: StoreContext) => {
       return accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
     },
     chatPkFor: (accountKey: number, chatId: Id) => chatQueries.chatPkFor(context, accountKey, chatId),
+    answeredChatPk: (accountKey: number, chatId: Id, typed: Id) =>
+      chatQueries.answeredChatPk(context, accountKey, chatId, typed),
     identityPk: (
       accountKey: number,
       provider: Provider,
