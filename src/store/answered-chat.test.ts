@@ -52,6 +52,14 @@ describe("the chat row a send lands in when the messenger answered another id", 
     expect(row(context, answeredChatPk(context, 1, "lid", "phone"))).toMatchObject({ searchable: 0 })
   })
 
+  it("already there, turns personal when it and the typed row sit on different sides", async () => {
+    const context = await opened(
+      "(1,1,'phone','dialog','Olga',1,'personal',0,0),(2,1,'lid','dialog','Olga L',1,'work',0,0)",
+    )
+
+    expect(row(context, answeredChatPk(context, 1, "lid", "phone"))).toMatchObject({ scope: "personal" })
+  })
+
   it("takes nothing from another account's row with the typed id", async () => {
     const context = await opened("(1,2,'phone','dialog','Olga',0,'personal',0,0)")
 

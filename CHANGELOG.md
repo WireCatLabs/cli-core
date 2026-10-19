@@ -83,15 +83,17 @@ shape of this file.
 
 - **A sent message is saved in the chat the messenger answered, not the one typed**: `messages send`, `polls
   create` and `messages forward` save the message, and its chat row, under the `chatId` of the message the adapter
-  returns. The id that was typed is used only when that `chatId` is empty. So a WhatsApp send to a re-keyed
-  person's old phone number no longer creates a second, phone-form chat. A chat row made for the answered id takes
-  the typed chat's title, kind, search visibility and scope, and an answered chat that already exists is hidden from
-  search when the typed one is. `messages edit` keeps the message in the chat row that already holds it. When the
-  two ids differ, the send journal (`sends list`) of a send, a poll or a forward records the answered one as
-  `result_chat_id` beside `chat_id`, and the run record's `messages.send` response names the answered chat. The
-  JSON answer already showed the answered id. No new field: an adapter fills `Message.chatId` with the id its
-  messenger answered ([ADAPTERS.md](docs/dev/ADAPTERS.md#send-ids-and-an-unknown-outcome)). tg answers with the
-  same chat's own id and max echoes the typed one, so nothing changes for them.
+  returns. The id that was typed is used only when that `chatId` is empty. A chat row made for the answered id takes
+  the typed chat's title, kind, search visibility and scope; an answered chat that already exists takes the
+  stricter search visibility and scope of the two, by the same rule as a re-keyed chat. Rows of another account are
+  never read. `messages edit` keeps the message in the chat row that already holds it. When the two ids differ, the
+  send journal (`sends list`) of a send, a poll or a forward records the answered one as `result_chat_id` beside
+  `chat_id`, and the run record's `messages.send` response names the answered chat. The JSON answer already showed
+  the answered id. No new field: an adapter fills `Message.chatId` with the id its messenger answered
+  ([ADAPTERS.md](docs/dev/ADAPTERS.md#send-ids-and-an-unknown-outcome)). Per messenger: tg answers with Telegram's
+  own id for the same chat, so nothing changes; max echoes the typed id, so nothing changes; wa maps a known
+  person's phone-form id to their LID chat, so a send to a re-keyed person's old phone number no longer creates a
+  second, phone-form chat.
 
 ## 0.352.0 — 19.10.2026
 

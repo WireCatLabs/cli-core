@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../../domain/locator.js"
 import type { Id } from "../../domain/models.js"
 import type { AccountKey } from "../types.js"
-import { purgeChats } from "./chats.js"
+import { purgeChats, stricterPrivacy } from "./chats.js"
 import { pointerPairs } from "./entity-types.js"
 import { tombstone } from "./messages.js"
 import { targetKey } from "./notes.js"
@@ -192,25 +192,10 @@ const latest = (a: unknown, b: unknown): number | null => {
 
 type Row = NonNullable<ReturnType<typeof chatRow>>
 
-/**
- * The owner's word on a chat must not loosen because a stray twin merged in: hidden wins, and when the two chats sit
- * on different sides of the owner's life, the personal side wins, since a work chat reaches work views and meeting
- * preparation a personal one does not. A scope either half pinned stays pinned, so a later change to the account's
- * default cannot loosen the merged chat.
- */
-const strictest = (context: StoreContext, accountKey: number, old: Row, twin: Row) => {
-  const account = context.database.prepare("SELECT scope FROM accounts WHERE id = ?").get(accountKey)
-  const effective = (row: Row) => scalar(row.scope) ?? scalar(account?.scope)
-  return {
-    searchable: Math.min(Number(old.searchable), Number(twin.searchable)),
-    scope:
-      scalar(old.scope) === null && scalar(twin.scope) === null
-        ? null
-        : effective(old) === effective(twin)
-          ? effective(old)
-          : "personal",
-  }
-}
+const privacyOf = (row: Row) => ({
+  searchable: Number(row.searchable),
+  scope: typeof row.scope === "string" ? row.scope : null,
+})
 
 const MESSENGER_FIELDS = [
   "title",
@@ -235,7 +220,7 @@ export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: nu
   if (twin) {
     if (old.kind !== twin.kind && old.kind !== "unknown" && twin.kind !== "unknown")
       throw new CliError("validation_error", `a ${String(old.kind)} and a ${String(twin.kind)} are not one chat`)
-    const strict = strictest(context, accountKey, old, twin)
+    const strict = stricterPrivacy(context, accountKey, privacyOf(old), privacyOf(twin))
     moved = absorb(context, kept, Number(twin.id))
     const fields = MESSENGER_FIELDS.map((field) => `${field} = coalesce(?, ${field})`).join(", ")
     context.database
