@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.349.0 — 19.10.2026
-
 ### Added
 
 - **A messenger that pushes its history can be told the chats the store holds**: the optional
@@ -16,6 +14,11 @@ shape of this file.
   whatsapp-cli uses it to re-key phone-form chats nothing names again, through `rekeys`. A reject is a
   `stored_chats_failed` warning. The contract kit has a case for it, skipped without the method, and
   `fakeAdapter(seed, { storedChats: true })`.
+
+## 0.349.0 — 19.10.2026
+
+### Added
+
 - **`gatherProjectEvidence` brings the mail and document index up to date before reading** through the new
   optional `MessageStore.contextIndex` port (`ContextIndex.catchUp`), the same fills a mail search and the notes
   search run. `index: "as-is"` skips it; the result's `index` says what happened. On a store just synced, new
