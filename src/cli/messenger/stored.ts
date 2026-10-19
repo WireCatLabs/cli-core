@@ -140,7 +140,7 @@ export const stored = (
     for (const saving of rekeysOnly) pending?.delete(saving)
     if (count === 0) return
     events({ event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: count } })
-    warn(`${count} chat re-key${count === 1 ? "" : "s"} not applied before exit; the next serve applies them`)
+    warn(`${count} chat re-key${count === 1 ? "" : "s"} not applied yet; the next serve applies them`)
   }
   closing?.addEventListener("abort", giveUpRekeys, { once: true })
   const saveRekeys = async (pairs: readonly { from: Id; to: Id }[], round: number): Promise<void> => {

@@ -1028,7 +1028,7 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     },
   })
   const notApplied = (count: number) => ({
-    warning: `${count} chat re-keys not applied before exit; the next serve applies them`,
+    warning: `${count} chat re-keys not applied yet; the next serve applies them`,
     event: { event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: count } },
   })
 

@@ -16,7 +16,7 @@ shape of this file.
   a pause after it. Each re-key keeps its own savepoint, privacy merge and account scope, and a refused one still
   warns and leaves the others applied. Once the store is about to close (`Saving.closing`, which `connected`
   aborts) or refuses a whole pass (closed, busy past its timeout), every re-key still queued, in any batch, is given
-  up with one warning: "N chat re-keys not applied before exit; the next serve applies them", and one
+  up with one warning: "N chat re-keys not applied yet; the next serve applies them", and one
   `rekeys_not_applied` event whose new `counts` field (`WarningEvent.counts`) holds N. Before, a messenger that sends
   each re-key as its own batch (wa) got one `store_not_written` per chat left. `ChatsStore` gains `rekeyChats`, so a
   hand-written `ChatsStore` must add it.

@@ -413,7 +413,7 @@ describe("a one-shot command of a messenger whose history is pushed", () => {
 
     expect(passes).toBeGreaterThan(1)
     expect(passes).toBeLessThan(400)
-    expect(warnings).toEqual([`${400 - passes} chat re-keys not applied before exit; the next serve applies them`])
+    expect(warnings).toEqual([`${400 - passes} chat re-keys not applied yet; the next serve applies them`])
     expect(recorded.filter((event) => event.event === "warning")).toEqual([
       { event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: 400 - passes } },
     ])
