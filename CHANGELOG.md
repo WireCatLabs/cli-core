@@ -14,7 +14,8 @@ shape of this file.
   that gets in, the left mark comes off, and a chat stored as archived stays archived. A join that waits for an
   admin's approval changes nothing. Only the running account's chat changes. When the store cannot record a leave or
   join that went through, the error says it went through, not to run it again, and that an online `chats list --all`
-  corrects the store (on a messenger whose chat list is read from the store, no command does yet).
+  corrects the store once the messenger answers it with every chat (on a messenger whose chat list is read from the
+  store, no command does yet).
 - **`chats show` on a chat you left shows it**, with `membership_state: "left"`, and says that you left it and that
   `<tool> <profile> store clear --left --dry-run` lists the chats you left. Where the history is read from the store,
   it said "nothing stored for this chat yet — keep … serve running", which was wrong; `messages list` and `messages

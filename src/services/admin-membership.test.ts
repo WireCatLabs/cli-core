@@ -52,7 +52,7 @@ describe("a leave or join whose store record fails", () => {
       code: "invalid_response",
       message:
         "you left chat 7, but the local store could not mark it left (database is locked) — do not run it again; " +
-        "an online `chat chats list --all` corrects it",
+        "an online `chat chats list --all` corrects it once the messenger answers it with every chat",
       details: { operation_id: expect.any(String), retryable: false },
     })
   })
