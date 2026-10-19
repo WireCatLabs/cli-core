@@ -186,7 +186,9 @@ MCP tools write through `services.tags` with their own permission keys (`tags.ad
 before the batch's messages through `rekeyChats`: the pairs in order, each in its own savepoint, in passes of
 one transaction that each hold the write lock for about 50 ms, with a 25 ms pause between passes. The first
 `serve` after an upgrade re-keys every phone-form chat; one transaction per re-key kept the lock so busy that
-another command waited seconds for it. Everything hangs off `chats.id`, so a chat stored only under the old id is
+another command waited seconds for it. Once the store is about to close or refuses a whole pass, every re-key still
+queued is given up with one warning and one `rekeys_not_applied` event that counts them; the next `serve` hands the
+stored chats over again, and the messenger re-keys them then. Everything hangs off `chats.id`, so a chat stored only under the old id is
 renamed in place. When both ids are stored, the old row is kept and the other merged into it: messages
 move, a message id held in both keeps the old row's copy (deleted if either was), every `chat` and
 `message` pointer (`pointerPairs`) moves, and the emptied chat is purged. The `sync_cursors` keys, task

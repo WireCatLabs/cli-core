@@ -471,6 +471,7 @@ export const connected = (
   )
   const pending = new Set<Promise<void>>()
   const announcing = new Set<Promise<void>>()
+  const closing = new AbortController()
   const saving =
     self === null
       ? adapter
@@ -482,6 +483,7 @@ export const connected = (
           events,
           pending,
           announcing,
+          closing: closing.signal,
           ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
           rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
           recipientIds: () =>
@@ -509,6 +511,7 @@ export const connected = (
             renderer.warn(`not saved to the local store: the messenger was still handing on ${what} at exit`)
           })
           await settled(new Set([...pending, ...announcing]), SAVES_WAIT_MS)
+          closing.abort()
           if (pending.size > 0) {
             events({ event: "warning", code: "store_not_written", operation: "close" })
             renderer.warn("not saved to the local store: the last messages were still being written at exit")

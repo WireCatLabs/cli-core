@@ -1,10 +1,11 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import { countedPoll } from "../../domain/polls.js"
 import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
+import type { DiagnosticEvent } from "../../runs/events.js"
 import { RecipientList } from "../../sends/recipients.js"
 import { type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { storedMessages } from "./context.js"
@@ -893,15 +894,17 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     store: MessageStore,
     adapter: Partial<MessengerAdapter>,
     options: Partial<Saving> = {},
-  ): Promise<{ warnings: string[]; codes: string[] }> => {
+  ): Promise<{ warnings: string[]; codes: string[]; events: DiagnosticEvent[] }> => {
     const pending = new Set<Promise<void>>()
     const warnings: string[] = []
     const codes: string[] = []
+    const events: DiagnosticEvent[] = []
     const wrapped = stored({ self: () => "500", ...adapter } as unknown as MessengerAdapter, {
       account,
       store: async () => store,
       warn: (line) => warnings.push(line),
       events: (event) => {
+        events.push(event)
         if (event.event === "warning") codes.push(event.code)
       },
       pending,
@@ -909,7 +912,7 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     })
     await wrapped.feed?.(() => {}, new AbortController().signal)
     while (pending.size > 0) await Promise.all(pending)
-    return { warnings, codes }
+    return { warnings, codes, events }
   }
 
   it("hands over only this account's chats it has not left, and a re-key the messenger sends back moves the chat", async () => {
@@ -974,41 +977,122 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     )
   })
 
-  it("gives up only the first re-key of a pass the store refused whole, and saves the rest", async () => {
-    const { store } = await setUp()
+  const rekeysOf = (ids: string[]) => ids.map((id) => ({ from: id, to: `${id}@lid` }))
+
+  const passing = (store: MessageStore, afterPass: (pass: number) => Promise<void> = async () => {}) => {
     const rekeyChats = store.chats.rekeyChats.bind(store.chats)
-    let calls = 0
-    const flaky = {
+    const taken: number[] = []
+    const wrapped = {
       ...store,
       chats: {
         ...store.chats,
-        rekeyChats: (...args: Parameters<typeof rekeyChats>) => {
-          calls += 1
-          return calls === 1 ? Promise.reject(new Error("database is locked")) : rekeyChats(...args)
+        rekeyChats: async (...args: Parameters<typeof rekeyChats>) => {
+          const pass = await rekeyChats(...args)
+          taken.push(pass.taken)
+          await afterPass(taken.length)
+          return pass
         },
       },
     } as MessageStore
+    return { wrapped, taken }
+  }
+
+  it("saves a run longer than one pass's lock time in several passes", async () => {
+    const { store } = await setUp()
+    const { wrapped, taken } = passing(store)
     const moved: string[] = []
 
-    const { codes } = await feeding(
-      flaky,
-      {
-        storedChats: async () => {},
-        feed: async (onBatch) => {
-          onBatch({
-            rekeys: [
-              { from: "7", to: "7@lid" },
-              { from: "8", to: "8@lid" },
-            ],
-          })
-        },
-      },
-      { rekeyed: (from, to) => void moved.push(`${from}>${to}`) },
+    await feeding(
+      wrapped,
+      { storedChats: async () => {}, feed: async (onBatch) => onBatch({ rekeys: rekeysOf(["7", "8"]) }) },
+      { rekeyed: (from, to) => void moved.push(`${from}>${to}`), rekeyPacing: { lockMs: 0, pauseMs: 0 } },
     )
 
-    expect(codes).toEqual(["store_not_written"])
-    expect(moved).toEqual(["8>8@lid"])
-    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8@lid"])
+    expect(taken).toEqual([1, 1])
+    expect(moved).toEqual(["7>7@lid", "8>8@lid"])
+  })
+
+  const dialogs = (ids: string[]) =>
+    ids.map((id) => ({
+      id,
+      title: id,
+      kind: "dialog" as const,
+      unreadCount: 0,
+      lastMessageAt: null,
+      participantsCount: 2,
+    }))
+  const oneByOne = (ids: string[]) => ({
+    storedChats: async () => {},
+    feed: async (onBatch: (batch: HistoryBatch) => void) => {
+      for (const id of ids) onBatch({ rekeys: rekeysOf([id]) })
+    },
+  })
+  const notApplied = (count: number) => ({
+    warning: `${count} chat re-keys not applied yet; the next serve applies them`,
+    event: { event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: count } },
+  })
+
+  describe("with one batch per re-key, as wa sends them", () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it("applies every re-key with no warning", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+      const { store } = await setUp()
+      const ids = Array.from({ length: 200 }, (_, at) => `c${at}`)
+      await store.chats.saveChats(account, dialogs(ids))
+      const { wrapped, taken } = passing(store)
+
+      const { warnings, codes } = await feeding(wrapped, oneByOne(ids), { rekeyPacing: { lockMs: 0, pauseMs: 25 } })
+
+      expect(taken).toEqual(ids.map(() => 1))
+      expect(warnings).toEqual([])
+      expect(codes).toEqual([])
+      const held = (await store.chats.chats(account, {})).items.map((chat) => chat.id)
+      expect(held.filter((id) => id.startsWith("c")).every((id) => id.endsWith("@lid"))).toBe(true)
+    })
+
+    it("gives up every queued re-key once the store refuses a pass, with one warning for all of them", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+      const { store } = await setUp()
+      const ids = Array.from({ length: 200 }, (_, at) => `c${at}`)
+      await store.chats.saveChats(account, dialogs(ids))
+      const { wrapped, taken } = passing(store, async (pass) => {
+        if (pass > 1) return
+        opened.splice(opened.indexOf(store), 1)
+        await store.close()
+      })
+
+      const { warnings, events } = await feeding(wrapped, oneByOne(ids), { rekeyPacing: { lockMs: 0, pauseMs: 25 } })
+
+      expect(taken).toEqual([1])
+      expect(warnings).toEqual([notApplied(199).warning])
+      expect(events.filter((event) => event.event === "warning")).toEqual([notApplied(199).event])
+    })
+  })
+
+  it("gives up the re-keys still queued when the store is about to close", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    try {
+      const { store } = await setUp()
+      const closing = new AbortController()
+      const { wrapped, taken } = passing(store)
+
+      const fed = feeding(
+        wrapped,
+        { storedChats: async () => {}, feed: async (onBatch) => onBatch({ rekeys: rekeysOf(["7", "8", "9"]) }) },
+        { rekeyPacing: { lockMs: 0, pauseMs: 25 }, closing: closing.signal, rekeyed: () => closing.abort() },
+      )
+      await vi.advanceTimersByTimeAsync(100)
+      const { warnings, events } = await fed
+
+      expect(taken).toEqual([1])
+      expect(warnings).toEqual([notApplied(2).warning])
+      expect(events.filter((event) => event.event === "warning")).toEqual([notApplied(2).event])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("hands over the recipient list's ids too, and a re-key of one with no stored chat moves the entry", async () => {
