@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { ContextEvidenceItem, ContextEvidenceReader, ContextIndex, ContextSource } from "../context/evidence.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
+import { attachNeighbours, type ProjectNeighbour, type ProjectNeighbourReader } from "./project-gathering-around.js"
 import {
   decodeCheckpoint,
   encodeCheckpoint,
@@ -26,6 +27,7 @@ export interface ProjectGatheringPorts {
   evidence: ContextEvidenceReader
   fetcher?: ProjectSourceFetcher
   index?: ContextIndex
+  neighbours?: ProjectNeighbourReader
   now?: () => number
 }
 export interface ProjectIndexCatchUp {
@@ -41,6 +43,8 @@ export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   textTruncated: boolean
   lanes: string[]
   context: "project" | "person-only"
+  around?: ProjectNeighbour[] | null
+  aroundIssue?: string | null
 }
 export type ProjectGatheringStop = "reads" | "read-bytes" | "elapsed" | "items" | null
 
@@ -109,7 +113,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       }
   }
 
-  const usage = { reads: 0, readBytes: 0, items: 0 }
+  const usage = { reads: 0, readBytes: 0, aroundBytes: 0, items: 0 }
   const items: ProjectEvidenceItem[] = []
   const byRef = new Map<string, ProjectEvidenceItem>()
   const matchedAgain = new Map<string, Set<string>>()
@@ -203,6 +207,20 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       }
     }
   }
+
+  await attachNeighbours(
+    items,
+    ports.neighbours,
+    plan.around,
+    {
+      remaining: () => plan.budgets.maxReadBytes - usage.readBytes - usage.aroundBytes,
+      charge: (bytes) => {
+        usage.aroundBytes += bytes
+      },
+    },
+    (ref) => byRef.has(ref) || seen.has(seenKey(ref)),
+    signal,
+  )
 
   const totals = {
     reads: (previous?.totals.reads ?? 0) + usage.reads,

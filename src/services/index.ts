@@ -27,6 +27,8 @@ export type {
   ProjectSourceFetcher,
 } from "./project-gathering.js"
 export { gatherProjectEvidence } from "./project-gathering.js"
+export type { ProjectNeighbour, ProjectNeighbourReader } from "./project-gathering-around.js"
+export { storedMessageNeighbours } from "./project-gathering-around.js"
 export type {
   ProjectFetchState,
   ProjectGatheringBudgets,

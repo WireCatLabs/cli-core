@@ -51,6 +51,12 @@ const result = await gatherProjectEvidence(
   shows `index-pending` on its units. A message is indexed when it is saved. The fill is a local write to the
   index, never to the records, and is not bounded by the read budgets.
 
+- **Around a hit.** With the host's `neighbours` port (`storedMessageNeighbours(store.messages)`), each message
+  hit carries `around`: up to `around.before` and `around.after` (default 2 each, at most 5) stored messages next
+  to it in its chat, as 200-character excerpts with their references. They are context for reading the hit, not
+  matches: they never join `items`, and `found` says whether a neighbour is a hit itself. Their bytes count
+  against `maxReadBytes` (`usage.aroundBytes`); when it runs out, a hit has `aroundIssue: "read-bytes"`.
+
 ## Budgets and order
 
 `budgets` are per invocation: `maxReads` (default 48, or one read per lane × source × chunk when that is more, up

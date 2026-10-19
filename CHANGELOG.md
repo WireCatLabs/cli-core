@@ -27,6 +27,10 @@ shape of this file.
   mail and imported documents were missed before.
 - **The project key is a search lane of its own** (`project.key`, lane kind `key`), and an explicit window may
   give `after` alone: `before` is `asOf`, frozen with the run.
+- **Each message hit of `gatherProjectEvidence` carries the messages next to it** (`around`, default 2 before and 2
+  after, at most 5) through the new `neighbours` port; `storedMessageNeighbours(store.messages)` builds it. They
+  are cited context, not matches, and their bytes count against `maxReadBytes`. A reply that names nothing was
+  out of reach of every search.
 - **The default read budget covers one full round**: one read per search × source × 90-day chunk when that is more
   than 48 (at most 512), so `--source all` with several searches no longer stops before every search ran once.
 - **`ProjectFetchState`, `ProjectUnitState`, `ProjectIndexCatchUp` and `ContextIndex` are exported** from

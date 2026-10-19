@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it, vi } from "vitest"
-import type { ContextEvidenceReader } from "../context/evidence.js"
+import type { ContextEvidenceReader, ContextSource } from "../context/evidence.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
 import { gatherProjectEvidence, type ProjectSourceFetcher } from "./project-gathering.js"
+import { storedMessageNeighbours } from "./project-gathering-around.js"
 import type { ProjectGatheringRequest } from "./project-gathering-request.js"
 
 const DAY = 86400000
@@ -224,4 +225,49 @@ it("raises the default read budget to finish one round of every search over ever
     { ...f.request, keywords, before: 91 * DAY, budgets: { maxReads: 48 } },
   )
   expect(capped).toMatchObject({ stopped: "reads", usage: { reads: 48 } })
+})
+
+it("attaches the messages next to a message hit as cited context, not as new matches", async () => {
+  const f = await fixture()
+  f.db
+    .prepare(
+      "INSERT INTO messages(chat_id,account_id,external_id,sent_at,text,normalized_text,normalizer_version,created_at,updated_at,source) VALUES(?,?,'4',250,'Ok, tomorrow','ok tomorrow',1,0,0,'history')",
+    )
+    .run(f.accountId, f.accountId)
+  const neighbours = storedMessageNeighbours(f.store.messages)
+  const result = await gatherProjectEvidence(
+    { evidence: f.port, neighbours },
+    { ...f.request, sources: [f.sources[0], f.sources[1]] as ContextSource[], around: { before: 1, after: 1 } },
+  )
+  const third = result.items.find((i) => i.ref.endsWith("/planning/3"))
+  expect(third?.around).toEqual([
+    expect.objectContaining({ ref: third?.ref.replace(/3$/, "4"), text: "Ok, tomorrow", found: false }),
+  ])
+  const second = result.items.find((i) => i.ref.endsWith("/planning/2"))
+  expect(second?.around?.map((n) => [n.ref.split("/").pop(), n.found])).toEqual([
+    ["1", true],
+    ["4", false],
+  ])
+  expect(result.items.some((i) => i.ref.endsWith("/planning/4"))).toBe(false)
+  expect(result.items.find((i) => i.kind === "mail")?.around).toBeUndefined()
+  expect(result.usage.aroundBytes).toBeGreaterThan(0)
+
+  const plain = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, sources: [f.sources[0]] as ContextSource[] },
+  )
+  const tight = await gatherProjectEvidence(
+    { evidence: f.port, neighbours },
+    {
+      ...f.request,
+      sources: [f.sources[0]] as ContextSource[],
+      budgets: { maxReadBytes: plain.usage.readBytes + 10, maxPageBytes: 65536 },
+    },
+  )
+  expect(tight.items.some((i) => i.aroundIssue === "read-bytes")).toBe(true)
+  const none = await gatherProjectEvidence(
+    { evidence: f.port, neighbours },
+    { ...f.request, around: { before: 0, after: 0 } },
+  )
+  expect(none.items.every((i) => i.around === undefined)).toBe(true)
 })

@@ -15,6 +15,7 @@ export interface ProjectGatheringRequest {
   asOf?: number
   fetch?: "none" | "before-read"
   index?: "update" | "as-is"
+  around?: { before: number; after: number }
   budgets?: ProjectGatheringBudgets
   runKey?: string
   checkpoint?: string
@@ -110,6 +111,7 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
       "asOf",
       "fetch",
       "index",
+      "around",
       "budgets",
       "runKey",
       "checkpoint",
@@ -169,6 +171,13 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
   const fetch = input.fetch ?? "none"
   const index = input.index ?? "update"
   if (index !== "update" && index !== "as-is") fail("index must be update or as-is", "index")
+  if (input.around !== undefined && (!input.around || typeof input.around !== "object"))
+    fail("around needs before and after", "around")
+  if (input.around) known(input.around, ["before", "after"], "around.")
+  const around = {
+    before: whole(input.around?.before ?? 2, "around.before", 0, 5),
+    after: whole(input.around?.after ?? 2, "around.after", 0, 5),
+  }
   if (fetch !== "none" && fetch !== "before-read") fail("fetch must be none or before-read", "fetch")
   const explicit = input.after !== undefined || input.before !== undefined
   if (explicit && input.lookbackDays !== undefined) fail("give lookbackDays or after/before, not both", "lookbackDays")
@@ -227,6 +236,7 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
     window,
     fetch,
     index,
+    around,
     budgets,
     fingerprint,
     runKey,
