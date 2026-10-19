@@ -470,6 +470,7 @@ export const connected = (
     events,
   )
   const pending = new Set<Promise<void>>()
+  const announcing = new Set<Promise<void>>()
   const saving =
     self === null
       ? adapter
@@ -480,6 +481,7 @@ export const connected = (
           warn: renderer.warn,
           events,
           pending,
+          announcing,
           ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
           rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
           ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
@@ -502,9 +504,14 @@ export const connected = (
             events({ event: "warning", code: "store_not_written", operation })
             renderer.warn(`not saved to the local store: the messenger was still handing on ${what} at exit`)
           })
-          if (!(await settled(pending, SAVES_WAIT_MS))) {
+          await settled(new Set([...pending, ...announcing]), SAVES_WAIT_MS)
+          if (pending.size > 0) {
             events({ event: "warning", code: "store_not_written", operation: "close" })
             renderer.warn("not saved to the local store: the last messages were still being written at exit")
+          }
+          if (announcing.size > 0) {
+            events({ event: "warning", code: "stored_chats_failed", operation: "close" })
+            renderer.warn("the messenger's stored-chats hook did not finish and was abandoned at exit; nothing is lost")
           }
         } finally {
           await store.close()

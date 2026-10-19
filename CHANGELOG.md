@@ -15,6 +15,11 @@ shape of this file.
   `stored_chats_failed` warning. The contract kit has a case for it, skipped without the method, and
   `fakeAdapter(seed, { storedChats: true })`.
 
+### Fixed
+
+- **A `storedChats` hook that never finishes no longer says messages were not saved** at exit: after the 5 s wait
+  it is a `stored_chats_failed` warning that the hook was abandoned, since it only reads chat ids.
+
 ## 0.349.0 — 19.10.2026
 
 ### Added
