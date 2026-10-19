@@ -45,7 +45,16 @@ shape of this file.
   the store did not take, a passive listen that failed and a stored-chats call that failed each wrote a bare
   `serve.warning` record, so the log could not tell them apart. The record now carries the warning's `code`,
   `operation` and `counts` (`rekeys_not_applied` with `counts.rekeys`), never its sentence, which can quote an
-  error or a chat. Warnings that have no code yet still log a bare record.
+  error or a chat.
+- **The other warnings in `serve`'s log now carry a code too.** A flood wait (`flood_wait`, with `counts.seconds`),
+  a long wait for the profile's pace (`pace_wait`, with `counts.seconds`), a held account (`account_frozen`,
+  `account_limited`, `account_banned`), a wait that could not be remembered (`wait_not_remembered`), a send missing
+  from the send journal (`send_not_journaled`), a recipient list that could not be re-keyed or read
+  (`recipients_not_rekeyed`, `recipients_not_read`), the reply audience warnings (`audience_person_on_both_lists`,
+  `audience_chat_on_both_lists`, `audience_allow_unused`, `audience_allow_empty`) and the reply template warnings
+  (`reply_legacy_placeholders`, `reply_legacy_may_reword`, `reply_template_warning`) each log their code and
+  operation instead of a bare `serve.warning`. The record never holds the sentence, a chat id, a name or an error
+  message; the sentence at a terminal is unchanged.
 - **The adapter test example in [ADAPTERS.md](docs/dev/ADAPTERS.md#running-the-contract-cases) no longer gives up
   re-keys.** It handed `run()` `rekeyPacing: { lockMs: 0 }`, one re-key per transaction, so a few hundred re-keys
   outlasted `closeWaitMs: 10` and were given up. It now hands `{ lockMs: 1000, pauseMs: 0 }` and says what each

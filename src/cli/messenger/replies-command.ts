@@ -5,6 +5,7 @@ import { DRY_RUN_DAYS, dryRun } from "../../replies/dry-run.js"
 import { replyRenderer } from "../../replies/rendering.js"
 import { audienceWarnings, readReplies, repliesPathFor } from "../../replies/rules.js"
 import { paused, readRepliesState, repliesStatePathFor, writeRepliesState } from "../../replies/state.js"
+import type { Warn } from "../../runs/events.js"
 import { levelFor } from "../../sends/permissions.js"
 import { momentOf } from "../../services/moment.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
@@ -55,7 +56,8 @@ export const repliesCommand = (messenger: Messenger): Command => {
       if (rules.length === 0) {
         renderer.note(`no reply rules yet — they live in ${path}`)
       }
-      for (const warning of audienceWarnings(audience)) renderer.warn(warning)
+      const warn: Warn = renderer.warn
+      for (const { text, warning } of audienceWarnings(audience)) warn(text, warning)
       const found = await context.withStore(
         (store, account) =>
           dryRun(store, account, rules, {
@@ -136,7 +138,8 @@ export const repliesCommand = (messenger: Messenger): Command => {
       const { settings, renderer, env } = context
       const { rules, audience } = readReplies(repliesPathFor(messenger.app, settings.profile, env), messenger.provider)
       const warnings = audienceWarnings(audience)
-      for (const warning of warnings) renderer.warn(warning)
+      const warn: Warn = renderer.warn
+      for (const { text, warning } of warnings) warn(text, warning)
       const state = readRepliesState(repliesStatePathFor(messenger.app, settings.profile, env))
       const level = levelFor(settings.permissions ?? {}, "replies.send").level
       if (level !== "allow") renderer.note(`replies.send is ${level}: serve sends nothing until it is allow`)
@@ -151,7 +154,7 @@ export const repliesCommand = (messenger: Messenger): Command => {
             allow: audience.allow.people.length + audience.allow.chats.length,
             deny: audience.deny.people.length + audience.deny.chats.length,
           },
-          warnings,
+          warnings: warnings.map(({ text }) => text),
           rules: rules.map(({ id, on }) => ({ id, on })),
         }),
       )

@@ -2,10 +2,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { contractSeed, fakeAdapter } from "../../kit/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { RecipientList } from "../../sends/recipients.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { chatsCommand } from "./chats-command.js"
@@ -16,6 +17,10 @@ import { watchCommand } from "./watch-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const seed = contractSeed()
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 const sandbox = () => {
   const root = mkdtempSync(join(tmpdir(), "feed-"))
@@ -281,6 +286,51 @@ describe("a messenger that pushes its history", () => {
     expect(warningAttributes(stderr)).toEqual([
       { event: "serve.warning", code: "stored_chats_failed", operation: "history.stored_chats" },
     ])
+    expect(stderr).not.toContain("MARKER")
+  })
+
+  it("a recipient-list re-key that fails logs its code, never the chat id or the error", async () => {
+    const { root, env } = sandbox()
+    mkdirSync(join(root, "state", "profiles"), { recursive: true })
+    writeFileSync(
+      join(root, "state", "profiles", "default.recipients.json"),
+      JSON.stringify({ chats: [{ id: "+10000000001", title: "Fake Ana", addedAt: "2026-10-01T00:00:00Z" }] }),
+    )
+    vi.spyOn(RecipientList.prototype, "rekey").mockRejectedValue(new Error("MARKER-Fake Book Club"))
+    const stop = new AbortController()
+    const { connect } = pushing(stop, {
+      feed: async (onBatch) => {
+        onBatch({ rekeys: [{ from: "+10000000001", to: "9990001" }] })
+        stop.abort()
+      },
+    })
+
+    const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
+
+    expect(code).toBe(0)
+    expect(warningAttributes(stderr)).toEqual([
+      { event: "serve.warning", code: "recipients_not_rekeyed", operation: "recipients.rekey" },
+    ])
+    expect(stderr).not.toContain("MARKER")
+    expect(stderr).not.toContain("10000000001")
+  })
+
+  it("a recipient list that cannot be read logs its code, never the error", async () => {
+    const { env } = sandbox()
+    vi.spyOn(RecipientList.prototype, "read").mockImplementation(() => {
+      throw new Error("MARKER-Fake Book Club +10000000000")
+    })
+    const stop = new AbortController()
+    const { connect } = pushing(stop, { storedChats: async () => {} })
+
+    const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
+
+    expect(code).toBe(0)
+    expect(warningAttributes(stderr)).toContainEqual({
+      event: "serve.warning",
+      code: "recipients_not_read",
+      operation: "history.stored_chats",
+    })
     expect(stderr).not.toContain("MARKER")
   })
 

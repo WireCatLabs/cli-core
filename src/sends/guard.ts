@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import { type AppIdentity, MESSENGER_CHANGE_REFUSAL, readOnlyRefusal } from "../ports/app.js"
+import type { Warn } from "../runs/events.js"
 import { FloodMemory, floodPathFor, holdEnd } from "./flood.js"
 import {
   type AccountAction,
@@ -95,7 +96,7 @@ export interface SendGuardOptions {
   recipients: RecipientList
   /** Where a messenger's "this account may not write" is remembered; without it nothing is held. */
   flood?: FloodMemory
-  warn: (message: string) => void
+  warn: Warn
   now?: () => Date
 }
 
@@ -374,7 +375,11 @@ export const sendGuard = ({
       try {
         journal.append({ at: now().toISOString(), profile, ...kept, ...(settles ? { reservation: settles } : {}) })
       } catch (error) {
-        warn(`this send is not in the send journal: ${journalFailure(error)}`)
+        warn(`this send is not in the send journal: ${journalFailure(error)}`, {
+          event: "warning",
+          code: "send_not_journaled",
+          operation: "sends.journal",
+        })
       }
     },
   }
@@ -404,7 +409,7 @@ export interface GuardSettings {
 export const guardFor = (
   app: AppIdentity,
   settings: GuardSettings,
-  warn: (message: string) => void,
+  warn: Warn,
   env: NodeJS.ProcessEnv = process.env,
   ask?: Asker,
 ): SendGuard =>

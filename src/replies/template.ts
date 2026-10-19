@@ -9,6 +9,7 @@ import {
   type Template,
   type TopLevelToken,
 } from "liquidjs"
+import type { WarningEvent } from "../runs/events.js"
 import type { ReplyRule } from "./rules.js"
 
 export const TEMPLATE_LIMITS = {
@@ -43,6 +44,20 @@ export interface TemplateInput {
   limits?: Partial<typeof TEMPLATE_LIMITS>
 }
 
+const LEGACY_PLACEHOLDERS = "legacy reply placeholders: use {{ sender.firstName }} and {{ sender.name }}"
+const LEGACY_REWORD = "legacy may-reword: use an ai block with an explicit fallback"
+const WARNING_CODES: Readonly<Record<string, string>> = {
+  [LEGACY_PLACEHOLDERS]: "reply_legacy_placeholders",
+  [LEGACY_REWORD]: "reply_legacy_may_reword",
+}
+
+/** A rendering warning as a log keeps it: a renderer a CLI hands in may warn in words this module does not know. */
+export const templateWarning = (text: string): WarningEvent => ({
+  event: "warning",
+  code: WARNING_CODES[text] ?? "reply_template_warning",
+  operation: "replies.render",
+})
+
 export const renderReplyTemplate = async (reply: ReplyRule["reply"], input: TemplateInput): Promise<TemplateResult> => {
   const limits = { ...TEMPLATE_LIMITS, ...input.limits }
   const blocks: TemplateBlock[] = []
@@ -50,11 +65,11 @@ export const renderReplyTemplate = async (reply: ReplyRule["reply"], input: Temp
   let source = reply.template
   const legacy = /(?<!\{)\{(firstName|name)\}(?!\})/g
   if (legacy.test(source)) {
-    warnings.push("legacy reply placeholders: use {{ sender.firstName }} and {{ sender.name }}")
+    warnings.push(LEGACY_PLACEHOLDERS)
     source = source.replace(legacy, (_, name: string) => `{{ sender.${name} }}`)
   }
   if (reply.model === "may-reword") {
-    warnings.push("legacy may-reword: use an ai block with an explicit fallback")
+    warnings.push(LEGACY_REWORD)
     if (!/\{%[-]?\s*ai\b/.test(source)) source = `{% ai %}${source}{% else %}${source}{% endai %}`
   }
   let missing: string | undefined
