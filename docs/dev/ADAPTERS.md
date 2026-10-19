@@ -167,8 +167,10 @@ store holds.
 stays left through a save that leaves membership out, such as a community notice. Any page of your adapter's `chats`
 rejoins the chats it names, since the messenger lists only chats the account is in; a complete one also marks the
 rest left. A client that saves its chat list itself calls `rejoinChats` with any part of it and `markChatsLeft`
-with a complete one. An adapter that learns of a rejoin any other way, from a push or a lookup, sends
-`membershipState: null` with the chat. Your adapter's own `leave` and `join` need neither: after a `leave` that
+with a complete one. An adapter that learns of a rejoin any other way, from a push or a lookup, such as the owner
+added back to a group, sends `membershipState: "member"` with the chat: it takes off the "left" mark and keeps any
+other state, such as "archived". `null` would clear that too. Leave `membershipState` out when the push does not say
+whether the owner is in the chat. Your adapter's own `leave` and `join` need neither: after a `leave` that
 succeeds, cli-core marks the chat left, and after a `join` that gets in, it takes the left mark off (`rejoinChats`,
 so "archived" is kept). A chat marked left drops out of `chats list`; `chats show` and the stored reads of its
 messages still find it.

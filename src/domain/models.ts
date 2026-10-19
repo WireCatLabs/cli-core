@@ -57,10 +57,11 @@ export interface Chat {
 /**
  * A chat as an adapter saves it. A `title`, `unreadCount`, `lastMessageAt`, `participantsCount` or `membershipState`
  * left out keeps the stored value; `null` stores none. So a push that knows only some of them, such as a notice that
- * a group left its community, leaves the rest out.
+ * a group left its community, leaves the rest out. `membershipState: "member"` says the owner is in the chat again: it
+ * takes off a "left" mark and keeps any other state, such as "archived". It is never stored.
  */
 export type ChatUpdate = Omit<Chat, KeptFields | "membershipState"> &
-  Partial<Pick<Chat, KeptFields>> & { membershipState?: MembershipState | null }
+  Partial<Pick<Chat, KeptFields>> & { membershipState?: MembershipState | "member" | null }
 type KeptFields = "title" | "unreadCount" | "lastMessageAt" | "participantsCount"
 
 /** A group's switches; `null` where the messenger does not say, or has no such switch. */

@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **An adapter can say "member again" without clearing other states.** `ChatUpdate.membershipState` (in `saveChats`
+  and a pushed `HistoryBatch.chats`) now also takes `"member"`: it takes off a "left" mark, as `rejoinChats` does,
+  and keeps any other stored state, such as "archived"; a new chat stores none. It is never stored or read back.
+  `null` still clears every state. Send `"member"` when the owner is added back to a group. Additive.
+
 ## 0.356.0 — 19.10.2026
 
 ### Fixed

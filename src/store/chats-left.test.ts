@@ -89,6 +89,37 @@ describe("a chat the account left", () => {
     await store.close()
   })
 
+  it("is taken off by member, which keeps any other state and is never stored", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [chat("-1"), chat("-2")])
+    await store.chats.saveChats(OWNER, [{ id: "-2", kind: "group", membershipState: "archived" }])
+    await store.chats.markChatsLeft(OWNER, ["-2"])
+
+    const member = (id: string) => ({ id, kind: "group" as const, membershipState: "member" as const })
+    await store.chats.saveChats(OWNER, [member("-1"), member("-2"), member("-3")])
+
+    expect((await store.chats.chats(OWNER, {})).items.map((one) => [one.id, one.membershipState ?? null])).toEqual([
+      ["-1", null],
+      ["-2", "archived"],
+      ["-3", null],
+    ])
+    await store.close()
+  })
+
+  it("is taken off by member only in the account that saves it", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [chat("-1")])
+    await store.chats.saveChats(OTHER, [chat("-1")])
+    await store.chats.markChatsLeft(OWNER, [])
+    await store.chats.markChatsLeft(OTHER, [])
+
+    await store.chats.saveChats(OWNER, [{ id: "-1", kind: "group", membershipState: "member" }])
+
+    expect(await ids(store, OWNER)).toEqual(["-1"])
+    expect(await ids(store, OTHER)).toEqual([])
+    await store.close()
+  })
+
   it("is taken off the chats any part of a chat list names, keeping other states", async () => {
     const store = await openStore({ path: fresh() })
     await store.chats.saveChats(OWNER, [chat("-1"), chat("-2"), chat("-3")])
