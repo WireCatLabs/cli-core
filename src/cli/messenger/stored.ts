@@ -24,8 +24,9 @@ export interface Saving {
   /** After a re-key is saved: what outside the store spells the chat id follows it. */
   rekeyed?: (from: Id, to: Id) => void | Promise<void>
   /**
-   * Chat ids this account's recipient list names, told to `storedChats` apart from the stored ones: an entry saved
-   * before any chat was stored under its id would otherwise never be re-keyed, and the send guard would refuse it.
+   * Chat and partner ids this account's recipient list names, told to `storedChats` apart from the stored ones: an
+   * entry saved before any chat was stored under its id would otherwise never be re-keyed, and the send guard would
+   * refuse it.
    */
   recipientIds?: () => Id[]
   /**
