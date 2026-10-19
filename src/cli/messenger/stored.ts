@@ -399,7 +399,6 @@ const personIn = (people: PeopleLookup, reference: string): Id | undefined => {
   }
 }
 
-/** Read once when `watch` starts: a store read per event would let a later event overtake an earlier one. */
 const announceStoredChats = async (
   messenger: MessengerAdapter,
   store: Saving["store"],
@@ -418,6 +417,7 @@ const announceStoredChats = async (
   }
 }
 
+/** Read once when `watch` starts: a store read per event would let a later event overtake an earlier one. */
 const rememberTitles = async (store: Saving["store"], account: AccountKey, titles: Map<Id, string>): Promise<void> => {
   try {
     const opened = await store()

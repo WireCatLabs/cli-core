@@ -828,11 +828,15 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     return { warnings, codes }
   }
 
-  it("hands over only this account's chat ids, and a re-key the messenger sends back moves the chat", async () => {
+  it("hands over only this account's chats it has not left, and a re-key the messenger sends back moves the chat", async () => {
     const { store } = await setUp()
     await store.chats.saveChats({ provider: "test", account: "600" }, [
       { id: "9", title: "Not ours", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
     ])
+    await store.chats.saveChats(account, [
+      { id: "6", title: "Gone", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 },
+    ])
+    await store.chats.markChatsLeft(account, ["7", "8"])
     let told: readonly string[] = []
     let heard = () => {}
     const toldOnce = new Promise<void>((resolve) => {
@@ -854,13 +858,19 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8@lid"])
   })
 
-  it("a messenger that fails to take them is one warning, and the feed is still saved", async () => {
+  it.each([
+    ["rejects", async () => Promise.reject(new Error("engine not ready"))],
+    [
+      "throws",
+      () => {
+        throw new Error("engine not ready")
+      },
+    ],
+  ])("a messenger that %s on them is one warning, and the feed is still saved", async (_, storedChats) => {
     const { store } = await setUp()
 
     const { warnings, codes } = await feeding(store, {
-      storedChats: async () => {
-        throw new Error("engine not ready")
-      },
+      storedChats,
       feed: async (onBatch) =>
         onBatch({
           chats: [{ id: "10", title: "New", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 }],
