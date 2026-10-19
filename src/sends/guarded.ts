@@ -12,6 +12,12 @@ type Attempt = Omit<SendEntry, "at" | "profile" | "outcome"> & {
   personIds?: Id[]
 }
 
+/** The sent message's id, and the chat it landed in when the messenger answered another id than the one typed. */
+export const sentIds = (typed: Id, message: { id: Id; chatId: Id }): Pick<Attempt, "messageId" | "resultChatId"> => ({
+  messageId: message.id,
+  ...(message.chatId && message.chatId !== typed ? { resultChatId: message.chatId } : {}),
+})
+
 /** A write's answer, with the id its journal lines and run events carry. */
 export type Operated<T> = T & { operationId: string }
 

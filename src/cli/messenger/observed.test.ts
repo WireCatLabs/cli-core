@@ -51,6 +51,24 @@ describe("observed message IDs in recorded runs", () => {
   }
 })
 
+describe("observed send", () => {
+  it("names the typed chat on the request and the answered chat on the response", async () => {
+    const events: DiagnosticEvent[] = []
+    const adapter = {
+      self: () => "9",
+      close: async () => {},
+      send: async () => ({ message, sendId: "90" }),
+    } as unknown as MessengerAdapter
+
+    await observed(adapter, (event) => events.push(event)).send("phone-form", "hi", { sendId: "90" })
+
+    expect(events.map((event) => [event.event, "ids" in event ? event.ids?.chat : undefined])).toEqual([
+      ["request", "phone-form"],
+      ["response", "7"],
+    ])
+  })
+})
+
 describe("observed watch", () => {
   it("counts each event it hands on, by event, on the messages.watch response", async () => {
     const arrived = { event: "message", message } as MessageEvent

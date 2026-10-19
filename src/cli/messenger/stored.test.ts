@@ -85,6 +85,18 @@ describe("what the writes leave in the store", () => {
     expect(await found("tuesday")).toEqual([])
   })
 
+  it("a send is saved under the chat the messenger answered, not the id typed", async () => {
+    const { store } = await setUp()
+    const wrapped = await listening(store, [], {
+      send: async () => ({ message: message("41", "hello again", "8"), sendId: "s" }),
+    })
+
+    await wrapped.send("phone-form", "hello again", { sendId: "s" })
+
+    expect((await store.messages.message(account, "41", { chatId: "8" }))?.text).toBe("hello again")
+    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id)).not.toContain("phone-form")
+  })
+
   it("a forward keeps its copy in the chat it went to", async () => {
     const { wrapped, found } = await setUp()
 
