@@ -5,7 +5,7 @@ import { providerErrorKey } from "../../runs/events.js"
 import { type FloodMemory, holdEnd, type SendBlock } from "../../sends/flood.js"
 import type { Pacer } from "../../sends/pace.js"
 
-const LONG_LIVED = new Set(["self", "newSendId", "close", "formatMarkdown", "formatHtml"])
+const LONG_LIVED = new Set(["self", "newSendId", "close", "formatMarkdown", "formatHtml", "storedChats"])
 /** Neither held nor paced, as they listen for as long as the run does; what ends them is still remembered. */
 const LISTENING = new Set(["watch", "feed", "listen", "listenHistory"])
 const BLOCKING = new Set<AccountStanding["state"]>(["frozen", "limited", "banned"])

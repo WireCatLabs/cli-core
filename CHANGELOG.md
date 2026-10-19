@@ -11,6 +11,11 @@ shape of this file.
 
 ### Added
 
+- **A messenger that pushes its history can be told the chats the store holds**: the optional
+  `PushedHistory.storedChats(ids)` gets every chat id of this account once as `feed` starts, in `serve` and `watch`.
+  whatsapp-cli uses it to re-key phone-form chats nothing names again, through `rekeys`. A reject is a
+  `stored_chats_failed` warning. The contract kit has a case for it, skipped without the method, and
+  `fakeAdapter(seed, { storedChats: true })`.
 - **`gatherProjectEvidence` brings the mail and document index up to date before reading** through the new
   optional `MessageStore.contextIndex` port (`ContextIndex.catchUp`), the same fills a mail search and the notes
   search run. `index: "as-is"` skips it; the result's `index` says what happened. On a store just synced, new

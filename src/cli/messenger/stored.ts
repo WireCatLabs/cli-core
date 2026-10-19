@@ -272,8 +272,14 @@ export const stored = (
       : {}),
     ...(messenger.feed
       ? {
-          feed: (onBatch, signal) =>
-            messenger.feed?.(saveBatches("history.feed", onBatch), signal) ?? Promise.resolve(),
+          feed: (onBatch, signal) => {
+            if (messenger.storedChats) {
+              const announcing = announceStoredChats(messenger, store, account, events, warn)
+              pending?.add(announcing)
+              void announcing.finally(() => pending?.delete(announcing))
+            }
+            return messenger.feed?.(saveBatches("history.feed", onBatch), signal) ?? Promise.resolve()
+          },
         }
       : {}),
     ...(messenger.listenHistory
@@ -394,6 +400,24 @@ const personIn = (people: PeopleLookup, reference: string): Id | undefined => {
 }
 
 /** Read once when `watch` starts: a store read per event would let a later event overtake an earlier one. */
+const announceStoredChats = async (
+  messenger: MessengerAdapter,
+  store: Saving["store"],
+  account: AccountKey,
+  events: EventSink,
+  warn: (message: string) => void,
+): Promise<void> => {
+  try {
+    const opened = await store()
+    if (!opened) return
+    const ids = (await opened.forAccount(account).chats.chats({})).items.map((chat) => chat.id)
+    await messenger.storedChats?.(ids)
+  } catch (error) {
+    events({ event: "warning", code: "stored_chats_failed", operation: "history.stored_chats" })
+    warn(`the messenger was not told the stored chats: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 const rememberTitles = async (store: Saving["store"], account: AccountKey, titles: Map<Id, string>): Promise<void> => {
   try {
     const opened = await store()

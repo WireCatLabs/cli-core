@@ -101,7 +101,8 @@ const missing = (what: string): CliError => new CliError("not_found", `the fake 
  * With `{ feed: true }` it also pushes its history, as a messenger with `history: "store"` does:
  * the chats and people in one batch, then each chat's messages in a batch of their own.
  * With `{ listen: true }` it also has `listen`, which hands on what `watch` does, and with `{ listenHistory: true }`
- * `listenHistory`, which hands on what `feed` does.
+ * `listenHistory`, which hands on what `feed` does. With `{ storedChats: true }` it takes the stored chat ids and
+ * does nothing with them.
  */
 const withRules = (folder: Folder, { emoji, include, skip, exclude, pin }: FolderRules): void => {
   if (emoji !== undefined) folder.emoji = emoji
@@ -113,7 +114,7 @@ const withRules = (folder: Folder, { emoji, include, skip, exclude, pin }: Folde
 
 export const fakeAdapter = (
   seed: Seed = contractSeed(),
-  options: { feed?: boolean; listen?: boolean; listenHistory?: boolean } = {},
+  options: { feed?: boolean; listen?: boolean; listenHistory?: boolean; storedChats?: boolean } = {},
 ): FakeAdapter => {
   const state = structuredClone(seed)
   let account: Account | null = state.account
@@ -406,6 +407,7 @@ export const fakeAdapter = (
 
     ...(options.feed ? { feed: pushHistory } : {}),
     ...(options.listenHistory ? { listenHistory: pushHistory } : {}),
+    ...(options.storedChats ? { storedChats: async () => {} } : {}),
 
     download: async (reference, messageId) => {
       const message = messageOf(chatOf(reference).id, messageId)

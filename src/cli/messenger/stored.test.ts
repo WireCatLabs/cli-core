@@ -805,3 +805,70 @@ describe("names the store answers where the history is pushed", () => {
     expect(titleOf("7")).toBeNull()
   })
 })
+
+describe("the stored chats a pushing messenger is told as feed starts", () => {
+  const feeding = async (
+    store: MessageStore,
+    adapter: Partial<MessengerAdapter>,
+  ): Promise<{ warnings: string[]; codes: string[] }> => {
+    const pending = new Set<Promise<void>>()
+    const warnings: string[] = []
+    const codes: string[] = []
+    const wrapped = stored({ self: () => "500", ...adapter } as unknown as MessengerAdapter, {
+      account,
+      store: async () => store,
+      warn: (line) => warnings.push(line),
+      events: (event) => {
+        if (event.event === "warning") codes.push(event.code)
+      },
+      pending,
+    })
+    await wrapped.feed?.(() => {}, new AbortController().signal)
+    while (pending.size > 0) await Promise.all(pending)
+    return { warnings, codes }
+  }
+
+  it("hands over only this account's chat ids, and a re-key the messenger sends back moves the chat", async () => {
+    const { store } = await setUp()
+    await store.chats.saveChats({ provider: "test", account: "600" }, [
+      { id: "9", title: "Not ours", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+    ])
+    let told: readonly string[] = []
+    let heard = () => {}
+    const toldOnce = new Promise<void>((resolve) => {
+      heard = resolve
+    })
+
+    await feeding(store, {
+      storedChats: async (ids) => {
+        told = ids
+        heard()
+      },
+      feed: async (onBatch) => {
+        await toldOnce
+        onBatch({ rekeys: [{ from: "8", to: "8@lid" }] })
+      },
+    })
+
+    expect([...told].sort()).toEqual(["7", "8"])
+    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8@lid"])
+  })
+
+  it("a messenger that fails to take them is one warning, and the feed is still saved", async () => {
+    const { store } = await setUp()
+
+    const { warnings, codes } = await feeding(store, {
+      storedChats: async () => {
+        throw new Error("engine not ready")
+      },
+      feed: async (onBatch) =>
+        onBatch({
+          chats: [{ id: "10", title: "New", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 }],
+        }),
+    })
+
+    expect(codes).toEqual(["stored_chats_failed"])
+    expect(warnings).toEqual([expect.stringContaining("engine not ready")])
+    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id)).toContain("10")
+  })
+})

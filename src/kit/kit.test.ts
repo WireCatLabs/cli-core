@@ -36,7 +36,7 @@ describe("the fake adapter keeps every promise of the port", () => {
   describe("pushing its history", () => {
     runAll(
       contractCases({
-        connect: (seed) => fakeAdapter(seed, { feed: true, listen: true, listenHistory: true }),
+        connect: (seed) => fakeAdapter(seed, { feed: true, listen: true, listenHistory: true, storedChats: true }),
         ids: wordIds,
         orderBy: "time",
       }),
@@ -207,6 +207,20 @@ describe("the contract cases catch an adapter that breaks a promise", () => {
     ).toEqual({
       skipped: "the adapter has no feed",
     })
+  })
+
+  it("a storedChats that rejects or never resolves, and the case skipped without one", async () => {
+    const run = (storedChats: MessengerAdapter["storedChats"]) =>
+      broken(() => ({ storedChats }))
+        .find((one) => one.name.startsWith("storedChats"))
+        ?.run()
+    await expect(
+      run(async () => {
+        throw new Error("not connected")
+      }),
+    ).rejects.toThrow(/not connected/)
+    await expect(run(() => new Promise<void>(() => {}))).rejects.toThrow(/did not resolve for no ids/)
+    expect(await run(undefined)).toEqual({ skipped: "the adapter has no storedChats" })
   })
 
   it("skips every server read case, together, for an adapter without them, and fails it unless its history is in the store", async () => {
