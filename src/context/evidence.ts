@@ -57,6 +57,17 @@ export interface ContextIndex {
   }>
 }
 
+/** Changes whenever the cited text, its title or its revision does; a staged finding citing an older one is stale. */
+export const contextEvidenceFingerprint = (item: Pick<ContextEvidenceItem, "ref" | "title" | "text" | "revision">) =>
+  createHash("sha256")
+    .update(JSON.stringify(["context-evidence-v1", item.ref, item.title, item.text, item.revision]))
+    .digest("hex")
+
+/** One stored message, email or document as the context reader returns it, by its reference. */
+export interface ContextRecordReader {
+  read(ref: string): Promise<Pick<ContextEvidenceItem, "ref" | "title" | "text" | "revision"> | null>
+}
+
 export const contextCursorScope = (request: Pick<ContextEvidenceRequest, "source" | "query" | "after" | "before">) =>
   createHash("sha256")
     .update(

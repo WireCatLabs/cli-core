@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
+import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
 import type { AccountKey } from "../types.js"
 import type { Actor } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
@@ -68,10 +69,16 @@ const NAMED =
   "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
 const json = (value: unknown) => (value == null ? null : JSON.parse(String(value)))
 
-type ProposalOperations = {
-  [K in keyof ProposedActionsStore]: ProposedActionsStore[K] extends (...args: infer A) => Promise<infer R>
-    ? (...args: A) => R
-    : never
+type ProposalOperations = Omit<
+  {
+    [K in keyof ProposedActionsStore]: ProposedActionsStore[K] extends (...args: infer A) => Promise<infer R>
+      ? (...args: A) => R
+      : never
+  },
+  "approve"
+> & {
+  /** `by` records an agent deciding for the owner; the public store always records the owner. */
+  approve(id: string, result?: unknown, by?: Author): ProposedAction
 }
 
 export const proposalOperationsOver = (context: StoreContext): ProposalOperations => {
@@ -133,8 +140,8 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         .run(to, now(), ...(values as (string | number | null)[]), Number(id))
       return actionOf(rowOf(id))
     })
-  const decide = (id: string, to: "approved" | "rejected", result?: unknown) => {
-    const { actor } = authorActor(context, "owner")
+  const decide = (id: string, to: "approved" | "rejected", result?: unknown, by: Author = "owner") => {
+    const { actor } = authorActor(context, by)
     return move(id, ["proposed"], to, ", decided_by_type = ?, decided_by_id = ?, decided_at = ?, result = ?", [
       actor.type,
       actor.id,
@@ -200,7 +207,7 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         .all(status ?? null, status ?? null, Math.min(Math.max(limit, 1), 500))
         .map(actionOf)
     },
-    approve: (id, result) => decide(id, "approved", result),
+    approve: (id, result, by) => decide(id, "approved", result, by),
     reject: (id) => decide(id, "rejected"),
     executed: (id, result) =>
       move(id, ["approved"], "executed", ", executed_at = ?, result = ?", [
@@ -227,15 +234,22 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
 export const proposedActionsStoreOver = (context: StoreContext): ProposedActionsStore => {
   const operations = proposalOperationsOver(context)
   const generic = (id: string) => {
-    if (operations.get(id).kind === MEETING_FINDINGS_KIND)
+    const kind = operations.get(id).kind
+    if (kind === MEETING_FINDINGS_KIND)
       throw new CliError("validation_error", "review meeting findings through the dedicated findings command", {
         reason: "meeting-findings.dedicated-review",
+      })
+    if (kind === EVIDENCE_FINDINGS_KIND)
+      throw new CliError("validation_error", "review evidence findings through the dedicated findings command", {
+        reason: "evidence-findings.dedicated-review",
       })
   }
   return {
     propose: async (input) => {
       if (input.kind === MEETING_FINDINGS_KIND)
         throw new CliError("validation_error", "stage meeting findings through the dedicated findings command")
+      if (input.kind === EVIDENCE_FINDINGS_KIND)
+        throw new CliError("validation_error", "stage evidence findings through the dedicated findings command")
       return operations.propose(input)
     },
     get: async (id) => operations.get(id),

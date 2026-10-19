@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it, vi } from "vitest"
-import type { ContextEvidenceReader, ContextSource } from "../context/evidence.js"
+import { type ContextEvidenceReader, type ContextSource, contextEvidenceFingerprint } from "../context/evidence.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
 import { gatherProjectEvidence, type ProjectSourceFetcher } from "./project-gathering.js"
 import { storedMessageNeighbours, storedNeighbours } from "./project-gathering-around.js"
@@ -324,4 +324,27 @@ it("gives a mail hit the emails before and after it in its thread", async () => 
       found: false,
     },
   ])
+})
+
+it("gives each item a fingerprint the store reproduces by reference until the text changes", async () => {
+  const f = await fixture()
+  const result = await gatherProjectEvidence({ evidence: f.port }, f.request)
+  const records = f.store.contextRecords
+  if (!records) throw new Error("Missing record reader")
+  const kinds = new Set<string>()
+  for (const item of result.items) {
+    const record = await records.read(item.ref)
+    expect(record && contextEvidenceFingerprint(record)).toBe(item.fingerprint)
+    kinds.add(item.kind)
+  }
+  expect([...kinds].sort()).toEqual(["document", "mail", "message"])
+  const message = result.items.find((i) => i.kind === "message")
+  f.db
+    .prepare("UPDATE messages SET text='Harbour launch moved' WHERE account_id=? AND external_id='3'")
+    .run(f.accountId)
+  const changed = await records.read(message?.ref ?? "")
+  expect(changed && contextEvidenceFingerprint(changed)).not.toBe(message?.fingerprint)
+  expect(await records.read("msg:telegram/9/9/9")).toBeNull()
+  expect(await records.read("document:999999")).toBeNull()
+  expect(await records.read("not a ref")).toBeNull()
 })

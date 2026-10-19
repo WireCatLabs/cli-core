@@ -1,4 +1,4 @@
-import type { ContextEvidenceReader, ContextIndex } from "../context/evidence.js"
+import type { ContextEvidenceReader, ContextIndex, ContextRecordReader } from "../context/evidence.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
 import {
@@ -10,6 +10,7 @@ import {
 import { type ChatsStore, chatsStoreOver } from "./chats.js"
 import { type ConversationsStore, conversationsStoreOver } from "./conversations.js"
 import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
+import type { EvidenceFindingsStore } from "./evidence-findings.js"
 import type { MeetingFindingsStore } from "./meeting-findings.js"
 import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
 import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
@@ -23,8 +24,9 @@ import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-ac
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
-import { contextEvidenceOver, contextIndexOver } from "./sqlite/context-evidence.js"
+import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
+import { evidenceFindingsStoreOver } from "./sqlite/evidence-findings.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
@@ -49,6 +51,7 @@ import { type AccountVectors, accountVectorsOver, type VectorsStore, vectorsStor
 export interface MessageStore {
   readonly contextEvidence?: ContextEvidenceReader
   readonly contextIndex?: ContextIndex
+  readonly contextRecords?: ContextRecordReader
   /** Accounts, account groups and which account each app profile is. */
   readonly accounts: AccountsStore
   /** One account's chats: the list, what left, what is complete, their metadata. */
@@ -91,6 +94,8 @@ export interface MessageStore {
   readonly catalog: CatalogStore
   /** Choices that hold until replaced, each with its evidence. */
   readonly meetingFindings: MeetingFindingsStore
+  /** Cited facts and follow-ups about one project from stored messages, mail and documents, for review. */
+  readonly evidenceFindings: EvidenceFindingsStore
   readonly facts: FactsStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
   readonly memories: MemoriesStore
@@ -180,6 +185,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   }
   const contextEvidence = once(() => contextEvidenceOver(context))
   const contextIndex = once(() => contextIndexOver(context, stemmerFor))
+  const contextRecords = once(() => contextRecordsOver(context))
   const searches = once(() => searchesStoreOver(context))
   const queries = once(() => queriesStoreOver(context, stemmerFor))
   const searchIndex = once(() => searchIndexStoreOver(context))
@@ -191,6 +197,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
   const catalog = once(() => catalogStoreOver(context))
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
+  const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
   const facts = once(() => factsStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
@@ -203,6 +210,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get contextIndex() {
       return contextIndex()
+    },
+    get contextRecords() {
+      return contextRecords()
     },
     meetingVectors: meetingVectorsOver(context),
     get accounts() {
@@ -273,6 +283,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get meetingFindings() {
       return meetingFindings()
+    },
+    get evidenceFindings() {
+      return evidenceFindings()
     },
     get facts() {
       return facts()

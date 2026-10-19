@@ -64,6 +64,8 @@ export type {
   ContextEvidenceReader,
   ContextEvidenceRequest,
   ContextIndex,
+  ContextRecordReader,
   ContextSource,
 } from "../context/evidence.js"
+export { contextEvidenceFingerprint } from "../context/evidence.js"
 export type { ContextReadLimits, ContextReadUsage } from "../context/read-budget.js"

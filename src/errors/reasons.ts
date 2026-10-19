@@ -25,6 +25,8 @@ const OTHERS: Entry[] = [
   validation("context.read-budget", "the selected context reads exceed their text or request allowance"),
   validation("meeting-findings.stale", "meeting findings changed since they were read; stage a new batch"),
   validation("meeting-findings.dedicated-review", "review meeting findings through the dedicated findings command"),
+  validation("evidence-findings.stale", "evidence findings changed since they were read; stage a new batch"),
+  validation("evidence-findings.dedicated-review", "review evidence findings through the dedicated findings command"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],

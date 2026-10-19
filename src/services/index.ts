@@ -8,10 +8,12 @@ export type {
   ContextIndex,
   ContextReadLimits,
   ContextReadUsage,
+  ContextRecordReader,
   ContextSource,
   ScopedContextEvidenceReader,
 } from "./context-evidence.js"
-export { createContextEvidenceReader } from "./context-evidence.js"
+export { contextEvidenceFingerprint, createContextEvidenceReader } from "./context-evidence.js"
+export { excerpt } from "./excerpt.js"
 export {
   type DownloadedModel,
   downloadImageModel,
