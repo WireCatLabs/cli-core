@@ -4,9 +4,10 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Chat, Message, MessageEvent } from "../../domain/models.js"
 import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
-import type { DiagnosticEvent } from "../../runs/events.js"
+import type { DiagnosticEvent, Warn, WarningEvent } from "../../runs/events.js"
 import type { MessageStore } from "../../store/store.js"
-import { connected } from "./context.js"
+import { connected, type MessengerContext } from "./context.js"
+import { recordDiagnostics } from "./serve-notice.js"
 
 const order: string[] = []
 let rekeysPerPass: number | undefined
@@ -133,7 +134,7 @@ describe("closing a connection", () => {
         return new Promise<void>(() => {})
       },
     } as unknown as MessengerAdapter
-    const { adapter: saving, close, warnings, codes } = opened(adapter, "store", { listen: true })
+    const { adapter: saving, close, warnings, codes, logged } = opened(adapter, "store", { listen: true })
     await saving.feed?.(() => {}, new AbortController().signal)
     await vi.advanceTimersByTimeAsync(0)
 
@@ -145,6 +146,7 @@ describe("closing a connection", () => {
     expect(order).toEqual(["connection closed", "store closed"])
     expect(codes).toEqual(["stored_chats_failed"])
     expect(warnings).toEqual([expect.stringContaining("stored-chats hook did not finish and was abandoned")])
+    expect(logged).toEqual([{ event: "serve.warning", code: "stored_chats_failed", operation: "close" }])
   })
 })
 
@@ -226,13 +228,29 @@ const opened = (
   const warnings: string[] = []
   const codes: string[] = []
   const recorded: DiagnosticEvent[] = []
+  const logged: Record<string, unknown>[] = []
+  const serveLog = recordDiagnostics(
+    {
+      format: "json",
+      settings: { quiet: false },
+      renderer: {},
+      streams: { diagnostic: (line: string) => logged.push(JSON.parse(line).attributes) },
+    } as unknown as MessengerContext,
+    app,
+  )
+  const logWarn = serveLog.renderer.warn as Warn
   const held = connected(
     adapter,
     { app, provider: "chat", ...(history ? { history } : {}) },
     {
       settings: { profile: "default" } as never,
       env: { CHAT_STATE_DIR: join(mkdtempSync(join(tmpdir(), "connected-")), "state") },
-      renderer: { warn: (line: string) => warnings.push(line) } as never,
+      renderer: {
+        warn: (line: string, warning?: WarningEvent) => {
+          warnings.push(line)
+          logWarn(line, warning)
+        },
+      } as never,
     },
     (event) => {
       recorded.push(event)
@@ -241,7 +259,7 @@ const opened = (
     undefined,
     connect,
   )
-  return { ...held, warnings, codes, recorded }
+  return { ...held, warnings, codes, recorded, logged }
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve))
@@ -337,7 +355,7 @@ describe("a one-shot command of a messenger whose history is in the store", () =
 
   it("warns when the listen fails, and the command goes on", async () => {
     const fake = passiveFake()
-    const { close, warnings, codes } = opened(fake.adapter, "store")
+    const { close, warnings, codes, logged } = opened(fake.adapter, "store")
     await tick()
     fake.fail(new Error("the engine stopped"))
     await tick()
@@ -345,6 +363,7 @@ describe("a one-shot command of a messenger whose history is in the store", () =
 
     expect(warnings).toEqual([expect.stringContaining("the engine stopped")])
     expect(codes).toEqual(["listen_failed"])
+    expect(logged).toEqual([{ event: "serve.warning", code: "listen_failed", operation: "messages.listen" }])
     expect(order).toEqual(["connection closed"])
   })
 
@@ -368,7 +387,7 @@ describe("a one-shot command of a messenger whose history is in the store", () =
   it("gives up on a listen that never ends, with a warning, and still closes", async () => {
     vi.useFakeTimers()
     const fake = passiveFake({ hangs: true })
-    const { close, warnings, codes } = opened(fake.adapter, "store")
+    const { close, warnings, codes, logged } = opened(fake.adapter, "store")
     await vi.advanceTimersByTimeAsync(0)
 
     const closing = close()
@@ -378,6 +397,7 @@ describe("a one-shot command of a messenger whose history is in the store", () =
     expect(order).toEqual(["connection closed"])
     expect(warnings).toEqual([expect.stringContaining("still handing on messages")])
     expect(codes).toEqual(["store_not_written"])
+    expect(logged).toEqual([{ event: "serve.warning", code: "store_not_written", operation: "messages.listen" }])
   })
 
   it("gives up on a listen that never ends within the close wait a test hands in", async () => {
@@ -491,7 +511,7 @@ describe("a one-shot command of a messenger whose history is pushed", () => {
 
   it("warns when the history listen fails, and the command goes on", async () => {
     const fake = historyFake()
-    const { close, warnings, codes } = opened(fake.adapter, "store")
+    const { close, warnings, codes, logged } = opened(fake.adapter, "store")
     await tick()
     fake.fail(new Error("the engine stopped"))
     await tick()
@@ -499,6 +519,7 @@ describe("a one-shot command of a messenger whose history is pushed", () => {
 
     expect(warnings).toEqual([expect.stringMatching(/^history batches .*the engine stopped/)])
     expect(codes).toEqual(["listen_failed"])
+    expect(logged).toEqual([{ event: "serve.warning", code: "listen_failed", operation: "history.listen" }])
     expect(order).toEqual(["connection closed"])
   })
 

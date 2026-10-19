@@ -3,7 +3,7 @@ import type { Chat, ChatEvent, Id, Message, MessageEvent, PollVote } from "../..
 import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import type { MessengerTraits } from "../../ports/traits.js"
 import { isId, type PeopleLookup, pickPerson } from "../../resolve.js"
-import type { EventSink } from "../../runs/events.js"
+import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { codeOf } from "../../sends/guarded.js"
 import { chatIdIn } from "../../services/message-resolution.js"
 import type { AccountKey, DeletionScope, IngestedVia, MessageStore } from "../../store/store.js"
@@ -14,7 +14,7 @@ export interface Saving {
   account: AccountKey
   /** Opened on the first save, not before: a command that reads nothing has no reason to touch the file. */
   store: () => Promise<MessageStore | undefined>
-  warn: (message: string) => void
+  warn: Warn
   events: EventSink
   /** Saves still writing, for the closer to wait on: `watch` does not hold the next event for one. */
   pending?: Set<Promise<void>>
@@ -71,8 +71,10 @@ export const stored = (
   let warned = false
   let recorded = profile === undefined
   const notWritten = (operation: string, error: unknown): void => {
-    events({ event: "warning", code: "store_not_written", operation })
-    if (!warned) warn(`not saved to the local store: ${error instanceof Error ? error.message : String(error)}`)
+    const warning: WarningEvent = { event: "warning", code: "store_not_written", operation }
+    events(warning)
+    if (!warned)
+      warn(`not saved to the local store: ${error instanceof Error ? error.message : String(error)}`, warning)
     warned = true
   }
   const attempt = async (operation: string, write: (store: MessageStore) => Promise<unknown>): Promise<void> => {
@@ -139,8 +141,14 @@ export const stored = (
     rekeysQueued = 0
     for (const saving of rekeysOnly) pending?.delete(saving)
     if (count === 0) return
-    events({ event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: count } })
-    warn(`${count} chat re-key${count === 1 ? "" : "s"} not applied yet; the next serve applies them`)
+    const warning: WarningEvent = {
+      event: "warning",
+      code: "rekeys_not_applied",
+      operation: "history.rekey",
+      counts: { rekeys: count },
+    }
+    events(warning)
+    warn(`${count} chat re-key${count === 1 ? "" : "s"} not applied yet; the next serve applies them`, warning)
   }
   closing?.addEventListener("abort", giveUpRekeys, { once: true })
   const saveRekeys = async (pairs: readonly { from: Id; to: Id }[], round: number): Promise<void> => {
@@ -507,7 +515,7 @@ const announceStoredChats = async (
   store: Saving["store"],
   account: AccountKey,
   events: EventSink,
-  warn: (message: string) => void,
+  warn: Warn,
   recipientIds: Saving["recipientIds"],
 ): Promise<void> => {
   let listed: Id[] = []
@@ -523,8 +531,12 @@ const announceStoredChats = async (
     if (recipients.length > 0) await messenger.storedChats?.(held, recipients)
     else if (opened) await messenger.storedChats?.(held)
   } catch (error) {
-    events({ event: "warning", code: "stored_chats_failed", operation: "history.stored_chats" })
-    warn(`the messenger was not told the stored chats: ${error instanceof Error ? error.message : String(error)}`)
+    const warning: WarningEvent = { event: "warning", code: "stored_chats_failed", operation: "history.stored_chats" }
+    events(warning)
+    warn(
+      `the messenger was not told the stored chats: ${error instanceof Error ? error.message : String(error)}`,
+      warning,
+    )
   }
 }
 

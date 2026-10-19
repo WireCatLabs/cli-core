@@ -322,9 +322,15 @@ await run(argv, definition, {
   env,
   keyring: memoryKeyring(),
   closeWaitMs: 10,
-  rekeyPacing: { lockMs: 0, pauseMs: 0 },
+  rekeyPacing: { lockMs: 1000, pauseMs: 0 },
 })
 ```
+
+- `closeWaitMs` — how long the close waits on saves and passive listens before it gives them up with a warning.
+- `rekeyPacing.lockMs` — how long one pass of re-keys may hold the store's write lock. A pass always does at least
+  one re-key, so `0` means one re-key per transaction: hundreds of re-keys then outlast a short `closeWaitMs`, and
+  the ones still queued are given up with `rekeys_not_applied`. Keep it long, as above.
+- `rekeyPacing.pauseMs` — the pause between two passes. `0` takes the wait out.
 
 A listen that hangs still warns `store_not_written`, only sooner. No flag, variable or MCP call sets them.
 

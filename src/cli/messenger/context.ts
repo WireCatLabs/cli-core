@@ -4,7 +4,7 @@ import { servingProfiles } from "../../background/lock.js"
 import type { AdminRight, GroupSettingKey, Id, Message, PollVote, PrivacyKey, Provider } from "../../domain/models.js"
 import type { WarmEmbedders } from "../../embeddings/embed.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
-import type { EventSink } from "../../runs/events.js"
+import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { type Asker, guardFor, type SendGuard } from "../../sends/guard.js"
 import { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "../../sends/pace.js"
@@ -367,7 +367,7 @@ interface Passive {
 const listened = (
   { run, operation, what }: Passive,
   events: EventSink,
-  warn: (message: string) => void,
+  warn: Warn,
   waitMs: number,
 ): { closing: () => void; stop: () => Promise<boolean>; operation: string; what: string } => {
   const abort = new AbortController()
@@ -376,9 +376,11 @@ const listened = (
     .then(() => run(abort.signal))
     .catch((error: unknown) => {
       if (closing) return
-      events({ event: "warning", code: "listen_failed", operation })
+      const warning: WarningEvent = { event: "warning", code: "listen_failed", operation }
+      events(warning)
       warn(
         `${what} arriving during this command are not saved: ${error instanceof Error ? error.message : String(error)}`,
+        warning,
       )
     })
   return {
@@ -519,21 +521,30 @@ export const connected = (
       } finally {
         try {
           const ended = await Promise.all(passives.map((passive) => passive.stop()))
+          const warn: Warn = renderer.warn
+          const warned = (warning: WarningEvent, text: string) => {
+            events(warning)
+            warn(text, warning)
+          }
           passives.forEach(({ operation, what }, at) => {
             if (ended[at]) return
-            events({ event: "warning", code: "store_not_written", operation })
-            renderer.warn(`not saved to the local store: the messenger was still handing on ${what} at exit`)
+            warned(
+              { event: "warning", code: "store_not_written", operation },
+              `not saved to the local store: the messenger was still handing on ${what} at exit`,
+            )
           })
           await settled(new Set([...pending, ...announcing]), closeWaitMs)
           closing.abort()
-          if (pending.size > 0) {
-            events({ event: "warning", code: "store_not_written", operation: "close" })
-            renderer.warn("not saved to the local store: the last messages were still being written at exit")
-          }
-          if (announcing.size > 0) {
-            events({ event: "warning", code: "stored_chats_failed", operation: "close" })
-            renderer.warn("the messenger's stored-chats hook did not finish and was abandoned at exit; nothing is lost")
-          }
+          if (pending.size > 0)
+            warned(
+              { event: "warning", code: "store_not_written", operation: "close" },
+              "not saved to the local store: the last messages were still being written at exit",
+            )
+          if (announcing.size > 0)
+            warned(
+              { event: "warning", code: "stored_chats_failed", operation: "close" },
+              "the messenger's stored-chats hook did not finish and was abandoned at exit; nothing is lost",
+            )
         } finally {
           await store.close()
         }

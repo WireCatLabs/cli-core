@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A warning in `serve`'s log now says which warning it was.** Off a terminal, a re-key given up at exit, a write
+  the store did not take, a passive listen that failed and a stored-chats call that failed each wrote a bare
+  `serve.warning` record, so the log could not tell them apart. The record now carries the warning's `code`,
+  `operation` and `counts` (`rekeys_not_applied` with `counts.rekeys`), never its sentence, which can quote an
+  error or a chat. Warnings that have no code yet still log a bare record.
+- **The adapter test example in [ADAPTERS.md](docs/dev/ADAPTERS.md#running-the-contract-cases) no longer gives up
+  re-keys.** It handed `run()` `rekeyPacing: { lockMs: 0 }`, one re-key per transaction, so a few hundred re-keys
+  outlasted `closeWaitMs: 10` and were given up. It now hands `{ lockMs: 1000, pauseMs: 0 }` and says what each
+  field does.
+
 ## 0.360.0 — 19.10.2026
 
 ### Added

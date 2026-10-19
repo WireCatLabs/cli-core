@@ -54,6 +54,7 @@ const call = async (
   connect: Messenger["connect"],
   signal?: AbortSignal,
   history?: "store",
+  waits: { closeWaitMs?: number; rekeyPacing?: { lockMs: number; pauseMs: number } } = {},
 ) => {
   const messenger: Messenger = {
     app,
@@ -75,10 +76,16 @@ const call = async (
         messagesCommand(messenger),
       ],
     },
-    { streams, tty: false, env, ...(signal ? { signal } : {}) },
+    { streams, tty: false, env, ...waits, ...(signal ? { signal } : {}) },
   )
   return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
 }
+
+const warningAttributes = (stderr: string) =>
+  stderr
+    .split("\n")
+    .filter((line) => line.includes('"body":"serve.warning"'))
+    .map((line) => JSON.parse(line).attributes)
 
 const neverConnects: Messenger["connect"] = async () => {
   throw new Error("a store-mode read connected")
@@ -215,7 +222,9 @@ describe("a messenger that pushes its history", () => {
     })
     const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
     expect(code).toBe(0)
-    expect(stderr).toContain('"body":"serve.warning"')
+    expect(warningAttributes(stderr)).toEqual([
+      { event: "serve.warning", code: "store_not_written", operation: "history.rekey" },
+    ])
     const messages = await call(["messages", "list", seed.busy, "--json"], env, neverConnects, undefined, "store")
     expect(JSON.parse(messages.stdout).items.map((message: { text: string }) => message.text)).toContain("still saved")
   })
@@ -228,8 +237,51 @@ describe("a messenger that pushes its history", () => {
 
     const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
     expect(code).toBe(0)
-    expect(stderr).toContain('"severity":"warn"')
+    expect(warningAttributes(stderr)).toContainEqual(expect.objectContaining({ code: "store_not_written" }))
     expect(stderr).not.toContain("not saved to the local store")
+  })
+
+  it("re-keys given up at exit log their code and how many, never the sentence", async () => {
+    const { env } = sandbox()
+    const stop = new AbortController()
+    const { connect } = pushing(stop, {
+      feed: async (onBatch) => {
+        onBatch({ chats: seed.chats })
+        onBatch({ rekeys: seed.chats.slice(0, 3).map((chat) => ({ from: chat.id, to: `${chat.id}@lid` })) })
+        stop.abort()
+      },
+    })
+
+    const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store", {
+      closeWaitMs: 10,
+      rekeyPacing: { lockMs: 0, pauseMs: 60_000 },
+    })
+
+    expect(code).toBe(0)
+    const [warning, ...more] = warningAttributes(stderr)
+    expect(more).toEqual([])
+    expect(warning).toMatchObject({ event: "serve.warning", code: "rekeys_not_applied", operation: "history.rekey" })
+    // A slow machine closes before the first pass, so it gives up all three.
+    expect([2, 3]).toContain(warning.counts.rekeys)
+    expect(stderr).not.toContain("not applied yet")
+  })
+
+  it("a stored-chats hook that fails logs its code, never the error it quotes", async () => {
+    const { env } = sandbox()
+    const stop = new AbortController()
+    const { connect } = pushing(stop, {
+      storedChats: async () => {
+        throw new Error("MARKER-Fake Book Club +10000000000")
+      },
+    })
+
+    const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
+
+    expect(code).toBe(0)
+    expect(warningAttributes(stderr)).toEqual([
+      { event: "serve.warning", code: "stored_chats_failed", operation: "history.stored_chats" },
+    ])
+    expect(stderr).not.toContain("MARKER")
   })
 
   it("a feed that fails ends serve with its error and leaves no lock", async () => {

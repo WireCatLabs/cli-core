@@ -1,5 +1,6 @@
 import type { Renderer } from "@wirecat/cli-base"
 import type { AppIdentity } from "../../ports/app.js"
+import type { WarningEvent } from "../../runs/events.js"
 import { recordLogFor } from "../../runs/record-log.js"
 import { currentRun } from "../../runs/scope.js"
 import type { MessengerContext } from "./context.js"
@@ -34,16 +35,18 @@ export const noticeFor =
 /**
  * A serve left running writes its diagnostics to a log file, so off a terminal each one is a log record with
  * its time and run. A sentence handed to the renderer may quote an error or a chat, so the record keeps only
- * which kind of line it was; serve's own reports go through `noticeFor` with a code. The renderer is changed
- * in place, so the send guard, bound to it before serve started, writes records too.
+ * which kind of line it was, and a warning's code, operation and counts when the warning event comes with it
+ * (`Warn`); serve's own reports go through `noticeFor` with a code. The renderer is changed in place, so the
+ * send guard, bound to it before serve started, writes records too.
  */
 export const recordDiagnostics = (context: MessengerContext, app: AppIdentity): MessengerContext => {
   if (context.format === "pretty") return context
   const say =
     (severity: Severity, event: string, always = false) =>
-    (_text: string) => {
+    (_text: string, warning?: WarningEvent) => {
       if (context.settings.quiet && !always) return
-      record(context, app, severity, { event })
+      const { event: _warning, ...fields } = warning ?? {}
+      record(context, app, severity, { event, ...fields })
     }
   const renderer: Renderer = context.renderer
   renderer.note = say("info", "serve.note")

@@ -40,7 +40,7 @@ export interface BaseEnvironment {
   storeLockWaitMs?: number
   /** How long a connection's close waits on its saves and passive listens, 5 s unless a test hands one in. */
   closeWaitMs?: number
-  /** How long one pass of chat re-keys holds the store's write lock and the pause after it; tests hand in zeros. */
+  /** How long one pass of chat re-keys holds the store's write lock and the pause after it; tests hand in no pause. */
   rekeyPacing?: { lockMs: number; pauseMs: number }
   /** Where raw bytes go when stdout is not this process's own — an MCP session relayed by serve. */
   stdout?: NodeJS.WritableStream

@@ -54,6 +54,9 @@ export type DiagnosticEvent = RequestEvent | CacheEvent | WarningEvent
 
 export type EventSink = (event: DiagnosticEvent) => void
 
+/** A sentence for a person, and the warning event it stands for when there is one: a log record keeps only the event. */
+export type Warn = (message: string, warning?: WarningEvent) => void
+
 /** `FLOOD_WAIT`, `PEER_ID_INVALID`, `login.token` — or nothing. A sentence is dropped, not trimmed. */
 export const providerErrorKey = (value: unknown): string | undefined =>
   typeof value === "string" && /^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(value) ? value : undefined

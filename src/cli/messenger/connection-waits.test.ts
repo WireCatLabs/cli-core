@@ -81,13 +81,13 @@ describe("a command run with the connection waits in its environment", () => {
     const code = await run(
       ["account", "show", "--json"],
       { app, commands: () => [accountCommand(messenger)] },
-      { streams, tty: false, env: sandbox(), closeWaitMs: 10, rekeyPacing: { lockMs: 0, pauseMs: 0 } },
+      { streams, tty: false, env: sandbox(), closeWaitMs: 10, rekeyPacing: { lockMs: 1000, pauseMs: 0 } },
     )
 
     expect(code).toBe(0)
     expect(listenHistory).toHaveBeenCalledOnce()
     expect(performance.now() - started).toBeLessThan(1_000)
     expect(streams.stderr.join("\n")).toContain("still handing on history batches at exit")
-    expect(rekeys.lockWaits).toEqual([0, 0, 0])
+    expect(rekeys.lockWaits).toEqual([1000])
   })
 })
