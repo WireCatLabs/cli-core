@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.365.0 — 19.10.2026
+
 ### Fixed
 
 - **A findings batch whose evidence changed can still be rejected.** Review rechecked the cited sources even when
