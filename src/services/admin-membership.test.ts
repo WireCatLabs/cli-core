@@ -52,7 +52,7 @@ describe("a leave or join whose store record fails", () => {
       code: "invalid_response",
       message:
         "you left chat 7, but the local store could not mark it left (database is locked) — do not run it again; " +
-        "an online `chat chats list --all` corrects it once the messenger answers it with every chat",
+        "it may show as joined until an online `chat chats list --all` names every chat",
       details: { operation_id: expect.any(String), retryable: false },
     })
   })
@@ -64,16 +64,22 @@ describe("a leave or join whose store record fails", () => {
 
     expect(acted).toEqual(["join"])
     expect(failed).toMatchObject({
-      message: expect.stringMatching(/^you joined chat 71, but the local store could not take its left mark off/),
+      message:
+        "you joined chat 71, but the local store could not take its left mark off (database is locked) — " +
+        "do not run it again; an online `chat chats list` that shows the chat corrects it",
       details: { retryable: false },
     })
   })
 
-  it("**names no command** where the chat list itself comes from the store", async () => {
+  it("**waits for the messenger's report** where the chat list itself comes from the store", async () => {
     const { admin } = service("store")
 
     await expect(admin.leave("Book club")).rejects.toThrow(
-      "do not run it again; this messenger's chat list comes from the store, so no command corrects it",
+      "do not run it again; it may show as joined until the messenger reports the leave; " +
+        "`chat chats show 7` says when it has",
+    )
+    await expect(admin.join("https://t.me/+abc")).rejects.toThrow(
+      "it may show as left until the messenger reports the join; `chat chats show 71` says when it has",
     )
   })
 
