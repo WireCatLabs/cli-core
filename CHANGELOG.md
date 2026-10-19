@@ -17,7 +17,8 @@ shape of this file.
 - **`loginQr().show(link, scan)` says where to scan only once a code exists**: after the drawn code, or after
   the `--qr-file` note. On a terminal too narrow to draw the code, only the hint to widen it or pass `--qr-file`
   is shown. Before, the CLIs said "scan this code" first, so a narrow terminal asked to scan a code that was
-  never drawn.
+  never drawn. `scan` is optional and nothing changes without it: an adapter drops its own scan note before
+  `show()` and passes that text as `show(link, scan)` instead.
 
 ## 0.349.0 — 19.10.2026
 
