@@ -190,7 +190,8 @@ move, a message id held in both keeps the old row's copy (deleted if either was)
 locators and unresolved `msg:` evidence links that spell the chat id are rewritten in the same transaction.
 Saved searches and note bodies stay as written. The old id is not kept: the adapter holds the mapping.
 A person with an open stay in both chats keeps one (`member_stays` allows one open stay per member), and the
-merged chat is left only when both were. After the store commits, `stored`'s `rekeyed` hook moves the entry
+merged chat is left only when both were. Privacy settings take the stricter half: hidden from search if
+either was, and `personal` when the halves' effective scopes differ. After the store commits, `stored`'s `rekeyed` hook moves the entry
 in the running profile's recipient list (`RecipientList.rekey`); a list that is off stays off.
 
 **The text of files** is `attachment_texts`, one row per attachment: what `attachments extract`

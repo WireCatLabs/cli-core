@@ -190,6 +190,22 @@ const latest = (a: unknown, b: unknown): number | null => {
   return one === null ? other : other === null ? one : Math.max(one, other)
 }
 
+type Row = NonNullable<ReturnType<typeof chatRow>>
+
+/**
+ * The owner's word on a chat must not loosen because a stray twin merged in: hidden wins, and when the two chats sit
+ * on different sides of the owner's life, the personal side wins, since a work chat reaches work views and meeting
+ * preparation a personal one does not.
+ */
+const strictest = (context: StoreContext, accountKey: number, old: Row, twin: Row) => {
+  const account = context.database.prepare("SELECT scope FROM accounts WHERE id = ?").get(accountKey)
+  const effective = (row: Row) => scalar(row.scope) ?? scalar(account?.scope)
+  return {
+    searchable: Math.min(Number(old.searchable), Number(twin.searchable)),
+    scope: effective(old) === effective(twin) ? scalar(old.scope) : "personal",
+  }
+}
+
 const MESSENGER_FIELDS = [
   "title",
   "unread_count",
@@ -213,6 +229,7 @@ export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: nu
   if (twin) {
     if (old.kind !== twin.kind && old.kind !== "unknown" && twin.kind !== "unknown")
       throw new CliError("validation_error", `a ${String(old.kind)} and a ${String(twin.kind)} are not one chat`)
+    const strict = strictest(context, accountKey, old, twin)
     moved = absorb(context, kept, Number(twin.id))
     const fields = MESSENGER_FIELDS.map((field) => `${field} = coalesce(?, ${field})`).join(", ")
     context.database
@@ -220,13 +237,15 @@ export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: nu
         // Left only when both were: a complete chat list that named the new id before the re-key marked the old one.
         `UPDATE chats SET ${fields}, kind = CASE WHEN kind = 'unknown' THEN ? ELSE kind END,
            membership_state = CASE WHEN ? IS NULL THEN nullif(membership_state, 'left') ELSE coalesce(nullif(?, 'left'), membership_state) END,
-           last_message_at = ?, updated_at = ? WHERE id = ?`,
+           searchable = ?, scope = ?, last_message_at = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         ...MESSENGER_FIELDS.map((field) => scalar(twin[field])),
         scalar(twin.kind),
         scalar(twin.membership_state),
         scalar(twin.membership_state),
+        strict.searchable,
+        strict.scope,
         latest(old.last_message_at, twin.last_message_at),
         context.now(),
         kept,
