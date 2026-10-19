@@ -401,8 +401,11 @@ describe("re-keying a stored chat", () => {
     { account: "personal", phone: "work", lid: null, merged: "personal" },
     { account: "personal", phone: null, lid: "work", merged: "personal" },
     { account: "personal", phone: null, lid: null, merged: null },
+    { account: "personal", phone: null, lid: "personal", merged: "personal" },
+    { account: "personal", phone: "personal", lid: null, merged: "personal" },
+    { account: "work", phone: null, lid: "work", merged: "work" },
   ])(
-    "keeps the personal side when the halves differ (account $account, phone $phone, lid $lid)",
+    "keeps the personal side when the halves differ, and pins any scope either half pinned (account $account, phone $phone, lid $lid)",
     async ({ account, phone, lid, merged }) => {
       const path = fresh()
       const store = await openStore({ path })
@@ -414,6 +417,32 @@ describe("re-keying a stored chat", () => {
       await store.chats.rekeyChat(OWNER, PHONE, LID)
 
       expect(await settings(path, OWNER)).toEqual([{ id: LID, searchable: 1, scope: merged }])
+      await store.close()
+    },
+  )
+
+  it.each([
+    { phone: null, lid: "personal" },
+    { phone: "personal", lid: null },
+  ])(
+    "keeps a personal pin on either half when the account default later turns to work (phone $phone, lid $lid)",
+    async ({ phone, lid }) => {
+      const path = fresh()
+      const store = await openStore({ path })
+      await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana")])
+      await settle(path, OWNER, PHONE, { searchable: 1, scope: phone })
+      await settle(path, OWNER, LID, { searchable: 1, scope: lid })
+
+      await store.chats.rekeyChat(OWNER, PHONE, LID)
+      await accountScope(path, OWNER, "work")
+
+      expect(
+        await raw(
+          path,
+          "SELECT coalesce(c.scope, a.scope) AS scope FROM chats c JOIN accounts a ON a.id = c.account_id WHERE a.external_id = ?",
+          OWNER.account,
+        ),
+      ).toEqual([{ scope: "personal" }])
       await store.close()
     },
   )

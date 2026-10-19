@@ -195,14 +195,20 @@ type Row = NonNullable<ReturnType<typeof chatRow>>
 /**
  * The owner's word on a chat must not loosen because a stray twin merged in: hidden wins, and when the two chats sit
  * on different sides of the owner's life, the personal side wins, since a work chat reaches work views and meeting
- * preparation a personal one does not.
+ * preparation a personal one does not. A scope either half pinned stays pinned, so a later change to the account's
+ * default cannot loosen the merged chat.
  */
 const strictest = (context: StoreContext, accountKey: number, old: Row, twin: Row) => {
   const account = context.database.prepare("SELECT scope FROM accounts WHERE id = ?").get(accountKey)
   const effective = (row: Row) => scalar(row.scope) ?? scalar(account?.scope)
   return {
     searchable: Math.min(Number(old.searchable), Number(twin.searchable)),
-    scope: effective(old) === effective(twin) ? scalar(old.scope) : "personal",
+    scope:
+      scalar(old.scope) === null && scalar(twin.scope) === null
+        ? null
+        : effective(old) === effective(twin)
+          ? effective(old)
+          : "personal",
   }
 }
 
