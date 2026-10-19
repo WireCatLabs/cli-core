@@ -21,6 +21,10 @@ vi.mock("../../store/store.js", () => ({
         rekeyChat: async () => {
           order.push("rekeyed")
         },
+        rekeyChats: async (_key: unknown, pairs: unknown[]) => {
+          order.push("rekeyed")
+          return { taken: pairs.length, applied: [], refused: [] }
+        },
       },
       messages: {
         saveMessages: () =>

@@ -474,3 +474,74 @@ describe("re-keying a stored chat", () => {
     await store.close()
   })
 })
+
+describe("re-keying a run of chats in one pass", () => {
+  const GROUP_PHONE = "34600000002@s.whatsapp.net"
+  const GROUP_LID = "778@lid"
+  const MERGED_PHONE = "34600000003@s.whatsapp.net"
+  const MERGED_LID = "779@lid"
+
+  it("**applies each pair as `rekeyChat` would, in order**, a refused one leaving the others and another account alone", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    const owned = [
+      chat(PHONE, "Ana"),
+      chat(GROUP_PHONE, "Ben"),
+      chat(GROUP_LID, "Team", "group"),
+      chat(MERGED_PHONE, "Eva"),
+      chat(MERGED_LID, "Eva"),
+    ]
+    await store.chats.saveChats(OWNER, owned)
+    await store.chats.saveChats(OTHER, owned)
+    await settle(path, OWNER, MERGED_PHONE, { searchable: 1, scope: "work" })
+    await settle(path, OWNER, MERGED_LID, { searchable: 1, scope: "personal" })
+    const before = await settings(path, OTHER)
+
+    const pass = await store.chats.rekeyChats(
+      OWNER,
+      [
+        { from: PHONE, to: LID },
+        { from: GROUP_PHONE, to: GROUP_LID },
+        { from: MERGED_PHONE, to: MERGED_LID },
+      ],
+      60_000,
+    )
+
+    expect(pass.taken).toBe(3)
+    expect(pass.applied.map(({ from, rekey }) => [from, rekey.outcome])).toEqual([
+      [PHONE, "renamed"],
+      [MERGED_PHONE, "merged"],
+    ])
+    expect(pass.refused).toEqual([
+      { from: GROUP_PHONE, to: GROUP_LID, error: expect.objectContaining({ code: "validation_error" }) },
+    ])
+    expect(await settings(path, OWNER)).toEqual(
+      [
+        { id: LID, searchable: 1, scope: null },
+        { id: GROUP_PHONE, searchable: 1, scope: null },
+        { id: GROUP_LID, searchable: 1, scope: null },
+        { id: MERGED_LID, searchable: 1, scope: "personal" },
+      ].sort((a, b) => a.id.localeCompare(b.id)),
+    )
+    expect(await settings(path, OTHER)).toEqual(before)
+    await store.close()
+  })
+
+  it("stops after the first pair once its lock time is spent, and says how far it got", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(GROUP_PHONE, "Ben")])
+
+    const pass = await store.chats.rekeyChats(
+      OWNER,
+      [
+        { from: PHONE, to: LID },
+        { from: GROUP_PHONE, to: GROUP_LID },
+      ],
+      0,
+    )
+
+    expect(pass.taken).toBe(1)
+    expect((await store.chats.chats(OWNER, {})).items.map((one) => one.id).sort()).toEqual([GROUP_PHONE, LID].sort())
+    await store.close()
+  })
+})

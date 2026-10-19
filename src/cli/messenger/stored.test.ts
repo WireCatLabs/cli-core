@@ -942,6 +942,38 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(["7", "8@lid"])
   })
 
+  it("saves a batch's re-keys together, and one refused warns and leaves the rest and their recipient moves", async () => {
+    const { store } = await setUp()
+    await store.chats.saveChats(account, [
+      { id: "40", title: "Ben", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+      { id: "41@lid", title: "Team", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 5 },
+    ])
+    const moved: string[] = []
+
+    const { codes } = await feeding(
+      store,
+      {
+        storedChats: async () => {},
+        feed: async (onBatch) => {
+          onBatch({
+            rekeys: [
+              { from: "8", to: "8@lid" },
+              { from: "40", to: "41@lid" },
+              { from: "7", to: "7@lid" },
+            ],
+          })
+        },
+      },
+      { rekeyed: (from, to) => void moved.push(`${from}>${to}`) },
+    )
+
+    expect(moved).toEqual(["8>8@lid", "7>7@lid"])
+    expect(codes).toEqual(["store_not_written"])
+    expect((await store.chats.chats(account, {})).items.map((chat) => chat.id).sort()).toEqual(
+      ["40", "41@lid", "7@lid", "8@lid"].sort(),
+    )
+  })
+
   it("hands over the recipient list's ids too, and a re-key of one with no stored chat moves the entry", async () => {
     const { store } = await setUp()
     const list = new RecipientList(join(mkdtempSync(join(tmpdir(), "recipients-")), "work.recipients.json"), "chat")

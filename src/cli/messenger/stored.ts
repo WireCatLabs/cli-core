@@ -8,6 +8,9 @@ import { codeOf } from "../../sends/guarded.js"
 import { chatIdIn } from "../../services/message-resolution.js"
 import type { AccountKey, DeletionScope, IngestedVia, MessageStore } from "../../store/store.js"
 
+const REKEY_LOCK_MS = 50
+const REKEY_PAUSE_MS = 25
+
 export interface Saving {
   account: AccountKey
   /** Opened on the first save, not before: a command that reads nothing has no reason to touch the file. */
@@ -62,6 +65,11 @@ export const stored = (
 ): MessengerAdapter => {
   let warned = false
   let recorded = profile === undefined
+  const notWritten = (operation: string, error: unknown): void => {
+    events({ event: "warning", code: "store_not_written", operation })
+    if (!warned) warn(`not saved to the local store: ${error instanceof Error ? error.message : String(error)}`)
+    warned = true
+  }
   const attempt = async (operation: string, write: (store: MessageStore) => Promise<unknown>): Promise<void> => {
     try {
       const opened = await store()
@@ -74,9 +82,7 @@ export const stored = (
           .catch(() => {})
       }
     } catch (error) {
-      events({ event: "warning", code: "store_not_written", operation })
-      if (!warned) warn(`not saved to the local store: ${error instanceof Error ? error.message : String(error)}`)
-      warned = true
+      notWritten(operation, error)
     }
   }
   const save = (operation: string, writing: (store: MessageStore) => Promise<unknown>): Promise<void> => {
@@ -114,6 +120,24 @@ export const stored = (
       return undefined
     }
   }
+  /**
+   * The first serve after an upgrade re-keys every phone-form chat at once. Back-to-back transactions keep the write
+   * lock so busy that another command waits past `busy_timeout`, so the re-keys go in passes with a pause between.
+   */
+  const saveRekeys = async (pairs: readonly { from: Id; to: Id }[]): Promise<void> => {
+    let rest = pairs
+    while (rest.length > 0) {
+      let taken = rest.length
+      await attempt("history.rekey", async (opened) => {
+        const pass = await opened.chats.rekeyChats(account, rest, REKEY_LOCK_MS)
+        taken = pass.taken
+        for (const { from, to } of pass.applied) await rekeyed?.(from, to)
+        for (const { error } of pass.refused) notWritten("history.rekey", error)
+      })
+      rest = rest.slice(taken)
+      if (rest.length > 0) await new Promise((resolve) => setTimeout(resolve, REKEY_PAUSE_MS))
+    }
+  }
   const saveBatches = (operation: string, onBatch: (batch: HistoryBatch) => void) => {
     // In order: a batch's messages may belong to chats only an earlier batch named.
     let previous: Promise<void> = Promise.resolve()
@@ -126,13 +150,9 @@ export const stored = (
         }
         for (const chat of batch.chats ?? []) if (chat.title) titles.set(chat.id, chat.title)
       }
-      // Each re-key apart: one refused leaves the chat split, never the batch's history unsaved.
+      // A refused re-key leaves its chat split, never the others or the batch's history unsaved.
       const saving = previous.then(async () => {
-        for (const { from, to } of batch.rekeys ?? [])
-          await attempt("history.rekey", async (opened) => {
-            await opened.chats.rekeyChat(account, from, to)
-            await rekeyed?.(from, to)
-          })
+        await saveRekeys(batch.rekeys ?? [])
         await attempt(operation, (opened) => fill(opened, account, batch))
       })
       previous = saving

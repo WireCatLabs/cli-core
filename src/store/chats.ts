@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../domain/channel-tags.js"
 import type { Chat, ChatKind, ChatUpdate, Id, Page } from "../domain/models.js"
 import { keysOver } from "./keys.js"
-import { type ChatRekey, rekeyChat } from "./sqlite/chat-rekey.js"
+import { type ChatRekey, type ChatRekeys, rekeyChat, rekeyChats } from "./sqlite/chat-rekey.js"
 import type { ChatMetadata, LeftChat } from "./sqlite/chats.js"
 import * as chatQueries from "./sqlite/chats.js"
 import type { ChatCompleteness } from "./sqlite/completeness.js"
@@ -45,6 +45,11 @@ export interface ChatsStore {
    * `to`. Replaying it changes nothing.
    */
   rekeyChat(key: AccountKey, from: Id, to: Id): Promise<ChatRekey>
+  /**
+   * `rekeyChat` for a run of pairs, in order, in one transaction that ends once it has held the write lock for
+   * `lockMs`: `taken` says how many it got to. A pair refused is in `refused`, and the others still apply.
+   */
+  rekeyChats(key: AccountKey, pairs: readonly { from: Id; to: Id }[], lockMs: number): Promise<ChatRekeys>
   /**
    * The chats marked left and the messages they hold, each named in `left`; with `clear`, deletes them and all under
    * them — `left` is then what was deleted.
@@ -116,6 +121,15 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) return { outcome: "unchanged", messages: 0, duplicates: 0 }
       return write(database, () => rekeyChat(context, key, accountKey, from, to))
+    },
+
+    rekeyChats: async (key, pairs, lockMs) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) {
+        const rekey = { outcome: "unchanged", messages: 0, duplicates: 0 } as const
+        return { taken: pairs.length, applied: pairs.map((pair) => ({ ...pair, rekey })), refused: [] }
+      }
+      return write(database, () => rekeyChats(context, key, accountKey, pairs, lockMs))
     },
 
     leftChats: async (key, { clear = false } = {}) => {

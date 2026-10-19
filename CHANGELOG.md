@@ -15,6 +15,15 @@ shape of this file.
   queued cues are excluded; missing indexes and unknown archive coverage remain explicit. Hosts must
   opt in to meeting sources; the reader does not fetch recordings, fill indexes or infer project links.
 
+### Fixed
+
+- **The first `serve` after an upgrade no longer locks other commands out of the store while it re-keys chats.**
+  A pushed batch's `rekeys` were saved one transaction each, back to back, so another command waited for the write
+  lock as long as the re-keys ran: up to 3.4 s for 5,000 re-keys on a synthetic 10,000-chat store. They now go
+  through the new `store.chats.rekeyChats` in passes of one transaction, each holding the lock for about 50 ms with
+  a pause after it. Each re-key keeps its own savepoint, privacy merge and account scope, and a refused one still
+  warns and leaves the others applied. `ChatsStore` gains `rekeyChats`, so a hand-written `ChatsStore` must add it.
+
 ## 0.357.0 — 19.10.2026
 
 ### Added
