@@ -9,7 +9,7 @@ import { threadIdOf } from "../domain/thread.js"
 import { type After, capability, type Download, type MessengerAdapter, type Sent } from "../ports/messenger.js"
 import type { MediaOption, MessengerTraits } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
-import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
+import { codeOf, guardedWrite, type Operated, sentIds } from "../sends/guarded.js"
 import type { PermissionKey } from "../sends/permissions.js"
 import { sendAsCheck } from "../sends/send-as.js"
 import { newOperationId, newSendId } from "../sends/send-id.js"
@@ -648,7 +648,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
               ...media,
               ...(sendAs === undefined ? {} : { sendAs }),
             }),
-          (sent) => ({ messageId: sent.message.id }),
+          (sent) => sentIds(chatId, sent.message),
           validate === undefined || threadId === undefined
             ? undefined
             : () => validate(chatId, threadId, { ...(replyTo === undefined ? {} : { replyTo }) }),
@@ -727,7 +727,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
             ...(sendAs === undefined ? {} : { sendAs }),
             ...(threadId === undefined ? {} : { threadId }),
           }),
-        (done) => ({ messageId: done.id }),
+        (done) => sentIds(toChatId, done),
         validate === undefined || threadId === undefined ? undefined : () => validate(toChatId, threadId, {}),
       )
       return { operationId: id, sendId: id, message: forwarded }

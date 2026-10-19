@@ -421,6 +421,33 @@ describe("the messages service's writes", () => {
     expect(sent.message.id).toBe("4")
   })
 
+  it("records the chat the messenger answered beside the one typed", async () => {
+    const rekeyed = {
+      ...writer,
+      send: async (_chatId: string, text: string, options: { sendId: string }) => ({
+        sendId: options.sendId,
+        message: { ...thread[0], id: "4", chatId: "70", text },
+      }),
+    } as MessengerAdapter
+
+    await messagesService(onlineDeps(messenger, rekeyed, guarding(false))).send({ chat: "Book", text: "hi" })
+
+    expect(journal).toMatchObject([{ chatId: "7", resultChatId: "70", messageId: "4", outcome: "sent" }])
+  })
+
+  it("records the chat a forward landed in beside the one typed", async () => {
+    const rekeyed = { ...writer, forward: async () => ({ ...thread[0], id: "9", chatId: "200" }) } as MessengerAdapter
+
+    await messagesService(onlineDeps(messenger, rekeyed, guarding(false))).forward({
+      chat: "Book",
+      message: "3",
+      to: "20",
+      silent: false,
+    })
+
+    expect(journal).toMatchObject([{ chatId: "20", resultChatId: "200", messageId: "9", outcome: "sent" }])
+  })
+
   it("sends with the messenger's own form of send id when it has one", async () => {
     const minting = { ...writer, newSendId: () => "1790000000000" } as MessengerAdapter
     const sent = await messagesService(onlineDeps(messenger, minting, guarding(false))).send({

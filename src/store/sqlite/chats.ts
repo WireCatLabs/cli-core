@@ -60,6 +60,75 @@ export const chatPkFor = (context: StoreContext, accountKey: number, chatId: Id)
       .get()?.pk,
   )
 
+interface ChatPrivacy {
+  searchable: number
+  scope: string | null
+}
+
+/**
+ * The owner's word on a chat must not loosen because another row joins it: hidden wins, and when the two chats sit
+ * on different sides of the owner's life, the personal side wins, since a work chat reaches work views and meeting
+ * preparation a personal one does not. Scopes compare as every reader applies them, the row's or else the account's.
+ * A scope either row pinned stays pinned, so a later change to the account's default cannot loosen the chat.
+ */
+export const stricterPrivacy = (
+  { database }: StoreContext,
+  accountKey: number,
+  kept: ChatPrivacy,
+  other: ChatPrivacy,
+): ChatPrivacy => {
+  const account = database.prepare("SELECT scope FROM accounts WHERE id = ?").get(accountKey)
+  const effective = ({ scope }: ChatPrivacy) => scope ?? (typeof account?.scope === "string" ? account.scope : null)
+  return {
+    searchable: Math.min(kept.searchable, other.searchable),
+    scope:
+      kept.scope === null && other.scope === null
+        ? null
+        : effective(kept) === effective(other)
+          ? effective(kept)
+          : "personal",
+  }
+}
+
+/**
+ * The row a send to `typed` lands in when the messenger answered `chatId`. A new row takes the typed row's title,
+ * kind and privacy; an existing one takes the stricter privacy of the two. Neither ever becomes more visible.
+ */
+export const answeredChatPk = (context: StoreContext, accountKey: number, chatId: Id, typed: Id): number => {
+  const { orm, now } = context
+  const like =
+    typed === chatId
+      ? undefined
+      : orm
+          .select({ kind: chats.kind, title: chats.title, searchable: chats.searchable, scope: chats.scope })
+          .from(chats)
+          .where(and(eq(chats.accountId, accountKey), eq(chats.externalId, typed)))
+          .get()
+  if (like === undefined) return chatPkFor(context, accountKey, chatId)
+  const found = orm
+    .select({ pk: chats.id, searchable: chats.searchable, scope: chats.scope })
+    .from(chats)
+    .where(and(eq(chats.accountId, accountKey), eq(chats.externalId, chatId)))
+    .get()
+  if (found !== undefined) {
+    const strict = stricterPrivacy(context, accountKey, found, like)
+    if (strict.searchable !== found.searchable || strict.scope !== found.scope)
+      orm
+        .update(chats)
+        .set({ ...strict, updatedAt: now() })
+        .where(eq(chats.id, found.pk))
+        .run()
+    return found.pk
+  }
+  return Number(
+    orm
+      .insert(chats)
+      .values({ accountId: accountKey, externalId: chatId, ...like, createdAt: now(), updatedAt: now() })
+      .returning({ pk: chats.id })
+      .get()?.pk,
+  )
+}
+
 export const upsertChat = (context: StoreContext, accountKey: number, chat: ChatUpdate): void => {
   const { orm, now } = context
   const parent = chat.parentChatId == null ? null : chatPkFor(context, accountKey, chat.parentChatId)
