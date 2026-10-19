@@ -36,8 +36,11 @@ export interface LoginQrOptions {
 
 export interface LoginQr {
   readonly path: string | undefined
-  /** Never throws for a code that does not fit: the messengers call it from inside their own event loops. */
-  show: (link: string) => void
+  /**
+   * `scan` says where to scan; it follows the code, and is not said when the terminal is too narrow to draw one.
+   * Never throws for a code that does not fit: the messengers call it from inside their own event loops.
+   */
+  show: (link: string, scan?: string) => void
   /** The image logs the account in while it is valid; call this in `finally`. */
   close: () => void
 }
@@ -54,11 +57,12 @@ export const loginQr = ({
   let written = false
   return {
     path,
-    show: (link) => {
+    show: (link, scan) => {
       if (path) {
         writeSecurely(path, qrPng(link), 0o600)
         written = true
         note(`the QR code is in ${path} — it is replaced when the code renews`)
+        if (scan) note(scan)
         return
       }
       const drawn = terminalQr(link)
@@ -72,6 +76,7 @@ export const loginQr = ({
         return
       }
       diagnostic(`\n${indent(drawn.text, pad + MARGIN)}`)
+      if (scan) note(scan)
     },
     close: () => {
       if (!path || !written) return
