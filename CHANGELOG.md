@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A messenger that pushes its history can be told the chats the store holds**: the optional
+  `PushedHistory.storedChats(ids)` gets every chat id of this account once as `feed` starts, in `serve` and `watch`.
+  whatsapp-cli uses it to re-key phone-form chats nothing names again, through `rekeys`. A reject is a
+  `stored_chats_failed` warning. The contract kit has a case for it, skipped without the method, and
+  `fakeAdapter(seed, { storedChats: true })`.
+
 ## 0.349.0 — 19.10.2026
 
 ### Added

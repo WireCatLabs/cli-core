@@ -401,6 +401,11 @@ export interface HistoryBatch {
 export interface PushedHistory {
   /** Chats, people and past messages as the messenger pushes them, until `signal` aborts. */
   feed(onBatch: (batch: HistoryBatch) => void, signal: AbortSignal): Promise<void>
+  /**
+   * Every chat id the store holds for this account, handed over once as `feed` starts, so a chat nothing names again
+   * can still be re-keyed through a later batch's `rekeys`. A reject is a warning; `feed` goes on.
+   */
+  storedChats?(ids: readonly Id[]): void | Promise<void>
 }
 
 /** A message's files and its speech, fetched from the messenger. */

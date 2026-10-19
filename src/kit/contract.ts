@@ -61,6 +61,7 @@ export const OPTIONAL_METHODS = [
   "listen",
   "listenHistory",
   "feed",
+  "storedChats",
   "download",
   "transcribe",
   "scheduled",
@@ -542,6 +543,16 @@ export const contractCases = ({
           )
         },
         "the fake pushes the seed's history once connected, as `fakeAdapter(seed, { feed: true })` does",
+      ],
+      [
+        "storedChats takes no ids, and ids it does not know, without rejecting",
+        async (adapter, seed) => {
+          const skipped = lacking(adapter, "storedChats")
+          if (skipped) return skipped
+          await within(Promise.resolve(adapter.storedChats?.([])), "storedChats did not resolve for no ids", waitMs)
+          const ids = [...seed.chats.map((chat) => chat.id), unknownChat]
+          await within(Promise.resolve(adapter.storedChats?.(ids)), "storedChats did not resolve for the ids", waitMs)
+        },
       ],
     ]),
     {

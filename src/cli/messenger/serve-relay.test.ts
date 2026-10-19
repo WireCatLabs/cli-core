@@ -533,9 +533,13 @@ describe("a lent connection", () => {
       close: async () => {},
       listen: async () => {},
       listenHistory: async () => {},
+      feed: async () => {},
+      storedChats: async () => {},
     } as unknown as MessengerAdapter
 
     expect(lentConnection(own).listen).toBeUndefined()
     expect(lentConnection(own).listenHistory).toBeUndefined()
+    expect(lentConnection(own).feed).toBeUndefined()
+    expect(lentConnection(own).storedChats).toBeUndefined()
   })
 })

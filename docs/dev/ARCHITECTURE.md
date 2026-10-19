@@ -495,8 +495,8 @@ it holds (NEED-1389):
   the journal and rendering are the direct run's own code — the guard runs in serve with the client's environment,
   so `<PREFIX>_READ_ONLY` holds and the socket is no way around it.
 - **The borrowed connection** (`serveRelay`, `src/cli/messenger/serve-relay.ts`): serve keeps the raw adapter its
-  `connect` returned; `connectFor` hands a relayed run that adapter with `close` doing nothing, no `feed`, no
-  `listen` or `listenHistory`, and a `watch` that subscribes to serve's own events. A relayed run for another
+  `connect` returned; `connectFor` hands a relayed run that adapter with `close` doing nothing, no `feed` or
+  `storedChats`, no `listen` or `listenHistory`, and a `watch` that subscribes to serve's own events. A relayed run for another
   profile is refused. A CLI's own command that connects goes through `connectFor` too, or inside serve it would
   open a second connection.
 - **Per run, not per process.** A relayed run adds no signal handlers, never prompts (`answer` is null — `ask`

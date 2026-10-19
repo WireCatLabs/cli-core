@@ -18,6 +18,7 @@ export const lentConnection = (
   throughWrapper(connection, {
     close: async () => {},
     feed: undefined,
+    storedChats: undefined,
     listen: undefined,
     listenHistory: undefined,
     ...(connection.watch && watchers

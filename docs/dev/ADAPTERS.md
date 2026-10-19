@@ -213,6 +213,12 @@ Some messengers push history to the client instead of answering a request for it
 - A batch the store cannot take is a warning on stderr. It does not stop `serve`. A `feed` that
   rejects stops `serve` and `watch` with its error.
 - New messages still come through `watch`, not through `feed`.
+- When a stored chat can move to a new id that only your engine learns, give `PushedHistory` `storedChats(ids)` too.
+  `serve` and `watch` call it once as `feed` starts, with every chat id the store holds for this account and no
+  other's; a chat marked left is not in it. Ids only, never messages, in one call
+  ([measured](https://github.com/WireCatLabs/cli-testing/tree/main/performance/store/stored-chat-ids)). Pick the ones
+  to move and send each later as a batch's `rekeys` (`{ from, to }`), which the store already applies. One-shot
+  commands and a connection lent by `serve` never call it. A reject is a `stored_chats_failed` warning; `feed` goes on.
 - Give the adapter `PassiveUpdates` when the messenger delivers, on any connection, what it queued while nothing was
   connected, and cannot deliver it again. `listen(onEvent, signal)` hands on the same `MessageEvent`s as `watch`, from
   a connection opened without `{ listen: true }`, until `signal` aborts. It only listens: it must not connect or wait
@@ -248,6 +254,8 @@ release ([README, "How often, and what may break"](../REFERENCE.md#how-often-and
   also has `listen`.
 - The `listenHistory` cases check the same of `listenHistory`, and run only when the adapter has it.
   `fakeAdapter(seed, { listenHistory: true })` has it: it hands on what its `feed` pushes.
+- The `storedChats` case runs only when the adapter has `storedChats`. It checks that no ids, and the seed's ids with
+  one it does not know, each resolve without rejecting. `fakeAdapter(seed, { storedChats: true })` has it.
 
 Each case checks with `node:assert/strict`, so the kit does not depend on a test runner. Under
 vitest, with `fakeAdapter` where your adapter over your own fake client goes:
