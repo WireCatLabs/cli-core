@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ContextEvidenceItem, ContextEvidenceReader, ContextIndex, ContextSource } from "../context/evidence.js"
+import { contextEvidenceFingerprint } from "../context/evidence.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
 import { attachNeighbours, type ProjectNeighbour, type ProjectNeighbourReader } from "./project-gathering-around.js"
@@ -43,6 +44,7 @@ export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   textTruncated: boolean
   lanes: string[]
   context: "project" | "person-only"
+  fingerprint: string
   around?: ProjectNeighbour[] | null
   aroundIssue?: string | null
 }
@@ -134,12 +136,14 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     }
     seen.add(key)
     const short = excerpt(item.text, lane.query, 300, { literal: true })
+    const fingerprint = contextEvidenceFingerprint(item)
     const entry: ProjectEvidenceItem = {
       ...item,
       kind,
       source,
       text: short,
       textTruncated: short !== item.text.replace(/\s+/g, " ").trim(),
+      fingerprint,
       lanes: [lane.id],
       context: lane.kinds.every((k) => k === "person") ? "person-only" : "project",
     }
