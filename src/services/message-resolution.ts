@@ -26,10 +26,14 @@ export const readChatId = async (
     throw error
   })
   if ((await store.messages.countMessages(account, chatId)) === 0) {
-    throw new CliError("not_found", nothingStored(deps.messenger), { chat: chatId })
+    const all = (await store.chats.chats(account, { includeLeft: true })).items
+    const left = all.some((one) => one.id === chatId && one.membershipState === "left")
+    throw new CliError("not_found", left ? LEFT_EMPTY : nothingStored(deps.messenger), { chat: chatId })
   }
   return chatId
 }
+
+const LEFT_EMPTY = "you left this chat, and the store holds none of its messages"
 
 /** A chat as typed, found among the stored chats the way an adapter finds it among its own. */
 export const storedChatId = async (
