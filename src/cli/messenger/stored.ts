@@ -27,6 +27,8 @@ export interface Saving {
   rekeyed?: (from: Id, to: Id) => void | Promise<void>
   /** How long one pass of re-keys may hold the write lock, and the pause after it. */
   rekeyPacing?: { lockMs: number; pauseMs: number }
+  /** Aborted just before the store closes: the re-keys still queued are given up, with one warning for them all. */
+  closing?: AbortSignal
   /**
    * Chat and partner ids this account's recipient list names, told to `storedChats` apart from the stored ones: an
    * entry saved before any chat was stored under its id would otherwise never be re-keyed, and the send guard would
@@ -61,6 +63,7 @@ export const stored = (
     profile,
     rekeyed,
     rekeyPacing = REKEY_PACING,
+    closing,
     namesFromStore,
     recipientIds,
   }: Saving,
@@ -126,22 +129,39 @@ export const stored = (
    * The first serve after an upgrade re-keys every phone-form chat at once. Back-to-back transactions keep the write
    * lock so busy that another command waits past `busy_timeout`, so the re-keys go in passes with a pause between.
    */
-  const saveRekeys = async (pairs: readonly { from: Id; to: Id }[]): Promise<void> => {
+  let rekeysQueued = 0
+  let rekeyRound = 0
+  const rekeysOnly = new Set<Promise<void>>()
+  // wa sends each re-key as its own batch, so a closed store would otherwise refuse, and warn for, every chat left.
+  const giveUpRekeys = (): void => {
+    rekeyRound += 1
+    const count = rekeysQueued
+    rekeysQueued = 0
+    for (const saving of rekeysOnly) pending?.delete(saving)
+    if (count === 0) return
+    events({ event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: count } })
+    warn(`${count} chat re-key${count === 1 ? "" : "s"} not applied before exit; the next serve applies them`)
+  }
+  closing?.addEventListener("abort", giveUpRekeys, { once: true })
+  const saveRekeys = async (pairs: readonly { from: Id; to: Id }[], round: number): Promise<void> => {
     let rest = pairs
-    while (rest.length > 0) {
-      let taken = 0
-      await attempt("history.rekey", async (opened) => {
-        const pass = await opened.chats.rekeyChats(account, rest, rekeyPacing.lockMs)
-        taken = pass.taken
-        for (const { from, to } of pass.applied)
-          await Promise.resolve()
-            .then(() => rekeyed?.(from, to))
-            .catch((error: unknown) => notWritten("history.rekey", error))
-        for (const { error } of pass.refused) notWritten("history.rekey", error)
-      })
-      // A store that refused a whole pass (closed at exit, busy past its timeout) would refuse each pass after it;
-      // the chats left keep their old ids, and the next serve re-keys them.
-      if (taken === 0) return
+    while (rest.length > 0 && round === rekeyRound) {
+      let pass: Awaited<ReturnType<MessageStore["chats"]["rekeyChats"]>> | undefined
+      try {
+        pass = await (await store())?.chats.rekeyChats(account, rest, rekeyPacing.lockMs)
+      } catch {
+        // Closed at exit or busy past its timeout, the store would refuse every pass after this one too.
+        if (round === rekeyRound) giveUpRekeys()
+        return
+      }
+      if (round !== rekeyRound) return
+      const taken = pass?.taken ?? rest.length
+      rekeysQueued -= taken
+      for (const { from, to } of pass?.applied ?? [])
+        await Promise.resolve()
+          .then(() => rekeyed?.(from, to))
+          .catch((error: unknown) => notWritten("history.rekey", error))
+      for (const { error } of pass?.refused ?? []) notWritten("history.rekey", error)
       rest = rest.slice(taken)
       if (rest.length > 0) await new Promise((resolve) => setTimeout(resolve, rekeyPacing.pauseMs))
     }
@@ -158,14 +178,21 @@ export const stored = (
         }
         for (const chat of batch.chats ?? []) if (chat.title) titles.set(chat.id, chat.title)
       }
+      const rekeys = batch.rekeys ?? []
+      const round = rekeyRound
+      rekeysQueued += rekeys.length
       // A refused re-key leaves its chat split, never the others or the batch's history unsaved.
       const saving = previous.then(async () => {
-        await saveRekeys(batch.rekeys ?? [])
+        await saveRekeys(rekeys, round)
         await attempt(operation, (opened) => fill(opened, account, batch))
       })
       previous = saving
       pending?.add(saving)
-      void saving.finally(() => pending?.delete(saving))
+      if (onlyRekeys(batch)) rekeysOnly.add(saving)
+      void saving.finally(() => {
+        pending?.delete(saving)
+        rekeysOnly.delete(saving)
+      })
       onBatch(batch)
     }
   }
@@ -521,6 +548,9 @@ const titled = (event: MessageEvent, titles: Map<Id, string>): MessageEvent => {
   const title = titles.get(event.chatId)
   return title ? { ...event, chatTitle: title } : event
 }
+
+const onlyRekeys = (batch: HistoryBatch): boolean =>
+  Object.entries(batch).every(([part, items]) => (part === "rekeys") === (items?.length ?? 0) > 0)
 
 /**
  * A pushed batch as the store keeps it. No `markChatsLeft`: a push names some chats, never all of them.

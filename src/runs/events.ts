@@ -35,6 +35,8 @@ export interface WarningEvent {
   operation?: string
   /** Field paths and types for an answer of an unexpected shape — built without the values. */
   detail?: string
+  /** How many things the warning is about, per field: `{ rekeys: 199 }`. */
+  counts?: Record<string, number>
 }
 
 /** A read answered locally, without asking the messenger, and why. */
@@ -66,7 +68,8 @@ export const providerErrorKey = (value: unknown): string | undefined =>
  */
 export const renderEvent = (event: DiagnosticEvent): string => {
   if (event.event === "warning") {
-    return [`${MARK.warning} ${(event.operation ?? "").padEnd(16)} ${event.code}`, event.detail]
+    const counts = Object.entries(event.counts ?? {}).map(([field, count]) => `${count} ${field}`)
+    return [`${MARK.warning} ${(event.operation ?? "").padEnd(16)} ${event.code}`, ...counts, event.detail]
       .filter(Boolean)
       .join("  ")
   }
