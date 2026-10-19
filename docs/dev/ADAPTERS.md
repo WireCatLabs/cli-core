@@ -156,9 +156,10 @@ community. Send `null` only when the messenger says there is no value; a `null` 
 store holds.
 
 `membershipState` follows the same rule: left out keeps it, a value sets it, `null` clears it. A chat marked left
-stays left through a save that leaves membership out, such as a community notice or a page of the chat list with
-more after it. A complete chat list (from your adapter's `chats`, or given to `markChatsLeft`) rejoins the chats it
-names. An adapter that learns of a rejoin any other way, from a push, a partial list or a lookup, sends
+stays left through a save that leaves membership out, such as a community notice. Any page of your adapter's `chats`
+rejoins the chats it names, since the messenger lists only chats the account is in; a complete one also marks the
+rest left. A client that saves its chat list itself calls `rejoinChats` with any part of it and `markChatsLeft`
+with a complete one. An adapter that learns of a rejoin any other way, from a push or a lookup, sends
 `membershipState: null` with the chat.
 
 ## One socket per linked device

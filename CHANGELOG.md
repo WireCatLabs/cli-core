@@ -12,9 +12,17 @@ shape of this file.
 - **A saved chat keeps its membership when the update leaves it out**: `saveChats`, `Delta.chats` and
   `HistoryBatch.chats` no longer take a "left" mark off a chat that comes without `membershipState`. So a late
   community notice for a group the owner left no longer marks it rejoined. A value sets the membership; `null`
-  (newly allowed on `ChatUpdate`) clears it. `markChatsLeft` now also takes the mark off the chats its complete list
-  names, so a complete chat list still rejoins them; a page with more after it no longer does. A caller that saves
-  a rejoined chat any other way must send `membershipState: null`.
+  (newly allowed on `ChatUpdate`) clears it. A page of the adapter's `chats`, complete or not, still rejoins the
+  chats it names, through `markChatsLeft` (now also takes the mark off the chats its complete list names) or the new
+  `rejoinChats`; other states such as "archived" are kept. A client that saves its own chat list must call
+  `rejoinChats(key, ids)` for a list that is not complete, or a chat the owner rejoined stays hidden from stored
+  reads until the next complete one: max-cli's `rememberChats` with `else await db.chats.rejoinChats(key, ids)`.
+  A caller that learns of a rejoin any other way sends `membershipState: null`.
+
+### Added
+
+- **`ChatsStore.rejoinChats(key, ids)`** takes the "left" mark off the chats a messenger's chat list names, from any
+  page of it, and says how many.
 
 ## 0.351.0 — 19.10.2026
 

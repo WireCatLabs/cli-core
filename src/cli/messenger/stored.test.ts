@@ -135,8 +135,9 @@ describe("what a chat list leaves in the store", () => {
     expect(await listing({ items: [], hasMore: false }, { offset: 0 })).toEqual(["7", "8"])
   })
 
-  it("only a complete page rejoins a chat marked left", async () => {
-    expect(await listing({ items: ["8"], hasMore: true }, { limit: 1, offset: 0 }, ["8"])).toEqual(["7"])
+  it("any page rejoins the chats it names marked left, and leaves the rest", async () => {
+    expect(await listing({ items: ["8"], hasMore: true }, { limit: 1, offset: 0 }, ["8"])).toEqual(["7", "8"])
+    expect(await listing({ items: ["7"], hasMore: true }, { limit: 1, offset: 0 }, ["8"])).toEqual(["7"])
     expect(await listing({ items: ["7", "8"], hasMore: false }, { offset: 0 }, ["8"])).toEqual(["7", "8"])
   })
 })

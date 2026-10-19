@@ -85,6 +85,20 @@ describe("a chat the account left", () => {
     await store.close()
   })
 
+  it("is taken off the chats any part of a chat list names, keeping other states", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [chat("-1"), chat("-2"), chat("-3")])
+    await store.chats.markChatsLeft(OWNER, [])
+    await store.chats.saveChats(OWNER, [{ id: "-3", kind: "group", membershipState: "archived" }])
+
+    expect(await store.chats.rejoinChats(OWNER, ["-1", "-3"])).toBe(1)
+    expect((await store.chats.chats(OWNER, {})).items.map((one) => [one.id, one.membershipState ?? null])).toEqual([
+      ["-1", null],
+      ["-3", "archived"],
+    ])
+    await store.close()
+  })
+
   it("is marked per account", async () => {
     const store = await openStore({ path: fresh() })
     await store.chats.saveChats(OWNER, [chat("-1"), chat("-2")])
