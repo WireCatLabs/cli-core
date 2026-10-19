@@ -526,6 +526,26 @@ describe("store fetch in the background", () => {
     })
   })
 
+  it("keeps a failed job's error code but not its message, which can name a chat, in the job file", async () => {
+    const env = setup()
+    const { calls, spawnJob } = spawned(process.pid)
+    const { job } = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
+    const refusing = {
+      ...chatOf({ newest: 5, asked: [] }),
+      history: async () => {
+        throw new CliError("not_found", 'no chat matches "Book club"')
+      },
+    } as MessengerAdapter & ServerReads
+
+    expect((await call(calls[0]?.argv ?? [], refusing, { ...env, ...calls[0]?.env })).code).not.toBe(0)
+
+    expect(readJob(jobsDir(app, env), job)?.error).toEqual({
+      code: "not_found",
+      message: `not_found — \`store jobs show ${job}\` names the log with the whole error`,
+    })
+    expect(readFileSync(join(jobsDir(app, env), `${job}.json`), "utf8")).not.toContain("Book club")
+  })
+
   it("logs the job's start and exit as records sharing the trace its commands get", async () => {
     const env = setup()
     const { calls, spawnJob } = spawned(process.pid)
