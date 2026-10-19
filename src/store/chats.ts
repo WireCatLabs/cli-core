@@ -42,7 +42,7 @@ export interface ChatsStore {
   rejoinChats(key: AccountKey, present: Id[]): Promise<number>
   /**
    * The chat the messenger now names `to` instead of `from`: renamed, or merged into the chat already stored as
-   * `to`. Replaying it changes nothing.
+   * `to`, with `from` kept as an alias (`aliasedChat`), also when only `to` is stored. Replaying it changes nothing.
    */
   rekeyChat(key: AccountKey, from: Id, to: Id): Promise<ChatRekey>
   /**

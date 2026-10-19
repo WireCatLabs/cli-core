@@ -234,7 +234,8 @@ const MESSENGER_FIELDS = [
 
 /**
  * A chat the messenger now names by another id: renamed in place, or merged into the row already stored under the
- * new id's twin. Replaying it, or naming a chat the store does not hold, changes nothing. Runs inside `write`.
+ * new id's twin; the old id stays an alias of it. Replaying it changes nothing, and naming a chat the store does not
+ * hold only records the alias when the new id is stored. Runs inside `write`.
  */
 export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: number, from: Id, to: Id): ChatRekey => {
   const old = from === to ? undefined : chatRow(context, accountKey, from)
