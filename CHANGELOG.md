@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.355.0 — 19.10.2026
-
 ### Fixed
 
 - **A recipient-list entry saved by an id with no stored chat follows the messenger's re-key.** `serve` and `watch`
@@ -18,6 +16,11 @@ shape of this file.
   partner) the store does not hold: typed ids an adapter maps from local data only, never looks up or records. The
   re-key the messenger sends back moves the entry as before, with or without a chat row. An unreadable list is a
   warning, and the store's ids are still handed over. Additive: the one-argument signature is unchanged.
+
+## 0.355.0 — 19.10.2026
+
+### Fixed
+
 - **A failed scheduled run no longer keeps a chat title or a name in `last.json`** (privacy). Its `reason` was the
   last line the run printed, which is the whole error object, message included: "no chat matches …" and the list of
   chats or people an ambiguous name matches reached the file and the "scheduled … failing" notice. `last.json` now
