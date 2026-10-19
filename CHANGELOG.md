@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.355.0 — 19.10.2026
+
 ### Fixed
 
 - **A failed scheduled run no longer keeps a chat title or a name in `last.json`** (privacy). Its `reason` was the
