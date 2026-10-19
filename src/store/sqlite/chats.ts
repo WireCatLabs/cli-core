@@ -293,8 +293,12 @@ export const chatsWith = ({ orm }: StoreContext, accountKey: number, key: Accoun
   return toChats(orm, rows)
 }
 
-const chatsWhere = (accountKey: number, { where }: StoredChatFilter) =>
-  and(eq(chats.accountId, accountKey), notLeft, where === undefined ? undefined : bound(where))
+const chatsWhere = (accountKey: number, { where, includeLeft }: StoredChatFilter) =>
+  and(
+    eq(chats.accountId, accountKey),
+    includeLeft ? undefined : notLeft,
+    where === undefined ? undefined : bound(where),
+  )
 
 /**
  * How the store answers a chat list's query. `title:` goes through the trigram index, so it matches part of a

@@ -390,6 +390,31 @@ describe("a messenger whose history is read from the store", () => {
     expect(shown.stderr).toContain("nothing stored for this chat yet")
   })
 
+  it("**shows a chat the store holds as left, and says so**, while the list leaves it out", async () => {
+    const env = await filled()
+    const { connects, connect } = pushing()
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.chats.saveChats({ provider: "chat", account: "500" }, [
+      { id: "7", kind: "group", membershipState: "left" },
+    ])
+    await store.close()
+
+    const shown = await call(["chats", "show", "Book club", "--json"], env, connect, "store")
+    const pretty = await call(["chats", "show", "Book club"], env, connect, "store")
+    const messages = await call(["messages", "list", "Book club", "--json"], env, connect, "store")
+    const listed = await call(["chats", "list", "--json"], env, connect, "store")
+
+    expect(shown.code).toBe(0)
+    expect(JSON.parse(shown.stdout).item).toMatchObject({ id: "7", title: "Book club", membership_state: "left" })
+    expect(pretty.stderr).toContain(
+      "you left this chat; its stored messages are kept — `chat default store clear --left --dry-run`",
+    )
+    for (const out of [shown, pretty, messages]) expect(out.stderr).not.toContain("nothing stored")
+    expect(JSON.parse(messages.stdout).items).toHaveLength(3)
+    expect(JSON.parse(listed.stdout).items.map((one: { id: string }) => one.id)).toEqual(["20"])
+    expect(connects).toEqual([])
+  })
+
   it("**still connects to write**, through the guard", async () => {
     const env = await filled()
     const { connects, sent, connect } = pushing()

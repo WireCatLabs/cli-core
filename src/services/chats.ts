@@ -194,10 +194,10 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
       const pushed = deps.reads === "store"
       const missing = (id: string) =>
         new CliError("not_found", pushed ? nothingStored(deps.messenger) : `no stored chat ${id}`)
-      const id = await chatIdIn(deps.messenger, chat, store).catch((error: unknown) => {
+      const id = await chatIdIn(deps.messenger, chat, store, { includeLeft: true }).catch((error: unknown) => {
         throw pushed && codeOf(error) === "not_found" ? missing(chat) : error
       })
-      const found = (await store.chats.chats({})).items.find((one) => one.id === id)
+      const found = (await store.chats.chats({ includeLeft: true })).items.find((one) => one.id === id)
       if (!found) throw missing(id)
       return { ...found, members: await storedMembers(store, found.id) }
     }

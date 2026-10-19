@@ -20,8 +20,8 @@ export const readChatId = async (
   store: MessageStore,
   account: AccountKey,
 ): Promise<string> => {
-  if (deps.reads !== "store") return storedChatId(deps.messenger, reference, store, account)
-  const chatId = await storedChatId(deps.messenger, reference, store, account).catch((error: unknown) => {
+  if (deps.reads !== "store") return keptChatId(deps.messenger, reference, store, account)
+  const chatId = await keptChatId(deps.messenger, reference, store, account).catch((error: unknown) => {
     if (codeOf(error) === "not_found") throw new CliError("not_found", nothingStored(deps.messenger))
     throw error
   })
@@ -39,9 +39,27 @@ export const storedChatId = async (
   account: AccountKey,
 ): Promise<string> => chatIdAmong(messenger, reference, account, () => store.chats.chats(account, {}))
 
-/** `storedChatId`, among the chats of the account the store is bound to. */
-export const chatIdIn = (messenger: Saved, reference: string, store: AccountStore): Promise<string> =>
-  chatIdAmong(messenger, reference, store.account, () => store.chats.chats({}))
+/** `storedChatId`, then among the chats the account left: their history is kept, so a read of it still finds them. */
+const keptChatId = (messenger: Saved, reference: string, store: MessageStore, account: AccountKey): Promise<string> =>
+  storedChatId(messenger, reference, store, account).catch((error: unknown) => {
+    if (codeOf(error) !== "not_found") throw error
+    return chatIdAmong(messenger, reference, account, () => store.chats.chats(account, { includeLeft: true }))
+  })
+
+/** `storedChatId`, among the chats of the account the store is bound to; `includeLeft` tries the left ones last. */
+export const chatIdIn = (
+  messenger: Saved,
+  reference: string,
+  store: AccountStore,
+  { includeLeft = false }: { includeLeft?: boolean } = {},
+): Promise<string> => {
+  const among = chatIdAmong(messenger, reference, store.account, () => store.chats.chats({}))
+  if (!includeLeft) return among
+  return among.catch((error: unknown) => {
+    if (codeOf(error) !== "not_found") throw error
+    return chatIdAmong(messenger, reference, store.account, () => store.chats.chats({ includeLeft: true }))
+  })
+}
 
 const chatIdAmong = async (
   messenger: Saved,
