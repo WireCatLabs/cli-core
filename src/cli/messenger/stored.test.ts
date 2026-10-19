@@ -1070,6 +1070,10 @@ describe("a stored chat id the messenger now names by another id", () => {
         asked.push(reference)
         return { ...dialog(answers[reference] ?? reference), kind: "unknown", title: null }
       },
+      send: async (chatId: string, text: string) => ({
+        message: message("42", text, answers[chatId] ?? chatId),
+        sendId: "s",
+      }),
       delete: async () => {},
     }
     const wrapped = stored(adapter as unknown as MessengerAdapter, {
@@ -1099,6 +1103,17 @@ describe("a stored chat id the messenger now names by another id", () => {
     expect(await chatIds(account)).toContain(LID)
     expect((await store.messages.search("keys", { limit: 10, account })).items).toEqual([])
     expect(await chatIds(other)).toContain(PHONE)
+  })
+
+  it("a send by the old id and a delete by it leave the text out of search", async () => {
+    const { wrapped, store, chatIds } = await following({ [PHONE]: LID })
+
+    const sent = await wrapped.send((await wrapped.resolve(PHONE)).id, "the code is 1234", { sendId: "s" })
+    await wrapped.delete?.((await wrapped.resolve(PHONE)).id, [sent.message.id], { forEveryone: false })
+
+    expect(sent.message.chatId).toBe(LID)
+    expect((await store.messages.search("code", { limit: 10, account })).items).toEqual([])
+    expect(await chatIds(account)).not.toContain(PHONE)
   })
 
   it("answers the messenger's id when the re-key cannot be written", async () => {
