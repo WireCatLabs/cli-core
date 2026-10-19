@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Meeting preparation and project gathering leave out a chat hidden from search** (security). The stored-context
+  reader (`store.contextEvidence`) searched the words of every chat of the account, so a chat with `searchable = 0`
+  still reached cli-memo's meeting preparation and project gathering. It now leaves such chats out; the reader never
+  names a chat. No released code sets `searchable = 0`, so only a store edited by hand was affected.
+
 ## 0.353.0 — 19.10.2026
 
 ### Changed — may break callers

@@ -44,6 +44,12 @@ it.each(["example-calendar", "sample-calendar"])(
   },
 )
 
+it("leaves out the messages of a chat the owner hid from search", async () => {
+  const f = await fixture()
+  f.db.prepare("UPDATE chats SET searchable=0 WHERE account_id=? AND external_id='planning'").run(f.accountId)
+  expect(await f.reader.read(f.request)).toMatchObject({ items: [], next: null, coverage: { hasMore: false } })
+})
+
 it("reads selected imported documents and mail without internal notes or writes", async () => {
   const f = await fixture()
   await f.store.notes.addNote({ text: "Harbour private comment" })
