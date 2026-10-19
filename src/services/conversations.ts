@@ -7,6 +7,7 @@ import { formatLocator } from "../domain/locator.js"
 import type { Id, Message } from "../domain/models.js"
 import { formatReference } from "../domain/references.js"
 import { conversation } from "../entities/conversation.js"
+import { typedCommand } from "../runs/scope.js"
 import {
   type AccountKey,
   type AgentAnswer,
@@ -114,7 +115,7 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
   const notBuilt = (chatId: Id) =>
     new CliError(
       "not_found",
-      `chat ${chatId} has no conversations yet — \`${deps.messenger.app.command} conversations build --chat ${chatId}\``,
+      `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations build --chat ${chatId}`)}\``,
     )
 
   return {

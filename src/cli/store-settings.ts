@@ -9,6 +9,7 @@ import {
   withTaskCategory,
 } from "../domain/task-categories.js"
 import type { AppIdentity } from "../ports/app.js"
+import { typedCommand } from "../runs/scope.js"
 import { ACCOUNT_GROUPS_SETTING, type AccountGroups, groupMembers, groupName } from "../search/account-list.js"
 import { DEFAULT_STEMMERS, parseStemmers, type Stemmers } from "../search/stem.js"
 import { openCache } from "../store/open.js"
@@ -116,7 +117,7 @@ const changePhoneCountries = async (app: AppIdentity, env: NodeJS.ProcessEnv, va
     },
     note:
       "store-wide — a number written without + is read in these countries, the first that fits; numbers already " +
-      `found keep their old reading until \`${app.command} mentions rebuild phone\``,
+      `found keep their old reading until \`${typedCommand(app.command, "mentions rebuild phone")}\``,
     rebuild: true,
   }
 }
@@ -184,7 +185,7 @@ const changeFirstPass = async (app: AppIdentity, env: NodeJS.ProcessEnv, value: 
       result: { store: storePath(env), scope: "store", setting: FIRST_PASS, value: now },
       note:
         `store-wide — an account's first sync opens at most ${now} task(s) per chat from history; later syncs read ` +
-        `only new messages. \`${app.command} tasks scan <chat>\` builds tasks from a chat's history when asked`,
+        `only new messages. \`${typedCommand(app.command, "tasks scan <chat>")}\` builds tasks from a chat's history when asked`,
     }
   } finally {
     await store.close()
@@ -234,7 +235,7 @@ const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: st
       result: { store: storePath(env), scope: "store", setting, value: members ?? null },
       note:
         `store-wide — \`--source group:${name}\` searches these accounts from every app; ` +
-        `a profile is found once its app has saved something (\`${app.command} config show\`)`,
+        `a profile is found once its app has saved something (\`${typedCommand(app.command, "config show")}\`)`,
     }
   } finally {
     await store.close()

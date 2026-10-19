@@ -24,6 +24,7 @@ import { storePath } from "../../store/path.js"
 import { type BaseEnvironment, environmentOf, setExitCode } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { lineOf } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** Each run of an agent is a paid model call that reads chats; keeping the store current is `serve`'s job. */
@@ -115,7 +116,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       say(scheduleAnswer(schedule, { file, timer: timer().where(schedule.name), replaced }), [
         `${replaced ? "Replaced" : "Added"} ${schedule.name}: ${describeWhen(schedule.when)}.`,
         `It runs: ${schedule.kind === "agent" ? schedule.argv.join(" ") : `${app.command} ${schedule.argv.join(" ")}`}`,
-        `Output: ${join(dirname(file), "runs")} · now: ${app.command} schedule run ${schedule.name} · stop: ${app.command} schedule remove ${schedule.name}`,
+        `Output: ${join(dirname(file), "runs")} · now: ${lineOf(self, `schedule run ${schedule.name}`)} · stop: ${lineOf(self, `schedule remove ${schedule.name}`)}`,
       ])
     }
     return { context, system, state, say, timer, environment, save }
@@ -217,7 +218,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       })
       renderAnswer(this, context, answer, () => {
         if (rows.length === 0) {
-          context.renderer.note(`no schedules — \`${app.command} schedule command|agent\` adds one`)
+          context.renderer.note(`no schedules — \`${lineOf(this, "schedule command|agent")}\` adds one`)
           return ""
         }
         return rows
@@ -257,7 +258,8 @@ export const scheduleCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, name: string) {
       const { state, say, timer } = prepare(this)
       const file = scheduleFile(state, scheduleName(name))
-      if (!existsSync(file)) throw new CliError("not_found", `no schedule ${name} — \`${app.command} schedule list\``)
+      if (!existsSync(file))
+        throw new CliError("not_found", `no schedule ${name} — \`${lineOf(this, "schedule list")}\``)
       await timer().remove(name)
       rmSync(file, { force: true })
       say({ name, removed: true }, [`Removed ${name}.`])

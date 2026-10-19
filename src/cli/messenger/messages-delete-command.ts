@@ -5,6 +5,7 @@ import { DELETE_AT_ONCE } from "../../services/index.js"
 import { environmentOf } from "../context.js"
 import { ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { lineOf } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /**
@@ -28,7 +29,7 @@ export const deleteCommand = (messenger: Messenger): Command =>
         throw new CliError(
           "permission_error",
           `${everyone ? "" : `${messenger.name ?? messenger.provider} deletes only for everyone, and `}an agent never ` +
-            `deletes for everyone — the owner can run \`${messenger.app.command} messages delete --for-everyone\``,
+            `deletes for everyone — the owner can run \`${lineOf(this, "messages delete --for-everyone")}\``,
           { permission: "messages.delete", sent: false },
         )
       const context = messengerContext(this, messenger)

@@ -18,6 +18,7 @@ import type {
 import { threadIdOf } from "../domain/thread.js"
 import { capability, type MessengerAdapter } from "../ports/messenger.js"
 import { syncsOneChat } from "../ports/traits.js"
+import { typedCommand } from "../runs/scope.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { AccountStore } from "../store/account-store.js"
@@ -276,7 +277,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     const counted = counts.length > 0 ? { ...known, memberCounts: counts } : known
     return completeness.state === "complete" || !syncsOneChat(deps.messenger)
       ? counted
-      : { ...counted, fetch: `${deps.messenger.app.command} messages sync ${chatId}` }
+      : { ...counted, fetch: typedCommand(deps.messenger.app.command, `messages sync ${chatId}`) }
   },
 
   sendAs: async (chat) => {
@@ -317,7 +318,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
       unknown,
       ...(stored?.completeness ? { completeness: stored.completeness } : {}),
       ...(stored?.completeness && stored.completeness.state !== "complete" && syncsOneChat(deps.messenger)
-        ? { fetch: `${deps.messenger.app.command} messages sync ${id}` }
+        ? { fetch: typedCommand(deps.messenger.app.command, `messages sync ${id}`) }
         : {}),
       items,
     }

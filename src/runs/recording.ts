@@ -42,6 +42,7 @@ export const recorded = async <T>(options: RecordingOptions, body: (events: Even
         runId: recording.runId,
         command: options.command,
         startedAt: Date.now(),
+        profile: options.profile,
         ...(recording.traceId ? { traceId: recording.traceId } : {}),
       },
       () => body(recording.events),

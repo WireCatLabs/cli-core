@@ -4,6 +4,7 @@ import type { Chat, ChatKind, Id, Message } from "../domain/models.js"
 import type { ActionableError } from "../domain/recovery.js"
 import { capability } from "../ports/messenger.js"
 import type { Fetching } from "../ports/traits.js"
+import { typedCommand } from "../runs/scope.js"
 import {
   type AccountKey,
   type ChatStats,
@@ -15,7 +16,6 @@ import {
 import { type Estimate, estimateBackfill } from "./backfill-estimate.js"
 import { actionable, batchProgress } from "./batch.js"
 import type { ServiceDeps } from "./deps.js"
-
 import { storedChatId } from "./message-resolution.js"
 import { patiently } from "./patience.js"
 import { type CatchUpOptions, type CatchUpResult, catchUpSearch, validateCatchUp } from "./search-catchup.js"
@@ -26,7 +26,7 @@ const pushed = (deps: ServiceDeps, what: string) => {
     throw new CliError(
       "validation_error",
       `${what} asks for older history, and this messenger pushes its history instead — keep ` +
-        `\`${deps.messenger.app.command} serve\` running`,
+        `\`${typedCommand(deps.messenger.app.command, "serve")}\` running`,
     )
   }
 }

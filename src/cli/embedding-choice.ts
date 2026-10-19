@@ -4,6 +4,7 @@ import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import { isLocal, remoteModel } from "../embeddings/remote.js"
 import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
+import { typedCommand } from "../runs/scope.js"
 import type { ModelChoice } from "../services/embeddings.js"
 
 export interface ModelOptions {
@@ -49,7 +50,7 @@ export const embeddingChoice = (
   if (!key && needKey && baseUrl === undefined) {
     throw new CliError(
       "authentication_error",
-      `no OpenAI key — \`${app.command} models text key set openai\`, or OPENAI_API_KEY`,
+      `no OpenAI key — \`${typedCommand(app.command, "models text key set openai")}\`, or OPENAI_API_KEY`,
     )
   }
   return { remote, ...(key ? { apiKey: key } : {}), ...(concurrency ? { concurrency } : {}) }

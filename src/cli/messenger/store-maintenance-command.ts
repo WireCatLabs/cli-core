@@ -45,7 +45,7 @@ import {
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { nextStep } from "../steps.js"
+import { lineOf, nextStep } from "../steps.js"
 import { answerOf } from "./ask.js"
 import type { Messenger } from "./context.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
@@ -517,7 +517,7 @@ const reindexCommand = (messenger: Messenger): Command =>
         if (schema.version < SPEAKS) {
           throw new CliError(
             "validation_error",
-            `the store is behind this build — \`${messenger.app.command} store migrate\` first`,
+            `the store is behind this build — \`${lineOf(this, "store migrate")}\` first`,
           )
         }
         resetSearchIndex(database)
@@ -662,7 +662,7 @@ const restoreFrom = async (command: Command, messenger: Messenger, backup: strin
   renderer.note("restart every serve and mcp of either CLI that was running, so they read the restored store")
   if (schema.version < SPEAKS) {
     renderer.note(
-      `the backup is behind this build; the next command migrates it — \`${messenger.app.command} store migrate\` now`,
+      `the backup is behind this build; the next command migrates it — \`${lineOf(command, "store migrate")}\` now`,
     )
   }
 }

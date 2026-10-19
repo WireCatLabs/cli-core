@@ -4,6 +4,7 @@ import { itemOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { keepRefreshedRefs } from "../../cli/messenger/refreshed-refs.js"
 import { capability, type RemoteFile } from "../../ports/messenger.js"
+import { typedCommand } from "../../runs/scope.js"
 import { type AnyTool, chatOf, message, Picture, READ, tool } from "../tool.js"
 
 /** Larger than this and a client may refuse the answer, or spend the model's context on one picture. */
@@ -38,7 +39,7 @@ export const messagesPhotoTools = (messenger: Messenger): Record<string, AnyTool
     annotations: READ,
     online: async (adapter, args, defaults) => {
       const { id: chatId } = await adapter.resolve(args.chat)
-      const saveIt = `the owner can save it with \`${messenger.app.command} messages download ${chatId} ${args.message}\``
+      const saveIt = `the owner can save it with \`${typedCommand(messenger.app.command, `messages download ${chatId} ${args.message}`)}\``
       const { files } = await capability(adapter, "download", "download attachments")(chatId, args.message)
       const photo = args.index === undefined ? files.find((file) => file.kind === "photo") : files[args.index]
       if (!photo) {

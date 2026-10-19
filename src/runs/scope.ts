@@ -10,6 +10,8 @@ export interface RunScope {
   startedAt?: number
   /** The caller's trace — an MCP client's `_meta.traceparent`, or `TRACEPARENT` from whatever started this process. */
   traceId?: string
+  /** The profile the run is for, so a hint deep in a service can name the command with it. */
+  profile?: string
 }
 
 const scopes = new AsyncLocalStorage<RunScope>()
@@ -33,6 +35,13 @@ export const currentRun = (): RunScope => {
 }
 
 export const inRun = <T>(scope: RunScope, body: () => T): T => scopes.run(scope, body)
+
+/**
+ * A command as a person types it: `max personal store migrate`. A hint without the profile fails when copied,
+ * since no profile is assumed; outside a run with a profile it stays `max store migrate`.
+ */
+export const typedCommand = (tool: string, words: string, profile = currentRun().profile): string =>
+  [tool, profile, words].filter((part) => part !== undefined && part !== "").join(" ")
 
 /**
  * For a one-shot command whose action runs outside `inRun` — max's `max bot`, recorded from commander's hooks, which

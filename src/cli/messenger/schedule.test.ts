@@ -410,7 +410,9 @@ describe("a failing schedule", () => {
     failed(env.CHAT_STATE_DIR)
     const { code, err } = await command(["chats", "list"], env)
     expect(code).toBe(0)
-    expect(err).toMatch(/^chat: scheduled sync failing since .+ \(3 runs\): no folder id — chat schedule list\n?$/)
+    expect(err).toMatch(
+      /^chat: scheduled sync failing since .+ \(3 runs\): no folder id — chat default schedule list\n?$/,
+    )
   })
 
   it("is not said inside the scheduled run, nor under --quiet", async () => {

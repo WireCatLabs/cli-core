@@ -303,7 +303,7 @@ export const serverEntry = (
     throw new CliError(
       "validation_error",
       `this ${app.command} runs from npx's cache, which gets cleared, and the path would stop working — ` +
-        `install it globally, then run \`${app.command} mcp config\` again`,
+        `install it globally, then run \`${app.command} ${profile} mcp config\` again`,
     )
   }
   const names = [
