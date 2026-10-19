@@ -240,6 +240,19 @@ describe("chats create, join and leave", () => {
     expect(await membership(env, owner, "7")).toMatchObject({ membershipState: null })
   })
 
+  it("**marks a chat left from a full online list**, the correction a failed mark names", async () => {
+    const env = sandbox()
+    await seed(env, [[owner, "7", null]])
+    const adapter: MessengerAdapter = {
+      ...base,
+      chats: async () => ({ items: [{ ...chat, id: "8" }], hasMore: false }),
+    }
+
+    expect((await call(["chats", "list", "--all", "--json"], adapter, env)).code).toBe(0)
+
+    expect(await membership(env, owner, "7")).toMatchObject({ membershipState: "left" })
+  })
+
   it("**leaves nothing and changes no membership under the read-only lock**", async () => {
     const env = sandbox()
     await seed(env, [[owner, "7", null]])

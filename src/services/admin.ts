@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type {
   AdminRight,
   GroupCard,
@@ -11,8 +11,10 @@ import type {
 } from "../domain/models.js"
 import { sendTime } from "../domain/send-time.js"
 import { capability } from "../ports/messenger.js"
+import { typedCommand } from "../runs/scope.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
+import type { AccountStore } from "../store/account-store.js"
 import { accountStoreIfOpen, type ServiceDeps } from "./deps.js"
 
 export interface NewGroup {
@@ -78,6 +80,35 @@ export interface AdminService {
   removeAdmin(chat: string, person: string): Promise<Operated<{ chatId: Id; personId: Id }>>
 }
 
+/**
+ * The store's record of a leave or join the messenger already carried out. A failure says it happened and is not
+ * safe to repeat: the messenger refuses a second leave, and a second join may wait for an admin.
+ */
+const recordMembership = async (
+  deps: ServiceDeps,
+  operationId: string,
+  done: string,
+  change: string,
+  write: (store: AccountStore) => Promise<unknown>,
+): Promise<void> => {
+  try {
+    const held = await accountStoreIfOpen(deps)
+    if (held) await write(held)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    // A complete online chat list marks the chats it leaves out as left and rejoins those it names.
+    const fix =
+      deps.reads === "store"
+        ? "this messenger's chat list comes from the store, so no command corrects it"
+        : `an online \`${typedCommand(deps.messenger.app.command, "chats list --all")}\` corrects it`
+    throw new CliError(
+      isCliError(error) ? error.code : "invalid_response",
+      `${done}, but the local store could not ${change} (${reason}) — do not run it again; ${fix}`,
+      { operation_id: operationId, retryable: false },
+    )
+  }
+}
+
 export const adminService = (deps: ServiceDeps): AdminService => {
   const online = async (command: string) => {
     if (deps.offline) throw new CliError("validation_error", `\`${command}\` changes a chat; not with --offline`)
@@ -111,7 +142,9 @@ export const adminService = (deps: ServiceDeps): AdminService => {
         (answer) => ("requested" in answer ? {} : { chatId: answer.id }),
       )
       if ("requested" in joined) return { operationId, requested: true }
-      await (await accountStoreIfOpen(deps))?.chats.rejoinChats([joined.id])
+      await recordMembership(deps, operationId, `you joined chat ${joined.id}`, "take its left mark off", (held) =>
+        held.chats.rejoinChats([joined.id]),
+      )
       return { operationId, chat: joined }
     },
 
@@ -121,12 +154,12 @@ export const adminService = (deps: ServiceDeps): AdminService => {
       const { id: chatId, kind } = await connection.resolve(chat)
       const operationId = newOperationId()
       await guardedWrite(deps.guard, { operationId, chatId, kind: "chat", action: "leave" }, () => leave(chatId))
-      const held = await accountStoreIfOpen(deps)
-      // A save always writes the kind, and a resolve may know less of it than the store does.
-      if (held)
-        await held.chats.saveChats([
+      await recordMembership(deps, operationId, `you left chat ${chatId}`, "mark it left", async (held) =>
+        // A save always writes the kind, and a resolve may know less of it than the store does.
+        held.chats.saveChats([
           { id: chatId, kind: (await held.chats.chatKind(chatId)) ?? kind, membershipState: "left" },
-        ])
+        ]),
+      )
       return { operationId, chatId }
     },
 
