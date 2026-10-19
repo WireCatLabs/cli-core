@@ -602,6 +602,23 @@ export const pollVotes = sqliteTable(
   ],
 )
 
+/** An id a stored chat was re-keyed from, so a read by the id the owner still types finds the chat. */
+export const chatAliases = sqliteTable(
+  "chat_aliases",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    chatId: integer("chat_id")
+      .notNull()
+      .references(() => chats.id),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [unique().on(table.accountId, table.externalId), index("chat_aliases_by_chat_id").on(table.chatId)],
+)
+
 /** Changes to who is in a chat, and to its title, for a messenger whose history is pushed to the store. */
 export const chatEvents = sqliteTable(
   "chat_events",

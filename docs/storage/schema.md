@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-91 tables, 19 full-text indexes.
+92 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -541,6 +541,20 @@ Each voter's newest vote in a poll, where the messenger sends votes one by one (
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (chat_id, message_external_id, identity_id)`, `INDEX (identity_id)`
+
+### `chat_aliases`
+
+An id a stored chat was re-keyed from, per account, so a read by the id the owner still types finds the chat it became. A chat stored under that id again wins over the alias.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the integration account it came through |
+| `external_id` | text | not null |  | the id the messenger no longer names the chat by |
+| `chat_id` | integer | not null | → `chats.id` | the `chat` it belongs to |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (chat_id)`
 
 ### `chat_events`
 

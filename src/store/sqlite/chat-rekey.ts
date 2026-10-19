@@ -148,6 +148,7 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
   foldOpenStays(context, kept, gone)
   for (const table of [
     "poll_votes",
+    "chat_aliases",
     "chat_events",
     "message_transcripts",
     "chat_members",
@@ -212,6 +213,15 @@ const strictest = (context: StoreContext, accountKey: number, old: Row, twin: Ro
   }
 }
 
+/** The owner keeps typing the id the messenger dropped; it now names the chat it was re-keyed into. */
+const aliasOf = (context: StoreContext, accountKey: number, from: Id, chat: number): void => {
+  context.database
+    .prepare(
+      "INSERT INTO chat_aliases (account_id, external_id, chat_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (account_id, external_id) DO UPDATE SET chat_id = excluded.chat_id",
+    )
+    .run(accountKey, from, chat, context.now())
+}
+
 const MESSENGER_FIELDS = [
   "title",
   "unread_count",
@@ -228,8 +238,11 @@ const MESSENGER_FIELDS = [
  */
 export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: number, from: Id, to: Id): ChatRekey => {
   const old = from === to ? undefined : chatRow(context, accountKey, from)
-  if (!old) return { outcome: "unchanged", messages: 0, duplicates: 0 }
-  const twin = chatRow(context, accountKey, to)
+  const twin = from === to ? undefined : chatRow(context, accountKey, to)
+  if (!old) {
+    if (twin) aliasOf(context, accountKey, from, Number(twin.id))
+    return { outcome: "unchanged", messages: 0, duplicates: 0 }
+  }
   const kept = Number(old.id)
   let moved = { messages: 0, duplicates: 0 }
   if (twin) {
@@ -259,5 +272,6 @@ export const rekeyChat = (context: StoreContext, key: AccountKey, accountKey: nu
   }
   context.database.prepare("UPDATE chats SET external_id = ?, updated_at = ? WHERE id = ?").run(to, context.now(), kept)
   renameText(context, key, accountKey, from, to)
+  aliasOf(context, accountKey, from, kept)
   return { outcome: twin ? "merged" : "renamed", ...moved }
 }

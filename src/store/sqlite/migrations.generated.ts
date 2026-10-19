@@ -538,5 +538,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "CREATE INDEX `messages_starred_by_time` ON `messages` (`chat_id`,\"sent_at\" desc) WHERE starred = 1;"
     ]
+  },
+  {
+    "name": "20261019043114_version-25-chat-aliases",
+    "statements": [
+      "CREATE TABLE `chat_aliases` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`chat_id` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `fk_chat_aliases_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `fk_chat_aliases_chat_id_chats_id_fk` FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`),\n\tCONSTRAINT `chat_aliases_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE INDEX `chat_aliases_by_chat_id` ON `chat_aliases` (`chat_id`);"
+    ]
   }
 ]

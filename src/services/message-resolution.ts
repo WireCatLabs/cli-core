@@ -37,26 +37,42 @@ export const storedChatId = async (
   reference: string,
   store: MessageStore,
   account: AccountKey,
-): Promise<string> => chatIdAmong(messenger, reference, account, () => store.chats.chats(account, {}))
+): Promise<string> =>
+  chatIdAmong(
+    messenger,
+    reference,
+    account,
+    () => store.chats.chats(account, {}),
+    (id) => store.chats.aliasedChat(account, id),
+  )
 
 /** `storedChatId`, among the chats of the account the store is bound to. */
 export const chatIdIn = (messenger: Saved, reference: string, store: AccountStore): Promise<string> =>
-  chatIdAmong(messenger, reference, store.account, () => store.chats.chats({}))
+  chatIdAmong(
+    messenger,
+    reference,
+    store.account,
+    () => store.chats.chats({}),
+    (id) => store.chats.aliasedChat(id),
+  )
 
 const chatIdAmong = async (
   messenger: Saved,
   reference: string,
   account: AccountKey,
   held: () => Promise<Page<Chat>>,
+  aliased: (id: Id) => Promise<Id | undefined>,
 ): Promise<string> => {
   const trimmed = reference.trim()
   if (messenger.savedChatId && ["me", "self", "saved"].includes(trimmed.toLowerCase())) {
     return messenger.savedChatId(account)
   }
-  if (/^-?\d+$/.test(trimmed)) return trimmed
+  if (/^-?\d+$/.test(trimmed)) return (await aliased(trimmed)) ?? trimmed
   const chats = (await held()).items
   const exact = chats.find((one) => one.id === trimmed)
   if (exact) return exact.id
+  const moved = await aliased(trimmed)
+  if (moved !== undefined) return moved
   if (trimmed.startsWith("@")) {
     const username = trimmed.slice(1).toLowerCase()
     const found = chats.find((one) => String(one.providerMetadata?.username ?? "").toLowerCase() === username)

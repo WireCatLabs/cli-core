@@ -385,7 +385,7 @@ export interface HistoryStar {
  * their polls, the owner's stars, and changes to who is in them. A vote or a star is saved with its chat's messages,
  * after them, so a message in the same batch is held before its votes and its star.
  * `rekeys` are chats the messenger now names by another id; they apply first, so the batch's messages under the
- * new id join the chat already stored under the old one.
+ * new id join the chat already stored under the old one. A read by the old id still finds the chat.
  */
 export interface HistoryBatch {
   rekeys?: { from: Id; to: Id }[]

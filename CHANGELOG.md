@@ -9,6 +9,13 @@ shape of this file.
 
 ### Fixed
 
+- **A read by the id a chat was re-keyed from finds the chat it became** (store version 25). A re-key renamed or
+  merged the stored chat and kept no trace of the old id, so `messages list <old id> --offline` (and every
+  store-answered read of a `history: "store"` messenger) found nothing once WhatsApp moved a phone-form chat to its
+  LID. Each re-key now records the old id in the new `chat_aliases` table, per account, also when only the new id was
+  stored; a chat-id lookup follows it when no chat is stored under the id itself. A merged twin's aliases move to the
+  kept chat, and clearing a chat or an account removes its aliases. Additive: `store.chats.aliasedChat(key, id)`;
+  `minCompatible` stays 1.
 - **A failed scheduled run no longer keeps a chat title or a name in `last.json`** (privacy). Its `reason` was the
   last line the run printed, which is the whole error object, message included: "no chat matches …" and the list of
   chats or people an ambiguous name matches reached the file and the "scheduled … failing" notice. `last.json` now

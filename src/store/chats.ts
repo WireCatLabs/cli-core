@@ -56,6 +56,8 @@ export interface ChatsStore {
   chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
   /** A stored chat's kind, with or without messages; `undefined` when the store does not know the chat. */
   chatKind(key: AccountKey, chatId: Id): Promise<ChatKind | undefined>
+  /** The id a chat re-keyed from `chatId` has now; `undefined` while a chat is stored under `chatId` itself. */
+  aliasedChat(key: AccountKey, chatId: Id): Promise<Id | undefined>
   /** Per chat that spoke since `since` (ms): its newest message and who sent it when stored, never the text. */
   /** `where` is a `tasks agenda` query compiled over `AGENDA_COLUMNS`. */
   chatActivity(
@@ -146,6 +148,17 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
         .prepare("SELECT kind FROM chats WHERE account_id = ? AND external_id = ?")
         .get(accountKey, chatId)
       return row ? (String(row.kind) as ChatKind) : undefined
+    },
+
+    aliasedChat: async (key, chatId) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) return undefined
+      const row = context.database
+        .prepare(
+          "SELECT c.external_id FROM chat_aliases a JOIN chats c ON c.id = a.chat_id WHERE a.account_id = ? AND a.external_id = ? AND NOT EXISTS (SELECT 1 FROM chats WHERE account_id = ? AND external_id = ?)",
+        )
+        .get(accountKey, chatId, accountKey, chatId)
+      return row ? String(row.external_id) : undefined
     },
 
     chatActivity: async (key, since, where) => {

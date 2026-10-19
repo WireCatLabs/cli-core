@@ -359,6 +359,18 @@ const NEW = {
       keys: ["UNIQUE (chat_id, message_external_id, identity_id)"],
     },
     {
+      name: "chat_aliases",
+      doc: "An id a stored chat was re-keyed from, per account, so a read by the id the owner still types finds the chat it became. A chat stored under that id again wins over the alias.",
+      cols: [
+        id(),
+        fk("account_id", "accounts", { notnull: true }),
+        c("external_id", "text", { notnull: true, note: "the id the messenger no longer names the chat by" }),
+        fk("chat_id", "chats", { notnull: true }),
+        c("created_at", "integer", { notnull: true }),
+      ],
+      keys: ["UNIQUE (account_id, external_id)", "INDEX (chat_id)"],
+    },
+    {
       name: "chat_events",
       doc: "Who joined, left, was added, removed, promoted or demoted in a chat, and its title changes, for a messenger whose history is pushed to the store (WhatsApp); one asked for its history answers these itself.",
       cols: [

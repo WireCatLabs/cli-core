@@ -9,6 +9,7 @@ import {
   accounts,
   aliases,
   botUpdates,
+  chatAliases,
   chatEventPeople,
   chatEvents,
   chatMembers,
@@ -112,6 +113,7 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.delete(syncs).where(eq(syncs.accountId, accountKey)).run()
   orm.delete(messageTranscripts).where(inArray(messageTranscripts.chatId, chatsOf)).run()
   orm.delete(pollVotes).where(inArray(pollVotes.chatId, chatsOf)).run()
+  orm.delete(chatAliases).where(inArray(chatAliases.chatId, chatsOf)).run()
   orm
     .delete(chatEventPeople)
     .where(
