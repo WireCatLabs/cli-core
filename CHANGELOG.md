@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.363.0 — 19.10.2026
+
 ### Added
 
 - **`store.evidenceFindings`: cited facts and follow-ups about one project from stored messages, mail and
