@@ -5,15 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## 0.358.0 — 19.10.2026
-
-### Added
-
-- **Meeting transcripts in bounded context reads:** `ContextSource.kind` accepts `meeting`; the native
-  reader returns current transcript cue references with `timeKind: "meeting-start"`. Account/time scope,
-  cursor validation, read-only snapshots and pre-hydration byte limits apply. Deleted/superseded and
-  queued cues are excluded; missing indexes and unknown archive coverage remain explicit. Hosts must
-  opt in to meeting sources; the reader does not fetch recordings, fill indexes or infer project links.
+## Unreleased
 
 ### Fixed
 
@@ -23,6 +15,16 @@ shape of this file.
   through the new `store.chats.rekeyChats` in passes of one transaction, each holding the lock for about 50 ms with
   a pause after it. Each re-key keeps its own savepoint, privacy merge and account scope, and a refused one still
   warns and leaves the others applied. `ChatsStore` gains `rekeyChats`, so a hand-written `ChatsStore` must add it.
+
+## 0.358.0 — 19.10.2026
+
+### Added
+
+- **Meeting transcripts in bounded context reads:** `ContextSource.kind` accepts `meeting`; the native
+  reader returns current transcript cue references with `timeKind: "meeting-start"`. Account/time scope,
+  cursor validation, read-only snapshots and pre-hydration byte limits apply. Deleted/superseded and
+  queued cues are excluded; missing indexes and unknown archive coverage remain explicit. Hosts must
+  opt in to meeting sources; the reader does not fetch recordings, fill indexes or infer project links.
 
 ## 0.357.0 — 19.10.2026
 
