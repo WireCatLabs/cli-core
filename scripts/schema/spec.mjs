@@ -372,7 +372,7 @@ const NEW = {
         c("old_value", "text", { note: "as stored before, as text; `parent_chat_id` is a `chats` row id" }),
         c("new_value", "text", { note: "as stored after" }),
         c("source", "text", {
-          note: "the store write that made it (`chats`, `history`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand",
+          note: "the store write that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand",
         }),
         c("created_at", "integer", { notnull: true }),
       ],

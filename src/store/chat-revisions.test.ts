@@ -143,17 +143,35 @@ describe("chat_revisions", () => {
     await store.close()
   })
 
+  it("**a read by the old id of a chat the account left finds it only where a read by its current id would**", async () => {
+    const { store } = await opened()
+    await store.chats.saveChats(OWNER, [chat(PHONE, "Ana", { kind: "group" })])
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+    await store.chats.markChatsLeft(OWNER, [])
+
+    await expect(chatIdIn({}, PHONE, store.forAccount(OWNER))).rejects.toThrow()
+    expect(await chatIdIn({}, PHONE, store.forAccount(OWNER), { includeLeft: true })).toBe(LID)
+    await expect(storedChatId({}, LID, store, OWNER)).rejects.toThrow()
+    await expect(storedChatId({}, PHONE, store, OWNER)).rejects.toThrow()
+    await store.close()
+  })
+
   it("**records leaving and rejoining**, and a membership state the messenger reports", async () => {
     const { path, store } = await opened()
     await store.chats.saveChats(OWNER, [chat("g1", "Team", { kind: "group" }), chat("g2", "Club", { kind: "group" })])
     await store.chats.markChatsLeft(OWNER, ["g2"])
     await store.chats.markChatsLeft(OWNER, ["g2"])
     await store.chats.rejoinChats(OWNER, ["g1"])
+    await store.chats.markChatsLeft(OWNER, ["g1"])
+    await store.chats.markChatsLeft(OWNER, ["g2"])
     await store.chats.saveChats(OWNER, [chat("g2", "Club", { kind: "group", membershipState: "archived" })])
 
     expect((await revisions(path)).map(({ field, old, new: next, source }) => [field, old, next, source])).toEqual([
       ["membership_state", null, "left", "left"],
       ["membership_state", "left", null, "rejoin"],
+      ["membership_state", null, "left", "left"],
+      ["membership_state", "left", null, "rejoin"],
+      ["membership_state", null, "left", "left"],
       ["membership_state", null, "archived", "chats"],
     ])
     await store.close()

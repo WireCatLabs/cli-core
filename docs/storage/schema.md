@@ -554,7 +554,7 @@ One row per field a chat changed: its external id on a re-key, title, membership
 | `field` | text | not null |  | `external_id`, `title`, `membership_state`, `scope`, `searchable` or `parent_chat_id` |
 | `old_value` | text |  |  | as stored before, as text; `parent_chat_id` is a `chats` row id |
 | `new_value` | text |  |  | as stored after |
-| `source` | text |  |  | the store write that made it (`chats`, `history`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand |
+| `source` | text |  |  | the store write that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand |
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `INDEX (chat_id, created_at)`, `INDEX (account_id, old_value) WHERE field = 'external_id'`

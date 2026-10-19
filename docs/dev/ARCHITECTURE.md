@@ -216,7 +216,13 @@ moves the absorbed chat's rows to the kept one first. Old titles are private dat
 nothing indexes the table for search, mentions, involvements or embeddings, and no warning, event or run record
 carries its values; `renamedChatId` reads only the old-id rows, to find a chat. Creating a chat is not a change and
 records nothing, and nothing from before version 26 was recorded. A heavy account (about 2,000 chats) writes some
-10,000–20,000 rows a year, most of them the first `serve`'s re-keys and title changes: a few MB, so nothing prunes it.
+10,000–20,000 rows a year, most of them the first `serve`'s re-keys and title changes: a few MB (about 130 bytes a
+row with its indexes), so nothing prunes it. The table grows without bound only when a value flips on every sync (a
+chat list and `saveChatMetadata` that disagree on a title, a chat that drops in and out of the list): each flip is two
+rows a pass. Nothing skips them, as a skipped revert would leave the history wrong;
+`SELECT chat_id, field, count(*) FROM chat_revisions GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10` finds one. An older
+build's merge does not know the table, so `chat_revisions_ad` drops the absorbed twin's rows; the kept chat's rows,
+the re-key included, stay.
 
 **The text of files** is `attachment_texts`, one row per attachment: what `attachments extract`
 read from the file `messages download` saved (`attachments.local_path`, written by the download since this

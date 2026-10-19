@@ -283,7 +283,7 @@ export const rejoin = ({ orm }: StoreContext, accountKey: number, present: Id[])
  * list. Answers how many it marked.
  */
 export const markLeft = (context: StoreContext, accountKey: number, present: Id[]): number => {
-  rejoin(context, accountKey, present)
+  revisedBy(context, "rejoin", () => rejoin(context, accountKey, present))
   return context.orm
     .update(chats)
     .set({ membershipState: "left" })

@@ -91,7 +91,7 @@ const chatIdAmong = async (
   const exact = chats.find((one) => one.id === trimmed)
   if (exact) return exact.id
   const moved = await renamed(trimmed)
-  if (moved !== undefined) return moved
+  if (moved !== undefined && chats.some((one) => one.id === moved)) return moved
   if (trimmed.startsWith("@")) {
     const username = trimmed.slice(1).toLowerCase()
     const found = chats.find((one) => String(one.providerMetadata?.username ?? "").toLowerCase() === username)
