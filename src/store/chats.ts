@@ -21,11 +21,16 @@ export interface ChatsStore {
   /** The chats a person is in, newest first — as far as the saved member lists go. */
   chatsWith(key: AccountKey, memberId: Id): Promise<Chat[]>
   /**
-   * Given every chat the account is in, marks the rest `left` and says how many it marked. Only
-   * ever from a complete list: a page or a cut list says nothing about the chats it leaves out.
+   * Given every chat the account is in, marks the rest `left`, takes the mark off those it names, and says how many
+   * it marked. Only ever from a complete list: a page or a cut list says nothing about the chats it leaves out.
    * Remembers when, so a search can say the store knows the account's whole chat list.
    */
   markChatsLeft(key: AccountKey, present: Id[]): Promise<number>
+  /**
+   * Takes the `left` mark off the chats a messenger's own chat list names, from any page of it: the list holds only
+   * chats the account is in. Other states are kept. Says how many it took the mark off.
+   */
+  rejoinChats(key: AccountKey, present: Id[]): Promise<number>
   /**
    * The chat the messenger now names `to` instead of `from`: renamed, or merged into the chat already stored as
    * `to`. Replaying it changes nothing.
@@ -88,6 +93,11 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
         writeState(accountKey, completeness.CHAT_LIST_KEY, String(present.length))
       })
       return marked
+    },
+
+    rejoinChats: async (key, present) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined ? 0 : write(database, () => chatQueries.rejoin(context, accountKey, present))
     },
 
     rekeyChat: async (key, from, to) => {

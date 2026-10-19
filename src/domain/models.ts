@@ -55,11 +55,12 @@ export interface Chat {
 }
 
 /**
- * A chat as an adapter saves it. A `title`, `unreadCount`, `lastMessageAt` or `participantsCount` left out keeps the
- * stored value; `null` stores none. So a push that knows only some of them, such as a notice that a group left its
- * community, leaves the rest out.
+ * A chat as an adapter saves it. A `title`, `unreadCount`, `lastMessageAt`, `participantsCount` or `membershipState`
+ * left out keeps the stored value; `null` stores none. So a push that knows only some of them, such as a notice that
+ * a group left its community, leaves the rest out.
  */
-export type ChatUpdate = Omit<Chat, KeptFields> & Partial<Pick<Chat, KeptFields>>
+export type ChatUpdate = Omit<Chat, KeptFields | "membershipState"> &
+  Partial<Pick<Chat, KeptFields>> & { membershipState?: MembershipState | null }
 type KeptFields = "title" | "unreadCount" | "lastMessageAt" | "participantsCount"
 
 /** A group's switches; `null` where the messenger does not say, or has no such switch. */

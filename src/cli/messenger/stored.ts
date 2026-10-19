@@ -204,11 +204,9 @@ export const stored = (
             const complete = window.offset === 0 && !page.hasMore && page.items.length > 0
             await save("chats.list", async (opened) => {
               await opened.chats.saveChats(account, page.items)
-              if (complete)
-                await opened.chats.markChatsLeft(
-                  account,
-                  page.items.map((chat) => chat.id),
-                )
+              const ids = page.items.map((chat) => chat.id)
+              if (complete) await opened.chats.markChatsLeft(account, ids)
+              else await opened.chats.rejoinChats(account, ids)
             })
             return page
           },

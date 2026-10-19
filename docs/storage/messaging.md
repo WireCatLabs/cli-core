@@ -6,8 +6,9 @@ provider IDs. Canonical person IDs and private note IDs are integer store keys s
 An `AccountKey` can supply `scope: "personal" | "work"` when writing. An omitted scope preserves the account's
 stored scope. A chat can supply its own `scope` and a provider `parentChatId`; an unclassified chat inherits the
 account's scope. Saving a held chat merges `providerMetadata` key by key: an absent key keeps its stored value, a
-`null` key is removed. An absent `parentChatId`, `title`, `unreadCount`, `lastMessageAt` or `participantsCount`
-keeps the stored value, `null` clears it. `Message.threadId` holds the provider thread identifier, and
+`null` key is removed. An absent `parentChatId`, `title`, `unreadCount`, `lastMessageAt`, `participantsCount` or
+`membershipState` keeps the stored value, `null` clears it. A complete chat list (`markChatsLeft`) marks the chats it
+does not name as left and takes the mark off those it names; any part of the list (`rejoinChats`) does the second. `Message.threadId` holds the provider thread identifier, and
 `threadRootId` can name the root message explicitly. The store connects the integer root when both messages are
 present, including a root that arrives after its replies.
 

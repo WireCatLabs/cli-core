@@ -96,9 +96,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
         ...(chat.lastMessageAt === undefined ? {} : { lastMessageAt: sql`excluded.last_message_at` }),
         ...(chat.participantsCount === undefined ? {} : { participantsCount: sql`excluded.participants_count` }),
         metadata: sql`excluded.metadata`,
-        // A chat the list names again has been rejoined; any other state it had is kept.
-        membershipState: sql`CASE WHEN excluded.membership_state IS NOT NULL THEN excluded.membership_state
-          WHEN ${chats.membershipState} = 'left' THEN NULL ELSE ${chats.membershipState} END`,
+        ...(chat.membershipState === undefined ? {} : { membershipState: sql`excluded.membership_state` }),
         updatedAt: sql`excluded.updated_at`,
       },
     })
@@ -156,20 +154,30 @@ const byRecency = [sql`${chats.lastMessageAt} DESC NULLS LAST`, chats.id]
 
 const notLeft = sql`${chats.membershipState} IS NOT 'left'`
 
-/** Marks this account's chats that `present` does not name; only ever given a complete list. */
-export const markLeft = ({ orm }: StoreContext, accountKey: number, present: Id[]): number =>
+const named = (present: Id[]) => sql`${chats.externalId} IN (SELECT value FROM json_each(${JSON.stringify(present)}))`
+
+/** Takes the left mark off the chats `present` names; any other state is kept. Answers how many. */
+export const rejoin = ({ orm }: StoreContext, accountKey: number, present: Id[]): number =>
   orm
     .update(chats)
-    .set({ membershipState: "left" })
-    .where(
-      and(
-        eq(chats.accountId, accountKey),
-        notLeft,
-        sql`${chats.externalId} NOT IN (SELECT value FROM json_each(${JSON.stringify(present)}))`,
-      ),
-    )
+    .set({ membershipState: null })
+    .where(and(eq(chats.accountId, accountKey), eq(chats.membershipState, "left"), named(present)))
     .returning({ pk: chats.id })
     .all().length
+
+/**
+ * Marks this account's chats that `present` does not name, and rejoins those it names. Only ever given a complete
+ * list. Answers how many it marked.
+ */
+export const markLeft = (context: StoreContext, accountKey: number, present: Id[]): number => {
+  rejoin(context, accountKey, present)
+  return context.orm
+    .update(chats)
+    .set({ membershipState: "left" })
+    .where(and(eq(chats.accountId, accountKey), notLeft, sql`NOT (${named(present)})`))
+    .returning({ pk: chats.id })
+    .all().length
+}
 
 /** The chats marked left, and how many messages they hold. */
 export const leftChats = ({ orm }: StoreContext, accountKey: number): { pks: number[]; messages: number } => {
