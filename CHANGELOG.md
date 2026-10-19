@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.350.0 — 19.10.2026
+
 ### Added
 
 - **A messenger that pushes its history can be told the chats the store holds**: the optional
