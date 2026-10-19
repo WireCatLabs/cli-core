@@ -100,7 +100,7 @@ const recordMembership = async (
     const fix =
       deps.reads === "store"
         ? "this messenger's chat list comes from the store, so no command corrects it"
-        : `an online \`${typedCommand(deps.messenger.app.command, "chats list --all")}\` corrects it`
+        : `an online \`${typedCommand(deps.messenger.app.command, "chats list --all")}\` corrects it once the messenger answers it with every chat`
     throw new CliError(
       isCliError(error) ? error.code : "invalid_response",
       `${done}, but the local store could not ${change} (${reason}) — do not run it again; ${fix}`,
