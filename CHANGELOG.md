@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Adapter test authors can shorten a connection's close wait and re-key pauses.** The run environment takes
+  `closeWaitMs` (how long a connection's close waits on its saves and passive listens, 5 s by default) and
+  `rekeyPacing` (`{ lockMs, pauseMs }` for chat re-keys, 50 ms and 25 ms by default). Commands, the shared services and
+  the MCP server's tool calls pass them on; a command `serve` runs for a client through its relay keeps the
+  defaults. A test through `run()` no longer pays the real waits. Only code
+  that builds the environment can set them; no flag, variable or MCP call does
+  ([ADAPTERS.md](docs/dev/ADAPTERS.md#running-the-contract-cases)).
+
 ## 0.359.0 — 19.10.2026
 
 ### Fixed

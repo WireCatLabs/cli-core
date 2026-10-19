@@ -10,6 +10,7 @@ import { connected } from "./context.js"
 
 const order: string[] = []
 let rekeysPerPass: number | undefined
+const rekeyLockWaits: number[] = []
 let finishWrite: () => void = () => {}
 
 vi.mock("../../store/store.js", () => ({
@@ -22,8 +23,9 @@ vi.mock("../../store/store.js", () => ({
         rekeyChat: async () => {
           order.push("rekeyed")
         },
-        rekeyChats: async (_key: unknown, pairs: unknown[]) => {
+        rekeyChats: async (_key: unknown, pairs: unknown[], lockMs: number) => {
           order.push("rekeyed")
+          rekeyLockWaits.push(lockMs)
           return { taken: rekeysPerPass ?? pairs.length, applied: [], refused: [] }
         },
       },
@@ -91,6 +93,7 @@ const watched = async () => {
 afterEach(() => {
   order.length = 0
   rekeysPerPass = undefined
+  rekeyLockWaits.length = 0
   vi.useRealTimers()
 })
 
@@ -218,7 +221,7 @@ const pushed: HistoryBatch = {
 const opened = (
   adapter: MessengerAdapter,
   history: "store" | "server" | undefined,
-  connect: { listen?: boolean } = {},
+  connect: { listen?: boolean; closeWaitMs?: number; rekeyPacing?: { lockMs: number; pauseMs: number } } = {},
 ) => {
   const warnings: string[] = []
   const codes: string[] = []
@@ -376,6 +379,19 @@ describe("a one-shot command of a messenger whose history is in the store", () =
     expect(warnings).toEqual([expect.stringContaining("still handing on messages")])
     expect(codes).toEqual(["store_not_written"])
   })
+
+  it("gives up on a listen that never ends within the close wait a test hands in", async () => {
+    const fake = passiveFake({ hangs: true })
+    const { close, warnings, codes } = opened(fake.adapter, "store", { closeWaitMs: 1 })
+    await tick()
+    const started = performance.now()
+
+    await close()
+
+    expect(performance.now() - started).toBeLessThan(1_000)
+    expect(warnings).toEqual([expect.stringContaining("still handing on messages")])
+    expect(codes).toEqual(["store_not_written"])
+  })
 })
 
 describe("a one-shot command of a messenger whose history is pushed", () => {
@@ -418,6 +434,19 @@ describe("a one-shot command of a messenger whose history is pushed", () => {
       { event: "warning", code: "rekeys_not_applied", operation: "history.rekey", counts: { rekeys: 400 - passes } },
     ])
     expect(order.at(-1)).toBe("store closed")
+  })
+
+  it("paces the re-keys as the test hands in", async () => {
+    rekeysPerPass = 1
+    const fake = historyFake()
+    const { close, warnings } = opened(fake.adapter, "store", { rekeyPacing: { lockMs: 7, pauseMs: 0 } })
+    await tick()
+    fake.deliver({ rekeys: [1, 2, 3].map((at) => ({ from: `${at}`, to: `${at}@lid` })) })
+
+    await close()
+
+    expect(rekeyLockWaits).toEqual([7, 7, 7])
+    expect(warnings).toEqual([])
   })
 
   it("records how many batches, and of each part, the listen handed on", async () => {

@@ -368,6 +368,7 @@ const listened = (
   { run, operation, what }: Passive,
   events: EventSink,
   warn: (message: string) => void,
+  waitMs: number,
 ): { closing: () => void; stop: () => Promise<boolean>; operation: string; what: string } => {
   const abort = new AbortController()
   let closing = false
@@ -388,7 +389,7 @@ const listened = (
     },
     stop: () => {
       abort.abort()
-      return settled(new Set([ended]), SAVES_WAIT_MS)
+      return settled(new Set([ended]), waitMs)
     },
   }
 }
@@ -431,6 +432,14 @@ const rekeyRecipients = async (
   }
 }
 
+/** The waits a test shortens through its environment; a run without them keeps the defaults. */
+type ConnectionWaits = Pick<BaseEnvironment, "closeWaitMs" | "rekeyPacing">
+
+const waitsOf = (command: Command): ConnectionWaits => {
+  const { closeWaitMs, rekeyPacing } = environmentOf(command)
+  return { ...(closeWaitMs === undefined ? {} : { closeWaitMs }), ...(rekeyPacing ? { rekeyPacing } : {}) }
+}
+
 /**
  * A connection as every shared reader sees it: its account remembered, each call a run event, what
  * the reads answer saved to the store. `close` closes the connection and the store it opened. One
@@ -454,7 +463,11 @@ export const connected = (
   { settings, env, renderer }: Pick<BaseContext, "settings" | "env" | "renderer">,
   events: EventSink,
   store: LazyStore = lazyStore(env, app.command),
-  { listen: watching = false }: Pick<ConnectOptions, "listen"> = {},
+  {
+    listen: watching = false,
+    closeWaitMs = SAVES_WAIT_MS,
+    rekeyPacing,
+  }: Pick<ConnectOptions, "listen"> & ConnectionWaits = {},
 ): { adapter: MessengerAdapter; close: () => Promise<void> } => {
   const self = connection.self()
   if (self !== null) rememberAccount(app, settings.profile, self, env)
@@ -485,6 +498,7 @@ export const connected = (
           announcing,
           closing: closing.signal,
           ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
+          ...(rekeyPacing ? { rekeyPacing } : {}),
           rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
           recipientIds: () =>
             (new RecipientList(recipientsPathFor(app, settings.profile, env), app.command).read() ?? []).flatMap(
@@ -494,7 +508,7 @@ export const connected = (
         })
   const passives =
     history === "store" && self !== null && !watching
-      ? passivesOf(saving).map((passive) => listened(passive, events, renderer.warn))
+      ? passivesOf(saving).map((passive) => listened(passive, events, renderer.warn, closeWaitMs))
       : []
   return {
     adapter: saving,
@@ -510,7 +524,7 @@ export const connected = (
             events({ event: "warning", code: "store_not_written", operation })
             renderer.warn(`not saved to the local store: the messenger was still handing on ${what} at exit`)
           })
-          await settled(new Set([...pending, ...announcing]), SAVES_WAIT_MS)
+          await settled(new Set([...pending, ...announcing]), closeWaitMs)
           closing.abort()
           if (pending.size > 0) {
             events({ event: "warning", code: "store_not_written", operation: "close" })
@@ -551,7 +565,10 @@ export const connectedFor = async (
   }
   return {
     connection,
-    ...connected(connection, messenger, base, options.events, store, options.listen ? { listen: true } : {}),
+    ...connected(connection, messenger, base, options.events, store, {
+      ...waitsOf(command),
+      ...(options.listen ? { listen: true } : {}),
+    }),
   }
 }
 
@@ -731,7 +748,7 @@ export const messengerContext = (
                   throw new CliError("validation_error", "the read connection has already been released")
                 }
                 base.track(connection)
-                held = connected(connection, messenger, base, events)
+                held = connected(connection, messenger, base, events, undefined, waitsOf(command))
               }
               return held.adapter
             },

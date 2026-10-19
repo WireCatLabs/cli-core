@@ -38,6 +38,10 @@ export interface BaseEnvironment {
   recognizer?: OpenRecognizer
   /** How long `store restore` and `store reset` wait on another connection's write, 1 s unless a test hands one in. */
   storeLockWaitMs?: number
+  /** How long a connection's close waits on its saves and passive listens, 5 s unless a test hands one in. */
+  closeWaitMs?: number
+  /** How long one pass of chat re-keys holds the store's write lock and the pause after it; tests hand in zeros. */
+  rekeyPacing?: { lockMs: number; pauseMs: number }
   /** Where raw bytes go when stdout is not this process's own — an MCP session relayed by serve. */
   stdout?: NodeJS.WritableStream
   /** Where a prompt and what is typed at it go, in place of the process's stderr; tests hand one in. */
