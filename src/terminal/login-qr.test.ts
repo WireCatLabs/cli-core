@@ -9,13 +9,26 @@ import { qrPng, terminalQr } from "./qr.js"
 
 const LINK = "tg://login?token=not-a-real-token-for-the-test"
 
+const SCAN = "scan in the app on your phone"
+
 const capture = () => {
   const diagnostic: string[] = []
   const notes: string[] = []
+  const log: [string, string][] = []
   return {
     diagnostic,
     notes,
-    sinks: { diagnostic: (t: string) => diagnostic.push(t), note: (t: string) => notes.push(t) },
+    log,
+    sinks: {
+      diagnostic: (t: string) => {
+        diagnostic.push(t)
+        log.push(["diagnostic", t])
+      },
+      note: (t: string) => {
+        notes.push(t)
+        log.push(["note", t])
+      },
+    },
   }
 }
 
@@ -73,24 +86,46 @@ describe("loginQr", () => {
     expect(diagnostic).toEqual([`\n${terminalQr(LINK).text.replace(/^/gm, "     ")}`])
   })
 
+  it("says where to scan after the code is drawn", () => {
+    const { log, sinks } = capture()
+    loginQr({ ...sinks, columns: () => 200 }).show(LINK, SCAN)
+    expect(log).toEqual([
+      ["diagnostic", `\n${terminalQr(LINK).text.replace(/^/gm, "  ")}`],
+      ["note", SCAN],
+    ])
+  })
+
+  it("says where to scan after the file is written", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "login-qr-")), "login.png")
+    const { log, sinks } = capture()
+    const qr = loginQr({ qrFile: path, ...sinks })
+    qr.show(LINK, SCAN)
+    qr.close()
+    expect(log).toEqual([
+      ["note", expect.stringContaining(path)],
+      ["note", SCAN],
+    ])
+  })
+
   it("draws the code when the width is unknown", () => {
     const { diagnostic, sinks } = capture()
     loginQr({ ...sinks, columns: () => undefined }).show(LINK)
     expect(diagnostic[0]).toContain(terminalQr(LINK).text.split("\n")[1])
   })
 
-  it("draws nothing on a narrow terminal and says how to get the code, on the stream --quiet keeps", () => {
+  it("draws nothing on a narrow terminal and says only how to get the code, on the stream --quiet keeps", () => {
     const { diagnostic, notes, sinks } = capture()
     let columns = 20
     const qr = loginQr({ ...sinks, columns: () => columns })
 
-    expect(() => qr.show(LINK)).not.toThrow()
+    expect(() => qr.show(LINK, SCAN)).not.toThrow()
     expect(diagnostic).toEqual([expect.stringMatching(/20 columns wide .* --qr-file <png>$/)])
     expect(notes).toEqual([])
 
     columns = 200
-    qr.show(LINK)
+    qr.show(LINK, SCAN)
     expect(diagnostic[1]).toContain(terminalQr(LINK).text.split("\n")[1])
+    expect(notes).toEqual([SCAN])
   })
 })
 
