@@ -3649,6 +3649,8 @@ describe("the shared read commands", () => {
     expect(unconfirmed.code).toBe(7)
     expect(unconfirmed.stderr.join("\n")).toContain("1 chat(s) this account has left and their 3 message(s)")
     expect(unconfirmed.stderr.join("\n")).toMatch(/7 {2}Book club {2}3/)
+    const quiet = await call(["store", "clear", "--left", "--quiet"], never, env, { tty: true })
+    expect(quiet.stderr.join("\n")).toMatch(/7 {2}Book club {2}3/)
     const refused = await call(["store", "clear", "--left", "--json"], never, env)
     expect(refused.stderr.join("\n")).not.toContain("Book club")
     const preview = await call(["store", "clear", "--left", "--dry-run", "--json"], never, env)

@@ -104,10 +104,10 @@ const clearCommand = (messenger: Messenger): Command =>
         return
       }
       if (found.chats > 0 && !allowDangerous) {
-        if (pretty) {
-          context.renderer.note("it would delete these chats — id, title, messages:")
-          for (const line of leftLines(found.left)) context.renderer.note(line)
-        }
+        // Not a note: --quiet drops notes, and this list is what the owner confirms.
+        if (pretty)
+          for (const line of ["it would delete these chats — id, title, messages:", ...leftLines(found.left)])
+            context.streams.diagnostic(line)
         throw new CliError(
           "confirmation_required",
           `this deletes ${found.chats} chat(s) this account has left and their ${found.messages} message(s) ` +
