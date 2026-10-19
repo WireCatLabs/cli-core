@@ -14,7 +14,8 @@ shape of this file.
   review is the owner's or an agent's deciding for the owner (`by: { bot, reason }`), recorded in the receipt.
   Evidence is checked against the current text by fingerprint: project evidence items carry `fingerprint`, and
   `store.contextRecords.read(ref)` reproduces it. Meeting and evidence findings share their validation and review
-  code (`validateFindings`); meeting findings behave as before.
+  code (`validateFindings`); meeting findings behave as before. A host reads a staged batch from snake_case JSON
+  with `parseEvidenceFindingsJson` from `./cli`.
 
 ## 0.362.0 — 19.10.2026
 

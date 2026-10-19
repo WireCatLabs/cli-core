@@ -1,6 +1,19 @@
-import type { FindingOutcome, FindingsInput, FindingsReceipt } from "../meetings/index.js"
+import { CliError } from "@wirecat/cli-base"
+import { formatLocator, parseLocator } from "../domain/locator.js"
+import { type FindingOutcome, type FindingsInput, type FindingsReceipt, validateFindings } from "../meetings/index.js"
 
 export const EVIDENCE_FINDINGS_KIND = "evidence_findings"
+
+const reference = (raw: string) => {
+  if (/^document:[1-9]\d*$/.test(raw)) return raw
+  try {
+    return formatLocator(parseLocator(raw))
+  } catch {
+    throw new CliError("validation_error", "finding evidence is a msg: or document: reference")
+  }
+}
+export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
+  validateFindings(input, { plural: "evidence findings", singular: "evidence finding", cited: "reference", reference })
 
 /** Who decided: the owner, or an agent the host let decide for the owner, with its reason. */
 export type EvidenceFindingsDecider = "owner" | { bot: string; model?: string; reason: string }

@@ -1,4 +1,5 @@
 import { afterEach, expect, it } from "vitest"
+import { parseEvidenceFindingsJson } from "../cli/meeting-findings-input.js"
 import { contextEvidenceFingerprint } from "../context/evidence.js"
 import type { FindingsInput } from "../meetings/index.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
@@ -148,4 +149,54 @@ it("is reviewed only through its own store, never as a generic proposal", async 
   })
   await expect(f.store.proposedActions.reject(batch.id)).rejects.toThrow("dedicated")
   await expect(f.store.proposedActions.propose({ kind: "evidence_findings", by: agent })).rejects.toThrow("dedicated")
+})
+
+it("reads a staged batch from snake_case JSON with msg: and document: evidence", () => {
+  const fingerprint = "a".repeat(64)
+  const input = parseEvidenceFindingsJson(
+    JSON.stringify({
+      schema_version: 1,
+      key: "run-1",
+      extractor: "synthetic",
+      findings: [
+        {
+          id: "plan",
+          kind: "task",
+          type: "chore",
+          title: "Read the plan",
+          reason: "It is the plan",
+          commitment: "explicit",
+          project: "project:1",
+          evidence: [{ reference: "document:4", fingerprint }],
+          due_at: "2026-11-01T00:00:00Z",
+          due_evidence: ["document:4"],
+        },
+      ],
+    }),
+  )
+  expect(input.findings[0]).toMatchObject({ dueEvidence: ["document:4"], evidence: [{ reference: "document:4" }] })
+  expect(() =>
+    parseEvidenceFindingsJson(
+      JSON.stringify({ ...JSON.parse(JSON.stringify(input)), schemaVersion: undefined, schema_version: 1 }),
+    ),
+  ).toThrow("snake_case")
+  expect(() =>
+    parseEvidenceFindingsJson(
+      JSON.stringify({
+        schema_version: 1,
+        key: "k",
+        extractor: "x",
+        findings: [
+          {
+            id: "a",
+            kind: "fact",
+            type: "fact",
+            statement: "s",
+            project: "project:1",
+            evidence: [{ reference: "meeting:1/2/3", fingerprint }],
+          },
+        ],
+      }),
+    ),
+  ).toThrow("msg: or document:")
 })

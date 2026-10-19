@@ -45,6 +45,7 @@ export {
   type EvidenceFindingsDecider,
   type EvidenceFindingsReceipt,
   type EvidenceFindingsStore,
+  validateEvidenceFindings,
 } from "./evidence-findings.js"
 export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"

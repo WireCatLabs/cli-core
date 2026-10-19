@@ -1,12 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { contextEvidenceFingerprint } from "../../context/evidence.js"
-import { formatLocator, parseLocator } from "../../domain/locator.js"
-import { type FindingsInput, findingFingerprint, findingHash, validateFindings } from "../../meetings/index.js"
+import { type FindingsInput, findingFingerprint, findingHash } from "../../meetings/index.js"
 import {
   EVIDENCE_FINDINGS_KIND,
   type EvidenceFindingsBatch,
   type EvidenceFindingsReceipt,
   type EvidenceFindingsStore,
+  validateEvidenceFindings,
 } from "../evidence-findings.js"
 import { contextRecordOf } from "./context-evidence.js"
 import { findingsAgent, findingsCoreOver } from "./findings-core.js"
@@ -24,15 +24,6 @@ const stale = (): never => {
 const invalid = (message: string): never => {
   throw new CliError("validation_error", message)
 }
-const reference = (raw: string) => {
-  if (/^document:[1-9]\d*$/.test(raw)) return raw
-  try {
-    return formatLocator(parseLocator(raw))
-  } catch {
-    return invalid("finding evidence is a msg: or document: reference")
-  }
-}
-const RULES = { plural: "evidence findings", singular: "evidence finding", cited: "reference", reference }
 const TEXT_BUDGET = 262144
 
 export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindingsStore => {
@@ -106,7 +97,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
   }
   return {
     stage: async (raw, rawAgent) => {
-      const input = validateFindings(raw, RULES)
+      const input = validateEvidenceFindings(raw)
       const projects = new Set(input.findings.map((finding) => finding.project))
       if (projects.size !== 1) return invalid("an evidence findings batch is about one project")
       const by = findingsAgent(rawAgent)
