@@ -100,6 +100,8 @@ export interface Delta {
 /** A chat list's query, compiled over `CHAT_COLUMNS`. */
 export interface StoredChatFilter {
   where?: Where
+  /** Chats the account left are kept but left out of a list unless this asks for them. */
+  includeLeft?: boolean
 }
 
 /** One sender's stored messages in one chat. */

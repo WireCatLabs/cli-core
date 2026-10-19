@@ -4,9 +4,10 @@ import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
-import type { Chat, GroupCard } from "../../domain/models.js"
+import type { Chat, GroupCard, Id, MembershipState } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { openStore } from "../../store/store.js"
 import { commandsCommand } from "../commands-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -187,6 +188,112 @@ describe("chats create, join and leave", () => {
     expect(answer(joined)).toMatchObject({ operation_id: expect.any(String), chat: { id: "71" } })
     expect(answer(gone)).toEqual({ operation_id: expect.any(String), chat_id: "7" })
     expect(left).toEqual(["7"])
+  })
+
+  const owner = { provider: "chat", account: "500" }
+  const other = { provider: "chat", account: "501" }
+  const seed = async (env: NodeJS.ProcessEnv, rows: [typeof owner, Id, MembershipState | null][]) => {
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    for (const [key, id, membershipState] of rows)
+      await store.chats.saveChats(key, [{ id, kind: "group", title: "Book club", membershipState }])
+    await store.close()
+  }
+  const membership = async (env: NodeJS.ProcessEnv, key: typeof owner, id: Id) => {
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const found = (await store.chats.chats(key, { includeLeft: true })).items.find((one) => one.id === id)
+    await store.close()
+    return found && { title: found.title, kind: found.kind, membershipState: found.membershipState ?? null }
+  }
+  const leaving = (outcome: () => Promise<void> = async () => {}): MessengerAdapter => ({
+    ...base,
+    resolve: async () => ({ ...chat, kind: "unknown" }),
+    leave: async (chatId) => {
+      await outcome()
+      return { chatId }
+    },
+  })
+
+  it("**marks the chat left in the store after a leave**, keeping its kind and title, for this account only", async () => {
+    const env = sandbox()
+    await seed(env, [
+      [owner, "7", null],
+      [other, "7", null],
+    ])
+
+    const gone = await call(["chats", "leave", "Book club", "--json"], leaving(), env)
+
+    expect(gone.code).toBe(0)
+    expect(await membership(env, owner, "7")).toEqual({ title: "Book club", kind: "group", membershipState: "left" })
+    expect(await membership(env, other, "7")).toMatchObject({ membershipState: null })
+  })
+
+  it("**keeps the store as it was when the leave fails**", async () => {
+    const env = sandbox()
+    await seed(env, [[owner, "7", null]])
+    const refusing = leaving(async () => {
+      throw new Error("not a member any more")
+    })
+
+    const failed = await call(["chats", "leave", "Book club", "--json"], refusing, env)
+
+    expect(failed.code).not.toBe(0)
+    expect(await membership(env, owner, "7")).toMatchObject({ membershipState: null })
+  })
+
+  it("**marks a chat left from a full online list**, the correction a failed mark names", async () => {
+    const env = sandbox()
+    await seed(env, [[owner, "7", null]])
+    const adapter: MessengerAdapter = {
+      ...base,
+      chats: async () => ({ items: [{ ...chat, id: "8" }], hasMore: false }),
+    }
+
+    expect((await call(["chats", "list", "--all", "--json"], adapter, env)).code).toBe(0)
+
+    expect(await membership(env, owner, "7")).toMatchObject({ membershipState: "left" })
+  })
+
+  it("**leaves nothing and changes no membership under the read-only lock**", async () => {
+    const env = sandbox()
+    await seed(env, [[owner, "7", null]])
+    const left: string[] = []
+    const adapter = leaving(async () => {
+      left.push("7")
+    })
+
+    const locked = await call(["chats", "leave", "Book club", "--json"], adapter, { ...env, CHAT_READ_ONLY: "1" })
+
+    expect(locked.code).not.toBe(0)
+    expect(left).toEqual([])
+    expect(await membership(env, owner, "7")).toMatchObject({ membershipState: null })
+  })
+
+  it("**takes the left mark off after a join**, keeping archived and other accounts as they were", async () => {
+    const env = sandbox()
+    await seed(env, [
+      [owner, "71", "left"],
+      [other, "71", "left"],
+    ])
+    const archived = sandbox()
+    await seed(archived, [[owner, "71", "archived"]])
+    const adapter: MessengerAdapter = { ...base, join: async () => card("71", "Joined") }
+
+    expect((await call(["chats", "join", "https://t.me/+abc", "--json"], adapter, env)).code).toBe(0)
+    expect((await call(["chats", "join", "https://t.me/+abc", "--json"], adapter, archived)).code).toBe(0)
+
+    expect(await membership(env, owner, "71")).toMatchObject({ membershipState: null })
+    expect(await membership(env, other, "71")).toMatchObject({ membershipState: "left" })
+    expect(await membership(archived, owner, "71")).toMatchObject({ membershipState: "archived" })
+  })
+
+  it("**changes no membership for a join that waits for approval**", async () => {
+    const env = sandbox()
+    await seed(env, [[owner, "71", "left"]])
+    const adapter: MessengerAdapter = { ...base, join: async () => ({ requested: true }) }
+
+    expect((await call(["chats", "join", "https://t.me/+abc", "--json"], adapter, env)).code).toBe(0)
+
+    expect(await membership(env, owner, "71")).toMatchObject({ membershipState: "left" })
   })
 
   it("**answers a join that needs approval as requested**, exit 0, journaled with no chat", async () => {

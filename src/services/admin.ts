@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type {
   AdminRight,
   GroupCard,
@@ -11,9 +11,11 @@ import type {
 } from "../domain/models.js"
 import { sendTime } from "../domain/send-time.js"
 import { capability } from "../ports/messenger.js"
+import { typedCommand } from "../runs/scope.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
-import type { ServiceDeps } from "./deps.js"
+import type { AccountStore } from "../store/account-store.js"
+import { accountStoreIfOpen, type ServiceDeps } from "./deps.js"
 
 export interface NewGroup {
   title: string
@@ -78,6 +80,36 @@ export interface AdminService {
   removeAdmin(chat: string, person: string): Promise<Operated<{ chatId: Id; personId: Id }>>
 }
 
+/**
+ * The store's record of a leave or join the messenger already carried out. A failure says it happened and is not
+ * safe to repeat: the messenger refuses a second leave, and a second join may wait for an admin.
+ */
+const recordMembership = async (
+  deps: ServiceDeps,
+  operationId: string,
+  done: string,
+  change: string,
+  fix: string,
+  write: (store: AccountStore) => Promise<unknown>,
+): Promise<void> => {
+  try {
+    const held = await accountStoreIfOpen(deps)
+    if (held) await write(held)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new CliError(
+      isCliError(error) ? error.code : "invalid_response",
+      `${done}, but the local store could not ${change} (${reason}) — do not run it again; ${fix}`,
+      { operation_id: operationId, retryable: false },
+    )
+  }
+}
+
+/** Where the chat list is read from the store, only the messenger's own report of the change corrects it. */
+const reportedFix = (deps: ServiceDeps, chatId: Id, shows: string, action: string) =>
+  `it may show as ${shows} until the messenger reports the ${action}; ` +
+  `\`${typedCommand(deps.messenger.app.command, `chats show ${chatId}`)}\` says when it has`
+
 export const adminService = (deps: ServiceDeps): AdminService => {
   const online = async (command: string) => {
     if (deps.offline) throw new CliError("validation_error", `\`${command}\` changes a chat; not with --offline`)
@@ -110,15 +142,35 @@ export const adminService = (deps: ServiceDeps): AdminService => {
         () => join(link.trim()),
         (answer) => ("requested" in answer ? {} : { chatId: answer.id }),
       )
-      return "requested" in joined ? { operationId, requested: true } : { operationId, chat: joined }
+      if ("requested" in joined) return { operationId, requested: true }
+      // Every online chat list page takes the left mark off the chats it names, complete or not.
+      const fix =
+        deps.reads === "store"
+          ? reportedFix(deps, joined.id, "left", "join")
+          : `an online \`${typedCommand(deps.messenger.app.command, "chats list")}\` that shows the chat corrects it`
+      await recordMembership(deps, operationId, `you joined chat ${joined.id}`, "take its left mark off", fix, (held) =>
+        held.chats.rejoinChats([joined.id]),
+      )
+      return { operationId, chat: joined }
     },
 
     leave: async (chat) => {
       const connection = await online("chats leave")
       const leave = capability(connection, "leave", "leave a chat")
-      const { id: chatId } = await connection.resolve(chat)
+      const { id: chatId, kind } = await connection.resolve(chat)
       const operationId = newOperationId()
       await guardedWrite(deps.guard, { operationId, chatId, kind: "chat", action: "leave" }, () => leave(chatId))
+      // Only a chat list that names every chat marks the others left, and a messenger may never answer with all of them.
+      const fix =
+        deps.reads === "store"
+          ? reportedFix(deps, chatId, "joined", "leave")
+          : `it may show as joined until an online \`${typedCommand(deps.messenger.app.command, "chats list --all")}\` names every chat`
+      await recordMembership(deps, operationId, `you left chat ${chatId}`, "mark it left", fix, async (held) =>
+        // A save always writes the kind, and a resolve may know less of it than the store does.
+        held.chats.saveChats([
+          { id: chatId, kind: (await held.chats.chatKind(chatId)) ?? kind, membershipState: "left" },
+        ]),
+      )
       return { operationId, chatId }
     },
 
