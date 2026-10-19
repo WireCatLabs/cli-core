@@ -110,6 +110,20 @@ describe("a chat the account left", () => {
     await store.close()
   })
 
+  it("is taken off per account", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [chat("-1")])
+    await store.chats.saveChats(OTHER, [chat("-1")])
+    await store.chats.markChatsLeft(OWNER, [])
+    await store.chats.markChatsLeft(OTHER, [])
+
+    expect(await store.chats.rejoinChats(OWNER, ["-1"])).toBe(1)
+
+    expect(await ids(store, OWNER)).toEqual(["-1"])
+    expect(await ids(store, OTHER)).toEqual([])
+    await store.close()
+  })
+
   it("is counted, then deleted with its messages and members, and nothing else is", async () => {
     const store = await openStore({ path: fresh() })
     await store.chats.saveChats(OWNER, [chat("-1"), chat("-2")])

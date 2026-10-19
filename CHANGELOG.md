@@ -16,7 +16,9 @@ shape of this file.
   chats it names, through `markChatsLeft` (now also takes the mark off the chats its complete list names) or the new
   `rejoinChats`; other states such as "archived" are kept. A client that saves its own chat list must call
   `rejoinChats(key, ids)` for a list that is not complete, or a chat the owner rejoined stays hidden from stored
-  reads until the next complete one: max-cli's `rememberChats` with `else await db.chats.rejoinChats(key, ids)`.
+  reads until the next complete one. **max-cli must do this in the bump that takes this version**: in
+  `rememberChats` (`src/record.ts`), `else await db.chats.rejoinChats(key, ids)`; without it a chat rejoined while
+  the session list is cut stays "left", is hidden from `max chats list`, and `archive clear --left` deletes it.
   A caller that learns of a rejoin any other way sends `membershipState: null`.
 
 ### Added
