@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.352.0 — 19.10.2026
+
 ### Changed — may break callers
 
 - **A saved chat keeps its membership when the update leaves it out**: `saveChats`, `Delta.chats` and
