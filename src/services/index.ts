@@ -30,7 +30,7 @@ export type {
 } from "./project-gathering.js"
 export { gatherProjectEvidence } from "./project-gathering.js"
 export type { ProjectNeighbour, ProjectNeighbourReader } from "./project-gathering-around.js"
-export { storedMessageNeighbours, storedNeighbours } from "./project-gathering-around.js"
+export { documentPassage, storedMessageNeighbours, storedNeighbours } from "./project-gathering-around.js"
 export type { EvidenceMention, EvidenceMentions } from "./project-gathering-mentions.js"
 export { findEvidenceMentions } from "./project-gathering-mentions.js"
 export type {
