@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.367.0 — 20.10.2026
+
 ### Added
 
 - **A document hit in project gathering carries the paragraphs around it.** `around` holds, in document order, up
