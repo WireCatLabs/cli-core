@@ -7,6 +7,29 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Setup wizard helpers from `./cli`**: `AGENTS`, `type Agent`, `screenFor(context, quiet, steps)` and
+  `agentFor(context, given, pad, prompt?)`, for the `setup` command of a messenger CLI. `screenFor` prints the
+  numbered step headings (`[2/5] …`, details indented by 6) to stderr for a person, hides them under `--quiet`,
+  and keeps plain notes in a machine mode. `agentFor` asks which agent to install only at a terminal in the pretty
+  format and answers `none` otherwise; an unknown answer is a `validation_error`. Both take the minimum shape they
+  read (`format`, `streams.diagnostic`, `renderer.note`, `stdin`), so tg-cli's and whatsapp-cli's contexts fit as they
+  are. Pass the wizard's step count as `steps`, and the prompt's `input`, `output` and `signal` as `prompt`
+  (`secretInputOf(command)` plus the signal, or `{ input: context.stdin }`). No profile or agent is chosen for the
+  caller. This replaces the copies in both CLIs' `src/commands/setup.ts`.
+- **`restartServers(app, script, env, spawn?)` from `./cli`** restarts the `serve` of every profile that is running,
+  with `<script> <profile> server restart`, and answers `{ restarted, left }`: the shape `upgradeCommand`'s
+  `afterUpdate` port returns, so `afterUpdate: () => restartServers(app, script, env, environment.spawn)` is the whole
+  host side. `script` is the new install's own entry point; `spawn` replaces the child process in a test. A serve started
+  by hand refuses the restart and lands in `left`. This replaces the copies in both CLIs' `src/commands/update.ts` and
+  `src/update.ts`.
+- **`ARGV_LOG` and `argvLogSetup` from `./testing`**: the path `coverage/argv.jsonl` under the working directory, and
+  a vitest `globalSetup` function that clears it, for the test matrix that checks which commands and options a run
+  drove. A CLI's own `src/testing/argv-log.ts` can go. Vitest takes a package specifier as `globalSetup` only with a
+  named `setup` or a default export, so keep a one-line file: `export { argvLogSetup as default } from
+  "@wirecat/cli-core/testing"`.
+
 ## 0.371.0 — 20.10.2026
 
 ### Added

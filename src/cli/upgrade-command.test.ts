@@ -1,9 +1,13 @@
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
+import { holdLock, lockPath } from "../background/lock.js"
 import type { PackageUpgradePorts } from "../services/package-upgrade.js"
 import { outputFor } from "./context.js"
 import { run } from "./program.js"
-import { upgradeCommand } from "./upgrade-command.js"
+import { restartServers, upgradeCommand } from "./upgrade-command.js"
 
 const call = async (
   command: string,
@@ -158,4 +162,36 @@ it("**says plainly when the package manager installed an older version than late
     "installed 1.5.0, not 2.0.0: pnpm installs a version only once it is older than its minimum release age " +
       "(1 day by default, so after 2026-10-13T01:25:01.496Z) — `pnpm add -g @synthetic/tg@2.0.0 --config.minimumReleaseAgeExclude=@synthetic/*` installs it now",
   )
+})
+
+describe("restartServers", () => {
+  const app = { command: "app", appName: "app-cli", envPrefix: "APP", version: "1.0.0", description: "Synthetic CLI" }
+  const serving = (...profiles: string[]) => {
+    const env = { ...process.env, APP_STATE_DIR: mkdtempSync(join(tmpdir(), "restart-")) }
+    for (const profile of profiles)
+      holdLock(lockPath(app, profile, env), { pid: process.pid, startedAt: new Date().toISOString() })
+    return env
+  }
+
+  it("restarts each serving profile with the new script and names the ones that refuse", () => {
+    const env = serving("personal", "work")
+    const spawn = vi.fn((argv: string[]) => (argv[2] === "work" ? 1 : 0))
+    expect(restartServers(app, "/x/bin/app.js", env, spawn)).toEqual({ restarted: ["personal"], left: ["work"] })
+    expect(spawn).toHaveBeenCalledWith([process.execPath, "/x/bin/app.js", "personal", "server", "restart"])
+    expect(spawn).toHaveBeenCalledTimes(2)
+  })
+
+  it("skips a lock named like no profile and does nothing when nothing serves", () => {
+    const spawn = vi.fn(() => 0)
+    expect(restartServers(app, "/x/bin/app.js", serving(".hidden bad"), spawn)).toEqual({ restarted: [], left: [] })
+    expect(restartServers(app, "/x/bin/app.js", serving(), spawn)).toEqual({ restarted: [], left: [] })
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it("runs the script as a child process when no spawn is given", () => {
+    const env = serving("personal", "work")
+    const script = join(mkdtempSync(join(tmpdir(), "restart-script-")), "app.js")
+    writeFileSync(script, "process.exit(process.argv[2] === 'work' ? 3 : 0)\n")
+    expect(restartServers(app, script, env)).toEqual({ restarted: ["personal"], left: ["work"] })
+  })
 })

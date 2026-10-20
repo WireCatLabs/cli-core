@@ -410,7 +410,8 @@ export {
   type Source,
   settingsFor,
 } from "./settings.js"
+export { AGENTS, type Agent, agentFor, screenFor } from "./setup-screen.js"
 export { skillCommand } from "./skill-command.js"
 export { runnable, withSafety } from "./steps.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
-export { type UpgradeContext, upgradeCommand } from "./upgrade-command.js"
+export { restartServers, type UpgradeContext, upgradeCommand } from "./upgrade-command.js"
