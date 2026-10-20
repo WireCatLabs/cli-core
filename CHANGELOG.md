@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.371.0 — 20.10.2026
+
 ### Added
 
 - **Project annotation manifest validation from `./store`** checks a bounded, versioned JSON graph of
