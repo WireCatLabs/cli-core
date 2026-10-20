@@ -51,6 +51,17 @@ export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findi
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"
 export { openCache } from "./open.js"
 export { storePath } from "./path.js"
+export {
+  decodeProjectAnnotations,
+  PROJECT_ANNOTATIONS_MAX_BYTES,
+  type ProjectAnnotations,
+  projectAnnotationsFingerprint,
+} from "./project-transfer/manifest.js"
+export {
+  type ProjectAnnotationsPlan,
+  type ProjectAnnotationsTarget,
+  planProjectAnnotations,
+} from "./project-transfer/plan.js"
 export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/agent-actions.js"
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"

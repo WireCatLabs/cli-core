@@ -9,6 +9,11 @@ shape of this file.
 
 ### Added
 
+- **Project annotation manifest validation from `./store`** checks a bounded, versioned JSON graph of
+  project aliases, facts and direct links with explicit external dependencies and omitted facets.
+  `decodeProjectAnnotations` validates it, `projectAnnotationsFingerprint` hashes its normalized
+  form, and `planProjectAnnotations` checks explicit bindings against a complete target snapshot.
+  These helpers do not export a store, restore records or authorize confirmation.
 - **`documentPassage` from `./services`** gives hosts the same bounded paragraph context that project gathering
   uses, so a findings review can show the paragraphs around its cited document without copying that logic.
 
