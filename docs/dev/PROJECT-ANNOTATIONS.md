@@ -78,6 +78,16 @@ organizations, other projects, chats, identities and account/folder references c
 need explicit bindings. External facts, memories and tasks are refused by this reader. Hashes bind
 specific source content, not semantic equivalence or inferred identity.
 
-Database preview, version-2 planning and atomic apply remain separate work. A host must enforce
+`planProjectAnnotationSnapshot(json, target, bindings)` supplies pure binding validation for version 2.
+It requires a separate binding for every external dependency, including a project owner referenced
+only by the descriptor. Its fingerprint includes all version-2 metadata, manifest hashes, bindings
+and the adapter-supplied target revision. Alias provenance and timestamp changes invalidate the plan.
+Source/target inputs remain unchanged and proposed facts remain proposed. Reference kinds, changed
+source hashes, missing/duplicate bindings and populated selected annotation targets are checked by
+the same policy as version 1. It does not open a database, resolve names, check the destination's
+global alias namespace or authorize writes. The caller must supply a complete, consistent target
+snapshot; a fabricated snapshot establishes no database preconditions.
+
+Database preview and atomic apply remain separate work. A host must enforce
 owner policy; neither a valid snapshot nor a matching fingerprint authorizes accepting an agent's
 proposals. No live-project reset or store migration is part of these helpers.

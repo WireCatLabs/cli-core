@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`planProjectAnnotationSnapshot` from `./store`** validates explicit bindings for version-2 snapshots,
+  including the project's owner, and binds preserved alias/project metadata to the preview fingerprint.
+  Version-1 planning keeps its existing contract. This pure helper opens no store and does not apply records.
+
 ## 0.373.0 — 20.10.2026
 
 ### Added
