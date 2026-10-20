@@ -128,19 +128,22 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   let stopped: ProjectGatheringStop = null
   const open = (u: ProjectUnitProgress) => !terminal.has(u.state) && u.state !== "read-limited"
 
-  const take = (item: ContextEvidenceItem, lane: ProjectLane, kind: ContextSource["kind"], source: number) => {
-    const known = byRef.get(item.ref)
+  /** Records another lane finding a reference this run already returned; true when it had. */
+  const again = (ref: string, lane: ProjectLane) => {
+    const known = byRef.get(ref)
     if (known) {
       if (!known.lanes.includes(lane.id)) known.lanes.push(lane.id)
       if (!lane.kinds.every((k) => k === "person")) known.context = "project"
-      return
+      return true
     }
-    const key = seenKey(item.ref)
-    if (seen.has(key)) {
-      matchedAgain.set(item.ref, (matchedAgain.get(item.ref) ?? new Set()).add(lane.id))
-      return
-    }
-    seen.add(key)
+    if (!seen.has(seenKey(ref))) return false
+    matchedAgain.set(ref, (matchedAgain.get(ref) ?? new Set()).add(lane.id))
+    return true
+  }
+
+  const take = (item: ContextEvidenceItem, lane: ProjectLane, kind: ContextSource["kind"], source: number) => {
+    if (again(item.ref, lane)) return
+    seen.add(seenKey(item.ref))
     const short = excerpt(item.text, lane.query, 300, { literal: true })
     const fingerprint = contextEvidenceFingerprint(item)
     const entry: ProjectEvidenceItem = {
@@ -215,7 +218,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       }
       try {
         let page = await readPage(Math.min(plan.budgets.maxPageBytes, plan.budgets.maxReadBytes - usage.readBytes), 20)
-        const big = page.oversized
+        // A large record another lane already returned is not read again; its page already moves past it.
+        const big = page.oversized && !again(page.oversized.ref, unit.lane) ? page.oversized : undefined
         if (big && big.bytes <= CONTEXT_MAX_READ_BYTES) {
           if (big.bytes > plan.budgets.maxReadBytes - usage.readBytes || usage.reads >= plan.budgets.maxReads) {
             state.state = "read-limited"
