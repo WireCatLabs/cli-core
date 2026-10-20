@@ -46,6 +46,16 @@ export const validateContextEvidencePage = (page: ContextEvidencePage, request: 
     )
       fail()
     if (page.next) contextEvidenceRequest({ ...request, cursor: page.next })
+    const big = page.oversized
+    if (
+      big !== undefined &&
+      (!big ||
+        page.items.length ||
+        typeof big.ref !== "string" ||
+        !Number.isSafeInteger(big.bytes) ||
+        big.bytes <= maxReadBytes)
+    )
+      fail()
     let actual = 0
     for (const item of page.items) {
       if (

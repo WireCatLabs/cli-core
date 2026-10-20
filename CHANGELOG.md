@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Project gathering moves past large documents instead of stalling.** A page of evidence now holds the records
+  that fit its byte budget together, rather than failing when they do not. A record larger than the page is read
+  alone, up to 256 KiB. One larger still is listed in the new `oversized` result field by reference and skipped,
+  so a resume no longer retries the same page and charges its budget each time. The context reader's page gains
+  the same optional `oversized`. Meeting preparation reports such a record as `read-limited` and continues past it.
+
 ## 0.366.0 — 20.10.2026
 
 ### Added

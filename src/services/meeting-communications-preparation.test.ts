@@ -322,3 +322,20 @@ it("does not call a short multi-line message cut", async () => {
   ])
   expect(result.coverage.outputLimited).toBe(false)
 })
+
+it("reports a record too large to read as read-limited and continues past it", async () => {
+  const f = await setup()
+  const reader: ContextEvidenceReader = {
+    async read(req) {
+      if (req.source.kind !== "mail") return f.port.read(req)
+      return { ...(await f.port.read(req)), items: [], readBytes: 0, oversized: { ref: "x", bytes: 999999 } }
+    },
+  }
+  const answer = meetingPreparationAnswer(
+    await f.service({ ...f.binding, reader }).prepare("example-series", f.request),
+  )
+  expect(answer.item.communications?.coverage.sources.find((s) => s.state === "read-limited")).toMatchObject({
+    restart_required: false,
+    issue: "validation_error",
+  })
+})

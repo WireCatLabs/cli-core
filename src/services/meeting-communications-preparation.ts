@@ -44,6 +44,9 @@ export const readPreparationCommunications = async (plan: CommunicationPlan, sig
       if (!page.coverage.available) {
         coverage.state = "unavailable"
         coverage.issue = "not_found"
+      } else if (page.oversized) {
+        coverage.state = "read-limited"
+        coverage.issue = "validation_error"
       } else if (page.coverage.index !== "ready") coverage.issue = "configuration_error"
       const refs = new Set<string>()
       for (const item of page.items) {

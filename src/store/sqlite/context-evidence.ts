@@ -1,4 +1,3 @@
-import { CliError } from "@wirecat/cli-base"
 import {
   type ContextEvidencePage,
   type ContextEvidenceReader,
@@ -6,6 +5,7 @@ import {
   type ContextRecordReader,
   contextCursorScope,
   contextEvidenceRequest,
+  fittingRows,
 } from "../../context/evidence.js"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
@@ -135,39 +135,53 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
       ]
       if (cursor) params.push(cursor.at, cursor.at, cursor.id)
       params.push(limit + 1)
-      const probe = database
-        .prepare(`SELECT coalesce(sum(
+      const sized = database
+        .prepare(`SELECT id,at,provider,account,chat,external_id,
         length(CAST(coalesce(title,'') AS BLOB))+length(CAST(coalesce(body,'') AS BLOB))+
         length(CAST(coalesce(url,'') AS BLOB))+length(CAST(provider AS BLOB))+
         length(CAST(account AS BLOB))+length(CAST(external_id AS BLOB))+
-        length(CAST(coalesce(chat,'') AS BLOB))+length(CAST(time_kind AS BLOB))),0) AS bytes FROM (${selection})`)
-        .get(...params)
-      const readBytes = Number(probe?.bytes)
-      if (!Number.isSafeInteger(readBytes) || readBytes < 0 || readBytes > maxReadBytes)
-        throw new CliError("validation_error", "context evidence exceeds maxReadBytes before hydration", {
-          reason: "context.read-budget",
-        })
+        length(CAST(coalesce(chat,'') AS BLOB))+length(CAST(time_kind AS BLOB)) AS bytes FROM (${selection})`)
+        .all(...params)
+      const refOf = (row: Record<string, unknown>) =>
+        source.kind === "document"
+          ? `document:${row.id}`
+          : formatLocator({
+              provider: String(row.provider),
+              account: String(row.account),
+              chat: String(row.chat),
+              message: String(row.external_id),
+            })
+      const past = (row: Record<string, unknown>) => ({ at: Number(row.at), id: Number(row.id), scope })
+      const fit = fittingRows(
+        sized.map((row) => Number(row.bytes)),
+        limit,
+        maxReadBytes,
+      )
+      const first = sized[0]
+      if (!fit.count && first) {
+        coverage.hasMore = sized.length > 1
+        return {
+          source,
+          items: [],
+          readBytes: 0,
+          coverage,
+          next: coverage.hasMore ? past(first) : null,
+          oversized: { ref: refOf(first), bytes: Number(first.bytes) },
+        }
+      }
       signal?.throwIfAborted()
-      const rows = database.prepare(selection).all(...params)
+      params[params.length - 1] = fit.count
+      const selected = fit.count ? database.prepare(selection).all(...params) : []
       signal?.throwIfAborted()
-      coverage.hasMore = rows.length > limit
-      const selected = rows.slice(0, limit)
+      coverage.hasMore = sized.length > selected.length
       const last = selected.at(-1)
       return {
         source,
-        readBytes,
+        readBytes: fit.bytes,
         coverage,
-        next: coverage.hasMore && last ? { at: Number(last.at), id: Number(last.id), scope } : null,
+        next: coverage.hasMore && last ? past(last) : null,
         items: selected.map((row) => ({
-          ref:
-            source.kind === "document"
-              ? `document:${row.id}`
-              : formatLocator({
-                  provider: String(row.provider),
-                  account: String(row.account),
-                  chat: String(row.chat),
-                  message: String(row.external_id),
-                }),
+          ref: refOf(row),
           provider: String(row.provider),
           account: String(row.account),
           title: row.title == null ? null : String(row.title),

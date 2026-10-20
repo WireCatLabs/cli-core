@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ContextEvidenceItem, ContextEvidenceReader, ContextIndex, ContextSource } from "../context/evidence.js"
-import { contextEvidenceFingerprint } from "../context/evidence.js"
+import { CONTEXT_MAX_READ_BYTES, contextEvidenceFingerprint } from "../context/evidence.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
 import { attachNeighbours, type ProjectNeighbour, type ProjectNeighbourReader } from "./project-gathering-around.js"
@@ -119,6 +119,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   const items: ProjectEvidenceItem[] = []
   const byRef = new Map<string, ProjectEvidenceItem>()
   const matchedAgain = new Map<string, Set<string>>()
+  const oversized = new Map<string, { ref: string; lanes: string[]; source: number; bytes: number }>()
   let stopped: ProjectGatheringStop = null
   const open = (u: ProjectUnitProgress) => !terminal.has(u.state) && u.state !== "read-limited"
 
@@ -171,24 +172,46 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
                 ? "items"
                 : null
       if (stopped) break
-      const allowance = Math.min(plan.budgets.maxPageBytes, plan.budgets.maxReadBytes - usage.readBytes)
-      const reader = createContextEvidenceReader(ports.evidence, [unit.source], {
-        maxReads: 1,
-        maxTotalReadBytes: allowance,
-      })
-      usage.reads++
-      try {
-        const page = await reader.read({
-          source: unit.source,
-          query: unit.lane.query,
-          after: unit.chunk.after,
-          before: unit.chunk.before,
-          limit: 20,
-          maxReadBytes: allowance,
-          ...(state.cursor ? { cursor: state.cursor } : {}),
-          signal,
+      const readPage = async (allowance: number, limit: number) => {
+        const reader = createContextEvidenceReader(ports.evidence, [unit.source], {
+          maxReads: 1,
+          maxTotalReadBytes: allowance,
         })
-        usage.readBytes += page.readBytes
+        usage.reads++
+        try {
+          const page = await reader.read({
+            source: unit.source,
+            query: unit.lane.query,
+            after: unit.chunk.after,
+            before: unit.chunk.before,
+            limit,
+            maxReadBytes: allowance,
+            ...(state.cursor ? { cursor: state.cursor } : {}),
+            signal,
+          })
+          usage.readBytes += page.readBytes
+          return page
+        } catch (error) {
+          usage.readBytes += reader.usage().chargedBytes
+          throw error
+        }
+      }
+      try {
+        let page = await readPage(Math.min(plan.budgets.maxPageBytes, plan.budgets.maxReadBytes - usage.readBytes), 20)
+        const big = page.oversized
+        if (big && big.bytes <= CONTEXT_MAX_READ_BYTES) {
+          if (big.bytes > plan.budgets.maxReadBytes - usage.readBytes || usage.reads >= plan.budgets.maxReads) {
+            state.state = "read-limited"
+            state.code = "validation_error"
+            continue
+          }
+          page = await readPage(big.bytes, 1)
+        } else if (big) {
+          const known = oversized.get(big.ref)
+          if (!known)
+            oversized.set(big.ref, { ref: big.ref, lanes: [unit.lane.id], source: unit.sourceIndex, bytes: big.bytes })
+          else if (!known.lanes.includes(unit.lane.id)) known.lanes.push(unit.lane.id)
+        }
         state.pages++
         state.code = page.coverage.index === "ready" ? null : `index-${page.coverage.index}`
         for (const item of page.items) take(item, unit.lane, unit.source.kind, unit.sourceIndex)
@@ -202,7 +225,6 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
         }
       } catch (error) {
         signal?.throwIfAborted()
-        usage.readBytes += reader.usage().chargedBytes
         if (!(error instanceof CliError)) throw error
         if (error.code === "validation_error" && error.details?.reason === "context.read-budget")
           state.state = "read-limited"
@@ -273,6 +295,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       issue: progress[index]?.code ?? null,
     })),
     items,
+    oversized: [...oversized.values()],
     matchedAgain: [...matchedAgain].map(([ref, lanes]) => ({ ref, lanes: [...lanes] })),
     usage: { ...usage, elapsedMs: now() - started },
     totals,

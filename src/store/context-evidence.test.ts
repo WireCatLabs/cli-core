@@ -69,13 +69,16 @@ it("reads selected imported documents and mail without internal notes or writes"
   expect(f.db.prepare("SELECT total_changes() AS n").get()).toEqual(before)
 })
 
-it("checks UTF-8 body, title, locator and lookahead bytes before hydrating any row", async () => {
+it("measures UTF-8 body, title and locator bytes before hydrating and moves past a row too large to read", async () => {
   const f = await fixture()
   const first = await f.reader.read(f.request)
   const spy = vi.spyOn(f.db, "prepare")
   const port = contextEvidenceOver({ database: f.db })
-  await expect(port.read({ ...f.request, maxReadBytes: first.readBytes - 1 })).rejects.toMatchObject({
-    code: "validation_error",
+  expect(await port.read({ ...f.request, maxReadBytes: first.readBytes - 1 })).toMatchObject({
+    items: [],
+    readBytes: 0,
+    next: first.next,
+    oversized: { ref: first.items[0]?.ref, bytes: first.readBytes },
   })
   expect(spy.mock.calls.some(([sql]) => sql.startsWith("SELECT n.id,n.external_id"))).toBe(false)
   spy.mockRestore()
@@ -83,9 +86,11 @@ it("checks UTF-8 body, title, locator and lookahead bytes before hydrating any r
   const exact = await port.read({ ...f.request, maxReadBytes: first.readBytes })
   expect(exact.items).toHaveLength(1)
   f.db.prepare("UPDATE messages SET text=? WHERE account_id=? AND external_id='2'").run("Ж".repeat(300), f.accountId)
-  await expect(port.read({ ...f.request, maxReadBytes: 400 })).rejects.toMatchObject({ code: "validation_error" })
+  const shrunk = await port.read({ ...f.request, limit: 2, maxReadBytes: 400 })
+  expect(shrunk).toMatchObject({ readBytes: first.readBytes, coverage: { hasMore: true } })
+  expect(shrunk.items.map((item) => item.text)).toEqual(["Harbour launch 3"])
   f.db.prepare("UPDATE chats SET title=? WHERE account_id=?").run("x".repeat(1000), f.accountId)
-  await expect(port.read({ ...f.request, maxReadBytes: 900 })).rejects.toMatchObject({ code: "validation_error" })
+  expect((await port.read({ ...f.request, maxReadBytes: 900 })).oversized?.bytes).toBeGreaterThan(1000)
 })
 
 it("reports pending indexes, omits stale matches and keeps source/time boundaries", async () => {
@@ -219,11 +224,11 @@ it("holds one read snapshot when another connection changes a body after preflig
   let changed = false
   vi.spyOn(f.db, "prepare").mockImplementation((sql) => {
     const statement = prepare(sql)
-    if (!sql.startsWith("SELECT coalesce(sum(")) return statement
+    if (!sql.startsWith("SELECT id,at,")) return statement
     return {
       ...statement,
-      get: (...args) => {
-        const result = statement.get(...args)
+      all: (...args) => {
+        const result = statement.all(...args)
         writer
           .prepare(
             "UPDATE messages SET text='Changed after probe',normalized_text='changed after probe',normalizer_version=1,updated_at=6000 WHERE account_id=? AND external_id='3'",
@@ -247,11 +252,11 @@ it.each(["probe", "hydrate"])("honors cancellation after %s and leaves no transa
   const prepare = f.db.prepare.bind(f.db)
   const spy = vi.spyOn(f.db, "prepare").mockImplementation((sql) => {
     const s = prepare(sql)
-    if (stage === "probe" && sql.startsWith("SELECT coalesce(sum("))
+    if (stage === "probe" && sql.startsWith("SELECT id,at,"))
       return {
         ...s,
-        get: (...args) => {
-          const row = s.get(...args)
+        all: (...args) => {
+          const row = s.all(...args)
           controller.abort()
           return row
         },
