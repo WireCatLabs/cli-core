@@ -57,6 +57,9 @@ const result = await gatherProjectEvidence(
   to it in its chat, as 200-character excerpts with their references. They are context for reading the hit, not
   matches: they never join `items`, and `found` says whether a neighbour is a hit itself. Their bytes count
   against `maxReadBytes` (`usage.aroundBytes`); when it runs out, a hit has `aroundIssue: "read-bytes"`.
+  A document hit needs no port: its `around` is the paragraphs (split at blank lines) before and after the first
+  one that names a lane word, in document order, as 200-character excerpts. The hit's own paragraph is included
+  with `found: true`; every entry carries the document's reference.
 
 ## Other names in the evidence
 
