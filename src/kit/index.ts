@@ -1,3 +1,4 @@
+export { ARGV_LOG, argvLogSetup } from "./argv-log.js"
 export { type ContractCase, type ContractOptions, contractCases, OPTIONAL_METHODS } from "./contract.js"
 export { type FakeAdapter, fakeAdapter } from "./fake.js"
 export { type McpStdio, type McpStdioStreams, type McpToolResult, mcpOverStdio } from "./mcp-stdio.js"

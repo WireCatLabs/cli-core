@@ -1,15 +1,46 @@
+import { spawnSync } from "node:child_process"
 import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { servingProfiles } from "../background/lock.js"
 import type { AppIdentity } from "../ports/app.js"
 import { type PackageUpgradePorts, type PackageUpgradeResult, upgradePackage } from "../services/package-upgrade.js"
 import { grantsAuthority, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
+import { usableProfileName } from "./profile.js"
 
 export interface UpgradeContext extends Omit<PackageUpgradePorts, "onInstall"> {
   renderer: Renderer
   format: RenderFormat
   streams: Streams
+}
+
+/**
+ * A running serve keeps the code it started with; the update replaced the files under it. Each is restarted by
+ * the new `script` — `server restart` refuses a serve started by hand, which is then named in `left`.
+ * `spawn` replaces the child process, as in `UpdateEnvironment`.
+ */
+export const restartServers = (
+  app: AppIdentity,
+  script: string,
+  env: NodeJS.ProcessEnv,
+  spawn?: (argv: string[]) => number,
+) => {
+  const restarted: string[] = []
+  const left: string[] = []
+  for (const profile of servingProfiles(app, env)) {
+    try {
+      usableProfileName(profile)
+    } catch {
+      continue
+    }
+    const argv = [script, profile, "server", "restart"]
+    const code = spawn
+      ? spawn([process.execPath, ...argv])
+      : (spawnSync(process.execPath, argv, { env, shell: false, stdio: ["ignore", 2, 2] }).status ?? 1)
+    ;(code === 0 ? restarted : left).push(profile)
+  }
+  return { restarted, left }
 }
 
 export const upgradeCommand = (
