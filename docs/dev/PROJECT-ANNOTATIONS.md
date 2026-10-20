@@ -88,6 +88,30 @@ the same policy as version 1. It does not open a database, resolve names, check 
 global alias namespace or authorize writes. The caller must supply a complete, consistent target
 snapshot; a fabricated snapshot establishes no database preconditions.
 
-Database preview and atomic apply remain separate work. A host must enforce
+## Database preview
+
+`previewProjectAnnotationSnapshot({ snapshot, target, project, bindings, env?, maxReadBytes? })`
+decodes version-2 JSON, checks explicit binding syntax before opening the target, and reads an existing
+destination through a native read-only handle. The project reference is explicit. One consistent
+transaction covers the selected annotation snapshot, bound external content hashes and project
+namespace. No source is fetched and no destination is created or maintained.
+
+The result includes the pure `plan`, `descriptor_conflicts`, `namespace_conflicts`, `ready`,
+`fingerprint`, `read_bytes` and `records`. The baseline project's key and name must match exactly.
+Other projects' normalized names, keys and owner-scoped aliases cannot collide with the selected
+names; deleted/account-scoped project keys still reserve their unique key. Namespace conflicts name
+project references without copying their names into the result. A ready result requires no pure-plan,
+descriptor or namespace conflict. Selected aliases, facts or generic links already on the destination
+cause a populated-target conflict; omitted facets are never permission to overwrite other data.
+
+The fingerprint binds the manifest and bindings to the actual target snapshot, bound source hashes
+and bounded namespace rows. Even an unrelated namespace change can invalidate it conservatively.
+Metadata probes precede source hydration. The existing snapshot limits also charge namespace reads,
+so a store whose project catalog exceeds the budget is refused rather than partially checked.
+Deleted, unavailable or unsupported dependencies may refuse the read instead of producing a ready
+preview. The public pure planner remains useful to other adapters; a ready pure plan is not the
+same as a successful database preview.
+
+Atomic apply remains separate work. A host must enforce
 owner policy; neither a valid snapshot nor a matching fingerprint authorizes accepting an agent's
 proposals. No live-project reset or store migration is part of these helpers.

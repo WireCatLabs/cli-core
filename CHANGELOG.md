@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **`previewProjectAnnotationSnapshot` from `./store`** reads an explicit existing destination natively
+  read-only and checks version-2 bindings against its actual content hashes, selected annotations and
+  project vocabulary. It reports descriptor/namespace conflicts and a preview fingerprint in one coherent
+  bounded read. It neither restores annotations nor authorizes a write.
 - **`planProjectAnnotationSnapshot` from `./store`** validates explicit bindings for version-2 snapshots,
   including the project's owner, and binds preserved alias/project metadata to the preview fingerprint.
   Version-1 planning keeps its existing contract. This pure helper opens no store and does not apply records.

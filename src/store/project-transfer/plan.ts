@@ -36,14 +36,10 @@ const invalid = (field: string): never => {
   throw new CliError("validation_error", `invalid project annotation plan.${field}`)
 }
 
-export const planBoundProjectAnnotations = (
-  manifest: { project: { ref: string }; external: { ref: string; content_sha256: string | null }[] },
-  manifest_fingerprint: string,
-  target: ProjectAnnotationsTarget,
+export const projectAnnotationBindingSources = (
+  manifest: { project: { ref: string }; external: { ref: string }[] },
   bindings: Record<string, string>,
-): ProjectAnnotationsPlan => {
-  const checked = v.safeParse(targetSchema, target)
-  if (!checked.success) return invalid(checked.issues[0]?.path?.map((p) => String(p.key)).join(".") ?? "target")
+) => {
   if (!bindings || typeof bindings !== "object" || Array.isArray(bindings) || Object.keys(bindings).length > 1001)
     return invalid("bindings")
   if (Object.getPrototypeOf(bindings) !== Object.prototype && Object.getPrototypeOf(bindings) !== null)
@@ -52,6 +48,25 @@ export const planBoundProjectAnnotations = (
   for (const [source, destination] of Object.entries(bindings))
     if (!required.has(source) || typeof destination !== "string" || destination.length > 2048)
       return invalid("bindings")
+  for (const destination of Object.values(bindings)) {
+    try {
+      kind(destination)
+    } catch {
+      return invalid("bindings.reference")
+    }
+  }
+  return required
+}
+
+export const planBoundProjectAnnotations = (
+  manifest: { project: { ref: string }; external: { ref: string; content_sha256: string | null }[] },
+  manifest_fingerprint: string,
+  target: ProjectAnnotationsTarget,
+  bindings: Record<string, string>,
+): ProjectAnnotationsPlan => {
+  const checked = v.safeParse(targetSchema, target)
+  if (!checked.success) return invalid(checked.issues[0]?.path?.map((p) => String(p.key)).join(".") ?? "target")
+  const required = projectAnnotationBindingSources(manifest, bindings)
   const destinations = new Map<string, string | null>()
   for (const item of checked.output.external) {
     try {
