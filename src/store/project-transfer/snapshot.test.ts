@@ -101,6 +101,18 @@ it("uses portable content hashes when identical source text has different store 
   expect(two.snapshot.facts).toHaveLength(2)
 })
 
+it("keeps whitespace-only metadata invalid while exposing a structural transport schema", async () => {
+  const f = await fixture(),
+    result = await snapshotProjectAnnotations({ source: f.path, project: f.project.ref })
+  const source = result.snapshot.aliases[0]
+  if (!source) throw new Error("Missing synthetic alias")
+  source.source = "  "
+  expect(() => decodeProjectAnnotationSnapshot(JSON.stringify(result.snapshot))).toThrow("aliases.source")
+  source.source = "owner"
+  result.snapshot.project.description = "  "
+  expect(() => decodeProjectAnnotationSnapshot(JSON.stringify(result.snapshot))).toThrow("project.description")
+})
+
 it("refuses oversized source text and invalid budgets without changing the source or creating a missing store", async () => {
   const f = await fixture()
   await expect(

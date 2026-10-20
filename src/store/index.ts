@@ -73,9 +73,16 @@ export {
   type ProjectAnnotationSnapshotOptions,
   type ProjectAnnotationSnapshotResult,
   projectAnnotationSnapshotFingerprint,
+  projectAnnotationSnapshotSchema,
   snapshotProjectAnnotations,
 } from "./project-transfer/snapshot.js"
 export { planProjectAnnotationSnapshot } from "./project-transfer/snapshot-plan.js"
+export type {
+  ProjectAnnotationRestoreReceipt,
+  ProjectAnnotationRestoreRequest,
+  ProjectAnnotationStore,
+  ProjectAnnotationTargetRequest,
+} from "./project-transfer/store.js"
 export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/agent-actions.js"
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
