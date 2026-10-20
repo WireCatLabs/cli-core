@@ -50,6 +50,49 @@ it("leaves out the messages of a chat the owner hid from search", async () => {
   expect(await f.reader.read(f.request)).toMatchObject({ items: [], next: null, coverage: { hasMore: false } })
 })
 
+it("reads one named chat without a query, newest first by cursor, even when it is hidden from search", async () => {
+  const f = await fixture()
+  f.db
+    .prepare(
+      "INSERT INTO chats(id,account_id,external_id,kind,title,created_at,updated_at,searchable) VALUES(99,?,'side','group','Side',0,0,0)",
+    )
+    .run(f.accountId)
+  for (const [n, at] of [
+    [1, 150],
+    [2, 250],
+  ] as const)
+    f.db
+      .prepare(
+        "INSERT INTO messages(chat_id,account_id,external_id,sent_at,text,created_at,updated_at,source) VALUES(99,?,?,?,?,0,0,'history')",
+      )
+      .run(f.accountId, String(n), at, `Unindexed note ${n}`)
+  const { query: _, ...unqueried } = f.request
+  const first = await f.reader.read({ ...unqueried, chat: "side" })
+  expect(first).toMatchObject({
+    items: [{ ref: "msg:example-calendar/AliceExample/side/2", text: "Unindexed note 2" }],
+    coverage: { available: true, index: "ready", matching: "chat", hasMore: true },
+  })
+  const second = await f.reader.read({ ...unqueried, chat: "side", cursor: present(first.next) })
+  expect(second).toMatchObject({ items: [{ text: "Unindexed note 1" }], next: null })
+  await expect(f.reader.read({ ...unqueried, chat: "planning", cursor: present(first.next) })).rejects.toMatchObject({
+    code: "validation_error",
+  })
+  expect(await f.reader.read({ ...unqueried, chat: "missing" })).toMatchObject({
+    items: [],
+    coverage: { available: false },
+  })
+  const literal = await f.reader.read(f.request)
+  expect(await f.reader.read({ ...f.request, cursor: present(literal.next) })).toMatchObject({
+    coverage: { matching: "literal-words" },
+  })
+  for (const request of [
+    { ...f.request, chat: "side" },
+    { ...unqueried, source: f.sources.document, chat: "side" },
+    { ...unqueried, source: { ...f.sources.message, kind: "meeting" as const }, chat: "side" },
+  ])
+    await expect(f.port.read(request)).rejects.toMatchObject({ code: "validation_error" })
+})
+
 it("reads selected imported documents and mail without internal notes or writes", async () => {
   const f = await fixture()
   await f.store.notes.addNote({ text: "Harbour private comment" })

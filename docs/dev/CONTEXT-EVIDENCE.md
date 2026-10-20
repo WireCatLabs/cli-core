@@ -12,8 +12,13 @@ Core's optional `MessageStore.contextEvidence` is the native read port. Wrap it 
 Account discovery is not authorization. Capture the selection from trusted profile/folder binding,
 not arbitrary account IDs supplied by a request.
 
-Whole message/mail/meeting accounts and whole imported folders are supported.
-Chat, mailbox, thread, document-list or other selectors are refused by name instead of ignored.
+Whole message/mail/meeting accounts and whole imported folders are supported. A message or mail read
+may name one stored chat or mail thread of its account by external id (`chat`) instead of a `query`: it returns
+that chat's records in the window, newest first, with the same byte fitting, `oversized`, cursor and coverage,
+and `coverage.matching: "chat"`. It reads a chat hidden from search (`searchable=0`), because the read names
+it, and uses no word index (`index: "ready"`). A chat that is not stored is `available: false`. `chat` with a
+`query`, or on a document or meeting source, is refused. Mailbox, document-list or other selectors are refused
+by name instead of ignored.
 Requests, sources, cursors and allowance options reject unknown fields.
 
 Each source includes its resource kind, stored account ID, provider and external account key.
@@ -113,7 +118,8 @@ Empty pages and exhausted pagination still have unknown archive completeness, in
 transcripts and meetings that were never archived. Undated mail/messages and meetings with current
 transcript cues are reported separately rather than assigned a date.
 
-Use `next` as the next request's `cursor`, keeping the same source, query and dates. Scope changes
+Use `next` as the next request's `cursor`, keeping the same source, query (or chat) and dates. The scope hash
+includes `chat` only for a chat read, so cursors issued before chat reads existed stay valid. Scope changes
 are refused before source access; the scope hash also carries the reader protocol version. A cursor binds scope, not a historical snapshot: every native
 page has its own read transaction, so later pages may reflect intervening edits. Do not infer that
 finishing pages revalidated earlier evidence. Cancellation is checked around synchronous reads and

@@ -452,3 +452,107 @@ it("gives a document hit the paragraphs around the one that names the project, i
   const none = await gatherProjectEvidence({ evidence: f.port }, { ...request, around: { before: 0, after: 0 } })
   expect(none.items.find((i) => i.ref === hit?.ref)?.around).toBeUndefined()
 })
+
+const linkedChat = (f: Awaited<ReturnType<typeof fixture>>, accountId: number, texts: string[]) => {
+  const chat = f.db
+    .prepare(
+      "INSERT INTO chats(account_id,external_id,kind,title,created_at,updated_at,searchable) VALUES(?,'crew','group','Crew',0,0,0) RETURNING id",
+    )
+    .get(accountId)
+  for (const [n, text] of texts.entries())
+    f.db
+      .prepare(
+        "INSERT INTO messages(chat_id,account_id,external_id,sent_at,text,created_at,updated_at,source) VALUES(?,?,?,?,?,0,0,'history')",
+      )
+      .run(Number(chat?.id), accountId, `c${n}`, 400 + n, text)
+  const account = present(f.db.prepare("SELECT provider,external_id FROM accounts WHERE id=?").get(accountId))
+  return { provider: String(account.provider), account: String(account.external_id), chat: "crew" }
+}
+
+it("reads a confirmed linked chat whose messages name nothing and labels them linked-chat", async () => {
+  const f = await fixture()
+  const crew = linkedChat(f, f.accountId, ["Crane arrives Tuesday", "Ok, booked"])
+  const outside = linkedChat(f, f.otherId, ["Not ours to read"])
+  const missing = { ...crew, chat: "gone" }
+  const read = vi.spyOn(f.port, "read")
+  const result = await gatherProjectEvidence(
+    { evidence: f.port, neighbours: storedMessageNeighbours(f.store.messages) },
+    { ...f.request, linkedChats: [crew, outside, missing] },
+  )
+  expect(result.lanes.slice(2)).toEqual([
+    { id: "l3", kinds: ["linked-chat"], query: null, people: [], chat: "chat:example-calendar/AliceExample/crew" },
+    { id: "l4", kinds: ["linked-chat"], query: null, people: [], chat: "chat:example-calendar/AliceExample/gone" },
+  ])
+  expect(result.linkedChats.map((c) => [c.chat, c.account, c.state, c.lane, c.source])).toEqual([
+    ["crew", "AliceExample", "in-scope", "l3", 0],
+    ["crew", "BobSample", "out-of-scope", null, null],
+    ["gone", "AliceExample", "unavailable", "l4", 0],
+  ])
+  expect(read.mock.calls.some(([r]) => r.source.account === "BobSample")).toBe(false)
+  const linked = result.items.filter((i) => i.lanes.includes("l3"))
+  expect(linked.map((i) => [i.text, i.context, i.lanes, i.around])).toEqual([
+    ["Ok, booked", "linked-chat", ["l3"], undefined],
+    ["Crane arrives Tuesday", "linked-chat", ["l3"], undefined],
+  ])
+  const records = present(f.store.contextRecords)
+  const record = present(await records.read(present(linked[0]).ref))
+  expect(contextEvidenceFingerprint(record)).toBe(present(linked[0]).fingerprint)
+  await expect(
+    gatherProjectEvidence({ evidence: f.port }, { ...f.request, linkedChats: [crew, crew] }),
+  ).rejects.toMatchObject({ details: { param: "linkedChats" } })
+})
+
+it("keeps a literal hit labelled project when a linked chat finds it too", async () => {
+  const f = await fixture()
+  const message = present(f.sources[0])
+  const planning = { provider: message.provider, account: message.account, chat: "planning" }
+  const result = await gatherProjectEvidence({ evidence: f.port }, { ...f.request, linkedChats: [planning] })
+  const third = present(result.items.find((i) => i.ref.endsWith("/planning/3")))
+  expect(third).toMatchObject({ context: "project", lanes: ["l1", "l2", "l3"] })
+  expect(result.items.filter((i) => i.context === "linked-chat")).toEqual([])
+})
+
+it("resumes a linked chat across pages and refuses a checkpoint whose linked chats changed", async () => {
+  const f = await fixture()
+  const crew = linkedChat(
+    f,
+    f.accountId,
+    Array.from({ length: 25 }, (_, n) => `Note ${n}`),
+  )
+  const request = { ...f.request, sources: [present(f.sources[0])], linkedChats: [crew], budgets: { maxReads: 3 } }
+  const first = await gatherProjectEvidence({ evidence: f.port }, request)
+  expect(first).toMatchObject({ stopped: "reads", complete: false })
+  expect(first.items.filter((i) => i.context === "linked-chat")).toHaveLength(20)
+  const checkpoint = present(first.checkpoint)
+  const second = await gatherProjectEvidence({ evidence: f.port }, { ...request, checkpoint })
+  expect(second).toMatchObject({ complete: true, resumed: true })
+  const all = [...first.items, ...second.items].filter((i) => i.context === "linked-chat").map((i) => i.ref)
+  expect(new Set(all).size).toBe(25)
+
+  for (const linkedChats of [[], [crew, { ...crew, chat: "planning" }]])
+    await expect(gatherProjectEvidence({ evidence: f.port }, { ...request, linkedChats, checkpoint })).rejects.toThrow(
+      "the project's linked chats changed; start again without --cursor",
+    )
+})
+
+it("keeps the fingerprint and checkpoint of a run without linked chats", async () => {
+  const f = await fixture()
+  const budgeted = { ...f.request, budgets: { maxReads: 3 } }
+  const first = await gatherProjectEvidence({ evidence: f.port }, budgeted)
+  const withEmpty = await gatherProjectEvidence({ evidence: f.port }, { ...budgeted, linkedChats: [] })
+  expect(withEmpty.fingerprint).toBe(first.fingerprint)
+  const decoded = JSON.parse(Buffer.from(present(first.checkpoint), "base64url").toString("utf8"))
+  expect(decoded).toMatchObject({ version: 1 })
+  expect(decoded).not.toHaveProperty("linkedChats")
+  const resumed = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, checkpoint: present(first.checkpoint) },
+  )
+  expect(resumed).toMatchObject({ resumed: true, complete: true, linkedChats: [] })
+  await expect(
+    gatherProjectEvidence(
+      { evidence: f.port },
+      { ...f.request, linkedChats: [linkedChat(f, f.accountId, ["x"])], checkpoint: present(first.checkpoint) },
+    ),
+  ).rejects.toThrow("linked chats changed")
+})

@@ -31,6 +31,9 @@ const corpora = {
     timeKind: "'sent'",
     join: "JOIN chats c ON c.id=n.chat_id AND c.account_id=n.account_id",
     where: "c.searchable=1",
+    chats: "chats",
+    // A read that names the chat sees it even when it is hidden from search (searchable=0).
+    named: "c.external_id=?",
   },
   mail: {
     table: "emails",
@@ -44,6 +47,8 @@ const corpora = {
     timeKind: "'sent'",
     join: "JOIN email_threads c ON c.id=n.email_thread_id AND c.account_id=n.account_id",
     where: "a.provider='email'",
+    chats: "email_threads",
+    named: "a.provider='email' AND c.external_id=?",
   },
   document: {
     table: "documents",
@@ -58,6 +63,8 @@ const corpora = {
     join: "",
     where:
       "n.body IS NOT NULL AND CASE WHEN json_valid(n.metadata) THEN coalesce(json_extract(n.metadata, '$.catalog.active'),1) ELSE 1 END=1",
+    chats: null,
+    named: null,
   },
 } as const
 
@@ -65,10 +72,10 @@ const corpora = {
 export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">): ContextEvidenceReader => ({
   async read(original) {
     const request = contextEvidenceRequest(original)
-    const { source, words, after, before, limit, maxReadBytes, cursor, signal } = request
+    const { source, words, chat, after, before, limit, maxReadBytes, cursor, signal } = request
     if (source.kind === "meeting") return readMeetingContextEvidence(database, request)
     const corpus = corpora[source.kind]
-    const scope = contextCursorScope({ source, query: request.query, after, before })
+    const scope = contextCursorScope({ source, query: request.query, chat, after, before })
     signal?.throwIfAborted()
     return read(database, () => {
       const coverage: ContextEvidencePage["coverage"] = {
@@ -77,28 +84,39 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
         hasMore: false,
         hasUndated: false,
         completeness: "unknown",
-        matching: "literal-words",
+        matching: chat === undefined ? "literal-words" : "chat",
         consistency: "snapshot-per-page",
       }
       const empty = (): ContextEvidencePage => ({ source, items: [], next: null, readBytes: 0, coverage })
-      const scopeParams: SqlValue[] = [source.accountId, source.provider, source.account]
+      const accountParams: SqlValue[] = [source.accountId, source.provider, source.account]
       const account = database
         .prepare(
           `SELECT 1 FROM accounts WHERE id=? AND provider=? AND external_id=?${source.kind === "mail" ? " AND provider='email'" : ""}`,
         )
-        .get(...scopeParams)
+        .get(...accountParams)
       if (!account) return empty()
+      if (
+        chat !== undefined &&
+        !database
+          .prepare(`SELECT 1 FROM ${corpus.chats} WHERE account_id=? AND external_id=?`)
+          .get(source.accountId, chat)
+      )
+        return empty()
       coverage.available = true
-      if (!database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(corpus.index)) {
+      const scopeParams = chat === undefined ? accountParams : [...accountParams, chat]
+      const base = `FROM ${corpus.table} n JOIN accounts a ON a.id=n.account_id ${corpus.join}
+        WHERE n.account_id=? AND a.provider=? AND a.external_id=? AND n.deleted_at IS NULL
+        AND ${chat === undefined ? corpus.where : corpus.named}`
+      // A chat read uses no word index, so words still waiting for it hide nothing.
+      if (chat !== undefined) coverage.index = "ready"
+      else if (!database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(corpus.index)) {
         coverage.index = "missing"
         return empty()
       }
-      const base = `FROM ${corpus.table} n JOIN accounts a ON a.id=n.account_id ${corpus.join}
-        WHERE n.account_id=? AND a.provider=? AND a.external_id=? AND n.deleted_at IS NULL AND ${corpus.where}`
       coverage.hasUndated = Boolean(
         database.prepare(`SELECT 1 ${base} AND ${corpus.at} IS NULL LIMIT 1`).get(...scopeParams),
       )
-      if (source.kind === "message") {
+      if (chat === undefined && source.kind === "message") {
         const state = database
           .prepare("SELECT watermark,filled_through FROM search_index_state WHERE name='message_words'")
           .get()
@@ -110,7 +128,7 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
                 .get(...scopeParams, after, before, Number(state.filled_through), Number(state.watermark))
             ? "pending"
             : "ready"
-      } else {
+      } else if (chat === undefined) {
         coverage.index = database
           .prepare(`SELECT 1 ${base} AND ${corpus.at}>=? AND ${corpus.at}<?
           AND EXISTS(SELECT 1 FROM ${source.kind === "mail" ? "email" : "document"}_index_pending p
@@ -123,16 +141,12 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
         ${corpus.title} AS title,${corpus.body} AS body,${corpus.url} AS url,${corpus.at} AS at,
         n.updated_at,${corpus.revision} AS revision,${corpus.timeKind} AS time_kind ${base}
         AND ${corpus.at}>=? AND ${corpus.at}<?
-        AND n.id IN (SELECT rowid FROM ${corpus.index} WHERE ${corpus.index} MATCH ?)
-        ${source.kind === "message" ? `AND n.normalized_text IS NOT NULL AND n.normalizer_version=${NORMALIZER_VERSION}` : `AND NOT EXISTS(SELECT 1 FROM ${source.kind === "mail" ? "email" : "document"}_index_pending p WHERE p.id=n.id AND p.indexable_type='${source.kind === "mail" ? "email" : "document"}')`}
+        ${chat !== undefined ? "" : `AND n.id IN (SELECT rowid FROM ${corpus.index} WHERE ${corpus.index} MATCH ?)`}
+        ${chat !== undefined ? "" : source.kind === "message" ? `AND n.normalized_text IS NOT NULL AND n.normalizer_version=${NORMALIZER_VERSION}` : `AND NOT EXISTS(SELECT 1 FROM ${source.kind === "mail" ? "email" : "document"}_index_pending p WHERE p.id=n.id AND p.indexable_type='${source.kind === "mail" ? "email" : "document"}')`}
         ${cursor ? `AND (${corpus.at}<? OR (${corpus.at}=? AND n.id<?))` : ""}
         ORDER BY ${corpus.at} DESC,n.id DESC LIMIT ?`
-      const params: SqlValue[] = [
-        ...scopeParams,
-        after,
-        before,
-        words.map((w) => `normalized_text:"${normalize(w)}"`).join(" AND "),
-      ]
+      const params: SqlValue[] = [...scopeParams, after, before]
+      if (chat === undefined) params.push(words.map((w) => `normalized_text:"${normalize(w)}"`).join(" AND "))
       if (cursor) params.push(cursor.at, cursor.at, cursor.id)
       params.push(limit + 1)
       const sized = database
@@ -245,10 +259,10 @@ export const contextRecordOf = (
   const row = database
     .prepare(
       `SELECT ${corpus.title} AS title,${corpus.body} AS body FROM ${corpus.table} n JOIN accounts a ON a.id=n.account_id
-       ${corpus.join} WHERE a.provider=? AND a.external_id=? AND c.external_id=? AND n.external_id=?
-       AND n.deleted_at IS NULL AND ${corpus.where}`,
+       ${corpus.join} WHERE a.provider=? AND a.external_id=? AND n.external_id=?
+       AND n.deleted_at IS NULL AND ${corpus.named}`,
     )
-    .get(at.provider, at.account, at.chat, at.message)
+    .get(at.provider, at.account, at.message, at.chat)
   return row
     ? { ref, title: row.title == null ? null : String(row.title), text: String(row.body), revision: null }
     : null
