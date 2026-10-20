@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Read-only project annotation snapshots from `./store`** preserve project metadata, alias provenance
+  and timestamps, facts and direct links in a version-2 manifest. `snapshotProjectAnnotations` reads one
+  explicit project from an existing current-schema store in a consistent SQLite transaction, with
+  bounded source hashing and no migration or source text in the result. The decoder and fingerprint
+  helpers validate that format independently. Notes, meeting memberships, tasks, memories, labels
+  and findings remain explicitly omitted; restore and CLI commands are not included.
+
 ## 0.372.0 — 20.10.2026
 
 ### Added
