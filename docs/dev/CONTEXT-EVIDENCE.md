@@ -17,7 +17,10 @@ may name one stored chat or mail thread of its account by external id (`chat`) i
 that chat's records in the window, newest first, with the same byte fitting, `oversized`, cursor and coverage,
 and `coverage.matching: "chat"`. It reads a chat hidden from search (`searchable=0`), because the read names
 it, and uses no word index (`index: "ready"`). A chat that is not stored is `available: false`. `chat` with a
-`query`, or on a document or meeting source, is refused. Mailbox, document-list or other selectors are refused
+`query`, or on a document or meeting source, is refused. A message or mail read may instead name `senders`
+(1–16 identity ids of the source's provider; for mail, addresses): it returns what those identities wrote in the
+window, in chats open to search, with `coverage.matching: "sender"` and no word index. `senders` with a `query` or
+`chat` is refused, and the scope hash includes them only for such a read. Mailbox, document-list or other selectors are refused
 by name instead of ignored.
 Requests, sources, cursors and allowance options reject unknown fields.
 

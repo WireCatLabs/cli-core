@@ -55,18 +55,23 @@ export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   /** A document hit with `around`: how many paragraphs after the one it centres on also name a lane word. */
   moreMatches?: number
 }
-/** Strongest first: a hit that names the project, then one only from a linked chat, then one naming only a person. */
-export type ProjectEvidenceContext = "project" | "linked-chat" | "person-only"
+/**
+ * Strongest first: a hit that names the project, then one only from a linked chat, then one a person wrote, then one
+ * naming only a person.
+ */
+export type ProjectEvidenceContext = "project" | "linked-chat" | "sender" | "person-only"
 export type ProjectGatheringStop = "reads" | "read-bytes" | "elapsed" | "items" | null
 
 const terminal = new Set(["done", "unavailable", "failed"])
-const CONTEXTS: ProjectEvidenceContext[] = ["person-only", "linked-chat", "project"]
+const CONTEXTS: ProjectEvidenceContext[] = ["person-only", "sender", "linked-chat", "project"]
 const contextOf = (lane: ProjectLane): ProjectEvidenceContext =>
   lane.kinds.includes("linked-chat")
     ? "linked-chat"
-    : lane.kinds.every((k) => k === "person")
-      ? "person-only"
-      : "project"
+    : lane.kinds.includes("sender")
+      ? "sender"
+      : lane.kinds.every((k) => k === "person")
+        ? "person-only"
+        : "project"
 
 export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, request: ProjectGatheringRequest) => {
   if (!ports?.evidence || typeof ports.evidence.read !== "function")
@@ -218,7 +223,11 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
         try {
           const page = await reader.read({
             source: unit.source,
-            ...(unit.chat === undefined ? { query: unit.lane.query ?? undefined } : { chat: unit.chat }),
+            ...(unit.chat !== undefined
+              ? { chat: unit.chat }
+              : unit.senders !== undefined
+                ? { senders: unit.senders }
+                : { query: unit.lane.query ?? undefined }),
             after: unit.chunk.after,
             before: unit.chunk.before,
             limit,

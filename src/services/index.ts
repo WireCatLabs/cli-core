@@ -41,6 +41,8 @@ export type {
   ProjectLane,
   ProjectLaneKind,
   ProjectLinkedChat,
+  ProjectPerson,
+  ProjectSender,
   ProjectUnitState,
 } from "./project-gathering-request.js"
 

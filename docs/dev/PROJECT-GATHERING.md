@@ -46,7 +46,15 @@ const result = await gatherProjectEvidence(
 - **People.** A person's lane finds what mentions the name. A name is not an identity, and a person's other
   conversations are not project membership: an item found only through person lanes has
   `context: "person-only"`. A reference several lanes find keeps the strongest context: `project`, then
-  `linked-chat`, then `person-only`.
+  `linked-chat`, then `sender`, then `person-only`.
+- **Senders.** A person given with `senders: [{ provider, id }]` (1–16 of their stored identities; an email
+  identity's id is its address) and a `reference` gets a lane of its own: `kinds: ["sender"]`, `query: null`,
+  `people: [<reference>]`, `senders`, numbered after the word lanes and counted in the 16. It reads every message
+  or mail one of those identities wrote in the window, in chats open to search, through each selected source of
+  the identity's provider only: a Telegram identity is never looked for in MAX, and an account outside `sources`
+  is never read. Its `name`, when given too, is still a word lane; without senders `name` is required. An item
+  found only that way has `context: "sender"`, a 300-character excerpt from the start and `around` like any
+  message hit: the person wrote it, it need not name the project.
 - **Window.** `lookbackDays` (default 60, at most 730) before `asOf` (default now), or an explicit
   half-open `after`/`before`; `before` left out is `asOf`, frozen with the run. Windows longer than 90 days are read in 90-day chunks, newest first. Each
   item keeps its `timeKind`: an imported document's `stored-update` time is when it was stored, not when
@@ -100,8 +108,8 @@ authorization and response validation are the context reader's own.
 
 Reads go in rounds: the first page of every lane × source × chunk unit before any second page. A cut budget
 therefore leaves no lane or person unread while another went deep. A linked chat has one unit per chunk, on its
-own account's source, with the same 20-record page and `maxPageBytes`; its units come after every word lane's in
-each round, so a word lane labels a shared hit first, and a busy chat stops on `maxItems` or `maxReads` and
+own account's source, with the same 20-record page and `maxPageBytes`; its units come after every word and sender
+lane's in each round, so a word lane labels a shared hit first, and a busy chat stops on `maxItems` or `maxReads` and
 continues from the checkpoint. `stopped` names the budget that ended
 the invocation.
 
@@ -122,7 +130,7 @@ returned and cumulative `totals` — no text. A resumed run keeps its window eve
 The same `runKey` (default: the request's fingerprint) with a changed project, lanes, people, sources,
 scope, window or fetch mode is refused. A changed set of linked chats is refused first, with "the project's
 linked chats changed; start again without --cursor". Budgets may change between invocations. A run without
-linked chats keeps the fingerprint and checkpoint it had before linked chats existed, so those checkpoints still
+linked chats or senders keeps the fingerprint and checkpoint it had before either existed, so those checkpoints still
 resume.
 
 `items` holds only references new to the run, with a 300-character excerpt and the lanes that found them;

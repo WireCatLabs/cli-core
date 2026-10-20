@@ -38,6 +38,7 @@ export const createContextEvidenceReader = (
         source: Object.freeze({ ...source }),
         ...(validated.query === undefined ? {} : { query: validated.query }),
         ...(validated.chat === undefined ? {} : { chat: validated.chat }),
+        ...(validated.senders === undefined ? {} : { senders: Object.freeze([...validated.senders]) as string[] }),
         after: validated.after,
         before: validated.before,
         limit: validated.limit,

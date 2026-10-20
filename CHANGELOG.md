@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`gatherProjectEvidence` reads what a person wrote.** A person given with `senders: [{ provider, id }]` (their
+  stored identities, at most 16; an email identity's id is its address) and a `reference` gets a lane of its own
+  (`kinds: ["sender"]`, `query: null`, `senders`): every message or mail one of those identities wrote in the window,
+  read only through a selected source of that identity's provider. `name` becomes optional for such a person. An
+  item found only that way has `context: "sender"`, ranked between `linked-chat` and `person-only`. The context reader
+  takes the same filter as `senders` (`coverage.matching: "sender"`). Requests without senders keep their
+  fingerprint, so their checkpoints still resume. See [project gathering](docs/dev/PROJECT-GATHERING.md).
+
 ## 0.377.0 — 20.10.2026
 
 ### Added
