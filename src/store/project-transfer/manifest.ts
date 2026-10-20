@@ -19,7 +19,7 @@ const canonical = (ref: string): string => {
   }
 }
 
-const graph = (manifest: ProjectAnnotations) => {
+export const validateProjectAnnotationsGraph = (manifest: ProjectAnnotations, additionalActors: string[] = []) => {
   const owned = new Set([manifest.project.ref])
   const external = new Set<string>()
   const used = new Set<string>()
@@ -52,6 +52,10 @@ const graph = (manifest: ProjectAnnotations) => {
   }
   if (manifest.project.organization !== null) kind(manifest.project.organization, ["organization"])
   dependency(manifest.project.organization)
+  for (const actor of additionalActors) {
+    kind(actor, ["person", "bot"])
+    dependency(actor)
+  }
   const aliases = new Set([manifest.project.name, manifest.project.key].map(normalizeVocabularyName))
   for (const alias of manifest.aliases) {
     const name = normalizeVocabularyName(alias)
@@ -102,7 +106,7 @@ export const decodeProjectAnnotations = (json: string): ProjectAnnotations => {
   const manifest = parsed.output
   if (manifest.aliases.length + manifest.facts.length + manifest.links.length + manifest.external.length > 1000)
     invalid("record budget")
-  graph(manifest)
+  validateProjectAnnotationsGraph(manifest)
   return manifest
 }
 
