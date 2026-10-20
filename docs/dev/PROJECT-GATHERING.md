@@ -83,8 +83,8 @@ the invocation.
 
 ## Units, coverage and resume
 
-A page holds the records that fit `maxPageBytes` together. A record larger than that is read alone, with
-up to 256 KiB of the remaining `maxReadBytes`. A record above 256 KiB is not read: `oversized` lists its `ref`,
+A page holds the records that fit `maxPageBytes` together. A record larger than that is read alone, once per run however many lanes
+match it, with up to 256 KiB of the remaining `maxReadBytes`. A record above 256 KiB is not read: `oversized` lists its `ref`,
 `bytes`, the lanes that matched it and its source, and the unit moves past it. Open it by reference instead.
 
 Every unit reports `state`: `pending`, `partial`, `done`, `unavailable`, `failed` or `read-limited` (the

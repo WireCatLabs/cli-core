@@ -383,6 +383,22 @@ it("reads documents too large to share a page one at a time and moves past one t
   expect(result.usage.readBytes).toBeLessThan(400000)
 })
 
+it("reads a large document once when several lanes match it", async () => {
+  const f = await fixture()
+  const { note } = await f.store.notes.saveFileNote({
+    folderId: f.folder.id,
+    path: "large.md",
+    title: "large",
+    text: `Harbour launch plan ${"x".repeat(95200)}`,
+  })
+  drainNoteIndex(f.db, stemmerCache())
+  const request = { ...f.request, sources: f.sources.filter((s) => s.kind === "document") }
+  const result = await gatherProjectEvidence({ evidence: f.port }, request)
+  expect(result.items.find((i) => i.ref === `document:${note.id}`)?.lanes).toEqual(["l1", "l2"])
+  expect(result.usage.readBytes).toBeGreaterThan(95200)
+  expect(result.usage.readBytes).toBeLessThan(2 * 95200)
+})
+
 it("reads a large document on resume when the read budget ran out before its own read", async () => {
   const f = await fixture()
   const { note } = await f.store.notes.saveFileNote({

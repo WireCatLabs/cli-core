@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Project gathering reads a large document once, not once per matching lane.** A record too large to share a
+  page is read alone; when another lane had already returned it, it was still read in full again before being
+  dropped, so a 95 KB document matched by five lanes charged about 476 KB. It is now skipped without reading.
+
 ## 0.368.0 — 20.10.2026
 
 ### Fixed
