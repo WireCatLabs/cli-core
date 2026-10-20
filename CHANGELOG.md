@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.370.0 — 20.10.2026
+
 ### Changed — may break callers
 
 - **`checkGuide` finds a scenario step a shell would change**, so a tool's guide test that passed may now fail. It
