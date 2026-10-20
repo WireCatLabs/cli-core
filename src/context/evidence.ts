@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 
+export const CONTEXT_MAX_READ_BYTES = 262144
 export const CONTEXT_SOURCE_KINDS = ["message", "mail", "document", "meeting"] as const
 export interface ContextSource {
   kind: (typeof CONTEXT_SOURCE_KINDS)[number]
@@ -35,6 +36,8 @@ export interface ContextEvidencePage {
   items: ContextEvidenceItem[]
   next: { at: number; id: number; scope: string } | null
   readBytes: number
+  /** The next record alone is larger than maxReadBytes: it was not read, and next moves past it. */
+  oversized?: { ref: string; bytes: number }
   coverage: {
     available: boolean
     index: "ready" | "pending" | "missing" | "unknown"
@@ -62,6 +65,18 @@ export const contextEvidenceFingerprint = (item: Pick<ContextEvidenceItem, "ref"
   createHash("sha256")
     .update(JSON.stringify(["context-evidence-v1", item.ref, item.title, item.text, item.revision]))
     .digest("hex")
+
+/** How many rows, in reading order, fit the allowance together; none when the first alone is larger. */
+export const fittingRows = (sizes: readonly number[], limit: number, maxReadBytes: number) => {
+  let count = 0,
+    bytes = 0
+  for (const size of sizes.slice(0, limit)) {
+    if (!(bytes + size <= maxReadBytes)) break
+    bytes += size
+    count++
+  }
+  return { count, bytes }
+}
 
 /** One stored message, email or document as the context reader returns it, by its reference. */
 export interface ContextRecordReader {
@@ -125,7 +140,7 @@ export const contextEvidenceRequest = (input: ContextEvidenceRequest) => {
   const words = query.match(/[\p{L}\p{N}]+/gu) ?? []
   if (!words.length || words.length > 16) throw new CliError("validation_error", "query needs 1–16 literal words")
   const limit = integer(input.limit ?? 10, "limit", 1, 20)
-  const maxReadBytes = integer(input.maxReadBytes ?? 65536, "maxReadBytes", 1, 262144)
+  const maxReadBytes = integer(input.maxReadBytes ?? 65536, "maxReadBytes", 1, CONTEXT_MAX_READ_BYTES)
   if (input.cursor !== undefined && (!input.cursor || typeof input.cursor !== "object"))
     throw new CliError("validation_error", "cursor needs at, id and scope")
   if (input.cursor) fields(input.cursor, ["at", "id", "scope"], "cursor.")

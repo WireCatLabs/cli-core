@@ -1,4 +1,3 @@
-import { CliError } from "@wirecat/cli-base"
 import { meetingPreparationAnswer } from "../src/cli/meeting-preparation-answer.js"
 import { createContextEvidenceReader } from "../src/services/context-evidence.js"
 import { createMeetingPreparationService } from "../src/services/meeting-preparation.js"
@@ -37,11 +36,11 @@ export const smokeContextEvidence = async (check: (name: string, passes: boolean
         `${provider} continues a bounded page`,
         (await reader.read({ ...f.request, cursor: first.next })).items[0]?.text === "Harbour launch 2",
       )
-      const refused = await reader.read({ ...f.request, maxReadBytes: 1 }).then(
-        () => false,
-        (error) => error instanceof CliError && error.details?.reason === "context.read-budget",
+      const skipped = await reader.read({ ...f.request, maxReadBytes: 1 })
+      check(
+        `${provider} moves past a record too large to read without hydrating it`,
+        skipped.items.length === 0 && skipped.readBytes === 0 && skipped.oversized?.ref === first.items[0]?.ref,
       )
-      check(`${provider} refuses oversized context before hydration`, refused)
       const selections = Object.entries(f.sources).map(([id, source]) => ({ id, source }))
       const preparation = createMeetingPreparationService(f.key, f.accountId, {
         meetings: f.store.meetings,

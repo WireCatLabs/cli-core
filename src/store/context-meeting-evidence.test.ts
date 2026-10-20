@@ -57,7 +57,7 @@ it.each(["example-calendar", "sample-calendar"])(
   },
 )
 
-it("preflights UTF-8 cue, title and lookahead bytes before hydration and performs no writes", async () => {
+it("measures UTF-8 cue and title bytes before hydration, moves past a cue too large to read and performs no writes", async () => {
   const f = await fixture()
   f.db.prepare("UPDATE meetings SET title=? WHERE account_id=?").run("Ж".repeat(100), f.accountId)
   f.db
@@ -66,17 +66,18 @@ it("preflights UTF-8 cue, title and lookahead bytes before hydration and perform
     )
     .run(" Ж".repeat(100), f.accountId)
   await f.store.meetings.indexSearch({ accountId: f.accountId, limit: 1000 })
-  const first = await f.reader.read(f.request)
+  const first = await f.reader.read({ ...f.request, limit: 1 })
   const spy = vi.spyOn(f.db, "prepare")
-  await expect(f.reader.read({ ...f.request, maxReadBytes: first.readBytes - 1 })).rejects.toMatchObject({
-    code: "validation_error",
-    details: { reason: "context.read-budget" },
+  expect(await f.reader.read({ ...f.request, limit: 1, maxReadBytes: first.readBytes - 1 })).toMatchObject({
+    items: [],
+    readBytes: 0,
+    oversized: { ref: first.items[0]?.ref, bytes: first.readBytes },
   })
   expect(spy.mock.calls.some(([sql]) => sql.startsWith("SELECT r.id,m.title"))).toBe(false)
   spy.mockRestore()
   f.db.exec("PRAGMA query_only=ON")
   const before = f.db.prepare("SELECT total_changes() AS n").get()
-  expect(await f.reader.read({ ...f.request, maxReadBytes: first.readBytes })).toMatchObject({
+  expect(await f.reader.read({ ...f.request, limit: 1, maxReadBytes: first.readBytes })).toMatchObject({
     readBytes: first.readBytes,
   })
   expect(f.db.prepare("SELECT total_changes() AS n").get()).toEqual(before)
@@ -147,11 +148,11 @@ it("rejects changed cursors before I/O and releases its snapshot after cancellat
   const controller = new AbortController()
   spy.mockImplementation((sql) => {
     const statement = prepare(sql)
-    if (!sql.startsWith("SELECT coalesce(sum(")) return statement
+    if (!sql.startsWith("SELECT id,at,ref")) return statement
     return {
       ...statement,
-      get: (...args) => {
-        const row = statement.get(...args)
+      all: (...args) => {
+        const row = statement.all(...args)
         controller.abort()
         return row
       },

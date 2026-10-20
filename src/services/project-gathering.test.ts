@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it, vi } from "vitest"
 import { type ContextEvidenceReader, type ContextSource, contextEvidenceFingerprint } from "../context/evidence.js"
+import { drainNoteIndex } from "../store/sqlite/note-index.js"
+import { stemmerCache } from "../store/sqlite/stems.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
 import { gatherProjectEvidence, type ProjectSourceFetcher } from "./project-gathering.js"
 import { storedMessageNeighbours, storedNeighbours } from "./project-gathering-around.js"
@@ -347,4 +349,61 @@ it("gives each item a fingerprint the store reproduces by reference until the te
   expect(await records.read("msg:telegram/9/9/9")).toBeNull()
   expect(await records.read("document:999999")).toBeNull()
   expect(await records.read("not a ref")).toBeNull()
+})
+
+it("reads documents too large to share a page one at a time and moves past one too large to read", async () => {
+  const f = await fixture()
+  const save = async (path: string, bytes: number) =>
+    (
+      await f.store.notes.saveFileNote({
+        folderId: f.folder.id,
+        path,
+        title: path,
+        text: `Harbour plan ${"x".repeat(bytes)}`,
+      })
+    ).note
+  const medium = [await save("a.md", 30000), await save("b.md", 30000), await save("c.md", 30000)]
+  const large = await save("large.md", 95200)
+  const huge = await save("huge.md", 300000)
+  drainNoteIndex(f.db, stemmerCache())
+  const request = {
+    ...f.request,
+    sources: f.sources.filter((s) => s.kind === "document"),
+    project: { name: "Harbour" },
+  }
+  const result = await gatherProjectEvidence({ evidence: f.port }, request)
+  const refs = result.items.map((i) => i.ref)
+  for (const note of [...medium, large]) expect(refs).toContain(`document:${note.id}`)
+  expect(refs).not.toContain(`document:${huge.id}`)
+  expect(result.oversized).toEqual([
+    { ref: `document:${huge.id}`, lanes: ["l1"], source: 0, bytes: expect.any(Number) },
+  ])
+  expect(result.oversized[0]?.bytes).toBeGreaterThan(262144)
+  expect(result).toMatchObject({ complete: true, checkpoint: null, stopped: null })
+  expect(result.usage.readBytes).toBeLessThan(400000)
+})
+
+it("reads a large document on resume when the read budget ran out before its own read", async () => {
+  const f = await fixture()
+  const { note } = await f.store.notes.saveFileNote({
+    folderId: f.folder.id,
+    path: "large.md",
+    title: "large",
+    text: `Harbour plan ${"x".repeat(95200)}`,
+  })
+  drainNoteIndex(f.db, stemmerCache())
+  const request = {
+    ...f.request,
+    sources: f.sources.filter((s) => s.kind === "document"),
+    project: { name: "Harbour" },
+    budgets: { maxReads: 1 },
+  }
+  const first = await gatherProjectEvidence({ evidence: f.port }, request)
+  expect(first).toMatchObject({ complete: false, items: [], oversized: [] })
+  expect(first.usage.readBytes).toBe(0)
+  const next = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...request, checkpoint: present(first.checkpoint), budgets: { maxReads: 2 } },
+  )
+  expect(next.items.map((i) => i.ref)).toContain(`document:${note.id}`)
 })

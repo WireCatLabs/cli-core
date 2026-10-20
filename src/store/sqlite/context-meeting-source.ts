@@ -1,5 +1,9 @@
-import { CliError } from "@wirecat/cli-base"
-import { type ContextEvidencePage, contextCursorScope, type contextEvidenceRequest } from "../../context/evidence.js"
+import {
+  type ContextEvidencePage,
+  contextCursorScope,
+  type contextEvidenceRequest,
+  fittingRows,
+} from "../../context/evidence.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { read } from "./transaction.js"
@@ -60,30 +64,44 @@ export const readMeetingContextEvidence = (database: CacheDatabase, request: Req
     ]
     if (cursor) params.push(cursor.at, cursor.at, cursor.id)
     params.push(limit + 1)
-    const probe = database
-      .prepare(`SELECT coalesce(sum(length(CAST(coalesce(title,'') AS BLOB))+
+    const sized = database
+      .prepare(`SELECT id,at,ref,length(CAST(coalesce(title,'') AS BLOB))+
         length(CAST(text AS BLOB))+length(CAST(provider AS BLOB))+
-        length(CAST(account AS BLOB))+length(CAST(ref AS BLOB))+length('meeting-start')),0) AS bytes FROM (${selection})`)
-      .get(...params)
-    const readBytes = Number(probe?.bytes)
-    if (!Number.isSafeInteger(readBytes) || readBytes < 0 || readBytes > maxReadBytes)
-      throw new CliError("validation_error", "meeting context evidence exceeds maxReadBytes before hydration", {
-        reason: "context.read-budget",
-      })
+        length(CAST(account AS BLOB))+length(CAST(ref AS BLOB))+length('meeting-start') AS bytes FROM (${selection})`)
+      .all(...params)
+    const past = (row: Record<string, unknown>) => ({
+      at: Number(row.at),
+      id: Number(row.id),
+      scope: contextCursorScope(request),
+    })
+    const fit = fittingRows(
+      sized.map((row) => Number(row.bytes)),
+      limit,
+      maxReadBytes,
+    )
+    const first = sized[0]
+    if (!fit.count && first) {
+      coverage.hasMore = sized.length > 1
+      return {
+        source,
+        items: [],
+        readBytes: 0,
+        coverage,
+        next: coverage.hasMore ? past(first) : null,
+        oversized: { ref: String(first.ref), bytes: Number(first.bytes) },
+      }
+    }
     signal?.throwIfAborted()
-    const rows = database.prepare(selection).all(...params)
+    params[params.length - 1] = fit.count
+    const selected = fit.count ? database.prepare(selection).all(...params) : []
     signal?.throwIfAborted()
-    coverage.hasMore = rows.length > limit
-    const selected = rows.slice(0, limit)
+    coverage.hasMore = sized.length > selected.length
     const last = selected.at(-1)
     return {
       source,
-      readBytes,
+      readBytes: fit.bytes,
       coverage,
-      next:
-        coverage.hasMore && last
-          ? { at: Number(last.at), id: Number(last.id), scope: contextCursorScope(request) }
-          : null,
+      next: coverage.hasMore && last ? past(last) : null,
       items: selected.map((row) => ({
         ref: String(row.ref),
         provider: String(row.provider),

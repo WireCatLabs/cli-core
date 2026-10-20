@@ -60,9 +60,11 @@ Each page returns at most 20 records (default 10), newest first by time and inte
 
 The read-text budget defaults to 64 KiB and is capped at 256 KiB. Before any record is hydrated,
 SQLite probes the UTF-8 sizes of its body, title, URL and locator metadata, including the one-row
-lookahead. An oversized page fails with `validation_error`, reason `context.read-budget`; it does
-not hydrate the records then truncate them. `readBytes` reports those bytes, including discarded
-lookahead. This is not a limit on serialized JSON, database scanning or SQL execution time.
+lookahead, one row at a time. The page holds the records that fit together, in order, and `next` continues
+after the last one; it never hydrates records and then truncates them. When the first record alone is
+larger than the budget, the page holds no records, names it in `oversized` (`ref` and its `bytes`) and `next`
+moves past it, so a caller can read it alone with a larger budget or report it. `readBytes` reports the
+hydrated records' bytes. This is not a limit on serialized JSON, database scanning or SQL execution time.
 The native raw port bounds one page; the factory additionally enforces the per-invocation ledger
 below. The later preparation assembler must enforce final output budgets and preserve source
 coverage separately.
