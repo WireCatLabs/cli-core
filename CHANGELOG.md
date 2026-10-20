@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.368.0 — 20.10.2026
+
 ### Fixed
 
 - **Reads of a left chat's kept history find it by any id; live operations refuse it by any id.** `store export`
