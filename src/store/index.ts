@@ -63,6 +63,11 @@ export {
   planProjectAnnotations,
 } from "./project-transfer/plan.js"
 export {
+  type ProjectAnnotationPreview,
+  type ProjectAnnotationPreviewOptions,
+  previewProjectAnnotationSnapshot,
+} from "./project-transfer/preview.js"
+export {
   decodeProjectAnnotationSnapshot,
   type ProjectAnnotationSnapshot,
   type ProjectAnnotationSnapshotOptions,
