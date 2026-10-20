@@ -5,10 +5,10 @@ import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
 
 export const metadataService = (deps: ServiceDeps) => {
-  const held = async (reference: string) => {
+  const held = async (reference: string, { includeLeft = false } = {}) => {
     const store = await deps.store()
     const account = await deps.account()
-    const chatId = await storedChatId(deps.messenger, reference, store, account)
+    const chatId = await storedChatId(deps.messenger, reference, store, account, { includeLeft })
     return { store, account, chatId }
   }
   const refresh = async (reference: string) => {
@@ -45,7 +45,7 @@ export const metadataService = (deps: ServiceDeps) => {
       return missing
     },
     get: async (reference: string) => {
-      const { store, account, chatId } = await held(reference)
+      const { store, account, chatId } = await held(reference, { includeLeft: true })
       return { chatId, metadata: (await store.chats.chatMetadata(account, chatId)) ?? null }
     },
     refresh,

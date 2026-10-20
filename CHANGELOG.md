@@ -28,8 +28,8 @@ shape of this file.
   so a resume no longer retries the same page and charges its budget each time. The context reader's page gains
   the same optional `oversized`. Meeting preparation reports such a record as `read-limited` and continues past it.
 - **Reads of a left chat's kept history find it by any id; live operations refuse it by any id.** `store export`
-  (also `--output-dir` with named chats), `store status`, `messages thread`, members, stats, events, tags, tasks,
-  conversations, embeddings, pictures, attachments and the other stored reads now find a chat the account left by its
+  (also `--output-dir` with named chats), `store status`, `messages thread`, a search's `--chat` and `chat:` in one
+  account, `metadata get`, members, stats, events, tags, tasks, conversations, embeddings, pictures and attachments now find a chat the account left by its
   name or id, the current one or one it was re-keyed from, as `chats show` and `messages list` already did. Before,
   a left chat named by a non-numeric id was refused. `chats track` and `store gaps plan` refuse a left chat with
   "you left chat <id>", also by a numeric id, which used to pass as typed. A numeric id the store does not hold still

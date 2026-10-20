@@ -165,7 +165,7 @@ export const chatAmong = async (
 ): Promise<{ account: AccountKey; chatId: Id }> => {
   const [only] = accounts
   if (accounts.length === 1 && only)
-    return { account: only, chatId: await storedChatId(messenger, reference, store, only) }
+    return { account: only, chatId: await storedChatId(messenger, reference, store, only, { includeLeft: true }) }
   const found = (
     await Promise.all(
       accounts.map(async (account) => {

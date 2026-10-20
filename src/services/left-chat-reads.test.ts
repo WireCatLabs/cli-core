@@ -68,6 +68,19 @@ describe("reads of a left chat's kept history by a numeric id", () => {
     expect((await messages.thread(typed, "1")).chat).toBe(kept)
   })
 
+  it.each([
+    [LEFT, LEFT],
+    [OLD, NEW],
+  ])("**%s finds the kept chat %s** in a search by --chat or chat:, and in metadata get", async (typed, kept) => {
+    const { messages, metadata } = await services()
+    const chatsOf = async (request: Parameters<typeof messages.search>[0]) =>
+      (await messages.search(request)).items.map(({ chatId }) => chatId)
+
+    expect(await chatsOf({ text: "kept", limit: 5, chat: typed })).toEqual([kept])
+    expect(await chatsOf({ text: `kept chat:"${typed}"`, limit: 5 })).toEqual([kept])
+    expect((await metadata.get(typed)).chatId).toBe(kept)
+  })
+
   it.each([LEFT, OLD])("**tracking members of %s is refused**: the account is no longer in it", async (typed) => {
     const { chats } = await services()
 
