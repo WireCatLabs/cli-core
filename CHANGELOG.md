@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.377.0 — 20.10.2026
+
 ### Added
 
 - **A document hit says how many other paragraphs match.** `ProjectEvidenceItem.moreMatches` (on a document item
