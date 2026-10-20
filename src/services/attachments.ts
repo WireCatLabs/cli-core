@@ -291,7 +291,7 @@ const messageOf = async (
     return { chatId: locator.chat, messageId: locator.message }
   }
   if (message === undefined) throw new CliError("validation_error", "which message? give its id after the chat")
-  return { chatId: await chatIdIn(deps.messenger, chat, store), messageId: message.trim() }
+  return { chatId: await chatIdIn(deps.messenger, chat, store, { includeLeft: true }), messageId: message.trim() }
 }
 
 export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
@@ -326,7 +326,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     deps.guard.check({ chatId: null, key: "attachments.extract" }, { reserve: false })
     const store = await accountStore(deps)
     const { account } = store
-    const chatId = chat === undefined ? undefined : await chatIdIn(deps.messenger, chat, store)
+    const chatId = chat === undefined ? undefined : await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
     const directory =
       fromDir === undefined
         ? undefined
@@ -522,7 +522,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     if (query)
       for (const node of walkQuery(query.root))
         if (node.field === "chat" && node.operator !== "wildcard" && !chats.has(node.value))
-          chats.set(node.value, await chatIdIn(deps.messenger, node.value, store))
+          chats.set(node.value, await chatIdIn(deps.messenger, node.value, store, { includeLeft: true }))
     const where = query ? queryFilter(query, attachmentColumns(chats), { command: "attachments list" }) : undefined
     const views = await store.attachments.attachments({ ...(where ? { where } : {}), offset, limit: limit + 1 })
     return { items: views.slice(0, limit).map((view) => itemOf(account, view)), has_more: views.length > limit }

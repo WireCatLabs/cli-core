@@ -173,7 +173,7 @@ other state, such as "archived". `null` would clear that too. Leave `membershipS
 whether the owner is in the chat. Your adapter's own `leave` and `join` need neither: after a `leave` that
 succeeds, cli-core marks the chat left, and after a `join` that gets in, it takes the left mark off (`rejoinChats`,
 so "archived" is kept). A chat marked left drops out of `chats list`; `chats show` and the stored reads of its
-messages still find it.
+messages still find it, and an operation that acts on the live chat, such as `chats track`, refuses it.
 
 ## One socket per linked device
 

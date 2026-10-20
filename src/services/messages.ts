@@ -441,7 +441,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         return readThreadContext(
           store,
           account,
-          await storedChatId(deps.messenger, target.chat, store, account),
+          await storedChatId(deps.messenger, target.chat, store, account, { includeLeft: true }),
           target.message,
           options,
         )

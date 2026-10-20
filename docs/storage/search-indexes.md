@@ -135,7 +135,7 @@ middle of words — and brings noise.
 `search_stemmers.latin` takes several stemmers, comma-separated; `english,spanish` is the default. Each gives its own stem sequence; distinct ones are stored apart
 by a separator token (`STEM_SEPARATOR`, `src/search/stem.ts`), and a query matches any of them as a
 phrase. A text with Latin words keeps about twice the stems (1.94× on a synthetic fixture). Notes have
-the same indexes since version 26: `note_words`, `note_stems` and `note_chunks` — see
+the same indexes since store version 1, the initial migration: `note_words`, `note_stems`, and chunks in `chunks` — see
 [ARCHITECTURE.md](../dev/ARCHITECTURE.md).
 
 ## Search by meaning

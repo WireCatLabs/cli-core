@@ -29,7 +29,7 @@ export interface ChatDocumentsService {
 export const chatDocumentsService = (deps: ServiceDeps): ChatDocumentsService => ({
   list: async (chat, { limit, offset }) => {
     const store = await accountStore(deps)
-    const chatId = await chatIdIn(deps.messenger, chat, store)
+    const chatId = await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
     const items = (await store.messages.documentLinkMessages(chatId)).flatMap((message) =>
       googleDocumentLinks(message.text).map(({ url, documentId }): ChatDocument => {
         const stored = documentId === null ? undefined : message.documents.find((one) => one.fileId === documentId)

@@ -109,7 +109,7 @@ export const BATCH_SIZE = { default: 50, min: 10, max: 200 }
 export const conversationsService = (deps: ServiceDeps): ConversationsService => {
   const found = async (chat: string) => {
     const store = await accountStore(deps)
-    return { store, chatId: await chatIdIn(deps.messenger, chat, store) }
+    return { store, chatId: await chatIdIn(deps.messenger, chat, store, { includeLeft: true }) }
   }
 
   const notBuilt = (chatId: Id) =>

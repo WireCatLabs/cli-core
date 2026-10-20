@@ -595,7 +595,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const passes = await context.withStore(
         async (store, account) => {
           const ids = []
-          for (const chat of chats) ids.push(await storedChatId(messenger, chat, store, account))
+          for (const chat of chats) ids.push(await storedChatId(messenger, chat, store, account, { includeLeft: true }))
           return applyTaskRulesToChats(store, account, ids, { ...(last === undefined ? {} : { last }), yes })
         },
         { name: "tasks scan" },

@@ -39,7 +39,7 @@ export const retentionService = (deps: ServiceDeps) => ({
     }
     const store = await deps.store(),
       account = await deps.account()
-    const chatId = await storedChatId(deps.messenger, chat, store, account)
+    const chatId = await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
     const result = await store.roster.retention(account, chatId, options)
     return {
       ...result,

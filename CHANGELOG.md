@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Reads of a left chat's kept history find it by any id; live operations refuse it by any id.** `store export`
+  (also `--output-dir` with named chats), `store status`, `messages thread`, a search's `--chat` and `chat:` in one
+  account, `metadata get`, members, stats, events, tags, tasks, conversations, embeddings, pictures and attachments
+  now find a chat the account left by its name or id, the current one or one it was re-keyed from, as `chats show`
+  and `messages list` already did. Before, a left chat named by a non-numeric id was refused. `chats track` and
+  `store gaps plan` refuse a left chat with "you left chat <id>", also by a numeric id, which used to pass as typed.
+  A numeric id the store does not hold still passes as typed.
+
 ## 0.367.0 — 20.10.2026
 
 ### Added

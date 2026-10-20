@@ -130,7 +130,7 @@ const targetOf = async (
     return { type: "message", chatId: locator.chat, messageId: locator.message }
   }
   if (chat === undefined) throw new CliError("validation_error", ONE_TARGET)
-  const chatId = await storedChatId(deps.messenger, chat, store, account)
+  const chatId = await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
   return message === undefined ? { type: "chat", chatId } : { type: "message", chatId, messageId: message.trim() }
 }
 

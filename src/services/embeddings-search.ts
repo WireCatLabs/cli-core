@@ -289,7 +289,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       const store = await deps.store()
       const account = await deps.account()
       const target = embeddingTarget(deps, choice)
-      const chatId = await storedChatId(deps.messenger, chat, store, account)
+      const chatId = await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       const [source] = await store.conversations.conversationsOfMessages(account, [{ chatId, messageId: message }])
       if (!source) {
         if (!(await store.conversations.conversationState(account, chatId))?.builtAt) throw notBuiltError(deps, chatId)
