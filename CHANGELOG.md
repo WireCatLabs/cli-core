@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.372.0 — 20.10.2026
+
 ### Added
 
 - **Setup wizard helpers from `./cli`**: `AGENTS`, `type Agent`, `screenFor(context, quiet, steps)` and
