@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`documentPassage` from `./services`** gives hosts the same bounded paragraph context that project gathering
+  uses, so a findings review can show the paragraphs around its cited document without copying that logic.
+
 ## 0.370.0 — 20.10.2026
 
 ### Changed — may break callers

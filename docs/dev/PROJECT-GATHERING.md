@@ -61,6 +61,12 @@ const result = await gatherProjectEvidence(
   one that names a lane word, in document order, as 200-character excerpts. The hit's own paragraph is included
   with `found: true`; every entry carries the document's reference.
 
+Hosts can reuse the pure `documentPassage(text, query, { before, after })` helper from `./services`
+when reviewing an already-read document. It returns the same 200-character paragraph excerpts and
+`found` marker without store, network or model access. The host retains reference/account binding,
+input-window validation, read limits and the decision to omit context in a brief view. A word match
+is a location hint, not evidence that the document supports a finding.
+
 ## Other names in the evidence
 
 `findEvidenceMentions(store.knowledge, result, { exclude: "project:<id>" })` reads the project, tag and topic
