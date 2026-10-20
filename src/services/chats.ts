@@ -134,7 +134,7 @@ const storedEvents = async (
   chat: string,
   since: number,
 ): Promise<ChatEvents> => {
-  const chatId = await chatIdIn(deps.messenger, chat, store)
+  const chatId = await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
   const found = await store.roster.chatEvents(chatId, {
     since: new Date(since).toISOString(),
     limit: STORED_EVENTS + 1,
@@ -222,7 +222,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
         return capability(connection, "members", "list a group's members")(chat, window)
     }
     const store = await accountStore(deps)
-    const chatId = await chatIdIn(deps.messenger, chat, store)
+    const chatId = await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
     const everyone = await store.roster.members(chatId)
     const end = window.limit === undefined ? everyone.length : window.offset + window.limit
     return { chatId, items: everyone.slice(window.offset, end), hasMore: everyone.length > end }
@@ -246,7 +246,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
 
   stats: async (chat, { since, by, timezone }) => {
     const store = await accountStore(deps)
-    const chatId = await chatIdIn(deps.messenger, chat, store)
+    const chatId = await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
     const [completeness] = await store.chats.chatCompleteness([chatId])
     if (!completeness) throw new CliError("not_found", `no stored chat ${chatId}`)
     const from = since ?? Date.now() - EVENTS_DAYS * 86_400_000
@@ -356,7 +356,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
 
   memberHistory: async (chat, { since }) => {
     const store = await accountStore(deps)
-    const chatId = await chatIdIn(deps.messenger, chat, store)
+    const chatId = await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
     const [stays, revisions] = await Promise.all([
       store.roster.memberStays(chatId),
       store.roster.profileRevisions(chatId),
@@ -366,7 +366,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
 
   trackedChat: async (chat) => {
     const store = await accountStore(deps)
-    const chatId = await chatIdIn(deps.messenger, chat, store)
+    const chatId = await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
     const entry = (await store.roster.trackedChats()).find((one) => one.chatId === chatId)
     const since = new Date(Date.now() - TRACKED_DAYS * 86_400_000).toISOString().slice(0, 10)
     return {

@@ -135,7 +135,8 @@ export const picturesService = (deps: ServiceDeps) => {
       if (!deps.pictures) throw new CliError("validation_error", PICTURES_OFF)
       const store = await deps.store()
       const account = await deps.account()
-      const chatId = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
+      const chatId =
+        chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       const use = await embedder()
       const result: PicturesEmbedded = { model: model.key, embedded: 0, skipped: 0, failed: 0, more: false }
       const pending: Parameters<typeof store.vectors.savePictures>[3] = []
@@ -227,7 +228,8 @@ export const picturesService = (deps: ServiceDeps) => {
       if (words === "") return {}
       const store = await deps.store()
       const account = await deps.account()
-      const chatId = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
+      const chatId =
+        chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       let vector: Float32Array
       try {
         const use = await embedder()

@@ -169,7 +169,9 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       const store = await deps.store()
       const account = await deps.account()
       if (!fetch) {
-        const ids = await Promise.all(chats.map((chat) => storedChatId(deps.messenger, chat, store, account)))
+        const ids = await Promise.all(
+          chats.map((chat) => storedChatId(deps.messenger, chat, store, account, { includeLeft: true })),
+        )
         return personMessages(store, account, person, {
           chats: ids,
           ...(limit ? { limit } : {}),

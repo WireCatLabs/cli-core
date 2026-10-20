@@ -36,28 +36,35 @@ export const readChatId = async (
 
 const LEFT_EMPTY = "you left this chat, and the store holds none of its messages"
 
-/** A chat as typed, found among the stored chats the way an adapter finds it among its own. */
-export const storedChatId = async (
+/**
+ * A chat as typed, found among the stored chats the way an adapter finds it among its own; `includeLeft` tries the
+ * left ones last, for a read of their kept history.
+ */
+export const storedChatId = (
   messenger: Saved,
   reference: string,
   store: MessageStore,
   account: AccountKey,
-): Promise<string> =>
-  chatIdAmong(messenger, reference, account, {
+  { includeLeft = false }: { includeLeft?: boolean } = {},
+): Promise<string> => {
+  const renamed = (id: Id) => store.chats.renamedChatId(account, id)
+  const among = chatIdAmong(messenger, reference, account, {
     held: () => store.chats.chats(account, {}),
-    renamed: (id) => store.chats.renamedChatId(account, id),
+    renamed,
     left: async (id) => leftIn(await store.chats.chats(account, byId(id))),
   })
-
-/** `storedChatId`, then among the chats the account left: their history is kept, so a read of it still finds them. */
-const keptChatId = (messenger: Saved, reference: string, store: MessageStore, account: AccountKey): Promise<string> =>
-  storedChatId(messenger, reference, store, account).catch((error: unknown) => {
+  if (!includeLeft) return among
+  return among.catch((error: unknown) => {
     if (codeOf(error) !== "not_found") throw error
     return chatIdAmong(messenger, reference, account, {
       held: () => store.chats.chats(account, { includeLeft: true }),
-      renamed: (id) => store.chats.renamedChatId(account, id),
+      renamed,
     })
   })
+}
+
+const keptChatId = (messenger: Saved, reference: string, store: MessageStore, account: AccountKey): Promise<string> =>
+  storedChatId(messenger, reference, store, account, { includeLeft: true })
 
 /** `storedChatId`, among the chats of the account the store is bound to; `includeLeft` tries the left ones last. */
 export const chatIdIn = (

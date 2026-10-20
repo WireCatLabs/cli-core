@@ -27,10 +27,13 @@ shape of this file.
   alone, up to 256 KiB. One larger still is listed in the new `oversized` result field by reference and skipped,
   so a resume no longer retries the same page and charges its budget each time. The context reader's page gains
   the same optional `oversized`. Meeting preparation reports such a record as `read-limited` and continues past it.
-- **A numeric chat id of a chat you left is refused where any other id is.** Store reads that skip left chats
-  (`members`, `stats`, `track`, tags, metadata, embeddings and the like) took a Telegram- or MAX-shaped id, or an old
-  id it was re-keyed from, as typed, even for a chat the account left; they now say "you left chat <id>". `chats show`
-  and the stored message reads still find it. A numeric id the store does not hold still passes as typed.
+- **Reads of a left chat's kept history find it by any id; live operations refuse it by any id.** `store export`
+  (also `--output-dir` with named chats), `store status`, `messages thread`, members, stats, events, tags, tasks,
+  conversations, embeddings, pictures, attachments and the other stored reads now find a chat the account left by its
+  name or id, the current one or one it was re-keyed from, as `chats show` and `messages list` already did. Before,
+  a left chat named by a non-numeric id was refused. `chats track` and `store gaps plan` refuse a left chat with
+  "you left chat <id>", also by a numeric id, which used to pass as typed. A numeric id the store does not hold still
+  passes as typed.
 
 ## 0.366.0 — 20.10.2026
 

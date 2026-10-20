@@ -343,7 +343,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
   const service = (store: MessageStore) => createTaskService({ store: store.tasks })
 
   const groupOf = async (store: MessageStore, account: AccountKey, chat: string | undefined) =>
-    chat === undefined ? undefined : storedChatId(deps.messenger, chat, store, account)
+    chat === undefined ? undefined : storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
 
   const refuseBare = (target: string): never => {
     throw new CliError(
@@ -404,7 +404,10 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         const groups = new Map<string, string>()
         for (const node of query ? walkQuery(query.root) : [])
           if (node.field === "chat" && node.operator !== "wildcard" && !groups.has(node.value))
-            groups.set(node.value, await storedChatId(deps.messenger, node.value, store, account))
+            groups.set(
+              node.value,
+              await storedChatId(deps.messenger, node.value, store, account, { includeLeft: true }),
+            )
         const where = query ? queryFilter(query, taskColumns(groups), { command: "tasks list" }) : undefined
         const rows = await store.tasks.query(taskAccount(account), where, { limit: limit + 1, offset })
         const shown = rows.slice(0, limit)
@@ -678,7 +681,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
               type: "chat",
               provider: account.provider,
               account: account.account,
-              chat: await storedChatId(deps.messenger, chat, store, account),
+              chat: await storedChatId(deps.messenger, chat, store, account, { includeLeft: true }),
             }),
           ),
         )

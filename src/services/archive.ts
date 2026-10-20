@@ -150,14 +150,15 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
   const found = async (chat: string) => {
     const store = await deps.store()
     const account = await deps.account()
-    return { store, account, chatId: await storedChatId(deps.messenger, chat, store, account) }
+    return { store, account, chatId: await storedChatId(deps.messenger, chat, store, account, { includeLeft: true }) }
   }
 
   return {
     status: async (chat) => {
       const store = await deps.store()
       const account = await deps.account()
-      const only = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
+      const only =
+        chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       const stats = await store.chats.chatStats(account, only)
       return Promise.all(stats.map(async (one) => ({ ...one, held: await store.sync.ranges(account, one.chatId) })))
     },
@@ -180,7 +181,9 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const store = await deps.store()
       const account = await deps.account()
       if (chats !== undefined && chats.length > 0) {
-        const named = await Promise.all(chats.map((chat) => storedChatId(deps.messenger, chat, store, account)))
+        const named = await Promise.all(
+          chats.map((chat) => storedChatId(deps.messenger, chat, store, account, { includeLeft: true })),
+        )
         const titles = new Map((await store.chats.chatStats(account)).map((one) => [one.chatId, one.title]))
         return { account, chats: [...new Set(named)].map((id) => ({ id, title: titles.get(id) ?? null })) }
       }

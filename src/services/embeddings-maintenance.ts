@@ -129,7 +129,7 @@ export const embeddingsMaintenance = (
   const found = async (chat: string) => {
     const store = await deps.store()
     const account = await deps.account()
-    const chatId = await storedChatId(deps.messenger, chat, store, account)
+    const chatId = await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
     if (!(await store.conversations.conversationState(account, chatId))?.builtAt) throw notBuiltError(deps, chatId)
     return { store, account, chatId }
   }
@@ -294,7 +294,8 @@ export const embeddingsMaintenance = (
       const store = await deps.store()
       const account = await deps.account()
       const target = embeddingTarget(deps, choice)
-      const chatId = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
+      const chatId =
+        chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       const chats = await readinessOf(deps, chatId, target.key)
       if (chatId !== undefined) return { model: target.id, chats }
       return { model: target.id, chats, unbuiltGroups: (await store.vectors.unbuiltGroups(account)).length }
@@ -317,7 +318,8 @@ export const embeddingsMaintenance = (
       const account = await deps.account()
       const target = embeddingTarget(deps, choice)
       if (embed && !build && !target.installed) throw notDownloaded(deps, target.id)
-      const chatId = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
+      const chatId =
+        chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       const scan = async () => ({
         chats: (await readinessOf(deps, chatId, target.key)).sort(byOldestBuild),
         unbuilt: chatId === undefined ? await store.vectors.unbuiltGroups(account) : [],
@@ -385,7 +387,7 @@ export const embeddingsMaintenance = (
     clear: async (chat, choice) => {
       const store = await deps.store()
       const account = await deps.account()
-      const chatId = await storedChatId(deps.messenger, chat, store, account)
+      const chatId = await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       const cleared = await store.vectors.clearVectors(
         account,
         chatId,
