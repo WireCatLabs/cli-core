@@ -21,7 +21,7 @@ Search messages by a mention:
 
 ```sh
 tg work search messages phone:"8 900 000-00-01"     # any spelling: +7…, 8…, with spaces or dashes
-tg work search messages email:"ana@example.com"     # quoted: @ is an operator in the query language
+tg work search messages email:ana@example.com       # the address, lower-cased
 tg work search messages domain:google.com           # docs.google.com, drive.google.com, google.com
 tg work search messages url:"https://example.com/a" # the link without utm_*, fbclid and the #part
 tg work search messages link:"/price"              # any link that contains this text

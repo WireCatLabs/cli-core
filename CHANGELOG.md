@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A WhatsApp chat id works unquoted in a query.** `chat:133…@lid` and `chat:120…@g.us` parse as one term; before,
+  `@lid` was refused with `query.unsupported-operator`. The fix is in cli-base 0.47.3, so cli-core now needs
+  `@wirecat/cli-base >=0.47.3`: a CLI pinned to 0.47.0–0.47.2 must raise its own cli-base pin with this release.
+  Emails in the `email` field help and the search docs are unquoted too.
+
 ## 0.374.0 — 20.10.2026
 
 ### Added
