@@ -304,27 +304,31 @@ command prints; the body is for the site's Examples page and the command does no
 title: Catch up after a day away
 goal: Know who waits on you and what you promised, without reading every chat.
 steps:
-  - run: tg review date>1d --unanswered 4h
+  - run: tg review 'date>1d' --unanswered 4h
     why: questions to you that nobody answered, across every chat
 look:
   - who asked first and how long ago
 ---
 ```
 
-A step is written as a person types it: the tool's name first, no profile, as in a written example. The tool
-mounts the command and names the directory, plus the cross-tool scenarios it lists by reference:
+A step is written as a person types it: the tool's name first, no profile, as in a written example, and pasted into
+a shell as is. A character a shell would act on — `>`, `<`, `|`, `&`, `;`, `` ` ``, `$(`, or a glob `*`, `?`, `[` —
+goes inside quotes: `'date>1d'`, not `date>1d`, which writes a file named `1d` and drops the filter. The tool mounts
+the command and names the directory, plus the cross-tool scenarios it lists by reference, taken from
+`MEMO_SCENARIOS` so every tool shows the same title:
 
 ```ts
 import { fileURLToPath } from "node:url"
-import { checkGuide, guideCommand } from "@wirecat/cli-core/cli"
+import { checkGuide, guideCommand, MEMO_SCENARIOS } from "@wirecat/cli-core/cli"
 
 guideCommand(app, {
   directory: fileURLToPath(new URL("../scenarios", import.meta.url)),
-  worksWith: [{ tool: "memo", name: "person-brief", title: "one person across every tool" }],
+  worksWith: [MEMO_SCENARIOS.personBrief],
 })
 
-// In the tool's tests: every file parses, every step's command path exists and its options and arguments parse,
-// on a program built fresh per step; no account, no network, no action runs. packageRoot checks `files` ships it.
+// In the tool's tests: every file parses, no step leaves a shell character unquoted, every step's command path
+// exists and its options and arguments parse, on a program built fresh per step; no account, no network, no action
+// runs. packageRoot checks `files` ships it.
 expect(await checkGuide(() => createProgram(definition), { packageRoot: process.cwd() })).toEqual([])
 ```
 

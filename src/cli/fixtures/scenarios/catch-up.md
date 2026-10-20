@@ -2,7 +2,7 @@
 title: Catch up after a day away
 goal: Know who waits on you and what you promised, without reading every chat.
 steps:
-  - run: chat review date>1d --unanswered 4h
+  - run: chat review 'date>1d' --unanswered 4h
     why: questions to you that nobody answered, across every chat
   - run: chat messages list "Book club" --limit 20
     why: the chat behind a question, read in full
