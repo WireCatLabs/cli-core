@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.374.0 — 20.10.2026
+
 ### Added
 
 - **`readBoundedUtf8File` from `./files`** preflights ordinary-file size, bounds reads even if the input grows,
