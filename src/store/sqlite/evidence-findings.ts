@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { contextEvidenceFingerprint } from "../../context/evidence.js"
-import { type FindingsInput, findingFingerprint, findingHash } from "../../meetings/index.js"
+import { type FindingEvidence, type FindingsInput, findingFingerprint, findingHash } from "../../meetings/index.js"
 import {
   EVIDENCE_FINDINGS_KIND,
   type EvidenceFindingsBatch,
@@ -15,7 +15,12 @@ import type { StoreContext } from "./open.js"
 import { type ProposedAction, proposalOperationsOver } from "./proposed-actions.js"
 import { write } from "./transaction.js"
 
-type StoredInput = FindingsInput & { inputHash: string; snapshotHash: string; agentModel: string | null }
+type StoredInput = FindingsInput & {
+  inputHash: string
+  snapshotHash: string
+  snapshotParts?: Record<string, string>
+  agentModel: string | null
+}
 const stale = (): never => {
   throw new CliError("validation_error", "evidence findings changed since they were read; stage a new batch", {
     reason: "evidence-findings.stale",
@@ -65,9 +70,9 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       receipt: proposal.result as EvidenceFindingsReceipt | null,
     }
   }
-  const snapshot = (input: FindingsInput): string => {
+  const cite = () => {
     let readBytes = 0
-    return core.snapshot(input, (evidence, _finding, _project, seen) => {
+    return (evidence: FindingEvidence, _finding: unknown, _project: unknown, seen: Map<string, unknown>) => {
       if (seen.has(evidence.reference)) {
         if (seen.get(evidence.reference) !== evidence.fingerprint) return stale()
         return
@@ -79,8 +84,9 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       const fingerprint = contextEvidenceFingerprint(record)
       if (fingerprint !== evidence.fingerprint) return stale()
       seen.set(evidence.reference, fingerprint)
-    })
+    }
   }
+  const snapshot = (input: FindingsInput) => core.snapshot(input, cite())
   const decider = (by: unknown) => {
     if (by === undefined || by === "owner") return { author: "owner" as const, decision: { by: "owner" as const } }
     const raw = by as { bot?: unknown; model?: unknown; reason?: unknown }
@@ -116,6 +122,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           return view(proposal)
         }
         const snapshotHash = snapshot(input)
+        const snapshotParts = core.snapshotParts(input, cite())
         const fingerprints = input.findings.map(findingFingerprint)
         if (new Set(fingerprints).size !== fingerprints.length) return invalid("the batch contains duplicate findings")
         return view(
@@ -123,7 +130,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
             kind: EVIDENCE_FINDINGS_KIND,
             by,
             target: [...projects][0] as string,
-            payload: { ...input, inputHash, snapshotHash, agentModel: by.model ?? null },
+            payload: { ...input, inputHash, snapshotHash, snapshotParts, agentModel: by.model ?? null },
           }),
         )
       })
@@ -172,8 +179,18 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           return batch
         }
         const input = proposal.payload as StoredInput
-        // Rejecting creates nothing, so a batch whose evidence changed can still be closed.
-        if (accepted.length && snapshot(batch.input) !== input.snapshotHash) return stale()
+        // Rejecting creates nothing, so a batch whose evidence changed can still be closed. Accepting needs only the
+        // accepted findings' own project, assignee and evidence unchanged; a batch staged before parts were kept needs all.
+        if (accepted.length) {
+          const parts = input.snapshotParts
+          if (!parts) {
+            if (snapshot(batch.input) !== input.snapshotHash) return stale()
+          } else {
+            const chosen = { ...batch.input, findings: batch.input.findings.filter((f) => accepted.includes(f.id)) }
+            const now = core.snapshotParts(chosen, cite())
+            if (Object.entries(now).some(([key, hash]) => parts[key] !== hash)) return stale()
+          }
+        }
         if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
         const agent = {

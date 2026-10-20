@@ -15,6 +15,11 @@ shape of this file.
 
 ### Fixed
 
+- **An evidence findings review accepts the findings whose own evidence is unchanged.** Before, one changed text
+  anywhere in a batch refused accepting any of it, so the agent had to stage the whole batch again. Now only the
+  accepted findings' project, assignee and cited texts are rechecked; the rest can be rejected in the same review.
+  Batches keep one hash per checked record for this; a batch staged earlier is still checked as a whole.
+
 - **Project gathering moves past large documents instead of stalling.** A page of evidence now holds the records
   that fit its byte budget together, rather than failing when they do not. A record larger than the page is read
   alone, up to 256 KiB. One larger still is listed in the new `oversized` result field by reference and skipped,

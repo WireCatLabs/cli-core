@@ -95,6 +95,28 @@ it("refuses evidence whose text changed or was never stored", async () => {
   )
 })
 
+it("accepts the findings whose own evidence is unchanged when another finding's text changed", async () => {
+  const f = await fixture()
+  const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
+  f.db.prepare("UPDATE documents SET body='Launch list moved' WHERE id=?").run(Number(f.doc.id))
+  await expect(
+    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["checklist"] }),
+  ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
+  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["launch"],
+  })
+  expect(reviewed.receipt?.items.map((item) => [item.id, item.status])).toEqual([
+    ["launch", "accepted"],
+    ["checklist", "rejected"],
+  ])
+  const renamed = await f.store.evidenceFindings.stage(await f.input("run-2"), agent)
+  f.db.prepare("UPDATE projects SET name='Renamed Example' WHERE id=?").run(Number(f.project.ref.slice(8)))
+  await expect(
+    f.store.evidenceFindings.review(renamed.id, { fingerprint: renamed.fingerprint, accept: ["launch"] }),
+  ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
+})
+
 it("lets the owner, or an agent with a reason, decide; later batches reuse the decisions", async () => {
   const f = await fixture()
   const batch = await f.store.evidenceFindings.stage(await f.input(), agent)

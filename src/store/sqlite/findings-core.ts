@@ -46,10 +46,10 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
   const facts = factOperationsOver(context)
   const tasks = workTaskOperationsOver(context)
 
-  const snapshot = (
+  const cited = (
     input: FindingsInput,
     cite: (evidence: FindingEvidence, finding: Finding, projectId: string, seen: Map<string, unknown>) => void,
-  ): string => {
+  ) => {
     const seen = new Map<string, unknown>()
     for (const finding of input.findings) {
       const project = requiredThing(database, finding.project, "the project")
@@ -70,8 +70,13 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
       }
       for (const evidence of finding.evidence) cite(evidence, finding, String(project.id), seen)
     }
-    return findingHash([...seen].sort(([a], [b]) => a.localeCompare(b)))
+    return seen
   }
+  const snapshot = (...args: Parameters<typeof cited>): string =>
+    findingHash([...cited(...args)].sort(([a], [b]) => a.localeCompare(b)))
+  /** The same snapshot, one hash per project, person and cited reference, so part of a batch can be checked alone. */
+  const snapshotParts = (...args: Parameters<typeof cited>): Record<string, string> =>
+    Object.fromEntries([...cited(...args)].map(([key, value]) => [key, findingHash(value)]))
 
   const previous = (account: number | null, fingerprint: string): FindingOutcome | undefined => {
     const row = database
@@ -131,5 +136,5 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
       }
     })
 
-  return { snapshot, previous, outcomes }
+  return { snapshot, snapshotParts, previous, outcomes }
 }
