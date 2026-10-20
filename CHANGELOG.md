@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.373.0 — 20.10.2026
+
 ### Added
 
 - **Read-only project annotation snapshots from `./store`** preserve project metadata, alias provenance
