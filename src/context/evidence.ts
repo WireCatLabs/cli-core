@@ -11,7 +11,10 @@ export interface ContextSource {
 }
 export interface ContextEvidenceRequest {
   source: ContextSource
-  query: string
+  /** Required unless `chat` is given; a chat read takes no query. */
+  query?: string
+  /** One stored chat or mail thread of the source's account, by its external id; refused for documents and meetings. */
+  chat?: string
   after: number
   before: number
   limit?: number
@@ -44,7 +47,7 @@ export interface ContextEvidencePage {
     hasMore: boolean
     hasUndated: boolean
     completeness: "unknown"
-    matching: "literal-words"
+    matching: "literal-words" | "chat"
     consistency: "snapshot-per-page"
   }
 }
@@ -83,7 +86,9 @@ export interface ContextRecordReader {
   read(ref: string): Promise<Pick<ContextEvidenceItem, "ref" | "title" | "text" | "revision"> | null>
 }
 
-export const contextCursorScope = (request: Pick<ContextEvidenceRequest, "source" | "query" | "after" | "before">) =>
+export const contextCursorScope = (
+  request: Pick<ContextEvidenceRequest, "source" | "query" | "chat" | "after" | "before">,
+) =>
   createHash("sha256")
     .update(
       JSON.stringify([
@@ -92,9 +97,11 @@ export const contextCursorScope = (request: Pick<ContextEvidenceRequest, "source
         request.source.accountId,
         request.source.provider,
         request.source.account,
-        request.query,
+        request.query ?? null,
         request.after,
         request.before,
+        // Only a chat read hashes its chat, so cursors issued before chat reads existed stay valid.
+        ...(request.chat === undefined ? [] : [request.chat]),
       ]),
     )
     .digest("hex")
@@ -124,7 +131,7 @@ export const contextSource = (value: ContextSource): ContextSource => {
 
 export const contextEvidenceRequest = (input: ContextEvidenceRequest) => {
   const source = contextSource(input?.source)
-  fields(input, ["source", "query", "after", "before", "limit", "maxReadBytes", "cursor", "signal"], "")
+  fields(input, ["source", "query", "chat", "after", "before", "limit", "maxReadBytes", "cursor", "signal"], "")
   const integer = (value: number, name: string, low: number, high: number) => {
     if (!Number.isSafeInteger(value) || value < low || value > high)
       throw new CliError("validation_error", `${name} must be a whole number from ${low} to ${high}`)
@@ -134,11 +141,20 @@ export const contextEvidenceRequest = (input: ContextEvidenceRequest) => {
   const before = integer(input.before, "before", after + 1, 8_640_000_000_000_000)
   if (before - after > 90 * 86400000)
     throw new CliError("validation_error", "context time window must not exceed 90 days")
+  const chat = input.chat
+  if (chat !== undefined) {
+    if (typeof chat !== "string" || !chat.trim() || Buffer.byteLength(chat) > 1024)
+      throw new CliError("validation_error", "chat needs 1–1024 UTF-8 bytes")
+    if (source.kind !== "message" && source.kind !== "mail")
+      throw new CliError("validation_error", "only a message or mail source reads one chat")
+    if (input.query !== undefined) throw new CliError("validation_error", "a chat read takes no query")
+  }
   const query = input.query
-  if (typeof query !== "string" || !query.trim() || Buffer.byteLength(query) > 2048)
+  if (chat === undefined && (typeof query !== "string" || !query.trim() || Buffer.byteLength(query) > 2048))
     throw new CliError("validation_error", "query needs 1–2048 UTF-8 bytes of literal words")
-  const words = query.match(/[\p{L}\p{N}]+/gu) ?? []
-  if (!words.length || words.length > 16) throw new CliError("validation_error", "query needs 1–16 literal words")
+  const words = query?.match(/[\p{L}\p{N}]+/gu) ?? []
+  if (chat === undefined && (!words.length || words.length > 16))
+    throw new CliError("validation_error", "query needs 1–16 literal words")
   const limit = integer(input.limit ?? 10, "limit", 1, 20)
   const maxReadBytes = integer(input.maxReadBytes ?? 65536, "maxReadBytes", 1, CONTEXT_MAX_READ_BYTES)
   if (input.cursor !== undefined && (!input.cursor || typeof input.cursor !== "object"))
@@ -152,7 +168,7 @@ export const contextEvidenceRequest = (input: ContextEvidenceRequest) => {
           id: integer(input.cursor.id, "cursor.id", 1, Number.MAX_SAFE_INTEGER),
           scope: input.cursor.scope,
         }
-  if (cursor && cursor.scope !== contextCursorScope({ source, query, after, before }))
-    throw new CliError("validation_error", "cursor belongs to another source, query or time window")
-  return { source, query, words, after, before, limit, maxReadBytes, cursor, signal: input.signal }
+  if (cursor && cursor.scope !== contextCursorScope({ source, query, chat, after, before }))
+    throw new CliError("validation_error", "cursor belongs to another source, query, chat or time window")
+  return { source, query, chat, words, after, before, limit, maxReadBytes, cursor, signal: input.signal }
 }

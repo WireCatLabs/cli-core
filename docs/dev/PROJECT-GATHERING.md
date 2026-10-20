@@ -18,6 +18,7 @@ const result = await gatherProjectEvidence(
     keywords: ["berth tender", "crane"],
     people: [{ name: "Alice Example", reference: "person:12" }],
     sources,
+    linkedChats: [{ provider: "telegram", account: "500", chat: "-1001" }],
     scope: "explicit",
     fetch: "before-read",
   },
@@ -31,9 +32,21 @@ const result = await gatherProjectEvidence(
 - **Lanes.** The project name, its key, each alias, each keyword and each person's name is one lane: 1–16 literal
   words, all of which must match. Lanes are alternatives (OR); the same query given twice is one lane with
   both kinds. At most 16 lanes.
+- **Linked chats.** `linkedChats` (at most 16) are the chats the host confirmed as the project's: a
+  `member-of` link from `chat:<provider>/<account>/<chat>` to the project, with `confirmed` set. Choosing
+  confirmed links is the host's job; Core checks only each entry's shape (`provider`, `account`, `chat`) and refuses
+  one chat given twice. Each chat is read whole, newest first, through the selected source of its own account (a
+  `mail` source for `provider: "email"`, a `message` source otherwise), even when the chat is hidden from search.
+  It is its own lane: `kinds: ["linked-chat"]`, `query: null`, `chat: <reference>`, numbered after the word lanes.
+  An item found only that way has `context: "linked-chat"`, a 300-character excerpt from the start and no
+  `around` (its neighbours are the lane's own items). A chat whose account is not in `sources` is never read and
+  never falls back to another account: the result's `linkedChats` lists every entry with `ref`, `source` and
+  `lane` (both null when unread) and `state`: `in-scope`, `out-of-scope` (its account is outside `sources`) or
+  `unavailable` (the chat is not stored).
 - **People.** A person's lane finds what mentions the name. A name is not an identity, and a person's other
   conversations are not project membership: an item found only through person lanes has
-  `context: "person-only"`.
+  `context: "person-only"`. A reference several lanes find keeps the strongest context: `project`, then
+  `linked-chat`, then `person-only`.
 - **Window.** `lookbackDays` (default 60, at most 730) before `asOf` (default now), or an explicit
   half-open `after`/`before`; `before` left out is `asOf`, frozen with the run. Windows longer than 90 days are read in 90-day chunks, newest first. Each
   item keeps its `timeKind`: an imported document's `stored-update` time is when it was stored, not when
@@ -84,7 +97,10 @@ to 512, so one round always finishes), `maxReadBytes` (2 MiB), `maxPageBytes` (6
 authorization and response validation are the context reader's own.
 
 Reads go in rounds: the first page of every lane × source × chunk unit before any second page. A cut budget
-therefore leaves no lane or person unread while another went deep. `stopped` names the budget that ended
+therefore leaves no lane or person unread while another went deep. A linked chat has one unit per chunk, on its
+own account's source, with the same 20-record page and `maxPageBytes`; its units come after every word lane's in
+each round, so a word lane labels a shared hit first, and a busy chat stops on `maxItems` or `maxReads` and
+continues from the checkpoint. `stopped` names the budget that ended
 the invocation.
 
 ## Units, coverage and resume
@@ -102,7 +118,10 @@ While any unit can still be read, `checkpoint` is an opaque string. Pass it back
 continue. It holds the frozen window, per-unit cursors, fetch states, hashes of the references already
 returned and cumulative `totals` — no text. A resumed run keeps its window even when `asOf` was "now".
 The same `runKey` (default: the request's fingerprint) with a changed project, lanes, people, sources,
-scope, window or fetch mode is refused. Budgets may change between invocations.
+scope, window or fetch mode is refused. A changed set of linked chats is refused first, with "the project's
+linked chats changed; start again without --cursor". Budgets may change between invocations. A run without
+linked chats keeps the fingerprint and checkpoint it had before linked chats existed, so those checkpoints still
+resume.
 
 `items` holds only references new to the run, with a 300-character excerpt and the lanes that found them;
 a reference returned earlier and found by another lane later appears in `matchedAgain`.

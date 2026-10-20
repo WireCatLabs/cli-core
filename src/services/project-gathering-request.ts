@@ -2,12 +2,15 @@ import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import { type ContextSource, contextSource } from "../context/evidence.js"
 import { contextSourceKey } from "../context/evidence-response.js"
+import { formatReference } from "../domain/references.js"
 
 export interface ProjectGatheringRequest {
   project: { name: string; key?: string; background?: string; aliases?: string[] }
   keywords?: string[]
   people?: { name: string; reference?: string }[]
   sources: ContextSource[]
+  /** Chats the host confirmed as the project's; each is read whole, through the source of its own account. */
+  linkedChats?: ProjectLinkedChat[]
   scope: "explicit" | "all-connected"
   lookbackDays?: number
   after?: number
@@ -21,6 +24,11 @@ export interface ProjectGatheringRequest {
   checkpoint?: string
   signal?: AbortSignal
 }
+export interface ProjectLinkedChat {
+  provider: string
+  account: string
+  chat: string
+}
 export interface ProjectGatheringBudgets {
   maxReads?: number
   maxReadBytes?: number
@@ -28,12 +36,15 @@ export interface ProjectGatheringBudgets {
   maxElapsedMs?: number
   maxItems?: number
 }
-export type ProjectLaneKind = "project" | "key" | "alias" | "keyword" | "person"
+export type ProjectLaneKind = "project" | "key" | "alias" | "keyword" | "person" | "linked-chat"
 export interface ProjectLane {
   id: string
   kinds: ProjectLaneKind[]
-  query: string
+  /** Null for a linked chat's lane, which reads every message of the chat. */
+  query: string | null
   people: string[]
+  /** A linked chat's lane only: the chat's reference. */
+  chat?: string
 }
 export type ProjectUnitState = "pending" | "partial" | "done" | "unavailable" | "failed" | "read-limited"
 export interface ProjectUnitProgress {
@@ -52,6 +63,8 @@ export interface ProjectGatheringCheckpoint {
   asOf: number
   fetched: { state: ProjectFetchState; history: "complete" | "partial" | "unknown" | null; code: string | null }[]
   units: ProjectUnitProgress[]
+  /** Present only when the run reads linked chats: a hash of their references. */
+  linkedChats?: string
   seen: string[]
   totals: { reads: number; readBytes: number; items: number; invocations: number }
 }
@@ -59,7 +72,7 @@ export interface ProjectGatheringCheckpoint {
 const DAY = 86400000
 const MAX_TIME = 8_640_000_000_000_000
 export const CONTEXT_CHUNK_DAYS = 90
-const LIMITS = { lanes: 16, sources: 32, units: 512, lookbackDays: 730, people: 16 } as const
+const LIMITS = { lanes: 16, sources: 32, units: 512, lookbackDays: 730, people: 16, linkedChats: 16 } as const
 const BUDGETS = {
   maxReads: [48, 512],
   maxReadBytes: [2097152, 16777216],
@@ -104,6 +117,7 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
       "keywords",
       "people",
       "sources",
+      "linkedChats",
       "scope",
       "lookbackDays",
       "after",
@@ -147,11 +161,33 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
     fail("sources needs at least one resolved source; omitted scope never means every account", "sources")
   const sources = sourceList.map((s) => contextSource(s as ContextSource))
   if (new Set(sources.map(contextSourceKey)).size !== sources.length) fail("sources lists one source twice", "sources")
+  const linkedChats = list(input.linkedChats, "linkedChats", LIMITS.linkedChats).map((value, i) => {
+    const name = `linkedChats.${i}`
+    if (!value || typeof value !== "object") return fail(`${name} needs provider, account and chat`, name)
+    known(value, ["provider", "account", "chat"], `${name}.`)
+    const given = value as Record<string, unknown>
+    const provider = text(given.provider, `${name}.provider`, 128)
+    const account = text(given.account, `${name}.account`, 1024)
+    const chat = text(given.chat, `${name}.chat`, 1024)
+    const kind = provider === "email" ? "mail" : "message"
+    // The chat's own account must be a selected source; any other account would widen the owner's scope.
+    const source = sources.findIndex((s) => s.kind === kind && s.provider === provider && s.account === account)
+    return {
+      provider,
+      account,
+      chat,
+      ref: formatReference({ type: "chat", provider, account, chat }),
+      source: source < 0 ? null : source,
+      lane: null as string | null,
+    }
+  })
+  if (new Set(linkedChats.map((c) => c.ref)).size !== linkedChats.length)
+    fail("linkedChats lists one chat twice", "linkedChats")
 
   const lanes: ProjectLane[] = []
   const lane = (kind: ProjectLaneKind, query: string, person?: string) => {
     const key = query.toLowerCase()
-    const found = lanes.find((l) => l.query.toLowerCase() === key) ?? {
+    const found = lanes.find((l) => l.query?.toLowerCase() === key) ?? {
       id: `l${lanes.length + 1}`,
       kinds: [],
       query,
@@ -167,6 +203,11 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
   for (const k of keywords) lane("keyword", k)
   for (const p of people) lane("person", p.name, p.reference ?? p.name)
   if (lanes.length > LIMITS.lanes) fail(`at most ${LIMITS.lanes} distinct search lanes`, "keywords")
+  for (const linked of linkedChats) {
+    if (linked.source === null) continue
+    linked.lane = `l${lanes.length + 1}`
+    lanes.push({ id: linked.lane, kinds: ["linked-chat"], query: null, people: [], chat: linked.ref })
+  }
 
   const fetch = input.fetch ?? "none"
   const index = input.index ?? "update"
@@ -222,6 +263,11 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
       ]),
     )
     .digest("hex")
+  const linkedKey = linkedChats.length
+    ? createHash("sha256")
+        .update(JSON.stringify(linkedChats.map((c) => c.ref)))
+        .digest("hex")
+    : undefined
   const runKey = input.runKey === undefined ? fingerprint : text(input.runKey, "runKey", 256)
   if (input.checkpoint !== undefined && typeof input.checkpoint !== "string")
     fail("checkpoint must be text", "checkpoint")
@@ -231,6 +277,8 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
     people,
     lanes,
     sources,
+    linkedChats,
+    linkedKey,
     scope: input.scope,
     lookbackDays,
     window,
@@ -255,9 +303,31 @@ export const contextChunks = (after: number, before: number) => {
 }
 
 export const projectUnits = (plan: ProjectGatheringPlan, window: { after: number; before: number }) => {
-  const units = contextChunks(window.after, window.before).flatMap((chunk) =>
-    plan.lanes.flatMap((lane) => plan.sources.map((source, sourceIndex) => ({ lane, source, sourceIndex, chunk }))),
+  const chunks = contextChunks(window.after, window.before)
+  const literal = chunks.flatMap((chunk) =>
+    plan.lanes
+      .filter((lane) => lane.query !== null)
+      .flatMap((lane) =>
+        plan.sources.map((source, sourceIndex) => ({
+          lane,
+          source,
+          sourceIndex,
+          chunk,
+          chat: undefined as string | undefined,
+        })),
+      ),
   )
+  // Appended after every literal unit: a checkpoint from a run without links keeps its unit order, and in each
+  // round a literal lane labels a shared hit before the linked chat does.
+  const linked = chunks.flatMap((chunk) =>
+    plan.linkedChats.flatMap(({ lane, source, chat }) => {
+      const found = plan.lanes.find((l) => l.id === lane)
+      return found && source !== null
+        ? [{ lane: found, source: plan.sources[source] as ContextSource, sourceIndex: source, chunk, chat }]
+        : []
+    }),
+  )
+  const units = [...literal, ...linked]
   if (units.length > LIMITS.units)
     fail(`${units.length} lane × source × 90-day reads exceed ${LIMITS.units}; narrow the lanes, sources or window`)
   return units
@@ -287,6 +357,8 @@ export const decodeCheckpoint = (text: string, plan: ProjectGatheringPlan): Proj
     value.before <= value.after
   )
     fail("invalid project gathering checkpoint", "checkpoint")
+  if ((value.linkedChats ?? null) !== (plan.linkedKey ?? null))
+    fail("the project's linked chats changed; start again without --cursor", "checkpoint")
   if (value.runKey !== plan.runKey) fail("checkpoint belongs to another run key", "checkpoint")
   if (value.fingerprint !== plan.fingerprint)
     fail(

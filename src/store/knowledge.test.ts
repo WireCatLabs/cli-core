@@ -168,6 +168,33 @@ describe("cross-source knowledge metadata", () => {
     expect(await f.store.knowledge.relations(key)).toEqual([])
   })
 
+  it("relates a chat, named with its account, to a project only as its member", async () => {
+    const f = await fixture()
+    const project = await f.store.knowledge.addProject({ name: "Harbour" })
+    const chat = "chat:telegram/500/7"
+    const link = await f.store.knowledge.relate(null, {
+      from: chat,
+      to: project.ref,
+      kind: "member-of",
+      confirmed: false,
+    })
+    expect(link).toMatchObject({ from: chat, to: project.ref, kind: "member-of", confirmed: false })
+    expect(await f.store.knowledge.confirmRelation(null, link.id)).toMatchObject({ confirmed: true })
+    expect(await f.store.knowledge.relations(null, project.ref)).toEqual([expect.objectContaining({ from: chat })])
+    expect(await f.store.notes.links({ to: project.ref })).toEqual([
+      expect.objectContaining({ from: chat, kind: "member-of", confirmed: true }),
+    ])
+    const organization = await f.store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
+    for (const [key, input, code] of [
+      [null, { from: chat, to: project.ref, kind: "related-to" }, "validation_error"],
+      [null, { from: chat, to: organization.ref, kind: "member-of" }, "validation_error"],
+      [null, { from: project.ref, to: chat, kind: "member-of" }, "not_found"],
+      [other, { from: chat, to: project.ref, kind: "member-of" }, "validation_error"],
+      [null, { from: "chat:telegram/500/404", to: project.ref, kind: "member-of" }, "not_found"],
+    ] as const)
+      await expect(f.store.knowledge.relate(key, input)).rejects.toMatchObject({ code })
+  })
+
   it("leases due reminders, rejects stale receipts, survives restart and cancels closed tasks", async () => {
     const f = await fixture()
     const due = "2026-10-08T09:00:00Z"

@@ -36,7 +36,8 @@ export const createContextEvidenceReader = (
       const reservation = budget.reserve(validated.maxReadBytes)
       const request = Object.freeze({
         source: Object.freeze({ ...source }),
-        query: validated.query,
+        ...(validated.query === undefined ? {} : { query: validated.query }),
+        ...(validated.chat === undefined ? {} : { chat: validated.chat }),
         after: validated.after,
         before: validated.before,
         limit: validated.limit,

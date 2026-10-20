@@ -21,6 +21,7 @@ export {
   type ModelDownloadOptions,
 } from "./model-downloads.js"
 export type {
+  ProjectEvidenceContext,
   ProjectEvidenceItem,
   ProjectGathering,
   ProjectGatheringPorts,
@@ -39,6 +40,7 @@ export type {
   ProjectGatheringRequest,
   ProjectLane,
   ProjectLaneKind,
+  ProjectLinkedChat,
   ProjectUnitState,
 } from "./project-gathering-request.js"
 

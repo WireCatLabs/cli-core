@@ -7,6 +7,35 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`gatherProjectEvidence` reads a project's linked chats.** `linkedChats: [{ provider, account, chat }]` (at
+  most 16, the host's confirmed `member-of` links) become lanes of their own (`kinds: ["linked-chat"]`,
+  `query: null`, `chat: <reference>`), read whole through the selected source of the chat's own account. Items
+  found only that way have `context: "linked-chat"` and no `around`; a reference a word lane also finds keeps
+  `context: "project"`. The result's `linkedChats` gives each entry's `ref`, `source`, `lane` and `state`
+  (`in-scope`, `out-of-scope` when its account is not in `sources`, never read; `unavailable` when not stored).
+  Checkpoints stay version 1; a run without linked chats keeps its fingerprint, and a changed link set is refused
+  with "start again without --cursor". See [project gathering](docs/dev/PROJECT-GATHERING.md).
+- **The context reader reads one chat.** `chat` (a chat or mail thread external id) in place of `query` returns
+  that chat's records newest first, including a chat hidden from search, with `coverage.matching: "chat"`.
+  Refused on document and meeting sources and together with `query`. Old cursors stay valid.
+- **`knowledge.relate` links a chat to a project.** A `chat:<provider>/<account>/<chat>` reference may be the
+  `from` of a `member-of` relationship to a `project:`, and `confirmRelation` confirms it. The reference carries
+  its account; a scope key of another account is refused. A chat is related to nothing else.
+
+### Changed — may break callers
+
+- **`ProjectLane.query` is `string | null`** (null for a linked chat's lane), and `ProjectEvidenceItem.context`
+  adds `"linked-chat"`. `ContextEvidenceRequest.query` is optional and `coverage.matching` adds `"chat"`.
+- **`store.contextRecords.read` resolves a message of a chat hidden from search**, since its reference names
+  the chat, so evidence from a linked hidden chat can be staged and its fingerprint rechecked.
+
+### Fixed
+
+- **A resumed project gathering read nothing when every open unit already had a page** (for example a lane
+  stopped after its first page): it now starts at the shallowest open unit's round.
+
 ## 0.375.0 — 20.10.2026
 
 ### Fixed

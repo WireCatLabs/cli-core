@@ -392,11 +392,21 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     if (!row) throw new CliError("not_found", "no relationship with that id")
     return row
   }
-  const related = (key: KnowledgeScope, reference: string): Thing => {
+  /** A chat may only be the member: its reference names its own account, so it is never another account's. */
+  const related = (key: KnowledgeScope, reference: string, member = false): Thing => {
     checked(key)
     const thing = thingOf(database, reference)
-    if (!thing || !RELATED.includes(thing.type) || stateOfThing(database, thing) !== "available")
-      throw new CliError("not_found", "reference needs a stored person:, organization:, project: or task:")
+    const chat = member && (thing?.type === "chat" || thing?.type === "email_thread")
+    if (!thing || !(RELATED.includes(thing.type) || chat) || stateOfThing(database, thing) !== "available")
+      throw new CliError(
+        "not_found",
+        `reference needs a stored person:, organization:, project:${member ? ", task: or chat:" : " or task:"}`,
+      )
+    if (chat && key !== null) {
+      const parsed = parseReference(reference) as { provider: string; account: string }
+      if (parsed.provider !== key.provider || parsed.account !== key.account)
+        throw new CliError("validation_error", "the chat belongs to another account")
+    }
     return thing
   }
 
@@ -703,10 +713,15 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         .all()
         .map(projectOf),
     relate: async (key, input) => {
-      const from = related(key, input.from)
+      const from = related(key, input.from, true)
       const to = related(key, input.to)
       if ((from.type === to.type && from.id === to.id) || !RELATION_KINDS.includes(input.kind))
         throw new CliError("validation_error", "a relationship needs distinct references and a supported kind")
+      if (
+        (from.type === "chat" || from.type === "email_thread") &&
+        (input.kind !== "member-of" || to.type !== "project")
+      )
+        throw new CliError("validation_error", "a chat is related only as member-of a project")
       const existing = database
         .prepare(`${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=?`)
         .get(from.type, from.id, to.type, to.id, input.kind)
@@ -748,7 +763,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       checked(key)
       const row = relation(id)
       const link = linkOf(database, row)
-      related(key, link.from)
+      related(key, link.from, true)
       related(key, String(link.to))
       database
         .prepare("UPDATE links SET confirmed=1, source='owner', author='owner', updated_at=? WHERE id=?")

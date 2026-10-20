@@ -48,14 +48,23 @@ export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   text: string
   textTruncated: boolean
   lanes: string[]
-  context: "project" | "person-only"
+  context: ProjectEvidenceContext
   fingerprint: string
   around?: ProjectNeighbour[] | null
   aroundIssue?: string | null
 }
+/** Strongest first: a hit that names the project, then one only from a linked chat, then one naming only a person. */
+export type ProjectEvidenceContext = "project" | "linked-chat" | "person-only"
 export type ProjectGatheringStop = "reads" | "read-bytes" | "elapsed" | "items" | null
 
 const terminal = new Set(["done", "unavailable", "failed"])
+const CONTEXTS: ProjectEvidenceContext[] = ["person-only", "linked-chat", "project"]
+const contextOf = (lane: ProjectLane): ProjectEvidenceContext =>
+  lane.kinds.includes("linked-chat")
+    ? "linked-chat"
+    : lane.kinds.every((k) => k === "person")
+      ? "person-only"
+      : "project"
 
 export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, request: ProjectGatheringRequest) => {
   if (!ports?.evidence || typeof ports.evidence.read !== "function")
@@ -133,7 +142,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     const known = byRef.get(ref)
     if (known) {
       if (!known.lanes.includes(lane.id)) known.lanes.push(lane.id)
-      if (!lane.kinds.every((k) => k === "person")) known.context = "project"
+      const context = contextOf(lane)
+      if (CONTEXTS.indexOf(context) > CONTEXTS.indexOf(known.context)) known.context = context
       return true
     }
     if (!seen.has(seenKey(ref))) return false
@@ -144,7 +154,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   const take = (item: ContextEvidenceItem, lane: ProjectLane, kind: ContextSource["kind"], source: number) => {
     if (again(item.ref, lane)) return
     seen.add(seenKey(item.ref))
-    const short = excerpt(item.text, lane.query, 300, { literal: true })
+    const short = excerpt(item.text, lane.query ?? "", 300, { literal: true })
     const fingerprint = contextEvidenceFingerprint(item)
     const entry: ProjectEvidenceItem = {
       ...item,
@@ -154,9 +164,9 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       textTruncated: short !== item.text.replace(/\s+/g, " ").trim(),
       fingerprint,
       lanes: [lane.id],
-      context: lane.kinds.every((k) => k === "person") ? "person-only" : "project",
+      context: contextOf(lane),
     }
-    if (kind === "document" && plan.around.before + plan.around.after) {
+    if (kind === "document" && lane.query !== null && plan.around.before + plan.around.after) {
       entry.around = []
       for (const part of documentPassage(item.text, lane.query, plan.around)) {
         const bytes = Buffer.byteLength(part.text)
@@ -173,7 +183,9 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     usage.items++
   }
 
-  for (let round = 0; !stopped; round++) {
+  // A resumed run starts at its shallowest open unit: below it no unit is due, and an empty round would end the run.
+  const shallowest = progress.reduce((low, u) => (open(u) ? Math.min(low, u.pages) : low), Number.POSITIVE_INFINITY)
+  for (let round = shallowest; !stopped; round++) {
     const due = progress.flatMap((u, index) => (open(u) && u.pages <= round ? [index] : []))
     if (!due.length) break
     for (const index of due) {
@@ -201,7 +213,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
         try {
           const page = await reader.read({
             source: unit.source,
-            query: unit.lane.query,
+            ...(unit.chat === undefined ? { query: unit.lane.query ?? undefined } : { chat: unit.chat }),
             after: unit.chunk.after,
             before: unit.chunk.before,
             limit,
@@ -256,7 +268,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   }
 
   await attachNeighbours(
-    items,
+    // A linked chat's neighbours are already its own lane's evidence.
+    items.filter((item) => item.context !== "linked-chat"),
     ports.neighbours,
     plan.around,
     {
@@ -285,6 +298,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     asOf: window.asOf,
     fetched,
     units: progress.map((u) => (u.state === "read-limited" ? { ...u, state: "partial" } : u)),
+    ...(plan.linkedKey === undefined ? {} : { linkedChats: plan.linkedKey }),
     seen: [...seen],
     totals,
   }
@@ -304,6 +318,20 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     },
     scope: { origin: plan.scope, sources: plan.sources },
     lanes: plan.lanes,
+    linkedChats: plan.linkedChats.map(({ provider, account, chat, ref, source, lane }) => ({
+      provider,
+      account,
+      chat,
+      ref,
+      source,
+      lane,
+      state:
+        source === null
+          ? ("out-of-scope" as const)
+          : units.every((unit, index) => unit.lane.id !== lane || progress[index]?.state === "unavailable")
+            ? ("unavailable" as const)
+            : ("in-scope" as const),
+    })),
     fetch: fetched.map((f, index) => ({ source: index, ...f })),
     index: indexed,
     units: units.map((unit, index) => ({
