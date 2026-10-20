@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`checkGuide` finds a scenario step a shell would change**, so a tool's guide test that passed may now fail. It
+  splits each step as a POSIX shell does and reports `>`, `<`, `|`, `&`, `;`, `` ` ``, `$(` and the globs `*`, `?`,
+  `[` left outside quotes (`` ` `` and `$(` also inside double quotes), and a quote never closed. `max review
+  date>1d` passed before, though a shell writes a file named `1d` and drops the filter. Quote the word:
+  `'date>1d'`. `shellProblems(run)` gives the same check for one step.
+
+### Added
+
+- **`MEMO_SCENARIOS` holds the titles of memo's cross-tool scenarios** (`personBrief`, `decisionTrail`), so every
+  tool's "Works with" list takes them from one place instead of typing its own copy.
+
 ## 0.369.0 — 20.10.2026
 
 ### Fixed

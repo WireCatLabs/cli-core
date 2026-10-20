@@ -30,6 +30,12 @@ export interface GuideReference {
   title: string
 }
 
+/** memo's cross-tool scenarios: the one source of the titles every tool lists, and memo's files must carry. */
+export const MEMO_SCENARIOS = {
+  personBrief: { tool: "memo", name: "person-brief", title: "One person across every tool" },
+  decisionTrail: { tool: "memo", name: "decision-trail", title: "What did we decide about X, across every source" },
+} as const satisfies Record<string, GuideReference>
+
 export interface GuideOptions {
   /** Absolute path of the tool's scenario files: `fileURLToPath(new URL("../scenarios", import.meta.url))`. */
   directory: string
@@ -195,25 +201,69 @@ export const guideCommand = (app: Pick<AppIdentity, "command">, options: GuideOp
   return command
 }
 
-/** A step's words, split as a shell would on spaces, with "…" and '…' kept together. */
-const words = (line: string): string[] => {
+const OPERATORS: Record<string, string> = {
+  ">": "redirects output to a file",
+  "<": "reads input from a file",
+  "|": "pipes into another command",
+  "&": "runs the command in the background",
+  ";": "ends the command there",
+  "`": "runs it as a command",
+  "$(": "runs it as a command",
+  "*": "expands it to file names",
+  "?": "expands it to file names",
+  "[": "expands it to file names",
+}
+
+/**
+ * A step split into words as a POSIX shell would — '…' literal, "…" with \ escapes, \ outside quotes — and the
+ * characters a shell would act on instead of passing them to the tool. `` ` `` and `$(` still act inside "…".
+ */
+const scan = (line: string): { words: string[]; live: string[]; open: boolean } => {
   const found: string[] = []
+  const live = new Set<string>()
   let word: string | undefined
   let quote: string | undefined
-  for (const char of line) {
-    if (quote) {
-      if (char === quote) quote = undefined
-      else word = (word ?? "") + char
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index] as string
+    const next = line[index + 1]
+    if (quote === "'") {
+      if (char === "'") quote = undefined
+      else word += char
+      continue
+    }
+    if (char === "\\" && next !== undefined && (quote === undefined || '$`"\\'.includes(next))) {
+      word = (word ?? "") + next
+      index++
+      continue
+    }
+    if (char === "`" || (char === "$" && next === "(")) live.add(char === "`" ? "`" : "$(")
+    if (quote === '"') {
+      if (char === '"') quote = undefined
+      else word += char
     } else if (char === '"' || char === "'") {
       quote = char
       word ??= ""
     } else if (/\s/.test(char)) {
       if (word !== undefined) found.push(word)
       word = undefined
-    } else word = (word ?? "") + char
+    } else {
+      if (OPERATORS[char]) live.add(char)
+      word = (word ?? "") + char
+    }
   }
   if (word !== undefined) found.push(word)
-  return found
+  return { words: found, live: [...live], open: quote !== undefined }
+}
+
+const words = (line: string): string[] => scan(line).words
+
+/** Characters in a step that a shell would act on: the person who copies it would run something else. */
+export const shellProblems = (run: string): string[] => {
+  const { live, open } = scan(run)
+  return [
+    ...live.map((char) => `a shell acts on ${char}: it ${OPERATORS[char]}; put the word in single quotes`),
+    ...(open ? ["a quote is never closed"] : []),
+  ]
 }
 
 const silent = (command: Command) =>
@@ -327,7 +377,7 @@ export const checkGuide = async (
   const { scenarios, problems } = await loadScenarios(options.directory)
   for (const scenario of scenarios)
     scenario.steps.forEach((step, index) => {
-      for (const problem of checkStep(build(), step.run))
+      for (const problem of [...shellProblems(step.run), ...checkStep(build(), step.run)])
         problems.push(`${scenario.name}.md step ${index + 1} (${step.run}): ${problem}`)
     })
   for (const reference of options.worksWith ?? [])

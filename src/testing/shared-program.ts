@@ -3,7 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import { botCommand } from "../cli/bot/command.js"
 import { commandsCommand } from "../cli/commands-command.js"
 import { configCommand } from "../cli/config-command.js"
-import { guideCommand } from "../cli/guide.js"
+import { guideCommand, MEMO_SCENARIOS } from "../cli/guide.js"
 import { addMeetingProjectCandidatesCommand } from "../cli/meeting-project-candidates-command.js"
 import { addMeetingSeriesInventoryCommand } from "../cli/meeting-series-inventory-command.js"
 import { accountCommand } from "../cli/messenger/account-command.js"
@@ -102,7 +102,7 @@ export const sharedCommands = (over: Messenger = messenger) => {
     floodCommand(messenger),
     guideCommand(app, {
       directory: fileURLToPath(new URL("../cli/fixtures/scenarios", import.meta.url)),
-      worksWith: [{ tool: "memo", name: "person-brief", title: "one person across every tool" }],
+      worksWith: [MEMO_SCENARIOS.personBrief],
     }),
     imagesCommand(messenger),
     inboxCommand(messenger),

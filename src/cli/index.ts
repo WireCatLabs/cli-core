@@ -235,7 +235,9 @@ export {
   type GuideStep,
   guideCommand,
   loadScenarios,
+  MEMO_SCENARIOS,
   type Scenario,
+  shellProblems,
 } from "./guide.js"
 export {
   type CommandHelp,

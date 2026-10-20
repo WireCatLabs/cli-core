@@ -5,7 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { sharedProgram } from "../testing/shared-program.js"
-import { checkGuide, checkStep, guideCommand, parseScenario } from "./guide.js"
+import { checkGuide, checkStep, guideCommand, parseScenario, shellProblems } from "./guide.js"
 import { createProgram, run } from "./program.js"
 
 const call = async (argv: string[]) => {
@@ -24,7 +24,7 @@ describe("guide", () => {
         catch-up  Catch up after a day away
 
       Works with:
-        memo guide person-brief  one person across every tool"
+        memo guide person-brief  One person across every tool"
     `)
   })
 
@@ -37,7 +37,7 @@ describe("guide", () => {
       Goal: Know who waits on you and what you promised, without reading every chat.
 
       Steps — account commands start with your profile: chat <profile> …
-        1. chat review date>1d --unanswered 4h
+        1. chat review 'date>1d' --unanswered 4h
            questions to you that nobody answered, across every chat
         2. chat messages list "Book club" --limit 20
            the chat behind a question, read in full
@@ -60,7 +60,7 @@ describe("guide", () => {
     const { item } = JSON.parse((await call(["guide", "catch-up", "--json"])).stdout)
     expect(item).toMatchObject({ name: "catch-up", goal: expect.any(String), look: expect.any(Array) })
     expect(item.steps[0]).toEqual({
-      run: "chat review date>1d --unanswered 4h",
+      run: "chat review 'date>1d' --unanswered 4h",
       why: "questions to you that nobody answered, across every chat",
     })
   })
@@ -115,6 +115,47 @@ describe("checkGuide", () => {
 
   it("accepts the root's options and quoted words", () => {
     expect(checkStep(createProgram(sharedProgram), 'chat messages list "Book club" --json --limit=5')).toEqual([])
+  })
+
+  it.each([
+    ["chat review date>1d", ">"],
+    ["chat search all a<b", "<"],
+    ["chat inbox --json | jq .", "|"],
+    ["chat inbox & chat tasks list", "&"],
+    ["chat inbox; chat tasks list", ";"],
+    ["chat search all `whoami`", "`"],
+    ["chat search all $(whoami)", "$("],
+    ['chat search all "$(whoami)"', "$("],
+    ["chat search all invoice*", "*"],
+    ["chat search all why?", "?"],
+    ["chat search all [ab]", "["],
+  ])("finds the shell acting on %s", (line, char) => {
+    expect(shellProblems(line)).toEqual([expect.stringContaining(`a shell acts on ${char}:`)])
+  })
+
+  it.each([
+    "chat review 'date>1d' --unanswered 4h",
+    'chat review "date>1d"',
+    "chat review date\\>1d",
+    'chat search all "why?" \'a|b\' "[x]" subject:"person:42"',
+    'chat search all "price \\$(x)"',
+    "chat schedule list -- messages sync --all",
+  ])("passes quoted and escaped words: %s", (line) => {
+    expect(shellProblems(line)).toEqual([])
+  })
+
+  it("finds a quote never closed", () => {
+    expect(shellProblems('chat search all "invoice')).toEqual(["a quote is never closed"])
+  })
+
+  it("reports the shell's problems for each scenario step", async () => {
+    const root = mkdtempSync(join(tmpdir(), "guide-shell-"))
+    writeFileSync(join(root, "x.md"), "---\ntitle: X\ngoal: Y\nsteps:\n  - run: t date>1d\n    why: z\nlook: w\n---\n")
+    const program = () => new Command("t").addCommand(guideCommand({ command: "t" }, { directory: root }))
+
+    expect(await checkGuide(program)).toContain(
+      "x.md step 1 (t date>1d): a shell acts on >: it redirects output to a file; put the word in single quotes",
+    )
   })
 })
 
