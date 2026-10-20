@@ -24,6 +24,15 @@ describe("versioned structured AST and field registry", () => {
     expect(validateFields(ast)).toBe(ast)
     expect(QUERY_FIELDS.map(({ name }) => name)).toContain("body")
   })
+  it("takes a WhatsApp chat id unquoted and still refuses minimum-should-match", () => {
+    for (const id of ["133713371337@lid", "120363000000000000@g.us"])
+      expect(validateFields(parseLucene(`chat:${id}`)).root).toMatchObject({
+        field: "chat",
+        operator: "term",
+        value: id,
+      })
+    expect(reason(() => validateFields(parseLucene("(alpha beta)@2")))).toBe("query.unsupported-operator")
+  })
   it("refuses the camelCase tree cli-base built before 0.26", () => {
     const span = { start: 0, end: 1 }
     const range = { kind: "predicate", field: "date", operator: "range", value: "a", upper: "b", span }

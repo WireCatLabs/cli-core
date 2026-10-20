@@ -333,7 +333,6 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--by` | `<group>` | choice | what the answer counts or groups by: a field or a calendar unit |  |
 | `--context` | `<n>` | count | how many messages before and after each hit | messages |
 | `--events` |  | switch | also print edits, deletions and other changes; every line names its event |  |
-| `--qr-file` | `<png>` | path | write the login QR code to this PNG instead of drawing it |  |
 | `--all-versions` |  | switch | also the earlier versions a newer one replaced |  |
 | `--measure` | `<name>` | choice | the metric a ranking is ordered by |  |
 | `--newest` |  | switch | newest first instead of best first |  |
@@ -483,6 +482,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--render` | `<mode>` | choice | how returned cell values are represented: formatted display values, unformatted values or formulas |  |
 | `--context-source` | `<id=cursor>` | string | explicitly selected communications source, optionally with its scoped continuation cursor; repeat for more sources |  |
 | `--context-query` | `<words>` | string | literal words to find within the communications selected for preparation |  |
+| `--alias` | `<name>` | string | another name of the thing, searched as its own alternative beside its name; repeat for more |  |
 | `--context-since-time` | `<time>` | time | inclusive start of the selected communications window used for preparation |  |
 | `--context-before-time` | `<time>` | time | exclusive end of the selected communications window used for preparation |  |
 | `--account` | `<account>` | string | the account to use; never assumed |  |
