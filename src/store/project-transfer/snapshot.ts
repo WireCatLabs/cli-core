@@ -5,7 +5,11 @@ import { projectAnnotationSnapshot } from "../sqlite/project-transfer/snapshot.j
 import { type ProjectAnnotationSnapshot, projectAnnotationSnapshotFingerprint } from "./snapshot-model.js"
 
 export type { ProjectAnnotationSnapshot } from "./snapshot-model.js"
-export { decodeProjectAnnotationSnapshot, projectAnnotationSnapshotFingerprint } from "./snapshot-model.js"
+export {
+  decodeProjectAnnotationSnapshot,
+  projectAnnotationSnapshotFingerprint,
+  projectAnnotationSnapshotSchema,
+} from "./snapshot-model.js"
 
 export interface ProjectAnnotationSnapshotOptions {
   source: string

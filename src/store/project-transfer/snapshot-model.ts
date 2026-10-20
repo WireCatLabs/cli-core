@@ -12,7 +12,7 @@ const text = (max: number) =>
     v.check((s) => !!s.trim()),
   )
 const timestamp = v.pipe(v.number(), v.safeInteger(), v.minValue(0))
-const schema = v.strictObject({
+export const projectAnnotationSnapshotSchema = v.strictObject({
   ...projectAnnotationsSchema.entries,
   version: v.literal(2),
   coverage: v.strictObject({
@@ -42,7 +42,7 @@ const schema = v.strictObject({
   ),
 })
 
-export type ProjectAnnotationSnapshot = v.InferOutput<typeof schema>
+export type ProjectAnnotationSnapshot = v.InferOutput<typeof projectAnnotationSnapshotSchema>
 
 export const snapshotGraph = (value: ProjectAnnotationSnapshot): ProjectAnnotations => ({
   format: value.format,
@@ -74,7 +74,7 @@ export const decodeProjectAnnotationSnapshot = (json: string): ProjectAnnotation
   } catch {
     return invalid("json")
   }
-  const checked = v.safeParse(schema, value)
+  const checked = v.safeParse(projectAnnotationSnapshotSchema, value)
   if (!checked.success) return invalid(checked.issues[0]?.path?.map((p) => String(p.key)).join(".") ?? "manifest")
   const snapshot = checked.output
   if (snapshot.aliases.length + snapshot.facts.length + snapshot.links.length + snapshot.external.length > 1000)

@@ -9,6 +9,9 @@ shape of this file.
 
 ### Added
 
+- **`readBoundedUtf8File` from `./files`** preflights ordinary-file size, bounds reads even if the input grows,
+  and refuses invalid UTF-8. Snapshot hosts can share this reader and `projectAnnotationSnapshotSchema`
+  from `./store` for transport validation; graph validation still uses the snapshot decoder.
 - **The optional `store.projectAnnotations` port** previews and atomically restores selected version-2
   annotations into an empty selected target. Restore requires the exact preview fingerprint, rechecks
   references and namespace under the write lock, preserves historical state and rolls back on failure.

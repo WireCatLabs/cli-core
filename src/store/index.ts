@@ -73,6 +73,7 @@ export {
   type ProjectAnnotationSnapshotOptions,
   type ProjectAnnotationSnapshotResult,
   projectAnnotationSnapshotFingerprint,
+  projectAnnotationSnapshotSchema,
   snapshotProjectAnnotations,
 } from "./project-transfer/snapshot.js"
 export { planProjectAnnotationSnapshot } from "./project-transfer/snapshot-plan.js"

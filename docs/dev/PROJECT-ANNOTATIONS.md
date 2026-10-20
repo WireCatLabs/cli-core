@@ -55,6 +55,12 @@ Account-scoped projects or aliases, deleted facts, unknown fact metadata, and un
 are refused. Known link provenance is preserved along with origin, author, confirmation, evidence,
 roles, anchors, unresolved target text and timestamps.
 
+`projectAnnotationSnapshotSchema` exposes the same structural schema for CLI/MCP transport hosts;
+the decoder still enforces graph and total-byte constraints. `readBoundedUtf8File` from `./files`
+reads an ordinary input file with an explicit 1–16777216-byte budget, preflights its size and refuses
+invalid UTF-8. A host must still select the format's 4 MiB limit and call its decoder. This reader
+does not increase the shared batch-input limit.
+
 Facts owned by the selected project and generic links touching that project or its facts are selected
 completely. References do not recursively make other projects or sources owned. The coverage map
 explicitly omits internal notes, specialized meeting memberships, tasks, memories, labels and findings.
