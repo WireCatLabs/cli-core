@@ -25,7 +25,7 @@ it("fingerprints cited source kinds without copying their text or unrelated proj
       statement: "Review the cited examples",
       project: project.ref,
       by: "owner",
-      evidence: refs,
+      evidence: [...refs],
     })
     const result = await snapshotProjectAnnotations({ source: f.path, project: project.ref })
     expect(result.snapshot.facts).toHaveLength(1)
