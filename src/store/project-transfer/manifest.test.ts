@@ -1,65 +1,8 @@
 import { expect, it } from "vitest"
+import { projectAnnotationsFixture as fixture } from "../../testing/project-annotations.js"
 import { decodeProjectAnnotations, PROJECT_ANNOTATIONS_MAX_BYTES, projectAnnotationsFingerprint } from "./manifest.js"
 import type { ProjectAnnotations } from "./schema.js"
 
-const fixture = (): ProjectAnnotations => ({
-  format: "wirecat.project-annotations",
-  version: 1,
-  project: {
-    ref: "project:11",
-    key: "RES",
-    name: "Research",
-    type: "work",
-    scope: "work",
-    organization: null,
-    created_at: 1000,
-  },
-  coverage: {
-    aliases: "complete",
-    facts: "complete",
-    links: "complete",
-    memories: "omitted",
-    tasks: "omitted",
-    labels: "omitted",
-    findings: "omitted",
-  },
-  aliases: ["Investigations", "Study"],
-  facts: [
-    {
-      ref: "fact:20",
-      type: "statement",
-      statement: "The sender reported delivery; delivery was not independently checked.",
-      status: "proposed",
-      subject: null,
-      occurred_at: 900,
-      supersedes: null,
-      author: "bot:4",
-      model: null,
-      confirmed_by: null,
-      scope: "work",
-      source: "agent",
-      created_at: 1000,
-      updated_at: 1001,
-    },
-  ],
-  links: [
-    {
-      ref: "link:30",
-      from: "fact:20",
-      to: "document:8",
-      kind: "evidence",
-      role: null,
-      evidence: null,
-      confirmed: false,
-      provenance: null,
-      created_at: 1000,
-    },
-  ],
-  external: [
-    { ref: "bot:4", content_sha256: null },
-    { ref: "document:8", content_sha256: "a".repeat(64) },
-  ],
-})
 const at = <T>(items: T[], index: number): T => {
   const item = items[index]
   if (item === undefined) throw new Error("missing fixture record")
@@ -181,4 +124,17 @@ it("refuses a combined record budget overrun even when each array fits", () => {
   const m = fixture()
   m.aliases = Array.from({ length: 998 }, (_, n) => `alias ${n}`)
   expect(() => decode(m)).toThrow("record budget")
+})
+
+it("retains link origin, free-form evidence and an unresolved target without resolving a person", () => {
+  const m = fixture()
+  const link = at(m.links, 0)
+  link.to = null
+  link.target_text = "An unverified contact mentioned in the source"
+  link.evidence = "The author described this as a possibility, not an introduction."
+  link.anchor = "proposal section"
+  m.external.pop()
+  expect(decode(m).links[0]).toEqual(link)
+  link.target_text = null
+  expect(() => decode(m)).toThrow("links.target_text")
 })

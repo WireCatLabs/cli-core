@@ -22,8 +22,19 @@ the selected arrays, and bounded individual fields. Validation errors identify t
 graph constraint without including source text. The fingerprint includes lifecycle, provenance and
 external hashes; JSON property order and record-array ordering do not change it.
 
-SQLite snapshot reading, explicit destination binding, preview and atomic apply remain separate
-work. A future snapshot adapter must read each selected facet completely within budgets and refuse
+`planProjectAnnotations` takes validated manifest JSON, explicit source-to-destination bindings and
+an adapter's complete target snapshot. It checks the project binding, dependency kinds, source text
+hashes, missing references, duplicate bindings and whether the target already has annotations. A bot
+cannot become a person through binding, and two actors cannot silently become one. Provider reference
+kinds must match; a transcript cue cannot bind to a whole meeting. The plan's fingerprint includes the
+manifest, bindings and target revision. No SQL, mutation, name-based matching or identity creation occurs.
+
+The target snapshot contains an explicit project reference, annotation count, revision SHA-256 and
+bounded external references/hashes. It must come from a consistent store adapter, not an agent's
+description of what the destination probably contains. A ready pure plan is not permission to write.
+
+SQLite snapshot reading, database preview and atomic apply remain separate work. A future snapshot
+adapter must read each selected facet completely within budgets and refuse
 unsupported metadata rather than silently dropping it. Portable source hash rules and the
 destination's preconditions must be defined before implementing apply. A host must enforce owner
 policy; neither a valid manifest nor a matching fingerprint authorizes accepting an agent's proposals.

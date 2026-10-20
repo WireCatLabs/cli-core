@@ -80,8 +80,10 @@ const graph = (manifest: ProjectAnnotations) => {
   for (const link of manifest.links) {
     if (!/^link:[1-9]\d*$/.test(link.ref) || links.has(link.ref)) invalid("links.ref")
     links.add(link.ref)
-    if (!owned.has(link.from) && !owned.has(link.to)) invalid("links.outside project")
-    for (const ref of [link.from, link.to, link.evidence]) dependency(ref)
+    if (!owned.has(link.from) && (link.to === null || !owned.has(link.to))) invalid("links.outside project")
+    if (link.to === null && link.target_text === null) invalid("links.target_text")
+    if (link.updated_at < link.created_at) invalid("links.updated_at")
+    for (const ref of [link.from, link.to]) dependency(ref)
   }
   for (const ref of external) if (!used.has(ref)) invalid("external.unused")
 }

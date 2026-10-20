@@ -1,6 +1,7 @@
 import * as v from "valibot"
 import { FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { LINK_KINDS } from "../sqlite/link-kinds.js"
+import { LINK_ORIGINS } from "../sqlite/notes.js"
 
 const text = (max: number) => v.pipe(v.string(), v.minLength(1), v.maxLength(max))
 const ref = text(2048)
@@ -52,13 +53,18 @@ export const projectAnnotationsSchema = v.strictObject({
     v.strictObject({
       ref: text(200),
       from: ref,
-      to: ref,
+      to: nullableRef,
       kind: v.picklist(LINK_KINDS),
+      origin: v.picklist(LINK_ORIGINS),
+      anchor: v.nullable(text(2000)),
+      target_text: v.nullable(text(2000)),
       role: v.nullable(text(200)),
-      evidence: nullableRef,
+      evidence: v.nullable(text(2000)),
       confirmed: v.boolean(),
       provenance: v.nullable(text(2000)),
       created_at: timestamp,
+      updated_at: timestamp,
+      author: v.nullable(text(200)),
     }),
   ),
   external: bounded(
