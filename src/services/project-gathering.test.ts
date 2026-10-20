@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it, vi } from "vitest"
 import { type ContextEvidenceReader, type ContextSource, contextEvidenceFingerprint } from "../context/evidence.js"
+import { normalize } from "../store/normalize.js"
 import { drainNoteIndex } from "../store/sqlite/note-index.js"
 import { stemmerCache } from "../store/sqlite/stems.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
@@ -583,4 +584,124 @@ it("keeps the fingerprint and checkpoint of a run without linked chats", async (
       { ...f.request, linkedChats: [linkedChat(f, f.accountId, ["x"])], checkpoint: present(first.checkpoint) },
     ),
   ).rejects.toThrow("linked chats changed")
+})
+
+const sentBy = (f: Awaited<ReturnType<typeof fixture>>, accountId: number, sender: string, texts: string[]) => {
+  const identity = present(
+    f.db
+      .prepare(
+        "INSERT INTO identities(provider,external_id,name,created_at,updated_at) VALUES('example-calendar',?,'Степа Stefan Grachev AVITO M A',0,0) ON CONFLICT DO UPDATE SET name=name RETURNING id",
+      )
+      .get(sender),
+  )
+  const chat = present(
+    f.db
+      .prepare(
+        "INSERT INTO chats(account_id,external_id,kind,title,created_at,updated_at) VALUES(?,'dm','private','Stepa',0,0) RETURNING id",
+      )
+      .get(accountId),
+  )
+  for (const [n, text] of texts.entries())
+    f.db
+      .prepare(
+        "INSERT INTO messages(chat_id,account_id,external_id,sender_identity_id,sent_at,text,normalized_text,normalizer_version,created_at,updated_at,source) VALUES(?,?,?,?,?,?,?,1,0,0,'history')",
+      )
+      .run(Number(chat.id), accountId, `s${n}`, Number(identity.id), 500 + n, text, normalize(text))
+}
+
+it("reads what a person's identities wrote, though it names nothing, only in the selected accounts", async () => {
+  const f = await fixture()
+  sentBy(f, f.accountId, "u7", ["Booked it for Tuesday"])
+  sentBy(f, f.otherId, "u7", ["Not ours to read"])
+  const address = present(
+    f.db
+      .prepare(
+        "INSERT INTO identities(provider,external_id,created_at,updated_at) VALUES('email','stepa@example.com',0,0) RETURNING id",
+      )
+      .get(),
+  )
+  f.db
+    .prepare(
+      "INSERT INTO emails(id,account_id,email_thread_id,external_id,subject,body_text,from_identity_id,sent_at,created_at,updated_at) VALUES(2,?,1,'reply','Re: dates','See attached',?,600,0,0)",
+    )
+    .run(f.mailId, Number(address.id))
+  const read = vi.spyOn(f.port, "read")
+  const senders = [
+    { provider: "example-calendar", id: "u7" },
+    { provider: "telegram", id: "u7" },
+    { provider: "email", id: "stepa@example.com" },
+  ]
+  const result = await gatherProjectEvidence(
+    { evidence: f.port, neighbours: storedMessageNeighbours(f.store.messages) },
+    { ...f.request, project: { name: "Zeppelin" }, people: [{ reference: "person:7", senders }] },
+  )
+  expect(result.lanes).toEqual([
+    { id: "l1", kinds: ["project"], query: "Zeppelin", people: [] },
+    { id: "l2", kinds: ["sender"], query: null, people: ["person:7"], senders },
+  ])
+  expect(result.units.filter((u) => u.lane === "l2").map((u) => u.source)).toEqual([0, 1])
+  expect(result.items.map((i) => [i.kind, i.text, i.context, i.lanes])).toEqual([
+    ["message", "Booked it for Tuesday", "sender", ["l2"]],
+    ["mail", "See attached", "sender", ["l2"]],
+  ])
+  expect(read.mock.calls.some(([r]) => r.source.account === "BobSample")).toBe(false)
+  expect(read.mock.calls.filter(([r]) => r.senders).map(([r]) => [r.source.kind, r.senders])).toEqual([
+    ["message", ["u7"]],
+    ["mail", ["stepa@example.com"]],
+  ])
+})
+
+it("keeps a project hit labelled project when its sender lane finds it too", async () => {
+  const f = await fixture()
+  sentBy(f, f.accountId, "u7", ["Harbour crane booked"])
+  const result = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, people: [{ reference: "person:7", senders: [{ provider: "example-calendar", id: "u7" }] }] },
+  )
+  expect(result.items.find((i) => i.text === "Harbour crane booked")).toMatchObject({
+    context: "project",
+    lanes: ["l1", "l3"],
+  })
+})
+
+it("resumes a sender lane across pages", async () => {
+  const f = await fixture()
+  sentBy(
+    f,
+    f.accountId,
+    "u7",
+    Array.from({ length: 25 }, (_, n) => `Note ${n}`),
+  )
+  const request = {
+    ...f.request,
+    sources: [present(f.sources[0])],
+    people: [{ reference: "person:7", senders: [{ provider: "example-calendar", id: "u7" }] }],
+    budgets: { maxReads: 3 },
+  }
+  const first = await gatherProjectEvidence({ evidence: f.port }, request)
+  expect(first).toMatchObject({ stopped: "reads", complete: false })
+  const second = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...request, checkpoint: present(first.checkpoint) },
+  )
+  expect(second).toMatchObject({ complete: true, resumed: true })
+  const sent = [...first.items, ...second.items].filter((i) => i.context === "sender").map((i) => i.ref)
+  expect(new Set(sent).size).toBe(25)
+})
+
+it("keeps the fingerprint a person's name lane had before sender lanes, so its checkpoints still resume", async () => {
+  const f = await fixture()
+  const request: ProjectGatheringRequest = {
+    project: { name: "Harbour" },
+    people: [{ name: "Stepa", reference: "person:7" }],
+    sources: [present(f.sources[0])],
+    scope: "explicit",
+    after: 0,
+    before: 10000,
+  }
+  const result = await gatherProjectEvidence({ evidence: f.port }, request)
+  expect(result.fingerprint).toBe("d5cc956d118b4c9f935f0db983e1b468fbe76c681ed412e30b7233c06ee16aa7")
+  await expect(
+    gatherProjectEvidence({ evidence: f.port }, { ...request, people: [{ senders: [{ provider: "x", id: "1" }] }] }),
+  ).rejects.toMatchObject({ details: { param: "people.0.reference" } })
 })

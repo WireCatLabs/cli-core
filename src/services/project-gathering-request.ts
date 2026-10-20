@@ -7,7 +7,7 @@ import { formatReference } from "../domain/references.js"
 export interface ProjectGatheringRequest {
   project: { name: string; key?: string; background?: string; aliases?: string[] }
   keywords?: string[]
-  people?: { name: string; reference?: string }[]
+  people?: ProjectPerson[]
   sources: ContextSource[]
   /** Chats the host confirmed as the project's; each is read whole, through the source of its own account. */
   linkedChats?: ProjectLinkedChat[]
@@ -24,6 +24,20 @@ export interface ProjectGatheringRequest {
   checkpoint?: string
   signal?: AbortSignal
 }
+/**
+ * `name` is searched as words; `senders` are the person's stored identities, and every message or mail one of them
+ * wrote in the window is read. A sender lane needs the person's `reference`.
+ */
+export interface ProjectPerson {
+  name?: string
+  reference?: string
+  senders?: ProjectSender[]
+}
+/** One stored identity by its provider and the provider's own id; an email identity's id is its address. */
+export interface ProjectSender {
+  provider: string
+  id: string
+}
 export interface ProjectLinkedChat {
   provider: string
   account: string
@@ -36,13 +50,15 @@ export interface ProjectGatheringBudgets {
   maxElapsedMs?: number
   maxItems?: number
 }
-export type ProjectLaneKind = "project" | "key" | "alias" | "keyword" | "person" | "linked-chat"
+export type ProjectLaneKind = "project" | "key" | "alias" | "keyword" | "person" | "sender" | "linked-chat"
 export interface ProjectLane {
   id: string
   kinds: ProjectLaneKind[]
-  /** Null for a linked chat's lane, which reads every message of the chat. */
+  /** Null for a linked chat's or a sender's lane, which read every message of the chat or of the sender. */
   query: string | null
   people: string[]
+  /** A sender lane only: the identities whose messages and mail it reads. */
+  senders?: ProjectSender[]
   /** A linked chat's lane only: the chat's reference. */
   chat?: string
 }
@@ -72,7 +88,15 @@ export interface ProjectGatheringCheckpoint {
 const DAY = 86400000
 const MAX_TIME = 8_640_000_000_000_000
 export const CONTEXT_CHUNK_DAYS = 90
-const LIMITS = { lanes: 16, sources: 32, units: 512, lookbackDays: 730, people: 16, linkedChats: 16 } as const
+const LIMITS = {
+  lanes: 16,
+  sources: 32,
+  units: 512,
+  lookbackDays: 730,
+  people: 16,
+  linkedChats: 16,
+  senders: 16,
+} as const
 const BUDGETS = {
   maxReads: [48, 512],
   maxReadBytes: [2097152, 16777216],
@@ -147,11 +171,25 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
   const keywords = list(input.keywords, "keywords", LIMITS.lanes).map((k, i) => laneQuery(k, `keywords.${i}`))
   const people = list(input.people, "people", LIMITS.people).map((person, i) => {
     if (!person || typeof person !== "object") return fail(`people.${i} needs a name`, `people.${i}`)
-    known(person, ["name", "reference"], `people.${i}.`)
-    const p = person as { name: unknown; reference?: unknown }
+    known(person, ["name", "reference", "senders"], `people.${i}.`)
+    const p = person as { name?: unknown; reference?: unknown; senders?: unknown }
+    const reference = p.reference === undefined ? null : text(p.reference, `people.${i}.reference`, 1024)
+    if (p.senders === undefined) return { name: laneQuery(p.name, `people.${i}.name`), reference }
+    const senders = list(p.senders, `people.${i}.senders`, LIMITS.senders).map((value, j) => {
+      const name = `people.${i}.senders.${j}`
+      if (!value || typeof value !== "object") return fail(`${name} needs provider and id`, name)
+      known(value, ["provider", "id"], `${name}.`)
+      const given = value as Record<string, unknown>
+      return { provider: text(given.provider, `${name}.provider`, 128), id: text(given.id, `${name}.id`, 1024) }
+    })
+    if (!senders.length) fail(`people.${i}.senders needs at least one identity`, `people.${i}.senders`)
+    if (new Set(senders.map((one) => JSON.stringify([one.provider, one.id]))).size !== senders.length)
+      fail(`people.${i}.senders lists one identity twice`, `people.${i}.senders`)
+    if (reference === null) fail(`people.${i} needs a reference to read by sender`, `people.${i}.reference`)
     return {
-      name: laneQuery(p.name, `people.${i}.name`),
-      reference: p.reference === undefined ? null : text(p.reference, `people.${i}.reference`, 1024),
+      name: p.name === undefined ? null : laneQuery(p.name, `people.${i}.name`),
+      reference,
+      senders,
     }
   })
   if (input.scope !== "explicit" && input.scope !== "all-connected")
@@ -201,7 +239,16 @@ export const projectGatheringRequest = (input: ProjectGatheringRequest, now: num
   if (project.key) lane("key", laneQuery(project.key, "project.key"))
   for (const [i, a] of project.aliases.entries()) lane("alias", laneQuery(a, `project.aliases.${i}`))
   for (const k of keywords) lane("keyword", k)
-  for (const p of people) lane("person", p.name, p.reference ?? p.name)
+  for (const p of people) if (p.name !== null) lane("person", p.name, p.reference ?? p.name)
+  for (const p of people)
+    if (p.senders && p.reference !== null)
+      lanes.push({
+        id: `l${lanes.length + 1}`,
+        kinds: ["sender"],
+        query: null,
+        people: [p.reference],
+        senders: p.senders,
+      })
   if (lanes.length > LIMITS.lanes) fail(`at most ${LIMITS.lanes} distinct search lanes`, "keywords")
   for (const linked of linkedChats) {
     if (linked.source === null) continue
@@ -314,20 +361,40 @@ export const projectUnits = (plan: ProjectGatheringPlan, window: { after: number
           sourceIndex,
           chunk,
           chat: undefined as string | undefined,
+          senders: undefined as string[] | undefined,
         })),
       ),
   )
-  // Appended after every literal unit: a checkpoint from a run without links keeps its unit order, and in each
+  // Only the sources of a sender's own provider: an identity of one messenger never wrote in another.
+  const bySender = chunks.flatMap((chunk) =>
+    plan.lanes.flatMap((lane) =>
+      plan.sources.flatMap((source, sourceIndex) => {
+        if (!lane.senders || (source.kind !== "message" && source.kind !== "mail")) return []
+        const ids = lane.senders.filter((one) => one.provider === source.provider).map((one) => one.id)
+        return ids.length ? [{ lane, source, sourceIndex, chunk, chat: undefined, senders: ids }] : []
+      }),
+    ),
+  )
+  // Appended after every literal and sender unit: a checkpoint from a run without links keeps its unit order, and in each
   // round a literal lane labels a shared hit before the linked chat does.
   const linked = chunks.flatMap((chunk) =>
     plan.linkedChats.flatMap(({ lane, source, chat }) => {
       const found = plan.lanes.find((l) => l.id === lane)
       return found && source !== null
-        ? [{ lane: found, source: plan.sources[source] as ContextSource, sourceIndex: source, chunk, chat }]
+        ? [
+            {
+              lane: found,
+              source: plan.sources[source] as ContextSource,
+              sourceIndex: source,
+              chunk,
+              chat,
+              senders: undefined,
+            },
+          ]
         : []
     }),
   )
-  const units = [...literal, ...linked]
+  const units = [...literal, ...bySender, ...linked]
   if (units.length > LIMITS.units)
     fail(`${units.length} lane × source × 90-day reads exceed ${LIMITS.units}; narrow the lanes, sources or window`)
   return units

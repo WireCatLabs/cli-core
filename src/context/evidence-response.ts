@@ -16,7 +16,7 @@ export const validateContextEvidencePage = (page: ContextEvidencePage, request: 
     throw new CliError("invalid_response", "context reader returned invalid or out-of-scope evidence")
   }
   try {
-    const { source, chat, after, before, limit, maxReadBytes } = contextEvidenceRequest(request)
+    const { source, chat, senders, after, before, limit, maxReadBytes } = contextEvidenceRequest(request)
     if (!page || contextSourceKey(contextSource(page.source)) !== contextSourceKey(source)) fail()
     if (
       !Array.isArray(page.items) ||
@@ -33,7 +33,7 @@ export const validateContextEvidencePage = (page: ContextEvidencePage, request: 
       typeof c.hasMore !== "boolean" ||
       typeof c.hasUndated !== "boolean" ||
       !["ready", "pending", "missing", "unknown"].includes(c.index) ||
-      c.matching !== (chat === undefined ? "literal-words" : "chat") ||
+      c.matching !== (chat !== undefined ? "chat" : senders !== undefined ? "sender" : "literal-words") ||
       c.completeness !== "unknown" ||
       c.consistency !== "snapshot-per-page"
     )
