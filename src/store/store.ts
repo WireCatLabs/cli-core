@@ -15,6 +15,7 @@ import type { MeetingFindingsStore } from "./meeting-findings.js"
 import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
 import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
 import { type AccountPeople, accountPeopleOver, type PeopleStore, peopleStoreOver } from "./people.js"
+import type { ProjectAnnotationStore } from "./project-transfer/store.js"
 import { type QueriesStore, queriesStoreOver } from "./queries.js"
 import { type RosterStore, rosterStoreOver } from "./roster.js"
 import { type SearchIndexStore, searchIndexStoreOver } from "./search-index.js"
@@ -40,6 +41,7 @@ import { noteSearchOver } from "./sqlite/note-search.js"
 import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
+import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
 import * as stems from "./sqlite/stems.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
@@ -49,6 +51,7 @@ import type { AccountKey } from "./types.js"
 import { type AccountVectors, accountVectorsOver, type VectorsStore, vectorsStoreOver } from "./vectors.js"
 
 export interface MessageStore {
+  readonly projectAnnotations?: ProjectAnnotationStore
   readonly contextEvidence?: ContextEvidenceReader
   readonly contextIndex?: ContextIndex
   readonly contextRecords?: ContextRecordReader
@@ -184,6 +187,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     ),
   }
   const contextEvidence = once(() => contextEvidenceOver(context))
+  const projectAnnotations = once(() => projectAnnotationStoreOver(context))
   const contextIndex = once(() => contextIndexOver(context, stemmerFor))
   const contextRecords = once(() => contextRecordsOver(context))
   const searches = once(() => searchesStoreOver(context))
@@ -205,6 +209,9 @@ const storeOver = (context: StoreContext): MessageStore => {
   const meetings = once(() => meetingStoreOver(context))
 
   const store: MessageStore = {
+    get projectAnnotations() {
+      return projectAnnotations()
+    },
     get contextEvidence() {
       return contextEvidence()
     },

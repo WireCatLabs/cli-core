@@ -112,6 +112,28 @@ Deleted, unavailable or unsupported dependencies may refuse the read instead of 
 preview. The public pure planner remains useful to other adapters; a ready pure plan is not the
 same as a successful database preview.
 
-Atomic apply remains separate work. A host must enforce
-owner policy; neither a valid snapshot nor a matching fingerprint authorizes accepting an agent's
-proposals. No live-project reset or store migration is part of these helpers.
+## Atomic selected-annotation restore
+
+The optional `store.projectAnnotations` port uses the store's existing connection. Its `preview`
+takes `{ snapshot, project, bindings, maxReadBytes? }`; `restore` additionally requires the exact
+`fingerprint` returned by preview. The port opens no other store and performs no migration. A host
+must authorize restore before calling it. A read-only connection remains unable to restore.
+
+Restore starts a standard synchronous write transaction, rechecks the entire database preview under
+`BEGIN IMMEDIATE`, and refuses a changed fingerprint, conflicting namespace/descriptor, stale source
+hash or populated selected target. There is no `await` in that transaction. Failure rolls back the
+descriptor update, aliases, facts, links and derived work together. A retry into a populated selected
+target refuses rather than creating duplicates. No durable resume receipt or worker lease is written.
+
+The existing target's key/name remain unchanged and must match the source baseline. Selected project
+description, type, scope, organization, owner, status and historical dates are restored. Fact subjects,
+replacement decisions and generic link endpoints use explicit mappings; facts may reference later
+owned facts. Status, model, author, confirmation provenance, alias provenance and timestamps survive.
+An accepted historical fact remains accepted; a proposed one stays proposed. This is not a new agent
+confirmation. Shared people, organizations, documents, other projects and their annotations are not
+recreated or edited. Target task counts and omitted facets are untouched.
+
+The receipt returns the project, preview fingerprint, reference mappings and selected record counts.
+It is an operation result, not proof of a full project backup. Host policy remains necessary: neither
+a valid snapshot nor a matching fingerprint authorizes an agent to restore accepted records. No
+CLI/MCP mutation host, live-project reset or store migration is included in this SDK port.

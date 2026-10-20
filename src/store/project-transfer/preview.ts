@@ -4,6 +4,9 @@ import { SnapshotBudget } from "../sqlite/project-transfer/budget.js"
 import { previewAnnotationSnapshot } from "../sqlite/project-transfer/preview.js"
 import { projectAnnotationBindingSources } from "./plan.js"
 import { decodeProjectAnnotationSnapshot } from "./snapshot-model.js"
+import type { ProjectAnnotationPreview } from "./snapshot-plan.js"
+
+export type { ProjectAnnotationPreview } from "./snapshot-plan.js"
 
 export interface ProjectAnnotationPreviewOptions {
   snapshot: string
@@ -13,8 +16,6 @@ export interface ProjectAnnotationPreviewOptions {
   maxReadBytes?: number
   env?: NodeJS.ProcessEnv
 }
-export type ProjectAnnotationPreview = ReturnType<typeof previewAnnotationSnapshot>
-
 export const previewProjectAnnotationSnapshot = async (
   options: ProjectAnnotationPreviewOptions,
 ): Promise<ProjectAnnotationPreview> => {
