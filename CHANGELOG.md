@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.369.0 — 20.10.2026
+
 ### Fixed
 
 - **Project gathering reads a large document once, not once per matching lane.** A record too large to share a
