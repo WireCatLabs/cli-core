@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.366.0 — 20.10.2026
+
 ### Added
 
 - **A chat's history in the store (store version 25).** `chat_revisions` keeps one row per change to a chat's id,
