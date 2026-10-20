@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.376.0 — 20.10.2026
+
 ### Added
 
 - **`gatherProjectEvidence` reads a project's linked chats.** `linkedChats: [{ provider, account, chat }]` (at
