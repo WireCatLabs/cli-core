@@ -115,8 +115,10 @@ dates and assignees only with supporting references, and a receipt that reuses e
 candidates and refuses to accept one rejected before. What differs:
 
 - **Evidence.** Each reference must name a stored message, email or document whose current fingerprint matches;
-  otherwise the batch is stale (`evidence-findings.stale`), at staging and again at a review that accepts
-  anything; rejecting a whole stale batch still works, so it does not stay open forever. There is no
+  otherwise the batch is stale (`evidence-findings.stale`) at staging. A review that accepts findings rechecks
+  only the accepted ones: their project, assignee and evidence must be unchanged, while another finding's changed
+  text no longer blocks them. A batch staged by an earlier version still needs all of it unchanged. Rejecting a whole
+  stale batch still works, so it does not stay open forever. There is no
   membership check: the project must exist, and whether the evidence belongs to it is what the reviewer decides.
 - **One project per batch**, held as the proposal's target, so `list({ project })` reads one project's batches.
 - **Who decides.** `review(id, { fingerprint, accept, by })` takes `by: "owner"` (the default) or
