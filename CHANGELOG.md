@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.375.0 — 20.10.2026
+
 ### Fixed
 
 - **A WhatsApp chat id works unquoted in a query.** `chat:133…@lid` and `chat:120…@g.us` parse as one term; before,
