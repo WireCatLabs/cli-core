@@ -407,3 +407,32 @@ it("reads a large document on resume when the read budget ran out before its own
   )
   expect(next.items.map((i) => i.ref)).toContain(`document:${note.id}`)
 })
+
+it("gives a document hit the paragraphs around the one that names the project, in document order", async () => {
+  const f = await fixture()
+  const { note } = await f.store.notes.saveFileNote({
+    folderId: f.folder.id,
+    path: "plan.md",
+    title: "Plan",
+    text: "Intro.\n\nBudget notes.\n\nScope.\n\nThe harbour launch moved to May.\n\nOwners: Ana.\n\nRisks.\n\nAppendix.",
+  })
+  drainNoteIndex(f.db, stemmerCache())
+  const request = {
+    ...f.request,
+    sources: f.sources.filter((s) => s.kind === "document"),
+    project: { name: "Harbour" },
+  }
+  const result = await gatherProjectEvidence({ evidence: f.port }, request)
+  const hit = result.items.find((i) => i.ref === `document:${note.id}`)
+  expect(hit?.around?.map((one) => [one.text, one.found])).toEqual([
+    ["Budget notes.", false],
+    ["Scope.", false],
+    ["The harbour launch moved to May.", true],
+    ["Owners: Ana.", false],
+    ["Risks.", false],
+  ])
+  expect(hit?.around?.every((one) => one.ref === hit.ref)).toBe(true)
+  expect(result.usage.aroundBytes).toBeGreaterThan(0)
+  const none = await gatherProjectEvidence({ evidence: f.port }, { ...request, around: { before: 0, after: 0 } })
+  expect(none.items.find((i) => i.ref === hit?.ref)?.around).toBeUndefined()
+})

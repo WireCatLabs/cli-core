@@ -3,7 +3,12 @@ import type { ContextEvidenceItem, ContextEvidenceReader, ContextIndex, ContextS
 import { CONTEXT_MAX_READ_BYTES, contextEvidenceFingerprint } from "../context/evidence.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
-import { attachNeighbours, type ProjectNeighbour, type ProjectNeighbourReader } from "./project-gathering-around.js"
+import {
+  attachNeighbours,
+  documentPassage,
+  type ProjectNeighbour,
+  type ProjectNeighbourReader,
+} from "./project-gathering-around.js"
 import {
   decodeCheckpoint,
   encodeCheckpoint,
@@ -147,6 +152,18 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       fingerprint,
       lanes: [lane.id],
       context: lane.kinds.every((k) => k === "person") ? "person-only" : "project",
+    }
+    if (kind === "document" && plan.around.before + plan.around.after) {
+      entry.around = []
+      for (const part of documentPassage(item.text, lane.query, plan.around)) {
+        const bytes = Buffer.byteLength(part.text)
+        if (bytes > plan.budgets.maxReadBytes - usage.readBytes - usage.aroundBytes) {
+          entry.aroundIssue = "read-bytes"
+          break
+        }
+        usage.aroundBytes += bytes
+        entry.around.push({ ref: item.ref, at: item.at, sender: null, ...part })
+      }
     }
     byRef.set(item.ref, entry)
     items.push(entry)

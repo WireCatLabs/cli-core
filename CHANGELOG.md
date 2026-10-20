@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A document hit in project gathering carries the paragraphs around it.** `around` holds, in document order, up
+  to `around.before` and `around.after` paragraphs next to the first one naming a searched word, plus that one
+  marked `found`. The bytes count as `usage.aroundBytes`, as a message's neighbours do.
+
 ### Fixed
 
 - **Project gathering moves past large documents instead of stalling.** A page of evidence now holds the records
