@@ -36,13 +36,12 @@ const invalid = (field: string): never => {
   throw new CliError("validation_error", `invalid project annotation plan.${field}`)
 }
 
-/** Pure planning over an adapter's complete target snapshot; a ready plan is not write authorization. */
-export const planProjectAnnotations = (
-  json: string,
+export const planBoundProjectAnnotations = (
+  manifest: { project: { ref: string }; external: { ref: string; content_sha256: string | null }[] },
+  manifest_fingerprint: string,
   target: ProjectAnnotationsTarget,
   bindings: Record<string, string>,
 ): ProjectAnnotationsPlan => {
-  const manifest = decodeProjectAnnotations(json)
   const checked = v.safeParse(targetSchema, target)
   if (!checked.success) return invalid(checked.issues[0]?.path?.map((p) => String(p.key)).join(".") ?? "target")
   if (!bindings || typeof bindings !== "object" || Array.isArray(bindings) || Object.keys(bindings).length > 1001)
@@ -91,7 +90,6 @@ export const planProjectAnnotations = (
       conflicts.push({ reference: source, reason: "changed" })
   }
   if (target.annotation_count > 0) conflicts.push({ reference: target.project, reason: "populated" })
-  const manifest_fingerprint = projectAnnotationsFingerprint(json)
   const fingerprint = createHash("sha256")
     .update(
       JSON.stringify({
@@ -113,3 +111,11 @@ export const planProjectAnnotations = (
     ready: missing_bindings.length === 0 && conflicts.length === 0,
   }
 }
+
+/** Pure planning over an adapter's complete target snapshot; a ready plan is not write authorization. */
+export const planProjectAnnotations = (
+  json: string,
+  target: ProjectAnnotationsTarget,
+  bindings: Record<string, string>,
+): ProjectAnnotationsPlan =>
+  planBoundProjectAnnotations(decodeProjectAnnotations(json), projectAnnotationsFingerprint(json), target, bindings)
