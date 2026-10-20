@@ -5,7 +5,7 @@ import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
 import {
   attachNeighbours,
-  documentPassage,
+  documentMatches,
   type ProjectNeighbour,
   type ProjectNeighbourReader,
 } from "./project-gathering-around.js"
@@ -52,6 +52,8 @@ export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
   fingerprint: string
   around?: ProjectNeighbour[] | null
   aroundIssue?: string | null
+  /** A document hit with `around`: how many paragraphs after the one it centres on also name a lane word. */
+  moreMatches?: number
 }
 /** Strongest first: a hit that names the project, then one only from a linked chat, then one naming only a person. */
 export type ProjectEvidenceContext = "project" | "linked-chat" | "person-only"
@@ -87,6 +89,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     plan.sources.map(() => ({ state: "not-requested" as ProjectFetchState, history: null, code: null }))
   const seen = new Set(previous?.seen ?? [])
   const signal = plan.signal
+  const queries = plan.lanes.flatMap((lane) => (lane.query === null ? [] : [lane.query]))
 
   if (plan.fetch === "before-read" && !ports.fetcher)
     throw new CliError("configuration_error", "this host cannot fetch source history; use fetch none", {
@@ -167,8 +170,10 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       context: contextOf(lane),
     }
     if (kind === "document" && lane.query !== null && plan.around.before + plan.around.after) {
+      const passage = documentMatches(item.text, queries, plan.around)
       entry.around = []
-      for (const part of documentPassage(item.text, lane.query, plan.around)) {
+      entry.moreMatches = passage.moreMatches
+      for (const part of passage.around) {
         const bytes = Buffer.byteLength(part.text)
         if (bytes > plan.budgets.maxReadBytes - usage.readBytes - usage.aroundBytes) {
           entry.aroundIssue = "read-bytes"
