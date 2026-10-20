@@ -4,13 +4,7 @@ import * as v from "valibot"
 import { PROJECT_ANNOTATIONS_MAX_BYTES, validateProjectAnnotationsGraph } from "./manifest.js"
 import { type ProjectAnnotations, projectAnnotationsSchema } from "./schema.js"
 
-const text = (max: number) =>
-  v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(max),
-    v.check((s) => !!s.trim()),
-  )
+const text = (max: number) => v.pipe(v.string(), v.minLength(1), v.maxLength(max))
 const timestamp = v.pipe(v.number(), v.safeInteger(), v.minValue(0))
 export const projectAnnotationSnapshotSchema = v.strictObject({
   ...projectAnnotationsSchema.entries,
@@ -79,6 +73,10 @@ export const decodeProjectAnnotationSnapshot = (json: string): ProjectAnnotation
   const snapshot = checked.output
   if (snapshot.aliases.length + snapshot.facts.length + snapshot.links.length + snapshot.external.length > 1000)
     return invalid("record budget")
+  for (const field of ["description", "status", "owner"] as const)
+    if (snapshot.project[field] !== null && !snapshot.project[field].trim()) return invalid(`project.${field}`)
+  for (const alias of snapshot.aliases)
+    for (const field of ["name", "source"] as const) if (!alias[field].trim()) return invalid(`aliases.${field}`)
   if (snapshot.project.updated_at < snapshot.project.created_at) return invalid("project.updated_at")
   for (const alias of snapshot.aliases) if (alias.updated_at < alias.created_at) return invalid("aliases.updated_at")
   for (const fact of snapshot.facts) if (!fact.statement.trim()) return invalid("facts.statement")
