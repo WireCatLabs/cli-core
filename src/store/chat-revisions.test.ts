@@ -156,6 +156,25 @@ describe("chat_revisions", () => {
     await store.close()
   })
 
+  it("**a numeric id of a chat the account left, current or old, is refused as any other id is**", async () => {
+    const { store } = await opened()
+    const bound = store.forAccount(OWNER)
+    await store.chats.saveChats(OWNER, [chat("-1001", "Group", { kind: "group" }), chat("-1002", "Old")])
+    await store.chats.rekeyChat(OWNER, "-1002", "-1003")
+    await store.chats.markChatsLeft(OWNER, [])
+
+    for (const typed of ["-1001", "-1002"]) {
+      await expect(storedChatId({}, typed, store, OWNER)).rejects.toThrow("you left chat")
+      await expect(chatIdIn({}, typed, bound)).rejects.toThrow("you left chat")
+    }
+    expect(await chatIdIn({}, "-1001", bound, { includeLeft: true })).toBe("-1001")
+    expect(await chatIdIn({}, "-1002", bound, { includeLeft: true })).toBe("-1003")
+    expect(await storedChatId({}, "-1009", store, OWNER)).toBe("-1009")
+    await store.chats.rejoinChats(OWNER, ["-1001"])
+    expect(await storedChatId({}, "-1001", store, OWNER)).toBe("-1001")
+    await store.close()
+  })
+
   it("**records leaving and rejoining**, and a membership state the messenger reports", async () => {
     const { path, store } = await opened()
     await store.chats.saveChats(OWNER, [chat("g1", "Team", { kind: "group" }), chat("g2", "Club", { kind: "group" })])

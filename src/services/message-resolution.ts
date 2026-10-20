@@ -5,6 +5,7 @@ import { isId, pickChat, pickPerson } from "../resolve.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountStore } from "../store/account-store.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import type { StoredChatFilter } from "../store/types.js"
 import { nothingStored, type ServiceDeps } from "./deps.js"
 
 /** What a store search reads of the messenger: its saved-messages chat, and its command for a hint. */
@@ -45,6 +46,7 @@ export const storedChatId = async (
   chatIdAmong(messenger, reference, account, {
     held: () => store.chats.chats(account, {}),
     renamed: (id) => store.chats.renamedChatId(account, id),
+    left: async (id) => leftIn(await store.chats.chats(account, byId(id))),
   })
 
 /** `storedChatId`, then among the chats the account left: their history is kept, so a read of it still finds them. */
@@ -65,7 +67,11 @@ export const chatIdIn = (
   { includeLeft = false }: { includeLeft?: boolean } = {},
 ): Promise<string> => {
   const renamed = (id: Id) => store.chats.renamedChatId(id)
-  const among = chatIdAmong(messenger, reference, store.account, { held: () => store.chats.chats({}), renamed })
+  const among = chatIdAmong(messenger, reference, store.account, {
+    held: () => store.chats.chats({}),
+    renamed,
+    left: async (id) => leftIn(await store.chats.chats(byId(id))),
+  })
   if (!includeLeft) return among
   return among.catch((error: unknown) => {
     if (codeOf(error) !== "not_found") throw error
@@ -76,17 +82,38 @@ export const chatIdIn = (
   })
 }
 
+const byId = (id: Id): StoredChatFilter & { limit: number } => ({
+  includeLeft: true,
+  limit: 1,
+  where: { sql: "chats.external_id = ?", params: [id] },
+})
+
+const leftIn = ({ items }: Page<Chat>) => items.some((one) => one.membershipState === "left")
+
+/** `left` is given where a left chat is refused; it lets a numeric id the store does not hold through as typed. */
 const chatIdAmong = async (
   messenger: Saved,
   reference: string,
   account: AccountKey,
-  { held, renamed }: { held: () => Promise<Page<Chat>>; renamed: (id: Id) => Promise<Id | undefined> },
+  {
+    held,
+    renamed,
+    left,
+  }: {
+    held: () => Promise<Page<Chat>>
+    renamed: (id: Id) => Promise<Id | undefined>
+    left?: (id: Id) => Promise<boolean>
+  },
 ): Promise<string> => {
   const trimmed = reference.trim()
   if (messenger.savedChatId && ["me", "self", "saved"].includes(trimmed.toLowerCase())) {
     return messenger.savedChatId(account)
   }
-  if (/^-?\d+$/.test(trimmed)) return (await renamed(trimmed)) ?? trimmed
+  if (/^-?\d+$/.test(trimmed)) {
+    const id = (await renamed(trimmed)) ?? trimmed
+    if (await left?.(id)) throw new CliError("not_found", `you left chat ${id}`)
+    return id
+  }
   const chats = (await held()).items
   const exact = chats.find((one) => one.id === trimmed)
   if (exact) return exact.id

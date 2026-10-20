@@ -336,7 +336,7 @@ may still write the old ones, so `openStore` copies what is missing on every ope
 (`src/store/sqlite/notes-copy.ts`, behind `notesToCopy`).
 
 **Notes' search indexes.** The same words and stems as messages — `note_words`,
-`note_stems`, same tokenizer and the store's stemmer choices — and `note_chunks`, whose hashes find their
+`note_stems`, same tokenizer and the store's stemmer choices — and their rows in `chunks`, whose hashes find their
 vectors in `chunk_vectors` beside the conversations'. Triggers on `notes` only queue the note in
 `note_index_pending`; `drainNoteIndex` (`src/store/sqlite/note-index.ts`) writes words, stems and chunks
 in JS before every notes search, `chunksToEmbed` and `nearest`, and in `store migrate` and `store reindex`.
