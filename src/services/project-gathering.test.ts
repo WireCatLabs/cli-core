@@ -447,10 +447,38 @@ it("gives a document hit the paragraphs around the one that names the project, i
     ["Owners: Ana.", false],
     ["Risks.", false],
   ])
+  expect(hit?.moreMatches).toBe(0)
   expect(hit?.around?.every((one) => one.ref === hit.ref)).toBe(true)
   expect(result.usage.aroundBytes).toBeGreaterThan(0)
   const none = await gatherProjectEvidence({ evidence: f.port }, { ...request, around: { before: 0, after: 0 } })
   expect(none.items.find((i) => i.ref === hit?.ref)?.around).toBeUndefined()
+})
+
+it("centres a document hit on its first paragraph that names any lane, not the lane that found it", async () => {
+  const f = await fixture()
+  const { note } = await f.store.notes.saveFileNote({
+    folderId: f.folder.id,
+    path: "order.md",
+    title: "Order",
+    text: "Intro.\n\nThe launch slipped.\n\nBudget.\n\nScope.\n\nHarbour owners met.\n\nRisks.\n\nHarbour again.",
+  })
+  drainNoteIndex(f.db, stemmerCache())
+  const request = {
+    ...f.request,
+    sources: f.sources.filter((s) => s.kind === "document"),
+    around: { before: 1, after: 1 },
+  }
+  const result = await gatherProjectEvidence({ evidence: f.port }, request)
+  const hit = result.items.find((i) => i.ref === `document:${note.id}`)
+  expect(hit?.lanes).toEqual(["l1", "l2"])
+  expect(hit?.around?.map((one) => [one.text, one.found])).toEqual([
+    ["Intro.", false],
+    ["The launch slipped.", true],
+    ["Budget.", false],
+  ])
+  expect(hit?.moreMatches).toBe(2)
+  const none = await gatherProjectEvidence({ evidence: f.port }, { ...request, around: { before: 0, after: 0 } })
+  expect([none.usage.reads, none.usage.readBytes]).toEqual([result.usage.reads, result.usage.readBytes])
 })
 
 const linkedChat = (f: Awaited<ReturnType<typeof fixture>>, accountId: number, texts: string[]) => {

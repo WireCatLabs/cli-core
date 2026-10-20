@@ -38,21 +38,31 @@ export const storedMessageNeighbours = (messages: Pick<MessagesStore, "around">)
 
 const wordsOf = (text: string) => (text.match(/[\p{L}\p{N}\p{M}]+/gu) ?? []).map(fold)
 
-/** The paragraphs around the first one that names the query, in document order; the hit's own is marked found. */
-export const documentPassage = (text: string, query: string, window: { before: number; after: number }) => {
+/**
+ * The paragraphs around the first one that names a word of any query, in document order, with the hit's own marked
+ * found, and how many later paragraphs name one too.
+ */
+export const documentMatches = (text: string, queries: string[], window: { before: number; after: number }) => {
   const paragraphs = text
     .split(/\n\s*\n/)
     .map((part) => part.replace(/\s+/g, " ").trim())
     .filter(Boolean)
+  const query = queries.join(" ")
   const words = new Set(wordsOf(query))
-  const hit = paragraphs.findIndex((part) => wordsOf(part).some((word) => words.has(word)))
-  if (hit < 0 || paragraphs.length < 2) return []
+  const matching = paragraphs.flatMap((part, index) => (wordsOf(part).some((word) => words.has(word)) ? [index] : []))
+  const hit = matching[0]
+  if (hit === undefined || paragraphs.length < 2) return { around: [], moreMatches: 0 }
   const from = Math.max(0, hit - window.before)
-  return paragraphs.slice(from, hit + window.after + 1).map((part, index) => ({
+  const around = paragraphs.slice(from, hit + window.after + 1).map((part, index) => ({
     text: excerpt(part, query, 200, { literal: true }),
     found: from + index === hit,
   }))
+  return { around, moreMatches: matching.length - 1 }
 }
+
+/** The paragraphs around the first one that names the query, in document order; the hit's own is marked found. */
+export const documentPassage = (text: string, query: string, window: { before: number; after: number }) =>
+  documentMatches(text, [query], window).around
 
 /**
  * Neighbours are context for reading a hit, not matches: they never join `items`, and their text counts against

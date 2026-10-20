@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A document hit says how many other paragraphs match.** `ProjectEvidenceItem.moreMatches` (on a document item
+  with `around`) counts the paragraphs after the one `around` centres on that also name a lane word. See
+  [project gathering](docs/dev/PROJECT-GATHERING.md).
+
+### Fixed
+
+- **A document hit's `around` followed the lane that found it first, not the document.** It centred on that lane's
+  first matching paragraph (in a measured 145 KB document, paragraph 60 found by the key, not paragraph 4 that
+  names the project). It now centres on the first paragraph that names a word of any lane, in document order, as
+  the guide says. No extra reads or charged bytes.
+
 ## 0.376.0 — 20.10.2026
 
 ### Added

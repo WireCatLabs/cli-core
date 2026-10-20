@@ -71,8 +71,10 @@ const result = await gatherProjectEvidence(
   matches: they never join `items`, and `found` says whether a neighbour is a hit itself. Their bytes count
   against `maxReadBytes` (`usage.aroundBytes`); when it runs out, a hit has `aroundIssue: "read-bytes"`.
   A document hit needs no port: its `around` is the paragraphs (split at blank lines) before and after the first
-  one that names a lane word, in document order, as 200-character excerpts. The hit's own paragraph is included
-  with `found: true`; every entry carries the document's reference.
+  one that names a word of any of the request's lanes, in document order, whichever lane found the document, as
+  200-character excerpts. The hit's own paragraph is included with `found: true`; every entry carries the document's
+  reference. `moreMatches` counts the paragraphs after it that also name a lane word, shown in `around` or not. It
+  is worked out from the text already read: no extra read and no extra charged bytes.
 
 Hosts can reuse the pure `documentPassage(text, query, { before, after })` helper from `./services`
 when reviewing an already-read document. It returns the same 200-character paragraph excerpts and
