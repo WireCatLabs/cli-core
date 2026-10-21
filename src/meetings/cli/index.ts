@@ -1,5 +1,5 @@
 import { annotate } from "@wirecat/cli-base/commands"
-import { defineQuery, fieldsHelp } from "@wirecat/cli-base/query"
+import { defineQuery, fieldsHelp, timezoneOf, zonedMoment } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
@@ -43,8 +43,11 @@ const lookbackDays = (text: string) => {
   return Number(text)
 }
 const date = (text: string) => {
-  if (!Number.isFinite(Date.parse(text))) throw new InvalidArgumentError("expected an ISO date or timestamp")
-  return Date.parse(text)
+  try {
+    return zonedMoment(text, timezoneOf(), { start: 0, end: text.length })
+  } catch {
+    throw new InvalidArgumentError("expected an ISO date, or a time with or without an offset")
+  }
 }
 const LOCAL_READ: Effects = { remote: "none", local: "read" }
 const LOCAL_WRITE: Effects = { remote: "none", local: "write" }

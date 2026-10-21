@@ -222,7 +222,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
         services.people.timeline(person, {
           ...(scope === undefined ? {} : { scope: scope as Scope }),
           ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
-          ...(untilTime === undefined ? {} : { until: momentOf(untilTime, "--until-time") }),
+          ...(untilTime === undefined ? {} : { until: momentOf(untilTime, "--until-time", Date.now(), { end: true }) }),
           ...(limit === undefined ? {} : { limit }),
           ...(cursor === undefined ? {} : { cursor }),
         }),

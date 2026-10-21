@@ -279,10 +279,10 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
           : duration(query.olderThan ?? "24h", "--older-than"),
       within: query.within === undefined && pinned ? pinned.options.within : duration(query.within ?? "7d", "--within"),
       joinSince: query.sinceTime
-        ? momentOf(query.sinceTime, "--since-time", cutoff)
+        ? momentOf(query.sinceTime, "--since-time", cutoff, { zone: prepared.timezone })
         : (pinned?.options.joinSince ?? cutoff - 30 * 86_400_000),
       joinUntil: query.untilTime
-        ? momentOf(query.untilTime, "--until-time", cutoff)
+        ? momentOf(query.untilTime, "--until-time", cutoff, { zone: prepared.timezone, end: true })
         : (pinned?.options.joinUntil ?? cutoff),
       minViews: count(query.minViews ?? pinned?.options.minViews ?? 1, "--min-views"),
       maxReplies: count(query.maxReplies ?? pinned?.options.maxReplies ?? 0, "--max-replies"),

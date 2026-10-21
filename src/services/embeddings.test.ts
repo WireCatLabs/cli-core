@@ -209,9 +209,10 @@ describe("strict conversation search scope", () => {
       meaning: "unavailable",
       hits: [{ summary: { firstMessageId: "40" }, by: ["words"] }],
     })
-    expect((await embeddings.search("fish", { model: "e5-small", limit: 1, filter: "date:2026-10-03" })).hits).toEqual(
-      [],
-    )
+    expect(
+      (await embeddings.search("fish", { model: "e5-small", limit: 1, filter: "date:2026-10-03", timezone: "UTC" }))
+        .hits,
+    ).toEqual([])
     await expect(embeddings.search("fish", { model: "tiny", limit: 1, filter: "from:" })).rejects.toThrow()
     await expect(embeddings.search("fish", { model: "tiny", limit: 1, timezone: "invalid/zone" })).rejects.toThrow()
     expect(

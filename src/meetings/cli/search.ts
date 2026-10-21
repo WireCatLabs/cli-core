@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import { timezoneOf, zonedMoment } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import { meetingHitsList } from "../answers.js"
 import type { MeetingSearchPage } from "../search-store.js"
@@ -7,23 +8,17 @@ import { type MeetingHitSearchOptions, validateMeetingHitSearch } from "../searc
 
 export { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
+const moment = (flag: string, end: boolean) => (value: string) => {
+  try {
+    return zonedMoment(value, timezoneOf(), { start: 0, end: value.length }, { end })
+  } catch {
+    throw new CliError("validation_error", `${flag} takes an ISO date, or a time with or without an offset`)
+  }
+}
 const integer = (value: string): number => {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))
     throw new CliError("validation_error", "expected a positive safe integer")
   return Number(value)
-}
-const timestamp = (value: string): number => {
-  const parsed = Date.parse(value)
-  const date = value.slice(0, 10)
-  const day = Date.parse(`${date}T00:00:00Z`)
-  if (
-    !/^\d{4}-\d{2}-\d{2}(?:T.+(?:Z|[+-]\d{2}:\d{2}))?$/.test(value) ||
-    !Number.isFinite(parsed) ||
-    !Number.isFinite(day) ||
-    new Date(day).toISOString().slice(0, 10) !== date
-  )
-    throw new CliError("validation_error", "meeting search dates require a real ISO date or timestamp with offset")
-  return parsed
 }
 export interface MeetingSearchFlags {
   meetingId?: number
@@ -59,8 +54,16 @@ export const createMeetingSearchCommand = (program: Command): Command => {
     .option("--project <name>", "meetings confirmed in this project, by name, key or alias")
     .option("--tag <name>", "meetings with this tag, by name or alias")
     .option("--topic <name>", "meetings with this topic, by name or alias")
-    .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", timestamp)
-    .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", timestamp)
+    .option(
+      "--since-time <time>",
+      "meetings starting at or after this ISO 8601 date or time",
+      moment("--since-time", false),
+    )
+    .option(
+      "--until-time <time>",
+      "meetings starting at or before this ISO 8601 date or time; a date alone covers that whole local day",
+      moment("--until-time", true),
+    )
     .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
     .option("--cursor <cursor>", "continue from the previous page's page.next_cursor, with the same query and filters")
     .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)

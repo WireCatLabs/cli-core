@@ -1,7 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { isoTime } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import { meetingSeriesInventory } from "../entities/index.js"
+import { meetingSeriesInventory, zonedTime } from "../entities/index.js"
 import {
   type MeetingSeriesInventoryRequest,
   type MeetingSeriesInventoryResult,
@@ -16,8 +15,8 @@ export type MeetingSeriesInventoryReader = (
 const bounded = (min: number, max: number) =>
   v.optional(v.pipe(v.number(), v.integer(), v.minValue(min), v.maxValue(max)))
 export const meetingSeriesInventoryInput = v.strictObject({
-  after: v.optional(isoTime),
-  until: v.optional(isoTime),
+  after: v.optional(zonedTime),
+  until: v.optional(zonedTime),
   limit: bounded(1, 100),
   max_read_bytes: bounded(1, 1048576),
   bytes: bounded(2048, 1048576),

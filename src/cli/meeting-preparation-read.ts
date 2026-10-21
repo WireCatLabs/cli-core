@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
-import { isoTime } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { communicationFields } from "../context/communication-selection.js"
+import { zonedTime } from "../entities/index.js"
 import { validateMeetingChange } from "../meetings/index.js"
 import {
   MEETING_PREPARATION_LIMITS,
@@ -23,12 +23,12 @@ const bound = (name: keyof typeof MEETING_PREPARATION_LIMITS) => {
 export const meetingPreparationInput = v.strictObject({
   series_id: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
   communications: v.optional(
-    v.strictObject({ ...communicationFields, after: v.optional(isoTime), before: v.optional(isoTime) }),
+    v.strictObject({ ...communicationFields, after: v.optional(zonedTime), before: v.optional(zonedTime) }),
   ),
   project: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(200))),
-  after: v.optional(isoTime),
-  until: v.optional(isoTime),
-  history_after: v.optional(isoTime),
+  after: v.optional(zonedTime),
+  until: v.optional(zonedTime),
+  history_after: v.optional(zonedTime),
   meetings: bound("meetings"),
   cues: bound("cues"),
   context_limit: bound("contextLimit"),
