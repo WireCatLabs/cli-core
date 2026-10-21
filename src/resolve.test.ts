@@ -20,6 +20,15 @@ describe("a chat named by its title", () => {
     expect(() => pickChat("Мама", [chat("1", "Мама"), chat("2", "Мама Иванова")])).toThrow(/matches 2 chats/)
   })
 
+  it("finds a title whether or not the typed emoji carries a presentation mark", () => {
+    expect(pickChat("Семья❤\uFE0F", [chat("1", "Семья❤"), chat("2", "Работа")]).id).toBe("1")
+    expect(pickChat("семья❤", [chat("1", "Семья❤\uFE0F")]).id).toBe("1")
+  })
+
+  it("finds a title typed with a composed letter when it is stored as letter plus accent", () => {
+    expect(pickChat("Йога", [chat("1", "И\u0306ога")]).id).toBe("1")
+  })
+
   it("lists each candidate on one line, so a title cannot add a row of its own", () => {
     const forged = "Работа\n  999  Работа (настоящая)"
     let message = ""
@@ -46,6 +55,11 @@ describe("a person named by name or @username", () => {
 
   it("takes an exact @username over a name fragment", () => {
     expect(pickPerson("@ivanp", lookup).id).toBe("-5")
+  })
+
+  it("finds a name whatever presentation mark its emoji carries", () => {
+    const marked = [person("9", "Оля 🌸\uFE0F")]
+    expect(pickPerson("оля 🌸", { get: () => undefined, all: () => marked }).id).toBe("9")
   })
 
   it("takes a negative id as an id, not a name", () => {
