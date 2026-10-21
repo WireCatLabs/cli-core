@@ -5,6 +5,25 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **A typed date or time is read in a zone, and a date alone covers the whole local day** (cli-base `WC-TIME-3`,
+  `WC-TIME-5`). `--since-time`, `--until-time`, `--at-time`, `--due`, `--remind-time`, `chats mute --until`, fact
+  `occurredAt`, `meetings sync --since-time` and `search meetings --since-time`/`--until-time` used `Date.parse`: a date
+  alone was UTC midnight, a time without a zone was the process zone, and `--timezone` was ignored. Now a zone the
+  value names wins; otherwise the command's `--timezone` (stats, admin statistics, the MCP `stats` tool), else the
+  computer's IANA zone. A date alone starts at local midnight; as an end (`--until-time`) it is the last millisecond
+  of that local day, so the day is no longer dropped. A local time that daylight saving skips or repeats is refused.
+  List-query `time` terms (`timeBounds`) default to the computer's zone, not UTC. What to watch for: `momentOf` and
+  `aheadOf` keep their signature and take an optional `{ zone, end }`; a caller that passed a date alone and expected
+  UTC midnight now gets local midnight. `search meetings` now takes a time without an offset instead of refusing it.
+  The answers do not name the zone used yet (`meta.timezone`); that follows.
+- **cli-base 0.48.0.** `isoTime` refuses offsets other than `Z`; two input schemas that take a caller's time with any
+  offset (meeting preparation, meeting series inventory) use the new `zonedTime` instead. The peer range moves to
+  `>=0.48.0 <0.49.0`, and `node-ci.yml` runs the tests in `Asia/Vladivostok`.
+
 ## 0.378.0 — 21.10.2026
 
 ### Added
