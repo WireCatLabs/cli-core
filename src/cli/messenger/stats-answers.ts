@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { Meta } from "@wirecat/cli-base/standards"
 import type { InferOutput } from "valibot"
 import type { ChartData } from "../../charts/model.js"
 import type { CounterState } from "../../domain/counters.js"
@@ -446,7 +447,8 @@ export const officialAnswer = (stats: OfficialChatStats, provider: string): Item
 export const chartAnswer = (
   chart: ChartData,
   file?: { path: string; format: "svg" | "png"; width: number; height: number },
-): ItemBody<Of<"chart">> => itemOf(defined({ ...chart, file }))
+  meta?: Partial<Meta>,
+): ItemBody<Of<"chart">> => itemOf(defined({ ...chart, file }), meta ? { meta } : {})
 
 /** A report or a chart is one object: `--jsonl` would print one line pretending to be a stream. */
 export const refuseJsonl = (format: string): void => {

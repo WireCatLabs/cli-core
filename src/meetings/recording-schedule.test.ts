@@ -98,7 +98,7 @@ it("preserves typed cancellation and translates timeout before installation", as
   expect(install).not.toHaveBeenCalled()
 })
 
-it("uses UTC discovery dates with bounded overlap and initial/future start boundaries", () => {
+it("uses discovery dates with bounded overlap and initial/future start boundaries", () => {
   expect(recordingArchiveScheduleWindow(planned(), { now })).toEqual({
     from: "2026-01-01",
     to: "2026-10-11",
@@ -117,12 +117,19 @@ it("uses UTC discovery dates with bounded overlap and initial/future start bound
   ).toBeNull()
 })
 
+it("counts today in the schedule's own zone, not in UTC", () => {
+  const evening = Date.parse("2026-10-21T15:30:00.000Z")
+  const schedule = planRecordingArchiveSchedule({ ...input(), timeZone: "Asia/Vladivostok" }, { now: evening })
+  expect(recordingArchiveScheduleWindow(schedule, { now: evening })?.to).toBe("2026-10-22")
+  expect(recordingArchiveScheduleWindow(planned(), { now: evening })?.to).toBe("2026-10-21")
+})
+
 it("keeps long-lived discovery within ten calendar years across leap days", () => {
   const schedule = planRecordingArchiveSchedule(
     { ...input(), from: "2010-03-01" },
     { now: Date.parse("2020-02-29T00:00:00.000Z") },
   )
-  expect(recordingArchiveScheduleWindow(schedule, { now: Date.parse("2024-02-29T23:00:00.000Z") })?.from).toBe(
+  expect(recordingArchiveScheduleWindow(schedule, { now: Date.parse("2024-02-29T12:00:00.000Z") })?.from).toBe(
     "2014-02-28",
   )
 })

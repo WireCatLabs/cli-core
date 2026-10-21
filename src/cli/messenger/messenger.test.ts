@@ -3627,7 +3627,9 @@ describe("the shared read commands", () => {
     expect(envelope).toMatchObject({ page: { limit: 3, has_more: false } })
     expect(envelope.items.map((message: { id: string }) => message.id)).toEqual(["1", "2", "3"])
     const transcript = await call(["store", "export", "7", "--format", "markdown"], never, env)
-    expect(transcript.stdout.join("\n")).toMatch(/^# 7\n\n## \d{4}-\d{2}-\d{2}\n\n\*\*\d{2}:\d{2} /)
+    expect(transcript.stdout.join("\n")).toMatch(
+      /^# 7\n\nTimes are in [\w/+-]+\.\n\n## \d{4}-\d{2}-\d{2}\n\n\*\*\d{2}:\d{2} /,
+    )
     expect((await call(["store", "export", "7", "--format", "html"], never, env)).code).not.toBe(0)
     expect((await call(["export", "7"], never, env)).code).not.toBe(0)
     expect((await call(["sync", "status"], never, env)).code).not.toBe(0)

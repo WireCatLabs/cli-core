@@ -27,6 +27,10 @@ shape of this file.
   extends, so «риелтор» finds «реелтора», «рилторов» and «дриелтора», «циана» finds «цианом», and «договор» does not
   find «поговорить». Hits come typed form first, then other forms, then garbled spellings; a widened hit carries `match: "corrected"` and `corrections`, and `meeting_hit` items show both. Number words never
   widen, and match only their own forms («семь» finds «семи», not «семьдесят»). See [meetings](docs/dev/MEETINGS.md).
+- **Answers say which zone a typed date was read in, and the UTC window it gave** (cli-base `WC-TIME-3`, `WC-TIME-5`).
+  `stats charts`, the MCP `stats` tool and `contacts timeline` put `meta.timezone` (only when a value had no zone of
+  its own) and `meta.window: { since?, until? }` in UTC in their answers. `dateWindow` in `./cli`'s moment helpers
+  builds both from `--since-time`/`--until-time`. Other date filters follow.
 
 ### Changed — may break callers
 
@@ -41,6 +45,17 @@ shape of this file.
 - **Meeting search reads `exact:` and has new cursors.** `exact:word` and `exact:"two words"` in a
   `meetings.searchHits` query keep those words to their typed form, where `exact` was a search word before. Exact
   hits now come before widened ones, so cursors from earlier versions are refused; start the search again.
+
+### Fixed
+
+- **A recording archive schedule counts "today" in its own zone.** The window's end, its ten-year floor and its
+  look-back started from the UTC date, so a run between local midnight and UTC midnight worked on yesterday. The
+  schedule's `timeZone` was stored and never used for this.
+- **A Markdown chat archive says which zone its times are in.** The file printed local wall times with no zone; it
+  now has `Times are in <zone>.` under the title.
+- **`chats stats show` and `stats chats retention` read `--since-time`/`--until-time` in their `--timezone`.** They
+  used the computer's zone even when `--timezone` was given, and retention's `--until-time` dropped the day it named;
+  it now covers that whole local day.
 
 ## 0.379.0 — 21.10.2026
 

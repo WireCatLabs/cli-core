@@ -25,16 +25,21 @@ export const observationDuration = (text: string, flag: string): number => {
 export const retentionService = (deps: ServiceDeps) => ({
   report: async (chat: string, query: RetentionQuery = {}) => {
     const cutoff = Date.now()
+    const zone = timezoneOf(query.timezone)
     const options: RetentionOptions = {
-      since: query.sinceTime === undefined ? cutoff - 90 * 86_400_000 : momentOf(query.sinceTime, "--since-time"),
-      until: query.untilTime === undefined ? cutoff : momentOf(query.untilTime, "--until-time"),
+      since:
+        query.sinceTime === undefined
+          ? cutoff - 90 * 86_400_000
+          : momentOf(query.sinceTime, "--since-time", cutoff, { zone }),
+      until:
+        query.untilTime === undefined ? cutoff : momentOf(query.untilTime, "--until-time", cutoff, { zone, end: true }),
       cutoff,
       checkpoints: (query.checkpoints ?? "1d,7d,30d")
         .split(",")
         .map((one) => observationDuration(one.trim(), "--checkpoints")),
       within: observationDuration(query.within ?? "7d", "--within"),
       by: query.by ?? "week",
-      timezone: timezoneOf(query.timezone),
+      timezone: zone,
       limit: query.limit ?? 20,
     }
     const store = await deps.store(),

@@ -8,7 +8,7 @@ import { sealed } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { chartAnswer } from "../../cli/messenger/stats-answers.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { type AnyTool, chatOf, Picture, READ, tool } from "../tool.js"
 
 export const statsTools = (messenger: Messenger): Record<string, AnyTool> => ({
@@ -32,17 +32,20 @@ export const statsTools = (messenger: Messenger): Record<string, AnyTool> => ({
     stored: async (store, account, args, defaults) => {
       const timezone = timezoneOf(args.timezone)
       const by = args.by ?? "day"
+      const window = dateWindow({
+        ...(args.since_time === undefined ? {} : { sinceTime: args.since_time }),
+        zone: timezone,
+        names: ["since_time", "until_time"],
+      })
       const stats = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).chats.stats(args.chat, {
         by,
         timezone,
-        ...(args.since_time === undefined
-          ? {}
-          : { since: momentOf(args.since_time, "since_time", Date.now(), { zone: timezone }) }),
+        ...(window.since === undefined ? {} : { since: window.since }),
       })
       const chart = chatChart(stats, { kind: args.chart_kind ?? "messages", by, timezone })
-      if (args.format !== "png") return chartAnswer(chart)
+      if (args.format !== "png") return chartAnswer(chart, undefined, window.meta)
       const image = await chartPng(await (await chartRenderer()).render(chart, CHART_SIZE))
-      return new Picture(image.bytes, image.mimeType, sealed(chartAnswer(chart)))
+      return new Picture(image.bytes, image.mimeType, sealed(chartAnswer(chart, undefined, window.meta)))
     },
   }),
 })

@@ -35,6 +35,8 @@ describe("a chat as Markdown", () => {
       [
         "# Book club",
         "",
+        "Times are in UTC.",
+        "",
         "## 2026-09-29",
         "",
         "**23:58 Olga**",

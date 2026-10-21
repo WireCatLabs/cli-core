@@ -114,6 +114,16 @@ const setup = async ({
 afterEach(() => vi.restoreAllMocks())
 
 describe("stats charts", () => {
+  it("names the zone a date was read in and the UTC window it gave", async () => {
+    const { call } = await setup()
+    const result = await call(["--since-time", "2026-09-01", "--timezone", "Europe/Madrid", "--json"])
+    expect(result.code).toBe(0)
+    expect(JSON.parse(result.stdout).meta).toMatchObject({
+      timezone: "Europe/Madrid",
+      window: { since: "2026-08-31T22:00:00.000Z" },
+    })
+  })
+
   it("returns neutral JSON without loading a renderer or connecting", async () => {
     const load = vi.spyOn(rendering, "chartRenderer")
     const { call, connect } = await setup()
