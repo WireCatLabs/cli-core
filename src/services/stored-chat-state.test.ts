@@ -80,6 +80,34 @@ describe("a messenger whose inbox reads the store", () => {
     expect((await store.chats.chats(account, {})).items[0]).toMatchObject({ unreadCount: 0, markedUnread: false })
   })
 
+  it("takes a read up to the newest message from someone else as whole, though the owner replied after it", async () => {
+    const store = await holding([chat("7", { unreadCount: 2 })])
+    const reply = { ...messageIn("7", "7-2", 2), senderId: "500", outgoing: true }
+    await store.messages.saveMessages(account, "7", [reply], { via: "update" })
+    const adapter = {
+      resolve: async () => ({ id: "7", title: "Chat 7", kind: "group" }),
+      markRead: async () => {},
+    } as unknown as MessengerAdapter
+    const deps = { ...storeModeDeps(messenger, store, account, guard), connection: async () => adapter }
+
+    await chatsService(deps).markRead({ chat: "7", until: "7-1" })
+
+    expect((await store.chats.chats(account, {})).items[0]?.unreadCount).toBe(0)
+  })
+
+  it("adds no chat the store does not hold", async () => {
+    const store = await holding([])
+    const adapter = {
+      resolve: async () => ({ id: "9", title: "Chat 9", kind: "group" }),
+      markRead: async () => {},
+    } as unknown as MessengerAdapter
+    const deps = { ...storeModeDeps(messenger, store, account, guard), connection: async () => adapter }
+
+    await chatsService(deps).markRead({ chat: "9" })
+
+    expect((await store.chats.chats(account, {})).items).toEqual([])
+  })
+
   it("keeps the count after a read up to an older message", async () => {
     const store = await holding([chat("7", { unreadCount: 3 })])
     await store.messages.saveMessages(account, "7", [messageIn("7", "7-2", 2)], { via: "history" })

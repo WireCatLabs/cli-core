@@ -31,7 +31,7 @@ import {
   type TrackedChat,
 } from "../store/store.js"
 import { type ChatStats, chatStats, type StatsPeriod } from "./chat-stats.js"
-import { accountStore, accountStoreIfOpen, fromStore, nothingStored, type ServiceDeps } from "./deps.js"
+import { accountStore, accountStoreIfOpen, fromStore, nothingStored, type ServiceDeps, unlessBusy } from "./deps.js"
 import { type MemberEvent, memberEvents } from "./member-history.js"
 import {
   AUDIT_BUDGET,
@@ -414,14 +414,14 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
 
 /**
  * Where `inbox` reads the store, the store learns of a read the owner made here at once: the messenger may never say.
- * A read up to an older message leaves the count, which the store cannot split.
+ * A read up to an older message from someone else leaves the count, which the store cannot split.
  */
 const readInStore = async (deps: ServiceDeps, chatId: Id, kind: ChatKind, until: Id | undefined): Promise<void> => {
   const store = await accountStoreIfOpen(deps)
   if (!store) return
-  const [newest] = (await store.messages.messages(chatId, { limit: 1 })).items
-  if (until === undefined || newest === undefined || newest.id === until)
-    await store.chats.saveChats([{ id: chatId, kind, unreadCount: 0, markedUnread: false }])
+  const [newest] = (await store.messages.messages(chatId, { limit: 1, outgoing: false })).items
+  if (newest !== undefined && (until === undefined || newest.id === until))
+    await unlessBusy(() => store.chats.saveChats([{ id: chatId, kind, unreadCount: 0, markedUnread: false }]))
 }
 
 /** Each sender's first stored message in the chat; `undefined` when the store holds none of it. */
