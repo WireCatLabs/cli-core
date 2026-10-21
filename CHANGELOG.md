@@ -9,6 +9,11 @@ shape of this file.
 
 ### Added
 
+- **A file's copy and the provider's copy of one meeting are one record.** `MeetingSave.fromFile` marks a save read
+  from a file; it joins the provider's record of the same occurrence (same series key, start within 15 minutes)
+  and only fills a missing transcript there. A provider record saved after a file takes over that record and its
+  key, and a provider transcript supersedes transcripts with source `file`. Two provider records never merge.
+  See [meetings](docs/dev/MEETINGS.md).
 - **Meetings import text transcripts.** `parseTranscriptText` reads the text form zoom-searcher wrote: the header
   (`Встреча:` title, `Дата:` start as written, `Zoom ID:`, `Говорят:` speakers) and `[hh:mm:ss] Speaker: text`
   blocks, a block running over several lines. `ImportFile.format: "text"` makes `importFiles` use it; `vtt` stays
@@ -16,6 +21,7 @@ shape of this file.
 - **An import says the zone it read file times in, and a host can explain its file names.** `RunReport.timezone` is
   set when every imported file's meeting carries one zone; `MeetingCommandDeps.importHelp` adds the host's note
   (file name patterns, how their time is read) under `meetings import --help`.
+||||||| Stash base
 - **Meeting search finds words spread over neighbouring lines.** `"циан риелтор"~3` in a meeting query finds a
   transcript line with one of the words when the others are at most three lines away in the same transcript; `~0`
   is one line, any order; at most 20. The words widen to garbled spellings as single words do. It needs

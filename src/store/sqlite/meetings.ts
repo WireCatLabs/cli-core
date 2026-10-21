@@ -230,6 +230,74 @@ export const saveAttachment = (
     now,
   )
 
+const FILE_SOURCE = "file"
+const SAME_OCCURRENCE_MS = 15 * 60_000
+
+/** The account's record of this occurrence under another key: same series, the nearest start within 15 minutes. */
+const sameOccurrence = (
+  database: StoreContext["database"],
+  meeting: MeetingSave["meeting"],
+  seriesKey: string | undefined,
+) => {
+  if (!seriesKey || meeting.startedAt === null) return undefined
+  const row = database
+    .prepare(
+      `SELECT m.id,m.external_id,m.meeting_series_id,
+       EXISTS (SELECT 1 FROM meeting_transcripts t WHERE t.meeting_id=m.id AND t.source=?) AND
+       NOT EXISTS (SELECT 1 FROM meeting_transcripts t WHERE t.meeting_id=m.id AND t.source!=?) AS from_file
+       FROM meetings m JOIN meeting_series s ON s.id=m.meeting_series_id
+       WHERE m.account_id=? AND s.account_id=? AND s.external_id=? AND m.deleted_at IS NULL
+       AND m.started_at BETWEEN ? AND ? ORDER BY abs(m.started_at-?),m.id LIMIT 1`,
+    )
+    .get(
+      FILE_SOURCE,
+      FILE_SOURCE,
+      meeting.accountId,
+      meeting.accountId,
+      seriesKey,
+      meeting.startedAt - SAME_OCCURRENCE_MS,
+      meeting.startedAt + SAME_OCCURRENCE_MS,
+      meeting.startedAt,
+    )
+  return row
+    ? {
+        id: row.id,
+        externalId: row.external_id,
+        seriesId: row.meeting_series_id,
+        fromFile: Number(row.from_file) === 1,
+      }
+    : undefined
+}
+
+/** A file's copy of an occurrence the provider already gave: its transcript only, and only where there is none. */
+const fillGap = (context: StoreContext, input: MeetingSave, meetingId: number): number => {
+  const { database } = context
+  const held = database
+    .prepare("SELECT 1 FROM meeting_transcripts WHERE meeting_id = ? AND superseded_at IS NULL AND deleted_at IS NULL")
+    .get(meetingId)
+  if (held || !input.transcripts?.length) return meetingId
+  const participantIds = (input.participants ?? []).map(({ identity, ...p }) =>
+    upsert(
+      database,
+      "meeting_participants",
+      {
+        meeting_id: meetingId,
+        identity_id: meetingIdentityPk({ ...context, now: () => input.now }, input.meeting.accountId, identity),
+      },
+      { display_name: p.displayName, email: p.email, role: p.role, external_id: p.externalId },
+      input.now,
+    ),
+  )
+  saveTranscripts(
+    database,
+    meetingId,
+    input.transcripts,
+    (position) => (position === null ? null : (participantIds[position] ?? null)),
+    input.now,
+  )
+  return meetingId
+}
+
 const save = (context: StoreContext, input: MeetingSave): number => {
   const { database } = context
   const {
@@ -238,9 +306,20 @@ const save = (context: StoreContext, input: MeetingSave): number => {
   } = input
   if (!Number.isSafeInteger(meeting.accountId) || meeting.accountId <= 0 || !meeting.externalId)
     throw new Error("Invalid meeting key")
-  const existing = database
+  let existing = database
     .prepare("SELECT id, meeting_series_id FROM meetings WHERE account_id = ? AND external_id = ?")
     .get(meeting.accountId, meeting.externalId)
+  const same = existing ? undefined : sameOccurrence(database, meeting, seriesInput?.externalId)
+  if (same?.fromFile === false && input.fromFile) return fillGap(context, input, Number(same.id))
+  if (same && (same.fromFile || input.fromFile)) {
+    // A provider record takes over a record made from files; two files of one occurrence share the first one's key.
+    if (input.fromFile) meeting.externalId = String(same.externalId)
+    else
+      database
+        .prepare("UPDATE meetings SET external_id = ?, updated_at = ? WHERE id = ?")
+        .run(meeting.externalId, now, Number(same.id))
+    existing = { id: same.id, meeting_series_id: same.seriesId }
+  }
   let seriesId = existing ? int(existing.meeting_series_id) : null
   if (seriesInput) {
     if (!seriesInput.externalId) throw new Error("Invalid series key")
@@ -314,6 +393,12 @@ const save = (context: StoreContext, input: MeetingSave): number => {
   }
 
   saveTranscripts(database, meetingId, input.transcripts ?? [], participantId, now)
+  if ((input.transcripts ?? []).some((transcript) => transcript.source !== FILE_SOURCE))
+    database
+      .prepare(
+        "UPDATE meeting_transcripts SET superseded_at = ?, updated_at = ? WHERE meeting_id = ? AND source = ? AND superseded_at IS NULL",
+      )
+      .run(now, now, meetingId, FILE_SOURCE)
 
   for (const { senderParticipantPosition, ...line } of input.chat ?? []) {
     const values = {

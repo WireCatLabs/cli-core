@@ -50,6 +50,12 @@ export interface MeetingSave {
   summaries?: Omit<NewRecord<Summary>, "meetingId">[]
   attachments?: Omit<NewRecord<Attachment>, "attachableType" | "attachableId">[]
   now: number
+  /**
+   * A copy of the occurrence read from a file, not from the provider. It joins the provider's record of the same
+   * occurrence — same series, start within 15 minutes — and only fills a missing transcript there; a provider
+   * record saved later takes over a record made from files. Transcripts from files have source `file`.
+   */
+  fromFile?: boolean
 }
 export interface MeetingDetails {
   meeting: Meeting
