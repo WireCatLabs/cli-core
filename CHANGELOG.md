@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.381.0 — 22.10.2026
+
 ### Added
 
 - **Meeting search finds words speech recognition cut off.** A stored word of four letters or more that begins a
