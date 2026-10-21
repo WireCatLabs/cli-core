@@ -28,6 +28,8 @@ export interface MeetingCommandDeps {
   accountId: number
   source?: MeetingSource
   readFiles?: (folder: string) => Promise<ImportFile[]>
+  /** The host's file names and how it reads their time, shown in `meetings import --help`. */
+  importHelp?: string
   writeFile?: (path: string, content: string) => Promise<void>
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
   now?: () => number
@@ -176,11 +178,11 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
         command,
       )
     })
-  output(
-    annotate(group.command("import"), { effects: LOCAL_WRITE })
-      .description("import downloaded meeting transcripts")
-      .argument("<folder>", "folder of transcripts downloaded from the provider"),
-  ).action(async (folder: string, _opts: unknown, command: Command) => {
+  const importCommand = annotate(group.command("import"), { effects: LOCAL_WRITE })
+    .description("import downloaded meeting transcripts")
+    .argument("<folder>", "folder of transcripts downloaded from the provider")
+  if (deps.importHelp) importCommand.addHelpText("after", `\n${deps.importHelp}`)
+  output(importCommand).action(async (folder: string, _opts: unknown, command: Command) => {
     if (!deps.readFiles) throw new MeetingError("configuration_error", "file reader is unavailable")
     const files = await deps.readFiles(folder)
     if (files.some((file) => file.meeting.accountId !== deps.accountId))

@@ -2,6 +2,7 @@ import { linkEvent } from "./events.js"
 import { transcriptInput } from "./ingest.js"
 import type { RunReport } from "./pull.js"
 import type { MeetingInput, MeetingStore, ParticipantInput } from "./store.js"
+import { parseTranscriptText } from "./transcript-text.js"
 import { parseVtt } from "./vtt.js"
 
 export interface ImportFile {
@@ -9,18 +10,21 @@ export interface ImportFile {
   content: string
   participants?: ParticipantInput[]
   source?: string
+  /** `vtt` (the default) or `text`, the form `parseTranscriptText` reads. */
+  format?: "vtt" | "text"
 }
 /** The caller reads files and supplies provider-neutral occurrence metadata. */
 export const importFiles = async (files: ImportFile[], store: MeetingStore, now = Date.now()): Promise<RunReport> => {
   const report: RunReport = { meetings: 0, participants: 0, transcriptRows: 0, summaries: 0, warnings: [] }
   for (const file of files) {
     try {
-      const lines = parseVtt(file.content)
+      const format = file.format ?? "vtt"
+      const lines = format === "text" ? parseTranscriptText(file.content).lines : parseVtt(file.content)
       const participants = file.participants ?? []
       const details = await store.saveMeeting({
         meeting: file.meeting,
         participants: file.participants,
-        transcripts: [await transcriptInput(lines, participants, file.source ?? "file", file.content, "vtt")],
+        transcripts: [await transcriptInput(lines, participants, file.source ?? "file", file.content, format)],
         now,
       })
       await linkEvent(store, details, now)
@@ -34,5 +38,10 @@ export const importFiles = async (files: ImportFile[], store: MeetingStore, now 
       })
     }
   }
+  const zones = new Set(
+    files.map((file) => file.meeting.timezone).filter((zone) => zone !== null && zone !== undefined),
+  )
+  const [zone] = zones
+  if (zones.size === 1 && zone) report.timezone = zone
   return report
 }

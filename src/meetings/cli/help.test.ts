@@ -36,3 +36,16 @@ it("prints help and exits 0 for --help and -h on every meetings command", async 
     }
   expect(failed).toEqual([])
 })
+
+it("shows the host's note on its file names under meetings import --help", async () => {
+  const out: string[] = []
+  const program = new Command("zm").exitOverride().configureOutput({ writeOut: (text) => out.push(text) })
+  addMeetingCommands(program, {
+    store: {},
+    accountId: 1,
+    write: () => undefined,
+    importHelp: "Files: YYYY-MM-DD_HHMM_topic.vtt, read in Europe/Madrid.",
+  } as unknown as MeetingCommandDeps)
+  await program.parseAsync(["meetings", "import", "--help"], { from: "user" }).catch(() => undefined)
+  expect(out.join("")).toContain("Files: YYYY-MM-DD_HHMM_topic.vtt, read in Europe/Madrid.")
+})

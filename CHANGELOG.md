@@ -9,6 +9,13 @@ shape of this file.
 
 ### Added
 
+- **Meetings import text transcripts.** `parseTranscriptText` reads the text form zoom-searcher wrote: the header
+  (`Встреча:` title, `Дата:` start as written, `Zoom ID:`, `Говорят:` speakers) and `[hh:mm:ss] Speaker: text`
+  blocks, a block running over several lines. `ImportFile.format: "text"` makes `importFiles` use it; `vtt` stays
+  the default. The file keeps start times only, so a line ends where the next begins.
+- **An import says the zone it read file times in, and a host can explain its file names.** `RunReport.timezone` is
+  set when every imported file's meeting carries one zone; `MeetingCommandDeps.importHelp` adds the host's note
+  (file name patterns, how their time is read) under `meetings import --help`.
 - **Meeting search finds words spread over neighbouring lines.** `"циан риелтор"~3` in a meeting query finds a
   transcript line with one of the words when the others are at most three lines away in the same transcript; `~0`
   is one line, any order; at most 20. The words widen to garbled spellings as single words do. It needs

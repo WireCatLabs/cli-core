@@ -291,6 +291,7 @@ export type {
   TranscriptAppendReceipt,
   UnlinkedTranscriptInput,
 } from "./transcript-store.js"
+export { parseTranscriptText, TranscriptTextError, type TranscriptTextHeader } from "./transcript-text.js"
 export {
   type MeetingMediaDescriptor,
   type MeetingRecognitionSegment,
