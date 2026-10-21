@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.381.0 — 22.10.2026
 
 ### Added
 
@@ -15,11 +15,6 @@ shape of this file.
   a saved message's own `delivery` keep it in the new `messages.delivery` column, only on the owner's messages and
   only ever forward. Stored messages show it as `delivery`. tg and max send none and see no change. See
   [adapters](docs/dev/ADAPTERS.md).
-
-## 0.381.0 — 22.10.2026
-
-### Added
-
 - **Meeting search finds words speech recognition cut off.** A stored word of four letters or more that begins a
   query word, and that the Russian dictionary does not know, widens it: «може» for «может», «напри» for «например».
   Real shorter words («после» for «последующих») still do not. This is ztx's rule, behind the dictionary.
