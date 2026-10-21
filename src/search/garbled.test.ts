@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { normalize } from "../store/normalize.js"
 import { type GarbledProbe, garbledDistance, widenWords } from "./garbled.js"
+import { knownRussianWord } from "./russian-dictionary.js"
 import { createStemmer, DEFAULT_STEMMERS } from "./stem.js"
 
 const stemmer = createStemmer(DEFAULT_STEMMERS)
@@ -53,10 +54,33 @@ describe("widenWords", () => {
       { term: "цианом", docs: 3 },
       { term: "дом", docs: 9 },
     ]
-    expect(widenWords([probe("риелтор"), probe("циана"), probe("дом")], vocabulary, stems)).toEqual([
+    expect(widenWords([probe("риелтор"), probe("циана"), probe("дом")], vocabulary, stems, () => false)).toEqual([
       ["рилторов", "реелтора", "дриелтора"],
       ["цианом"],
       [],
     ])
+  })
+
+  it("widens a spelling only when the dictionary does not know it, and another form of the word always", () => {
+    const vocabulary = [
+      { term: "поговорить", docs: 40 },
+      { term: "договора", docs: 1 },
+      { term: "дговор", docs: 1 },
+    ]
+    expect(widenWords([probe("договор")], vocabulary, stems, knownRussianWord)).toEqual([["дговор"]])
+    expect(widenWords([probe("циана")], [{ term: "цианом", docs: 3 }], stems, knownRussianWord)).toEqual([["цианом"]])
+  })
+})
+
+describe("knownRussianWord", () => {
+  it.each([
+    ["поговорить", true],
+    ["которыи", true],
+    ["еще", true],
+    ["александр", true],
+    ["реелтора", false],
+    ["дриелтора", false],
+  ])("%s is %s", (word, known) => {
+    expect(knownRussianWord(word)).toBe(known)
   })
 })

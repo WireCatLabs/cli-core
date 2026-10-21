@@ -31,9 +31,9 @@ shape of this file.
 ### Added
 
 - **Meeting search finds words speech recognition garbled.** `meetings.searchHits` widens each query word of four
-  letters or more to stored words one stem edit away, stems one side extends, and words that begin it, so
-  «риелтор» finds «реелтора», «рилторов» and «дриелтора», and «циана» finds «цианом». Exact hits come first; a
-  widened hit carries `match: "corrected"` and `corrections`, and `meeting_hit` items show both. Number words never
+  letters or more to stored words one stem edit away that a Russian dictionary does not know, and to stems one side
+  extends, so «риелтор» finds «реелтора», «рилторов» and «дриелтора», «циана» finds «цианом», and «договор» does not
+  find «поговорить». Hits come typed form first, then other forms, then garbled spellings; a widened hit carries `match: "corrected"` and `corrections`, and `meeting_hit` items show both. Number words never
   widen, and match only their own forms («семь» finds «семи», not «семьдесят»). See [meetings](docs/dev/MEETINGS.md).
 
 - **`gatherProjectEvidence` reads what a person wrote.** A person given with `senders: [{ provider, id }]` (their

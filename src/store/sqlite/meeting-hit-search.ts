@@ -3,6 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
 import { formatMeetingReference } from "../../meetings/index.js"
 import { isNumberWord, widenWords } from "../../search/garbled.js"
+import { knownRussianWord } from "../../search/russian-dictionary.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { indexedText } from "./meeting-index-values.js"
@@ -60,7 +61,7 @@ const cursorOf = (value: string | undefined, key: string): Cursor | null => {
   if (
     parsed?.version !== 2 ||
     parsed.key !== key ||
-    (parsed.tier !== 0 && parsed.tier !== 1) ||
+    ![0, 1, 2].includes(parsed.tier) ||
     !Number.isSafeInteger(parsed.started) ||
     Math.abs(parsed.started) > 8640000000000000 ||
     !Number.isSafeInteger(parsed.meeting) ||
@@ -142,6 +143,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
                 .all()
                 .map((row) => ({ term: String(row.term), docs: Number(row.doc) })),
               (word) => [...new Set(stemmer?.explain(word).map((part) => part.stem))],
+              knownRussianWord,
             )
           : []
         const terms = probes.map((probe) => ({ ...probe, widened: widened[widening.indexOf(probe)] ?? [] }))
@@ -175,11 +177,11 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
               `stems : (${term.stems.map((stem) => `"${stem.replaceAll('"', '""')}"`).join(" OR ")})`,
               state.through,
             )
-            select += " UNION SELECT rowid,0 FROM meeting_stems WHERE meeting_stems MATCH ? AND rowid<=?"
+            select += " UNION SELECT rowid,1 FROM meeting_stems WHERE meeting_stems MATCH ? AND rowid<=?"
           }
           if (term.widened.length) {
             queryParams.push(`normalized_text : (${term.widened.map(quote).join(" OR ")})`)
-            select += " UNION SELECT rowid,1 FROM meeting_words WHERE meeting_words MATCH ?"
+            select += " UNION SELECT rowid,2 FROM meeting_words WHERE meeting_words MATCH ?"
           }
           return `term_${i} AS (${select})`
         })

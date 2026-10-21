@@ -45,11 +45,11 @@ export const plainMatch = (probe: GarbledProbe, word: string, stems: string[]): 
   word.startsWith(probe.literal) || stems.some((stem) => probe.stems.includes(stem))
 
 /**
- * How far a stored word is from a query word that recognition may have garbled, or `null` when it is not a
- * candidate. Stems are compared, not words: «рилторов» is three edits from «риелтор» but its stem one.
- * A stem one side extends counts only when the other side's word spells the extension out — «циана» (stem
- * `циа`) reaches «цианом» (`циан`), while «устав» (`уста`) does not reach «установить» (`установ`).
- * As in ztx, a stored word that begins the query word also matches, from four letters on.
+ * How far a stored word is from a query word, or `null` when it is not a candidate. `0` is another form the
+ * stemmer cut differently: a stem one side extends counts only when the other side's word spells the extension
+ * out — «циана» (stem `циа`) reaches «цианом» (`циан`), «устав» (`уста`) does not reach «установить» (`установ`).
+ * `1` is a spelling recognition may have garbled, compared by stem: «рилторов» is three edits from «риелтор»
+ * as a word but one as a stem.
  */
 export const garbledDistance = (probe: GarbledProbe, word: string, stems: string[]): number | null => {
   if (probe.literal.length < SHORTEST_GARBLED || plainMatch(probe, word, stems)) return null
@@ -68,9 +68,8 @@ export const garbledDistance = (probe: GarbledProbe, word: string, stems: string
       if (queryStem.length < SHORTEST_GARBLED) continue
       if (queryStem.length < LOOSE_START && queryStem[0] !== wordStem[0]) continue
       const distance = editDistance(queryStem, wordStem, 1)
-      if (distance <= 1 && (best === null || distance < best)) best = distance
+      if (distance <= 1) best = distance
     }
-  if (best === null && stored.length >= SHORTEST_GARBLED && literal.startsWith(stored)) return 0
   return best
 }
 
@@ -105,7 +104,6 @@ const prefixDistance = (stem: string, word: string, max: number): number => {
  */
 const worthStemming = (probe: GarbledProbe, word: string): boolean => {
   const stored = plain(word)
-  if (stored.length >= SHORTEST_GARBLED && plain(probe.literal).startsWith(stored)) return true
   return probe.stems.some((raw) => {
     const stem = plain(raw)
     if (stem.length >= 3 && stored.startsWith(stem)) return true
@@ -116,12 +114,15 @@ const worthStemming = (probe: GarbledProbe, word: string): boolean => {
 /**
  * The stored words each probe widens to, nearest first and then the most used, from one pass over the
  * vocabulary, whose terms are folded as the index folds them. `stem` is the store's stemmer, so a stored
- * word's stem is the one its index holds.
+ * word's stem is the one its index holds. A spelling that `known` finds in a dictionary is a different real
+ * word, not a garbled one — «договор» is one stem edit from «поговорить» — so only unknown spellings widen;
+ * on real transcripts that kept 517 of 10,271 widened passages.
  */
 export const widenWords = (
   probes: GarbledProbe[],
   vocabulary: Iterable<{ term: string; docs: number }>,
   stem: (word: string) => string[],
+  known: (word: string) => boolean,
 ): string[][] => {
   const found = probes.map(() => [] as { term: string; docs: number; distance: number }[])
   const live = probes.map((probe) => probe.literal.length >= SHORTEST_GARBLED)
@@ -132,7 +133,7 @@ export const widenWords = (
       if (!live[at] || !worthStemming(probe, word)) return
       stems ??= stem(word)
       const distance = garbledDistance(probe, word, stems)
-      if (distance !== null) found[at]?.push({ term: word, docs, distance })
+      if (distance === 0 || (distance === 1 && !known(word))) found[at]?.push({ term: word, docs, distance })
     })
   }
   return found.map((words) =>

@@ -173,6 +173,7 @@
     "@xmldom/xmldom": "0.9.12",
     "chardet": "2.2.0",
     "defuddle": "0.19.5",
+    "dictionary-ru": "3.0.0",
     "echarts": "6.1.0",
     "fflate": "0.8.3",
     "iconv-lite": "0.7.3",

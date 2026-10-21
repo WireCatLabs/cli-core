@@ -45,6 +45,10 @@ const fixture = async () => {
       "Встреча в семь вечера",
       "Около семи человек",
       "Прошло семьдесят дней",
+      "Надо поговорить с юристом",
+      "Подписали договор вчера",
+      "Я устал за неделю",
+      "Утвердили устав компании",
     ]),
   )
   await store.meetings.saveMeeting(meetingOf(otherId, ["Пришел риелтер без ключей"]))
@@ -95,6 +99,21 @@ it("matches a number word in its own forms only, not in a longer number it begin
   expect((await store.meetings.searchHits("семь", { accountId })).items.map((hit) => hit.text).sort()).toEqual([
     "Встреча в семь вечера",
     "Около семи человек",
+  ])
+})
+
+it("does not widen to a different real word", async () => {
+  const { store, accountId } = await fixture()
+  const found = (await store.meetings.searchHits("договор", { accountId })).items.map((hit) => hit.text)
+  expect(found).toContain("Подписали договор вчера")
+  expect(found).not.toContain("Надо поговорить с юристом")
+})
+
+it("ranks the typed form before other words the stemmer merged with it", async () => {
+  const { store, accountId } = await fixture()
+  expect((await store.meetings.searchHits("устав", { accountId })).items.map((hit) => hit.text)).toEqual([
+    "Утвердили устав компании",
+    "Я устал за неделю",
   ])
 })
 

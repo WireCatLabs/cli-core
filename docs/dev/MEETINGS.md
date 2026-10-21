@@ -94,19 +94,26 @@ for messages, notes and meetings — with one difference. Speech recognition gar
 garbled spelling sit in one meeting, so meeting search always widens a word of four letters or more to the
 stored words recognition may have made of it, instead of only when nothing matched as messages do:
 
-- a stem one edit away («риелтор» finds «реелтора», «рилторов», «дриелтора»); below seven letters the first
-  letter must agree, so «работа» does not find «заботы»;
+- a stem one edit away that a Russian dictionary (`dictionary-ru`, Hunspell) does not know: «риелтор» finds
+  «реелтора», «рилторов», «дриелтора», but «договор» does not find «поговорить», a real word one edit away.
+  Below seven letters the first letter must agree;
 - a stem one side extends, when the other side's word spells the extension out: «циана» (stem `циа`) finds
   «цианом» (`циан`), «устав» does not find «установить»;
-- a stored word of four letters or more that begins the query word, as ztx matched;
 - е and э compared as one letter (ё already folds into е in the index).
+
+The dictionary loads only when a query has such spellings to check, in about 0.15 s: it is read the way Hunspell
+checks a word, an ending at a time, not expanded into all its forms. On a copy of a real store of 119 meetings it
+cut the widened passages from 10,271 to 1,157 over 130 queries. ztx's rule that a stored word beginning the query
+word matches («показывал» → «пока») was dropped: it made 15 % of the noise and found nothing the rules above miss.
 
 Number words never widen, and match only their own forms, not as the start of a longer word: recognition swaps
 them, «десять» is one edit from «девять», and «семь» begins «семьдесят». `exact:word` and
-`exact:"two words"` keep those words to their typed form: no other forms, no widening. Exact hits come first;
+`exact:"two words"` keep those words to their typed form: no other forms, no widening. Hits come in three tiers:
+the typed form, then other forms of the word (stems merge some different words: «устав» and «устал» share `уста`,
+and a dictionary cannot split them, since «устав» is also a form of «устать»), then garbled spellings;
 a widened hit has `match: "corrected"` and `corrections` (`from`, the query word, and `to`, the stored words it
-matched in that passage). Widening reads the whole word list once per query, with no table of its own: about
-0.15 s on a synthetic 120-meeting store ([measurement](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/meeting-garbled)).
+matched in that passage). Widening reads the whole word list once per query, with no table of its own: a median
+of 0.11 s a query on that copy ([measurement](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/meeting-garbled)).
 
 ## Rules the tables keep
 
