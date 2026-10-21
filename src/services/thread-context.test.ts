@@ -324,10 +324,38 @@ describe("graph context around a hit", () => {
     expect(found.items[0]?.context?.map(({ id }) => id)).toEqual(["4", "5", "6"])
   })
 
-  it("validates thread bounds even when a search has no hits", async () => {
+  it.each(["Helix rollout", "Can operators approve Helix rollout?"])(
+    "discovery expands the final hit's approval thread for %s",
+    async (text) => {
+      const one = await setup(true, [
+        { ...message(1), text: "Helix rollout: approve the landing price of 40 credits?" },
+        { ...message(2, 1), text: "Yes, confirmed." },
+        { ...message(3), text: "Unrelated maintenance." },
+      ])
+      const query = { text, discover: true, limit: 1, context: 1 }
+      const plain = await one.services.messages.search(query)
+      expect(plain.items).toHaveLength(1)
+      const found = await one.services.messages.search({ ...query, thread: {} })
+      const expanded = found.items[0]
+      if (!expanded) throw new Error("discovery returned no hit")
+      const { thread, ...hit } = expanded
+      expect(hit).toEqual(plain.items[0])
+      expect(thread).toEqual(await one.services.messages.thread("7", hit.id, { before: 1, after: 1 }))
+      expect(thread?.items.map(({ id }) => id)).toEqual(["1", "2"])
+      expect(thread?.links).toContainEqual(
+        expect.objectContaining({ messageId: "2", parentId: "1", source: "provider", kind: "reply", chosen: true }),
+      )
+      const bounded = await one.services.messages.search({ ...query, thread: { maxMessages: 1 } })
+      expect(bounded.items[0]?.thread?.items).toHaveLength(1)
+      expect(bounded.items[0]?.thread?.stopped).toContain("messages")
+      expect(one.connection).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([false, true])("validates thread bounds on empty search with discovery=%s", async (discover) => {
     const one = await setup()
     await expect(
-      one.services.messages.search({ text: "unmatched", limit: 10, thread: { maxMessages: 0 } }),
+      one.services.messages.search({ text: "unmatched", limit: 10, discover, thread: { maxMessages: 0 } }),
     ).rejects.toMatchObject({ code: "validation_error" })
   })
 
