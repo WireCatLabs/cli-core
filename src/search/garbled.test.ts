@@ -28,12 +28,14 @@ describe("garbledDistance", () => {
     ["работа", "заботы"],
     ["проверка", "провела"],
     ["десять", "девять"],
-    ["восемь", "восьми"],
-    ["шесть", "шести"],
-    ["семь", "семьдесят"],
+    ["девятью", "десятью"],
     ["циан", "цена"],
   ])("%s does not reach %s", (query, word) => {
     expect(reaches(query, word)).toBe(false)
+  })
+
+  it("leaves a number's other numbers to the index's prefix match, which still links «семь» to «семьдесят»", () => {
+    expect(garbledDistance(probe("семь"), "семьдесят", stems("семьдесят"))).toBeNull()
   })
 
   it("leaves words the index already finds to the index", () => {
