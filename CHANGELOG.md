@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.378.0 — 21.10.2026
+
 ### Added
 
 - **`gatherProjectEvidence` reads what a person wrote.** A person given with `senders: [{ provider, id }]` (their
