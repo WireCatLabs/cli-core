@@ -88,7 +88,7 @@ const searchPage = async (
     throw new CliError("validation_error", "discovery searches the local archive; use backend archive")
   await topUp(store)
   const found = request.discover
-    ? await searchDiscovery(store, account, request, messenger)
+    ? await searchDiscovery(store, account, { ...request, thread: undefined }, messenger)
     : await searchLucene(store, account, request, messenger)
   return withThreads(store, found, request)
 }

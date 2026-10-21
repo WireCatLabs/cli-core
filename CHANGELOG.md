@@ -17,6 +17,12 @@ shape of this file.
   takes the same filter as `senders` (`coverage.matching: "sender"`). Requests without senders keep their
   fingerprint, so their checkpoints still resume. See [project gathering](docs/dev/PROJECT-GATHERING.md).
 
+### Fixed
+
+- **Discovery search accepts thread context.** `search messages --discover --thread` expands the ranked hits
+  through the shared bounded thread reader instead of refusing inside candidate search. Reply provenance,
+  time context and thread limits are preserved.
+
 ## 0.377.0 — 20.10.2026
 
 ### Added
