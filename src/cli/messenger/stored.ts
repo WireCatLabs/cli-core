@@ -40,6 +40,8 @@ export interface Saving {
    * titles `watch` leaves out, are answered from the store first. Its server has no directory to ask.
    */
   namesFromStore?: Pick<MessengerTraits, "savedChatId">
+  /** `MessengerTraits.unreadCounts: "store"`: a message `watch` or `listen` saves raises its chat's unread count. */
+  countsUnread?: boolean
 }
 
 /**
@@ -66,6 +68,7 @@ export const stored = (
     closing,
     namesFromStore,
     recipientIds,
+    countsUnread = false,
   }: Saving,
 ): MessengerAdapter => {
   let warned = false
@@ -353,7 +356,9 @@ export const stored = (
               messenger.watch?.(
                 (event) => {
                   const seenAt = Date.now()
-                  void save("messages.watch", (opened) => keep(opened, account, event, seenAt, deletedWithoutChat))
+                  void save("messages.watch", (opened) =>
+                    keep(opened, account, event, seenAt, deletedWithoutChat, countsUnread),
+                  )
                   onEvent(namesFromStore ? titled(event, titles) : event)
                 },
                 signal,
@@ -367,7 +372,9 @@ export const stored = (
       ? {
           listen: (onEvent, signal) =>
             messenger.listen?.((event) => {
-              void save("messages.listen", (opened) => keep(opened, account, event, Date.now(), deletedWithoutChat))
+              void save("messages.listen", (opened) =>
+                keep(opened, account, event, Date.now(), deletedWithoutChat, countsUnread),
+              )
               onEvent(event)
             }, signal) ?? Promise.resolve(),
         }
@@ -612,12 +619,17 @@ const keep = async (
   event: MessageEvent,
   seenAt: number,
   among: DeletionScope | undefined,
+  countsUnread: boolean,
 ): Promise<void> => {
   switch (event.event) {
     case "message":
     case "edit": {
       const { chatTitle, ...message } = event.message
-      await store.messages.saveMessages(account, message.chatId, [message], { via: "update", seenAt })
+      await store.messages.saveMessages(account, message.chatId, [message], {
+        via: "update",
+        seenAt,
+        ...(countsUnread && event.event === "message" ? { countUnread: true } : {}),
+      })
       return
     }
     case "delete":

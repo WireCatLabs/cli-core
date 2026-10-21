@@ -336,6 +336,11 @@ A chat, group or channel of one account, with what the messenger last said about
 | `created_at` | integer | not null |  | when this row was saved here |
 | `parent_chat_id` | integer |  | → `chats.id` | the chat this one sits inside: a forum topic in its group, a channel's discussion group, a channel in a workspace |
 | `scope` | text |  |  | overrides the account's scope for this chat; null takes the account's |
+| `muted` | integer |  |  | 1 muted, 0 not; NULL when the messenger did not say |
+| `muted_until` | integer |  |  | when the mute ends (epoch ms); NULL with `muted` 1 is for good |
+| `archived` | integer |  |  | 1 archived, 0 not; NULL when the messenger did not say |
+| `marked_unread` | integer |  |  | 1 when the owner marked it unread; NULL when the messenger did not say |
+| `unread_counted_at` | integer |  |  | when `unread_count` was taken (epoch ms) |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, last_message_at DESC)`, `INDEX (parent_chat_id)`
 

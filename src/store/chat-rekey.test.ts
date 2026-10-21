@@ -368,6 +368,21 @@ describe("re-keying a stored chat", () => {
     await store.close()
   })
 
+  it("keeps the phone-side state of both copies on a merge, the new id's where both say", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [
+      { ...chat(PHONE, "Ana"), muted: true, mutedUntil: "2099-01-01T00:00:00.000Z", markedUnread: true },
+      { ...chat(LID, "Ana"), muted: true, archived: true },
+    ])
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    const [merged] = (await store.chats.chats(OWNER, {})).items
+    expect(merged).toMatchObject({ id: LID, muted: true, archived: true, markedUnread: true })
+    expect(merged?.mutedUntil).toBeUndefined()
+    await store.close()
+  })
+
   it("stays left when the chat list named neither id", async () => {
     const store = await openStore({ path: fresh() })
     await store.chats.saveChats(OWNER, [chat(PHONE, "Ana"), chat(LID, "Ana"), chat("9@lid", "Bo")])

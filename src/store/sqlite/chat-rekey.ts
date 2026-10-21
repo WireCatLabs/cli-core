@@ -224,6 +224,10 @@ const privacyOf = (row: Row) => ({
 const MESSENGER_FIELDS = [
   "title",
   "unread_count",
+  "unread_counted_at",
+  "muted",
+  "archived",
+  "marked_unread",
   "participants_count",
   "metadata",
   "username",
@@ -282,6 +286,7 @@ const moveChat = (
         // Left only when both were: a complete chat list that named the new id before the re-key marked the old one.
         `UPDATE chats SET ${fields}, kind = CASE WHEN kind = 'unknown' THEN ? ELSE kind END,
            membership_state = CASE WHEN ? IS NULL THEN nullif(membership_state, 'left') ELSE coalesce(nullif(?, 'left'), membership_state) END,
+           muted_until = CASE WHEN ? IS NULL THEN muted_until ELSE ? END,
            searchable = ?, scope = ?, last_message_at = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
@@ -289,6 +294,8 @@ const moveChat = (
         scalar(twin.kind),
         scalar(twin.membership_state),
         scalar(twin.membership_state),
+        scalar(twin.muted),
+        scalar(twin.muted_until),
         strict.searchable,
         strict.scope,
         latest(old.last_message_at, twin.last_message_at),

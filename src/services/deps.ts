@@ -89,6 +89,9 @@ const unless = async <T>(work: () => Promise<T>, expected: (error: unknown) => b
   }
 }
 
+/** A store write after the messenger already did the work: a store busy past its timeout leaves it unwritten. */
+export const unlessBusy = <T>(work: () => Promise<T>): Promise<T | undefined> => unless(work, storeAbsent)
+
 /** `accountStore`, or nothing when there is no store to read or the account is not known yet. */
 export const accountStoreIfOpen = async (deps: ServiceDeps): Promise<AccountStore | undefined> => {
   const held = await storeIfOpen(deps)

@@ -149,7 +149,7 @@ export const upsertMessage = (
   message: Message,
   via: string,
   seenAt?: number,
-): void => {
+): boolean => {
   const { orm, now } = context
   const statements = statementsOf(orm)
   const sender =
@@ -168,7 +168,7 @@ export const upsertMessage = (
   const found = statements.find.get({ chatId: chatKey, externalId: message.id })
   const revived = found?.deletedAt != null && seenAt !== undefined && found.deletedAt < seenAt
   // A deleted message leaves no text behind, and a sync that still carries it does not bring it back.
-  if (found?.deletedAt != null && !revived) return
+  if (found?.deletedAt != null && !revived) return false
   let pk: number
   if (!found) {
     pk = Number(
@@ -277,6 +277,21 @@ export const upsertMessage = (
     })
   })
   if (Number(heardFirst) > 0) intoVoiceAttachment(context, pk)
+  return !found
+}
+
+/**
+ * One more unread for a message from someone else that the store first saw now, sent after the messenger's count was
+ * taken. A chat the messenger never gave a count for is left alone: the store would count its whole history.
+ */
+export const countUnread = ({ database }: StoreContext, chatKey: number, message: Message): void => {
+  if (message.outgoing || message.editedAt !== null) return
+  database
+    .prepare(
+      `UPDATE chats SET unread_count = unread_count + 1
+         WHERE id = ? AND unread_count IS NOT NULL AND unread_counted_at IS NOT NULL AND unread_counted_at < ?`,
+    )
+    .run(chatKey, Date.parse(message.timestamp))
 }
 
 /**

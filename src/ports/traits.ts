@@ -76,6 +76,12 @@ export interface MessengerTraits {
    */
   historyOnDemand?: boolean
   /**
+   * Who keeps a chat's unread count. `messenger` when unset: the store holds what the messenger last said. `store`: the
+   * messenger says it only now and then (a history push, a read on the phone), so each message from someone else that
+   * `watch` or `listen` saves for the first time, sent after the last count, adds one.
+   */
+  unreadCounts?: "messenger" | "store"
+  /**
    * Whether `search messages --backend` is offered: the adapter has `searchMessages`. `chat` when its server
    * searches one chat at a time, so only a query that names one chat asks it. No when unset.
    */

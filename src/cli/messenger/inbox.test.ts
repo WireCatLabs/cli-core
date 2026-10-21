@@ -134,6 +134,25 @@ describe("the unread inbox", () => {
     expect(inbox.quiet).toBe(2)
     expect((await unreadIn(adapter, { limit: 20, all: true })).chats).toHaveLength(4)
   })
+
+  it("takes in a chat the owner marked unread, muted or not, with its newest message from someone else", async () => {
+    const chats = [
+      { ...chatAt("1", 5), markedUnread: true, muted: true },
+      { ...chatAt("2", 4), markedUnread: true },
+      { ...chatAt("3", 3), markedUnread: false },
+    ]
+    const histories = {
+      "1": [messageAt("1", "10", 1), messageAt("1", "11", 2), messageAt("1", "12", 3, true)],
+      "2": [messageAt("2", "20", 1, true)],
+      "3": [messageAt("3", "30", 1)],
+    }
+    const { adapter } = messengerWith(chats, histories)
+
+    const inbox = await unreadIn(adapter, { limit: 20 })
+
+    expect(inbox.chats.map((chat) => [chat.id, chat.messages.map((message) => message.id)])).toEqual([["1", ["11"]]])
+    expect(inbox.quiet).toBe(0)
+  })
 })
 
 describe("every chat, not only the newest", () => {

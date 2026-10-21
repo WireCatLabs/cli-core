@@ -465,7 +465,11 @@ export const connected = (
     pace,
     history,
     savedChatId,
-  }: Pick<Messenger, "app" | "provider" | "name" | "deletedWithoutChat" | "pace" | "history" | "savedChatId">,
+    unreadCounts,
+  }: Pick<
+    Messenger,
+    "app" | "provider" | "name" | "deletedWithoutChat" | "pace" | "history" | "savedChatId" | "unreadCounts"
+  >,
   { settings, env, renderer }: Pick<BaseContext, "settings" | "env" | "renderer">,
   events: EventSink,
   store: LazyStore = lazyStore(env, app.command),
@@ -511,6 +515,7 @@ export const connected = (
               (recipient) => [recipient.id, ...(recipient.partnerId ? [recipient.partnerId] : [])],
             ),
           ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
+          ...(unreadCounts === "store" ? { countsUnread: true } : {}),
         })
   const passives =
     history === "store" && self !== null && !watching
@@ -562,7 +567,7 @@ export const connectedFor = async (
   command: Command,
   messenger: Pick<
     Messenger,
-    "connect" | "app" | "provider" | "name" | "deletedWithoutChat" | "pace" | "history" | "savedChatId"
+    "connect" | "app" | "provider" | "name" | "deletedWithoutChat" | "pace" | "history" | "savedChatId" | "unreadCounts"
   >,
   base: BaseContext,
   options: ConnectOptions & { events: EventSink },

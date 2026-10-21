@@ -163,6 +163,13 @@ only part of a chat sends only that part, such as `{ id, kind, parentChatId: nul
 community. Send `null` only when the messenger says there is no value; a `null` sent for "not known" erases what the
 store holds.
 
+A chat's state on the phone follows it too. `muted`, `archived` and `markedUnread` left out keep the stored value.
+`mutedUntil` is when a mute ends, in UTC: `muted: true` without it is for good, and `muted: false` clears it. A mute
+whose end has passed reads as `muted: false`, with no write. Clear `markedUnread` yourself when the owner reads the
+chat: a count of 0 does not, since a push may carry 0 for a chat that is marked unread. `inbox` leaves out muted and
+archived chats unless they mention the owner, and takes in a chat marked unread, muted or not, with its newest
+message from someone else.
+
 `membershipState` follows the same rule: left out keeps it, a value sets it, `null` clears it. A chat marked left
 stays left through a save that leaves membership out, such as a community notice. Any page of your adapter's `chats`
 rejoins the chats it names, since the messenger lists only chats the account is in; a complete one also marks the
@@ -204,6 +211,11 @@ Some messengers push history to the client instead of answering a request for it
   `history(chat, { limit, before })`, a page at a time, at most `fetching.maxPageSize` a request. `--all` stays
   refused: there is no chat list to walk. An adapter whose phone or server does not answer throws `timeout`, not an
   empty page — an empty page means the chat's start.
+- A messenger that reports a chat's unread count only now and then — a history push, a read on the phone — sets
+  `unreadCounts: "store"`. Then each message from someone else that `watch` or `listen` saves for the first time, and
+  that was sent after the count was taken, adds one to the chat's stored count. The count is taken as of the
+  `lastMessageAt` that comes with it, or as of the save when none does. A chat never given a count is not counted, and
+  `chats read` of the whole chat stores 0. A pushed batch adds nothing: send its count with its chats.
 - A group's member list is still a server read. When the adapter has `members`, `chats members list`, `fetch`
   and `audit` connect and ask it; only `--offline` refuses `fetch` and `audit`, and `list` then reads the stored
   members. Without `members`, `list` reads the stored members and `fetch` and `audit` say the messenger cannot.

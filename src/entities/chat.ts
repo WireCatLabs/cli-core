@@ -16,7 +16,11 @@ export const chat = v.strictObject({
   last_message_at: v.nullable(time),
   participants_count: v.nullable(count),
   muted: v.optional(v.boolean()),
+  /** When the mute ends; absent with `muted` true is for good. */
+  muted_until: v.optional(time),
   archived: v.optional(v.boolean()),
+  /** The owner marked it unread, whatever `unread_count` says. */
+  marked_unread: v.optional(v.boolean()),
   membership_state: v.optional(v.picklist(["joined", "left", "public", "imported", "archived", "external"])),
   parent_chat_id: v.optional(id),
   scope: v.optional(v.picklist(["personal", "work"])),
