@@ -309,6 +309,20 @@ export interface Reactions {
   total: number
 }
 
+/**
+ * One person's reaction to a message, for a messenger that sends a reaction change at a time (WhatsApp) instead of
+ * totals. `reaction` is `null` when they took it back. The store keeps each person's newest by `reactedAt` and derives
+ * the message's `Reactions` from them.
+ */
+export interface PersonReaction {
+  person: Member
+  /** The owner's own reaction, which becomes `Reactions.mine`. */
+  own: boolean
+  reaction: string | null
+  /** ISO 8601 — when the person reacted, as the messenger says, not when it arrived. */
+  reactedAt: string
+}
+
 /** The message a reply answers or a forward carries. */
 export interface QuotedMessage {
   id: Id
@@ -427,6 +441,15 @@ export interface PollVoteEvent {
   vote: PollVote
 }
 
+/** One person reacted to `messageId`, changed their reaction, or took it back; saved, an older one never wins. */
+export interface PersonReactionEvent {
+  event: "person_reaction"
+  chatId: Id
+  chatTitle: string | null
+  messageId: Id
+  reaction: PersonReaction
+}
+
 /** The owner starred a message or took the star off, here or on another device; saved, the same twice is one. */
 export interface MessageStarEvent {
   event: "star"
@@ -444,11 +467,12 @@ export interface ChatEventNotice {
   change: ChatEvent
 }
 
-/** What a listening connection reports: a new message, a change to one, a vote, a star, or a change to a chat. */
+/** What a listening connection reports: a new message, a change to one, a vote, a reaction, a star, or a change to a chat. */
 export type MessageEvent =
   | { event: "message"; message: MessageHit }
   | MessageChange
   | PollVoteEvent
+  | PersonReactionEvent
   | MessageStarEvent
   | ChatEventNotice
 

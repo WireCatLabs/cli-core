@@ -32,6 +32,7 @@ export type {
   GroupModeration,
   HistoryBatch,
   HistoryChatEvent,
+  HistoryReaction,
   HistoryStar,
   HistoryVote,
   InviteLinks,

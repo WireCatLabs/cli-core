@@ -412,6 +412,21 @@ const NEW = {
       keys: ["PRIMARY KEY (chat_event_id, identity_id)"],
     },
     {
+      name: "message_reactions",
+      doc: "Each person's newest reaction to a message, where the messenger sends one person's change at a time (WhatsApp) instead of totals. `messages.reactions` holds the totals derived from them. Keyed by chat and external id: a reaction can arrive before its message is stored.",
+      cols: [
+        id(),
+        fk("chat_id", "chats", { notnull: true }),
+        c("message_external_id", "text", { notnull: true, note: "the message reacted to" }),
+        fk("identity_id", "identities", { notnull: true, note: "who reacted" }),
+        c("own", "integer", { notnull: true, note: "1 when it is the owner's own reaction" }),
+        c("reaction", "text", { note: "the emoji; NULL when it was taken back" }),
+        c("reacted_at", "integer", { notnull: true, note: "an older reaction never replaces a newer one" }),
+        ...ts(),
+      ],
+      keys: ["UNIQUE (chat_id, message_external_id, identity_id)"],
+    },
+    {
       name: "member_observations",
       doc: "One read of a chat's member list: when, whether it was the whole list, and how many it reported and returned. Retention reads presence at a checkpoint from these.",
       cols: [

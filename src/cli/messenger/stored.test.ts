@@ -272,6 +272,20 @@ const listening = async (store: MessageStore, events: MessageEvent[], extra: Rec
   return wrapped
 }
 
+const fed = async (store: MessageStore, batch: HistoryBatch) => {
+  const pending = new Set<Promise<void>>()
+  const adapter = { self: () => "500", feed: async (onBatch: (batch: HistoryBatch) => void) => onBatch(batch) }
+  const wrapped = stored(adapter as unknown as MessengerAdapter, {
+    account,
+    store: async () => store,
+    warn: () => {},
+    events: () => {},
+    pending,
+  })
+  await wrapped.feed?.(() => {}, new AbortController().signal)
+  await Promise.all(pending)
+}
+
 describe("an edit `watch` hears", () => {
   it("keeps the send time, the quote and the reactions an edit event does not carry", async () => {
     const { store } = await setUp()
@@ -388,19 +402,6 @@ describe("votes in a pushed history batch", () => {
     messageId,
     vote: { person: olga, answers, votedAt },
   })
-  const fed = async (store: MessageStore, batch: HistoryBatch) => {
-    const pending = new Set<Promise<void>>()
-    const adapter = { self: () => "500", feed: async (onBatch: (batch: HistoryBatch) => void) => onBatch(batch) }
-    const wrapped = stored(adapter as unknown as MessengerAdapter, {
-      account,
-      store: async () => store,
-      warn: () => {},
-      events: () => {},
-      pending,
-    })
-    await wrapped.feed?.(() => {}, new AbortController().signal)
-    await Promise.all(pending)
-  }
   const answers = async (store: MessageStore, messageId = "40", chatId = "7") =>
     (await store.messages.pollVotes(account, chatId, messageId)).map((held) => [held.person.id, held.answers])
 
@@ -436,6 +437,53 @@ describe("votes in a pushed history batch", () => {
     await fed(store, { votes: [vote(["fri"], "2026-09-26T10:02:00.000Z", "1")] })
 
     expect(await answers(store, "1")).toEqual([])
+  })
+})
+
+describe("people's reactions `watch` hears and a pushed batch carries", () => {
+  const reaction = (id: string, emoji: string | null, reactedAt: string) => ({
+    person: { id, name: null, username: null },
+    own: id === "500",
+    reaction: emoji,
+    reactedAt,
+  })
+  const totals = async (store: MessageStore, messageId = "1") =>
+    (await store.messages.message(account, messageId, { chatId: "7" }))?.reactions
+
+  it("keeps each person's newest, so the message's totals count them", async () => {
+    const { store } = await setUp()
+    const event = (person: string, emoji: string | null, reactedAt: string) => ({
+      event: "person_reaction" as const,
+      chatId: "7",
+      chatTitle: "Book club",
+      messageId: "1",
+      reaction: reaction(person, emoji, reactedAt),
+    })
+
+    await listening(store, [
+      event("9", "👍", "2026-09-26T10:01:00.000Z"),
+      event("500", "👍", "2026-09-26T10:02:00.000Z"),
+      event("10", "❤️", "2026-09-26T10:03:00.000Z"),
+      event("10", null, "2026-09-26T10:04:00.000Z"),
+    ])
+
+    expect(await totals(store)).toEqual({ counts: [{ reaction: "👍", count: 2 }], mine: "👍", total: 2 })
+  })
+
+  it("keeps a batch's reactions after its messages, an older one not replacing what `watch` heard", async () => {
+    const { store } = await setUp()
+    await store.messages.saveReaction(account, "7", "1", reaction("9", "❤️", "2026-09-26T10:05:00.000Z"))
+
+    await fed(store, {
+      messages: [message("41", "lunch?")],
+      reactions: [
+        { chatId: "7", messageId: "1", reaction: reaction("9", "👍", "2026-09-26T10:01:00.000Z") },
+        { chatId: "7", messageId: "41", reaction: reaction("10", "😮", "2026-09-26T10:01:00.000Z") },
+      ],
+    })
+
+    expect((await totals(store))?.counts).toEqual([{ reaction: "❤️", count: 1 }])
+    expect((await totals(store, "41"))?.counts).toEqual([{ reaction: "😮", count: 1 }])
   })
 })
 

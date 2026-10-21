@@ -159,7 +159,7 @@ export const botWatchCommand = (bot: BotMessenger): Command =>
           )
         } else if (event.event === "delete") {
           context.streams.data(`deleted in ${title(event.chatId)}: message ${event.messageId}\n`)
-        } else if (event.event === "reaction") {
+        } else if (event.event === "reaction" || event.event === "person_reaction") {
           context.streams.data(`reactions in ${title(event.chatId)} on message ${event.messageId}\n`)
         } else if (event.event === "vote") {
           context.streams.data(`vote in ${title(event.chatId)} on poll ${event.messageId}\n`)

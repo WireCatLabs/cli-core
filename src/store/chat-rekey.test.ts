@@ -165,6 +165,15 @@ describe("re-keying a stored chat", () => {
       answers: ["2"],
       votedAt: "2026-10-18T12:00:00.000Z",
     })
+    const reaction = (id: string, emoji: string, reactedAt: string) => ({
+      person: { id, name: null, username: null },
+      own: false,
+      reaction: emoji,
+      reactedAt,
+    })
+    await store.messages.saveReaction(OWNER, PHONE, "A1", reaction("7", "👍", "2026-10-18T10:00:00.000Z"))
+    await store.messages.saveReaction(OWNER, PHONE, "A1", reaction("8", "😮", "2026-10-18T10:00:00.000Z"))
+    await store.messages.saveReaction(OWNER, LID, "A1", reaction("7", "❤️", "2026-10-18T12:00:00.000Z"))
     const [{ id: kept }] = (await raw(path, "SELECT id FROM chats WHERE external_id = ?", PHONE)) as [{ id: number }]
 
     expect(await store.chats.rekeyChat(OWNER, PHONE, LID)).toEqual({ outcome: "merged", messages: 1, duplicates: 1 })
@@ -182,6 +191,10 @@ describe("re-keying a stored chat", () => {
       ["todo", "message", LID],
     ])
     expect((await store.messages.pollVotes(OWNER, LID, "A1")).map((vote) => vote.answers)).toEqual([["2"]])
+    expect((await store.messages.message(OWNER, "A1", { chatId: LID }))?.reactions?.counts).toEqual([
+      { reaction: "😮", count: 1 },
+      { reaction: "❤️", count: 1 },
+    ])
     expect((await store.messages.search("lid", { limit: 5, account: OWNER })).items.map((hit) => hit.chatId)).toEqual([
       LID,
     ])

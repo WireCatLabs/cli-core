@@ -35,6 +35,7 @@ import type {
   OfficialChatStats,
   Page,
   PersonCard,
+  PersonReaction,
   PhoneBookEntry,
   Poll,
   PollVote,
@@ -367,6 +368,13 @@ export interface HistoryVote {
   vote: PollVote
 }
 
+/** One person's reaction to message `messageId` of `chatId`, as `PersonReactionEvent` has it. */
+export interface HistoryReaction {
+  chatId: Id
+  messageId: Id
+  reaction: PersonReaction
+}
+
 /** One change to who is in chat `chatId`, or to its title, as `ChatEventNotice` has it. */
 export interface HistoryChatEvent {
   chatId: Id
@@ -382,8 +390,8 @@ export interface HistoryStar {
 
 /**
  * What a messenger pushed in one go: any of chats, the people in them, past messages of any chats, votes in
- * their polls, the owner's stars, and changes to who is in them. A vote or a star is saved with its chat's messages,
- * after them, so a message in the same batch is held before its votes and its star.
+ * their polls, each person's reactions, the owner's stars, and changes to who is in them. A vote, a reaction or a star
+ * is saved with its chat's messages, after them, so a message in the same batch is held before them.
  * `rekeys` are chats the messenger now names by another id; they apply first, so the batch's messages under the
  * new id join the chat already stored under the old one.
  */
@@ -393,6 +401,7 @@ export interface HistoryBatch {
   people?: Member[]
   messages?: Message[]
   votes?: HistoryVote[]
+  reactions?: HistoryReaction[]
   stars?: HistoryStar[]
   events?: HistoryChatEvent[]
 }

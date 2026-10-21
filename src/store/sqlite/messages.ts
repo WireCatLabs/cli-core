@@ -1,5 +1,14 @@
 import { validCounter } from "../../domain/counters.js"
-import type { Attachment, ChatKind, Id, Message, PollVote, Provider, Reactions } from "../../domain/models.js"
+import type {
+  Attachment,
+  ChatKind,
+  Id,
+  Message,
+  PersonReaction,
+  PollVote,
+  Provider,
+  Reactions,
+} from "../../domain/models.js"
 import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import type { AccountKey, DeletionScope } from "../types.js"
@@ -210,6 +219,13 @@ export const upsertMessage = (
     if (revived) orm.update(messages).set({ deletedAt: null, text: message.text }).where(eq(messages.id, pk)).run()
   }
 
+  const derived = derivedReactions(context, chatKey, message.id)
+  if (derived)
+    orm
+      .update(messages)
+      .set({ reactions: JSON.stringify(derived) })
+      .where(eq(messages.id, pk))
+      .run()
   if (message.counterObservations) applyCounterObservations(context, pk, message.counterObservations)
   if (message.starred !== undefined)
     orm
@@ -278,6 +294,9 @@ export const tombstone = (context: StoreContext, pk: number): number => {
   context.database
     .prepare("DELETE FROM poll_votes WHERE chat_id=? AND message_external_id=?")
     .run(row.chatId, row.externalId)
+  context.database
+    .prepare("DELETE FROM message_reactions WHERE chat_id=? AND message_external_id=?")
+    .run(row.chatId, row.externalId)
   purgeVectorsOf(context, pk)
   orm
     .delete(messageTranscripts)
@@ -286,11 +305,11 @@ export const tombstone = (context: StoreContext, pk: number): number => {
   return 1
 }
 
-/** Whether the message is held at all. */
-export const saveReactions = ({ orm }: StoreContext, chatKey: number, messageId: Id, reactions: Reactions): boolean =>
-  orm
+/** Whether the message is held at all. Where people's own reactions are held, the totals come from them instead. */
+export const saveReactions = (context: StoreContext, chatKey: number, messageId: Id, reactions: Reactions): boolean =>
+  context.orm
     .update(messages)
-    .set({ reactions: JSON.stringify(reactions) })
+    .set({ reactions: JSON.stringify(derivedReactions(context, chatKey, messageId) ?? reactions) })
     .where(and(eq(messages.chatId, chatKey), eq(messages.externalId, messageId), isNull(messages.deletedAt)))
     .returning({ pk: messages.id })
     .all().length > 0
@@ -406,3 +425,87 @@ export const pollVotes = ({ database }: StoreContext, chatKey: number, messageId
     answers: JSON.parse(answers) as Id[],
     votedAt: new Date(votedAt).toISOString(),
   }))
+
+const reactionStatements = new WeakMap<
+  CacheDatabase,
+  { gone: CacheStatement; upsert: CacheStatement; held: CacheStatement; total: CacheStatement }
+>()
+const reactionStatementsOf = (database: CacheDatabase) => {
+  const held = reactionStatements.get(database)
+  if (held) return held
+  const statements = {
+    gone: database.prepare("SELECT 1 FROM messages WHERE chat_id=? AND external_id=? AND deleted_at IS NOT NULL"),
+    upsert: database.prepare(
+      `INSERT INTO message_reactions
+         (chat_id, message_external_id, identity_id, own, reaction, reacted_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (chat_id, message_external_id, identity_id) DO UPDATE SET
+         own = excluded.own, reaction = excluded.reaction, reacted_at = excluded.reacted_at,
+         updated_at = excluded.updated_at
+       WHERE excluded.reacted_at >= message_reactions.reacted_at`,
+    ),
+    held: database.prepare(
+      "SELECT reaction, own, reacted_at AS reactedAt FROM message_reactions WHERE chat_id=? AND message_external_id=?",
+    ),
+    total: database.prepare("UPDATE messages SET reactions=? WHERE chat_id=? AND external_id=? AND deleted_at IS NULL"),
+  }
+  reactionStatements.set(database, statements)
+  return statements
+}
+
+/**
+ * The totals of the people's reactions the store holds for a message, or `undefined` when it holds none: then the
+ * messenger's own totals stand. A taken-back reaction still counts as held, so all of them taken back is zero.
+ */
+export const derivedReactions = ({ database }: StoreContext, chatKey: number, messageId: Id): Reactions | undefined => {
+  const rows = reactionStatementsOf(database).held.all(chatKey, messageId) as {
+    reaction: string | null
+    own: number
+    reactedAt: number
+  }[]
+  if (rows.length === 0) return undefined
+  const counts = new Map<string, { count: number; first: number }>()
+  let mine: { reaction: string; at: number } | null = null
+  for (const { reaction, own, reactedAt } of rows) {
+    if (reaction === null) continue
+    const held = counts.get(reaction)
+    counts.set(reaction, { count: (held?.count ?? 0) + 1, first: Math.min(held?.first ?? reactedAt, reactedAt) })
+    if (own === 1 && (mine === null || reactedAt > mine.at)) mine = { reaction, at: reactedAt }
+  }
+  const sorted = [...counts].sort(([, a], [, b]) => b.count - a.count || a.first - b.first)
+  return {
+    counts: sorted.map(([reaction, { count }]) => ({ reaction, count })),
+    mine: mine?.reaction ?? null,
+    total: sorted.reduce((sum, [, { count }]) => sum + count, 0),
+  }
+}
+
+/** A reaction older than the one held for that person is dropped, and so is any reaction to a deleted message. */
+export const saveReaction = (
+  context: StoreContext,
+  accountKey: number,
+  provider: Provider,
+  chatKey: number,
+  messageId: Id,
+  { person, own, reaction, reactedAt }: PersonReaction,
+): void => {
+  const { database, now } = context
+  const statements = reactionStatementsOf(database)
+  if (statements.gone.get(chatKey, messageId)) return
+  const reactor = identityPk(
+    context,
+    accountKey,
+    provider,
+    person.id,
+    person.name,
+    person.username ? { username: person.username } : {},
+  )
+  const at = toMs(reactedAt) ?? now()
+  statements.upsert.run(chatKey, messageId, reactor, own ? 1 : 0, reaction, at, now(), now())
+  writeDerivedReactions(context, chatKey, messageId)
+}
+
+export const writeDerivedReactions = (context: StoreContext, chatKey: number, messageId: Id): void => {
+  const derived = derivedReactions(context, chatKey, messageId)
+  if (derived) reactionStatementsOf(context.database).total.run(JSON.stringify(derived), chatKey, messageId)
+}

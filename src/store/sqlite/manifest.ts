@@ -47,6 +47,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261018063952_version-24-message-stars-index", version: 24, minCompatible: 1 },
   { name: "20261019115025_version-25-chat-revisions", version: 25, minCompatible: 1 },
   { name: "20261019115027_version-25-chat-revisions-triggers", version: 25, minCompatible: 1 },
+  { name: "20261021214318_version-26-message-reactions", version: 26, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (
