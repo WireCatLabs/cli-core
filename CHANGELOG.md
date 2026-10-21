@@ -20,6 +20,10 @@ shape of this file.
 
 ### Fixed
 
+- **A chat or person is found by a name copied with its emoji.** A copied emoji often carries an invisible mark
+  (U+FE0F, U+FE0E, or the U+200D joiner) that a typed one lacks, so "Семья❤️" did not find the chat "Семья❤". Names
+  now compare without those marks and with accented letters in one form, still ignoring case, wherever a chat or a
+  person is named (`pickChat`, `pickPerson`, a stored alias).
 - **A store the process may not write is a permission error, not a crash.** Opening the store for writing where the
   file or its folder is read-only (`EROFS`, `EACCES`, `EPERM`) was reported as `internal_error` "this is a bug".
   It is now `permission_error` (exit 5) with reason `store.not-writable`, and the message names no path.

@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Chat, ChatEvent, Id, Message, MessageEvent, PersonReaction, PollVote } from "../../domain/models.js"
 import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import type { MessengerTraits } from "../../ports/traits.js"
-import { isId, type PeopleLookup, pickPerson } from "../../resolve.js"
+import { foldName, isId, type PeopleLookup, pickPerson } from "../../resolve.js"
 import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { codeOf } from "../../sends/guarded.js"
 import { chatIdIn } from "../../services/message-resolution.js"
@@ -248,8 +248,8 @@ export const stored = (
       const { id, held } = namesFromStore ? await storedChat(opened, scoped, namesFromStore, reference) : {}
       if (!isId(reference)) {
         const people = await opened.people.people(scoped.provider, { account: scoped.account })
-        const wanted = reference.trim().toLowerCase()
-        if (people.all().some((person) => person.alias?.toLowerCase().includes(wanted))) {
+        const wanted = foldName(reference.trim())
+        if (people.all().some((person) => person.alias && foldName(person.alias).includes(wanted))) {
           const person = pickPerson(reference, people)
           const chats = (await opened.chats.chatsWith(scoped, person.id)).filter((chat) => chat.kind === "dialog")
           if (chats.length !== 1 || !chats[0])
