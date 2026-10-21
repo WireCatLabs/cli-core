@@ -45,7 +45,10 @@ export const createMeetingSearchCommand = (program: Command): Command => {
   const command = search
     .command("meetings")
     .description("find words in stored meetings, indexing new ones first")
-    .argument("<query>", "words to find; each also matches its other word forms")
+    .argument(
+      "<query>",
+      "words to find; each also matches its other forms and spellings speech recognition garbled; exact:word keeps one as typed",
+    )
     .option("--meeting-id <id>", "only this stored meeting", integer)
     .option("--identity-id <id>", "meetings with this participant identity; does not say who spoke a hit", integer)
     .option("--person-id <id>", "meetings with a participant linked to this person", integer)

@@ -30,6 +30,13 @@ shape of this file.
 
 ### Added
 
+- **Meeting search finds words speech recognition garbled.** `meetings.searchHits` widens each query word of four
+  letters or more to stored words one stem edit away, stems one side extends, and words that begin it, so
+  «риелтор» finds «реелтора», «рилторов» and «дриелтора», and «циана» finds «цианом». Exact hits come first; a
+  widened hit carries `match: "corrected"` and `corrections`, and `meeting_hit` items show both. Number words never
+  widen. `exact:word` and `exact:"two words"` keep words to their typed form. Search cursors from earlier versions
+  are refused; start the search again. See [meetings](docs/dev/MEETINGS.md).
+
 - **`gatherProjectEvidence` reads what a person wrote.** A person given with `senders: [{ provider, id }]` (their
   stored identities, at most 16; an email identity's id is its address) and a `reference` gets a lane of its own
   (`kinds: ["sender"]`, `query: null`, `senders`): every message or mail one of those identities wrote in the window,

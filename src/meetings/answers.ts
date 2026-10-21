@@ -30,6 +30,9 @@ export const meetingHit = v.strictObject({
   excerpt: text,
   /** How far into the meeting the passage is. */
   offset_ms: v.nullable(count),
+  /** `corrected`: a query word matched only a garbled form of itself, listed in `corrections`. */
+  match: v.optional(v.picklist(["words", "corrected"])),
+  corrections: v.optional(v.array(v.strictObject({ from: text, to: v.array(text) }))),
   source: v.optional(
     v.strictObject({
       ref: reference,
@@ -233,6 +236,8 @@ export const meetingHitItem = (hit: SearchHit & { ref: string }): MeetingHitItem
   id: String(hit.id),
   excerpt: hit.text,
   offset_ms: hit.startMs,
+  ...(hit.match === undefined ? {} : { match: hit.match }),
+  ...(hit.corrections === undefined ? {} : { corrections: hit.corrections }),
   ...(hit.source === undefined
     ? {}
     : {
