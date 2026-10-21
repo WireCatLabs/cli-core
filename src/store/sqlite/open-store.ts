@@ -24,6 +24,24 @@ export interface StoreOptions {
 }
 export const BACKFILL_ON_OPEN = 5_000
 
+const NOT_WRITABLE = new Set(["EACCES", "EPERM", "EROFS"])
+
+const createWritable = (file: string): void => {
+  try {
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+    // SQLite gives its sidecar files the database's permissions.
+    writeFileSync(file, "", { flag: "a", mode: 0o600 })
+  } catch (error) {
+    if (!NOT_WRITABLE.has((error as NodeJS.ErrnoException).code ?? "")) throw error
+    // The errno's own sentence names the path, which holds the owner's home folder.
+    throw new CliError(
+      "permission_error",
+      "the message store cannot be written from here; run where it is writable, or set MESSAGING_STORE",
+      { reason: "store.not-writable" },
+    )
+  }
+}
+
 export const openStoreContext = async ({
   path,
   env,
@@ -37,11 +55,7 @@ export const openStoreContext = async ({
   if (readOnly) {
     if (!statSync(file, { throwIfNoEntry: false })?.isFile())
       throw new CliError("not_found", "The store does not exist as a file; read-only opening does not create it")
-  } else {
-    mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
-    // SQLite gives its sidecar files the database's permissions.
-    writeFileSync(file, "", { flag: "a", mode: 0o600 })
-  }
+  } else createWritable(file)
   const opened = await openSqlite(file, { readOnly })
   const database = opened.database
   try {

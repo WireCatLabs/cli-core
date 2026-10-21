@@ -34,6 +34,7 @@ const OTHERS: Entry[] = [
   validation("file.locked", "another process holds the file's lock"),
   ["profile.wrong-account", "authentication_error", "the signed-in source account does not match this profile"],
   validation("store.refused", "the local store refused the document text"),
+  ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   validation("catalog.scope-limit", "the selected catalog exceeds its entry limit"),
   validation("evidence.row-too-large", "one evidence row is over its size limit"),
   validation("index.not-ready", "the search index is still being built"),
