@@ -232,6 +232,26 @@ describe("re-keying a stored chat", () => {
     await store.close()
   })
 
+  it("carries receipts into the merged chat, the copy that got further winning", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    const own = (id: string, chatId: string): Message => ({ ...message(id, chatId, "sent"), outgoing: true })
+    await store.messages.saveMessages(OWNER, PHONE, [own("A1", PHONE), own("A2", PHONE)], { via: "history" })
+    await store.messages.saveMessages(OWNER, LID, [own("A2", LID)], { via: "history" })
+    await store.messages.saveDelivery(OWNER, PHONE, "A1", "delivered")
+    await store.messages.saveDelivery(OWNER, PHONE, "A2", "read")
+    await store.messages.saveDelivery(OWNER, LID, "A2", "delivered")
+
+    await store.chats.rekeyChat(OWNER, PHONE, LID)
+
+    const page = await store.messages.messages(OWNER, LID, { limit: 10 })
+    expect(page.items.map((one) => [one.id, one.delivery])).toEqual([
+      ["A1", "delivered"],
+      ["A2", "read"],
+    ])
+    await store.close()
+  })
+
   it("keeps a deletion when only one copy of a message held twice was deleted", async () => {
     const path = fresh()
     const store = await openStore({ path })

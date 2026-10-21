@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Delivered and read on the owner's own messages (store version 27).** `Message.delivery` (`delivered` or `read`)
+  says how far the owner's message in a one-to-one chat got; a `watch` event `{ event: "delivery", chatId, chatTitle,
+  messageId, delivery, at }` (`MessageDeliveryEvent`) carries a receipt as it comes. `store.messages.saveDelivery` and
+  a saved message's own `delivery` keep it in the new `messages.delivery` column, only on the owner's messages and
+  only ever forward. Stored messages show it as `delivery`. tg and max send none and see no change. See
+  [adapters](docs/dev/ADAPTERS.md).
+
 ## 0.381.0 — 22.10.2026
 
 ### Added

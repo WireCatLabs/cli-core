@@ -380,7 +380,16 @@ export interface Message {
    * keeps what the store holds: a fetch, an edit or another messenger's message says nothing about it.
    */
   starred?: boolean
+  /**
+   * How far the owner's own message got in a one-to-one chat, from the messenger's receipts: `read` once the other
+   * person opened it. Absent when no receipt came. On a save, absent keeps what the store holds, and a state never
+   * moves back: a late `delivered` after `read` changes nothing.
+   */
+  delivery?: Delivery
 }
+
+/** `delivered` reached the other person's phone; `read` they opened it (a voice note or view-once file played counts). */
+export type Delivery = "delivered" | "read"
 
 /**
  * A message found by searching, carrying the chat's name as well as its id: a search spans every
@@ -459,6 +468,17 @@ export interface MessageStarEvent {
   starred: boolean
 }
 
+/** A receipt for the owner's own message in a one-to-one chat; saved, it never moves the stored state back. */
+export interface MessageDeliveryEvent {
+  event: "delivery"
+  chatId: Id
+  chatTitle: string | null
+  messageId: Id
+  delivery: Delivery
+  /** ISO 8601 — when the receipt says it happened. */
+  at: string
+}
+
 /** Who joined, left, was added, removed, promoted or demoted, or a new title, as it happens; saved for `chats events`. */
 export interface ChatEventNotice {
   event: "chat_event"
@@ -467,13 +487,14 @@ export interface ChatEventNotice {
   change: ChatEvent
 }
 
-/** What a listening connection reports: a new message, a change to one, a vote, a reaction, a star, or a change to a chat. */
+/** What a listening connection reports: a message, a change to one, a vote, a reaction, a star, a receipt, a chat change. */
 export type MessageEvent =
   | { event: "message"; message: MessageHit }
   | MessageChange
   | PollVoteEvent
   | PersonReactionEvent
   | MessageStarEvent
+  | MessageDeliveryEvent
   | ChatEventNotice
 
 /** One chat's share of `inbox`: other people's messages since the last check, oldest first. */

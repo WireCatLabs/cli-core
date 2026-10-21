@@ -229,6 +229,12 @@ Some messengers push history to the client instead of answering a request for it
   absent `starred` keeps what the store holds. A live one comes from `watch` as `{ event: "star", chatId, chatTitle,
   messageId, starred }` (`MessageStarEvent`). The same star twice is kept once; with no time on a star, the last one
   saved wins. `messages list <chat> starred:true` and `search messages is:starred` then read them.
+- How far the owner's own message got in a one-to-one chat is `Message.delivery`: `delivered`, or `read` once the
+  other person opened it. A pushed message carries it when the messenger says; leave it out otherwise, since an absent
+  `delivery` keeps what the store holds. A live receipt comes from `watch` (and `listen`) as `{ event: "delivery",
+  chatId, chatTitle, messageId, delivery, at }` (`MessageDeliveryEvent`), one per message. The store keeps it only on
+  the owner's own message, and never moves it back: a late `delivered` after `read` changes nothing. A group's
+  receipts arrive per person; the shared model has no field for them, so send none.
 - A chat event in `events` is `{ chatId, change }` (`HistoryChatEvent`), `change` a `ChatEvent`: who joined, left, was
   added, removed, promoted or demoted, or a new title. A live one comes from `watch` as `{ event: "chat_event",
   chatId, chatTitle, change }` (`ChatEventNotice`). `change.messageId` names the event: the same event must always

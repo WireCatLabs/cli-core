@@ -122,12 +122,17 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
   const star = database.prepare(
     "UPDATE messages SET starred = (SELECT starred FROM messages WHERE id = ?) WHERE id = ? AND starred IS NULL",
   )
+  // A receipt only moves a message forward, so the copy that got further wins.
+  const delivery = database.prepare(
+    "UPDATE messages SET delivery = nullif(max(coalesce(delivery, 0), coalesce((SELECT delivery FROM messages WHERE id = ?), 0)), 0) WHERE id = ? AND outgoing = 1",
+  )
   const links = ["message_id", "parent_id"].map((column) =>
     database.prepare(`UPDATE OR IGNORE message_links SET ${column} = ? WHERE ${column} = ?`),
   )
   for (const pair of pairs) {
     threads.run(pair.kept, pair.gone)
     star.run(pair.gone, pair.kept)
+    delivery.run(pair.gone, pair.kept)
     // Both copies become tombstones before anything moves, so only what a deletion keeps (the owner's links) moves.
     if (pair.deleted) {
       tombstone(context, pair.gone)

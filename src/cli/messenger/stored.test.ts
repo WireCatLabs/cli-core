@@ -565,6 +565,22 @@ describe("the owner's stars in the store", () => {
     expect(await starredIds(store)).toEqual(["1"])
   })
 
+  it("keeps the receipts `watch` and a one-shot command hear for the owner's messages, never moving one back", async () => {
+    const { store } = await setUp()
+    const receipt = (messageId: string, delivery: "delivered" | "read") => ({
+      event: "delivery" as const,
+      chatId: "7",
+      chatTitle: null,
+      messageId,
+      delivery,
+      at: "2026-09-26T10:05:00.000Z",
+    })
+
+    await listening(store, [receipt("1", "read"), receipt("1", "delivered"), receipt("missing", "read")])
+
+    expect((await store.messages.message(account, "1", { chatId: "7" }))?.delivery).toBe("read")
+  })
+
   it("keeps a pushed batch's stars after its messages, and a message's own star", async () => {
     const { store } = await setUp()
     const pending = new Set<Promise<void>>()
