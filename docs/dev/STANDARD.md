@@ -238,6 +238,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `documents` | collection | files imported from Google Drive or Docs, or linked in a chat |  |
 | `notes` | collection | text the owner writes, or files from a notes folder |  |
 | `projects` | collection | the owner's work units with a task key |  |
+| `annotations` | collection | derived records attached to a selected entity, with explicit coverage of included and omitted facets |  |
 | `organizations` | collection | companies, teams, families or communities |  |
 | `identities` | collection | ways to reach a person or an organization: an account in one messenger or mailbox, an e-mail address, a phone |  |
 | `facts` | collection | what happened, with evidence |  |
@@ -480,6 +481,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--workers` | `<n>` | count | sessions in parallel on this machine, each with its own copy of the model | sessions |
 | `--input` | `<mode>` | choice | how supplied cell values are parsed: literal values or provider-interpreted formulas and locale formats |  |
 | `--render` | `<mode>` | choice | how returned cell values are represented: formatted display values, unformatted values or formulas |  |
+| `--target-store` | `<file>` | path | explicit destination store file for checking or restoring selected annotations |  |
+| `--bindings` | `<file>` | path | JSON file mapping source typed references to explicitly selected destination references |  |
 | `--context-source` | `<id=cursor>` | string | explicitly selected communications source, optionally with its scoped continuation cursor; repeat for more sources |  |
 | `--context-query` | `<words>` | string | literal words to find within the communications selected for preparation |  |
 | `--alias` | `<name>` | string | another name of the thing, searched as its own alternative beside its name; repeat for more |  |

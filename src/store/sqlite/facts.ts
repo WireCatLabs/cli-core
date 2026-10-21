@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
+import { calendarMoment } from "../../domain/moment.js"
 import type { Actor } from "./actors.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence } from "./memories.js"
@@ -135,7 +136,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       if (!statement || statement.length > 2000)
         throw new CliError("validation_error", "a fact's statement takes 1–2000 characters")
       const scope = input.scope === undefined ? null : oneOf(input.scope, MEMORY_SCOPES, "a fact's scope")
-      const occurredAt = input.occurredAt === undefined ? null : Date.parse(input.occurredAt)
+      const occurredAt = input.occurredAt === undefined ? null : calendarMoment(input.occurredAt, "occurredAt")
       if (occurredAt !== null && !Number.isFinite(occurredAt))
         throw new CliError("validation_error", "occurredAt takes an ISO timestamp")
       if (input.supersedes !== undefined && type !== "decision")

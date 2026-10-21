@@ -1,11 +1,19 @@
 import { Command } from "commander"
-import { expect, it, vi } from "vitest"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import {
   addMeetingSearchCommand,
   createMeetingSearchCommand,
   meetingHitSearchRequest,
   validateMeetingHitSearch,
 } from "./search.js"
+
+const processZone = process.env.TZ
+beforeEach(() => {
+  process.env.TZ = "Europe/Madrid"
+})
+afterEach(() => {
+  process.env.TZ = processZone
+})
 
 it("forwards combined context, dates and continuation to an injected provider-neutral search", async () => {
   const program = new Command("example")
@@ -71,8 +79,8 @@ it("forwards combined context, dates and continuation to an injected provider-ne
       meetingSeriesId: 78,
       project: "RES",
       topic: "costs",
-      since: Date.parse("2026-09-12"),
-      until: Date.parse("2026-10-12"),
+      since: Date.parse("2026-09-11T22:00:00Z"),
+      until: Date.parse("2026-10-12T22:00:00Z") - 1,
       after: "abc",
       limit: 10,
       signal: controller.signal,
@@ -106,8 +114,8 @@ it("forwards combined context, dates and continuation to an injected provider-ne
           series_id: 78,
           project: "RES",
           topic: "costs",
-          since_time: "2026-09-12T00:00:00.000Z",
-          until_time: "2026-10-12T00:00:00.000Z",
+          since_time: "2026-09-11T22:00:00.000Z",
+          until_time: "2026-10-12T21:59:59.999Z",
           max_read_bytes: 4194304,
         }),
       }),
@@ -117,7 +125,7 @@ it("forwards combined context, dates and continuation to an injected provider-ne
 it("rejects impossible dates and invalid selectors before opening a store", async () => {
   const cases = [
     ["--since-time", "2026-02-30"],
-    ["--since-time", "2026-10-12T10:00:00"],
+    ["--since-time", "2026-03-29T02:30"],
     ["--identity-id", "0"],
     ["--person-id", "1.5"],
     ["--event-id", "0"],

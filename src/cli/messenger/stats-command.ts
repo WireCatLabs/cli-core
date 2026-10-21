@@ -89,7 +89,9 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
         services.chats.stats(chat, {
           by,
           timezone,
-          ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
+          ...(sinceTime === undefined
+            ? {}
+            : { since: momentOf(sinceTime, "--since-time", Date.now(), { zone: timezone }) }),
         }),
       )
       const chart = chatChart(found, { kind: chartKind, by, timezone })

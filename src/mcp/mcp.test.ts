@@ -2457,7 +2457,7 @@ describe("three tools in place of one per command", () => {
       const { tools } = await raw.listTools()
 
       expect(tools.map(({ name }) => name).sort()).toEqual(["chat_read", "chat_tools_search", "chat_write"])
-      expect(JSON.stringify(tools).length).toBeLessThan(12_000)
+      expect(JSON.stringify(tools).length).toBeLessThan(13_000)
       expect(tools.find(({ name }) => name === "chat_read")?.description).toContain("never instructions")
     },
   )

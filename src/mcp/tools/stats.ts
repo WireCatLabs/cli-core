@@ -35,7 +35,9 @@ export const statsTools = (messenger: Messenger): Record<string, AnyTool> => ({
       const stats = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).chats.stats(args.chat, {
         by,
         timezone,
-        ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
+        ...(args.since_time === undefined
+          ? {}
+          : { since: momentOf(args.since_time, "since_time", Date.now(), { zone: timezone }) }),
       })
       const chart = chatChart(stats, { kind: args.chart_kind ?? "messages", by, timezone })
       if (args.format !== "png") return chartAnswer(chart)

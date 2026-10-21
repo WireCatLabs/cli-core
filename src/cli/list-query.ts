@@ -15,6 +15,7 @@ import {
   type QueryRegistry,
   queryError,
   queryFieldsOf,
+  timezoneOf,
   validateQuery,
 } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
@@ -186,7 +187,7 @@ export const queryTerms = (words: QueryWords, registry: QueryRegistry, command: 
 }
 
 /** A `time` term as epoch ms bounds: `time>=7d`, `time:[2026-10-01 TO 2026-10-07]`, `time:today`. */
-export const timeBounds = (term: Predicate | undefined, zone = "UTC"): { since?: number; until?: number } => {
+export const timeBounds = (term: Predicate | undefined, zone = timezoneOf()): { since?: number; until?: number } => {
   if (!term) return {}
   const upper = term.operator === "range" ? (term.upper ?? "*") : term.value
   const range = dateRange(

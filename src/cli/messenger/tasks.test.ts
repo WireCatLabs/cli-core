@@ -343,7 +343,7 @@ describe("tasks", () => {
     const planned = item(
       await call("tasks", "plan", added.id, "--due", "none", "--remind-time", "2026-01-01", "--json"),
     )
-    expect(planned).toMatchObject({ due_at: null, next_check_at: "2026-01-01T00:00:00.000Z" })
+    expect(planned).toMatchObject({ due_at: null, next_check_at: new Date(2026, 0, 1).toISOString() })
     expect((await call("tasks", "plan", added.id)).code).not.toBe(0)
     expect((await call("tasks", "plan", added.id, "--due", "soon")).stderr).toContain("--due takes")
 
