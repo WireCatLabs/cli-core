@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.379.0 — 21.10.2026
+
 ### Changed — may break callers
 
 - **A typed date or time is read in a zone, and a date alone covers the whole local day** (cli-base `WC-TIME-3`,
