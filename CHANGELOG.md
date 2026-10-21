@@ -9,6 +9,12 @@ shape of this file.
 
 ### Added
 
+- **Meeting search finds words spread over neighbouring lines.** `"циан риелтор"~3` in a meeting query finds a
+  transcript line with one of the words when the others are at most three lines away in the same transcript; `~0`
+  is one line, any order; at most 20. The words widen to garbled spellings as single words do. It needs
+  `@wirecat/cli-base` 0.49.0 (`parseLucene({ proximity: true })`), now the pinned version and the peer range.
+  See [query language](docs/search/query-language.md#встречи).
+
 - **Meeting search finds words speech recognition garbled.** `meetings.searchHits` widens each query word of four
   letters or more to stored words one stem edit away that a Russian dictionary does not know, and to stems one side
   extends, so «риелтор» finds «реелтора», «рилторов» and «дриелтора», «циана» finds «цианом», and «договор» does not

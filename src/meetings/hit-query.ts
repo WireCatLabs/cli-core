@@ -1,9 +1,11 @@
 import {
   defineQuery,
   type Operator,
+  type Predicate,
   parseLucene,
   type QueryAst,
   type QueryNode,
+  queryError,
   validateQuery,
 } from "@wirecat/cli-base/query"
 
@@ -12,6 +14,17 @@ const context = {
   guide: "https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md#встречи",
 }
 const words: Operator[] = ["term", "phrase"]
+/** A transcript line holds a sentence or two; further than this is a different part of the meeting. */
+export const MOST_LINES_APART = 20
+const near = (node: Predicate): void => {
+  if (node.slop !== undefined && node.slop > MOST_LINES_APART)
+    queryError(
+      "query.invalid-number",
+      node.span,
+      `words at most ${MOST_LINES_APART} lines apart: "a b"~${MOST_LINES_APART}`,
+      context,
+    )
+}
 
 /** The messages query language over meeting text: the same fields, a narrower set of operators. */
 export const MEETING_HIT_QUERY = defineQuery({
@@ -24,6 +37,7 @@ export const MEETING_HIT_QUERY = defineQuery({
       operators: words,
       example: "text:budget",
       relation: "a passage with the word in any form, or a spelling speech recognition garbled",
+      validate: near,
     },
     {
       name: "exact",
@@ -31,6 +45,7 @@ export const MEETING_HIT_QUERY = defineQuery({
       operators: words,
       example: "exact:budget",
       relation: "a passage with the word as typed: no other forms, no garbled spellings",
+      validate: near,
     },
     {
       name: "from",
@@ -44,7 +59,7 @@ export const MEETING_HIT_QUERY = defineQuery({
 
 /** What a person typed: the CLI, MCP and batch queries. */
 export const parseMeetingQuery = (query: string): QueryAst =>
-  validateQuery(parseLucene(query, { defaultField: "text", ...context }), MEETING_HIT_QUERY, context)
+  validateQuery(parseLucene(query, { defaultField: "text", proximity: true, ...context }), MEETING_HIT_QUERY, context)
 
 /**
  * Words from a name or a note, never parsed: a project called «C++ (beta)» must not become syntax. Each word is

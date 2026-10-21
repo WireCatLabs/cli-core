@@ -154,3 +154,21 @@ it("pages an OR whose sides rank differently without repeating or skipping a hit
   expect(paged).toEqual(whole)
   expect(whole.length).toBeGreaterThan(2)
 })
+
+it('finds words spread over neighbouring lines with "a b"~N, from a line that holds one of them', async () => {
+  const { texts } = await fixture()
+  expect(await texts('"риелтор договор"~3')).toEqual([
+    "Договор подпишем в пятницу",
+    "Нужен риелтор на завтра",
+    "Риелтор и ипотека вместе",
+  ])
+  expect(await texts('"риелтор договор"~1')).toEqual(["Договор подпишем в пятницу", "Риелтор и ипотека вместе"])
+  expect(await texts('"риелтор ипотека"~0')).toEqual(["Риелтор и ипотека вместе"])
+  expect(await texts('"риелтор перезвоню"~1')).toEqual([])
+})
+
+it("refuses a distance beyond 20 lines and a fuzzy word", async () => {
+  const { store, accountId } = await fixture()
+  for (const query of ['"риелтор договор"~21', "риелтор~2"])
+    await expect(store.meetings.searchHits(query, { accountId })).rejects.toMatchObject({ code: "validation_error" })
+})
