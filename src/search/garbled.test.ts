@@ -72,6 +72,19 @@ describe("widenWords", () => {
   })
 })
 
+describe("cut-off words", () => {
+  it("widens a query word to a cut-off beginning of it, and never to a real shorter word", () => {
+    const vocabulary = [
+      { term: "може", docs: 30 },
+      { term: "после", docs: 260 },
+      { term: "отдел", docs: 50 },
+    ]
+    expect(
+      widenWords([probe("может"), probe("последующих"), probe("отдельно")], vocabulary, stems, knownRussianWord),
+    ).toEqual([["може"], [], []])
+  })
+})
+
 describe("knownRussianWord", () => {
   it.each([
     ["поговорить", true],

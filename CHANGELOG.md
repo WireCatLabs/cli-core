@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **Meeting search finds words speech recognition cut off.** A stored word of four letters or more that begins a
+  query word, and that the Russian dictionary does not know, widens it: «може» for «может», «напри» for «например».
+  Real shorter words («после» for «последующих») still do not. This is ztx's rule, behind the dictionary.
+
 - **People's reactions in the store (store version 26).** For a messenger that sends one person's reaction change at a
   time (WhatsApp), a `watch` event `{ event: "person_reaction", chatId, chatTitle, messageId, reaction }`
   (`PersonReactionEvent`) and a pushed batch's `reactions` (`HistoryReaction`) carry `PersonReaction`
