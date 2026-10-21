@@ -47,7 +47,7 @@ export const createMeetingSearchCommand = (program: Command): Command => {
     .description("find words in stored meetings, indexing new ones first")
     .argument(
       "<query>",
-      'words, OR, (groups), -word, "a phrase", exact:word, from:"Name" (who said the line); a word also matches its other forms and spellings speech recognition garbled',
+      'words, OR, (groups), -word, "a phrase", "a b"~N (within N lines), exact:word, from:"Name" (who said the line); a word also matches its other forms and spellings speech recognition garbled',
     )
     .option("--meeting-id <id>", "only this stored meeting", integer)
     .option("--identity-id <id>", "meetings with this participant identity; does not say who spoke a hit", integer)

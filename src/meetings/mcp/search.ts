@@ -16,7 +16,7 @@ export const meetingSearchTool = {
         type: "string",
         minLength: 1,
         description:
-          'The messages query language: words (all required), OR, (groups), NOT or -word, "a phrase", exact:word, from:"Name" for who said the line',
+          'The messages query language: words (all required), OR, (groups), NOT or -word, "a phrase", "a b"~N for words within N transcript lines (at most 20), exact:word, from:"Name" for who said the line',
       },
       meeting_id: integer,
       identity_id: integer,

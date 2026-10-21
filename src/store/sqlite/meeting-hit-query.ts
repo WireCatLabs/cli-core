@@ -21,6 +21,8 @@ interface Word {
 type Leaf =
   | { kind: "words"; exact: boolean; words: Word[] }
   | { kind: "phrase"; exact: boolean; words: Word[] }
+  /** `"a b"~N`: every word within `lines` transcript lines of a line that holds one of them. */
+  | { kind: "near"; exact: boolean; words: Word[]; lines: number }
   | { kind: "speaker"; participants: number[]; names: string[] }
 export type Resolved = Leaf | { kind: "boolean"; must: Resolved[]; should: Resolved[]; not: Resolved[] }
 
@@ -147,6 +149,8 @@ export const resolveMeetingQuery = (
     if (node.field === "from") return pickSpeaker(database, accountId, node.value)
     const exact = node.field === "exact"
     const words = wordsOf(node.value, exact)
+    if (node.operator === "phrase" && node.slop !== undefined && words.length > 1)
+      return { kind: "near", exact, words, lines: node.slop }
     return { kind: node.operator === "phrase" && words.length > 1 ? "phrase" : "words", exact, words }
   }
   const tree = resolve(ast.root)
@@ -154,7 +158,8 @@ export const resolveMeetingQuery = (
   const widening: Word[] = []
   const collect = (node: Resolved): void => {
     if (node.kind === "boolean") [...node.must, ...node.should, ...node.not].forEach(collect)
-    else if (node.kind === "words" && !node.exact) for (const term of node.words) widening.push(term)
+    else if ((node.kind === "words" || node.kind === "near") && !node.exact)
+      for (const term of node.words) widening.push(term)
   }
   collect(tree)
   if (stemmer && state.through > 0 && widening.length) {
@@ -205,6 +210,19 @@ export const meetingQuerySql = (tree: Resolved, state: State): { sql: string; pa
   const nothing = "SELECT NULL AS rid,0 AS tier WHERE 0"
   const compile = (node: Resolved): string => {
     if (node.kind === "words") return node.words.length ? all(node.words.map(word)) : nothing
+    if (node.kind === "near") {
+      const lines = node.words.map(
+        (term, i) =>
+          `w${i} AS MATERIALIZED (SELECT r.meeting_transcript_id AS t,r.position AS p,r.id,h.tier FROM (${word(term)}) h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4)`,
+      )
+      const nearest = node.words.map(
+        (_, i) =>
+          `(SELECT min(x.tier) FROM w${i} x WHERE x.t=c.t AND x.p BETWEEN c.p-${node.lines} AND c.p+${node.lines})`,
+      )
+      return `SELECT rid,tier FROM (WITH ${lines.join(",")}, c AS (${node.words
+        .map((_, i) => `SELECT t,p,id FROM w${i}`)
+        .join(" UNION ")}) SELECT c.id*4+1 AS rid,max(${nearest.join(",")}) AS tier FROM c) WHERE tier IS NOT NULL`
+    }
     if (node.kind === "phrase") {
       params.push(`normalized_text : ${quote(node.words.map((term) => term.literal).join(" "))}`)
       let select = "SELECT rowid AS rid,0 AS tier FROM meeting_words WHERE meeting_words MATCH ?"
@@ -258,6 +276,8 @@ export const matchMeetingText = (
   }
   const check = (node: Resolved): { from: string; to: string[] }[] | null => {
     if (node.kind === "speaker") return []
+    // The other words are on neighbouring lines, so only this line's garbled spellings are named.
+    if (node.kind === "near") return node.words.flatMap((term) => word(term) ?? [])
     if (node.kind === "words" || node.kind === "phrase") {
       const found: { from: string; to: string[] }[] = []
       for (const term of node.words) {
