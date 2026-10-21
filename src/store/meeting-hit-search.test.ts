@@ -114,7 +114,7 @@ it("reports pending indexing without draining write queues and skips superseded/
   expect(
     (await store.meetings.searchHits("example", { accountId })).items.every((hit) => hit.scope !== "transcript"),
   ).toBe(true)
-  expect((await store.meetings.searchHits("!!!", { accountId })).items).toEqual([])
+  await expect(store.meetings.searchHits("!!!", { accountId })).rejects.toMatchObject({ code: "validation_error" })
   input.meeting.deletedAt = 2000
   await store.meetings.saveMeeting(input)
   expect((await store.meetings.searchHits("example", { accountId, meetingId: before.meeting.id })).items).toEqual([])

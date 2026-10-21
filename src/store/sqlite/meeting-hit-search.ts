@@ -1,15 +1,13 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
-import { formatMeetingReference } from "../../meetings/index.js"
-import { isNumberWord, widenWords } from "../../search/garbled.js"
-import { knownRussianWord } from "../../search/russian-dictionary.js"
+import { formatMeetingReference, parseMeetingQuery } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
-import { normalize } from "../normalize.js"
+import { matchMeetingText, meetingQuerySql, resolveMeetingQuery } from "./meeting-hit-query.js"
 import { indexedText } from "./meeting-index-values.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
-import { meetingStemmableText, meetingStemState } from "./meeting-stem-state.js"
+import { meetingStemState } from "./meeting-stem-state.js"
 import type { StoreContext } from "./open.js"
 import { read } from "./transaction.js"
 
@@ -75,18 +73,6 @@ const cursorOf = (value: string | undefined, key: string): Cursor | null => {
     return fail("Meeting search cursor does not match this query and account")
   return parsed
 }
-const WORD = /[\p{L}\p{N}\p{M}]+/gu
-/** `exact:word` and `exact:"two words"` keep those words to their typed form; every other word widens. */
-const queryWords = (query: string): { raw: string; exact: boolean }[] => {
-  const words: { raw: string; exact: boolean }[] = []
-  const rest = query.replace(/(?<![\p{L}\p{N}])exact:(?:"([^"]*)"|([^\s"]+))/gu, (_, quoted, bare) => {
-    for (const raw of String(quoted ?? bare).match(WORD) ?? []) words.push({ raw, exact: true })
-    return " "
-  })
-  for (const raw of rest.match(WORD) ?? []) words.push({ raw, exact: false })
-  return words.filter((word) => normalize(word.raw))
-}
-const quote = (word: string): string => `"${word.replaceAll('"', '""')}"`
 const fields = ["title", "overview", "sections", "next_steps", "content"]
 const bytes = (alias: string, columns: string[]): string =>
   columns.map((column) => `coalesce(length(CAST(${alias}.${column} AS BLOB)),0)`).join("+")
@@ -116,38 +102,14 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         fail("Meeting search limit must be from 1 through 1000")
       if (!Number.isSafeInteger(maxReadBytes) || maxReadBytes < 1 || maxReadBytes > 64 * 1024 ** 2)
         fail("Meeting search byte limit must be from 1 through 67108864")
-      if (typeof rawQuery !== "string" || Buffer.byteLength(rawQuery) > 65536)
+      if (typeof rawQuery === "string" && Buffer.byteLength(rawQuery) > 65536)
         fail("Meeting search query must be a bounded string")
-      const rawWords = queryWords(rawQuery)
-      if (rawWords.length > 128) fail("Meeting search supports at most 128 query words")
+      const ast = typeof rawQuery === "string" ? parseMeetingQuery(rawQuery) : rawQuery
       return read(database, () => {
         checkMeetingCancelled(input.signal)
         const state = meetingStemState(database, input.accountId)
-        const probes = rawWords.map(({ raw, exact }) => ({
-          raw,
-          exact,
-          whole: exact || isNumberWord(normalize(raw)),
-          literal: normalize(raw),
-          stems:
-            state.stemmer && raw.length <= 1024 && !exact
-              ? [...new Set(state.stemmer.explain(raw).map((word) => word.stem))]
-              : [],
-        }))
-        const stemmer = state.stemmer
-        const widening = probes.filter((probe) => !probe.exact && stemmer && state.through > 0)
-        const widened: string[][] = widening.length
-          ? widenWords(
-              widening,
-              database
-                .prepare("SELECT term,doc FROM meeting_words_vocab WHERE col='normalized_text'")
-                .all()
-                .map((row) => ({ term: String(row.term), docs: Number(row.doc) })),
-              (word) => [...new Set(stemmer?.explain(word).map((part) => part.stem))],
-              knownRussianWord,
-            )
-          : []
-        const terms = probes.map((probe) => ({ ...probe, widened: widened[widening.indexOf(probe)] ?? [] }))
-        const key = fingerprint(JSON.stringify(terms), input, state.identity)
+        const tree = resolveMeetingQuery(database, input.accountId, ast, state)
+        const key = fingerprint(JSON.stringify(tree), input, state.identity)
         const after = cursorOf(input.after, key)
         const pending = database
           .prepare(`SELECT 1 FROM meeting_index_pending p
@@ -166,28 +128,8 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             pending || !state.stemmer || state.through < state.watermark ? ("pending" as const) : ("ready" as const),
           indexCompleteness: "unknown" as const,
         }
-        if (terms.length === 0) return { items: [], hasMore: false, nextCursor: null, coverage }
         const clauses = ["m.account_id=?", "m.deleted_at IS NULL"]
-        const queryParams: SqlValue[] = []
-        const termTables = terms.map((term, i) => {
-          queryParams.push(`normalized_text : (${quote(term.literal)}${term.whole ? "" : "*"})`)
-          let select = "SELECT rowid AS rid,0 AS tier FROM meeting_words WHERE meeting_words MATCH ?"
-          if (state.stemmer && state.through > 0 && term.stems.length) {
-            queryParams.push(
-              `stems : (${term.stems.map((stem) => `"${stem.replaceAll('"', '""')}"`).join(" OR ")})`,
-              state.through,
-            )
-            select += " UNION SELECT rowid,1 FROM meeting_stems WHERE meeting_stems MATCH ? AND rowid<=?"
-          }
-          if (term.widened.length) {
-            queryParams.push(`normalized_text : (${term.widened.map(quote).join(" OR ")})`)
-            select += " UNION SELECT rowid,2 FROM meeting_words WHERE meeting_words MATCH ?"
-          }
-          return `term_${i} AS (${select})`
-        })
-        const matching = `SELECT rid,max(tier) AS tier FROM (${terms
-          .map((_, i) => `SELECT rid,min(tier) AS tier FROM term_${i} GROUP BY rid`)
-          .join(" UNION ALL ")}) GROUP BY rid HAVING count(*)=${terms.length}`
+        const { sql: matching, params: queryParams } = meetingQuerySql(tree, state)
         const params: SqlValue[] = [input.accountId]
         if (input.meetingId !== undefined) {
           clauses.push("m.id=?")
@@ -246,7 +188,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             after.kind,
             after.id,
           )
-        const sql = `WITH ${termTables.join(",")}, matches AS (${matching}), matching AS (SELECT rid,tier FROM matches h WHERE NOT EXISTS(SELECT 1 FROM meeting_index_pending p WHERE p.id=h.rid/4 AND p.indexable_type=CASE h.rid%4 WHEN 1 THEN 'meeting_transcript_row' WHEN 2 THEN 'meeting_chat_message' ELSE 'meeting_summary' END)), selected AS (SELECT m.id,coalesce(m.started_at,0) AS started FROM meetings m WHERE ${clauses.join(" AND ")}), hits AS (
+        const sql = `WITH matches AS (${matching}), matching AS (SELECT rid,tier FROM matches h WHERE NOT EXISTS(SELECT 1 FROM meeting_index_pending p WHERE p.id=h.rid/4 AND p.indexable_type=CASE h.rid%4 WHEN 1 THEN 'meeting_transcript_row' WHEN 2 THEN 'meeting_chat_message' ELSE 'meeting_summary' END)), selected AS (SELECT m.id,coalesce(m.started_at,0) AS started FROM meetings m WHERE ${clauses.join(" AND ")}), hits AS (
         SELECT h.tier,m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes,t.id AS transcript_id,r.position FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
         UNION ALL SELECT h.tier,m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])},NULL,NULL FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
         UNION ALL SELECT h.tier,m.started,m.id,2,s.id,NULL,${bytes("s", fields)},NULL,NULL FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
@@ -304,24 +246,8 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
           }
         })
         const fresh = items.flatMap((item) => {
-          const literalTokens: string[] = normalize(item.text).match(/[\p{L}\p{N}]+/gu) ?? []
-          let stemTokens: Set<string> | undefined
-          const corrections: { from: string; to: string[] }[] = []
-          for (const term of terms) {
-            if (
-              term.whole
-                ? literalTokens.includes(term.literal)
-                : literalTokens.some((token) => token.startsWith(term.literal))
-            )
-              continue
-            stemTokens ??= state.stemmer
-              ? new Set(state.stemmer.explain(meetingStemmableText(item.text)).map((word) => word.stem))
-              : new Set<string>()
-            if (term.stems.some((stem) => stemTokens?.has(stem))) continue
-            const to = term.widened.filter((word) => literalTokens.includes(word))
-            if (to.length === 0) return []
-            corrections.push({ from: term.raw, to })
-          }
+          const corrections = matchMeetingText(tree, item.text, state.stemmer)
+          if (!corrections) return []
           return [
             corrections.length
               ? { ...item, match: "corrected" as const, corrections }

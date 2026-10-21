@@ -17,6 +17,14 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Meeting search reads the messages query language.** `meetings.searchHits`, `search meetings` and MCP
+  `search_meetings` take `OR`, `(groups)`, `NOT`/`-word`, `"phrases"` (neighbouring words, any form), `exact:` and
+  `from:"Name"` — who said the line or wrote the chat message, a person through all their linked identities; an
+  ambiguous name is an error with the candidates. `:`, `(`, `"`, `-` and `AND`/`OR`/`NOT` in a meeting query are
+  now syntax, and a query of punctuation alone is a `validation_error`. `searchHits` also takes a `QueryAst`;
+  `meetingWordsQuery(text)` builds one from text that must stay plain words, as project discovery now does.
+  `MEETING_HIT_QUERY` and `parseMeetingQuery` are exported. See [query language](docs/search/query-language.md#встречи).
+
 - **Meeting search reads `exact:` and has new cursors.** `exact:word` and `exact:"two words"` in a
   `meetings.searchHits` query keep those words to their typed form, where `exact` was a search word before. Exact
   hits now come before widened ones, so cursors from earlier versions are refused; start the search again.

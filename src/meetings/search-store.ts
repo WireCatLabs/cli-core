@@ -1,3 +1,4 @@
+import type { QueryAst } from "@wirecat/cli-base/query"
 import type { SearchHit } from "./store.js"
 
 export interface MeetingSearchOptions {
@@ -38,7 +39,8 @@ export interface MeetingSearchPage {
 
 /** Optional bounded read capability; paging reaches inside a single large transcript. */
 export interface MeetingSearchStore {
-  searchHits(query: string, options: MeetingSearchOptions): Promise<MeetingSearchPage>
+  /** A string is what a person typed, parsed as a query; text that must not become syntax comes as `meetingWordsQuery`. */
+  searchHits(query: string | QueryAst, options: MeetingSearchOptions): Promise<MeetingSearchPage>
 }
 
 export interface MeetingSearchIndexInput {

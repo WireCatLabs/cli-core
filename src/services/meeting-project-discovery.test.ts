@@ -4,7 +4,12 @@ import { join } from "node:path"
 import { Command } from "commander"
 import { afterEach, expect, it, vi } from "vitest"
 import { addMeetingProjectEvidenceCommand } from "../meetings/cli/index.js"
-import type { MeetingProjectDiscoveryReader, MeetingSave, MeetingSearchPage } from "../meetings/index.js"
+import {
+  type MeetingProjectDiscoveryReader,
+  type MeetingSave,
+  type MeetingSearchPage,
+  meetingWordsQuery,
+} from "../meetings/index.js"
 import { callMeetingProjectEvidenceTool } from "../meetings/mcp/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { openStore } from "../store/store.js"
@@ -273,7 +278,7 @@ it("captures the selected account and stops after cancellation during asynchrono
     maxTerms: 32,
   })
   expect(defaultSearch).toHaveBeenCalledWith(
-    "Research Example",
+    meetingWordsQuery("Research Example"),
     expect.objectContaining({ accountId: f.accountId, limit: 100, maxReadBytes: 4 * 1024 ** 2 }),
   )
   const original = { ...f.options }
