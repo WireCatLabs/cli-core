@@ -128,6 +128,12 @@ of 0.11 s a query on that copy ([measurement](https://github.com/WireCatLabs/cli
    meeting app, join later without changing the meeting tables.
 4. **Meetings are not messages.** Messages are for messengers; meetings, their lines and their chat live
    in their own tables.
+5. **One occurrence, one record.** A save marked `fromFile` (a transcript read from a file) and a provider's
+   record of the same occurrence — same series key, starts within 15 minutes — are one meeting. The provider's
+   record wins: saved after a file, it takes over the record and its key; a file saved after it only fills a
+   missing transcript, and a provider transcript supersedes transcripts with source `file`. Two provider
+   records are never merged (a restarted meeting is a new occurrence), and a file without the provider's series
+   key (a `.vtt` named only by its topic) cannot be matched.
 
 ## Atomic writes
 
