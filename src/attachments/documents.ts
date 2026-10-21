@@ -390,6 +390,25 @@ const readBook = (archive: Map<string, Uint8Array>, output: Output) => {
   }
 }
 
+/** The cells of an XLSX or ODS workbook, one `Sheet` per worksheet in workbook order, values as displayed. */
+export const readSpreadsheet = async (
+  bytes: Uint8Array,
+  kind: "xlsx" | "ods",
+  signal?: AbortSignal,
+): Promise<Sheet[]> => {
+  try {
+    const archive = await readContainer(bytes, signal)
+    const sheets = kind === "xlsx" ? readSheet(archive) : readOdf(archive, kind, new Output())
+    if (!sheets) throw new Error("wrong_format")
+    return sheets
+  } catch (error) {
+    if (error instanceof CliError) throw error
+    throw new CliError("validation_error", `the ${kind.toUpperCase()} workbook could not be read`, {
+      reason: "spreadsheet.unreadable",
+    })
+  }
+}
+
 export const readDocument = async (
   bytes: Uint8Array,
   kind: DocumentKind,

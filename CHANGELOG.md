@@ -5,6 +5,25 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`readSpreadsheet(bytes, "xlsx" | "ods")` from `@wirecat/cli-core/documents`** returns a workbook's cells per
+  worksheet (values as displayed), the same reader text extraction uses, so a provider can mirror a workbook's tabs.
+- **Push local files into a provider as native documents (`@wirecat/cli-core/documents`).** `pushDocuments` mirrors
+  a local folder one way through a provider's `DocumentTarget`: new files are created, changed files updated, and
+  unchanged files skipped by content hash with no remote call. Before a create it saves a pending origin key, so a
+  crash after the provider wrote finds the file (`findByOrigin`) instead of creating a duplicate. The provider's
+  `prepare` compares the remote with the last push before writing; a remote copy changed since then is a conflict
+  unless `force`, and only the `write` step passes the guard. A local delete is reported as an
+  orphan and nothing is ever deleted remotely. `planPush` is the pure plan behind `dryRun`; `scanLocal` skips hidden
+  files, editor leftovers and symbolic links. Every write passes through the caller's `guard` with its own operation
+  id. For documents with structure, `markdownBlocks` (async, its parser loaded on first use) parses Markdown (CommonMark and GFM tables, task lists,
+  strikethrough) into `Block`s a provider writes natively, `diffBlocks` gives the edits that leave unchanged blocks
+  in place, and `reconcileBlocks` lets a checklist tick change on either side without a conflict. See
+  [documents](docs/dev/DOCUMENTS.md#push-local-files-to-a-provider).
+
 ## 0.382.0 — 22.10.2026
 
 ### Added
