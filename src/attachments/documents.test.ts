@@ -11,7 +11,7 @@ import {
   slideEntries,
 } from "../testing/office-files.js"
 import { readContainer } from "./container.js"
-import { documentExtractor } from "./documents.js"
+import { documentExtractor, readSpreadsheet } from "./documents.js"
 import { extractText, importEngine } from "./extract.js"
 
 const hint = (kind: string) => ({ kind: "file", name: `fixture.${kind}`, mime: null, path: `/fixture.${kind}` })
@@ -48,6 +48,15 @@ describe("digital document text", () => {
   it("uses workbook order, rich/shared and inline strings, a header row and cached values", async () => {
     const text = await textOf("xlsx", sheetEntries())
     expect(text).toBe("# First\nRow 2: C: 12; D: =1+1\n\n# Second\nRow 7: B: sharedneedle")
+  })
+  it("returns an XLSX workbook's cells per worksheet", async () => {
+    const sheets = await readSpreadsheet(zip(sheetEntries()), "xlsx")
+    expect(sheets.map((sheet) => sheet.name)).toEqual(["First", "Second"])
+    expect(sheets[0]?.cells).toContainEqual({ row: 2, column: 3, value: "12" })
+    expect(sheets[1]?.cells).toContainEqual({ row: 7, column: 2, value: "sharedneedle" })
+    await expect(readSpreadsheet(zip(odfEntries("odt")), "xlsx")).rejects.toMatchObject({
+      code: "validation_error",
+    })
   })
   it("reads ODP slides in order", async () => {
     expect(await textOf("odp", presentationEntries())).toBe("[Slide 1]\nFirst slideneedle\n\n\n[Slide 2]\nLater слайд")

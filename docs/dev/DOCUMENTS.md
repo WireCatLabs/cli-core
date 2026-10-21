@@ -57,6 +57,33 @@ history. Extraction tests cover preview, evidence, proposed saves and source cha
 write boundaries. Drive's integration tests exercise its actual adapters against the packed Core
 candidate. Tests do not contact a real provider or measure model accuracy.
 
+## Push local files to a provider
+
+`pushDocuments` mirrors a local folder one way into a provider's native documents. The provider implements
+`DocumentTarget`: which local paths it takes (`kindOf`), find-or-create of folders by an origin key, `create`,
+`prepare` and `findByOrigin`. It persists `PushState` through `PushStatePort`, holds its profile lock and passes
+`assertHeld`, and wraps each write in `guard` with its permission checks and write journal.
+
+1. Unchanged files are skipped by content hash with no remote call. `planPush` is the plan alone (`dryRun`).
+2. A create saves a pending origin key first; the provider stores it on the remote file. After a crash, the next
+   run finds the file with `findByOrigin` and updates it instead of creating a second one.
+3. `prepare` reads the remote and compares it with the snapshot the last push recorded. It returns a conflict
+   (unless `force`), `missing`, `unchanged` (nothing to write) or a `write` step; only `write` runs inside `guard`,
+   so a conflict never reaches the write journal. The snapshot is the provider's own read-back after its write, so
+   its own push never looks like an edit. One file is one provider write (or one all-or-nothing batch): a write cut
+   in half would read back as an edit.
+4. Nothing is deleted remotely. A file deleted locally is an orphan; a file deleted remotely is missing and is
+   created again only with `force`.
+
+For documents with structure, `markdownBlocks` (async; the parser loads on first use) parses Markdown into `Block`s (headings, paragraphs, bullet,
+numbered and checklist items, code, quotes, tables, images, rules) with inline marks. The provider maps its own
+document into the same blocks and writes only `diffBlocks(current, next)`, so unchanged paragraphs keep their
+comments and formatting. `reconcileBlocks(recorded, current, local, lastLocal)` allows one remote change, a
+checklist tick: a tick follows the side that changed it, judged against `lastLocal` (the file at the last push), so
+a remote tick survives later pushes. Any other remote change is a conflict. The provider's snapshot therefore keeps
+both the blocks it wrote and the local blocks it pushed. A field the provider
+cannot read back must stay out of its blocks, or that block would differ on every push.
+
 ## Copy a document collection to another database
 
 Use `previewDocumentTransfer` and `applyDocumentTransfer` from `@wirecat/cli-core/store` to retain
