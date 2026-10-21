@@ -12,6 +12,10 @@ shape of this file.
 - **Meeting search finds words speech recognition cut off.** A stored word of four letters or more that begins a
   query word, and that the Russian dictionary does not know, widens it: «може» for «может», «напри» for «например».
   Real shorter words («после» for «последующих») still do not. This is ztx's rule, behind the dictionary.
+- **A meeting answer names what about it is doubtful, in `issues`.** `MEETING_ISSUES` lists the values; today one,
+  `time_without_zone`: the provider sent a time with no zone, and it was read in the computer's zone. A provider
+  adapter keeps the data and puts the issue in the meeting's `metadata.issues`; `meetingItem` shows the known ones and
+  leaves the field out when there are none. No store change.
 
 - **People's reactions in the store (store version 26).** For a messenger that sends one person's reaction change at a
   time (WhatsApp), a `watch` event `{ event: "person_reaction", chatId, chatTitle, messageId, reaction }`

@@ -54,7 +54,16 @@ export {
 } from "./findings-rules.js"
 export { MEETING_HIT_QUERY, meetingWordsQuery, parseMeetingQuery } from "./hit-query.js"
 export { type ImportFile, importFiles } from "./import.js"
-export { MEETING_QUERY, type MeetingItem, type MeetingOwner, meeting, meetingItem } from "./item.js"
+export {
+  MEETING_ISSUES,
+  MEETING_QUERY,
+  type MeetingIssue,
+  type MeetingItem,
+  type MeetingOwner,
+  meeting,
+  meetingIssuesOf,
+  meetingItem,
+} from "./item.js"
 export {
   createMeetingContext,
   MEETING_FACT_TYPES,
