@@ -208,13 +208,22 @@ Some messengers push history to the client instead of answering a request for it
   and `audit` connect and ask it; only `--offline` refuses `fetch` and `audit`, and `list` then reads the stored
   members. Without `members`, `list` reads the stored members and `fetch` and `audit` say the messenger cannot.
 - Give the adapter the `PushedHistory` group. `feed(onBatch, signal)` hands over what the messenger
-  pushes, as `HistoryBatch` objects: `{ chats?, people?, messages?, votes?, stars?, events? }`, any of them, for any chats. It
+  pushes, as `HistoryBatch` objects: `{ chats?, people?, messages?, votes?, reactions?, stars?, events? }`, any of them, for any chats. It
   ends when `signal` aborts.
 - A vote in `votes` is `{ chatId, messageId, vote: { person, answers, votedAt } }` (`HistoryVote`): the poll
   message's chat and id, and the vote as `PollVoteEvent` carries it. `votedAt` is when the person voted, not when the
   push came: a voter's older vote never replaces a newer one, so a push dated now would hide a later change. No
   `answers` is a take-back. Send pushed votes here, not as `watch` events: only `serve`, `watch` and `listen` keep
   those.
+- A reaction in `reactions` is `{ chatId, messageId, reaction: { person, own, reaction, reactedAt } }`
+  (`HistoryReaction`): one person's reaction to the message, for a messenger that sends a reaction change at a time
+  instead of totals. `reaction` is the emoji, or `null` when they took it back; `own` marks the owner's, which becomes
+  `Reactions.mine`; `reactedAt` is when the person reacted, not when the push came, since a person's older reaction
+  never replaces a newer one. A live one comes from `watch` as `{ event: "person_reaction", chatId, chatTitle,
+  messageId, reaction }` (`PersonReactionEvent`). The store keeps each person's newest and writes the message's
+  `reactions` as their totals, whenever the message is held — also when the reaction came first. Once a message has
+  such rows, totals from the message itself or a `reaction` event no longer replace them; leave `Message.reactions`
+  `null` on such a messenger.
 - A star in `stars` is `{ chatId, messageId, starred }` (`HistoryStar`): the owner starred the message, or took the
   star off. A pushed message may carry `starred` itself instead; leave it out unless the messenger says, since an
   absent `starred` keeps what the store holds. A live one comes from `watch` as `{ event: "star", chatId, chatTitle,
@@ -226,8 +235,8 @@ Some messengers push history to the client instead of answering a request for it
   carry the same id, from the push and from `watch` alike, so that each is kept once. `chats events` then answers
   from the store, so the adapter needs no `chatEvents`.
 - `serve` and `watch` run `feed` beside `watch`, on the same connection, and save each batch to the
-  store. Chats are saved first, then people, then messages. A chat's votes and stars are saved in the same transaction as
-  its messages, after them, so a message in the batch is held before its votes and its star. Batches are saved in the order they come.
+  store. Chats are saved first, then people, then messages. A chat's votes, reactions and stars are saved in the same
+  transaction as its messages, after them, so a message in the batch is held before them. Batches are saved in the order they come.
 - A push names some chats, never all of them, so a chat left out of a batch is not marked as left.
   A pushed message does not lift a deletion the store already holds: the push may be older than it.
 - A batch the store cannot take is a warning on stderr. It does not stop `serve`. A `feed` that

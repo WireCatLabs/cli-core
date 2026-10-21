@@ -672,6 +672,33 @@ export const chatEventPeople = sqliteTable(
   ],
 )
 
+/**
+ * Each person's newest reaction to a message, for a messenger that sends one person's change at a time; the store
+ * derives `messages.reactions` from them. Keyed by chat and external id: a reaction can arrive before its message.
+ */
+export const messageReactions = sqliteTable(
+  "message_reactions",
+  {
+    id: integer("id").primaryKey(),
+    chatId: integer("chat_id")
+      .notNull()
+      .references(() => chats.id),
+    messageExternalId: text("message_external_id").notNull(),
+    identityId: integer("identity_id")
+      .notNull()
+      .references(() => identities.id),
+    own: integer("own").notNull(),
+    reaction: text("reaction"),
+    reactedAt: integer("reacted_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.chatId, table.messageExternalId, table.identityId),
+    index("message_reactions_by_identity_id").on(table.identityId),
+  ],
+)
+
 /** One read of a chat's member list. Retention reads presence at a checkpoint from these, not from stays. */
 export const memberObservations = sqliteTable(
   "member_observations",

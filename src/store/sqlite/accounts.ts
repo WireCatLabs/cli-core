@@ -20,6 +20,7 @@ import {
   memberObservationMembers,
   memberObservations,
   memberStays,
+  messageReactions,
   messageRevisions,
   messages,
   messageTranscripts,
@@ -112,6 +113,7 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.delete(syncs).where(eq(syncs.accountId, accountKey)).run()
   orm.delete(messageTranscripts).where(inArray(messageTranscripts.chatId, chatsOf)).run()
   orm.delete(pollVotes).where(inArray(pollVotes.chatId, chatsOf)).run()
+  orm.delete(messageReactions).where(inArray(messageReactions.chatId, chatsOf)).run()
   orm
     .delete(chatEventPeople)
     .where(

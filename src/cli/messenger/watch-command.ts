@@ -135,6 +135,12 @@ const describe = (event: MessageEvent, render: (message: MessageHit) => string):
       const choice = answers.length > 0 ? answers.join(", ") : "took it back"
       return `vote in ${event.chatTitle ?? event.chatId} on poll ${event.messageId}: ${person.name ?? person.id} — ${choice}\n`
     }
+    case "person_reaction": {
+      const { person, reaction } = event.reaction
+      const who = person.name ?? person.id
+      const what = reaction === null ? "took their reaction back" : `reacted ${reaction}`
+      return `${who} ${what} in ${event.chatTitle ?? event.chatId} on message ${event.messageId}\n`
+    }
     case "star":
       return `${event.starred ? "starred" : "unstarred"} in ${event.chatTitle ?? event.chatId}: message ${event.messageId}\n`
     case "chat_event": {

@@ -19,6 +19,7 @@ import {
   memberObservationMembers,
   memberObservations,
   memberStays,
+  messageReactions,
   messageRevisions,
   messages,
   messageTranscripts,
@@ -345,6 +346,7 @@ export const purgeChats = ({ orm }: StoreContext, pks: number[]): void => {
     .run()
   orm.delete(messageTranscripts).where(inArray(messageTranscripts.chatId, pks)).run()
   orm.delete(pollVotes).where(inArray(pollVotes.chatId, pks)).run()
+  orm.delete(messageReactions).where(inArray(messageReactions.chatId, pks)).run()
   orm
     .delete(chatEventPeople)
     .where(

@@ -1,5 +1,5 @@
 import type { CounterObservations } from "../domain/counters.js"
-import type { Id, Message, Page, PollVote, Reactions, WindowedMessage } from "../domain/models.js"
+import type { Id, Message, Page, PersonReaction, PollVote, Reactions, WindowedMessage } from "../domain/models.js"
 import { keysOver } from "./keys.js"
 import { applyCounterObservations } from "./sqlite/counters.js"
 import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
@@ -19,7 +19,8 @@ export interface AccountMessages {
    * `seenAt` is when the messenger was asked: a message it still returned is not deleted, so a
    * tombstone older than that is lifted. A tombstone set after it stays — the deletion is newer.
    *
-   * `votes` and `stars` are saved after the messages in the same transaction, as `saveVote` and `saveStar` save each.
+   * `votes`, `reactions` and `stars` are saved after the messages in the same transaction, as `saveVote`,
+   * `saveReaction` and `saveStar` save each.
    *
    * `typedChatId` is the id the owner wrote to when the messenger answered `chatId`: a chat row made for `chatId`
    * takes the typed row's title, kind and privacy, and is never more visible than it.
@@ -32,6 +33,7 @@ export interface AccountMessages {
       via: IngestedVia
       seenAt?: number
       votes?: { messageId: Id; vote: PollVote }[]
+      reactions?: { messageId: Id; reaction: PersonReaction }[]
       stars?: { messageId: Id; starred: boolean }[]
       typedChatId?: Id
     },
@@ -82,7 +84,10 @@ export interface AccountMessages {
    * chats a deletion without one may belong to (`Messenger.deletedWithoutChat`).
    */
   markDeleted(key: AccountKey, messageIds: Id[], options?: { chatId?: Id; among?: DeletionScope }): Promise<number>
-  /** A message's reactions as they are now; answers whether the message is held at all. */
+  /**
+   * A message's reactions as they are now; answers whether the message is held at all. Ignored where the store holds
+   * people's own reactions to it (`saveReaction`): the totals come from those.
+   */
   saveReactions(
     key: AccountKey,
     chatId: Id,
@@ -90,6 +95,11 @@ export interface AccountMessages {
     reactions: Reactions,
     options?: { observation?: CounterObservations["reactions"] },
   ): Promise<boolean>
+  /**
+   * One person's reaction to a message, unless the store holds a newer one of theirs; a `null` reaction is a take-back.
+   * The message's `reactions` become the totals of every person's newest, whenever the message is held.
+   */
+  saveReaction(key: AccountKey, chatId: Id, messageId: Id, reaction: PersonReaction): Promise<void>
   /** The owner's star on a message, or its removal; answers whether the message is held at all. */
   saveStar(key: AccountKey, chatId: Id, messageId: Id, starred: boolean): Promise<boolean>
   /** One voter's vote in the poll a message carries, unless the store holds a newer one of theirs; no answers is a take-back. */
@@ -126,7 +136,7 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
   const { accountPk, findAccountPk, findChatPk, chatKeyOf, chatPkFor, answeredChatPk, upsertMessage } =
     keysOver(context)
   return {
-    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [], stars = [], typedChatId }) =>
+    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [], reactions = [], stars = [], typedChatId }) =>
       write(database, () => {
         const accountKey = accountPk(key)
         const chatKey =
@@ -136,6 +146,8 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
         }
         for (const { messageId, vote } of votes)
           messageWrites.saveVote(context, accountKey, key.provider, chatKey, messageId, vote)
+        for (const { messageId, reaction } of reactions)
+          messageWrites.saveReaction(context, accountKey, key.provider, chatKey, messageId, reaction)
         for (const { messageId, starred } of stars) messageWrites.saveStar(context, chatKey, messageId, starred)
       }),
 
@@ -204,6 +216,19 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
       })
       return saved
     },
+
+    saveReaction: async (key, chatId, messageId, reaction) =>
+      write(database, () => {
+        const accountKey = accountPk(key)
+        messageWrites.saveReaction(
+          context,
+          accountKey,
+          key.provider,
+          chatPkFor(accountKey, chatId),
+          messageId,
+          reaction,
+        )
+      }),
 
     saveVote: async (key, chatId, messageId, vote) =>
       write(database, () => {

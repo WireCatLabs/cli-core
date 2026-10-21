@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **People's reactions in the store (store version 26).** For a messenger that sends one person's reaction change at a
+  time (WhatsApp), a `watch` event `{ event: "person_reaction", chatId, chatTitle, messageId, reaction }`
+  (`PersonReactionEvent`) and a pushed batch's `reactions` (`HistoryReaction`) carry `PersonReaction`
+  (`{ person, own, reaction, reactedAt }`, `reaction: null` a take-back). `store.messages.saveReaction` and
+  `saveMessages({ reactions })` keep each person's newest in the new `message_reactions` table, so an older history
+  push never undoes a newer live change, and write the message's `reactions` totals from them: readers, output and
+  MCP see the same shape. tg and max keep sending totals; a message with people's reactions keeps the derived ones.
+  See [adapters](docs/dev/ADAPTERS.md).
+
 ### Fixed
 
 - **A store the process may not write is a permission error, not a crash.** Opening the store for writing where the

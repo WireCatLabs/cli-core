@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Chat, ChatEvent, Id, Message, MessageEvent, PollVote } from "../../domain/models.js"
+import type { Chat, ChatEvent, Id, Message, MessageEvent, PersonReaction, PollVote } from "../../domain/models.js"
 import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import type { MessengerTraits } from "../../ports/traits.js"
 import { isId, type PeopleLookup, pickPerson } from "../../resolve.js"
@@ -578,18 +578,25 @@ const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatc
   if (batch.people?.length) await store.people.savePeople(account, batch.people)
   const byChat = new Map<
     Id,
-    { messages: Message[]; votes: { messageId: Id; vote: PollVote }[]; stars: { messageId: Id; starred: boolean }[] }
+    {
+      messages: Message[]
+      votes: { messageId: Id; vote: PollVote }[]
+      reactions: { messageId: Id; reaction: PersonReaction }[]
+      stars: { messageId: Id; starred: boolean }[]
+    }
   >()
   const of = (chatId: Id) => {
-    const held = byChat.get(chatId) ?? { messages: [], votes: [], stars: [] }
+    const held = byChat.get(chatId) ?? { messages: [], votes: [], reactions: [], stars: [] }
     byChat.set(chatId, held)
     return held
   }
   for (const message of batch.messages ?? []) of(message.chatId).messages.push(message)
   for (const { chatId, messageId, vote } of batch.votes ?? []) of(chatId).votes.push({ messageId, vote })
+  for (const { chatId, messageId, reaction } of batch.reactions ?? [])
+    of(chatId).reactions.push({ messageId, reaction })
   for (const { chatId, messageId, starred } of batch.stars ?? []) of(chatId).stars.push({ messageId, starred })
-  for (const [chatId, { messages, votes, stars }] of byChat)
-    await store.messages.saveMessages(account, chatId, messages, { via: "history", votes, stars })
+  for (const [chatId, { messages, votes, reactions, stars }] of byChat)
+    await store.messages.saveMessages(account, chatId, messages, { via: "history", votes, reactions, stars })
   const changes = new Map<Id, ChatEvent[]>()
   for (const { chatId, change } of batch.events ?? []) changes.set(chatId, [...(changes.get(chatId) ?? []), change])
   for (const [chatId, events] of changes) await store.roster.saveChatEvents(account, chatId, events)
@@ -597,7 +604,7 @@ const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatc
 
 /**
  * Each change as the store keeps it: a message or an edit upserted, a deletion a tombstone, reactions replaced, a
- * voter's vote replacing their older one, a star set or taken off, a chat event kept once.
+ * voter's vote or a person's reaction replacing their older one, a star set or taken off, a chat event kept once.
  */
 const keep = async (
   store: MessageStore,
@@ -622,6 +629,9 @@ const keep = async (
       return
     case "vote":
       await store.messages.saveVote(account, event.chatId, event.messageId, event.vote)
+      return
+    case "person_reaction":
+      await store.messages.saveReaction(account, event.chatId, event.messageId, event.reaction)
       return
     case "star":
       await store.messages.saveStar(account, event.chatId, event.messageId, event.starred)

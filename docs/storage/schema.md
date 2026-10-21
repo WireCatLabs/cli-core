@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-93 tables, 19 full-text indexes.
+94 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -597,6 +597,24 @@ The people one chat event is about.
 | `identity_id` | integer | not null | → `identities.id` | the `identity` it belongs to |
 
 *Keys and indexes:* `PRIMARY KEY (chat_event_id, identity_id)`, `INDEX (identity_id)`
+
+### `message_reactions`
+
+Each person's newest reaction to a message, where the messenger sends one person's change at a time (WhatsApp) instead of totals. `messages.reactions` holds the totals derived from them. Keyed by chat and external id: a reaction can arrive before its message is stored.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `chat_id` | integer | not null | → `chats.id` | the `chat` it belongs to |
+| `message_external_id` | text | not null |  | the message reacted to |
+| `identity_id` | integer | not null | → `identities.id` | who reacted |
+| `own` | integer | not null |  | 1 when it is the owner's own reaction |
+| `reaction` | text |  |  | the emoji; NULL when it was taken back |
+| `reacted_at` | integer | not null |  | an older reaction never replaces a newer one |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (chat_id, message_external_id, identity_id)`, `INDEX (identity_id)`
 
 ### `member_observations`
 

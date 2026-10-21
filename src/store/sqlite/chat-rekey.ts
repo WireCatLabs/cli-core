@@ -4,7 +4,7 @@ import type { Id } from "../../domain/models.js"
 import type { AccountKey } from "../types.js"
 import { purgeChats, revisedBy, stricterPrivacy } from "./chats.js"
 import { pointerPairs } from "./entity-types.js"
-import { tombstone } from "./messages.js"
+import { tombstone, writeDerivedReactions } from "./messages.js"
 import { targetKey } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
@@ -147,6 +147,11 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
       "DELETE FROM poll_votes WHERE chat_id = ? AND EXISTS (SELECT 1 FROM poll_votes g WHERE g.chat_id = ? AND g.message_external_id = poll_votes.message_external_id AND g.identity_id = poll_votes.identity_id AND g.voted_at > poll_votes.voted_at)",
     )
     .run(kept, gone)
+  database
+    .prepare(
+      "DELETE FROM message_reactions WHERE chat_id = ? AND EXISTS (SELECT 1 FROM message_reactions g WHERE g.chat_id = ? AND g.message_external_id = message_reactions.message_external_id AND g.identity_id = message_reactions.identity_id AND g.reacted_at > message_reactions.reacted_at)",
+    )
+    .run(kept, gone)
   // The absorbed copy of an event both chats hold is purged, so the people only it named move first.
   database
     .prepare(
@@ -156,6 +161,7 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
   foldOpenStays(context, kept, gone)
   for (const table of [
     "poll_votes",
+    "message_reactions",
     "chat_revisions",
     "chat_events",
     "message_transcripts",
@@ -178,6 +184,10 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
       "DELETE FROM message_transcripts WHERE chat_id = ? AND message_id IN (SELECT id FROM messages WHERE chat_id = ? AND deleted_at IS NOT NULL)",
     )
     .run(kept, kept)
+  for (const { id } of database
+    .prepare("SELECT DISTINCT message_external_id AS id FROM message_reactions WHERE chat_id = ?")
+    .all(kept) as { id: string }[])
+    writeDerivedReactions(context, kept, id)
   database.prepare("UPDATE chats SET parent_chat_id = ? WHERE parent_chat_id = ?").run(kept, gone)
   pointerMover(context, "chat")(gone, kept)
   purgeChats(context, [gone])

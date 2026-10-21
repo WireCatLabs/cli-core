@@ -554,5 +554,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER chat_revisions_au AFTER UPDATE OF external_id, title, membership_state, scope, searchable, parent_chat_id ON chats BEGIN\n  INSERT INTO chat_revisions (chat_id, account_id, field, old_value, new_value, source, created_at)\n  SELECT new.id, new.account_id, f.field, f.old_value, f.new_value, s.source,\n    coalesce(s.at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER))\n  FROM (\n    SELECT 'external_id' AS field, old.external_id AS old_value, new.external_id AS new_value\n    UNION ALL SELECT 'title', old.title, new.title\n    UNION ALL SELECT 'membership_state', old.membership_state, new.membership_state\n    UNION ALL SELECT 'scope', old.scope, new.scope\n    UNION ALL SELECT 'searchable', old.searchable, new.searchable\n    UNION ALL SELECT 'parent_chat_id', old.parent_chat_id, new.parent_chat_id\n  ) f\n  LEFT JOIN chat_revision_source s ON s.id = 1\n  WHERE f.old_value IS NOT f.new_value;\nEND;",
       "CREATE TRIGGER chat_revisions_ad AFTER DELETE ON chats BEGIN\n  DELETE FROM chat_revisions WHERE chat_id = old.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261021214318_version-26-message-reactions",
+    "statements": [
+      "CREATE TABLE `message_reactions` (\n\t`id` integer PRIMARY KEY,\n\t`chat_id` integer NOT NULL,\n\t`message_external_id` text NOT NULL,\n\t`identity_id` integer NOT NULL,\n\t`own` integer NOT NULL,\n\t`reaction` text,\n\t`reacted_at` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_message_reactions_chat_id_chats_id_fk` FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`),\n\tCONSTRAINT `fk_message_reactions_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `message_reactions_chat_id_message_external_id_identity_id_unique` UNIQUE(`chat_id`,`message_external_id`,`identity_id`)\n);",
+      "CREATE INDEX `message_reactions_by_identity_id` ON `message_reactions` (`identity_id`);"
+    ]
   }
 ]
