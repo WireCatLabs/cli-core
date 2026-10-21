@@ -47,6 +47,9 @@ importers:
       defuddle:
         specifier: 0.19.5
         version: 0.19.5
+      dictionary-ru:
+        specifier: 3.0.0
+        version: 3.0.0
       echarts:
         specifier: 6.1.0
         version: 6.1.0
@@ -1715,6 +1718,9 @@ packages:
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
+
+  dictionary-ru@3.0.0:
+    resolution: {integrity: sha512-tigem0CDnNpxEciW6ktwVH3wWB4FYpuvpwA6IR6UlF7bVu2kez6vOejVNyZgBX1TJIjuYTCTuLxzg/YOls2mRQ==}
 
   dingbat-to-unicode@1.0.2:
     resolution: {integrity: sha512-R0bRerYzy/EZP6QzD3Hkl6JjUDA1Mnn+pd928w0nWjPzihnbAR6dcjGJGiRyznj5E4S1duEKzWrTqw02DPcdzg==}
@@ -4130,6 +4136,8 @@ snapshots:
   devlop@1.1.0:
     dependencies:
       dequal: 2.0.3
+
+  dictionary-ru@3.0.0: {}
 
   dingbat-to-unicode@1.0.2: {}
 

@@ -90,7 +90,30 @@ provider's record has `metadata`, JSON, for whatever has no column yet.
 | `attachments` | one file a meeting has: a recording, a shared file, a whiteboard — a pointer, not the file |
 
 Meeting text gets its own word and stem indexes, built the way the notes' are, so a query means the same
-for messages, notes and meetings.
+for messages, notes and meetings — with one difference. Speech recognition garbles words, and a correct and a
+garbled spelling sit in one meeting, so meeting search always widens a word of four letters or more to the
+stored words recognition may have made of it, instead of only when nothing matched as messages do:
+
+- a stem one edit away that a Russian dictionary (`dictionary-ru`, Hunspell) does not know: «риелтор» finds
+  «реелтора», «рилторов», «дриелтора», but «договор» does not find «поговорить», a real word one edit away.
+  Below seven letters the first letter must agree;
+- a stem one side extends, when the other side's word spells the extension out: «циана» (stem `циа`) finds
+  «цианом» (`циан`), «устав» does not find «установить»;
+- е and э compared as one letter (ё already folds into е in the index).
+
+The dictionary loads only when a query has such spellings to check, in about 0.15 s: it is read the way Hunspell
+checks a word, an ending at a time, not expanded into all its forms. On a copy of a real store of 119 meetings it
+cut the widened passages from 10,271 to 1,157 over 130 queries. ztx's rule that a stored word beginning the query
+word matches («показывал» → «пока») was dropped: it made 15 % of the noise and found nothing the rules above miss.
+
+Number words never widen, and match only their own forms, not as the start of a longer word: recognition swaps
+them, «десять» is one edit from «девять», and «семь» begins «семьдесят». `exact:word` and
+`exact:"two words"` keep those words to their typed form: no other forms, no widening. Hits come in three tiers:
+the typed form, then other forms of the word (stems merge some different words: «устав» and «устал» share `уста`,
+and a dictionary cannot split them, since «устав» is also a form of «устать»), then garbled spellings;
+a widened hit has `match: "corrected"` and `corrections` (`from`, the query word, and `to`, the stored words it
+matched in that passage). Widening reads the whole word list once per query, with no table of its own: a median
+of 0.11 s a query on that copy ([measurement](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/meeting-garbled)).
 
 ## Rules the tables keep
 
@@ -179,11 +202,11 @@ is added.
 
 ## Bounded search with context filters
 
-`meetings.searchHits` combines account and date bounds with `participantIdentityId`, `personId`, `eventId`, `meetingSeriesId`, `projectId` and `tagId` before hit pagination. Event and series are field predicates on the meeting, beside the others; the query itself is plain words, not a Lucene query. Participant identity matches observed meeting membership; person matches follow existing identity links. Neither attributes transcript speech. Project selection requires a confirmed, unanchored membership link to a live owner project. Tags and topics use explicit meeting taggings. Proposed project membership does not count.
+`meetings.searchHits` combines account and date bounds with `participantIdentityId`, `personId`, `eventId`, `meetingSeriesId`, `projectId` and `tagId` before hit pagination. Event and series are field predicates on the meeting, beside the others; the query itself is plain words and `exact:` terms, not a Lucene query. Participant identity matches observed meeting membership; person matches follow existing identity links. Neither attributes transcript speech. Project selection requires a confirmed, unanchored membership link to a live owner project. Tags and topics use explicit meeting taggings. Proposed project membership does not count.
 
 `searchMeetingHits` from the services export also takes `project`, `tag` or `topic` names. It reuses the shared vocabulary's exact canonical-name, project-key and explicit-alias resolution; missing or ambiguous names fail with candidates instead of guessing. Results include the resolved name selections. It does not infer project membership from transcript words or write labels. Cursors bind the resolved IDs together with the account, query and dates. Before it reads, `searchMeetingHits` indexes what was saved since the last search (`refreshMeetingIndex`), in batches that each commit, so there is no separate index step; when the store's stemmers are unknown it indexes words only.
 
-Providers mount `addMeetingSearchCommand` from the meetings CLI export: it adds `search meetings` under the host's `search` group (creating it when missing) and returns the command, so a host can add options and pick another source from them. Its `search` closure is fixed to the selected account and receives the request and every parsed option. The optional `meetingSearchTool` (`search_meetings`) and `callMeetingSearchTool` from the meetings MCP export accept the same selectors; tool callers cannot override that account. Hosts retain permission checks, connection lifecycle and output limits. Both answer the list envelope without `meta`, which the host adds: each item is a `meeting_hit` (`ref`, `meeting`, `scope`, `id`, `excerpt`, `offset_ms`), the store's cursor is `page.cursor` with a `page.next` step, and passages left out because they changed since indexing are a `missing` entry with the `meetings.search-again` step (`MEETING_STEPS`, which a host lists beside its own steps). `meetingHitsList` turns a `searchHits` page into that answer for a host with its own search flow.
+Providers mount `addMeetingSearchCommand` from the meetings CLI export: it adds `search meetings` under the host's `search` group (creating it when missing) and returns the command, so a host can add options and pick another source from them. Its `search` closure is fixed to the selected account and receives the request and every parsed option. The optional `meetingSearchTool` (`search_meetings`) and `callMeetingSearchTool` from the meetings MCP export accept the same selectors; tool callers cannot override that account. Hosts retain permission checks, connection lifecycle and output limits. Both answer the list envelope without `meta`, which the host adds: each item is a `meeting_hit` (`ref`, `meeting`, `scope`, `id`, `excerpt`, `offset_ms`, and `match` with `corrections` for a widened hit), the store's cursor is `page.cursor` with a `page.next` step, and passages left out because they changed since indexing are a `missing` entry with the `meetings.search-again` step (`MEETING_STEPS`, which a host lists beside its own steps). `meetingHitsList` turns a `searchHits` page into that answer for a host with its own search flow.
 
 `meetings show` answers one `meeting_details` item; `meetings transcript` and `meetings summary` answer lists of `meeting_transcript` and `meeting_summary` (a cue's `offset_ms`, ISO times, `meeting:` references). No answer carries `next_steps`: `SAVE_INSTRUCTION` is the line for the host's MCP server instructions.
 
