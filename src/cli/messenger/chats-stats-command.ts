@@ -27,7 +27,16 @@ export const statsCommand = (messenger: Messenger): Command =>
       refuseJsonl(context.format)
       const { stats, account } = await context.withServices(async (services) => ({
         stats: await services.chats.stats(chat, {
-          ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
+          ...(sinceTime === undefined
+            ? {}
+            : {
+                since: momentOf(
+                  sinceTime,
+                  "--since-time",
+                  Date.now(),
+                  timezone === undefined ? {} : { zone: timezone },
+                ),
+              }),
           ...(by ? { by } : {}),
           ...(timezone === undefined ? {} : { timezone }),
         }),

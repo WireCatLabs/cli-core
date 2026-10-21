@@ -40,6 +40,9 @@ shape of this file.
   schedule's `timeZone` was stored and never used for this.
 - **A Markdown chat archive says which zone its times are in.** The file printed local wall times with no zone; it
   now has `Times are in <zone>.` under the title.
+- **`chats stats show` and `stats chats retention` read `--since-time`/`--until-time` in their `--timezone`.** They
+  used the computer's zone even when `--timezone` was given, and retention's `--until-time` dropped the day it named;
+  it now covers that whole local day.
 
 ## 0.379.0 — 21.10.2026
 
