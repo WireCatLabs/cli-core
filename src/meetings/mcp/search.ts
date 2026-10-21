@@ -12,7 +12,12 @@ export const meetingSearchTool = {
   inputSchema: {
     type: "object" as const,
     properties: {
-      query: { type: "string", minLength: 1 },
+      query: {
+        type: "string",
+        minLength: 1,
+        description:
+          'The messages query language: words (all required), OR, (groups), NOT or -word, "a phrase", exact:word, from:"Name" for who said the line',
+      },
       meeting_id: integer,
       identity_id: integer,
       person_id: integer,

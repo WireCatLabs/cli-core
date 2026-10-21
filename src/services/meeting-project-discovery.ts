@@ -6,6 +6,7 @@ import {
   type MeetingProjectDiscoveryOptions,
   type MeetingProjectDiscoveryPage,
   type MeetingSearchStore,
+  meetingWordsQuery,
   parseMeetingReference,
   type SearchHit,
   validateMeetingHitSearch,
@@ -162,7 +163,7 @@ export const readMeetingProjectDiscovery = async (
   const previous = cursorOf(cursor, key, terms.length)
   const termIndex = previous?.term ?? 0
   const term = terms[termIndex] as MeetingProjectDiscoveryPage["term"]
-  const result = await ports.search.searchHits(term.name, {
+  const result = await ports.search.searchHits(meetingWordsQuery(term.name), {
     ...input,
     ...(previous?.after ? { after: previous.after } : {}),
   })
