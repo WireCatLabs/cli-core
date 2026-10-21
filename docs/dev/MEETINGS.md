@@ -101,7 +101,8 @@ stored words recognition may have made of it, instead of only when nothing match
 - a stored word of four letters or more that begins the query word, as ztx matched;
 - е and э compared as one letter (ё already folds into е in the index).
 
-Number words never widen: recognition swaps them, and «десять» is one edit from «девять». `exact:word` and
+Number words never widen, and match only their own forms, not as the start of a longer word: recognition swaps
+them, «десять» is one edit from «девять», and «семь» begins «семьдесят». `exact:word` and
 `exact:"two words"` keep those words to their typed form: no other forms, no widening. Exact hits come first;
 a widened hit has `match: "corrected"` and `corrections` (`from`, the query word, and `to`, the stored words it
 matched in that passage). Widening reads the whole word list once per query, with no table of its own: about

@@ -42,6 +42,9 @@ const fixture = async () => {
       "Объявление висит на циана",
       "Осталось десять квартир",
       "Осталось девять квартир",
+      "Встреча в семь вечера",
+      "Около семи человек",
+      "Прошло семьдесят дней",
     ]),
   )
   await store.meetings.saveMeeting(meetingOf(otherId, ["Пришел риелтер без ключей"]))
@@ -84,6 +87,14 @@ it("never widens one number into another", async () => {
   const { store, accountId } = await fixture()
   expect((await store.meetings.searchHits("десять", { accountId })).items.map((hit) => hit.text)).toEqual([
     "Осталось десять квартир",
+  ])
+})
+
+it("matches a number word in its own forms only, not in a longer number it begins", async () => {
+  const { store, accountId } = await fixture()
+  expect((await store.meetings.searchHits("семь", { accountId })).items.map((hit) => hit.text).sort()).toEqual([
+    "Встреча в семь вечера",
+    "Около семи человек",
   ])
 })
 

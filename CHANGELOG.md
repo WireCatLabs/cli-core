@@ -34,7 +34,7 @@ shape of this file.
   letters or more to stored words one stem edit away, stems one side extends, and words that begin it, so
   «риелтор» finds «реелтора», «рилторов» and «дриелтора», and «циана» finds «цианом». Exact hits come first; a
   widened hit carries `match: "corrected"` and `corrections`, and `meeting_hit` items show both. Number words never
-  widen. See [meetings](docs/dev/MEETINGS.md).
+  widen, and match only their own forms («семь» finds «семи», not «семьдесят»). See [meetings](docs/dev/MEETINGS.md).
 
 - **`gatherProjectEvidence` reads what a person wrote.** A person given with `senders: [{ provider, id }]` (their
   stored identities, at most 16; an email identity's id is its address) and a `reference` gets a lane of its own

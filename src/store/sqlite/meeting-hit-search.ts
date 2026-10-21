@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
 import { formatMeetingReference } from "../../meetings/index.js"
-import { widenWords } from "../../search/garbled.js"
+import { isNumberWord, widenWords } from "../../search/garbled.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { indexedText } from "./meeting-index-values.js"
@@ -125,6 +125,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         const probes = rawWords.map(({ raw, exact }) => ({
           raw,
           exact,
+          whole: exact || isNumberWord(normalize(raw)),
           literal: normalize(raw),
           stems:
             state.stemmer && raw.length <= 1024 && !exact
@@ -167,7 +168,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         const clauses = ["m.account_id=?", "m.deleted_at IS NULL"]
         const queryParams: SqlValue[] = []
         const termTables = terms.map((term, i) => {
-          queryParams.push(`normalized_text : (${quote(term.literal)}${term.exact ? "" : "*"})`)
+          queryParams.push(`normalized_text : (${quote(term.literal)}${term.whole ? "" : "*"})`)
           let select = "SELECT rowid AS rid,0 AS tier FROM meeting_words WHERE meeting_words MATCH ?"
           if (state.stemmer && state.through > 0 && term.stems.length) {
             queryParams.push(
@@ -306,7 +307,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
           const corrections: { from: string; to: string[] }[] = []
           for (const term of terms) {
             if (
-              term.exact
+              term.whole
                 ? literalTokens.includes(term.literal)
                 : literalTokens.some((token) => token.startsWith(term.literal))
             )

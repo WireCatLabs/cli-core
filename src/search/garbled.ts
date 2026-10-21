@@ -31,7 +31,7 @@ const NUMBER_STEMS = new Set(
     .split(/\s+/)
     .map((word) => russian.stemToken(word)),
 )
-const isNumber = (word: string): boolean => /\d/.test(word) || NUMBER_STEMS.has(russian.stemToken(word))
+export const isNumberWord = (word: string): boolean => /\d/.test(word) || NUMBER_STEMS.has(russian.stemToken(word))
 
 /**
  * One edit between stems, tighter than typed-text correction (`maxEdits`), because a transcript always widens
@@ -53,7 +53,7 @@ export const plainMatch = (probe: GarbledProbe, word: string, stems: string[]): 
  */
 export const garbledDistance = (probe: GarbledProbe, word: string, stems: string[]): number | null => {
   if (probe.literal.length < SHORTEST_GARBLED || plainMatch(probe, word, stems)) return null
-  if (isNumber(probe.literal) || isNumber(word)) return null
+  if (isNumberWord(probe.literal) || isNumberWord(word)) return null
   const literal = plain(probe.literal)
   const stored = plain(word)
   let best: number | null = null

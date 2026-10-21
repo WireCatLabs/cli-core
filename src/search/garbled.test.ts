@@ -34,7 +34,7 @@ describe("garbledDistance", () => {
     expect(reaches(query, word)).toBe(false)
   })
 
-  it("leaves a number's other numbers to the index's prefix match, which still links «семь» to «семьдесят»", () => {
+  it("does not widen a number to another number", () => {
     expect(garbledDistance(probe("семь"), "семьдесят", stems("семьдесят"))).toBeNull()
   })
 
