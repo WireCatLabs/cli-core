@@ -23,9 +23,9 @@ export const reviewStart = (now = Date.now()): number => now - REVIEW_DAYS * 86_
 export const byRecency = (chats: Chat[]): Chat[] =>
   chats.toSorted((a, b) => Date.parse(b.lastMessageAt ?? "") - Date.parse(a.lastMessageAt ?? ""))
 
-/** Muted or archived, and nothing in it mentions the owner or replies to them. */
+/** Muted or archived, and nothing in it mentions the owner or replies to them; one the owner marked unread never is. */
 const isQuiet = (chat: Chat): boolean =>
-  (chat.muted === true || chat.archived === true) && (chat.unreadMentions ?? 0) === 0
+  (chat.muted === true || chat.archived === true) && (chat.unreadMentions ?? 0) === 0 && chat.markedUnread !== true
 
 export const heard = (chats: Chat[], all: boolean) =>
   all
@@ -97,6 +97,7 @@ export const capped = (chats: Chat[], most: number) => ({
  * Other people's unread messages, as the messenger counts them: for each chat with a count, its
  * newest that many. Reading marks nothing read, so the same messages come back until they are read
  * somewhere else — right for a person, wrong for a scheduled run, which is what `since` is for.
+ * A chat the owner marked unread is there with no count too, with its newest message from someone else.
  *
  * Muted and archived chats are left out unless `all`, or they mention the owner: on a busy account
  * they are most of what is unread, and they would take the history reads a person's chat needs.
@@ -107,7 +108,7 @@ export const unreadIn = async (
 ): Promise<Inbox> => {
   const page = await everyChat(adapter)
   const { heard: waiting, quiet } = heard(
-    byRecency(ofKinds(page.items, kinds).filter((chat) => (chat.unreadCount ?? 0) > 0)),
+    byRecency(ofKinds(page.items, kinds).filter((chat) => (chat.unreadCount ?? 0) > 0 || chat.markedUnread === true)),
     all,
   )
   const { read, skipped } = capped(waiting, INBOX_CHATS)
@@ -115,6 +116,11 @@ export const unreadIn = async (
   const chats: InboxChat[] = []
   for (const { id, title, kind, unreadCount } of read) {
     const count = unreadCount ?? 0
+    if (count === 0) {
+      const newest = (await adapter.history(id, { limit })).items.findLast((message) => !message.outgoing)
+      if (newest) chats.push({ id, title, kind, unreadCount, messages: [newest], more: false })
+      continue
+    }
     const wanted = Math.min(count, limit)
     const { items } = await adapter.history(id, { limit: wanted })
     const theirs = items.slice(-wanted).filter((message) => !message.outgoing)

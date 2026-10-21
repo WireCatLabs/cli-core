@@ -33,6 +33,9 @@ export interface AccountMessages {
    *
    * `typedChatId` is the id the owner wrote to when the messenger answered `chatId`: a chat row made for `chatId`
    * takes the typed row's title, kind and privacy, and is never more visible than it.
+   *
+   * `countUnread` raises the chat's unread count by each message from someone else stored for the first time and sent
+   * after the messenger's count was taken — for a messenger whose store counts (`MessengerTraits.unreadCounts`).
    */
   saveMessages(
     key: AccountKey,
@@ -45,6 +48,7 @@ export interface AccountMessages {
       reactions?: { messageId: Id; reaction: PersonReaction }[]
       stars?: { messageId: Id; starred: boolean }[]
       typedChatId?: Id
+      countUnread?: boolean
     },
   ): Promise<void>
   /** Oldest to newest, like a provider's history page. */
@@ -147,13 +151,20 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
   const { accountPk, findAccountPk, findChatPk, chatKeyOf, chatPkFor, answeredChatPk, upsertMessage } =
     keysOver(context)
   return {
-    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [], reactions = [], stars = [], typedChatId }) =>
+    saveMessages: async (
+      key,
+      chatId,
+      messages,
+      { via, seenAt, votes = [], reactions = [], stars = [], typedChatId, countUnread = false },
+    ) =>
       write(database, () => {
         const accountKey = accountPk(key)
         const chatKey =
           typedChatId === undefined ? chatPkFor(accountKey, chatId) : answeredChatPk(accountKey, chatId, typedChatId)
         for (const message of messages) {
-          if (message.scheduledFor === undefined) upsertMessage(key, accountKey, chatKey, message, via, seenAt)
+          if (message.scheduledFor !== undefined) continue
+          if (upsertMessage(key, accountKey, chatKey, message, via, seenAt) && countUnread)
+            messageWrites.countUnread(context, chatKey, message)
         }
         for (const { messageId, vote } of votes)
           messageWrites.saveVote(context, accountKey, key.provider, chatKey, messageId, vote)

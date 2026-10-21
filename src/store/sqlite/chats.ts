@@ -190,6 +190,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       participantsCount: chat.participantsCount ?? null,
       metadata: mergedMetadata(stored?.metadata ?? null, chat.providerMetadata),
       membershipState: chat.membershipState === "member" ? null : (chat.membershipState ?? null),
+      ...stateOf(chat, now()),
       createdAt: now(),
       updatedAt: now(),
     })
@@ -200,16 +201,35 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
         ...(chat.parentChatId === undefined ? {} : { parentChatId: sql`excluded.parent_chat_id` }),
         scope: sql`coalesce(excluded.scope, ${chats.scope})`,
         ...(chat.title === undefined ? {} : { title: sql`excluded.title` }),
-        ...(chat.unreadCount === undefined ? {} : { unreadCount: sql`excluded.unread_count` }),
+        ...(chat.unreadCount === undefined
+          ? {}
+          : { unreadCount: sql`excluded.unread_count`, unreadCountedAt: sql`excluded.unread_counted_at` }),
         ...(chat.lastMessageAt === undefined ? {} : { lastMessageAt: sql`excluded.last_message_at` }),
         ...(chat.participantsCount === undefined ? {} : { participantsCount: sql`excluded.participants_count` }),
         metadata: sql`excluded.metadata`,
         ...membershipSet(chat.membershipState),
+        ...(chat.muted === undefined ? {} : { muted: sql`excluded.muted`, mutedUntil: sql`excluded.muted_until` }),
+        ...(chat.archived === undefined ? {} : { archived: sql`excluded.archived` }),
+        ...(chat.markedUnread === undefined ? {} : { markedUnread: sql`excluded.marked_unread` }),
         updatedAt: sql`excluded.updated_at`,
       },
     })
     .run()
 }
+
+const bit = (value: boolean | undefined): number | null => (value === undefined ? null : value ? 1 : 0)
+
+/**
+ * The count is taken as of the chat's newest message where the update names it, else as of now: a message the store
+ * saves later and sent after that point is one the count does not hold yet.
+ */
+const stateOf = (chat: ChatUpdate, at: number) => ({
+  unreadCountedAt: chat.unreadCount === undefined ? null : (toMs(chat.lastMessageAt) ?? at),
+  muted: bit(chat.muted),
+  mutedUntil: chat.muted === true ? toMs(chat.mutedUntil) : null,
+  archived: bit(chat.archived),
+  markedUnread: bit(chat.markedUnread),
+})
 
 const membershipSet = (state: ChatUpdate["membershipState"]) => {
   if (state === undefined) return {}
@@ -376,7 +396,7 @@ export const purgeChats = ({ orm }: StoreContext, pks: number[]): void => {
   orm.delete(chats).where(inArray(chats.id, pks)).run()
 }
 
-export const chatsWith = ({ orm }: StoreContext, accountKey: number, key: AccountKey, memberId: Id): Chat[] => {
+export const chatsWith = ({ orm, now }: StoreContext, accountKey: number, key: AccountKey, memberId: Id): Chat[] => {
   const rows = orm
     .select({ chat: chats })
     .from(chats)
@@ -405,7 +425,7 @@ export const chatsWith = ({ orm }: StoreContext, accountKey: number, key: Accoun
     .orderBy(...byRecency)
     .all()
     .map(({ chat }) => chat)
-  return toChats(orm, rows)
+  return toChats(orm, rows, now())
 }
 
 const chatsWhere = (accountKey: number, { where, includeLeft }: StoredChatFilter) =>
@@ -440,7 +460,7 @@ export const CHAT_COLUMNS = {
 export const titlePart = (value: string): string => value.replace(/^\*+|\*+$/g, "").trim()
 
 export const listChats = (
-  { orm }: StoreContext,
+  { orm, now }: StoreContext,
   accountKey: number,
   { limit, offset = 0, ...filter }: { limit?: number; offset?: number } & StoredChatFilter,
 ): Page<Chat> => {
@@ -452,13 +472,13 @@ export const listChats = (
     .limit(limit === undefined ? -1 : limit + 1)
     .offset(offset)
     .all()
-  return { items: toChats(orm, rows.slice(0, limit)), hasMore: limit !== undefined && rows.length > limit }
+  return { items: toChats(orm, rows.slice(0, limit), now()), hasMore: limit !== undefined && rows.length > limit }
 }
 
 export const countChats = ({ orm }: StoreContext, accountKey: number, filter: StoredChatFilter): number =>
   Number(orm.select({ n: sql<number>`count(*)` }).from(chats).where(chatsWhere(accountKey, filter)).get()?.n)
 
-const toChats = (orm: Orm, rows: (typeof chats.$inferSelect)[]): Chat[] => {
+const toChats = (orm: Orm, rows: (typeof chats.$inferSelect)[], at: number): Chat[] => {
   const ids = [...new Set(rows.flatMap((row) => (row.parentChatId === null ? [] : [row.parentChatId])))]
   const parents = new Map(
     ids.length === 0
@@ -470,10 +490,12 @@ const toChats = (orm: Orm, rows: (typeof chats.$inferSelect)[]): Chat[] => {
           .all()
           .map((row) => [row.pk, row.externalId]),
   )
-  return rows.map((row) => toChat(row, row.parentChatId === null ? undefined : parents.get(row.parentChatId)))
+  return rows.map((row) => toChat(row, at, row.parentChatId === null ? undefined : parents.get(row.parentChatId)))
 }
 
-const toChat = (row: typeof chats.$inferSelect, parentId?: Id): Chat => ({
+const flag = (stored: number | null): boolean | undefined => (stored === null ? undefined : stored === 1)
+
+const toChat = (row: typeof chats.$inferSelect, at: number, parentId?: Id): Chat => ({
   id: row.externalId,
   title: row.title,
   kind: row.kind as Chat["kind"],
@@ -486,7 +508,16 @@ const toChat = (row: typeof chats.$inferSelect, parentId?: Id): Chat => ({
     membershipState: row.membershipState,
     providerMetadata: parsed(row.metadata),
   }),
+  ...muteOf(row, at),
+  ...present({ archived: flag(row.archived), markedUnread: flag(row.markedUnread) }),
 })
+
+// A mute is read against the clock, so one that ran out needs no write to end.
+const muteOf = ({ muted, mutedUntil }: typeof chats.$inferSelect, at: number): Pick<Chat, "muted" | "mutedUntil"> => {
+  if (muted === null) return {}
+  if (muted !== 1 || (mutedUntil !== null && mutedUntil <= at)) return { muted: false }
+  return mutedUntil === null ? { muted: true } : { muted: true, mutedUntil: toIso(mutedUntil) }
+}
 
 export interface ChatMetadata {
   chatId: string

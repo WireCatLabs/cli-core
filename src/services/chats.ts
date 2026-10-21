@@ -394,7 +394,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
       const markTopicRead = capability(connection, "markTopicRead", "mark a forum topic read")
       act = (chatId) => markTopicRead(chatId, threadId, until)
     }
-    const { id: chatId } = await connection.resolve(chat)
+    const { id: chatId, kind } = await connection.resolve(chat)
     const operationId = newOperationId()
     await guardedWrite(
       deps.guard,
@@ -407,9 +407,22 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
       },
       () => act(chatId),
     )
+    if (deps.reads === "store" && threadId === undefined) await readInStore(deps, chatId, kind, until)
     return { operationId, chatId, until: until ?? null, ...(threadId === undefined ? {} : { threadId }) }
   },
 })
+
+/**
+ * Where `inbox` reads the store, the store learns of a read the owner made here at once: the messenger may never say.
+ * A read up to an older message leaves the count, which the store cannot split.
+ */
+const readInStore = async (deps: ServiceDeps, chatId: Id, kind: ChatKind, until: Id | undefined): Promise<void> => {
+  const store = await accountStoreIfOpen(deps)
+  if (!store) return
+  const [newest] = (await store.messages.messages(chatId, { limit: 1 })).items
+  if (until === undefined || newest === undefined || newest.id === until)
+    await store.chats.saveChats([{ id: chatId, kind, unreadCount: 0, markedUnread: false }])
+}
 
 /** Each sender's first stored message in the chat; `undefined` when the store holds none of it. */
 const storedFacts = async (store: AccountStore, chatId: Id) => {

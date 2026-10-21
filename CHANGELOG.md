@@ -9,6 +9,17 @@ shape of this file.
 
 ### Added
 
+- **A chat's state from the phone (store version 28).** The store keeps `Chat.muted`, `Chat.archived` and two new
+  fields: `mutedUntil` (when a mute ends, UTC; none is for good) and `markedUnread` (the owner marked the chat unread).
+  A `ChatUpdate` that leaves one out keeps the stored value, and a mute past its end reads as over. Stored chats show
+  them, and `chat` gains `muted_until` and `marked_unread`. So `inbox` and `review` over the store now leave out muted
+  and archived chats, as they do for a messenger that answers live, and `inbox` takes in a chat marked unread with its
+  newest message from someone else. tg and max send `muted` and `archived` in their chat lists, so their stored chats
+  now show them too.
+- **The store can count unread messages** for a messenger that sets `unreadCounts: "store"`: each new message from
+  someone else that `watch` or `listen` saves after the messenger's last count adds one, and a whole-chat `chats read`
+  stores 0. `store.messages.saveMessages` takes `countUnread`. tg and max leave it unset and count as before. See
+  [adapters](docs/dev/ADAPTERS.md).
 - **Delivered and read on the owner's own messages (store version 27).** `Message.delivery` (`delivered` or `read`)
   says how far the owner's message in a one-to-one chat got; a `watch` event `{ event: "delivery", chatId, chatTitle,
   messageId, delivery, at }` (`MessageDeliveryEvent`) carries a receipt as it comes. `store.messages.saveDelivery` and

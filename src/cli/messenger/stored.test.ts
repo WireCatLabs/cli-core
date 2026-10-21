@@ -251,7 +251,12 @@ describe("a deletion `watch` hears without its chat", () => {
   })
 })
 
-const listening = async (store: MessageStore, events: MessageEvent[], extra: Record<string, unknown> = {}) => {
+const listening = async (
+  store: MessageStore,
+  events: MessageEvent[],
+  extra: Record<string, unknown> = {},
+  saving: Partial<Saving> = {},
+) => {
   const pending = new Set<Promise<void>>()
   const adapter = {
     self: () => "500",
@@ -266,6 +271,7 @@ const listening = async (store: MessageStore, events: MessageEvent[], extra: Rec
     warn: () => {},
     events: () => {},
     pending,
+    ...saving,
   })
   await wrapped.watch?.(() => {}, new AbortController().signal)
   await Promise.all(pending)
@@ -579,6 +585,23 @@ describe("the owner's stars in the store", () => {
     await listening(store, [receipt("1", "read"), receipt("1", "delivered"), receipt("missing", "read")])
 
     expect((await store.messages.message(account, "1", { chatId: "7" }))?.delivery).toBe("read")
+  })
+
+  it("counts the new messages from others `watch` hears into the chat's unread, where the store counts", async () => {
+    const { store } = await setUp()
+    await store.chats.saveChats(account, [
+      { id: "8", kind: "dialog", unreadCount: 0, lastMessageAt: "2026-09-26T09:00:00.000Z" },
+    ])
+    const heard = (id: string, outgoing = false): MessageEvent => ({
+      event: "message",
+      message: { ...message(id, "hi", "8"), outgoing, chatTitle: null },
+    })
+    const unread = async () => (await store.chats.chats(account, {})).items.find((chat) => chat.id === "8")?.unreadCount
+
+    await listening(store, [heard("20"), heard("20"), heard("21", true)])
+    expect(await unread()).toBe(0)
+    await listening(store, [heard("22"), heard("22"), heard("23", true)], {}, { countsUnread: true })
+    expect(await unread()).toBe(1)
   })
 
   it("keeps a pushed batch's stars after its messages, and a message's own star", async () => {

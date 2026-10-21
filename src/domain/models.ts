@@ -40,9 +40,16 @@ export interface Chat {
   /** ISO 8601, or `null` when the chat has never had a message. */
   lastMessageAt: string | null
   participantsCount: number | null
-  /** Absent where the messenger does not say. */
+  /** Absent where the messenger does not say. A mute that has ended reads as `false`. */
   muted?: boolean
+  /**
+   * ISO 8601 UTC: when the mute ends. `null` or absent with `muted` is for good. Saving a chat: absent keeps the stored
+   * end, and `muted: false` clears it.
+   */
+  mutedUntil?: string | null
   archived?: boolean
+  /** The owner marked the chat unread, whatever its count; absent where the messenger does not say. */
+  markedUnread?: boolean
   /** Unread messages that mention the owner or reply to them. */
   unreadMentions?: number
   /** Absent where the messenger does not say. */
@@ -58,7 +65,8 @@ export interface Chat {
  * A chat as an adapter saves it. A `title`, `unreadCount`, `lastMessageAt`, `participantsCount` or `membershipState`
  * left out keeps the stored value; `null` stores none. So a push that knows only some of them, such as a notice that
  * a group left its community, leaves the rest out. `membershipState: "member"` says the owner is in the chat again: it
- * takes off a "left" mark and keeps any other state, such as "archived". It is never stored.
+ * takes off a "left" mark and keeps any other state, such as "archived". It is never stored. `muted`, `mutedUntil`,
+ * `archived` and `markedUnread` left out keep the stored value too.
  */
 export type ChatUpdate = Omit<Chat, KeptFields | "membershipState"> &
   Partial<Pick<Chat, KeptFields>> & { membershipState?: MembershipState | "member" | null }
@@ -499,6 +507,7 @@ export type MessageEvent =
 
 /** One chat's share of `inbox`: other people's messages since the last check, oldest first. */
 export interface InboxChat extends Pick<Chat, "id" | "title" | "kind" | "unreadCount"> {
+  /** A chat marked unread with nothing counted: its newest message from someone else. */
   messages: Message[]
   /** There are more than `--limit`; these are the newest of them. */
   more: boolean

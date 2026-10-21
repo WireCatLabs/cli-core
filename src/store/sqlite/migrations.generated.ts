@@ -567,5 +567,15 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "ALTER TABLE `messages` ADD `delivery` integer;"
     ]
+  },
+  {
+    "name": "20261021224625_version-28-chat-state",
+    "statements": [
+      "ALTER TABLE `chats` ADD `muted` integer;",
+      "ALTER TABLE `chats` ADD `muted_until` integer;",
+      "ALTER TABLE `chats` ADD `archived` integer;",
+      "ALTER TABLE `chats` ADD `marked_unread` integer;",
+      "ALTER TABLE `chats` ADD `unread_counted_at` integer;"
+    ]
   }
 ]

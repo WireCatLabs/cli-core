@@ -350,6 +350,11 @@ export const chats = sqliteTable(
     createdAt: integer("created_at").notNull(),
     parentChatId: integer("parent_chat_id").references((): AnySQLiteColumn => chats.id),
     scope: text("scope"),
+    muted: integer("muted"),
+    mutedUntil: integer("muted_until"),
+    archived: integer("archived"),
+    markedUnread: integer("marked_unread"),
+    unreadCountedAt: integer("unread_counted_at"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
