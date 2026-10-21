@@ -38,5 +38,10 @@ export const importFiles = async (files: ImportFile[], store: MeetingStore, now 
       })
     }
   }
+  const zones = new Set(
+    files.map((file) => file.meeting.timezone).filter((zone) => zone !== null && zone !== undefined),
+  )
+  const [zone] = zones
+  if (zones.size === 1 && zone) report.timezone = zone
   return report
 }

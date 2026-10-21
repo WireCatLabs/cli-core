@@ -70,4 +70,14 @@ describe("importFiles with a text transcript", () => {
       [null, 3723000],
     ])
   })
+
+  it("names the zone every file's start time was read in", async () => {
+    const store = memoryMeetingStore()
+    const { meeting } = sampleMeeting()
+    const report = await importFiles(
+      [{ meeting: { ...meeting, timezone: "Europe/Madrid" }, content: transcript, format: "text" }],
+      store,
+    )
+    expect(report.timezone).toBe("Europe/Madrid")
+  })
 })

@@ -9,6 +9,8 @@ export interface RunReport {
   transcriptRows: number
   summaries: number
   warnings: { externalId: string; message: string }[]
+  /** An import whose files all read their start time in one zone names it; files carry no zone of their own. */
+  timezone?: string
 }
 export interface PullOptions {
   accountId: number
