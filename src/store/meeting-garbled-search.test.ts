@@ -24,8 +24,14 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-garbled-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path }, now: () => 1000 })
   opened.push(store)
-  const accountId = await store.accounts.saveAccount({ provider: "example", account: "AliceExample" }, {})
-  const otherId = await store.accounts.saveAccount({ provider: "example", account: "BobSample" }, {})
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
+  const otherId = await store.accounts.saveAccount(
+    { provider: "example", account: "BobSample" },
+    { name: "Bob Sample" },
+  )
   await store.meetings.saveMeeting(
     meetingOf(accountId, [
       "Итог: нужен риелтор для квартиры",
