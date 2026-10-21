@@ -172,3 +172,70 @@ it("refuses a distance beyond 20 lines and a fuzzy word", async () => {
   for (const query of ['"риелтор договор"~21', "риелтор~2"])
     await expect(store.meetings.searchHits(query, { accountId })).rejects.toMatchObject({ code: "validation_error" })
 })
+
+it("finds a name-only speaker's lines across meetings, where each meeting keys them apart", async () => {
+  const { store, accountId, texts } = await fixture()
+  for (const occurrence of ["second", "third"]) {
+    const input = sampleMeeting()
+    input.meeting.accountId = accountId
+    input.meeting.externalId = occurrence
+    const alice = input.participants[0]
+    input.participants.splice(0, 1, {
+      ...alice,
+      identity: {
+        provider: "example",
+        externalId: `name:Carol Sample@${accountId}/${occurrence}:0`,
+        name: "Carol Sample",
+        metadata: null,
+        associatePerson: false,
+      },
+      displayName: "Carol Sample",
+      email: null,
+      externalId: null,
+    })
+    input.transcripts[0].rows[0] = {
+      ...input.transcripts[0].rows[0],
+      speakerParticipantPosition: 0,
+      speakerName: "Carol Sample",
+      text: `Говорит Кэрол на встрече ${occurrence}`,
+    }
+    await store.meetings.saveMeeting(input)
+  }
+  let result: { remaining: number }
+  do result = await store.meetings.indexSearch({ accountId, limit: 50 })
+  while (result.remaining)
+  expect(await texts('from:"Carol Sample"')).toEqual([
+    "Говорит Кэрол на встрече second",
+    "Говорит Кэрол на встрече third",
+  ])
+})
+
+it("counts a name-only speaker as the identified speaker of that name", async () => {
+  const { store, accountId, texts } = await fixture()
+  const input = sampleMeeting()
+  input.meeting.accountId = accountId
+  input.meeting.externalId = "from-file"
+  const alice = input.participants[0]
+  input.participants.splice(0, 1, {
+    ...alice,
+    identity: {
+      provider: "example",
+      externalId: `name:Alice Example@${accountId}/from-file:0`,
+      name: "Alice Example",
+      metadata: null,
+      associatePerson: false,
+    },
+    email: null,
+    externalId: null,
+  })
+  input.transcripts[0].rows[0] = { ...input.transcripts[0].rows[0], text: "Алиса из файла" }
+  await store.meetings.saveMeeting(input)
+  let result: { remaining: number }
+  do result = await store.meetings.indexSearch({ accountId, limit: 50 })
+  while (result.remaining)
+  expect(await texts('from:"Alice Example"')).toEqual([
+    "Алиса из файла",
+    "Договор подпишем в пятницу",
+    "Нужен риелтор на завтра",
+  ])
+})

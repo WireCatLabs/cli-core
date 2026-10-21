@@ -45,7 +45,7 @@ const speakers = (database: CacheDatabase, accountId: number) => {
   }
   const participants = database
     .prepare(
-      `SELECT p.id,p.identity_id,p.display_name,i.name AS identity_name,l.person_id,person.name AS person_name
+      `SELECT p.id,p.identity_id,p.display_name,p.email,i.external_id AS identity_key,i.name AS identity_name,l.person_id,person.name AS person_name
        FROM meeting_participants p JOIN meetings m ON m.id=p.meeting_id
        LEFT JOIN identities i ON i.id=p.identity_id LEFT JOIN identity_links l ON l.identity_id=p.identity_id
        LEFT JOIN persons person ON person.id=l.person_id WHERE m.account_id=? AND m.deleted_at IS NULL`,
@@ -62,9 +62,23 @@ const speakers = (database: CacheDatabase, accountId: number) => {
     if (row.person_id !== null && row.person_id !== undefined) {
       const others = personNames.all(Number(row.person_id)).map((one) => (one.name === null ? null : String(one.name)))
       add(`person:${row.person_id}`, String(row.person_name ?? label), [...names, ...others], Number(row.id))
-    } else if (row.identity_id !== null && row.identity_id !== undefined)
-      add(`identity:${row.identity_id}`, label, names, Number(row.id))
+    } else if (
+      row.identity_id !== null &&
+      row.identity_id !== undefined &&
+      !String(row.identity_key).startsWith("name:")
+    )
+      add(`identity:${row.identity_id}`, row.email ? `${label} <${row.email}>` : label, names, Number(row.id))
+    // A participant known only by name is keyed per meeting (`name:…@account/occurrence:n`); across meetings the name is all there is.
     else add(`name:${fold(label)}`, label, names, Number(row.id))
+  }
+  // A name heard in one meeting is the identified speaker of that name, when exactly one has it.
+  for (const [key, speaker] of found) {
+    if (!key.startsWith("name:")) continue
+    const named = [...found].filter(([other, one]) => !other.startsWith("name:") && one.names.has(key.slice(5)))
+    const [only] = named
+    if (named.length !== 1 || !only) continue
+    for (const participant of speaker.participants) only[1].participants.add(participant)
+    found.delete(key)
   }
   const unlinked = database
     .prepare(

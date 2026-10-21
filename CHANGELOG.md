@@ -28,6 +28,11 @@ shape of this file.
   (U+FE0F, U+FE0E, or the U+200D joiner) that a typed one lacks, so "Семья❤️" did not find the chat "Семья❤". Names
   now compare without those marks and with accented letters in one form, still ignoring case, wherever a chat or a
   person is named (`pickChat`, `pickPerson`, a stored alias).
+- **`from:` finds a speaker known only by name across meetings.** A participant keyed by name in one meeting
+  (`name:…@account/occurrence:n`, as zoom-cli's `.txt` speakers and nameless API participants are) is grouped with
+  the same name elsewhere, and with the one identified speaker of that name when there is exactly one. Before,
+  each meeting's copy was a separate candidate, so `from:"Name"` was ambiguous. Candidates with an email show it.
+
 - **A store the process may not write is a permission error, not a crash.** Opening the store for writing where the
   file or its folder is read-only (`EROFS`, `EACCES`, `EPERM`) was reported as `internal_error` "this is a bug".
   It is now `permission_error` (exit 5) with reason `store.not-writable`, and the message names no path.
