@@ -49,7 +49,8 @@ export const plainMatch = (probe: GarbledProbe, word: string, stems: string[]): 
  * stemmer cut differently: a stem one side extends counts only when the other side's word spells the extension
  * out — «циана» (stem `циа`) reaches «цианом» (`циан`), «устав» (`уста`) does not reach «установить» (`установ`).
  * `1` is a spelling recognition may have garbled, compared by stem: «рилторов» is three edits from «риелтор»
- * as a word but one as a stem.
+ * as a word but one as a stem; or a word recognition cut off, of four letters or more, that begins the query word
+ * («може» for «может»), as ztx matched.
  */
 export const garbledDistance = (probe: GarbledProbe, word: string, stems: string[]): number | null => {
   if (probe.literal.length < SHORTEST_GARBLED || plainMatch(probe, word, stems)) return null
@@ -70,6 +71,7 @@ export const garbledDistance = (probe: GarbledProbe, word: string, stems: string
       const distance = editDistance(queryStem, wordStem, 1)
       if (distance <= 1) best = distance
     }
+  if (best === null && stored.length >= SHORTEST_GARBLED && literal.startsWith(stored)) return 1
   return best
 }
 
@@ -104,6 +106,7 @@ const prefixDistance = (stem: string, word: string, max: number): number => {
  */
 const worthStemming = (probe: GarbledProbe, word: string): boolean => {
   const stored = plain(word)
+  if (stored.length >= SHORTEST_GARBLED && plain(probe.literal).startsWith(stored)) return true
   return probe.stems.some((raw) => {
     const stem = plain(raw)
     if (stem.length >= 3 && stored.startsWith(stem)) return true

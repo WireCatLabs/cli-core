@@ -104,8 +104,11 @@ stored words recognition may have made of it, instead of only when nothing match
 
 The dictionary loads only when a query has such spellings to check, in about 0.15 s: it is read the way Hunspell
 checks a word, an ending at a time, not expanded into all its forms. On a copy of a real store of 119 meetings it
-cut the widened passages from 10,271 to 1,157 over 130 queries. ztx's rule that a stored word beginning the query
-word matches («показывал» → «пока») was dropped: it made 15 % of the noise and found nothing the rules above miss.
+cut the widened passages from 10,271 to 1,157 over 130 queries. ztx's rule that a stored word of four letters or more
+beginning the query word matches is kept behind the same dictionary: speech recognition cuts words off («може» for
+«может», «напри» for «например»), while the real shorter words it also reached — «после» for «последующих»,
+«отдел» for «отдельно», «пока» for «показывал» — are dictionary words. Over 45 queries from April to September on
+that copy, ztx found 45,833 lines; without the rule zm missed 357 of them, 280 of those real other words.
 
 Number words never widen, and match only their own forms, not as the start of a longer word: recognition swaps
 them, «десять» is one edit from «девять», and «семь» begins «семьдесят». `exact:word` and
