@@ -46,6 +46,7 @@ cli-base ← cli-core (src/meetings/ ← the rest of src/) ← zoom-cli (zm)
 |---|---|
 | [`src/model.ts`](../../src/meetings/model.ts) | events, meetings, participants, transcripts, chat, summaries and attachments |
 | [`src/vtt.ts`](../../src/meetings/vtt.ts) | `parseVtt`: WebVTT cues to transcript lines, the speaker taken from `Name: text` |
+| [`src/transcript-text.ts`](../../src/meetings/transcript-text.ts) | `parseTranscriptText`: the text form zoom-searcher wrote — a header (`Встреча:`, `Дата:`, `Zoom ID:`, `Говорят:`) and `[hh:mm:ss] Speaker: text` blocks; the header as written, the date for the caller to read in its zone |
 | [`src/store.ts`](../../src/meetings/store.ts) | `MeetingStore`, atomic writes and meeting/event reads |
 | [`src/source.ts`](../../src/meetings/source.ts) | `MeetingSource`, the port a provider implements |
 | [`src/pull.ts`](../../src/meetings/pull.ts) | fetch occurrence parts and save them |
@@ -159,7 +160,7 @@ is zero. Parts that appear outside the window require an older explicit `since`.
 The source reports whether its series is recurring. Participants carry identity keys; a cue matches
 only one participant with that name. Name clashes preserve the cue's name with a null speaker link.
 
-`importFiles` takes file contents and meeting metadata supplied by the caller. It reads no folder.
+`importFiles` takes file contents and meeting metadata supplied by the caller. It reads no folder. A file's `format` picks the parser: `vtt` (the default) or `text`.
 SHA-256 hashes skip repeated transcript content; corrected versions supersede only the same source.
 `linkEvent` preserves existing links, matches overlapping series or join links, and creates an event
 when no single match exists. Recurring meetings also create an event series when needed. Linking refreshes the stored meeting
