@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.380.0 — 21.10.2026
+
 ### Added
 
 - **Meetings import text transcripts.** `parseTranscriptText` reads the text form zoom-searcher wrote: the header
