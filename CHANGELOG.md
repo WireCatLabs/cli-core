@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.383.0 — 22.10.2026
+
 ### Added
 
 - **`readSpreadsheet(bytes, "xlsx" | "ods")` from `@wirecat/cli-core/documents`** returns a workbook's cells per
