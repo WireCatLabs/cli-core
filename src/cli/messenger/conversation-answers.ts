@@ -1,4 +1,4 @@
-import type { Missing, NextStep } from "@wirecat/cli-base/standards"
+import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { Message } from "../../domain/models.js"
 import { type MessengerTraits, syncsOneChat } from "../../ports/traits.js"
 import { conversationItem } from "../../services/conversations.js"
@@ -72,13 +72,17 @@ export const foundConversations = (
   limit: number,
   messenger: Syncing,
   chat?: string,
+  meta: Partial<Meta> = {},
 ) =>
   listOf(command, {
     items: found.hits.map((hit) => snakeKeys(hit)),
     limit,
     has_more: false,
     ...readinessGaps(found, messenger, chat),
-    ...(found.accounts ? { meta: { accounts: found.accounts.map((one) => `${one.provider}:${one.account}`) } } : {}),
+    meta: {
+      ...meta,
+      ...(found.accounts ? { accounts: found.accounts.map((one) => `${one.provider}:${one.account}`) } : {}),
+    },
   })
 
 /** `conversations status`: each built chat with the model it was measured by; group chats never built are missing. */

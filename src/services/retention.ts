@@ -3,7 +3,7 @@ import { timezoneOf } from "@wirecat/cli-base/query"
 import type { RetentionOptions } from "../domain/retention.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
-import { momentOf } from "./moment.js"
+import { dateWindow } from "./moment.js"
 
 export interface RetentionQuery {
   sinceTime?: string
@@ -26,13 +26,15 @@ export const retentionService = (deps: ServiceDeps) => ({
   report: async (chat: string, query: RetentionQuery = {}) => {
     const cutoff = Date.now()
     const zone = timezoneOf(query.timezone)
+    const window = dateWindow({
+      ...(query.sinceTime === undefined ? {} : { sinceTime: query.sinceTime }),
+      ...(query.untilTime === undefined ? {} : { untilTime: query.untilTime }),
+      zone,
+      now: cutoff,
+    })
     const options: RetentionOptions = {
-      since:
-        query.sinceTime === undefined
-          ? cutoff - 90 * 86_400_000
-          : momentOf(query.sinceTime, "--since-time", cutoff, { zone }),
-      until:
-        query.untilTime === undefined ? cutoff : momentOf(query.untilTime, "--until-time", cutoff, { zone, end: true }),
+      since: window.since ?? cutoff - 90 * 86_400_000,
+      until: window.until ?? cutoff,
       cutoff,
       checkpoints: (query.checkpoints ?? "1d,7d,30d")
         .split(",")
@@ -61,6 +63,7 @@ export const retentionService = (deps: ServiceDeps) => ({
       })),
       account,
       report: "retention" as const,
+      timeMeta: window.meta,
     }
   },
   evidence: async (

@@ -222,7 +222,7 @@ export const adminAnswer = (found: AdminFound): ItemBody<Of<"admin_report">> => 
         top?.drilldown.arguments.component,
         top?.message ?? (top?.id.startsWith("msg:") ? top.id : undefined),
       ),
-      ...truncated(found.hasMore),
+      meta: { ...found.timeMeta, ...(found.hasMore ? { truncated: true } : {}) },
     },
   )
 }
@@ -282,7 +282,7 @@ export const retentionAnswer = (found: RetentionFound): ItemBody<Of<"retention">
     },
     {
       next: drilldownSteps(top?.drilldown, top?.drilldown.arguments.component),
-      ...truncated(found.hasMore),
+      meta: { ...found.timeMeta, ...(found.hasMore ? { truncated: true } : {}) },
     },
   )
 }
@@ -459,7 +459,11 @@ export const refuseJsonl = (format: string): void => {
 }
 
 /** `stats chats show`, CLI and MCP alike; a chat the store does not hold whole names the sync that fills it. */
-export const chatStatsAnswer = (stats: ChatStats, account: AccountKey): ItemBody<Of<"chat_stats">> => {
+export const chatStatsAnswer = (
+  stats: ChatStats,
+  account: AccountKey,
+  meta?: Partial<Meta>,
+): ItemBody<Of<"chat_stats">> => {
   const { chatId, completeness, topPosts, questions, memberCounts, members, series, fetch } = stats
   const item = defined({
     chat: chatRef(account, chatId),
@@ -532,6 +536,7 @@ export const chatStatsAnswer = (stats: ChatStats, account: AccountKey): ItemBody
     ...(completeness.state === "complete" || fetch === undefined
       ? {}
       : { next: [nextStep("messages.sync", { args: { chat: chatId } })] }),
+    ...(meta ? { meta } : {}),
   })
 }
 

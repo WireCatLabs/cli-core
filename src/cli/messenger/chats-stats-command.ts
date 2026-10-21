@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { ChatStats, StatsPeriod } from "../../services/chat-stats.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -25,18 +25,13 @@ export const statsCommand = (messenger: Messenger): Command =>
       const context = messengerContext(this, messenger)
       const { sinceTime, by, timezone } = this.opts<{ sinceTime?: string; by?: StatsPeriod; timezone?: string }>()
       refuseJsonl(context.format)
+      const window = dateWindow({
+        ...(sinceTime === undefined ? {} : { sinceTime }),
+        ...(timezone === undefined ? {} : { zone: timezone }),
+      })
       const { stats, account } = await context.withServices(async (services) => ({
         stats: await services.chats.stats(chat, {
-          ...(sinceTime === undefined
-            ? {}
-            : {
-                since: momentOf(
-                  sinceTime,
-                  "--since-time",
-                  Date.now(),
-                  timezone === undefined ? {} : { zone: timezone },
-                ),
-              }),
+          ...(window.since === undefined ? {} : { since: window.since }),
           ...(by ? { by } : {}),
           ...(timezone === undefined ? {} : { timezone }),
         }),
@@ -49,7 +44,7 @@ export const statsCommand = (messenger: Messenger): Command =>
         )
       if (!stats.members && !stats.membersUnrecorded)
         context.renderer.note("joins and leaves were not asked of the messenger")
-      renderAnswer(this, context, chatStatsAnswer(stats, account), () => view(stats))
+      renderAnswer(this, context, chatStatsAnswer(stats, account, window.meta), () => view(stats))
     })
 
 const view = (stats: ChatStats): string => {

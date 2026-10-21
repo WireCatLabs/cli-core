@@ -2740,7 +2740,18 @@ describe("the shared read commands", () => {
       expect(badGrouping.code).toBe(2)
       expect(badGrouping.stdout).toEqual([])
       const chatStats = await call(
-        ["stats", "chats", "show", "7", "--offline", "--since-time", "2000-01-01", "--json"],
+        [
+          "stats",
+          "chats",
+          "show",
+          "7",
+          "--offline",
+          "--since-time",
+          "2000-01-01",
+          "--timezone",
+          "Asia/Vladivostok",
+          "--json",
+        ],
         never,
         env,
         {},
@@ -2748,9 +2759,9 @@ describe("the shared read commands", () => {
       )
       expect(chatStats.code).toBe(0)
       expect(chatStats.stdout).toHaveLength(1)
-      expect(JSON.parse(chatStats.stdout[0] ?? "null").item).toMatchObject({
-        chat: expect.stringMatching(/\/7$/),
-        complete: false,
+      expect(JSON.parse(chatStats.stdout[0] ?? "null")).toMatchObject({
+        item: { chat: expect.stringMatching(/\/7$/), complete: false },
+        meta: { timezone: "Asia/Vladivostok", window: { since: "1999-12-31T14:00:00.000Z" } },
       })
       expect(chatStats.stderr.join("\n")).toContain("joins and leaves were not asked of the messenger")
       const asked: string[] = []
@@ -3731,6 +3742,8 @@ describe("the shared read commands", () => {
 
     expect(written.code).toBe(0)
     expect(JSON.parse(written.stdout[0] ?? "").item).toEqual({ path: file, format: "jsonl", count: 2 })
+    expect(JSON.parse(written.stdout[0] ?? "").meta).toMatchObject({ window: { since: "2026-09-27T10:01:00.000Z" } })
+    expect(JSON.parse(written.stdout[0] ?? "").meta).not.toHaveProperty("timezone")
     expect(statSync(file).mode & 0o777).toBe(0o600)
     expect(
       readFileSync(file, "utf8")

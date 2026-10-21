@@ -3,9 +3,9 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import { fetchInto } from "../../services/archive.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { FETCH } from "../effects.js"
-import { renderItem } from "../messenger/chat-answers.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { stopOnSignal } from "../messenger/patience.js"
 import { botContext, online } from "./context.js"
 import { botCan, botIdOf } from "./messages.js"
@@ -50,7 +50,8 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
       throw new CliError("validation_error", "give --since-time or --last, not both: how far back the fetch goes")
     }
     const pauseMs = parseDuration(options.pause, "--pause")
-    const sinceMs = options.sinceTime === undefined ? undefined : momentOf(options.sinceTime, "--since-time")
+    const bounds = dateWindow(options.sinceTime === undefined ? {} : { sinceTime: options.sinceTime })
+    const sinceMs = bounds.since
     const context = online(botContext(this, bot), this)
     const ref = context.chatRef(chat)
     const stop = stopOnSignal(this)
@@ -87,7 +88,7 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
               onPage: () => {},
             }),
           )
-          renderItem(this, context, result)
+          renderAnswer(this, context, itemOf(snakeKeys(result), { meta: bounds.meta }))
         } finally {
           await adapter.close()
         }

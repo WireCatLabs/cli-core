@@ -186,8 +186,14 @@ export const queryTerms = (words: QueryWords, registry: QueryRegistry, command: 
   return terms
 }
 
-/** A `time` term as epoch ms bounds: `time>=7d`, `time:[2026-10-01 TO 2026-10-07]`, `time:today`. */
-export const timeBounds = (term: Predicate | undefined, zone = timezoneOf()): { since?: number; until?: number } => {
+/**
+ * A `time` term as epoch ms bounds: `time>=7d`, `time:[2026-10-01 TO 2026-10-07]`, `time:today`, and the `meta`
+ * an answer reports them by: the zone calendar words and bare dates were read in, and the bounds in UTC.
+ */
+export const timeBounds = (
+  term: Predicate | undefined,
+  zone = timezoneOf(),
+): { since?: number; until?: number; meta?: { timezone: string; window: { since?: string; until?: string } } } => {
   if (!term) return {}
   const upper = term.operator === "range" ? (term.upper ?? "*") : term.value
   const range = dateRange(
@@ -201,6 +207,13 @@ export const timeBounds = (term: Predicate | undefined, zone = timezoneOf()): { 
   return {
     ...(range.lower === undefined ? {} : { since: range.lower }),
     ...(range.upper === undefined ? {} : { until: range.upper }),
+    meta: {
+      timezone: zone,
+      window: {
+        ...(range.lower === undefined ? {} : { since: new Date(range.lower).toISOString() }),
+        ...(range.upper === undefined ? {} : { until: new Date(range.upper).toISOString() }),
+      },
+    },
   }
 }
 

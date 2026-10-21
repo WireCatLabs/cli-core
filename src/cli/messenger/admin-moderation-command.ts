@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, MAX_ACTIONS } from "../../moderation/check.js"
 import { RULE_KEYS } from "../../moderation/rules.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "./ask.js"
@@ -71,9 +71,10 @@ export const moderateCommand = (messenger: Messenger): Command =>
       if (!Number.isInteger(maxActions) || maxActions < 0) {
         throw new CliError("validation_error", `--max-actions takes a whole number — got ${String(options.maxActions)}`)
       }
+      const window = dateWindow(options.sinceTime === undefined ? {} : { sinceTime: options.sinceTime })
       const { chatId, rows, notes } = await context.withServices((services) =>
         services.moderation.moderate(chat, {
-          ...(options.sinceTime === undefined ? {} : { since: momentOf(options.sinceTime, "--since-time") }),
+          ...(window.since === undefined ? {} : { since: window.since }),
           dryRun: options.dryRun === true,
           allowDangerous: options.allowDangerous === true,
           maxActions,
@@ -84,7 +85,7 @@ export const moderateCommand = (messenger: Messenger): Command =>
           },
         }),
       )
-      renderAnswer(this, context, itemOf(snakeKeys({ chatId, rows })), () =>
+      renderAnswer(this, context, itemOf(snakeKeys({ chatId, rows }), { meta: window.meta }), () =>
         rows
           .map((row) =>
             [row.kind, row.personName ?? row.personId, row.rule, row.action, row.outcome, row.reason ?? ""]

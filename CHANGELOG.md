@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **More commands say how they read a typed date** (WC-TIME-3, WC-TIME-5): `meta.window` gives the UTC bounds they
+  used, and `meta.timezone` names the zone a value without its own zone was read in. Now: `moderate` (the bot's and
+  the admin's), the bot's `store fetch`, `store export`, `messages sync`, `stats chats show`, `contacts context`,
+  `search conversations`, `replies test` (its 7-day default window too), `runs search`, `stats chats retention`, the
+  administrator reports (`stats messages unanswered`, `stats contacts responses`, `stats chats newcomers`,
+  `stats messages discussion`), `search meetings` (also in `meetings batch`; over MCP only the window, since it takes
+  epoch times), and a `time:` or `date:` term in `chats events`, `chats members history`, `inbox` and `review`.
+  `search conversations` now reads a date alone in its `--timezone` when one is given. A host of `search meetings`
+  passes `meetingSearchMeta(options)` to `meetingHitsList` to report the same.
+
 ## 0.383.0 — 22.10.2026
 
 ### Added

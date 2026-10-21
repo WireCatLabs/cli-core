@@ -10,7 +10,7 @@ import { renderMessages } from "../../render/messages.js"
 import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import type { LeftChat } from "../../store/chats.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -235,7 +235,8 @@ const exportCommand = (messenger: Messenger): Command =>
       }
       const password = encrypt ? await passwordOf(this, { twice: true }) : undefined
       const chat = chats[0] as string
-      const from = since === undefined ? undefined : new Date(momentOf(since, "--since-time")).toISOString()
+      const window = dateWindow(since === undefined ? {} : { sinceTime: since })
+      const from = window.since === undefined ? undefined : new Date(window.since).toISOString()
       const { account, title, messages } = await context.withServices((services) =>
         services.archive.export(chat, from === undefined ? {} : { since: from }),
       )
@@ -258,12 +259,15 @@ const exportCommand = (messenger: Messenger): Command =>
         renderAnswer(
           this,
           context,
-          itemOf({
-            path,
-            format: format ?? "jsonl",
-            count: messages.length,
-            ...(password === undefined ? {} : { encrypted: true }),
-          }),
+          itemOf(
+            {
+              path,
+              format: format ?? "jsonl",
+              count: messages.length,
+              ...(password === undefined ? {} : { encrypted: true }),
+            },
+            { meta: window.meta },
+          ),
         )
         return
       }
@@ -278,6 +282,7 @@ const exportCommand = (messenger: Messenger): Command =>
             items: messageItems(messages, account),
             limit: Math.max(1, messages.length),
             has_more: false,
+            meta: window.meta,
           }),
         )
       else

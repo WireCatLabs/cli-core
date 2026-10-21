@@ -3,6 +3,7 @@ import {
   type ItemEnvelope,
   isoTime,
   type ListEnvelope,
+  type Meta,
   reference,
   STEPS,
   type StepDefinition,
@@ -255,7 +256,8 @@ export const meetingHitsList = (
   limit: number,
   command = "search meetings",
   args: Record<string, unknown> = {},
-): MeetingListBody<MeetingHitItem> => {
+  meta: Partial<Meta> = {},
+): MeetingListBody<MeetingHitItem> & { meta?: Partial<Meta> } => {
   const items = found.items.map(meetingHitItem)
   const cursor = found.hasMore && found.nextCursor !== null ? found.nextCursor : undefined
   const pending = found.coverage.indexing === "pending"
@@ -292,5 +294,6 @@ export const meetingHitsList = (
           ],
         }
       : {}),
+    ...(Object.keys(meta).length === 0 ? {} : { meta }),
   }
 }

@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { timezoneOf, zonedMoment } from "@wirecat/cli-base/query"
+import type { Meta } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { meetingHitsList } from "../answers.js"
 import type { MeetingSearchPage } from "../search-store.js"
@@ -8,12 +9,17 @@ import { type MeetingHitSearchOptions, validateMeetingHitSearch } from "../searc
 
 export { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
-const moment = (flag: string, end: boolean) => (value: string) => {
+const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/i
+const moment = (flag: string, end: boolean, readIn: (zone: string) => void) => (value: string) => {
+  const zone = timezoneOf()
+  let time: number
   try {
-    return zonedMoment(value, timezoneOf(), { start: 0, end: value.length }, { end })
+    time = zonedMoment(value, zone, { start: 0, end: value.length }, { end })
   } catch {
     throw new CliError("validation_error", `${flag} takes an ISO date, or a time with or without an offset`)
   }
+  if (!ZONED.test(value.trim())) readIn(zone)
+  return time
 }
 const integer = (value: string): number => {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))
@@ -31,6 +37,8 @@ export interface MeetingSearchFlags {
   topic?: string
   sinceTime?: number
   untilTime?: number
+  /** The zone a date or time without one was read in; the parser sets it, since the typed text is gone after. */
+  timesReadIn?: string
   limit?: number
   cursor?: string
   maxReadBytes?: number
@@ -42,7 +50,8 @@ export const createMeetingSearchCommand = (program: Command): Command => {
     search = new Command("search").description("search the stored resources")
     program.addCommand(search)
   }
-  const command = search
+  const readIn = (zone: string) => command.setOptionValue("timesReadIn", zone)
+  const command: Command = search
     .command("meetings")
     .description("find words in stored meetings, indexing new ones first")
     .argument(
@@ -60,12 +69,12 @@ export const createMeetingSearchCommand = (program: Command): Command => {
     .option(
       "--since-time <time>",
       "meetings starting at or after this ISO 8601 date or time",
-      moment("--since-time", false),
+      moment("--since-time", false, readIn),
     )
     .option(
       "--until-time <time>",
       "meetings starting at or before this ISO 8601 date or time; a date alone covers that whole local day",
-      moment("--until-time", true),
+      moment("--until-time", true, readIn),
     )
     .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
     .option("--cursor <cursor>", "continue from the previous page's page.next_cursor, with the same query and filters")
@@ -124,6 +133,18 @@ export const meetingSearchArguments = (query: string, options: MeetingSearchFlag
     }).filter(([, value]) => value !== undefined),
   )
 
+/** What `meta` says about the dates: the zone one without its own was read in, and the window in UTC. */
+export const meetingSearchMeta = (options: MeetingSearchFlags): Pick<Meta, "timezone" | "window"> => {
+  const window = {
+    ...(options.sinceTime === undefined ? {} : { since: new Date(options.sinceTime).toISOString() }),
+    ...(options.untilTime === undefined ? {} : { until: new Date(options.untilTime).toISOString() }),
+  }
+  return {
+    ...(options.timesReadIn === undefined ? {} : { timezone: options.timesReadIn }),
+    ...(Object.keys(window).length === 0 ? {} : { window }),
+  }
+}
+
 export const addMeetingSearchCommand = (
   program: Command,
   deps: {
@@ -145,6 +166,7 @@ export const addMeetingSearchCommand = (
           request.limit ?? 100,
           "search meetings",
           meetingSearchArguments(query, options),
+          meetingSearchMeta(options),
         ),
       )
     },

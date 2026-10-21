@@ -1,5 +1,5 @@
 import { defineQuery, queryError } from "@wirecat/cli-base/query"
-import type { Missing, NextStep } from "@wirecat/cli-base/standards"
+import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { Inbox, Message, Review } from "../../domain/models.js"
 import { type Hearing, heard, hearingMissing } from "../../speech/hearing.js"
 import type { AccountKey } from "../../store/store.js"
@@ -25,16 +25,20 @@ export const catchUpQuery = (
   words: QueryWords,
   registry: typeof INBOX_QUERY,
   command: string,
-): { since?: number; chat?: string } => {
+): { since?: number; chat?: string; meta?: Partial<Meta> } => {
   const terms = nativeTerms(listQuery(typedQuery(words), registry, command), command)
   const term = terms.get("date")
-  const { since, until } = timeBounds(term)
+  const { since, until, meta } = timeBounds(term)
   if (term && (until !== undefined || since === undefined))
     queryError("query.unsupported-operator", term.span, `${command} reads from a point on: date>2h, not an end`, {
       command,
     })
   const chat = terms.get("chat")?.value
-  return { ...(since === undefined ? {} : { since }), ...(chat === undefined ? {} : { chat }) }
+  return {
+    ...(since === undefined ? {} : { since }),
+    ...(chat === undefined ? {} : { chat }),
+    ...(meta === undefined ? {} : { meta }),
+  }
 }
 
 type Read = Message & { chatTitle?: string | null }
@@ -75,7 +79,7 @@ const catchUpList = (
   found: Shared,
   hearing: Hearing | undefined,
   reader: AccountKey,
-  { transcribe, first = [] }: { transcribe: boolean; first?: NextStep[] },
+  { transcribe, first = [], meta = {} }: { transcribe: boolean; first?: NextStep[]; meta?: Partial<Meta> },
 ) => {
   const read = found.chats
     .flatMap((chat) => heard(chat.messages, hearing).map((message) => ({ ...message, chatTitle: chat.title })))
@@ -105,12 +109,17 @@ const catchUpList = (
     has_more: false,
     next: [...first, ...cut.map((chat) => nextStep("messages.list", { args: { chat: chat.id } }))],
     missing,
-    ...(found.partial ? { meta: { truncated: true } } : {}),
+    meta: { ...meta, ...(found.partial ? { truncated: true } : {}) },
   })
 }
 
-export const inboxAnswer = (inbox: Inbox, hearing: Hearing | undefined, reader: AccountKey, transcribe: boolean) =>
-  catchUpList("inbox", inbox, hearing, reader, { transcribe })
+export const inboxAnswer = (
+  inbox: Inbox,
+  hearing: Hearing | undefined,
+  reader: AccountKey,
+  transcribe: boolean,
+  meta: Partial<Meta> = {},
+) => catchUpList("inbox", inbox, hearing, reader, { transcribe, meta })
 
 const quoted = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
 
@@ -122,7 +131,7 @@ export const reviewAnswer = (
   found: Review,
   hearing: Hearing | undefined,
   reader: AccountKey,
-  { transcribe, fresh, chat }: { transcribe: boolean; fresh: boolean; chat?: string },
+  { transcribe, fresh, chat, meta }: { transcribe: boolean; fresh: boolean; chat?: string; meta?: Partial<Meta> },
 ) => {
   const continues = !fresh && found.unanswered === undefined
   const query = [
@@ -132,5 +141,6 @@ export const reviewAnswer = (
   return catchUpList("review", found, hearing, reader, {
     transcribe,
     first: continues ? [nextStep("review.next", { args: { query: query.join(" ") } })] : [],
+    ...(meta === undefined ? {} : { meta }),
   })
 }
