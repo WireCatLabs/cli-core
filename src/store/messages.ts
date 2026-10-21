@@ -1,5 +1,14 @@
 import type { CounterObservations } from "../domain/counters.js"
-import type { Id, Message, Page, PersonReaction, PollVote, Reactions, WindowedMessage } from "../domain/models.js"
+import type {
+  Delivery,
+  Id,
+  Message,
+  Page,
+  PersonReaction,
+  PollVote,
+  Reactions,
+  WindowedMessage,
+} from "../domain/models.js"
 import { keysOver } from "./keys.js"
 import { applyCounterObservations } from "./sqlite/counters.js"
 import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
@@ -102,6 +111,8 @@ export interface AccountMessages {
   saveReaction(key: AccountKey, chatId: Id, messageId: Id, reaction: PersonReaction): Promise<void>
   /** The owner's star on a message, or its removal; answers whether the message is held at all. */
   saveStar(key: AccountKey, chatId: Id, messageId: Id, starred: boolean): Promise<boolean>
+  /** A receipt for the owner's own message; the state never moves back. Answers whether such a message is held. */
+  saveDelivery(key: AccountKey, chatId: Id, messageId: Id, delivery: Delivery): Promise<boolean>
   /** One voter's vote in the poll a message carries, unless the store holds a newer one of theirs; no answers is a take-back. */
   saveVote(key: AccountKey, chatId: Id, messageId: Id, vote: PollVote): Promise<void>
   /** Each voter's newest vote in the poll a message carries, newest first. */
@@ -213,6 +224,17 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
       let saved = false
       write(database, () => {
         saved = messageWrites.saveStar(context, chatKey, messageId, starred)
+      })
+      return saved
+    },
+
+    saveDelivery: async (key, chatId, messageId, delivery) => {
+      const accountKey = findAccountPk(key)
+      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
+      if (chatKey === undefined) return false
+      let saved = false
+      write(database, () => {
+        saved = messageWrites.saveDelivery(context, chatKey, messageId, delivery)
       })
       return saved
     },

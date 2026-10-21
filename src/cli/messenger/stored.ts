@@ -636,6 +636,9 @@ const keep = async (
     case "star":
       await store.messages.saveStar(account, event.chatId, event.messageId, event.starred)
       return
+    case "delivery":
+      await store.messages.saveDelivery(account, event.chatId, event.messageId, event.delivery)
+      return
     case "chat_event":
       await store.roster.saveChatEvents(account, event.chatId, [event.change])
       return

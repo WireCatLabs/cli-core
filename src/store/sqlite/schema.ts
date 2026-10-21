@@ -457,6 +457,7 @@ export const messages = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     threadRootId: integer("thread_root_id").references((): AnySQLiteColumn => messages.id),
     starred: integer("starred"),
+    delivery: integer("delivery"),
   },
   (table) => [
     unique().on(table.chatId, table.externalId),

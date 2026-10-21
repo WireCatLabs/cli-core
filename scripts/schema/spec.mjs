@@ -178,6 +178,7 @@ const EDITS = {
         },
       ],
       ["starred", "integer", { note: "1 when the owner starred the message; only this account sees the star" }],
+      ["delivery", "integer", { note: "own message: 1 delivered, 2 read; null when no receipt came; only rises" }],
     ],
     keys: [
       "INDEX (chat_id, sent_at DESC)",

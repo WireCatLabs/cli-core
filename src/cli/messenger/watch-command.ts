@@ -143,6 +143,8 @@ const describe = (event: MessageEvent, render: (message: MessageHit) => string):
     }
     case "star":
       return `${event.starred ? "starred" : "unstarred"} in ${event.chatTitle ?? event.chatId}: message ${event.messageId}\n`
+    case "delivery":
+      return `${event.delivery} in ${event.chatTitle ?? event.chatId}: message ${event.messageId}\n`
     case "chat_event": {
       const { event: action, by, people } = event.change
       const who = people.map((one) => one.name ?? one.id).join(", ")

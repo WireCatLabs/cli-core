@@ -167,6 +167,8 @@ export const botWatchCommand = (bot: BotMessenger): Command =>
           context.streams.data(
             `${event.starred ? "starred" : "unstarred"} in ${title(event.chatId)}: message ${event.messageId}\n`,
           )
+        } else if (event.event === "delivery") {
+          context.streams.data(`${event.delivery} in ${title(event.chatId)}: message ${event.messageId}\n`)
         } else if (event.event === "chat_event") {
           context.streams.data(`${event.change.event} in ${title(event.chatId)}\n`)
         } else context.streams.data(noticeLine(event, title))

@@ -75,6 +75,8 @@ export const message = v.strictObject({
   scheduled_for: v.optional(time),
   /** The owner starred it; only where the messenger has stars, and only when set. */
   starred: v.optional(v.literal(true)),
+  /** The owner's own message in a one-to-one chat: `delivered`, or `read` once opened; absent when no receipt came. */
+  delivery: v.optional(v.picklist(["delivered", "read"])),
   email: v.optional(
     v.strictObject({
       subject: v.nullable(text),

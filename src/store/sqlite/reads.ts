@@ -5,7 +5,7 @@ import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or, type SQL, sql } 
 import type { StoreContext } from "./open.js"
 import type { ColumnMap, Where } from "./query-filter.js"
 import { attachments, chats, identities, messageRevisions, messages } from "./schema.js"
-import { parsed, present, toIso, toMs } from "./values.js"
+import { deliveryOf, parsed, present, toIso, toMs } from "./values.js"
 
 /**
  * One flat row for every read, aliased where tables share a column name, so the same mapper serves
@@ -30,6 +30,7 @@ export const MESSAGE_FIELDS = {
   providerMetadata: messages.metadata,
   mentions: messages.mentions,
   starred: messages.starred,
+  delivery: messages.delivery,
 }
 
 export interface MessageRow {
@@ -51,6 +52,7 @@ export interface MessageRow {
   providerMetadata: string | null
   mentions: string | null
   starred: number | null
+  delivery: number | null
 }
 
 export const selectMessages = ({ orm }: StoreContext) =>
@@ -354,6 +356,7 @@ const toMessage = (row: MessageRow, attachments: Attachment[]): Message => {
     reactions: parsed(row.reactions) ?? null,
     ...present({ providerMetadata: parsed(row.providerMetadata), mentions: parsed(row.mentions) }),
     ...(row.starred === 1 ? { starred: true } : {}),
+    ...present({ delivery: deliveryOf(row.delivery) }),
   } as Message
 }
 

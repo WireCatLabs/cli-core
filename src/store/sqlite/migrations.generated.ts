@@ -561,5 +561,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TABLE `message_reactions` (\n\t`id` integer PRIMARY KEY,\n\t`chat_id` integer NOT NULL,\n\t`message_external_id` text NOT NULL,\n\t`identity_id` integer NOT NULL,\n\t`own` integer NOT NULL,\n\t`reaction` text,\n\t`reacted_at` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_message_reactions_chat_id_chats_id_fk` FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`),\n\tCONSTRAINT `fk_message_reactions_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `message_reactions_chat_id_message_external_id_identity_id_unique` UNIQUE(`chat_id`,`message_external_id`,`identity_id`)\n);",
       "CREATE INDEX `message_reactions_by_identity_id` ON `message_reactions` (`identity_id`);"
     ]
+  },
+  {
+    "name": "20261021221808_version-27-message-delivery",
+    "statements": [
+      "ALTER TABLE `messages` ADD `delivery` integer;"
+    ]
   }
 ]

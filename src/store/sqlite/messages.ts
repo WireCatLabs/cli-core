@@ -2,6 +2,7 @@ import { validCounter } from "../../domain/counters.js"
 import type {
   Attachment,
   ChatKind,
+  Delivery,
   Id,
   Message,
   PersonReaction,
@@ -20,7 +21,7 @@ import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
 import { attachments, chats, messageRevisions, messages, messageTranscripts } from "./schema.js"
 import { intoVoiceAttachment } from "./transcripts.js"
-import { json, parsed, toMs } from "./values.js"
+import { DELIVERY, json, parsed, toMs } from "./values.js"
 import { purgeVectorsOf } from "./vectors.js"
 
 const FIELDS = [
@@ -233,6 +234,12 @@ export const upsertMessage = (
       .set({ starred: message.starred ? 1 : 0 })
       .where(eq(messages.id, pk))
       .run()
+  if (message.delivery !== undefined)
+    orm
+      .update(messages)
+      .set({ delivery: raised(message.delivery) })
+      .where(and(eq(messages.id, pk), eq(messages.outgoing, 1)))
+      .run()
 
   const root = message.threadRootId ?? message.threadId
   if (root !== undefined) {
@@ -320,6 +327,24 @@ export const saveStar = ({ orm }: StoreContext, chatKey: number, messageId: Id, 
     .update(messages)
     .set({ starred: starred ? 1 : 0 })
     .where(and(eq(messages.chatId, chatKey), eq(messages.externalId, messageId), isNull(messages.deletedAt)))
+    .returning({ pk: messages.id })
+    .all().length > 0
+
+const raised = (delivery: Delivery) => sql`max(coalesce(delivery, 0), ${DELIVERY[delivery]})`
+
+/** Answers whether the owner's own message is held. A receipt is for a message the owner sent, so another's keeps none. */
+export const saveDelivery = ({ orm }: StoreContext, chatKey: number, messageId: Id, delivery: Delivery): boolean =>
+  orm
+    .update(messages)
+    .set({ delivery: raised(delivery) })
+    .where(
+      and(
+        eq(messages.chatId, chatKey),
+        eq(messages.externalId, messageId),
+        eq(messages.outgoing, 1),
+        isNull(messages.deletedAt),
+      ),
+    )
     .returning({ pk: messages.id })
     .all().length > 0
 
