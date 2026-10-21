@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { levelFor } from "../../sends/permissions.js"
 import { phoneOf } from "../../services/index.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow, momentOf } from "../../services/moment.js"
 import { maskedAccount } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
@@ -218,11 +218,15 @@ export const contactsCommand = (messenger: Messenger): Command => {
       if (scope !== undefined && !(SCOPES as readonly string[]).includes(scope))
         throw new CliError("validation_error", `--scope is personal or work, not "${scope}"`)
       const context = messengerContext(this, messenger)
+      const window = dateWindow({
+        ...(sinceTime === undefined ? {} : { sinceTime }),
+        ...(untilTime === undefined ? {} : { untilTime }),
+      })
       const found = await context.withServices((services) =>
         services.people.timeline(person, {
           ...(scope === undefined ? {} : { scope: scope as Scope }),
-          ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
-          ...(untilTime === undefined ? {} : { until: momentOf(untilTime, "--until-time", Date.now(), { end: true }) }),
+          ...(window.since === undefined ? {} : { since: window.since }),
+          ...(window.until === undefined ? {} : { until: window.until }),
           ...(limit === undefined ? {} : { limit }),
           ...(cursor === undefined ? {} : { cursor }),
         }),
@@ -243,7 +247,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
             ...(sinceTime === undefined ? {} : { since_time: sinceTime }),
             ...(untilTime === undefined ? {} : { until_time: untilTime }),
           },
-          ...(pending > 0 ? { meta: { truncated: true } } : {}),
+          meta: { ...window.meta, ...(pending > 0 ? { truncated: true } : {}) },
         }),
       )
     })

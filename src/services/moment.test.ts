@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { aheadOf, momentOf } from "./moment.js"
+import { aheadOf, dateWindow, momentOf } from "./moment.js"
 
 const processZone = process.env.TZ
 const inZone = <T>(zone: string, read: () => T): T => {
@@ -60,5 +60,21 @@ describe("aheadOf", () => {
     expect(aheadOf("2026-10-22T09:00", "--due-time", 0, { zone: "Asia/Vladivostok" })).toBe(
       Date.parse("2026-10-21T23:00:00Z"),
     )
+  })
+})
+
+describe("dateWindow", () => {
+  it("names the zone a date was read in and gives the window in UTC", () => {
+    expect(dateWindow({ sinceTime: "2026-09-01", untilTime: "2026-09-01", zone: "Europe/Madrid" }).meta).toEqual({
+      timezone: "Europe/Madrid",
+      window: { since: "2026-08-31T22:00:00.000Z", until: "2026-09-01T21:59:59.999Z" },
+    })
+  })
+
+  it("names no zone when every value carried its own or counted back from now", () => {
+    expect(dateWindow({ sinceTime: "2h", untilTime: "2026-09-01T00:00:00Z", now: 0 }).meta).toEqual({
+      window: { since: "1969-12-31T22:00:00.000Z", until: "2026-09-01T00:00:00.000Z" },
+    })
+    expect(dateWindow({}).meta).toEqual({})
   })
 })

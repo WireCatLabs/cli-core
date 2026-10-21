@@ -40,7 +40,10 @@ describe("stats_charts", () => {
       })
       expect(
         await tool.stored(store, account, { chat: "7", since_time: "2026-01-01", timezone: "UTC" }, defaults),
-      ).toEqual({ item: chatChart(stats, { by: "day", kind: "messages", timezone: "UTC" }) })
+      ).toEqual({
+        item: chatChart(stats, { by: "day", kind: "messages", timezone: "UTC" }),
+        meta: { timezone: "UTC", window: { since: "2026-01-01T00:00:00.000Z" } },
+      })
       const image = await tool.stored(
         store,
         account,

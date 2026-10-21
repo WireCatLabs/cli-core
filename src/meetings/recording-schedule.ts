@@ -44,6 +44,9 @@ const clock = (now: number): Date => {
   return new Date(now)
 }
 const day = (instant: Date): string => instant.toISOString().slice(0, 10)
+/** The calendar day it is at `instant` in the schedule's own zone: the day the owner's daily run belongs to. */
+const localDay = (instant: Date, timeZone: string): string =>
+  new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(instant)
 const identity = (schedule: Omit<RecordingArchiveSchedule, "version" | "id" | "createdAt">): string =>
   createHash("sha256").update(JSON.stringify(schedule)).digest("hex")
 
@@ -64,7 +67,7 @@ export const planRecordingArchiveSchedule = (
     fail("archive schedule requires a valid IANA time zone")
   }
   recordingWindows(input.from, input.from)
-  if (input.from <= day(now)) recordingWindows(input.from, day(now))
+  if (input.from <= localDay(now, input.timeZone)) recordingWindows(input.from, localDay(now, input.timeZone))
   const lookbackDays = input.lookbackDays ?? 7
   const maxBytes = input.maxBytes ?? 20 * 1024 ** 3
   if (!Number.isSafeInteger(lookbackDays) || lookbackDays < 0 || lookbackDays > 31)
@@ -117,10 +120,9 @@ export const recordingArchiveScheduleWindow = (
 ): (RecordingWindow & { recheckFrom: string }) | null => {
   const schedule = parseRecordingArchiveSchedule(value)
   const now = clock(options.now)
-  const through = day(now)
+  const through = localDay(now, schedule.timeZone)
   if (schedule.from > through) return null
-  const floor = new Date(now)
-  floor.setUTCHours(0, 0, 0, 0)
+  const floor = new Date(`${through}T00:00:00Z`)
   // A running job ages beyond its original ten-year discovery interval; saved pending work survives separately.
   const month = floor.getUTCMonth()
   const date = floor.getUTCDate()

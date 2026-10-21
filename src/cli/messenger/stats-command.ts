@@ -9,7 +9,7 @@ import { CHART_SIZE, type ChartKind, type ChartPeriod } from "../../charts/model
 import { chartPng } from "../../charts/png.js"
 import { chartRenderer } from "../../charts/render.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { destroysNothing, LOCAL_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { adminStatisticsCommand } from "./admin-statistics-command.js"
@@ -85,14 +85,9 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
         )
       }
       const timezone = timezoneOf(given)
+      const window = dateWindow({ ...(sinceTime === undefined ? {} : { sinceTime }), zone: timezone })
       const found = await context.withServices((services) =>
-        services.chats.stats(chat, {
-          by,
-          timezone,
-          ...(sinceTime === undefined
-            ? {}
-            : { since: momentOf(sinceTime, "--since-time", Date.now(), { zone: timezone }) }),
-        }),
+        services.chats.stats(chat, { by, timezone, ...(window.since === undefined ? {} : { since: window.since }) }),
       )
       const chart = chatChart(found, { kind: chartKind, by, timezone })
       let chartFile: { path: string; format: "svg" | "png"; width: number; height: number } | undefined
@@ -111,7 +106,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
         context.renderer.note(`chart written to ${path}`)
       }
       if (chart.partial) context.renderer.note("partial data — the chart shows lower bounds")
-      renderAnswer(this, context, chartAnswer(chart, chartFile))
+      renderAnswer(this, context, chartAnswer(chart, chartFile, window.meta))
     })
   return stats
 }

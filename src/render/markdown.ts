@@ -10,12 +10,12 @@ import type { Attachment, Message, QuotedMessage } from "../domain/models.js"
  * as often as in an editor, and a byte that rewrites the screen is nobody's text.
  */
 export const toMarkdown = (title: string, messages: Message[], timeZone?: string): string => {
-  const zone = timeZone ? { timeZone } : {}
+  const zone = { timeZone: timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone }
   const day = new Intl.DateTimeFormat("sv-SE", { ...zone, year: "numeric", month: "2-digit", day: "2-digit" })
   const clock = new Intl.DateTimeFormat("en-GB", { ...zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
   const byId = new Map(messages.map((message) => [message.id, message]))
 
-  const lines = [`# ${literal(singleLine(title))}`]
+  const lines = [`# ${literal(singleLine(title))}`, "", `Times are in ${zone.timeZone}.`]
   let today = ""
   for (const message of messages) {
     const when = new Date(message.timestamp)
