@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.381.0 — 22.10.2026
+
 ### Added
 
 - **People's reactions in the store (store version 26).** For a messenger that sends one person's reaction change at a
