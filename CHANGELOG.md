@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A store the process may not write is a permission error, not a crash.** Opening the store for writing where the
+  file or its folder is read-only (`EROFS`, `EACCES`, `EPERM`) was reported as `internal_error` "this is a bug".
+  It is now `permission_error` (exit 5) with reason `store.not-writable`, and the message names no path.
+
 ## 0.380.0 — 21.10.2026
 
 ### Added
