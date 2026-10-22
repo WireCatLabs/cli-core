@@ -31,6 +31,15 @@ const HISTORY = `CREATE TABLE IF NOT EXISTS schema_migrations (
 
 const latest = (migrations: Migration[]): number => migrations.at(-1)?.version ?? 0
 
+/**
+ * The pre-rename `cli-messaging` store also has `schema_migrations`, with its own, higher numbers ("29, needs at
+ * least 28"). Once ours caught up, the version check alone took it for a compatible file, opened it and would have
+ * migrated it. Version 1 here always creates `meetings`; that store never had one.
+ */
+const OWN_TABLE = "meetings"
+const hasTable = (database: CacheDatabase, name: string): boolean =>
+  database.prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined
+
 const fileState = (database: CacheDatabase): { version: number; minCompatible: number } => {
   const row = database
     .prepare("SELECT version, min_compatible FROM schema_migrations ORDER BY version DESC LIMIT 1")
@@ -50,13 +59,21 @@ export const migrate = (
     migrations = MIGRATIONS,
     now = Date.now,
     command,
-  }: { migrations?: Migration[]; now?: () => number; command?: string } = {},
+    ownTable = OWN_TABLE,
+  }: { migrations?: Migration[]; now?: () => number; command?: string; ownTable?: string | null } = {},
 ): void => {
   const ours = latest(migrations)
   database.exec("BEGIN IMMEDIATE")
   try {
     database.exec(HISTORY)
     const file = fileState(database)
+    if (file.version > 0 && ownTable !== null && !hasTable(database, ownTable)) {
+      throw new CliError(
+        "configuration_error",
+        `the message store was written by another, incompatible tool (schema ${file.version} by its own numbering, ` +
+          "with no meetings table) — this tool will not open or change it; move it aside to start a new store",
+      )
+    }
     if (file.version > ours && file.minCompatible > ours) {
       throw new CliError(
         "configuration_error",

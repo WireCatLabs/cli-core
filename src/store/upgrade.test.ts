@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
@@ -50,4 +50,21 @@ it("advises no other app's command when a migration fails in an app without stor
   expect(() => migrate(database, { migrations: broken })).toThrow(/moving the file aside keeps it as a backup/)
   expect(() => migrate(database, { migrations: broken })).not.toThrow(/store reset/)
   database.close()
+})
+
+it("refuses the pre-rename store, whose own numbering reads as ours, and leaves the file as it was", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "upgrade-")), "messages.db")
+  const foreign = await openCache(path)
+  foreign.exec(
+    "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, min_compatible INTEGER NOT NULL, applied_at INTEGER NOT NULL)",
+  )
+  foreign.exec("CREATE TABLE messages (id INTEGER PRIMARY KEY, text TEXT)")
+  foreign.prepare("INSERT INTO schema_migrations (version, min_compatible, applied_at) VALUES (29, 28, 1)").run()
+  foreign.close()
+  const before = createHash("sha256").update(readFileSync(path)).digest("hex")
+
+  const database = await openCache(path)
+  expect(() => migrate(database)).toThrow(/another, incompatible tool/)
+  database.close()
+  expect(createHash("sha256").update(readFileSync(path)).digest("hex")).toBe(before)
 })

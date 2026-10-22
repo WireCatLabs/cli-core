@@ -24,7 +24,7 @@ const fixture = async () => {
     return db
   }
   const old = await connect()
-  migrate(old, { migrations: [first] })
+  migrate(old, { migrations: [first], ownTable: null })
   old.exec("INSERT INTO fixture_labels(id,name) VALUES(1,'source'),(2,'survivor')")
   return { old, connect }
 }
@@ -40,9 +40,9 @@ const redirectMigration = (minimum: number): Migration => ({
 it("an additive manifest admits an old SDK that does not understand retained source IDs", async () => {
   const { connect } = await fixture()
   const newer = await connect()
-  migrate(newer, { migrations: [first, redirectMigration(1)] })
+  migrate(newer, { migrations: [first, redirectMigration(1)], ownTable: null })
   const reopenedOld = await connect()
-  expect(() => migrate(reopenedOld, { migrations: [first] })).not.toThrow()
+  expect(() => migrate(reopenedOld, { migrations: [first], ownTable: null })).not.toThrow()
   expect(reopenedOld.prepare("SELECT name FROM fixture_labels ORDER BY id").all()).toEqual([
     { name: "source" },
     { name: "survivor" },
@@ -55,9 +55,9 @@ it("an additive manifest admits an old SDK that does not understand retained sou
 it("a breaking manifest rejects old opens but cannot revoke an already-open old handle", async () => {
   const { old, connect } = await fixture()
   const newer = await connect()
-  migrate(newer, { migrations: [first, redirectMigration(2)] })
+  migrate(newer, { migrations: [first, redirectMigration(2)], ownTable: null })
   const reopenedOld = await connect()
-  expect(() => migrate(reopenedOld, { migrations: [first] })).toThrow(
+  expect(() => migrate(reopenedOld, { migrations: [first], ownTable: null })).toThrow(
     expect.objectContaining({ code: "configuration_error" }),
   )
   expect(() =>

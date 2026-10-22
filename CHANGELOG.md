@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A store the pre-rename `cli-messaging` wrote is refused again, and left untouched.** Its `schema_migrations`
+  uses its own, higher numbers ("29, needs at least 28"); since store version 28 the version check took it for a
+  compatible file, opened it and failed on a missing column with `internal_error`, and a later version would have
+  migrated it. A file that has a version but no `meetings` table, which version 1 here always creates, now fails with
+  `configuration_error` (exit 3) before anything runs. `migrate` takes `ownTable: null` for synthetic test schemas.
+
 ## 0.384.0 — 22.10.2026
 
 ### Added
