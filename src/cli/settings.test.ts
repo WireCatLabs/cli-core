@@ -648,3 +648,27 @@ it("preserves public schema entry types when a provider composes permission sett
   const names: string[] = keys
   expect(names).toEqual(["permissions", "custom"])
 })
+
+describe("retired read-receipt setting", () => {
+  it.each([true, false])("refuses catch_up_marks_read=%s with a migration hint", (value) => {
+    withConfig(JSON.stringify({ profiles: { personal: { catch_up_marks_read: value } } }))
+    expect(() => settings()).toThrowError(
+      expect.objectContaining({
+        code: "configuration_error",
+        message: expect.stringContaining("chats mark-read"),
+      }),
+    )
+  })
+  it("refuses the setting accepted by a consumer's older schema", () => {
+    withConfig(JSON.stringify({ profiles: { personal: { catch_up_marks_read: true } } }))
+    const legacy = settingsFor(
+      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "1" },
+      {
+        schema: v.looseObject({ profiles: v.record(v.string(), v.looseObject({})) }),
+      },
+    )
+    expect(() => legacy.resolveSettings({ profile: "personal" }, { env: {}, configDir })).toThrowError(
+      expect.objectContaining({ code: "configuration_error", message: expect.stringContaining("chats mark-read") }),
+    )
+  })
+})

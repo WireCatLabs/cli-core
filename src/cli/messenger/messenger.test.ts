@@ -1110,7 +1110,7 @@ describe("the shared read commands", () => {
     ])
   })
 
-  it("**messages list marks the chat read only with --mark-read**, up to the newest message shown", async () => {
+  it("**messages list never marks the chat read and refuses --mark-read**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const marks: unknown[] = []
@@ -1129,9 +1129,8 @@ describe("the shared read commands", () => {
     const offline = await call(["messages", "list", "Book", "--mark-read", "--offline"], async () => reading, env)
     const lonelyModel = await call(["messages", "list", "Book", "--model", "gigaam-v3"], async () => reading, env)
 
-    const newest = JSON.parse(marked.stdout[0] ?? "").items.at(-1).id
-    expect(marked.stderr.join("\n")).toMatch(new RegExp(`marked read up to ${newest} \\(operation \\S+\\)`))
-    expect(marks).toEqual([["7", newest]])
+    expect(marked.code).toBe(2)
+    expect(marks).toEqual([])
     expect(offline.code).toBe(2)
     expect(lonelyModel.code).toBe(2)
     expect(lonelyModel.stderr.join("\n")).toContain("add --transcribe")

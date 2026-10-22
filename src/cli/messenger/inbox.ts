@@ -6,11 +6,11 @@ import { renderMessages } from "../../render/messages.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { modelWith } from "../../speech/hearing.js"
-import { ownerOnlyOption, REMOTE_READ } from "../effects.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
-import { MARK_READ_OPTION, markShown, marksRead, NO_MARK_READ_OPTION, pointsOf } from "./catch-up.js"
+import { pointsOf } from "./catch-up.js"
 import { catchUpQuery, INBOX_QUERY, inboxAnswer } from "./catch-up-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { hearForCommand, MODEL_OPTION, spokenItems, TRANSCRIBE_OPTION } from "./hearing-command.js"
@@ -48,8 +48,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
     .option("--kind <kinds>", `only chats of these kinds, comma-separated: ${CHAT_KINDS.join(", ")}`)
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
-    .addOption(ownerOnlyOption(...MARK_READ_OPTION))
-    .addOption(ownerOnlyOption(...NO_MARK_READ_OPTION))
+    .addHelpText("after", "To mark a chat read, use `chats mark-read <chat>`. The other side sees it.")
     .action(async function (this: Command, query: string[]) {
       const {
         new: fresh,
@@ -57,14 +56,12 @@ export const inboxCommand = (messenger: Messenger): Command =>
         kind,
         transcribe,
         model,
-        markRead,
       } = this.opts<{
         new?: boolean
         all?: boolean
         kind?: string
         transcribe?: boolean
         model?: string
-        markRead?: boolean
       }>()
       const hearWith = modelWith(transcribe, model)
       const context = messengerContext(this, messenger)
@@ -85,8 +82,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
           : undefined
       const from = since ?? saved?.first
       const points = saved?.chats
-      const marking = marksRead(markRead, settings, this)
-      const { inbox, hearing, marked, reader } = await context.withServices(async (services, connect) => {
+      const { inbox, hearing, reader } = await context.withServices(async (services, connect) => {
         const inbox = await services.inbox.read({
           ...(from === undefined ? {} : { since: from }),
           ...(points === undefined ? {} : { points }),
@@ -99,11 +95,9 @@ export const inboxCommand = (messenger: Messenger): Command =>
           chat.messages.map((message) => ({ ...message, chatTitle: chat.title })),
         )
         const hearing = await hearForCommand(context, messenger, read, transcribe === true, hearWith, connect)
-        const marked = marking ? await markShown(services, inbox.chats, renderer.warn) : undefined
-        return { inbox, hearing, marked, reader }
+        return { inbox, hearing, reader }
       })
 
-      if (marked !== undefined) renderer.note(`marked ${marked.length} chat(s) read up to the newest message shown`)
       if (inbox.partial && format === "pretty") renderer.warn(PARTIAL_NOTE)
       const answer = inboxAnswer(inbox, hearing, reader, transcribe === true, meta)
       renderAnswer(this, context, answer, () => {

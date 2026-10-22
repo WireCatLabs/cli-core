@@ -197,11 +197,11 @@ describe("read hearing lifecycle", () => {
     expect(answer.body.items).toEqual([])
   })
 
-  it("marks read only when requested, on the held connection before hearing", async () => {
+  it("hears without sending a read receipt", async () => {
     const test = fixture()
-    const answer = await test.execute(["messages", "list", "9", "--transcribe", "--mark-read"])
+    const answer = await test.execute(["messages", "list", "9", "--transcribe"])
     expect(answer.code).toBe(0)
-    expect(test.events).toEqual(["connect", "mark-read", "transcribe", "closed"])
+    expect(test.events).toEqual(["connect", "transcribe", "closed"])
     expect(answer.body.items.at(-1).id).toBe("1")
   })
 

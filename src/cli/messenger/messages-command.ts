@@ -8,7 +8,7 @@ import { renderThreadLinks } from "../../render/thread-context.js"
 import { readMail } from "../../services/mail-search.js"
 import { modelWith, spoken } from "../../speech/hearing.js"
 import type { AccountKey } from "../../store/store.js"
-import { ownerOnlyOption, REMOTE_READ } from "../effects.js"
+import { REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -63,41 +63,23 @@ export const messagesCommand = (messenger: Messenger): Command => {
     .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it")
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
-    .addOption(
-      ownerOnlyOption(
-        "--mark-read",
-        "also mark the chat read up to the newest message shown; the other person sees it",
-      ),
-    )
+    .addHelpText("after", "To mark a chat read, use `chats mark-read <chat>`. The other side sees it.")
     .action(async function (this: Command, chat: string, query: string[]) {
       const context = messengerContext(this, messenger)
-      const { cursor, transcribe, model, markRead } = this.opts<{
+      const { cursor, transcribe, model } = this.opts<{
         cursor?: string
         transcribe?: boolean
         model?: string
-        markRead?: boolean
       }>()
       const window = historyWindow(query, cursor, "messages list", history)
       const hearWith = modelWith(transcribe, model)
-      if (markRead && window.threadId !== undefined) {
-        throw new CliError(
-          "validation_error",
-          "--mark-read marks the whole chat; use `chats mark-read --topic` for one",
-        )
-      }
-      if (markRead && context.settings.offline) {
-        throw new CliError("validation_error", "--mark-read tells the messenger; not with --offline")
-      }
       const { limit } = context.settings
-      const { page, hearing, marked, reader } = await context.withServices(async (services, connect) => {
+      const { page, hearing, reader } = await context.withServices(async (services, connect) => {
         const page = await services.messages.list(chat, { limit, ...window })
         const reader = await services.messages.reader()
-        const newest = page.items.at(-1)
-        const marked = markRead && newest ? await services.chats.markRead({ chat, until: newest.id }) : undefined
         const hearing = await hearForCommand(context, messenger, page.items, transcribe === true, hearWith, connect)
-        return { page, hearing, marked, reader }
+        return { page, hearing, reader }
       })
-      if (marked) context.renderer.note(`marked read up to ${marked.until} (operation ${marked.operationId})`)
       const next = page.hasMore
         ? cursorOf(window, { first: page.items[0]?.id, last: page.items.at(-1)?.id })
         : undefined

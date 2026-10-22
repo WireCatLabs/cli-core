@@ -516,25 +516,17 @@ describe("inbox --new", () => {
     expect((await review(["--new", "--unanswered"])).code).toBe(2)
   })
 
-  it("marks read only when asked — up to the newest message shown — or when the setting says so", async () => {
-    const chats = [recentChat("g", 2), recentChat("d", 1, "dialog")]
-    const { inbox, review, marks, configure } = setup({ g: [recentMessage("g", 2)], d: [recentMessage("d", 1)] }, chats)
-
-    await inbox(["date>1d"])
+  it("reads never mark chats read and refuse the removed flags", async () => {
+    const chats = [recentChat("g", 2)]
+    const { inbox, review, marks } = setup({ g: [recentMessage("g", 2)] }, chats)
+    expect((await inbox(["date>1d"])).code).toBe(0)
+    expect((await review(["date>1d"])).code).toBe(0)
+    for (const read of [inbox, review]) {
+      for (const flag of ["--mark-read", "--no-mark-read"]) {
+        expect((await read(["date>1d", flag])).code).toBe(2)
+      }
+    }
     expect(marks).toEqual([])
-    const asked = await inbox(["date>1d", "--kind", "dialog", "--mark-read"])
-    expect(marks).toEqual([["d", "d-1"]])
-    expect(chatIds(asked.answer)).toEqual(["d"])
-    expect(asked.stderr).toContain("marked 1 chat(s) read up to the newest message shown")
-
-    configure({ catch_up_marks_read: true })
-    await review(["date>1d", "--kind", "group"])
-    await inbox(["date>1d", "--no-mark-read"])
-    expect(marks).toEqual([
-      ["d", "d-1"],
-      ["g", "g-1"],
-    ])
-    expect((await inbox(["date>1d", "--mark-read", "--offline"])).code).toBe(2)
   })
 
   it("**still shows the inbox while writes are held**, and marks nothing read", async () => {
@@ -542,11 +534,10 @@ describe("inbox --new", () => {
     const { inbox, marks, env } = setup({ d: [recentMessage("d", 1)] }, chats)
     new FloodMemory(join(env.CHAT_STATE_DIR, "flood", "default.json")).block({ state: "banned", hint: "banned" })
 
-    const shown = await inbox(["date>1d", "--mark-read"])
+    const shown = await inbox(["date>1d"])
 
     expect(shown.code).toBe(0)
     expect(chatIds(shown.answer)).toEqual(["d"])
     expect(marks).toEqual([])
-    expect(shown.stderr).toContain("holds its writes until lifted")
   })
 })

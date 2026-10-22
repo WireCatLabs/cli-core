@@ -75,7 +75,6 @@ const SHARED_PROFILE_ENTRIES = {
   requests_per_minute: v.optional(countOrZero),
   transcribe_with: v.optional(v.picklist(["auto", "messenger", "local"], plain("has to be auto, messenger or local"))),
   speech_model: v.optional(v.string(plain("has to be a model id from `models audio list`, in quotes"))),
-  catch_up_marks_read: v.optional(flag),
   search_catch_up: v.optional(flag),
   picture_search: v.optional(flag),
   ...AI_ENTRIES,
@@ -175,8 +174,6 @@ export interface Settings extends AISettings {
   /** Unset means "decide from the terminal", which is `resolveOutput`'s job, not this one's. */
   color: boolean | undefined
   senderColors: boolean
-  /** `inbox` and `review` mark each chat they show read, as `--mark-read` does; the other side sees it. Off unless set. */
-  catchUpMarksRead: boolean
   searchCatchUp?: boolean
   /** Search and `images embed` read the pictures themselves, with a model on this machine. Off until set. */
   pictureSearch?: boolean
@@ -312,7 +309,13 @@ export const settingsFor = <T extends object = Record<never, never>>(
     try {
       return loadSnakeCaseConfig(path, extension.schema ?? schema, () => ({ profiles: {} })) as Config
     } catch (error) {
-      throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      throw new CliError(
+        "configuration_error",
+        message.includes("catch_up_marks_read")
+          ? `${message}; remove catch_up_marks_read from the config file and use ${app.command} <profile> chats mark-read <chat>`
+          : message,
+      )
     }
   }
 
@@ -405,6 +408,12 @@ export const settingsFor = <T extends object = Record<never, never>>(
         only.map(([from, scope]): [Source, T | undefined] => [from, scope?.[key] as T | undefined]),
         fallback,
       )
+    if (fromLayers("catch_up_marks_read", undefined).value !== undefined) {
+      throw new CliError(
+        "configuration_error",
+        `remove catch_up_marks_read from the config file and use ${app.command} <profile> chats mark-read <chat>`,
+      )
+    }
     const kindLayers = layers.filter(([from]) => from.startsWith(`config file: ${kind}.`))
 
     const limit = flags.limit === undefined ? fromLayers("limit", DEFAULT_LIMIT) : { value: flags.limit, from: "flag" }
@@ -412,7 +421,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const timeoutMs = fromLayers<number | undefined>("timeout_ms", undefined)
     const color = fromLayers<boolean | undefined>("color", undefined)
     const senderColors = fromLayers("sender_colors", false)
-    const catchUpMarksRead = fromLayers("catch_up_marks_read", false)
     const searchCatchUp = fromLayers("search_catch_up", false)
     const pictureSearch = fromLayers("picture_search", false)
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
@@ -473,7 +481,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
       offline: flags.offline === true,
       color: color.value,
       senderColors: senderColors.value,
-      catchUpMarksRead: catchUpMarksRead.value,
       searchCatchUp: searchCatchUp.value,
       pictureSearch: pictureSearch.value,
       limit: limit.value,
@@ -508,7 +515,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
         commandTimeoutMs: timeout.from,
         color: color.from,
         senderColors: senderColors.from,
-        catchUpMarksRead: catchUpMarksRead.from,
         searchCatchUp: searchCatchUp.from,
         pictureSearch: pictureSearch.from,
         record: record.from,

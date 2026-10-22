@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { TAGGING_QUERY, type TaggingItem, type TagTargetInput, type TagTargetView } from "../../services/tags.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { changesStore, FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -38,7 +38,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
     "your own labels on chats, people, messages and tasks, kept in the local store and never sent; tag: in a search finds them",
   )
 
-  annotate(tags.command("auto"), { effects: LOCAL_WRITE })
+  changesStore(annotate(tags.command("auto"), { effects: FETCH }))
     .description("derive local group/channel tags from cached metadata using keyword rules")
     .option(
       "--chat <chat>",

@@ -104,7 +104,11 @@ describe("command effects", () => {
   it("refuse under the read-only lock every local write but what destroys nothing that cannot be got back", () => {
     const localWrites = commands.filter(({ command }) => {
       const effects = metaOf(command).effects
-      return effects?.remote === "none" && effects.local === "write" && !changesAuthority(command)
+      return (
+        (effects?.remote === "none" || isStoreChange(command)) &&
+        effects?.local === "write" &&
+        !changesAuthority(command)
+      )
     })
     const refused = localWrites.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)
     const kept = localWrites.filter(({ command }) => !isStoreChange(command)).map(({ path }) => path)
@@ -172,8 +176,10 @@ describe("command effects", () => {
       ].sort(),
     )
     expect(
-      commands.filter(({ command }) => isStoreChange(command) && metaOf(command).effects?.remote !== "none"),
-    ).toEqual([])
+      commands
+        .filter(({ command }) => isStoreChange(command) && metaOf(command).effects?.remote !== "none")
+        .map(({ path }) => path),
+    ).toEqual(["tags auto"])
   })
 
   it("let through every task write the follow-ups skill makes on a timer, but the owner's tasks reject", () => {

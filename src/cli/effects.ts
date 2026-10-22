@@ -63,6 +63,14 @@ export const destroysNothing = <T extends Command>(command: T): T => {
   return command
 }
 
+const STORE_WRITES = new WeakSet<Command>()
+
+/** A local edit remains an edit even when it first fetches metadata from the messenger. */
+export const changesStore = <T extends Command>(command: T): T => {
+  STORE_WRITES.add(command)
+  return command
+}
+
 /**
  * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
  * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
@@ -71,8 +79,8 @@ export const destroysNothing = <T extends Command>(command: T): T => {
 export const isStoreChange = (command: Command): boolean => {
   const effects = metaOf(command).effects
   return (
-    effects?.remote === "none" &&
-    effects.local === "write" &&
+    (effects?.remote === "none" || STORE_WRITES.has(command)) &&
+    effects?.local === "write" &&
     !KEPT_UNDER_LOCK.has(command) &&
     !changesAuthority(command)
   )
