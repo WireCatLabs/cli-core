@@ -10,6 +10,25 @@ const scaffolding = new Set(
 )
 const questionWord =
   /\b(?:what|which|how|who|where|when|can|could|should)\b|(?:^|\s)(?:сколько|какой|какая|какие|какое|кто|кому|кем|где|когда|как|что|можно|может|могут|ли)(?:\s|$)/iu
+const QUESTION_STARTS = new Set(
+  words(
+    "what which how who whom whose where when why can could should would did do does is are was were will " +
+      "что кто кого кому кем где когда как какой какая какое какие какую каким какого каких почему зачем откуда " +
+      "куда сколько ли можно разве чей чья чьё чьи",
+  ),
+)
+const QUESTION_FILLER = new Set(
+  words("about any did does why whom whose would will это мы вы я они он она о об про ли"),
+)
+/**
+ * A question's content words — «что решили по цене?» → решили, цене — or null when the text is not a question: it
+ * ends with «?» or starts with a question word.
+ */
+export const questionTerms = (text: string): string[] | null =>
+  /\?\s*$/u.test(text) || QUESTION_STARTS.has(words(text)[0] ?? "")
+    ? words(text).filter((word) => !scaffolding.has(word) && !QUESTION_STARTS.has(word) && !QUESTION_FILLER.has(word))
+    : null
+
 export function planQuestion(text: string, strict = false) {
   if (strict)
     return {

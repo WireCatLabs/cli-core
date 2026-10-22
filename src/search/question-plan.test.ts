@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "vitest"
-import { planQuestion } from "./question-plan.js"
+import { planQuestion, questionTerms } from "./question-plan.js"
 
 test("question scaffolding changes while content and filters survive", () => {
   const plan = planQuestion("How many days are logs kept for Canyon log retention? chat:301 from:700")
@@ -105,4 +105,11 @@ test("permission questions preserve subjects, negation and scope", () => {
   assert.ok(planQuestion("Подрядчики не могут подключиться к Лотос?").terms.includes("не"))
   for (const text of ["Can access Nimbus AND vendors?", "Can access Nim*?", "Nimbus report?", "Nimbus canary?"])
     assert.deepEqual(planQuestion(text).queries, [text])
+})
+
+test("questionTerms keeps a question's content words and leaves other text alone", () => {
+  assert.deepEqual(questionTerms("какую скидку дали?"), ["скидку", "дали"])
+  assert.deepEqual(questionTerms("почему перенесли релиз"), ["перенесли", "релиз"])
+  assert.deepEqual(questionTerms("did we book the hotel"), ["book", "hotel"])
+  assert.equal(questionTerms("риелтор ипотека"), null)
 })

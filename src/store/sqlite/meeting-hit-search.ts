@@ -2,11 +2,11 @@ import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
 import { formatMeetingReference, parseMeetingQuery } from "../../meetings/index.js"
-import type { SqlValue } from "../driver.js"
 import { matchMeetingText, meetingQuerySql, resolveMeetingQuery } from "./meeting-hit-query.js"
 import { indexedText } from "./meeting-index-values.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
+import { meetingSelectionSql } from "./meeting-selection.js"
 import { meetingStemState } from "./meeting-stem-state.js"
 import type { StoreContext } from "./open.js"
 import { read } from "./transaction.js"
@@ -128,51 +128,8 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             pending || !state.stemmer || state.through < state.watermark ? ("pending" as const) : ("ready" as const),
           indexCompleteness: "unknown" as const,
         }
-        const clauses = ["m.account_id=?", "m.deleted_at IS NULL"]
         const { sql: matching, params: queryParams } = meetingQuerySql(tree, state)
-        const params: SqlValue[] = [input.accountId]
-        if (input.meetingId !== undefined) {
-          clauses.push("m.id=?")
-          params.push(input.meetingId)
-        }
-        if (input.eventId !== undefined) {
-          clauses.push("m.event_id=?")
-          params.push(input.eventId)
-        }
-        if (input.meetingSeriesId !== undefined) {
-          clauses.push("m.meeting_series_id=?")
-          params.push(input.meetingSeriesId)
-        }
-        if (input.since !== undefined) {
-          clauses.push("m.started_at>=?")
-          params.push(input.since)
-        }
-        if (input.until !== undefined) {
-          clauses.push("m.started_at<=?")
-          params.push(input.until)
-        }
-        if (input.participantIdentityId !== undefined) {
-          clauses.push("EXISTS (SELECT 1 FROM meeting_participants p WHERE p.meeting_id=m.id AND p.identity_id=?)")
-          params.push(input.participantIdentityId)
-        }
-        if (input.personId !== undefined) {
-          clauses.push(
-            "EXISTS (SELECT 1 FROM meeting_participants p JOIN identity_links i ON i.identity_id=p.identity_id JOIN persons person ON person.id=i.person_id WHERE p.meeting_id=m.id AND person.id=?)",
-          )
-          params.push(input.personId)
-        }
-        if (input.projectId !== undefined) {
-          clauses.push(
-            "EXISTS (SELECT 1 FROM links l JOIN projects p ON p.id=l.to_id WHERE l.from_type='meeting' AND l.from_id=m.id AND l.to_type='project' AND l.kind='member-of' AND l.anchor IS NULL AND l.confirmed=1 AND p.id=? AND p.account_id IS NULL AND p.deleted_at IS NULL)",
-          )
-          params.push(input.projectId)
-        }
-        if (input.tagId !== undefined) {
-          clauses.push(
-            "EXISTS (SELECT 1 FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type='meeting' AND g.taggable_id=m.id AND t.id=?)",
-          )
-          params.push(input.tagId)
-        }
+        const { clauses, params } = meetingSelectionSql(input)
         const seek = after
           ? "WHERE h.tier>? OR (h.tier=? AND (h.started<? OR (h.started=? AND (h.meeting_id>? OR (h.meeting_id=? AND (h.kind>? OR (h.kind=? AND h.id>?)))))))"
           : ""

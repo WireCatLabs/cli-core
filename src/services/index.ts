@@ -259,6 +259,11 @@ export {
 } from "./document-pictures.js"
 export type { ModelChoice } from "./embeddings.js"
 export { createMeetingBatchReader } from "./meeting-batch.js"
+export {
+  type MeetingCombinedHit,
+  type MeetingCombinedRequest,
+  searchMeetingsCombined,
+} from "./meeting-combined.js"
 export type {
   MeetingCommunicationCoverage,
   MeetingCommunicationExcerpt,
