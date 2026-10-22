@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.386.0 — 22.10.2026
+
 ### Added
 
 - **Document sync works both ways.** `pushDocuments` reads every mirrored file back on each run and merges changes
