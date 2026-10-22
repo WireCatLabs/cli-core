@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type {
   Attachment,
   ChatLine,
+  MeetingChatLinesStore,
   MeetingContextStore,
   MeetingDetails,
   MeetingFilter,
@@ -33,6 +34,7 @@ import * as eventQueries from "./events.js"
 import { fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { meetingIdentityPk } from "./identities.js"
+import { meetingChatLinesOver } from "./meeting-chat-lines.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
@@ -765,7 +767,8 @@ export type StoredMeetings = MeetingStore &
   MeetingContextStore &
   MeetingSearchIndexStore &
   MeetingStatsStore &
-  MeetingReviewStore
+  MeetingReviewStore &
+  MeetingChatLinesStore
 
 /** The `MeetingStore` of `src/meetings/` over the shared store. */
 export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
@@ -780,6 +783,7 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     ...meetingHitSearchOver(context),
     ...meetingStatsOver(context),
     ...meetingReviewOver(context),
+    ...meetingChatLinesOver(context),
     ...meetingParticipantSearchOver(context),
     ...meetingHitIndexOver(context),
     ...meetingContextLinksOver(context),

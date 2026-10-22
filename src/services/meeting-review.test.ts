@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
+import { readMeetingLinks } from "./meeting-links.js"
 import { readMeetingReview } from "./meeting-review.js"
 
 const stores: MessageStore[] = []
@@ -89,4 +90,48 @@ it("keeps to the selection and says when more meetings match than it shows", asy
   const first = await readMeetingReview(store, { accountId, limit: 1 })
   expect(first).toMatchObject({ hasMore: true, items: [{ title: "Example silent" }] })
   await expect(readMeetingReview(store, { accountId, limit: 201 })).rejects.toMatchObject({ code: "validation_error" })
+})
+
+it("lists links shared in meeting chat, most shared first, with who shared them and where", async () => {
+  const { store, accountId } = await fixture()
+  const input = sampleMeeting()
+  input.meeting.accountId = accountId
+  input.meeting.externalId = "example-links"
+  input.meeting.title = "Example links"
+  input.meeting.startedAt = MONDAY + 4 * DAY
+  delete input.meeting.series
+  input.transcripts[0].contentHash = "invented-links"
+  const line = input.chat[0]
+  input.chat = [
+    {
+      ...line,
+      externalId: "example-1",
+      sentAt: MONDAY + 4 * DAY,
+      text: "Plan: https://example.com/plan?utm_source=x.",
+    },
+    {
+      ...line,
+      externalId: "example-2",
+      sentAt: MONDAY + 4 * DAY + 60_000,
+      senderParticipantPosition: null,
+      senderName: "Bob Sample",
+      text: "Again https://example.com/plan and https://docs.google.com/document/d/EXAMPLEdocumentId123/edit",
+    },
+  ] as typeof input.chat
+  await store.meetings.saveMeeting(input)
+  const links = await readMeetingLinks(store, { accountId })
+  expect(links).toMatchObject({ messages: 4, meetings: 3 })
+  expect(links.items.map(({ url, count, senders, documentId }) => ({ url, count, senders, documentId }))).toEqual([
+    { url: "https://example.com/plan", count: 2, senders: ["Alice Example", "Bob Sample"], documentId: null },
+    {
+      url: "https://docs.google.com/document/d/EXAMPLEdocumentId123/edit",
+      count: 1,
+      senders: ["Bob Sample"],
+      documentId: "EXAMPLEdocumentId123",
+    },
+  ])
+  expect(links.items[0]?.meetings.map((one) => one.title)).toEqual(["Example links"])
+  await expect(readMeetingLinks(store, { accountId, maxMessages: 3 })).rejects.toMatchObject({
+    code: "validation_error",
+  })
 })
