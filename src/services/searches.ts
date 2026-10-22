@@ -3,7 +3,7 @@ import { parseLucene, type QueryAst } from "@wirecat/cli-base/query"
 import type * as v from "valibot"
 import type { savedSearch } from "../entities/saved-search.js"
 import { validateAst, validateFields } from "../search/lucene/registry.js"
-import { SEARCH_QUERY } from "../search/lucene/types.js"
+import { MESSAGE_PARSING } from "../search/lucene/types.js"
 import type { MessageStore, StoredSearch } from "../store/store.js"
 import { isAdminSelection, readAdminSelection } from "./admin-statistics.js"
 import type { ServiceDeps } from "./deps.js"
@@ -66,7 +66,7 @@ const checked = (params: SearchParams): SearchParams => {
     throw new CliError("validation_error", "give query text or an AST, not both")
   if (params.ast !== undefined) validateAst(params.ast)
   else if (params.text !== undefined)
-    validateFields(parseLucene(params.text, { ...SEARCH_QUERY, defaultField: params.exact ? "exact" : "text" }))
+    validateFields(parseLucene(params.text, { ...MESSAGE_PARSING, defaultField: params.exact ? "exact" : "text" }))
   return params
 }
 
@@ -87,7 +87,7 @@ const both = (stored: QueryAst, words: string): QueryAst => ({
     kind: "boolean",
     clauses: [
       { occur: "must", node: stored.root },
-      { occur: "must", node: parseLucene(words, SEARCH_QUERY).root },
+      { occur: "must", node: parseLucene(words, MESSAGE_PARSING).root },
     ],
     span: { start: 0, end: 0 },
   },

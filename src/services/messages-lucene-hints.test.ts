@@ -83,15 +83,39 @@ describe("strict search hints", () => {
     expect(await ids(store, "exact:мой AND body:/(.*[^а-яёА-ЯЁ])?[Мм]ой([^а-яёА-ЯЁ].*)?/")).toEqual([1, 2])
   })
 
-  it("explains that ~ is not strict search and where fuzzy matching is", async () => {
+  it("explains that word~1 is not strict search and where fuzzy matching is", async () => {
     const store = await open({ "1": ["alpha beta"] })
     const fuzzy = await failure(run(store, "alpha~1"))
     expect(fuzzy.details).toMatchObject({ reason: "query.unsupported-operator" })
     expect(fuzzy.message).not.toContain("legacy")
     expect(fuzzy.message).toContain("word*")
-    const proximity = await failure(run(store, '"alpha beta"~2'))
-    expect(proximity.message).toContain("proximity")
-    expect(proximity.message).not.toContain("legacy")
+  })
+
+  it('**"a b"~N finds the words at most N words apart in one message, in any order**', async () => {
+    const store = await open({ "1": ["alpha x beta", "alpha x y z beta", "beta alpha", "alpha", "beta"] })
+    expect(await ids(store, '"alpha beta"~2')).toEqual([1, 3])
+    expect(await ids(store, '"alpha beta"~0')).toEqual([3])
+    expect(await ids(store, '"alpha beta"~3')).toEqual([1, 2, 3])
+    expect(await ids(store, 'exact:"alpha beta"~2 AND NOT "alpha x"')).toEqual([3])
+  })
+
+  it("does not bridge a text's English and Spanish stems, kept one after the other", async () => {
+    const store = await open({ "1": ["betas x y z alphas", "alphas x betas"] })
+    expect(await ids(store, '"alpha beta"~2')).toEqual([2])
+  })
+
+  it("matches any form of the words under ~N, and only the typed forms under exact:", async () => {
+    const store = await open({ "1": ["договора по квартире подписали", "договор и квартира"] })
+    expect(await ids(store, '"договор квартира"~2')).toEqual([1, 2])
+    expect(await ids(store, 'exact:"договор квартира"~2')).toEqual([2])
+  })
+
+  it("refuses ~N on a field that is not words, and a distance over 50", async () => {
+    const store = await open({ "1": ["alpha beta"] })
+    expect((await failure(run(store, 'from:"alice bob"~2'))).details).toMatchObject({
+      reason: "query.unsupported-operator",
+    })
+    expect((await failure(run(store, '"alpha beta"~51'))).details).toMatchObject({ reason: "query.invalid-number" })
   })
 
   it("names the term and the budget when a short prefix expands to too many words, whatever the chat", async () => {

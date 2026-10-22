@@ -5,7 +5,12 @@ export const queryWords = (query: string): string[] =>
   query
     .toLowerCase()
     .split(/\s+/)
-    .map((word) => word.replace(/^[\p{L}_]+:/u, "").replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
+    .map((word) =>
+      word
+        .replace(/^[\p{L}_]+:/u, "")
+        .replace(/~\d+$/u, "")
+        .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""),
+    )
     .filter((word) => word.length > 2 && !["and", "or", "not"].includes(word))
 
 /**

@@ -20,7 +20,11 @@ shape of this file.
 - Unknown permission keys now refuse messenger commands with `configuration_error`, including typos after
   the resource name such as `messages.sedn`. Correct the key or remove it with `config unset`; a warning
   no longer leaves the intended restriction unenforced.
-
+- **Message search reads `"a b"~N`: the words at most N words apart in one message, in any order.** It was a
+  `query.unsupported-operator` error; now it is syntax for `text:`, `exact:`, `transcript:`, `content:` and a bare
+  word, N up to 50 (`query.invalid-number` above). Words match in any form, as in a phrase; `exact:` keeps the typed
+  forms. Unlike Lucene, order costs nothing: `"a b"~0` finds "b a" too. `word~1` stays an error. A saved search may
+  now hold `~N`. `QUERY_OPERATORS` splits the `fuzzy / proximity` row into `proximity` and `fuzzy`.
 
 ## 0.389.0 — 22.10.2026
 

@@ -1,6 +1,6 @@
 import { implicitTextTerms, parseLucene, walkQuery } from "@wirecat/cli-base/query"
 import { normalize } from "../store/normalize.js"
-import { SEARCH_QUERY } from "./lucene/types.js"
+import { MESSAGE_PARSING } from "./lucene/types.js"
 
 export const words = (text: string) => normalize(text).match(/[\p{L}\p{N}]+/gu) ?? []
 const scaffolding = new Set(
@@ -41,7 +41,7 @@ export function planQuestion(text: string, strict = false) {
       removed: [] as string[],
       aliases: [] as string[],
     }
-  const inputAst = parseLucene(text, SEARCH_QUERY)
+  const inputAst = parseLucene(text, MESSAGE_PARSING)
   const rawTextual = walkQuery(inputAst.root).filter((node) => node.field === "text" || node.field === "exact")
   const body = rawTextual.map((node) => node.value).join(" ")
   const prefix = words(body).slice(0, 2)
@@ -81,7 +81,7 @@ export function planQuestion(text: string, strict = false) {
     if (last?.operator === "wildcard" && text[mark] === "?") cleaned = text.slice(0, mark) + text.slice(mark + 1)
   }
 
-  const ast = cleaned === text ? inputAst : parseLucene(cleaned, SEARCH_QUERY)
+  const ast = cleaned === text ? inputAst : parseLucene(cleaned, MESSAGE_PARSING)
   const predicates = walkQuery(ast.root)
   const textual = predicates.filter((p) => p.field === "text" || p.field === "exact")
   const fields = predicates.filter((p) => p.field !== "text" && p.field !== "exact")

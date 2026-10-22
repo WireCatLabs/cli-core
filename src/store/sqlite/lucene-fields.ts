@@ -9,6 +9,7 @@ import type { QueryExecution, ResolvedPredicate } from "../../search/lucene/reso
 import { isStemmed } from "../../search/lucene/resolved.js"
 import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import { inSource } from "../../search/query.js"
+import { STEM_SEPARATOR } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { linkMatch } from "./mention-links.js"
@@ -43,6 +44,13 @@ export interface Corpus {
 /** A voice note's transcript is its attachment's text, written by speech recognition (`speech:<model>`). */
 export const SPEECH = "coalesce(att.extractor,'') LIKE 'speech:%'"
 export const quoted = (value: string) => `"${value.replaceAll('"', '""')}"`
+/** A leaf's words as an FTS5 match: a phrase, or with `~N` its words at most N apart, in any order. */
+export const ftsMatch = (node: ResolvedPredicate): string => {
+  const text = normalize(node.value)
+  const words = node.slop === undefined ? [] : (text.match(/[\p{L}\p{N}\p{Co}\p{M}]+/gu) ?? [])
+  return words.length > 1 ? nearMatch(words, node.slop as number) : quoted(text)
+}
+const nearMatch = (words: string[], apart: number) => `NEAR(${words.map(quoted).join(" ")}, ${apart})`
 export const combine = (parts: Fragment[], operator: "AND" | "OR"): Fragment => ({
   sql: parts.length ? `(${parts.map(({ sql }) => sql).join(` ${operator} `)})` : operator === "AND" ? "1" : "0",
   params: parts.flatMap(({ params }) => params),
@@ -96,7 +104,7 @@ export interface FieldScope {
   patternOf: (pattern: string, node: ResolvedPredicate) => Automaton
   expanded: Map<string, Fragment>
   attachmentWords: (match: string, which: "file" | "transcript" | "any") => { sql: string; params: SqlValue[] }
-  everywhere: (node: ResolvedPredicate, text: string, fragment: Fragment) => Fragment
+  everywhere: (node: ResolvedPredicate, fragment: Fragment) => Fragment
   /** Counts the patterns' expanded words against the query's budget. */
   expand: (count: number) => number
 }
@@ -118,22 +126,85 @@ const mentioned = ({ mail }: FieldScope, where: string, params: SqlValue[]) =>
         ...params,
         ...params,
       )
-const stemsOf = ({ execution }: FieldScope, text: string) => execution.stemmer?.phrases(text)
+const stemsOf = ({ execution: { stemmer } }: FieldScope, node: ResolvedPredicate) => {
+  if (node.slop === undefined) return stemmer?.phrases(node.value)
+  const sequences = (stemmer?.stemSequences(node.value) ?? []).filter((sequence) => sequence.length)
+  return sequences.length
+    ? sequences
+        .map((sequence) => (sequence.length > 1 ? nearMatch(sequence, node.slop as number) : quoted(sequence.join(""))))
+        .join(" OR ")
+    : undefined
+}
+
+/** Whether some stem sequence of a text holds every stem of `wanted` with at most `apart` other words between. */
+const near = (sequence: string[], wanted: string[], apart: number): boolean => {
+  const events = sequence.flatMap((stem, index) => (wanted.includes(stem) ? [{ index, stem }] : []))
+  const held = new Map<string, number>()
+  const distinct = new Set(wanted).size
+  let left = 0
+  for (const event of events) {
+    held.set(event.stem, (held.get(event.stem) ?? 0) + 1)
+    while (held.size === distinct) {
+      const first = events[left] as { index: number; stem: string }
+      if (event.index - first.index + 1 - distinct <= apart) return true
+      const count = (held.get(first.stem) ?? 1) - 1
+      if (count) held.set(first.stem, count)
+      else held.delete(first.stem)
+      left++
+    }
+  }
+  return false
+}
+
+/**
+ * `NEAR` over the stems can bridge `STEM_SEPARATOR`, which parts a text's Latin readings: the end of one and the
+ * start of the next are one word apart. A row without the separator is the index's answer; one with it is read.
+ */
+const nearStems = (scope: FieldScope, node: ResolvedPredicate, stems: string): Fragment => {
+  const { database, corpus, execution } = scope
+  const stemmer = execution.stemmer as NonNullable<typeof execution.stemmer>
+  const rows = database
+    .prepare(
+      `SELECT m.id AS id, m.text AS text FROM ${corpus.rows} m WHERE m.id IN (SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?) LIMIT ?`,
+    )
+    .all(`stems : ((${stems}) AND ${quoted(STEM_SEPARATOR)})`, QUERY_LIMITS.candidates + 1)
+  if (rows.length > QUERY_LIMITS.candidates) exhausted("candidate rows")
+  const wanted = stemmer.stemSequences(node.value).filter((sequence) => sequence.length > 1)
+  const kept = rows.flatMap(({ id, text }) => {
+    scope.check()
+    const sequences = stemmer.stemSequences(String(text))
+    return wanted.some((query) => sequences.some((sequence) => near(sequence, query, node.slop as number)))
+      ? [Number(id)]
+      : []
+  })
+  return bound(
+    `m.id IN (SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?) OR m.id IN (SELECT value FROM json_each(?))`,
+    `stems : ((${stems}) NOT ${quoted(STEM_SEPARATOR)})`,
+    JSON.stringify(kept),
+  )
+}
 
 const stemmedText: FieldCompiler = (node, scope) => {
   const { execution, corpus } = scope
   if (!execution.stemmer && !execution.unstemmed)
     throw new Error("a stemmed leaf reached the compiler without the store's stemmer")
   const text = normalize(node.value)
-  const stems = stemsOf(scope, node.value)
+  const match = ftsMatch(node)
+  const stems = stemsOf(scope, node)
+  const byStems =
+    stems && node.slop !== undefined
+      ? nearStems(scope, node, stems)
+      : stems
+        ? bound(`m.id IN (SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?)`, `stems : (${stems})`)
+        : undefined
   // Words OR stems: two spellings can fold one word to different stems, and every exact hit must stay.
   return always(
     /[\p{L}\p{N}]/u.test(text)
-      ? scope.everywhere(node, text, {
-          sql: `m.id IN (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)${stems ? ` OR m.id IN (SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?)` : ""}`,
-          params: [`normalized_text : (${quoted(text)})`, ...(stems ? [`stems : (${stems})`] : [])],
+      ? scope.everywhere(node, {
+          sql: `m.id IN (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)${byStems ? ` OR ${byStems.sql}` : ""}`,
+          params: [`normalized_text : (${match})`, ...(byStems?.params ?? [])],
           exact: true,
-          fts: quoted(text),
+          fts: match,
           ...(stems ? { stems } : {}),
         })
       : bound("0"),
@@ -147,10 +218,10 @@ const words: FieldCompiler = (node, scope) => {
   if (isStemmed(node)) return stemmedText(node, scope)
   if (operator === "term" || operator === "phrase") {
     const text = normalize(value)
-    const stems = stemsOf(scope, value)
+    const stems = stemsOf(scope, node)
     return always(
       /[\p{L}\p{N}]/u.test(text)
-        ? scope.everywhere(node, text, { ...wordMatch(corpus, quoted(text)), ...(stems ? { stems } : {}) })
+        ? scope.everywhere(node, { ...wordMatch(corpus, ftsMatch(node)), ...(stems ? { stems } : {}) })
         : bound("0"),
     )
   }
@@ -266,10 +337,10 @@ const size: FieldCompiler = (node, { corpus }) => {
 
 const attachmentText =
   (which: "file" | "transcript"): FieldCompiler =>
-  ({ value }, scope) => {
-    const text = normalize(value)
+  (node, scope) => {
+    const text = normalize(node.value)
     // Never `fts`: the ranking ANDs every required word into message_words, where a file's words are not.
-    const set = scope.attachmentWords(quoted(text), which)
+    const set = scope.attachmentWords(ftsMatch(node), which)
     return always(/[\p{L}\p{N}]/u.test(text) ? bound(`m.id IN (${set.sql})`, ...set.params) : bound("0"))
   }
 

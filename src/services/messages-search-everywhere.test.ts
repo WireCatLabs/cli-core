@@ -93,6 +93,15 @@ describe("a plain word searches everywhere", () => {
     expect(ids(await search(store, "filename:heron* OR content:heron"))).toEqual(["3", "4"])
   })
 
+  it("**finds ~N words in a transcript and a file's text as in a message**", async () => {
+    const store = await seeded()
+    expect(ids(await search(store, '"heron river"~3'))).toEqual(["2"])
+    expect(ids(await search(store, 'transcript:"heron river"~3'))).toEqual(["2"])
+    expect(ids(await search(store, 'transcript:"heron river"~2'))).toEqual([])
+    expect(ids(await search(store, 'content:"bird count"~3'))).toEqual(["3"])
+    expect((await search(store, '"heron river"~3')).items[0]?.matchedIn).toBe("transcript")
+  })
+
   it("keeps Boolean logic over every place a word can be", async () => {
     const store = await seeded()
     expect(ids(await search(store, "heron AND table"))).toEqual(["3"])

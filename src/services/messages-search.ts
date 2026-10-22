@@ -25,7 +25,7 @@ import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is"])
 
 import { dateRange, parseLucene, type QueryAst, type QueryNode, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
-import { SEARCH_QUERY, searchError } from "../search/lucene/types.js"
+import { MESSAGE_PARSING, searchError } from "../search/lucene/types.js"
 import type { SearchRefreshed } from "./search-refresh.js"
 
 export interface QueryMetadata {
@@ -129,7 +129,9 @@ export const prepareLucene = async (
               span: { start: 0, end: 0 },
             },
           }
-        : validateFields(parseLucene(request.text, { ...SEARCH_QUERY, defaultField: request.exact ? "exact" : "text" }))
+        : validateFields(
+            parseLucene(request.text, { ...MESSAGE_PARSING, defaultField: request.exact ? "exact" : "text" }),
+          )
   const timezone = timezoneOf(request.timezone)
   const stored = await store.accounts.accounts()
   // A fresh store has no row yet for the account it runs as; "every account" still means that one.
