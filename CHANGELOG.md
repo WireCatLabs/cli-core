@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.384.0 — 22.10.2026
+
 ### Added
 
 - **More commands say how they read a typed date** (WC-TIME-3, WC-TIME-5): `meta.window` gives the UTC bounds they
