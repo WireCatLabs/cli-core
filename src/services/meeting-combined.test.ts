@@ -80,7 +80,7 @@ describe("combined meeting search", () => {
   it("answers a question by meaning when its words appear nowhere", async () => {
     const { store, accountId, meetings, model } = await fixture()
     const found = await searchMeetingsCombined(store, model, "what did we decide about the price?", { accountId })
-    expect(found.words).toEqual({ query: "decide about price", from: "question" })
+    expect(found.words).toEqual({ query: "decide price", from: "question" })
     expect(found.items[0]).toMatchObject({ meetingId: meetings.pricing, by: ["meaning"], scope: "transcript" })
     expect(found.items[0]?.ref).toBe(found.items[0]?.passage?.first)
     expect(found.coverage).toMatchObject({ meaningScanComplete: true, scanned: 3 })
@@ -119,6 +119,22 @@ describe("combined meeting search", () => {
     await expect(
       searchMeetingsCombined(store, model, "price", { accountId, after: first.nextCursor ?? undefined }),
     ).rejects.toMatchObject({ code: "validation_error" })
+  })
+
+  it("asks by meaning alone when the query language refuses the text", async () => {
+    const { store, accountId, meetings, model } = await fixture()
+    const found = await searchMeetingsCombined(store, model, "price~2", { accountId })
+    expect(found.words.refused).toBeDefined()
+    expect(found.items[0]).toMatchObject({ meetingId: meetings.pricing, by: ["meaning"] })
+  })
+
+  it("puts a line with the words above a passage that only resembles the query, when they tie", async () => {
+    const { store, accountId, meetings, model } = await fixture()
+    const found = await searchMeetingsCombined(store, model, "flight", { accountId, maxChunks: 1 })
+    expect(found.items.map((hit) => [hit.meetingId, hit.by])).toEqual([
+      [meetings.travel, ["words"]],
+      [meetings.pricing, ["meaning"]],
+    ])
   })
 
   it("says when the vector budget stopped the scan", async () => {

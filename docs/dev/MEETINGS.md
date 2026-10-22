@@ -245,9 +245,11 @@ line lies inside a passage the meaning search found joins that passage: the item
 (`ref`), keeps the passage as `passage.first`/`passage.last`, and says `by: ["words", "meaning"]`. Chat and summary
 hits, and lines outside every found passage, stay word-only items.
 
-A question — a question word at the start, or a final `?` — searches its content words (`questionTerms`; the
-answer's `words.from` is `question`); other text is the meeting query language, and a query it refuses fails as in
-word search. `from:` and `exact:` apply to the word side only: a passage mixes speakers, so meaning has no speaker.
+A question — a question word at the start (что, какую, почему, did, why…), or a final `?` — searches its content
+words (`questionTerms`; the answer's `words.from` is `question`); other text is the meeting query language. Text the
+language refuses is still asked by meaning: the word side is skipped and `words.refused` says why. On equal fused
+scores a line that has the words ranks above a passage that only resembles the query
+([measurement](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/meeting-hybrid)). `from:` and `exact:` apply to the word side only: a passage mixes speakers, so meaning has no speaker.
 The cursor is an offset into one ranking, bound to the query, the filters and the model; a page past 200 hits of
 either list has nothing more. `coverage.meaningScanComplete` is false when `maxChunks` stopped the scan; indexing and
 archive completeness stay unknown, as in word search.

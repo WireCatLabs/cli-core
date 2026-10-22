@@ -85,11 +85,18 @@ export const searchMeetingsCombined = async (
 
   let byWords: WordHit[] = []
   let indexing: "ready" | "pending" = "ready"
+  let refused: string | undefined
   if (wordQuery.trim()) {
     await refreshMeetingIndex(store.meetings, input.accountId, input.signal)
-    const page = await store.meetings.searchHits(wordQuery, { ...filters, limit: DEPTH, maxReadBytes })
-    byWords = page.items
-    indexing = page.coverage.indexing
+    try {
+      const page = await store.meetings.searchHits(wordQuery, { ...filters, limit: DEPTH, maxReadBytes })
+      byWords = page.items
+      indexing = page.coverage.indexing
+    } catch (error) {
+      // Text the query language refuses is still a question to ask by meaning.
+      if (!(error instanceof CliError) || error.code !== "validation_error") throw error
+      refused = error.message
+    }
   }
 
   input.signal?.throwIfAborted()
@@ -169,7 +176,13 @@ export const searchMeetingsCombined = async (
         fused: share,
       })
   })
-  const ordered = [...merged.values()].sort((a, b) => b.fused - a.fused || (b.score ?? -2) - (a.score ?? -2))
+  // On a tie a line that has the words outranks a passage that only resembles the query.
+  const ordered = [...merged.values()].sort(
+    (a, b) =>
+      b.fused - a.fused ||
+      Number(b.by.includes("words")) - Number(a.by.includes("words")) ||
+      (b.score ?? -2) - (a.score ?? -2),
+  )
   const items = ordered.slice(offset, offset + limit).map(({ fused: _, ...hit }) => hit)
   const hasMore = ordered.length > offset + limit
   return {
@@ -179,7 +192,11 @@ export const searchMeetingsCombined = async (
       ? Buffer.from(JSON.stringify({ version: 1, key, offset: offset + limit } satisfies Cursor)).toString("base64url")
       : null,
     selection,
-    words: terms === null ? { query } : { query: wordQuery, from: "question" as const },
+    words: {
+      query: wordQuery,
+      ...(terms === null ? {} : { from: "question" as const }),
+      ...(refused === undefined ? {} : { refused }),
+    },
     model: { key: embedder.key, model: embedder.model, kind: embedder.kind, dims: embedder.dims },
     coverage: {
       archiveCompleteness: "unknown" as const,

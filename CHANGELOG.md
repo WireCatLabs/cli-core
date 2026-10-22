@@ -13,7 +13,9 @@ shape of this file.
   one model are merged by reciprocal rank fusion over one selection of meetings: the date, meeting, series, event,
   participant, person, project and tag filters apply to both. A word hit inside a passage the meaning search found
   joins it (`by: ["words", "meaning"]`) and is cited by its own line. A question («что решили по цене?», "what did we
-  decide about pricing?") searches its content words; other text is the meeting query language. The ranking covers
+  decide about pricing?") searches its content words; other text is the meeting query language, and text it refuses
+  is asked by meaning alone (`words.refused`). On a tie a line with the words ranks above a passage that only
+  resembles the query. The ranking covers
   every vector of the selection up to `maxChunks` (default 10000), read in batches with text loaded only for the
   passages kept; pages continue one ranking (`nextCursor`), bound to the query, filters and model.
 - **`meetingVectors.ranked`** — the nearest passages over the whole selection, with meeting title and start.
