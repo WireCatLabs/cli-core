@@ -483,9 +483,6 @@
     "--local": {
       "meaning": "use the model on this machine, never the messenger"
     },
-    "--mark-read": {
-      "meaning": "also mark the chat read up to the newest message shown; the other person sees it"
-    },
     "--marker": {
       "value": "<value>",
       "meaning": "Marker"
@@ -634,9 +631,6 @@
     },
     "--no-input": {
       "meaning": "never prompt or open an interactive login; piped input remains available"
-    },
-    "--no-mark-read": {
-      "meaning": "do not mark read, whatever the catch_up_marks_read setting says"
     },
     "--no-mentions-me": {
       "meaning": "do not require a mention of you or a reply to you"
@@ -2876,10 +2870,8 @@
         "--all": "all",
         "--kind": "all",
         "--limit": "all",
-        "--mark-read": "all",
         "--model": "all",
         "--new": "all",
-        "--no-mark-read": "all",
         "--since": {
           "in": [],
           "planned": {
@@ -3186,7 +3178,6 @@
       "options": {
         "--cursor": "all",
         "--limit": "all",
-        "--mark-read": "all",
         "--model": "all",
         "--transcribe": "all"
       }
@@ -3610,10 +3601,8 @@
       "options": {
         "--all": "all",
         "--kind": "all",
-        "--mark-read": "all",
         "--model": "all",
         "--new": "all",
-        "--no-mark-read": "all",
         "--since": {
           "in": [],
           "planned": {

@@ -7,10 +7,10 @@ import { renderMessages } from "../../render/messages.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf, REVIEW_DAYS, reviewStart, UNANSWERED_HOURS } from "../../services/inbox.js"
 import { type Hearing, modelWith } from "../../speech/hearing.js"
-import { ownerOnlyOption, REMOTE_READ } from "../effects.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
-import { MARK_READ_OPTION, markShown, marksRead, NO_MARK_READ_OPTION, pointsOf } from "./catch-up.js"
+import { pointsOf } from "./catch-up.js"
 import { catchUpQuery, REVIEW_QUERY, reviewAnswer } from "./catch-up-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { heardItems, hearForCommand, MODEL_OPTION, spokenItems, TRANSCRIBE_OPTION } from "./hearing-command.js"
@@ -25,7 +25,7 @@ export const unansweredHours = (value: unknown, flag = "--unanswered"): number =
 /**
  * **Everything said since a point, both sides, in every chat that changed** — the reading half of a
  * review of who owes what (max-cli's `review`). Sorting it is the reader's job, person or agent.
- * Nothing is marked read unless asked, and `inbox --new` keeps its point. The rules open and close
+ * Reading never marks a chat read, and `inbox --new` keeps its point. The rules open and close
  * tasks in the local store from what it read (`../../services/task-rules.ts`); nothing reaches the messenger.
  */
 export const reviewCommand = (messenger: Messenger): Command =>
@@ -49,12 +49,10 @@ export const reviewCommand = (messenger: Messenger): Command =>
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
     .option("--new", "what changed since the last `review --new`, a point per chat — for scheduled runs")
-    .addOption(ownerOnlyOption(...MARK_READ_OPTION))
-    .addOption(ownerOnlyOption(...NO_MARK_READ_OPTION))
+    .addHelpText("after", "To mark a chat read, use `chats mark-read <chat>`. The other side sees it.")
     .action(async function (this: Command, query: string[]) {
       const options = this.opts<{
         new?: boolean
-        markRead?: boolean
         kind?: string
         unanswered?: string | true
         all?: boolean
@@ -78,12 +76,11 @@ export const reviewCommand = (messenger: Messenger): Command =>
           })
         : undefined
       const since = from ?? saved?.first ?? reviewStart()
-      const marking = marksRead(options.markRead, settings, this)
       const hours = options.unanswered === undefined ? undefined : unansweredHours(options.unanswered)
       const kinds = options.kind === undefined ? undefined : kindsOf(options.kind)
       let hearing: Hearing | undefined
       const transcribe = options.transcribe === true
-      const { found, marked, reader } = await context.withServices(async (services, connect) => {
+      const { found, reader } = await context.withServices(async (services, connect) => {
         const found = await services.inbox.review({
           since,
           ...(saved === undefined ? {} : { points: saved.chats }),
@@ -103,13 +100,11 @@ export const reviewCommand = (messenger: Messenger): Command =>
         })
         return {
           found,
-          marked: marking ? await markShown(services, found.chats, context.renderer.warn) : undefined,
           reader: await services.messages.reader(),
         }
       })
 
       found.complete &&= (hearing?.unheard.length ?? 0) === 0
-      if (marked !== undefined) renderer.note(`marked ${marked.length} chat(s) read up to the newest message shown`)
       notes(found, format === "pretty", renderer)
       renderAnswer(
         this,
