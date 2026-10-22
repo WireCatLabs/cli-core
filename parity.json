@@ -2822,6 +2822,13 @@
         "--show-phone": "all"
       }
     },
+    "contacts prepare": {
+      "in": "all",
+      "options": {
+        "--limit": "all",
+        "--since-time": "all"
+      }
+    },
     "contacts remove": {
       "in": "all"
     },
