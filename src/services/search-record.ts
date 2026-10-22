@@ -37,7 +37,10 @@ const canonical = (value: unknown, nested = false): unknown =>
       : value
 
 /** One run or one saved search as the store keeps it; the same parameters always give the same text. */
-export const searchRecordOf = (command: SearchCommand, params: SearchParams): SearchRecord => ({
+export const searchRecordOf = (
+  command: SearchCommand,
+  params: SearchParams | Readonly<Record<string, unknown>>,
+): SearchRecord => ({
   command,
   params: JSON.stringify(canonical(params)),
   language: "lucene-v1",

@@ -4,7 +4,7 @@ import type * as v from "valibot"
 import type { savedSearch } from "../entities/saved-search.js"
 import { validateAst, validateFields } from "../search/lucene/registry.js"
 import { MESSAGE_PARSING } from "../search/lucene/types.js"
-import type { MessageStore, StoredSearch } from "../store/store.js"
+import type { MessageStore, SearchCommand, StoredSearch } from "../store/store.js"
 import { isAdminSelection, readAdminSelection } from "./admin-statistics.js"
 import type { ServiceDeps } from "./deps.js"
 import { type SearchParams, searchRecordOf } from "./search-record.js"
@@ -47,9 +47,18 @@ export interface SearchesService {
   resolve(reference: string, typed: SearchParams): Promise<ResolvedSearch>
 }
 
+/** What the messenger commands run; the table is shared, and another CLI's rows are not theirs to list or run. */
+const MESSAGE_SEARCH_COMMANDS: readonly SearchCommand[] = [
+  "search",
+  "stats",
+  "message-top",
+  "author-top",
+  "admin-statistics",
+]
+
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/
 
-const nameOf = (value: string): string => {
+export const nameOf = (value: string): string => {
   const name = value.trim().toLowerCase()
   if (!NAME.test(name) || /^\d+$/.test(name))
     throw new CliError(
@@ -98,6 +107,15 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
   const found = async (store: MessageStore, reference: string): Promise<StoredSearch> => {
     const search = await store.searches.storedSearch(reference.trim().toLowerCase())
     if (!search) throw new CliError("not_found", `no saved search or run "${singleLine(reference)}"`)
+    if (!MESSAGE_SEARCH_COMMANDS.includes(search.command))
+      throw new CliError(
+        "validation_error",
+        `"${singleLine(reference)}" is a saved meeting search, not one of messages`,
+        {
+          reason: "search.kind",
+          command: search.command,
+        },
+      )
     return search
   }
 
@@ -137,17 +155,18 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
 
     show: (reference) => inStore((store) => found(store, reference)),
 
-    list: () => inStore((store) => store.searches.savedSearches()),
+    list: () => inStore((store) => store.searches.savedSearches(MESSAGE_SEARCH_COMMANDS)),
 
     history: (limit, offset = 0) =>
       inStore(async (store) => {
-        const rows = await store.searches.searchHistory(limit, offset)
+        const rows = await store.searches.searchHistory(limit, offset, MESSAGE_SEARCH_COMMANDS)
         return { items: rows.slice(0, limit), has_more: rows.length > limit }
       }),
 
     delete: (reference) => inStore(async (store) => store.searches.deleteSearch((await found(store, reference)).id)),
 
-    clear: () => inStore(async (store) => ({ cleared: await store.searches.clearSearchHistory() })),
+    clear: () =>
+      inStore(async (store) => ({ cleared: await store.searches.clearSearchHistory(MESSAGE_SEARCH_COMMANDS) })),
 
     resolve: (reference, { text: words, ...typed }) =>
       inStore(async (store) => {

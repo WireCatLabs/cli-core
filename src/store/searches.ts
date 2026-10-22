@@ -1,5 +1,5 @@
 import type { StoreContext } from "./sqlite/open.js"
-import type { SearchRecord, StoredSearch } from "./sqlite/searches.js"
+import type { SearchCommand, SearchRecord, StoredSearch } from "./sqlite/searches.js"
 import * as searchRecords from "./sqlite/searches.js"
 import { write } from "./sqlite/transaction.js"
 
@@ -10,12 +10,13 @@ export interface SearchesStore {
   saveSearch(name: string, search: SearchRecord, options?: { replace?: boolean }): Promise<StoredSearch>
   /** A saved search by name, or any row by id. */
   storedSearch(reference: string): Promise<StoredSearch | undefined>
-  savedSearches(): Promise<StoredSearch[]>
+  /** `commands`: only rows of these kinds; the table is shared by every CLI on the store. */
+  savedSearches(commands?: readonly SearchCommand[]): Promise<StoredSearch[]>
   /** Runs, newest first, one more than `limit` when there are more. */
-  searchHistory(limit: number, offset?: number): Promise<StoredSearch[]>
+  searchHistory(limit: number, offset?: number, commands?: readonly SearchCommand[]): Promise<StoredSearch[]>
   deleteSearch(reference: string): Promise<StoredSearch>
   /** Drops the unnamed runs; answers how many. */
-  clearSearchHistory(): Promise<number>
+  clearSearchHistory(commands?: readonly SearchCommand[]): Promise<number>
 }
 
 export const searchesStoreOver = (context: StoreContext): SearchesStore => {
@@ -29,18 +30,18 @@ export const searchesStoreOver = (context: StoreContext): SearchesStore => {
 
     storedSearch: async (reference) => searchRecords.findSearch(context, reference),
 
-    savedSearches: async () => searchRecords.savedSearches(context),
+    savedSearches: async (commands) => searchRecords.savedSearches(context, commands),
 
-    searchHistory: async (limit, offset) => searchRecords.searchHistory(context, limit, offset),
+    searchHistory: async (limit, offset, commands) => searchRecords.searchHistory(context, limit, offset, commands),
 
     deleteSearch: async (reference) => {
       return write(database, () => searchRecords.deleteSearch(context, reference))
     },
 
-    clearSearchHistory: async () => {
+    clearSearchHistory: async (commands) => {
       let cleared = 0
       write(database, () => {
-        cleared = searchRecords.clearHistory(context)
+        cleared = searchRecords.clearHistory(context, commands)
       })
       return cleared
     },

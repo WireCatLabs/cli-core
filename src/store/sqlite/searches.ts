@@ -5,7 +5,12 @@ import { toIso } from "./values.js"
 /** Unnamed runs kept, newest first; a saved search is never pruned. */
 export const HISTORY_KEPT = 1000
 
-export type SearchCommand = "search" | "stats" | "message-top" | "author-top" | "admin-statistics"
+export type SearchCommand = "search" | "stats" | "message-top" | "author-top" | "admin-statistics" | "meetings-search"
+
+const commandFilter = (commands?: readonly SearchCommand[]) =>
+  commands
+    ? { sql: ` AND command IN (${commands.map(() => "?").join(", ")})`, values: [...commands] }
+    : { sql: "", values: [] }
 
 /** What one run or one saved search is: `params` as canonical JSON, so the same run is the same text. */
 export interface SearchRecord {
@@ -107,17 +112,29 @@ export const saveSearch = (
   return mustFind(context, name)
 }
 
-export const savedSearches = ({ database }: StoreContext): StoredSearch[] =>
-  database.prepare(`SELECT ${COLUMNS} FROM searches WHERE name IS NOT NULL ORDER BY name`).all().map(searchOf)
+export const savedSearches = ({ database }: StoreContext, commands?: readonly SearchCommand[]): StoredSearch[] => {
+  const only = commandFilter(commands)
+  return database
+    .prepare(`SELECT ${COLUMNS} FROM searches WHERE name IS NOT NULL${only.sql} ORDER BY name`)
+    .all(...only.values)
+    .map(searchOf)
+}
 
 /** Runs, newest first: unnamed ones and saved searches that have run. One more than `limit` says there are more. */
-export const searchHistory = ({ database }: StoreContext, limit: number, offset = 0): StoredSearch[] =>
-  database
+export const searchHistory = (
+  { database }: StoreContext,
+  limit: number,
+  offset = 0,
+  commands?: readonly SearchCommand[],
+): StoredSearch[] => {
+  const only = commandFilter(commands)
+  return database
     .prepare(
-      `SELECT ${COLUMNS} FROM searches WHERE last_run_at IS NOT NULL ORDER BY last_run_at DESC, id DESC LIMIT ? OFFSET ?`,
+      `SELECT ${COLUMNS} FROM searches WHERE last_run_at IS NOT NULL${only.sql} ORDER BY last_run_at DESC, id DESC LIMIT ? OFFSET ?`,
     )
-    .all(limit + 1, offset)
+    .all(...only.values, limit + 1, offset)
     .map(searchOf)
+}
 
 export const deleteSearch = (context: StoreContext, reference: string): StoredSearch => {
   const found = mustFind(context, reference)
@@ -126,5 +143,7 @@ export const deleteSearch = (context: StoreContext, reference: string): StoredSe
 }
 
 /** Unnamed runs only; saved searches stay. */
-export const clearHistory = ({ database }: StoreContext): number =>
-  database.prepare("DELETE FROM searches WHERE name IS NULL").run().changes
+export const clearHistory = ({ database }: StoreContext, commands?: readonly SearchCommand[]): number => {
+  const only = commandFilter(commands)
+  return database.prepare(`DELETE FROM searches WHERE name IS NULL${only.sql}`).run(...only.values).changes
+}

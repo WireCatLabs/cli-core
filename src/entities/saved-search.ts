@@ -6,7 +6,7 @@ export const savedSearch = v.strictObject({
   id,
   /** `null` for a run in the history. */
   name: v.nullable(text),
-  command: v.picklist(["search", "stats", "message-top", "author-top", "admin-statistics"]),
+  command: v.picklist(["search", "stats", "message-top", "author-top", "admin-statistics", "meetings-search"]),
   /** The query and the options it runs with, as the command took them. */
   params: v.record(v.string(), v.unknown()),
   language: text,
