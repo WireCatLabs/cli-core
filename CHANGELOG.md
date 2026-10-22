@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.385.0 — 22.10.2026
+
 ### Fixed
 
 - **A store the pre-rename `cli-messaging` wrote is refused again, and left untouched.** Its `schema_migrations`
