@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Document sync works both ways.** `pushDocuments` reads every mirrored file back on each run and merges changes
+  made in the provider into the local file. Only the lines of changed blocks are rewritten, and a tick is flipped in
+  place. A conflict lists the changed parts and when each side changed, and the run goes on with the other files;
+  `keep: "local" | "remote" | "both"` settles conflicts. New: `mergeBlocks`, `spliceMarkdown`, `blocksMarkdown`,
+  `inlineMarkdown`, `placedMarkdownBlocks`.
+
+### Changed — may break callers
+
+- `PushOptions.force` is replaced by `keep` (settle conflicts) and `recreate` (create a remotely deleted file again);
+  `prepare` gets `keep` instead of `force`. Its update result is `{ local?, afterLocal?, remote, write }`:
+  `remote: false` writes only the local file; `afterLocal` is saved between the local and the remote write. `PushResult` adds `pulled`; a conflict may carry `parts`, `localChangedAt`,
+  `remoteChangedAt` and `remoteChangedBy`. `reconcileBlocks` is removed; `mergeBlocks` replaces it.
+
 ## 0.385.0 — 22.10.2026
 
 ### Fixed

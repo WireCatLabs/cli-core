@@ -16,8 +16,23 @@ const loadParser = () =>
 
 type Marks = Omit<Inline, "text">
 
+/**
+ * A block and the source it came from: `[start, end)` offsets into the Markdown. Blocks cut from one source
+ * stretch (a paragraph and its images, the paragraphs of one quote) share it. `column` is where a list item's
+ * text starts, which is how far a nested item under it must be indented.
+ */
+export interface PlacedBlock {
+  block: Block
+  start: number
+  end: number
+  column?: number
+}
+
 /** Markdown (CommonMark + GFM tables, task lists and strikethrough) as the blocks a provider can write natively. */
-export const markdownBlocks = async (markdown: string): Promise<Block[]> => {
+export const markdownBlocks = async (markdown: string): Promise<Block[]> =>
+  (await placedMarkdownBlocks(markdown)).map((placed) => placed.block)
+
+export const placedMarkdownBlocks = async (markdown: string): Promise<PlacedBlock[]> => {
   const tree = (await loadParser())(markdown)
   const definitions = new Map<string, Definition>()
   const collect = (node: Nodes) => {
@@ -70,38 +85,42 @@ export const markdownBlocks = async (markdown: string): Promise<Block[]> => {
     if (last) last.text = last.text.trimEnd()
     return normalizeInlines(out)
   }
-  const withImages = (block: Block | undefined): Block[] => {
+  const spanOf = (node: Nodes) => ({ start: node.position?.start.offset ?? 0, end: node.position?.end.offset ?? 0 })
+  const withImages = (block: Block | undefined, span: { start: number; end: number }): PlacedBlock[] => {
     const found = images.splice(0)
-    if (block?.kind === "paragraph" && !block.inlines.length) return found
-    return block ? [block, ...found] : found
+    const blocks = block?.kind === "paragraph" && !block.inlines.length ? found : block ? [block, ...found] : found
+    return blocks.map((one) => ({ block: one, ...span }))
   }
   const textOf = (node: Parent): Inline[] =>
     node.children.flatMap((child) =>
       child.type === "paragraph" || child.type === "heading" ? inlinesOf(child.children) : [],
     )
 
-  const blocks = (nodes: RootContent[], depth = 0): Block[] =>
-    nodes.flatMap((node): Block[] => {
+  const blocks = (nodes: RootContent[], depth = 0): PlacedBlock[] =>
+    nodes.flatMap((node): PlacedBlock[] => {
+      const span = spanOf(node)
       switch (node.type) {
         case "heading":
-          return withImages({ kind: "heading", level: node.depth, inlines: trimmed(inlinesOf(node.children)) })
+          return withImages({ kind: "heading", level: node.depth, inlines: trimmed(inlinesOf(node.children)) }, span)
         case "paragraph":
-          return withImages({ kind: "paragraph", inlines: trimmed(inlinesOf(node.children)) })
+          return withImages({ kind: "paragraph", inlines: trimmed(inlinesOf(node.children)) }, span)
         case "code":
-          return [{ kind: "code", ...(node.lang ? { language: node.lang } : {}), text: node.value }]
+          return [{ block: { kind: "code", ...(node.lang ? { language: node.lang } : {}), text: node.value }, ...span }]
         case "blockquote":
-          return node.children.flatMap((child) =>
-            child.type === "paragraph" || child.type === "heading"
-              ? withImages({ kind: "quote", inlines: trimmed(inlinesOf(child.children)) })
-              : blocks([child], depth),
-          )
+          return node.children
+            .flatMap((child) =>
+              child.type === "paragraph" || child.type === "heading"
+                ? withImages({ kind: "quote", inlines: trimmed(inlinesOf(child.children)) }, span)
+                : blocks([child], depth),
+            )
+            .map((placed) => ({ ...placed, ...span }))
         case "thematicBreak":
-          return [{ kind: "rule" }]
+          return [{ block: { kind: "rule" }, ...span }]
         case "table": {
           const [head, ...rows] = node.children.map((row) =>
             row.children.map((cell) => trimmed(inlinesOf(cell.children))),
           )
-          return [{ kind: "table", header: head ?? [], rows }]
+          return [{ block: { kind: "table", header: head ?? [], rows }, ...span }]
         }
         case "list":
           return node.children.flatMap((item) => {
@@ -114,25 +133,33 @@ export const markdownBlocks = async (markdown: string): Promise<Block[]> => {
               inlines: trimmed(first && first.type === "paragraph" ? inlinesOf(first.children) : []),
             }
             const tail = first && first.type !== "paragraph" ? [first, ...rest] : rest
+            const own = {
+              start: spanOf(item).start,
+              end: first?.type === "paragraph" ? spanOf(first).end : spanOf(item).start,
+            }
+            const marker = /^([-+*]|\d{1,9}[.)])( {1,4}|(?=\n)|$)/.exec(markdown.slice(own.start))?.[0].length ?? 2
+            const column = (item.position?.start.column ?? 1) - 1 + marker
             return [
-              ...withImages(head),
+              ...withImages(head, own).map((placed) => ({ ...placed, column })),
               ...tail.flatMap((child) =>
                 child.type === "list"
                   ? blocks([child], depth + 1)
                   : child.type === "paragraph"
-                    ? withImages({ kind: "paragraph", inlines: trimmed(inlinesOf(child.children)) })
+                    ? withImages({ kind: "paragraph", inlines: trimmed(inlinesOf(child.children)) }, spanOf(child))
                     : blocks([child], depth),
               ),
             ]
           })
         case "html":
-          return [{ kind: "paragraph", inlines: [{ text: node.value }] }]
+          return [{ block: { kind: "paragraph", inlines: [{ text: node.value }] }, ...span }]
         case "definition":
         case "footnoteDefinition":
         case "yaml":
           return []
         default:
-          return "children" in node ? withImages({ kind: "paragraph", inlines: trimmed(textOf(node as Parent)) }) : []
+          return "children" in node
+            ? withImages({ kind: "paragraph", inlines: trimmed(textOf(node as Parent)) }, span)
+            : []
       }
     })
   return blocks(tree.children)

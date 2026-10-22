@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
@@ -51,16 +51,29 @@ const setup = () => {
       }
       return { id, url: `https://example.invalid/${id}`, snapshot: text }
     }),
-    prepare: vi.fn(async ({ id, file, recorded, force }) => {
+    // The whole text is one block: a change on both sides is a conflict unless `keep` settles it.
+    prepare: vi.fn(async ({ id, file, recorded, keep }) => {
       const found = remote.get(id)
       if (!found) return { missing: true as const }
-      if (found.text !== recorded && !force) return { conflict: "changed remotely since the last push" }
-      const text = readFileSync(file.absolute, "utf8")
-      if (text === found.text) return { unchanged: { id, url: `https://example.invalid/${id}`, snapshot: text } }
+      const local = readFileSync(file.absolute, "utf8")
+      const pushed = (snapshot: string) => ({ id, url: `https://example.invalid/${id}`, snapshot })
+      if (local === found.text) return { unchanged: pushed(local) }
+      const remoteChanged = found.text !== recorded
+      const localChanged = local !== recorded
+      const take = remoteChanged && localChanged ? keep : remoteChanged ? "remote" : "local"
+      if (!take)
+        return {
+          conflict: "changed on both sides",
+          parts: [{ base: recorded, local, remote: found.text }],
+          remote: { changedAt: "2026-10-22T09:00:00.000Z", changedBy: "Synthetic Editor" },
+        }
+      const next = take === "remote" ? found.text : take === "local" ? local : `${local}\n${found.text}`
       return {
+        ...(next !== local ? { local: next, afterLocal: found.text } : {}),
+        remote: next !== found.text,
         write: async () => {
-          found.text = text
-          return { id, url: `https://example.invalid/${id}`, snapshot: text }
+          found.text = next
+          return pushed(next)
         },
       }
     }),
@@ -126,21 +139,99 @@ describe("pushDocuments", () => {
     expect(third).toMatchObject({ updated: ["notes.md"], unchanged: 1 })
   })
 
-  it("stops on a remote edit and overwrites it only when forced", async () => {
+  it("reports a file changed on both sides, goes on with the rest, and settles it when told which to keep", async () => {
     const t = setup()
     t.write("notes.md", "# a")
+    t.write("other.md", "o")
     await pushDocuments(t.options())
     const [id, file] = [...t.remote.entries()][0] as [string, Remote]
     file.text = "# edited in the provider"
     t.write("notes.md", "# b")
+    t.write("other.md", "o2")
     const stopped = await pushDocuments(t.options())
-    expect(t.guarded.filter((step) => step.startsWith("update"))).toEqual([])
+    expect(t.guarded.filter((step) => step.startsWith("update"))).toEqual(["update:other.md"])
     expect(stopped.conflicts).toEqual([
-      { path: "notes.md", url: `https://example.invalid/${id}`, reason: "changed remotely since the last push" },
+      {
+        path: "notes.md",
+        url: `https://example.invalid/${id}`,
+        reason: "changed on both sides",
+        parts: [{ base: "# a", local: "# b", remote: "# edited in the provider" }],
+        localChangedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+        remoteChangedAt: "2026-10-22T09:00:00.000Z",
+        remoteChangedBy: "Synthetic Editor",
+      },
     ])
     expect(file.text).toBe("# edited in the provider")
-    await pushDocuments(t.options({ force: true }))
-    expect(file.text).toBe("# b")
+    await pushDocuments(t.options({ keep: "both" }))
+    expect(file.text).toBe("# b\n# edited in the provider")
+    expect(readFileSync(join(t.root, "notes.md"), "utf8")).toBe("# b\n# edited in the provider")
+  })
+
+  it("writes a remote change into the local file, then finds nothing to do", async () => {
+    const t = setup()
+    t.write("notes.md", "# a")
+    await pushDocuments(t.options())
+    const [, file] = [...t.remote.entries()][0] as [string, Remote]
+    file.text = "# edited in the provider"
+    const pulled = await pushDocuments(t.options())
+    expect(pulled).toMatchObject({ pulled: ["notes.md"], updated: [], conflicts: [] })
+    expect(readFileSync(join(t.root, "notes.md"), "utf8")).toBe("# edited in the provider")
+    expect(t.guarded.filter((step) => step.startsWith("update"))).toEqual([])
+    expect(await pushDocuments(t.options())).toMatchObject({ pulled: [], updated: [], unchanged: 1 })
+  })
+
+  it.skipIf(process.platform === "win32")("keeps the file's mode when it writes a remote change into it", async () => {
+    const t = setup()
+    t.write("notes.md", "# a")
+    chmodSync(join(t.root, "notes.md"), 0o664)
+    await pushDocuments(t.options())
+    const [, file] = [...t.remote.entries()][0] as [string, Remote]
+    file.text = "# edited in the provider"
+    await pushDocuments(t.options())
+    expect(statSync(join(t.root, "notes.md")).mode & 0o777).toBe(0o664)
+  })
+
+  it("recovers on the next run when the remote write fails after the local file was written", async () => {
+    const t = setup()
+    t.write("notes.md", "# a")
+    await pushDocuments(t.options())
+    const [, file] = [...t.remote.entries()][0] as [string, Remote]
+    file.text = "# a\nfrom the provider"
+    t.write("notes.md", "# a\nfrom here")
+    const options = t.options({ keep: "both" })
+    options.guard = async () => {
+      throw new Error("connection dropped before the provider wrote")
+    }
+    const failed = await pushDocuments(options)
+    expect(failed).toMatchObject({ pulled: ["notes.md"], updated: [] })
+    expect(failed.errors).toHaveLength(1)
+    expect(file.text).toBe("# a\nfrom the provider")
+
+    const resumed = await pushDocuments(t.options())
+    expect(resumed).toMatchObject({ conflicts: [], errors: [], pulled: [], updated: ["notes.md"] })
+    expect(file.text).toBe("# a\nfrom here\n# a\nfrom the provider")
+    expect(readFileSync(join(t.root, "notes.md"), "utf8")).toBe(file.text)
+  })
+
+  it("leaves a local file saved during the sync alone", async () => {
+    const t = setup()
+    t.write("notes.md", "# a")
+    await pushDocuments(t.options())
+    const [, file] = [...t.remote.entries()][0] as [string, Remote]
+    file.text = "# edited in the provider"
+    const options = t.options()
+    const prepare = t.target.prepare
+    options.target = {
+      ...t.target,
+      prepare: async (input) => {
+        const prepared = await prepare(input)
+        t.write("notes.md", "# saved meanwhile")
+        return prepared
+      },
+    }
+    const result = await pushDocuments(options)
+    expect(result.conflicts).toMatchObject([{ path: "notes.md", reason: "the local file changed during the sync" }])
+    expect(readFileSync(join(t.root, "notes.md"), "utf8")).toBe("# saved meanwhile")
   })
 
   it("finds a file created before a crash instead of creating it twice", async () => {
@@ -169,6 +260,7 @@ describe("pushDocuments", () => {
     expect(result.orphans).toEqual([{ path: "a.md", url: `https://example.invalid/${ids[0]}` }])
     expect(result.missing).toEqual(["b.md"])
     expect(t.remote.size).toBe(1)
+    expect(await pushDocuments(t.options({ recreate: true }))).toMatchObject({ created: ["b.md"] })
   })
 
   it("records a change that alters nothing remotely without a write", async () => {

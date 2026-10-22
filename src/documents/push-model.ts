@@ -11,15 +11,38 @@ export interface Pushed<S> {
   /** What the provider reads back after its own write; the next push compares the remote against it. */
   snapshot: S
 }
+/** Which side a stretch both sides changed keeps: the local file, the remote, or both one after the other. */
+export type Keep = "local" | "remote" | "both"
+/** One stretch both sides changed, as text a person can compare. */
+export interface ConflictPart {
+  base: string
+  local: string
+  remote: string
+}
+/** The remote's last change, when the provider can tell. */
+export interface RemoteChange {
+  changedAt?: string
+  changedBy?: string
+}
 /**
- * What an update found before writing. Only `write` reaches the remote, so a conflict or a file with nothing to
- * change never counts as a write.
+ * What a sync found before writing. `local` is the file's new content when the remote changed it; `write` runs
+ * after it and reaches the remote only when `remote` is true, so a conflict or a file with nothing to change
+ * never counts as a write.
  */
 export type Prepared<S> =
-  | { conflict: string }
+  | { conflict: string; parts?: ConflictPart[]; remote?: RemoteChange }
   | { missing: true }
   | { unchanged: Pushed<S> }
-  | { write(): Promise<Pushed<S>> }
+  | {
+      local?: string
+      /**
+       * Recorded once `local` is written and before the remote write: both sides as the remote is now. If the
+       * remote write then fails, the next run sends the file's changes against it and settles nothing twice.
+       */
+      afterLocal?: S
+      remote: boolean
+      write(): Promise<Pushed<S>>
+    }
 
 /**
  * A provider that writes local files as its own native documents. Every write is one provider call per
@@ -40,12 +63,15 @@ export interface DocumentTarget<S> {
     operationId: string
     signal?: AbortSignal
   }): Promise<Pushed<S>>
-  /** Reads the remote and compares it with `recorded`; a conflict instead of a write unless `force`. */
+  /**
+   * Reads the remote and merges it with the local file against `recorded`, what the last sync left on both sides.
+   * A stretch both sides changed is a conflict unless `keep` says which side wins.
+   */
   prepare(input: {
     id: string
     file: LocalDocument
     recorded: S
-    force: boolean
+    keep?: Keep
     signal?: AbortSignal
   }): Promise<Prepared<S>>
 }
