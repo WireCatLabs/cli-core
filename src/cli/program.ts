@@ -20,6 +20,7 @@ import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
+import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
@@ -166,6 +167,15 @@ const RELAY_MARGIN_MS = 10_000
  * message: it tells a script nothing it can branch on, and exits 1 for every kind of failure alike.
  */
 export const run = async (argv: string[], definition: ProgramDefinition, options: RunOptions = {}): Promise<number> => {
+  const outer = processRun()
+  try {
+    return await runOnce(argv, definition, options)
+  } finally {
+    useAsProcessRun(outer)
+  }
+}
+
+const runOnce = async (argv: string[], definition: ProgramDefinition, options: RunOptions): Promise<number> => {
   const streams = options.streams ?? processStreams
   if (!options.streams) quietBrokenPipes()
   const delimiter = argv.indexOf("--")

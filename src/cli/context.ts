@@ -205,6 +205,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
               keepFailed: settings.keepFailedRuns,
               trace: settings.trace,
               keepDays: settings.keepRunsForDays,
+              processRun: !environment.agent,
               format,
               streams,
               env,

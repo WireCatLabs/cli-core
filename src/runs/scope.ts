@@ -47,9 +47,12 @@ export const typedCommand = (tool: string, words: string, profile = currentRun()
  * For a one-shot command whose action runs outside `inRun` — max's `max bot`, recorded from commander's hooks, which
  * cannot wrap the action — so its answers' `meta.run_id` names the run `runs show` finds. Never in a server.
  */
-export const useAsProcessRun = (scope: RunScope): void => {
+export const useAsProcessRun = (scope: RunScope | undefined): void => {
   processScope = scope
 }
+
+/** The run `useAsProcessRun` named, if any: a command run in-process puts it back when it ends. */
+export const processRun = (): RunScope | undefined => processScope
 
 /** The trace of the run this one is opened inside — an MCP call's command keeps its caller's trace. */
 export const enclosingTraceId = (): string | undefined => scopes.getStore()?.traceId
