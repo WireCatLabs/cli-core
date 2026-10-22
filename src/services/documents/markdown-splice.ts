@@ -116,11 +116,18 @@ export const spliceMarkdown = async (
   const placed = await placedMarkdownBlocks(body)
   const current = normalize(placed.map((item) => item.block))
   if (current.length !== placed.length) return undefined
-  const hunks = grouped(diffBlocks(current, next), placed, current)
+  // A run of blocks replaced one for one is spliced block by block, so a tick next to an edit still flips in place.
+  const single = diffBlocks(current, next).flatMap((hunk) =>
+    hunk.to - hunk.from === hunk.blocks.length
+      ? hunk.blocks.map((block, offset) => ({ from: hunk.from + offset, to: hunk.from + offset + 1, blocks: [block] }))
+      : [hunk],
+  )
+  const hunks = grouped(single, placed, current)
   if (!hunks.length) return text
 
   const lineStart = (offset: number) => body.lastIndexOf("\n", offset - 1) + 1
-  for (const hunk of [...hunks].reverse()) {
+  for (const [index, hunk] of [...hunks.entries()].reverse()) {
+    const following = hunks[index + 1]
     const toggled = tick(body, hunk, placed, current)
     if (toggled !== undefined) {
       body = toggled
@@ -130,7 +137,7 @@ export const spliceMarkdown = async (
     const cutStart = hunk.from < placed.length ? lineStart((placed[hunk.from] as PlacedBlock).start) : body.length
     const cutEnd = hunk.to < placed.length ? lineStart((placed[hunk.to] as PlacedBlock).start) : body.length
     const before = current[hunk.from - 1]
-    const after = current[hunk.to]
+    const after = following?.from === hunk.to ? (following.blocks[0] ?? current[following.to]) : current[hunk.to]
     let head = body.slice(0, cutStart)
     const first = hunk.blocks[0] ?? after
     if (BLANK_BETWEEN(before, first) && head && !head.endsWith("\n\n")) head += "\n"
@@ -161,7 +168,7 @@ const grouped = (hunks: BlockHunk[], placed: PlacedBlock[], current: Block[]): B
     while (shares(to)) to++
     const blocks = [...current.slice(from, hunk.from), ...hunk.blocks, ...current.slice(hunk.to, to)]
     const last = out.at(-1)
-    if (last && from <= last.to) {
+    if (last && from < last.to) {
       last.blocks = [...last.blocks, ...current.slice(last.to, from), ...blocks.slice(Math.max(0, last.to - from))]
       last.to = Math.max(last.to, to)
     } else out.push({ from, to, blocks })

@@ -16,6 +16,10 @@ describe("spliceMarkdown", () => {
     expect(await splice("* [ ] call  \n* [x] write\n", "- [x] call\n- [ ] write\n")).toBe("* [x] call  \n* [ ] write\n")
   })
 
+  it("flips a tick in place even when the next block changed too", async () => {
+    expect(await splice("* [ ] call\n\nold\n", "- [x] call\n\nnew\n")).toBe("* [x] call\n\nnew\n")
+  })
+
   it("inserts an item into a list and a paragraph after it", async () => {
     expect(await splice("- a\n- c\n\nend\n", "- a\n- b\n- c\n\nafter list\n\nend\n")).toBe(
       "- a\n- b\n- c\n\nafter list\n\nend\n",
@@ -23,7 +27,7 @@ describe("spliceMarkdown", () => {
   })
 
   it("appends to a file without a final line break and deletes a block", async () => {
-    expect(await splice("one\n\ntwo", "one\n\ntwo\n\nthree\n")).toBe("one\n\ntwo\nthree\n".replace("two\n", "two\n\n"))
+    expect(await splice("one\n\ntwo", "one\n\ntwo\n\nthree\n")).toBe("one\n\ntwo\n\nthree\n")
     expect(await splice("one\n\ntwo\n\nthree\n", "one\n\nthree\n")).toBe("one\n\nthree\n")
   })
 
