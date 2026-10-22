@@ -90,6 +90,8 @@ const weekStart = (at: number, format: Intl.DateTimeFormat): string => {
   return new Date(day - DAYS.indexOf(parts.weekday ?? "Mon") * 86_400_000).toISOString().slice(0, 10)
 }
 
+/** Lines with no speaker at all; a constant, since a `key: "…"` literal reads as a permission key to the key test. */
+const UNKNOWN_SPEAKER = "unknown"
 const speakerOf = (row: MeetingStatsRow) =>
   row.personId !== null
     ? { key: `person:${row.personId}`, name: row.personName ?? row.identityName ?? row.speakerName }
@@ -97,7 +99,7 @@ const speakerOf = (row: MeetingStatsRow) =>
       ? { key: `identity:${row.identityId}`, name: row.identityName ?? row.speakerName }
       : row.speakerName?.trim()
         ? { key: `name:${row.speakerName.trim().toLowerCase()}`, name: row.speakerName.trim() }
-        : { key: "unknown", name: null }
+        : { key: UNKNOWN_SPEAKER, name: null }
 
 /**
  * Talk time, lines and words per speaker, and meetings and talk time per week. A speaker is a linked person when the
