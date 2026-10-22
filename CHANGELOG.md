@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.389.0 — 22.10.2026
+
 ### Added
 
 - **`readMeetingStats`: talk time per speaker and meetings per week.** Over the meetings search would read, with the
