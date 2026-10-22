@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { chunkHash, cutChunks } from "../../conversations/chunks.js"
 import { positiveReadInteger } from "./meeting-reads.js"
+import { type MeetingSelection, meetingSelectionSql } from "./meeting-selection.js"
 import type { StoreContext } from "./open.js"
 import { read, write } from "./transaction.js"
 import { dot, saveVectors } from "./vectors.js"
@@ -48,7 +49,22 @@ export interface MeetingVectors {
     nextChunkId?: number
   }>
   status(input: Scope & { model: string }): Promise<{ chunks: number; embedded: number }>
+  /**
+   * The `limit` passages nearest to `query` among every vector of `model` in the selected meetings, up to
+   * `maxChunks` of them: one ranking over the whole selection, with text read only for the passages kept.
+   */
+  ranked(
+    model: string,
+    query: Float32Array,
+    input: MeetingSelection & Scope & TextBudget & { limit: number; maxChunks?: number },
+  ): Promise<{
+    items: (MeetingVectorHit & { text: string; title: string | null; startedAt: number | null })[]
+    scanned: number
+    complete: boolean
+  }>
 }
+/** Vectors read per query while ranking, so a store of any size stays within a few megabytes at a time. */
+const RANK_BATCH = 512
 const LIVE =
   "FROM chunks k JOIN meeting_transcripts t ON k.chunkable_type = 'meeting_transcript' AND t.id = k.chunkable_id JOIN meetings m ON m.id = t.meeting_id WHERE m.account_id = ? AND m.deleted_at IS NULL AND t.deleted_at IS NULL AND t.superseded_at IS NULL"
 const limitOf = (value: number, name: string, max = 1000) => {
@@ -327,6 +343,72 @@ export const meetingVectorsOver = (context: StoreContext): MeetingVectors => ({
         hasMore,
         ...(hasMore ? { nextChunkId: Number(selected.at(-1)?.id) } : {}),
       }
+    })
+  },
+  async ranked(model, query, input) {
+    scope(input)
+    modelOf(model)
+    const limit = limitOf(input.limit, "limit"),
+      maxChunks = limitOf(input.maxChunks ?? 10000, "maxChunks", 100000)
+    if (!query.length || query.length > 65536 || Array.from(query).some((value) => !Number.isFinite(value)))
+      throw new CliError("validation_error", "Query vector must have finite dimensions")
+    return read(context.database, () => {
+      const { clauses, params } = meetingSelectionSql(input)
+      const batch = context.database.prepare(
+        `SELECT k.id,k.chunkable_id,k.content_hash,k.start_offset,k.end_offset,e.dims,e.vector FROM chunks k JOIN meeting_transcripts t ON k.chunkable_type='meeting_transcript' AND t.id=k.chunkable_id JOIN meetings m ON m.id=t.meeting_id JOIN embeddings e ON e.content_hash=k.content_hash AND e.model=? WHERE ${clauses.join(" AND ")} AND t.deleted_at IS NULL AND t.superseded_at IS NULL AND k.id>? ORDER BY k.id LIMIT ?`,
+      )
+      const best: { row: Record<string, unknown>; score: number }[] = []
+      let scanned = 0
+      let after = 0
+      let complete = true
+      for (;;) {
+        input.signal?.throwIfAborted()
+        const take = Math.min(RANK_BATCH, maxChunks - scanned)
+        if (take <= 0) {
+          complete = !batch.get(model, ...params, after, 1)
+          break
+        }
+        const rows = batch.all(model, ...params, after, take)
+        for (const row of rows) {
+          if (
+            Number(row.dims) !== query.length ||
+            !(row.vector instanceof Uint8Array) ||
+            row.vector.byteLength !== query.length * 4
+          )
+            throw new CliError("validation_error", "Stored vector dimensions do not match query")
+          const score = dot(query, row.vector)
+          if (!Number.isFinite(score))
+            throw new CliError("invalid_response", "Stored vector contains non-finite values")
+          if (best.length < limit || score > (best.at(-1)?.score ?? Number.NEGATIVE_INFINITY)) {
+            const { vector: _, ...kept } = row
+            const at = best.findIndex((held) => held.score < score)
+            best.splice(at < 0 ? best.length : at, 0, { row: kept, score })
+            if (best.length > limit) best.pop()
+          }
+        }
+        scanned += rows.length
+        after = Number(rows.at(-1)?.id ?? after)
+        if (rows.length < take) break
+      }
+      const load = textLoader(context, input)
+      const meeting = context.database.prepare("SELECT title,started_at FROM meetings WHERE id=?")
+      const items = best.map(({ row, score }) => {
+        input.signal?.throwIfAborted()
+        const text = chunkText(context, input.accountId, row, input, input.signal, load(Number(row.chunkable_id)))
+        const about = meeting.get(text.meetingId)
+        return {
+          title: about?.title == null ? null : String(about.title),
+          startedAt: about?.started_at == null ? null : Number(about.started_at),
+          meetingId: text.meetingId,
+          transcriptId: Number(row.chunkable_id),
+          firstPosition: text.firstPosition,
+          lastPosition: text.lastPosition,
+          hash: String(row.content_hash),
+          score,
+          text: text.text,
+        }
+      })
+      return { items, scanned, complete }
     })
   },
   async status(input) {

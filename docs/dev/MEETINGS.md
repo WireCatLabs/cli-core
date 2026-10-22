@@ -233,6 +233,25 @@ a CLI source router. Common CLI and MCP continuation repeats query, selection an
 CLI dates are ISO timestamps and MCP dates remain epoch milliseconds. A pending-index retry
 retains that selection but drops the old cursor to restart the search.
 
+## Combined search
+
+`searchMeetingsCombined(store, embedder, query, request)` from the services export ranks word hits and passage
+vectors together. It resolves `project`, `tag` and `topic` names like `searchMeetingHits`, then reads two lists of at
+most 200 each over the same selection of meetings (`meetingSelectionSql`): the word hits, and
+`meetingVectors.ranked` — every vector of the embedder's model in the selection, compared in batches of 512 up to
+`maxChunks`, with transcript text read only for the passages kept. Hits under the model's similarity floor
+(`meaningFloor`) are dropped. The lists are merged by reciprocal rank fusion (k = 60). A transcript word hit whose
+line lies inside a passage the meaning search found joins that passage: the item is cited by the word hit's line
+(`ref`), keeps the passage as `passage.first`/`passage.last`, and says `by: ["words", "meaning"]`. Chat and summary
+hits, and lines outside every found passage, stay word-only items.
+
+A question — a question word at the start, or a final `?` — searches its content words (`questionTerms`; the
+answer's `words.from` is `question`); other text is the meeting query language, and a query it refuses fails as in
+word search. `from:` and `exact:` apply to the word side only: a passage mixes speakers, so meaning has no speaker.
+The cursor is an offset into one ranking, bound to the query, the filters and the model; a page past 200 hits of
+either list has nothing more. `coverage.meaningScanComplete` is false when `maxChunks` stopped the scan; indexing and
+archive completeness stay unknown, as in word search.
+
 ## Project-word discovery SDK
 
 `readMeetingProjectDiscovery` from the services export resolves one existing project through

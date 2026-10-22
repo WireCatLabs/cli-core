@@ -46,7 +46,7 @@ const textBudget = (options: { maxRows?: number; maxTextBytes?: number }) => ({
   maxRows: positive(options.maxRows ?? 10000, "transcript row budget", 100000),
   maxTextBytes: positive(options.maxTextBytes ?? 4 * 1024 * 1024, "transcript text byte budget", 64 * 1024 * 1024),
 })
-const validateVector = (vector: Float32Array | undefined, dims: number): Float32Array => {
+export const validateVector = (vector: Float32Array | undefined, dims: number): Float32Array => {
   if (
     !(vector instanceof Float32Array) ||
     vector.length !== dims ||

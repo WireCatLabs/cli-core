@@ -26,11 +26,9 @@ export const refreshMeetingIndex = async (
 }
 
 /** Name resolution changes selection only; it never assigns projects or labels from transcript words. */
-export const searchMeetingHits = async (
-  store: Pick<MessageStore, "meetings"> & { knowledge?: MessageStore["knowledge"] },
-  query: string,
+export const resolveMeetingSelection = async (
+  store: { knowledge?: MessageStore["knowledge"] },
   request: MeetingHitSearchRequest,
-  options: { refreshIndex?: boolean } = {},
 ) => {
   const { project, tag, topic, ...input } = request
   input.signal?.throwIfAborted()
@@ -68,6 +66,16 @@ export const searchMeetingHits = async (
     else input.tagId = id
     selection.push({ kind, id, name: entry.name, by: "explicit-link" })
   }
+  return { input, selection }
+}
+
+export const searchMeetingHits = async (
+  store: Pick<MessageStore, "meetings"> & { knowledge?: MessageStore["knowledge"] },
+  query: string,
+  request: MeetingHitSearchRequest,
+  options: { refreshIndex?: boolean } = {},
+) => {
+  const { input, selection } = await resolveMeetingSelection(store, request)
   if (options.refreshIndex !== false) await refreshMeetingIndex(store.meetings, input.accountId, input.signal)
   const result = await store.meetings.searchHits(query, input)
   input.signal?.throwIfAborted()

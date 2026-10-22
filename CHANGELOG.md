@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`searchMeetingsCombined`: meeting search by words and meaning in one ranking.** Word hits and passage vectors of
+  one model are merged by reciprocal rank fusion over one selection of meetings: the date, meeting, series, event,
+  participant, person, project and tag filters apply to both. A word hit inside a passage the meaning search found
+  joins it (`by: ["words", "meaning"]`) and is cited by its own line. A question («что решили по цене?», "what did we
+  decide about pricing?") searches its content words; other text is the meeting query language. The ranking covers
+  every vector of the selection up to `maxChunks` (default 10000), read in batches with text loaded only for the
+  passages kept; pages continue one ranking (`nextCursor`), bound to the query, filters and model.
+- **`meetingVectors.ranked`** — the nearest passages over the whole selection, with meeting title and start.
+  `questionTerms` (`search/question-plan`) — a question's content words, or null.
+
 ## 0.387.0 — 22.10.2026
 
 ### Added
@@ -148,7 +160,6 @@ shape of this file.
 - **An import says the zone it read file times in, and a host can explain its file names.** `RunReport.timezone` is
   set when every imported file's meeting carries one zone; `MeetingCommandDeps.importHelp` adds the host's note
   (file name patterns, how their time is read) under `meetings import --help`.
-||||||| Stash base
 - **Meeting search finds words spread over neighbouring lines.** `"циан риелтор"~3` in a meeting query finds a
   transcript line with one of the words when the others are at most three lines away in the same transcript; `~0`
   is one line, any order; at most 20. The words widen to garbled spellings as single words do. It needs

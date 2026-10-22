@@ -10,6 +10,12 @@ const scaffolding = new Set(
 )
 const questionWord =
   /\b(?:what|which|how|who|where|when|can|could|should)\b|(?:^|\s)(?:сколько|какой|какая|какие|какое|кто|кому|кем|где|когда|как|что|можно|может|могут|ли)(?:\s|$)/iu
+/** A question's content words — «что решили по цене?» → решили, цене — or null when the text is not a question. */
+export const questionTerms = (text: string): string[] | null =>
+  questionWord.test(text) && (/\?\s*$/u.test(text) || questionWord.test(words(text).slice(0, 2).join(" ")))
+    ? words(text).filter((word) => !scaffolding.has(word))
+    : null
+
 export function planQuestion(text: string, strict = false) {
   if (strict)
     return {
