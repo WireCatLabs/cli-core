@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.388.0 — 22.10.2026
+
 ### Added
 
 - **`searchMeetingsCombined`: meeting search by words and meaning in one ranking.** Word hits and passage vectors of
