@@ -309,7 +309,10 @@ describe("a messenger whose history is read from the store", () => {
 
   it("**says how to fill an empty store**: `serve` or `watch`, not --offline", async () => {
     const { connects, connect } = pushing()
-    const { code, stderr } = await call(["messages", "list", "Book", "--json"], sandbox(), connect, "store")
+    const env = sandbox()
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ profiles: { default: {} } }))
+    const { code, stderr } = await call(["messages", "list", "Book", "--json"], env, connect, "store")
 
     expect(code).not.toBe(0)
     expect(stderr).toContain("run `chat default serve` or `chat default watch` once to fill the local store")
@@ -320,6 +323,8 @@ describe("a messenger whose history is read from the store", () => {
   it("**UX-58: names `<tool> <profile> setup` first where the CLI has one**", async () => {
     const { connect } = pushing()
     const env = sandbox()
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ profiles: { default: {} } }))
     const ask = async (history?: "store") => {
       const messenger: Messenger = {
         app,
