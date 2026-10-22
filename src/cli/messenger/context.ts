@@ -696,7 +696,11 @@ export const messengerContext = (
     base.settings.permissions,
     knownPermissionKeys(command, messenger.permissionKey),
   )) {
-    base.renderer.warn(`permissions.${key} names no command and does nothing — \`config unset permissions.${key}\``)
+    throw new CliError(
+      "configuration_error",
+      `permissions.${key} names no command — remove it with \`${app.command} ${asFirstWord(profile)}config unset permissions.${key}\``,
+      { permission: key },
+    )
   }
   // Read when warning, not now: serve swaps the renderer's methods for log records after this.
   const warn: Warn = (text, warning) => (base.renderer.warn as Warn)(text, warning)

@@ -17,6 +17,10 @@ shape of this file.
   `details.profiles`, so a typo does not suggest linking a new account. A configured profile with no
   saved account still explains how to fill its local history.
 
+- Unknown permission keys now refuse messenger commands with `configuration_error`, including typos after
+  the resource name such as `messages.sedn`. Correct the key or remove it with `config unset`; a warning
+  no longer leaves the intended restriction unenforced.
+
 
 ## 0.389.0 — 22.10.2026
 
