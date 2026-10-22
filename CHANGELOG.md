@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`readMeetingStats`: talk time per speaker and meetings per week.** Over the meetings search would read, with the
+  same filters: per speaker (a linked person, else the identity, else the transcript's name) lines, words, talk time,
+  meetings and share of talk; per week (Monday in a chosen zone) meetings and talk time. One transcript per meeting,
+  so a local transcript beside the provider's does not count twice. `meetings.meetingStats` on the store and
+  `aggregateMeetingStats` for rows a host already has.
+
 ## 0.388.0 — 22.10.2026
 
 ### Added

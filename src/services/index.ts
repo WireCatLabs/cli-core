@@ -118,6 +118,7 @@ export { readMail } from "./mail-search.js"
 export { type MeetingHitSearchRequest, refreshMeetingIndex, searchMeetingHits } from "./meeting-hit-search.js"
 export { createMeetingProjectCandidateReader } from "./meeting-project-candidates.js"
 export { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
+export { type MeetingStatsRequest, readMeetingStats } from "./meeting-stats.js"
 export { chatIdIn, storedChatId } from "./message-resolution.js"
 export type {
   AroundWindow,

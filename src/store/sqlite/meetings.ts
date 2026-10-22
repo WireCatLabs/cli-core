@@ -15,6 +15,7 @@ import type {
   MeetingSearchStore,
   MeetingSeries,
   MeetingSeriesHistoryStore,
+  MeetingStatsStore,
   MeetingStore,
   MeetingTranscriptReceiptStore,
   MeetingTranscriptStore,
@@ -42,6 +43,7 @@ import { meetingPreparationNotesOver } from "./meeting-preparation-notes.js"
 import { type MeetingContextReadCapabilities, type MeetingReadCapabilities, meetingReadsOver } from "./meeting-reads.js"
 import { meetingRelatedHistoryOver } from "./meeting-related-history.js"
 import { meetingSeriesHistoryOver } from "./meeting-series-history.js"
+import { meetingStatsOver } from "./meeting-stats.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
@@ -759,7 +761,8 @@ export type StoredMeetings = MeetingStore &
   MeetingSearchStore &
   MeetingTranscriptReceiptStore &
   MeetingContextStore &
-  MeetingSearchIndexStore
+  MeetingSearchIndexStore &
+  MeetingStatsStore
 
 /** The `MeetingStore` of `src/meetings/` over the shared store. */
 export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
@@ -772,6 +775,7 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     ...meetingPreparationNotesOver(context),
     ...meetingRelatedHistoryOver(context),
     ...meetingHitSearchOver(context),
+    ...meetingStatsOver(context),
     ...meetingParticipantSearchOver(context),
     ...meetingHitIndexOver(context),
     ...meetingContextLinksOver(context),

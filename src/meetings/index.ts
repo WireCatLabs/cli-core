@@ -276,6 +276,16 @@ export type {
 } from "./series-inventory-types.js"
 export { validateMeetingSeriesInventoryCursor } from "./series-inventory-validation.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
+export {
+  aggregateMeetingStats,
+  type MeetingSpeakerStats,
+  type MeetingStats,
+  type MeetingStatsInput,
+  type MeetingStatsRow,
+  type MeetingStatsSelection,
+  type MeetingStatsStore,
+  type MeetingWeekStats,
+} from "./stats.js"
 export type {
   ChatInput,
   ContractCase,
