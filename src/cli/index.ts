@@ -111,7 +111,7 @@ export { guardedApp, guardedPress, guardedStart, type Pressed } from "../sends/b
 export { guardedClose, guardedCreatePoll, guardedVote } from "../sends/polls.js"
 export type { InboxReader } from "../services/inbox.js"
 export { INBOX_CHATS, newIn, REVIEW_CHATS, reviewIn, unreadIn } from "../services/inbox.js"
-export { momentOf } from "../services/moment.js"
+export { type DateWindow, dateWindow, momentOf } from "../services/moment.js"
 export { maskedAccount } from "../services/people.js"
 export { unanswered } from "../services/questions.js"
 export { openRequestTask } from "../services/task-rules.js"
