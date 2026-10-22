@@ -2816,17 +2816,17 @@
     "contacts notes show": {
       "in": "all"
     },
-    "contacts profile": {
-      "in": "all",
-      "options": {
-        "--show-phone": "all"
-      }
-    },
     "contacts prepare": {
       "in": "all",
       "options": {
         "--limit": "all",
         "--since-time": "all"
+      }
+    },
+    "contacts profile": {
+      "in": "all",
+      "options": {
+        "--show-phone": "all"
       }
     },
     "contacts remove": {
