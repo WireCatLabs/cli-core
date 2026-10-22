@@ -221,7 +221,7 @@ export interface EmailFilter extends MailFilter {
   mailbox?: string
   /** On the received time, or the sent time when that is unknown: IMAP's SINCE counts by the received day. */
   since?: number
-  /** Exclusive. */
+  /** Exclusive. `momentOf` and `dateWindow` with `end` give the last millisecond of a day, an inclusive end: add 1. */
   until?: number
   /** Only emails with an attachment whose text extraction failed with one of these errors. */
   attachmentErrors?: string[]

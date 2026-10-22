@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- `dateWindow` and `DateWindow` from `./cli`: `--since-time` and `--until-time` read together, with the
+  `meta.timezone` and `meta.window` an answer reports them by (WC-TIME-3, WC-TIME-5).
+
 ## 0.386.0 — 22.10.2026
 
 ### Added
