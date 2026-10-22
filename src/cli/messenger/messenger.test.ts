@@ -344,6 +344,21 @@ describe("explicit topic addressing", () => {
   })
 })
 
+it("names in a recorded answer's meta.run_id the run that was kept", async () => {
+  const root = mkdtempSync(join(tmpdir(), "messenger-"))
+  const env = {
+    CHAT_PROFILE: "default",
+    CHAT_STATE_DIR: join(root, "state"),
+    CHAT_CONFIG_DIR: join(root, "config"),
+    MESSAGING_STORE: join(root, "m.db"),
+  }
+  const { stdout } = await call(["chats", "list", "--json", "--record"], async () => fake, env)
+  const runId = JSON.parse(stdout.join("")).meta.run_id
+
+  expect(runId).toMatch(/-chats-list-/)
+  expect(readdirSync(join(root, "state", "runs"), { recursive: true })).toContainEqual(expect.stringMatching(runId))
+})
+
 describe("the shared read commands", () => {
   it("**answer offline exactly what the messenger answered**, without connecting", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))

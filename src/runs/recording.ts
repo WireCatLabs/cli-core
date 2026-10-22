@@ -5,7 +5,7 @@ import { type DiagnosticEvent, type EventSink, providerErrorKey, renderEvent } f
 import { DIAGNOSTIC_LOG_EVENTS } from "./log-events.js"
 import { logAttributes } from "./log-keys.js"
 import { newRunId, type Run, runsDirFor, startRun } from "./run.js"
-import { enclosingTraceId, inRun, traceOf } from "./scope.js"
+import { enclosingTraceId, inRun, type RunScope, traceOf, useAsProcessRun } from "./scope.js"
 
 export interface RecordingOptions {
   app: AppIdentity
@@ -25,6 +25,11 @@ export interface RecordingOptions {
   now?: () => Date
   /** The caller's trace; otherwise the enclosing run's, otherwise `TRACEPARENT` from `env`. */
   traceId?: string
+  /**
+   * A one-shot command prints its answer after the run ends, outside `inRun`: naming the run as the process's lets
+   * that answer's `meta.run_id` name the run `runs show` finds. Never in a server, where runs overlap.
+   */
+  processRun?: boolean
 }
 
 /**
@@ -37,16 +42,15 @@ export interface RecordingOptions {
 export const recorded = async <T>(options: RecordingOptions, body: (events: EventSink) => Promise<T>): Promise<T> => {
   const recording = startRecording(options)
   try {
-    const answer = await inRun(
-      {
-        runId: recording.runId,
-        command: options.command,
-        startedAt: Date.now(),
-        profile: options.profile,
-        ...(recording.traceId ? { traceId: recording.traceId } : {}),
-      },
-      () => body(recording.events),
-    )
+    const scope: RunScope = {
+      runId: recording.runId,
+      command: options.command,
+      startedAt: Date.now(),
+      profile: options.profile,
+      ...(recording.traceId ? { traceId: recording.traceId } : {}),
+    }
+    if (options.processRun) useAsProcessRun(scope)
+    const answer = await inRun(scope, () => body(recording.events))
     await recording.succeed(answer)
     return answer
   } catch (error) {

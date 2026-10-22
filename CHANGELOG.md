@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A recorded one-shot command's `meta.run_id` names the run it kept**, so `runs show <run_id>` finds it. It named
+  the process's own run, which is never kept.
+
 ## 0.388.0 — 22.10.2026
 
 ### Added
