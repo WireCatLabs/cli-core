@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.387.0 — 22.10.2026
+
 ### Added
 
 - `dateWindow` and `DateWindow` from `./cli`: `--since-time` and `--until-time` read together, with the
