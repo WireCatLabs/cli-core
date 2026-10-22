@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { createReadStream } from "node:fs"
-import { readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { chmod, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, posix } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type {
@@ -83,8 +83,10 @@ const hashText = (text: string) => createHash("sha256").update(text).digest("hex
 const replaceLocal = async (file: LocalDocument, content: string): Promise<string | undefined> => {
   const temp = join(dirname(file.absolute), `.${basename(file.absolute)}.${randomUUID().slice(0, 8)}.tmp`)
   const { mode } = await stat(file.absolute)
-  await writeFile(temp, content, { mode: mode & 0o777, flag: "wx" })
+  await writeFile(temp, content, { flag: "wx" })
   try {
+    // A mode passed to the write goes through the umask; set it after, so a group-writable file stays one.
+    await chmod(temp, mode & 0o777)
     if ((await hashFile(file.absolute)) !== file.hash) return undefined
     await rename(temp, file.absolute)
   } finally {
@@ -300,6 +302,10 @@ export const pushDocuments = async <S>(options: PushOptions<S>): Promise<PushRes
           }
           hash = written
           result.pulled.push(file.path)
+          if (prepared.remote && prepared.afterLocal !== undefined) {
+            state.entries[file.path] = { ...entry, snapshot: prepared.afterLocal, hash }
+            save()
+          }
         }
         if (prepared.remote) {
           const operationId = options.operationId()

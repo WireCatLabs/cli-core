@@ -18,8 +18,8 @@ shape of this file.
 ### Changed — may break callers
 
 - `PushOptions.force` is replaced by `keep` (settle conflicts) and `recreate` (create a remotely deleted file again);
-  `prepare` gets `keep` instead of `force`. Its update result is `{ local?, remote, write }`: `remote: false` writes
-  only the local file. `PushResult` adds `pulled`; a conflict may carry `parts`, `localChangedAt`,
+  `prepare` gets `keep` instead of `force`. Its update result is `{ local?, afterLocal?, remote, write }`:
+  `remote: false` writes only the local file; `afterLocal` is saved between the local and the remote write. `PushResult` adds `pulled`; a conflict may carry `parts`, `localChangedAt`,
   `remoteChangedAt` and `remoteChangedBy`. `reconcileBlocks` is removed; `mergeBlocks` replaces it.
 
 ## 0.385.0 — 22.10.2026

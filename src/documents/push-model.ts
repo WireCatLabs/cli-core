@@ -33,7 +33,16 @@ export type Prepared<S> =
   | { conflict: string; parts?: ConflictPart[]; remote?: RemoteChange }
   | { missing: true }
   | { unchanged: Pushed<S> }
-  | { local?: string; remote: boolean; write(): Promise<Pushed<S>> }
+  | {
+      local?: string
+      /**
+       * Recorded once `local` is written and before the remote write: both sides as the remote is now. If the
+       * remote write then fails, the next run sends the file's changes against it and settles nothing twice.
+       */
+      afterLocal?: S
+      remote: boolean
+      write(): Promise<Pushed<S>>
+    }
 
 /**
  * A provider that writes local files as its own native documents. Every write is one provider call per

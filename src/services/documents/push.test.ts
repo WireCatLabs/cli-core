@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
@@ -69,7 +69,7 @@ const setup = () => {
         }
       const next = take === "remote" ? found.text : take === "local" ? local : `${local}\n${found.text}`
       return {
-        ...(next !== local ? { local: next } : {}),
+        ...(next !== local ? { local: next, afterLocal: found.text } : {}),
         remote: next !== found.text,
         write: async () => {
           found.text = next
@@ -178,6 +178,39 @@ describe("pushDocuments", () => {
     expect(readFileSync(join(t.root, "notes.md"), "utf8")).toBe("# edited in the provider")
     expect(t.guarded.filter((step) => step.startsWith("update"))).toEqual([])
     expect(await pushDocuments(t.options())).toMatchObject({ pulled: [], updated: [], unchanged: 1 })
+  })
+
+  it.skipIf(process.platform === "win32")("keeps the file's mode when it writes a remote change into it", async () => {
+    const t = setup()
+    t.write("notes.md", "# a")
+    chmodSync(join(t.root, "notes.md"), 0o664)
+    await pushDocuments(t.options())
+    const [, file] = [...t.remote.entries()][0] as [string, Remote]
+    file.text = "# edited in the provider"
+    await pushDocuments(t.options())
+    expect(statSync(join(t.root, "notes.md")).mode & 0o777).toBe(0o664)
+  })
+
+  it("recovers on the next run when the remote write fails after the local file was written", async () => {
+    const t = setup()
+    t.write("notes.md", "# a")
+    await pushDocuments(t.options())
+    const [, file] = [...t.remote.entries()][0] as [string, Remote]
+    file.text = "# a\nfrom the provider"
+    t.write("notes.md", "# a\nfrom here")
+    const options = t.options({ keep: "both" })
+    options.guard = async () => {
+      throw new Error("connection dropped before the provider wrote")
+    }
+    const failed = await pushDocuments(options)
+    expect(failed).toMatchObject({ pulled: ["notes.md"], updated: [] })
+    expect(failed.errors).toHaveLength(1)
+    expect(file.text).toBe("# a\nfrom the provider")
+
+    const resumed = await pushDocuments(t.options())
+    expect(resumed).toMatchObject({ conflicts: [], errors: [], pulled: [], updated: ["notes.md"] })
+    expect(file.text).toBe("# a\nfrom here\n# a\nfrom the provider")
+    expect(readFileSync(join(t.root, "notes.md"), "utf8")).toBe(file.text)
   })
 
   it("leaves a local file saved during the sync alone", async () => {

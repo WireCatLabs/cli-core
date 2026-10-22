@@ -76,8 +76,9 @@ candidate. Tests do not contact a real provider or measure model accuracy.
    remote last changed; the engine adds the local file's time. A conflict never reaches the write journal, and the
    run goes on with the other files. `keep` (`local`, `remote`, `both`) settles conflicts instead.
 4. The local file is written before the remote: through a temporary file beside it, keeping its mode, and only if
-   it still has the hash this run read — a file saved meanwhile is reported, not overwritten. If the remote write
-   then fails, the next run finds the same change on both sides and merges it once.
+   it still has the hash this run read — a file saved meanwhile is reported, not overwritten. Right after it, the
+   provider's `afterLocal` snapshot is saved: both sides as the remote is now. If the remote write then fails, the
+   next run sends only the file's changes against that, so a conflict settled by `keep` is not met again.
 5. Nothing is deleted remotely. A file deleted locally is an orphan; a file deleted remotely is missing and is
    created again only with `recreate`.
 
