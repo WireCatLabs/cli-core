@@ -57,7 +57,7 @@ const fixture = async () => {
     input.meeting.title = `Example ${name}`
     input.meeting.startedAt = startedAt
     input.meeting.endedAt = startedAt + 1000
-    input.meeting.series = null
+    delete input.meeting.series
     input.transcripts[0].contentHash = `invented-${name}`
     input.transcripts[0].rows = lines.map((text, position) => ({
       ...input.transcripts[0].rows[0],
