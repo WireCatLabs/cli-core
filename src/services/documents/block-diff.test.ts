@@ -1,7 +1,6 @@
-import { beforeAll, describe, expect, it } from "vitest"
-import type { Block } from "../../documents/blocks.js"
+import { describe, expect, it } from "vitest"
 import { markdownBlocks } from "../../documents/markdown-blocks.js"
-import { diffBlocks, reconcileBlocks } from "./block-diff.js"
+import { diffBlocks, mergeBlocks } from "./block-diff.js"
 
 const md = (text: string) => markdownBlocks(text)
 
@@ -28,57 +27,89 @@ describe("diffBlocks", () => {
   })
 })
 
-describe("reconcileBlocks", () => {
-  let recorded: Block[] = []
-  let lastLocal: Block[] = []
-  beforeAll(async () => {
-    recorded = await md("# Plan\n\n- [ ] call\n- [ ] write\n")
-    lastLocal = recorded
-  })
+describe("mergeBlocks", () => {
+  const base = "# Plan\n\n- [ ] call\n- [ ] write\n\nnotes\n"
+  const merge = async (local: string, remote: string, keep?: "local" | "remote" | "both", from = base) =>
+    mergeBlocks(await md(from), await md(from), await md(local), await md(remote), keep)
 
-  it("writes the local file when the remote is what the last push left", async () => {
-    const local = await md("# Plan\n\n- [ ] call\n- [ ] write\n- [ ] ship\n")
-    expect(reconcileBlocks(recorded, recorded, local, lastLocal)).toEqual({
+  it("takes each side's change when they touch different blocks", async () => {
+    const merged = await merge("# Plan v2\n\n- [ ] call\n- [ ] write\n\nnotes\n", `${base}\nadded in Google\n`)
+    expect(merged).toEqual({
       status: "clean",
-      blocks: local,
-      ticksKept: 0,
+      blocks: await md("# Plan v2\n\n- [ ] call\n- [ ] write\n\nnotes\n\nadded in Google\n"),
+      conflicts: [],
     })
   })
 
-  it("keeps a remote tick across two pushes while the local file changes elsewhere", async () => {
-    const ticked = await md("# Plan\n\n- [x] call\n- [ ] write\n")
-    const first = reconcileBlocks(recorded, ticked, await md("# Plan v2\n\n- [ ] call\n- [ ] write\n"), lastLocal)
-    expect(first).toEqual({ status: "clean", blocks: await md("# Plan v2\n\n- [x] call\n- [ ] write\n"), ticksKept: 1 })
-    if (first.status !== "clean") throw new Error("expected a clean push")
-
-    const written = first.blocks
-    const localNow = await md("# Plan v3\n\n- [ ] call\n- [ ] write\n")
-    const second = reconcileBlocks(written, written, localNow, await md("# Plan v2\n\n- [ ] call\n- [ ] write\n"))
-    if (second.status !== "clean") throw new Error("expected a clean push")
-    expect(second.blocks).toEqual(await md("# Plan v3\n\n- [x] call\n- [ ] write\n"))
-    expect(diffBlocks(written, second.blocks)).toEqual([
-      { from: 0, to: 1, blocks: [{ kind: "heading", level: 1, inlines: [{ text: "Plan v3" }] }] },
-    ])
+  it("merges the same change made on both sides once", async () => {
+    const both = "# Plan\n\n- [ ] call\n- [ ] write\n\nnotes, edited\n"
+    expect(await merge(both, both)).toEqual({ status: "clean", blocks: await md(both), conflicts: [] })
   })
 
-  it("lets a tick changed locally win over the remote", async () => {
-    const current = await md("# Plan\n\n- [x] call\n- [ ] write\n")
-    const local = await md("# Plan\n\n- [ ] call\n- [x] write\n")
-    expect(reconcileBlocks(recorded, current, local, lastLocal)).toEqual({
+  it("keeps a tick from one side and a text edit from the other on the same item", async () => {
+    const merged = await merge(
+      "# Plan\n\n- [ ] call Ana\n- [ ] write\n\nnotes\n",
+      "# Plan\n\n- [x] call\n- [ ] write\n\nnotes\n",
+    )
+    expect(merged).toEqual({
       status: "clean",
-      blocks: await md("# Plan\n\n- [x] call\n- [x] write\n"),
-      ticksKept: 1,
-    })
-    const unticked = await md("# Plan\n\n- [ ] call\n- [ ] write\n")
-    expect(reconcileBlocks(current, current, unticked, await md("# Plan\n\n- [x] call\n- [ ] write\n"))).toEqual({
-      status: "clean",
-      blocks: unticked,
-      ticksKept: 0,
+      blocks: await md("# Plan\n\n- [x] call Ana\n- [ ] write\n\nnotes\n"),
+      conflicts: [],
     })
   })
 
-  it("stops on any remote change other than a tick", async () => {
-    const current = await md("# Plan\n\n- [ ] call Ana\n- [ ] write\n")
-    expect(reconcileBlocks(recorded, current, recorded, lastLocal)).toEqual({ status: "conflict" })
+  it("lets each tick follow the side that changed it", async () => {
+    const merged = await merge(
+      "# Plan\n\n- [ ] call\n- [x] write\n\nnotes\n",
+      "# Plan\n\n- [x] call\n- [ ] write\n\nnotes\n",
+    )
+    expect(merged).toEqual({
+      status: "clean",
+      blocks: await md("# Plan\n\n- [x] call\n- [x] write\n\nnotes\n"),
+      conflicts: [],
+    })
+  })
+
+  it("keeps a remote tick the local file never had once neither side changes it", async () => {
+    const remote = await md("# Plan\n\n- [x] call\n- [ ] write\n")
+    const local = await md("# Plan v3\n\n- [ ] call\n- [ ] write\n")
+    const merged = mergeBlocks(await md("# Plan\n\n- [ ] call\n- [ ] write\n"), remote, local, remote)
+    expect(merged).toEqual({
+      status: "clean",
+      blocks: await md("# Plan v3\n\n- [x] call\n- [ ] write\n"),
+      conflicts: [],
+    })
+  })
+
+  it("reports a block both sides changed differently, and settles it when told which to keep", async () => {
+    const local = "# Plan\n\n- [ ] call\n- [ ] write\n\nnotes from the laptop\n"
+    const remote = "# Plan\n\n- [ ] call\n- [ ] write\n\nnotes from Google\n"
+    const conflict = {
+      base: await md("notes\n"),
+      local: await md("notes from the laptop\n"),
+      remote: await md("notes from Google\n"),
+    }
+    expect(await merge(local, remote)).toEqual({ status: "conflict", conflicts: [conflict] })
+    expect(await merge(local, remote, "remote")).toEqual({
+      status: "clean",
+      blocks: await md(remote),
+      conflicts: [conflict],
+    })
+    expect(await merge(local, remote, "both")).toEqual({
+      status: "clean",
+      blocks: await md("# Plan\n\n- [ ] call\n- [ ] write\n\nnotes from the laptop\n\nnotes from Google\n"),
+      conflicts: [conflict],
+    })
+  })
+
+  it("treats two inserts at the same place as a conflict unless they are equal", async () => {
+    const merged = await merge(`${base}\nmine\n`, `${base}\ntheirs\n`)
+    expect(merged.status).toBe("conflict")
+  })
+
+  it("refuses to merge when the two sides of the last sync do not hold the same blocks", async () => {
+    expect(mergeBlocks(await md("a\n"), await md("b\n"), await md("a\n"), await md("b\n"))).toEqual({
+      status: "unaligned",
+    })
   })
 })

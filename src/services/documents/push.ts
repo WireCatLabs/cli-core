@@ -1,10 +1,12 @@
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { createReadStream } from "node:fs"
-import { readdir } from "node:fs/promises"
-import { join, posix } from "node:path"
+import { readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { basename, dirname, join, posix } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type {
+  ConflictPart,
   DocumentTarget,
+  Keep,
   LocalDocument,
   Pushed,
   PushPlan,
@@ -20,7 +22,10 @@ export interface PushOptions<S> {
   target: DocumentTarget<S>
   state: PushStatePort<S>
   principal: string
-  force?: boolean
+  /** Settles stretches both sides changed; without it they are conflicts. */
+  keep?: Keep
+  /** Creates again a remote file that was deleted. */
+  recreate?: boolean
   dryRun?: boolean
   /** Runs one remote write behind the provider's permission checks and write journal. */
   guard<T>(
@@ -34,11 +39,22 @@ export interface PushOptions<S> {
   maxFiles?: number
   now?(): number
 }
+export interface PushConflict {
+  path: string
+  url: string
+  reason: string
+  parts?: ConflictPart[]
+  localChangedAt?: string
+  remoteChangedAt?: string
+  remoteChangedBy?: string
+}
 export interface PushResult {
   created: string[]
   updated: string[]
+  /** Local files rewritten with changes made on the remote. */
+  pulled: string[]
   unchanged: number
-  conflicts: { path: string; url: string; reason: string }[]
+  conflicts: PushConflict[]
   missing: string[]
   orphans: { path: string; url: string }[]
   errors: { path: string; code: string; message: string }[]
@@ -57,6 +73,25 @@ const hashFile = (path: string): Promise<string> =>
       .on("error", fail)
       .on("end", () => done(hash.digest("hex")))
   })
+
+const hashText = (text: string) => createHash("sha256").update(text).digest("hex")
+
+/**
+ * Replaces the file through a temporary file beside it, keeping its mode. Undefined, and nothing written, when
+ * the file no longer has `hash`: someone saved it during the sync.
+ */
+const replaceLocal = async (file: LocalDocument, content: string): Promise<string | undefined> => {
+  const temp = join(dirname(file.absolute), `.${basename(file.absolute)}.${randomUUID().slice(0, 8)}.tmp`)
+  const { mode } = await stat(file.absolute)
+  await writeFile(temp, content, { mode: mode & 0o777, flag: "wx" })
+  try {
+    if ((await hashFile(file.absolute)) !== file.hash) return undefined
+    await rename(temp, file.absolute)
+  } finally {
+    await rm(temp, { force: true })
+  }
+  return hashText(content)
+}
 
 /** Files under `root` the target pushes. Hidden files, editor leftovers and symbolic links are never followed. */
 export const scanLocal = async (
@@ -118,7 +153,7 @@ const originOf = (principal: string, root: string, folder: string, path: string)
     .slice(0, 32)
 
 export const pushDocuments = async <S>(options: PushOptions<S>): Promise<PushResult> => {
-  const { root, folder, target, principal, force = false, signal } = options
+  const { root, folder, target, principal, keep, recreate = false, signal } = options
   const now = options.now ?? Date.now
   if (signal?.aborted) throw new CliError("cancelled", "push was cancelled")
   if ((await target.identity()) !== principal)
@@ -142,7 +177,8 @@ export const pushDocuments = async <S>(options: PushOptions<S>): Promise<PushRes
   const result: PushResult = {
     created: [],
     updated: [],
-    unchanged: plan.unchanged.length,
+    pulled: [],
+    unchanged: 0,
     conflicts: [],
     missing: [],
     orphans: plan.orphans.map((path) => ({ path, url: state.entries[path]?.url ?? "" })),
@@ -200,9 +236,11 @@ export const pushDocuments = async <S>(options: PushOptions<S>): Promise<PushRes
     result.created.push(file.path)
   }
 
+  // A file unchanged here may have changed remotely, so every mirrored file is read back.
   const work = [
     ...plan.create.map((file) => ({ file, create: true })),
     ...plan.update.map((file) => ({ file, create: false })),
+    ...plan.unchanged.map((file) => ({ file, create: false })),
   ]
   for (const job of work.sort((a, b) => a.file.path.localeCompare(b.file.path))) {
     if (signal?.aborted) {
@@ -220,15 +258,24 @@ export const pushDocuments = async <S>(options: PushOptions<S>): Promise<PushRes
         id: entry.id,
         file,
         recorded: entry.snapshot,
-        force,
+        ...(keep ? { keep } : {}),
         ...(signal ? { signal } : {}),
       })
       if ("conflict" in prepared) {
-        result.conflicts.push({ path: file.path, url: entry.url, reason: prepared.conflict })
+        const { mtime } = await stat(file.absolute)
+        result.conflicts.push({
+          path: file.path,
+          url: entry.url,
+          reason: prepared.conflict,
+          ...(prepared.parts ? { parts: prepared.parts } : {}),
+          localChangedAt: mtime.toISOString(),
+          ...(prepared.remote?.changedAt ? { remoteChangedAt: prepared.remote.changedAt } : {}),
+          ...(prepared.remote?.changedBy ? { remoteChangedBy: prepared.remote.changedBy } : {}),
+        })
         continue
       }
       if ("missing" in prepared) {
-        if (!force) {
+        if (!recreate) {
           result.missing.push(file.path)
           continue
         }
@@ -237,19 +284,34 @@ export const pushDocuments = async <S>(options: PushOptions<S>): Promise<PushRes
         continue
       }
       let pushed: Pushed<S>
+      let hash = file.hash
       if ("unchanged" in prepared) {
         pushed = prepared.unchanged
         result.unchanged++
       } else {
-        const operationId = options.operationId()
-        options.assertHeld()
-        pushed = await options.guard({ action: "update", path: file.path, operationId }, () => prepared.write())
-        result.updated.push(file.path)
+        // The local file goes first: if the remote write then fails, the next sync finds the same change on
+        // both sides and merges it once.
+        if (prepared.local !== undefined) {
+          options.assertHeld()
+          const written = await replaceLocal(file, prepared.local)
+          if (!written) {
+            result.conflicts.push({ path: file.path, url: entry.url, reason: "the local file changed during the sync" })
+            continue
+          }
+          hash = written
+          result.pulled.push(file.path)
+        }
+        if (prepared.remote) {
+          const operationId = options.operationId()
+          options.assertHeld()
+          pushed = await options.guard({ action: "update", path: file.path, operationId }, () => prepared.write())
+          result.updated.push(file.path)
+        } else pushed = await prepared.write()
       }
       state.entries[file.path] = {
         ...pushed,
         kind: file.kind,
-        hash: file.hash,
+        hash,
         pushedAt: new Date(now()).toISOString(),
       }
       save()

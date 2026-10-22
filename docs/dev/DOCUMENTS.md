@@ -57,32 +57,47 @@ history. Extraction tests cover preview, evidence, proposed saves and source cha
 write boundaries. Drive's integration tests exercise its actual adapters against the packed Core
 candidate. Tests do not contact a real provider or measure model accuracy.
 
-## Push local files to a provider
+<a id="push-local-files-to-a-provider"></a>
 
-`pushDocuments` mirrors a local folder one way into a provider's native documents. The provider implements
+## Sync local files with a provider
+
+`pushDocuments` keeps a local folder and a provider's native documents in step, both ways. The provider implements
 `DocumentTarget`: which local paths it takes (`kindOf`), find-or-create of folders by an origin key, `create`,
 `prepare` and `findByOrigin`. It persists `PushState` through `PushStatePort`, holds its profile lock and passes
-`assertHeld`, and wraps each write in `guard` with its permission checks and write journal.
+`assertHeld`, and wraps each remote write in `guard` with its permission checks and write journal.
 
-1. Unchanged files are skipped by content hash with no remote call. `planPush` is the plan alone (`dryRun`).
+1. Every mirrored file is read back from the provider on each run, changed locally or not: a remote edit is
+   found only by reading. `planPush` is the local plan alone (`dryRun`, a status command).
 2. A create saves a pending origin key first; the provider stores it on the remote file. After a crash, the next
    run finds the file with `findByOrigin` and updates it instead of creating a second one.
-3. `prepare` reads the remote and compares it with the snapshot the last push recorded. It returns a conflict
-   (unless `force`), `missing`, `unchanged` (nothing to write) or a `write` step; only `write` runs inside `guard`,
-   so a conflict never reaches the write journal. The snapshot is the provider's own read-back after its write, so
-   its own push never looks like an edit. One file is one provider write (or one all-or-nothing batch): a write cut
-   in half would read back as an edit.
-4. Nothing is deleted remotely. A file deleted locally is an orphan; a file deleted remotely is missing and is
-   created again only with `force`.
+3. `prepare` merges the remote and the local file against the snapshot the last sync recorded, and returns a
+   conflict, `missing`, `unchanged`, or the merge: new `local` content and a `write` step that reaches the remote
+   only when `remote` is true. A conflict lists its parts and, when the provider knows them, when and by whom the
+   remote last changed; the engine adds the local file's time. A conflict never reaches the write journal, and the
+   run goes on with the other files. `keep` (`local`, `remote`, `both`) settles conflicts instead.
+4. The local file is written before the remote: through a temporary file beside it, keeping its mode, and only if
+   it still has the hash this run read — a file saved meanwhile is reported, not overwritten. If the remote write
+   then fails, the next run finds the same change on both sides and merges it once.
+5. Nothing is deleted remotely. A file deleted locally is an orphan; a file deleted remotely is missing and is
+   created again only with `recreate`.
 
-For documents with structure, `markdownBlocks` (async; the parser loads on first use) parses Markdown into `Block`s (headings, paragraphs, bullet,
-numbered and checklist items, code, quotes, tables, images, rules) with inline marks. The provider maps its own
-document into the same blocks and writes only `diffBlocks(current, next)`, so unchanged paragraphs keep their
-comments and formatting. `reconcileBlocks(recorded, current, local, lastLocal)` allows one remote change, a
-checklist tick: a tick follows the side that changed it, judged against `lastLocal` (the file at the last push), so
-a remote tick survives later pushes. Any other remote change is a conflict. The provider's snapshot therefore keeps
-both the blocks it wrote and the local blocks it pushed. A field the provider
-cannot read back must stay out of its blocks, or that block would differ on every push.
+For documents with structure, `markdownBlocks` (async; the parser loads on first use) parses Markdown into `Block`s
+(headings, paragraphs, bullet, numbered and checklist items, code, quotes, tables, images, rules) with inline marks.
+The provider maps its own document into the same blocks and writes only `diffBlocks(current, next)`, so unchanged
+paragraphs keep their comments and formatting.
+
+`mergeBlocks(baseLocal, baseRemote, local, remote, keep?)` is the three-way merge. Blocks line up by shape, ticks
+left out, so a checklist tick never collides with a text edit: each tick follows the side that changed it, the
+remote when neither did. Changes to different blocks merge; the same change on both sides merges once; a stretch
+both sides changed differently is a conflict. The provider's snapshot keeps both the blocks it wrote and the local
+blocks they came from; when those two no longer line up, the merge returns `unaligned` and the provider reports a
+conflict rather than guess. A field the provider cannot read back must stay out of its blocks, or that block would
+differ on every sync.
+
+`spliceMarkdown(text, next, normalize)` writes the merge back into the Markdown file: only the lines of blocks that
+differ change (a tick is flipped inside its line), so the rest keeps its markers, spacing, line endings and
+byte-order mark. The result is parsed again and must read as `next`; otherwise it returns undefined and the caller
+reports a conflict instead of writing. `blocksMarkdown` writes blocks as Markdown that reads back as the same blocks.
 
 ## Copy a document collection to another database
 

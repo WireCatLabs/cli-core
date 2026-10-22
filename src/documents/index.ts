@@ -1,10 +1,18 @@
-export { type BlockHunk, diffBlocks, type Reconciled, reconcileBlocks } from "../services/documents/block-diff.js"
+export {
+  type BlockConflict,
+  type BlockHunk,
+  diffBlocks,
+  type Merged,
+  mergeBlocks,
+} from "../services/documents/block-diff.js"
 export { type Complete, extractMemories } from "../services/documents/extraction.js"
 export { documentIngestion, type IngestionOptions } from "../services/documents/ingestion.js"
 export { type DocumentKnowledge, documentKnowledge } from "../services/documents/knowledge.js"
+export { blocksMarkdown, inlineMarkdown, spliceMarkdown } from "../services/documents/markdown-splice.js"
 export type { SyncOptions } from "../services/documents/ports.js"
 export { extractDocumentMemories, type ImportedSource, type ProposalOptions } from "../services/documents/proposals.js"
 export {
+  type PushConflict,
   type PushOptions,
   type PushResult,
   planPush,
@@ -14,7 +22,7 @@ export {
 export { type SyncResult, syncDocuments } from "../services/documents/sync.js"
 export { type Block, blockKey, blockShape, type Inline, type ListKind, normalizeInlines } from "./blocks.js"
 export { catalogFiles } from "./catalog.js"
-export { markdownBlocks } from "./markdown-blocks.js"
+export { markdownBlocks, type PlacedBlock, placedMarkdownBlocks } from "./markdown-blocks.js"
 export type {
   DocumentSource,
   IndexedSource,
@@ -31,7 +39,9 @@ export type {
   TabText,
 } from "./model.js"
 export type {
+  ConflictPart,
   DocumentTarget,
+  Keep,
   LocalDocument,
   Prepared,
   PushEntry,
@@ -39,5 +49,6 @@ export type {
   PushPlan,
   PushState,
   PushStatePort,
+  RemoteChange,
 } from "./push-model.js"
 export { within } from "./scope.js"
