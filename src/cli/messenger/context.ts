@@ -592,7 +592,19 @@ export const connectedFor = async (
   }
 }
 
-const unrecorded = (command: Command, messenger: Messenger, profile: string, offline: boolean): CliError => {
+const unrecorded = (
+  command: Command,
+  messenger: Messenger,
+  profile: string,
+  { offline, profilesHere }: Pick<Settings, "offline" | "profilesHere">,
+): CliError => {
+  if (!profilesHere.includes(profile)) {
+    return new CliError(
+      "not_found",
+      `no profile named "${profile}" — profiles here: ${profilesHere.length > 0 ? profilesHere.join(", ") : "none"}`,
+      { profiles: profilesHere },
+    )
+  }
   const words = `${messenger.app.command} ${asFirstWord(profile)}`
   const setup = rootOf(command).commands.some((one) => one.name() === "setup") ? `\`${words}setup\`` : undefined
   if (messenger.history === "store")
@@ -690,7 +702,7 @@ export const messengerContext = (
   const warn: Warn = (text, warning) => (base.renderer.warn as Warn)(text, warning)
   const accountFor = (): AccountKey => {
     const account = messenger.accountOf?.(command) ?? recalledAccount(app, provider, profile, base.env)
-    if (!account) throw unrecorded(command, messenger, profile, base.settings.offline)
+    if (!account) throw unrecorded(command, messenger, profile, base.settings)
     return account
   }
   const guard =

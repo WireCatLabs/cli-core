@@ -13,6 +13,9 @@ shape of this file.
   `--no-mark-read`. Remove `catch_up_marks_read` from configuration; it is now refused. Use
   `<cli> <profile> chats mark-read <chat>` when you intend to send a read receipt.
 - `tags auto` declares its messenger read, including the preparatory read requested with `--sync-first`.
+- A local read with an unknown profile now lists the profiles on this computer in its error and
+  `details.profiles`, so a typo does not suggest linking a new account. A configured profile with no
+  saved account still explains how to fill its local history.
 
 ## 0.389.0 — 22.10.2026
 
@@ -186,7 +189,6 @@ shape of this file.
 - **An import says the zone it read file times in, and a host can explain its file names.** `RunReport.timezone` is
   set when every imported file's meeting carries one zone; `MeetingCommandDeps.importHelp` adds the host's note
   (file name patterns, how their time is read) under `meetings import --help`.
-||||||| Stash base
 - **Meeting search finds words spread over neighbouring lines.** `"циан риелтор"~3` in a meeting query finds a
   transcript line with one of the words when the others are at most three lines away in the same transcript; `~0`
   is one line, any order; at most 20. The words widen to garbled spellings as single words do. It needs
