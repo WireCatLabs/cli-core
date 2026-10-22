@@ -117,7 +117,7 @@ it("lists links shared in meeting chat, most shared first, with who shared them 
       senderName: "Bob Sample",
       text: "Again https://example.com/plan and https://docs.google.com/document/d/EXAMPLEdocumentId123/edit",
     },
-  ] as typeof input.chat
+  ] as unknown as typeof input.chat
   await store.meetings.saveMeeting(input)
   const links = await readMeetingLinks(store, { accountId })
   expect(links).toMatchObject({ messages: 4, meetings: 3 })
