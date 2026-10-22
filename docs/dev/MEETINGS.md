@@ -254,6 +254,18 @@ The cursor is an offset into one ranking, bound to the query, the filters and th
 either list has nothing more. `coverage.meaningScanComplete` is false when `maxChunks` stopped the scan; indexing and
 archive completeness stay unknown, as in word search.
 
+## Meeting stats
+
+`readMeetingStats(store, request)` from the services export answers talk time, lines and words per speaker, and
+meetings and talk time per week, over the meetings search would read (`meetingSelectionSql`; `project`, `tag` and
+`topic` names resolve as in `searchMeetingHits`). A speaker is a linked person when the line's participant has one,
+else the participant's identity, else the name the transcript gives; lines with none are `unknown`. Talk time is each
+line's end less its start, so overlapping speech counts for everyone speaking. Each meeting counts its earliest current
+transcript only, so a local transcript beside the provider's does not count twice; meetings without a transcript are
+not counted. Weeks start on Monday in `timeZone` (UTC when not given). Words are counted from spaces in SQL; no
+transcript text is read. More than `maxRows` lines (default and at most 500000) is an error, never a silent cut.
+`aggregateMeetingStats` is the same arithmetic over rows a host already has.
+
 ## Project-word discovery SDK
 
 `readMeetingProjectDiscovery` from the services export resolves one existing project through
