@@ -56,7 +56,7 @@ export interface ContextOptions {
   since?: number
 }
 
-const toContext = (key: AccountKey, message: Message, chatTitle: string | null): ContextMessage => ({
+export const toContext = (key: AccountKey, message: Message, chatTitle: string | null): ContextMessage => ({
   locator: formatLocator({ ...key, chat: message.chatId, message: message.id }),
   provider: key.provider,
   account: key.account,
@@ -108,7 +108,7 @@ const newestFirst = (a: ContextMessage, b: ContextMessage) => Date.parse(b.times
  * second account of the same messenger is somebody else's view; for a linked messenger, every account
  * of this store that saw that identity.
  */
-const readsOf = (record: PersonRecord, asked: AccountKey): { key: AccountKey; identity: LinkedIdentity }[] =>
+export const readsOf = (record: PersonRecord, asked: AccountKey): { key: AccountKey; identity: LinkedIdentity }[] =>
   record.identities.flatMap((identity) =>
     (identity.provider === asked.provider ? [asked.account] : identity.accounts)
       .filter((account) => identity.accounts.includes(account))
