@@ -8,7 +8,7 @@ import { defaultRules, ModerationRules, moderationPathFor, RULE_KEYS } from "../
 import { moderateWith, type SavedPoint } from "../../moderation/run.js"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -200,6 +200,7 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
       // An in-process caller's answer counts under --json too: it is not a terminal that could wait for ever.
       const given = environmentOf(this).answer
       const ask = async (question: string) => (given ? await given(question) : await answerOf(this, question))
+      const window = dateWindow(options.sinceTime === undefined ? {} : { sinceTime: options.sinceTime })
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
         const botId = await botIdOf(context, adapter)
@@ -215,7 +216,7 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
             finding.action === "delete"
               ? `${context.words} messages delete ${group} ${finding.messageId} --allow-dangerous`
               : `${context.words} chats members remove ${group} ${finding.personId}`,
-          ...(options.sinceTime === undefined ? {} : { since: momentOf(options.sinceTime, "--since-time") }),
+          ...(window.since === undefined ? {} : { since: window.since }),
           dryRun: options.dryRun === true,
           allowDangerous: options.allowDangerous === true,
           maxActions,
@@ -235,7 +236,7 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
               ...(row.reason ? { why: row.reason } : {}),
             })),
           )
-        else renderAnswer(this, context, itemOf({ chat_id: chatId, rows: snakeKeys(rows) }))
+        else renderAnswer(this, context, itemOf({ chat_id: chatId, rows: snakeKeys(rows) }, { meta: window.meta }))
         for (const note of notes) context.renderer.note(note)
       })
     })

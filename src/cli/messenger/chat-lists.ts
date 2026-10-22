@@ -51,12 +51,14 @@ export const chatsList = async (services: Services, query: QueryWords, paging: P
 
 export const chatEvents = async (services: Services, chat: string, query: QueryWords) => {
   const terms = nativeTerms(listQuery(typedQuery(query), EVENTS_QUERY, "chats events"), "chats events")
-  const { since } = timeBounds(terms.get("time"))
+  const { since, meta } = timeBounds(terms.get("time"))
   const found = await services.chats.events(chat, since === undefined ? {} : { since })
   return wholeList(
     "chats events",
     found.events.map((one) => chatEventAnswer(found.chatId, one)),
-    found.more ? { meta: { truncated: true } } : {},
+    {
+      meta: { ...meta, ...(found.more ? { truncated: true } : {}) },
+    },
   )
 }
 
@@ -75,14 +77,17 @@ export const membersHistory = async (services: Services, chat: string, query: Qu
     listQuery(typedQuery(query), HISTORY_QUERY, "chats members history"),
     "chats members history",
   )
-  const { since } = timeBounds(terms.get("time"))
+  const { since, meta } = timeBounds(terms.get("time"))
   const found = await services.chats.memberHistory(chat, since === undefined ? {} : { since })
   return wholeList(
     "chats members history",
     found.events.map((one) => memberEventAnswer(found.chatId, one)),
-    found.events.length === 0
-      ? { next: [nextStep("chats.members-fetch", { args: { chat: found.chatId, track: true } })] }
-      : {},
+    {
+      ...(found.events.length === 0
+        ? { next: [nextStep("chats.members-fetch", { args: { chat: found.chatId, track: true } })] }
+        : {}),
+      ...(meta ? { meta } : {}),
+    },
   )
 }
 

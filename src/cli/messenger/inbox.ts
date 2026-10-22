@@ -71,7 +71,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
       const { app } = messenger
       const { settings, renderer, format, env } = context
       const kinds = kind === undefined ? undefined : kindsOf(kind)
-      const { since } = catchUpQuery(query, INBOX_QUERY, "inbox")
+      const { since, meta } = catchUpQuery(query, INBOX_QUERY, "inbox")
       if (fresh && since !== undefined)
         throw new CliError("validation_error", "--new keeps its own point — not with a date in the query")
       const saved =
@@ -105,7 +105,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
 
       if (marked !== undefined) renderer.note(`marked ${marked.length} chat(s) read up to the newest message shown`)
       if (inbox.partial && format === "pretty") renderer.warn(PARTIAL_NOTE)
-      const answer = inboxAnswer(inbox, hearing, reader, transcribe === true)
+      const answer = inboxAnswer(inbox, hearing, reader, transcribe === true, meta)
       renderAnswer(this, context, answer, () => {
         if (answer.items.length === 0) {
           renderer.note(inbox.mode === "unread" ? "nothing unread" : `nothing new since ${inbox.since}`)

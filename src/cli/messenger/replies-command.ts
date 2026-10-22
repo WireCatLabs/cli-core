@@ -7,7 +7,7 @@ import { audienceWarnings, readReplies, repliesPathFor } from "../../replies/rul
 import { paused, readRepliesState, repliesStatePathFor, writeRepliesState } from "../../replies/state.js"
 import type { Warn } from "../../runs/events.js"
 import { levelFor } from "../../sends/permissions.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -50,7 +50,8 @@ export const repliesCommand = (messenger: Messenger): Command => {
           "permission_error",
           "this profile denies reading messages — no stored data was sent to a reply model",
         )
-      const since = momentOf(sinceTime ?? `${DRY_RUN_DAYS}d`, "--since-time")
+      const window = dateWindow({ sinceTime: sinceTime ?? `${DRY_RUN_DAYS}d` })
+      const since = window.since as number
       const path = repliesPathFor(messenger.app, settings.profile, env)
       const { rules, audience } = readReplies(path, messenger.provider)
       if (rules.length === 0) {
@@ -110,7 +111,7 @@ export const repliesCommand = (messenger: Messenger): Command => {
           .sort(([, a], [, b]) => b - a)
           .map(([why, count]) => `  passed over ${count}: ${why}`),
       ])
-      renderAnswer(this, context, itemOf(answer), () => `${lines.join("\n")}\n`)
+      renderAnswer(this, context, itemOf(answer, { meta: window.meta }), () => `${lines.join("\n")}\n`)
     })
 
   const switched = (on: boolean) =>

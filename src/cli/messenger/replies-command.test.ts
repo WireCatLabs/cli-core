@@ -124,6 +124,10 @@ describe("replies test", () => {
     const modeled = await replies(["replies", "test", "--ai", "--json"], env)
     expect(modeled.code).toBe(0)
     expect(JSON.parse(modeled.stdout.join("")).item.rules[0].would[0].text).toBe("Hello Ana")
+    expect(JSON.parse(modeled.stdout.join("")).meta).toEqual(
+      expect.objectContaining({ window: { since: expect.stringMatching(/Z$/) } }),
+    )
+    expect(JSON.parse(modeled.stdout.join("")).meta).not.toHaveProperty("timezone")
     expect(fetcher).toHaveBeenCalledTimes(1)
     const configPath = join(env.CHAT_CONFIG_DIR, "config.json")
     const config = JSON.parse(readFileSync(configPath, "utf8"))

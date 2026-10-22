@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { levelFor } from "../../sends/permissions.js"
 import { phoneOf } from "../../services/index.js"
-import { dateWindow, momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { maskedAccount } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
@@ -173,11 +173,12 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
       return
     }
+    const window = dateWindow(sinceTime === undefined ? {} : { sinceTime })
     const found = await context.withServices((services) =>
       services.people.context(person, {
         messages: limit ?? CONTEXT_MESSAGES,
         bytes: CONTEXT_BYTES,
-        ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
+        ...(window.since === undefined ? {} : { since: window.since }),
       }),
     )
     const { hasMore, ...rest } = found
@@ -190,7 +191,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
               .filter((chat) => chat.provider === messenger.provider)
               .map((chat) => nextStep("messages.sync", { args: { chat: chat.chatId } }))
           : [],
-        ...(hasMore ? { meta: { truncated: true } } : {}),
+        meta: { ...window.meta, ...(hasMore ? { truncated: true } : {}) },
       }),
     )
     if (hasMore) context.renderer.note("cut at --limit; a larger one shows more")

@@ -9,7 +9,7 @@ import { isCliFailure } from "../../errors/failures.js"
 import { envName } from "../../ports/app.js"
 import { FETCHING, type Fetched, type FetchedAll } from "../../services/archive.js"
 import { JOBS_QUERY, jobItems } from "../../services/job-query.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { applyTaskRulesSinceLastPass, type RuleResult } from "../../services/task-rules.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
@@ -136,8 +136,9 @@ export const syncCommand = (messenger: Messenger): Command => {
       }
       const limit = sizes.limit ?? fetching.maxPages * fetching.page
       const pauseMs = parseDuration(pause, "--pause")
-      const window = since ?? (all && last === undefined ? ALL_SINCE : undefined)
-      const sinceMs = window === undefined ? undefined : momentOf(window, "--since-time")
+      const from = since ?? (all && last === undefined ? ALL_SINCE : undefined)
+      const window = dateWindow(from === undefined ? {} : { sinceTime: from })
+      const sinceMs = window.since
       const context = messengerContext(this, messenger)
       const prepare = catchUp ?? context.settings.searchCatchUp ?? false
       const preparation = {
@@ -195,7 +196,10 @@ export const syncCommand = (messenger: Messenger): Command => {
         renderAnswer(
           this,
           context,
-          itemOf(snakeKeys(started), { next: [nextStep("store.job", { args: { job: started.job } })] }),
+          itemOf(snakeKeys(started), {
+            next: [nextStep("store.job", { args: { job: started.job } })],
+            meta: window.meta,
+          }),
         )
         return
       }
@@ -243,6 +247,7 @@ export const syncCommand = (messenger: Messenger): Command => {
                   : []),
                 ...(toReview > 0 ? [nextStep("mentions.review", { args: { new: true }, values: { shown } })] : []),
               ],
+              meta: window.meta,
             },
           ),
         )

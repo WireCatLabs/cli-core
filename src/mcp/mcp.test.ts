@@ -493,6 +493,17 @@ describe("the MCP server", () => {
       continuous_survival: false,
     })
     expect(retention.body.next?.length ?? 0).toBe(retention.body.item.rows.length > 0 ? 1 : 0)
+    const dated = await call("stats chats retention", {
+      chat: "7",
+      since_time: "2026-09-01",
+      until_time: "2026-09-01",
+      timezone: "Asia/Vladivostok",
+    })
+    expect(dated.isError, JSON.stringify(dated.body)).toBe(false)
+    expect(dated.body.meta).toMatchObject({
+      timezone: "Asia/Vladivostok",
+      window: { since: "2026-08-31T14:00:00.000Z", until: "2026-09-01T13:59:59.999Z" },
+    })
     const shown = await call("stats messages counters show", { chat: "7", counters: "views", limit: 1 })
     expect(shown.isError, JSON.stringify(shown.body)).toBe(false)
     const preview = await call("stats messages counters refresh", {

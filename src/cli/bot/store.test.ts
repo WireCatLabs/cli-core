@@ -94,9 +94,10 @@ describe("bot store fetch", () => {
       reached_last: true,
     })
     const since = new Date(START + 200 * 60_000).toISOString()
-    expect((await call(["store", "fetch", "-100", "--since-time", since, "--json"])).answer.item).toMatchObject({
-      reached_since: true,
-    })
+    const reached = (await call(["store", "fetch", "-100", "--since-time", since, "--json"])).answer
+    expect(reached.item).toMatchObject({ reached_since: true })
+    expect(reached.meta).toMatchObject({ window: { since } })
+    expect(reached.meta).not.toHaveProperty("timezone")
     expect((await call(["store", "fetch", "-100", "--last", "5", "--since-time", since])).code).toBe(2)
   })
 

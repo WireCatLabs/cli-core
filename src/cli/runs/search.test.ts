@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { expect, it } from "vitest"
+import { afterEach, expect, it } from "vitest"
 import { findRun, listRuns, readEvents, startRun } from "../../runs/run.js"
 import { searchRuns } from "./search.js"
 
@@ -128,4 +128,22 @@ it("reads runs written before their keys were snake_case, from the index and fro
   ])
   const shown = findRun(dir, "20261001T080000Z-messages-download-bbbbbb")
   expect(shown && readEvents(shown.dir)).toMatchObject([{ error_code: "rate_limited", duration_ms: 7 }])
+})
+
+const processZone = process.env.TZ
+afterEach(() => {
+  process.env.TZ = processZone
+})
+
+it("reads a date alone in the computer's zone and reports that zone and the UTC window", () => {
+  process.env.TZ = "Asia/Vladivostok"
+  const dir = mkdtempSync(join(tmpdir(), "run-search-"))
+  expect(searchRuns(dir, { since: "2026-09-01" }).meta).toEqual({
+    timezone: "Asia/Vladivostok",
+    window: { since: "2026-08-31T14:00:00.000Z" },
+  })
+  expect(searchRuns(dir, { since: "2026-09-01T00:00:00Z" }).meta).toEqual({
+    window: { since: "2026-09-01T00:00:00.000Z" },
+  })
+  expect(searchRuns(dir).meta).toEqual({})
 })

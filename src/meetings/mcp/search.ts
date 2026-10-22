@@ -67,10 +67,17 @@ export const callMeetingSearchTool = async (
     const query = args.query as string
     validateMeetingHitSearch(query, options)
     signal?.throwIfAborted()
-    const result = meetingHitsList(await search(query, options), options.limit ?? 100, "search meetings", {
-      ...args,
-      max_read_bytes: options.maxReadBytes ?? 4194304,
-    })
+    const window = {
+      ...(options.since === undefined ? {} : { since: new Date(options.since).toISOString() }),
+      ...(options.until === undefined ? {} : { until: new Date(options.until).toISOString() }),
+    }
+    const result = meetingHitsList(
+      await search(query, options),
+      options.limit ?? 100,
+      "search meetings",
+      { ...args, max_read_bytes: options.maxReadBytes ?? 4194304 },
+      Object.keys(window).length === 0 ? {} : { window },
+    )
     signal?.throwIfAborted()
     return agentResult({
       content: [{ type: "text" as const, text: JSON.stringify(result) }],

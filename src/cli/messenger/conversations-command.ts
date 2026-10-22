@@ -16,7 +16,7 @@ import {
   type Refreshed,
 } from "../../services/embeddings.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
 import {
@@ -815,6 +815,10 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
       }
       const { limit } = context.settings
+      const window = dateWindow({
+        ...(since === undefined ? {} : { sinceTime: since }),
+        ...(options.timezone === undefined ? {} : { zone: options.timezone }),
+      })
       const { found, refreshed } = await context.withServices(async (services) => {
         const syncing = syncRequest(this, context)
         const found = await services.embeddings.search(query, {
@@ -835,13 +839,16 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
           ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
           ...(chat === undefined ? {} : { chat }),
           model,
-          ...(since === undefined ? {} : { since: new Date(momentOf(since, "--since-time")).toISOString() }),
+          ...(window.since === undefined ? {} : { since: new Date(window.since).toISOString() }),
         })
         return { found, refreshed: found.prepared }
       })
       if (refreshed) for (const note of leftNotes(refreshed, rootOf(this))) context.renderer.note(note)
-      renderAnswer(this, context, foundConversations("search conversations", found, limit, messenger, chat), () =>
-        found.hits.map((hit) => `${hitLine(hit)}\n`).join(""),
+      renderAnswer(
+        this,
+        context,
+        foundConversations("search conversations", found, limit, messenger, chat, window.meta),
+        () => found.hits.map((hit) => `${hitLine(hit)}\n`).join(""),
       )
       if (found.hits.length === 0 && context.format === "pretty")
         context.renderer.note(

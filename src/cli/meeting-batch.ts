@@ -19,6 +19,7 @@ import {
   meetingHitSearchRequest,
   meetingPassageRequest,
   meetingSearchArguments,
+  meetingSearchMeta,
 } from "../meetings/cli/index.js"
 import {
   type MeetingBatchReader,
@@ -74,6 +75,7 @@ const handlers = (reader: MeetingBatchReader, meta: () => Meta): BatchHandler[] 
               ...meetingHitsList(found, request.limit ?? 100, "search meetings", meetingSearchArguments(query, flags)),
               meta: {
                 ...meta(),
+                ...meetingSearchMeta(flags),
                 complete,
                 ...(!complete ? { issues: [{ code: "invalid_response" as const, source: "meeting-index" }] } : {}),
               },

@@ -214,5 +214,6 @@ export {
   type MeetingSearchFlags,
   meetingHitSearchRequest,
   meetingSearchArguments,
+  meetingSearchMeta,
   validateMeetingHitSearch,
 } from "./search.js"

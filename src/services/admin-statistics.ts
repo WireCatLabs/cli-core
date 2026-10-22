@@ -7,7 +7,7 @@ import type { AdminStoreResult, MessageStore } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import type { SearchQuery } from "./messages.js"
 import { prepareLucene, stemExecution } from "./messages-search.js"
-import { momentOf } from "./moment.js"
+import { type DateWindow, dateWindow } from "./moment.js"
 import { type RankingSelection, rankingSelection, readRankingSelection } from "./rankings-selection.js"
 import { searchRecordOf } from "./search-record.js"
 
@@ -30,6 +30,8 @@ export interface AdminSelection {
 }
 export interface AdminFound extends AdminStoreResult {
   report: AdminReport
+  /** How the typed join dates were read, for the answer's `meta`. */
+  timeMeta?: DateWindow["meta"]
   detectorVersion: 1
   items: (AdminStoreResult["items"][number] & {
     drilldown: {
@@ -270,6 +272,12 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
       (query.source || query.ast || query.exact || (query.timezone && query.timezone !== prepared.timezone))
     )
       invalid("a saved report keeps its resolved query, accounts and timezone")
+    const window = dateWindow({
+      ...(query.sinceTime ? { sinceTime: query.sinceTime } : {}),
+      ...(query.untilTime ? { untilTime: query.untilTime } : {}),
+      zone: prepared.timezone,
+      now: cutoff,
+    })
     const options: AdminOptions = {
       report,
       cutoff,
@@ -278,12 +286,8 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
           ? pinned.options.olderThan
           : duration(query.olderThan ?? "24h", "--older-than"),
       within: query.within === undefined && pinned ? pinned.options.within : duration(query.within ?? "7d", "--within"),
-      joinSince: query.sinceTime
-        ? momentOf(query.sinceTime, "--since-time", cutoff, { zone: prepared.timezone })
-        : (pinned?.options.joinSince ?? cutoff - 30 * 86_400_000),
-      joinUntil: query.untilTime
-        ? momentOf(query.untilTime, "--until-time", cutoff, { zone: prepared.timezone, end: true })
-        : (pinned?.options.joinUntil ?? cutoff),
+      joinSince: window.since ?? pinned?.options.joinSince ?? cutoff - 30 * 86_400_000,
+      joinUntil: window.until ?? pinned?.options.joinUntil ?? cutoff,
       minViews: count(query.minViews ?? pinned?.options.minViews ?? 1, "--min-views"),
       maxReplies: count(query.maxReplies ?? pinned?.options.maxReplies ?? 0, "--max-replies"),
       answerers:
@@ -327,6 +331,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
     return {
       ...result,
       report,
+      timeMeta: window.meta,
       detectorVersion: 1,
       items: result.items.map((original) => {
         const identityKnown = known.has(

@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { findRun, listRuns, readEvents } from "../../runs/run.js"
-import { momentOf } from "../../services/moment.js"
+import { dateWindow } from "../../services/moment.js"
 import { listOf, snakeKeys } from "../envelope.js"
 
 export interface RunSearch {
@@ -56,7 +56,8 @@ export const searchRuns = (
 ) => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(page) || page < 1)
     throw new CliError("validation_error", "run search uses a limit from 1 to 100 and a positive page")
-  const from = since === undefined ? undefined : momentOf(since, "--since-time")
+  const window = dateWindow(since === undefined ? {} : { sinceTime: since })
+  const from = window.since
   if (from !== undefined && !Number.isFinite(from))
     throw new CliError("validation_error", "--since-time must be a valid date or ISO timestamp")
   const needle = query.toLowerCase()
@@ -125,7 +126,13 @@ export const searchRuns = (
     matches.push({ ...metadata, events: filtered.slice(0, 100), eventsTruncated: filtered.length > 100 })
     if (matches.length > offset + limit) break
   }
-  return { items: matches.slice(offset, offset + limit), page, limit, hasMore: matches.length > offset + limit }
+  return {
+    items: matches.slice(offset, offset + limit),
+    page,
+    limit,
+    hasMore: matches.length > offset + limit,
+    meta: window.meta,
+  }
 }
 
 /** A page of `searchRuns` in the list envelope; `args` are the search's own, so `page.next` reruns it. */
@@ -136,4 +143,5 @@ export const runsFound = (found: ReturnType<typeof searchRuns>, args: Record<str
     has_more: found.hasMore,
     page: found.page,
     args: Object.fromEntries(Object.entries(args).filter(([name, value]) => value !== undefined && name !== "page")),
+    meta: found.meta,
   })

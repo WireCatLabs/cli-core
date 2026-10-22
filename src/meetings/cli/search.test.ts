@@ -120,7 +120,31 @@ it("forwards combined context, dates and continuation to an injected provider-ne
         }),
       }),
     ],
+    meta: {
+      timezone: "Europe/Madrid",
+      window: { since: "2026-09-11T22:00:00.000Z", until: "2026-10-12T21:59:59.999Z" },
+    },
   })
+})
+it("names no zone when every typed time carries its own", async () => {
+  const program = new Command("example")
+  const output = vi.fn()
+  const search = vi.fn(async () => ({
+    items: [],
+    hasMore: false,
+    nextCursor: null,
+    coverage: {
+      archiveCompleteness: "unknown" as const,
+      currentRevisions: true as const,
+      indexing: "ready" as const,
+      indexCompleteness: "unknown" as const,
+    },
+  }))
+  addMeetingSearchCommand(program, { search, signal: () => undefined, output })
+  await program.parseAsync(["search", "meetings", "budget", "--since-time", "2026-09-12T08:00:00+02:00"], {
+    from: "user",
+  })
+  expect(output.mock.calls[0]?.[0].meta).toEqual({ window: { since: "2026-09-12T06:00:00.000Z" } })
 })
 it("rejects impossible dates and invalid selectors before opening a store", async () => {
   const cases = [

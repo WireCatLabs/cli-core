@@ -118,6 +118,24 @@ describe("administrator statistics command views", () => {
     const newcomers = await call(["stats", "chats", "newcomers", "7", "--within", "3d", "--json"])
     expect(newcomers.code, newcomers.stderr).toBe(0)
     expect(JSON.parse(newcomers.stdout).item).toMatchObject({ report: "newcomers", rows: [] })
+    const dated = await call([
+      "stats",
+      "chats",
+      "newcomers",
+      "7",
+      "--since-time",
+      "2026-09-01",
+      "--until-time",
+      "2026-09-01",
+      "--timezone",
+      "Asia/Vladivostok",
+      "--json",
+    ])
+    expect(dated.code, dated.stderr).toBe(0)
+    expect(JSON.parse(dated.stdout).meta).toMatchObject({
+      timezone: "Asia/Vladivostok",
+      window: { since: "2026-08-31T14:00:00.000Z", until: "2026-09-01T13:59:59.999Z" },
+    })
     const discussion = await call(["stats", "messages", "discussion", "--max-replies", "2", "--json"])
     expect(discussion.code, discussion.stderr).toBe(0)
     expect(JSON.parse(discussion.stdout).item).toMatchObject({ report: "discussion", rows: [] })

@@ -64,7 +64,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
       const hearWith = modelWith(options.transcribe, options.model)
       const context = messengerContext(this, messenger)
       const { settings, renderer, format, env } = context
-      const { since: from, chat } = catchUpQuery(query, REVIEW_QUERY, "review")
+      const { since: from, chat, meta } = catchUpQuery(query, REVIEW_QUERY, "review")
       if (options.new && (from !== undefined || options.unanswered !== undefined)) {
         // An open question stays open: moving past it would drop it from the next review.
         throw new CliError("validation_error", "--new keeps its own point — not with a date or --unanswered")
@@ -118,6 +118,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
           transcribe,
           fresh: saved !== undefined,
           ...(chat === undefined ? {} : { chat }),
+          ...(meta === undefined ? {} : { meta }),
         }),
         () => {
           const read = found.chats
