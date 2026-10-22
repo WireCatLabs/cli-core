@@ -246,6 +246,14 @@ export {
   type MeetingRelatedHistoryStore,
   validateMeetingRelatedHistory,
 } from "./related-history.js"
+export {
+  type MeetingReview,
+  type MeetingReviewInput,
+  type MeetingReviewItem,
+  type MeetingReviewSpeaker,
+  type MeetingReviewStore,
+  REVIEW_LIMIT,
+} from "./review.js"
 export { SAVE_HELP, SAVE_INSTRUCTION } from "./save-hints.js"
 export type {
   MeetingHitSearchRequest,
