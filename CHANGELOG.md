@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Agents are no longer offered channel comments for a messenger that cannot read them.** Direct calls
+  fail before connecting when the messenger declares comments unsupported.
+
 ## 0.391.0 — 23.10.2026
 
 ### Changed — may break callers
