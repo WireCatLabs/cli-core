@@ -12,6 +12,7 @@ import { EVENTS_DAYS } from "../../services/chats.js"
 import { dateWindow } from "../../services/moment.js"
 import { destroysNothing, LOCAL_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
+import { commandAt } from "../steps.js"
 import { adminStatisticsCommand } from "./admin-statistics-command.js"
 import { statsCommand as chatStatsCommand } from "./chats-stats-command.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -108,5 +109,32 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
       if (chart.partial) context.renderer.note("partial data — the chart shows lower bounds")
       renderAnswer(this, context, chartAnswer(chart, chartFile, window.meta))
     })
+  const examples: Record<string, string> = {
+    charts: '"Book club" --output ./activity.svg',
+    "chats newcomers": '"Book club"',
+    "chats retention": '"Book club"',
+    "chats show": '"Book club"',
+    "contacts evidence": '101 --selection "$selection" --component messages',
+    "contacts responses": '--chat "Project room"',
+    "contacts top": '--chat "Book club" --limit 10',
+    "messages counters refresh": '--chat "Book club" --dry-run',
+    "messages counters show": '--chat "Book club" --limit 10',
+    "messages discussion": '--chat "Book club"',
+    "messages evidence": '"$message" --selection "$selection" --component reactions',
+    "messages show": '--chat "Book club" --by day',
+    "messages top": '--chat "Book club" --limit 10',
+    "messages unanswered": '--chat "Project room"',
+    "tasks show": '--chat "Project room"',
+  }
+  for (const [path, args] of Object.entries(examples)) {
+    const command = commandAt(stats, path)
+    if (command) annotate(command, { examples: [`${messenger.app.command} personal stats ${path} ${args}`] })
+  }
+  for (const target of ["messages", "contacts"]) {
+    commandAt(stats, `${target} evidence`)?.addHelpText(
+      "after",
+      `\nSet selection to drilldown.selection from stats ${target} top; copy the matching row's ${target === "messages" ? "message locator into message" : "person id"}.\n`,
+    )
+  }
   return stats
 }
