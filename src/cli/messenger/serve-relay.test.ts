@@ -370,7 +370,7 @@ describe("commands through serve's relay", () => {
     stop.abort()
 
     expect(await watching).toBe(0)
-    expect(JSON.parse(streams.stdout[0] ?? "{}")).toMatchObject({ text: "news" })
+    expect(JSON.parse(streams.stdout[0] ?? "{}")).toMatchObject({ type: "item", data: { text: "news" } })
     serve.stop()
     await serve.done
   })

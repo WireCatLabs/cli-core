@@ -7,6 +7,7 @@ import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { defaultRule } from "../../replies/rules.js"
 import { NOT_ALLOWED } from "../../replies/serve.js"
@@ -78,7 +79,9 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, asked: ConnectOption
       ...(signal ? { signal } : {}),
     },
   )
-  return { code, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined, stderr: streams.stderr }
+  const answer = streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined
+  if (answer) v.parse(ENTITIES.serve_summary, answer)
+  return { code, answer, stderr: streams.stderr }
 }
 
 const lockOf = (root: string) => join(root, "state", "serve", "default.lock")
@@ -210,7 +213,9 @@ describe("serve with reply rules", () => {
         },
       },
     )
-    return { sent, answer: JSON.parse(streams.stdout[0] ?? "{}").item, stderr: streams.stderr }
+    const answer = JSON.parse(streams.stdout[0] ?? "{}").item
+    v.parse(ENTITIES.serve_summary, answer)
+    return { sent, answer, stderr: streams.stderr }
   }
 
   it("**answers only the allowed person, and the send journal names the rule**", async () => {

@@ -64,6 +64,7 @@ import { imageEmbedding } from "./image-embedding.js"
 import { inviteLink } from "./invite-link.js"
 import { job } from "./job.js"
 import { joinRequest } from "./join-request.js"
+import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
   meeting,
@@ -254,6 +255,7 @@ export {
   messageCounts,
   messageDeletion,
   messageDownload,
+  messageEvent,
   messageLink,
   messageLinks,
   messagePin,
@@ -288,6 +290,7 @@ export {
   savedSearch,
   searchHistoryClear,
   sendAttempt,
+  serveSummary,
   storeBackup,
   storeChatStatus,
   storeCheck,
@@ -325,6 +328,8 @@ export {
   topic,
   trackedChat,
   trackedChatHistory,
+  watchedMessage,
+  watchItem,
 }
 
 export const ENTITIES = {
@@ -478,6 +483,8 @@ export const ENTITIES = {
   conversation,
   saved_search: savedSearch,
   search_history_clear: searchHistoryClear,
+  watch_item: watchItem,
+  serve_summary: serveSummary,
   job,
   store_chat_status: storeChatStatus,
   store_clear: storeClear,
