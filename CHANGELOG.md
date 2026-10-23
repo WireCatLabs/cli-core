@@ -16,6 +16,11 @@ shape of this file.
 
 ### Added
 
+- `search meetings` takes `date:`, `project:`, `tag:` and `topic:` in the query: `budget project:RES date>=30d`. They
+  choose meetings as `--since-time`/`--until-time`, `--project`, `--tag` and `--topic` do, join the words with AND,
+  and are refused inside OR, NOT and groups (`query.unsupported-field`) or when the same filter is also an option.
+  Search by meaning embeds only the words. `liftMeetingFields` (`@wirecat/cli-core/meetings`) does the split.
+
 - `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
   same table: create, list, show, delete and `run`, which counts the run.
 

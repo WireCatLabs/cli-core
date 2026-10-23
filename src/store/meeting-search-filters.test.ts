@@ -207,3 +207,18 @@ it("stops refreshing when a batch makes no progress", async () => {
   await refreshMeetingIndex({ indexSearch }, 1)
   expect(indexSearch).toHaveBeenCalledTimes(2)
 })
+
+it("takes date:, project:, tag: and topic: in the query as the search's own filters", async () => {
+  const f = await fixture()
+  const hits = async (query: string, extra = {}) =>
+    (await searchMeetingHits(f.store, query, { accountId: f.accountId, ...extra })).items.map((hit) => hit.meetingId)
+  expect(new Set(await hits("example"))).toEqual(new Set([f.first.meeting.id, f.second.meeting.id]))
+  expect(new Set(await hits("example project:RES"))).toEqual(new Set([f.first.meeting.id]))
+  expect(new Set(await hits('tag:"plan-alias" AND example'))).toEqual(new Set([f.first.meeting.id]))
+  expect(new Set(await hits("example date:[1970-01-01T00:00:01.500Z TO *]"))).toEqual(new Set([f.second.meeting.id]))
+  await expect(hits("example OR project:RES")).rejects.toMatchObject({
+    details: { reason: "query.unsupported-field" },
+  })
+  await expect(hits("example project:RES", { project: "RES" })).rejects.toThrow(/give project once/)
+  await expect(hits("project:RES")).rejects.toThrow(/give words to find/)
+})

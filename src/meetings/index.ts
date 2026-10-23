@@ -52,7 +52,7 @@ export {
   findingFingerprint,
   validateFindings,
 } from "./findings-rules.js"
-export { MEETING_HIT_QUERY, meetingWordsQuery, parseMeetingQuery } from "./hit-query.js"
+export { liftMeetingFields, MEETING_HIT_QUERY, meetingWordsQuery, parseMeetingQuery } from "./hit-query.js"
 export { type ImportFile, importFiles } from "./import.js"
 export {
   MEETING_ISSUES,

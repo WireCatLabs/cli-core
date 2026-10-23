@@ -163,8 +163,8 @@ export type { RankedRow, RankingFound, RankingQuery, RankingsService } from "./r
 export { rankingsService } from "./rankings.js"
 export type { SearchParams } from "./search-record.js"
 export { searchRecordOf } from "./search-record.js"
-export type { ResolvedSearch, SearchesService } from "./searches.js"
-export { searchesService } from "./searches.js"
+export type { ResolvedSearch, SavedSearchItem, SearchesService } from "./searches.js"
+export { savedSearchItem, searchesService } from "./searches.js"
 export type { TagsAdded, TagsRemoved, TagsService, TagTargetInput, TagTargetView } from "./tags.js"
 export { tagsService } from "./tags.js"
 export type {
