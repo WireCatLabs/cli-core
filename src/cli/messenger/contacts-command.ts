@@ -15,7 +15,7 @@ import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, window, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
-import { nextStep } from "../steps.js"
+import { commandAt, nextStep } from "../steps.js"
 import { contactWriteCommands } from "./admin-contacts-command.js"
 import { contactAnswer, lines, pageOf } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -344,5 +344,35 @@ export const contactsCommand = (messenger: Messenger): Command => {
 
   for (const command of privatePeopleCommands(messenger)) contacts.addCommand(command)
   for (const command of contactWriteCommands(messenger)) contacts.addCommand(command)
+  const examples: Record<string, string> = {
+    add: '"Alex Example"',
+    "alias rm": '"Alex Example"',
+    "alias set": '"Alex Example" "Reading partner"',
+    block: '"Alex Example"',
+    check: '"Alex Example"',
+    context: '"Alex Example" --limit 10',
+    import: "./contacts.csv",
+    link: '"Alex Example" zoom:101',
+    list: "--limit 10",
+    lookup: "",
+    "notes add": '"Alex Example" --file ./note.txt',
+    "notes edit": '"Alex Example" 1 --revision 1 --file ./note.txt',
+    "notes list": '"Alex Example"',
+    "notes remove": '"Alex Example" 1',
+    "notes show": '"Alex Example" 1',
+    profile: '"Alex Example"',
+    remove: '"Alex Example"',
+    rename: '"Alex Example" Alex Example',
+    show: '"Alex Example"',
+    sync: "",
+    timeline: '"Alex Example" --limit 10',
+    unblock: '"Alex Example"',
+    unlink: '"Alex Example"',
+  }
+  for (const [path, args] of Object.entries(examples)) {
+    const command = commandAt(contacts, path)
+    if (command)
+      annotate(command, { examples: [`${messenger.app.command} personal contacts ${path} ${args}`.trimEnd()] })
+  }
   return contacts
 }
