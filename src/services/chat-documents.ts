@@ -1,5 +1,5 @@
 import { googleDocumentLinks } from "../domain/google-documents.js"
-import { formatLocator } from "../domain/locator.js"
+import { formatLocator, parseLocator } from "../domain/locator.js"
 import type { Id, Page } from "../domain/models.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
 import { chatIdIn } from "./message-resolution.js"
@@ -23,14 +23,21 @@ export interface ChatDocuments extends Page<ChatDocument> {
 
 export interface ChatDocumentsService {
   /** Reads the local store only; never asks the messenger. `limit` absent is every item. */
-  list(chat: string, window: { limit?: number; offset: number }): Promise<ChatDocuments>
+  list(chat: string, window: { limit?: number; offset: number; ref?: string }): Promise<ChatDocuments>
 }
 
 export const chatDocumentsService = (deps: ServiceDeps): ChatDocumentsService => ({
-  list: async (chat, { limit, offset }) => {
+  list: async (chat, { limit, offset, ref }) => {
     const store = await accountStore(deps)
     const chatId = await chatIdIn(deps.messenger, chat, store, { includeLeft: true })
-    const items = (await store.messages.documentLinkMessages(chatId)).flatMap((message) =>
+    const target = ref === undefined ? undefined : parseLocator(ref)
+    const sameScope =
+      target === undefined ||
+      (target.provider === store.account.provider && target.account === store.account.account && target.chat === chatId)
+    const messages = sameScope
+      ? await store.messages.documentLinkMessages(chatId, target ? { messageId: target.message } : {})
+      : []
+    const items = messages.flatMap((message) =>
       googleDocumentLinks(message.text).map(({ url, documentId }): ChatDocument => {
         const stored = documentId === null ? undefined : message.documents.find((one) => one.fileId === documentId)
         return {
