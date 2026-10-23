@@ -40,6 +40,10 @@ shape of this file.
 
 - Server commands include concrete examples in help and command discovery.
 
+### Fixed
+
+- Address-book add, rename, remove, block, unblock and import commands declare the fields they already return. Discovery and field selection use exact schemas for their write receipts, including operation identifiers.
+
 ## 0.394.0 — 23.10.2026
 
 ### Added

@@ -3,8 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { CommandInfo } from "@wirecat/cli-base/commands"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Chat, GroupCard, Id, MembershipState } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { openStore } from "../../store/store.js"
@@ -1056,9 +1058,14 @@ describe("chats create, join and leave", () => {
     }
 
     const added = await call(["contacts", "add", "Ivan", "--json"], adapter, env)
-    for (const verb of ["remove", "block", "unblock"]) await call(["contacts", verb, "Ivan"], adapter, env)
+    for (const verb of ["remove", "block", "unblock"]) {
+      const changed = await call(["contacts", verb, "Ivan", "--json"], adapter, env)
+      expect(v.safeParse(ENTITIES.contact_state_change, answer(changed)).success).toBe(true)
+    }
     const renamed = await call(["contacts", "rename", "Ivan", "Vanya", "P.", "--json"], adapter, env)
 
+    expect(v.safeParse(ENTITIES.contact_update, answer(added)).success).toBe(true)
+    expect(v.safeParse(ENTITIES.contact_update, answer(renamed)).success).toBe(true)
     expect(answer(added)).toEqual({ operation_id: expect.any(String), person: ivan })
     expect(answer(renamed)).toMatchObject({ person: { name: "Vanya P." } })
     expect(done).toEqual([
@@ -1075,6 +1082,27 @@ describe("chats create, join and leave", () => {
       "contact-unblock",
       "contact-rename",
     ])
+  })
+
+  it("projects contact write fields and refuses an unknown field before changing the address book", async () => {
+    const env = sandbox()
+    let writes = 0
+    const adapter: MessengerAdapter = {
+      ...base,
+      people: async () => ["91"],
+      addContact: async () => {
+        writes++
+        return { id: "91", name: "Synthetic", username: null }
+      },
+    }
+    const refused = await call(["contacts", "add", "91", "--json=missing"], adapter, env)
+    expect(refused.code).toBe(2)
+    expect(refused.stdout).toEqual([])
+    expect(writes).toBe(0)
+    const projected = await call(["contacts", "add", "91", "--json=person.id"], adapter, env)
+    expect(projected.code).toBe(0)
+    expect(answer(projected)).toEqual({ operation_id: expect.any(String), person: { id: "91" } })
+    expect(writes).toBe(1)
   })
 
   it("**imports a file of numbers**, never printing or journaling one, and names a bad line by its number", async () => {
@@ -1096,6 +1124,7 @@ describe("chats create, join and leave", () => {
     const imported = await call(["contacts", "import", good, "--json"], adapter, env)
     const refused = await call(["contacts", "import", bad], adapter, env)
 
+    expect(v.safeParse(ENTITIES.contact_import, answer(imported)).success).toBe(true)
     expect(answer(imported)).toEqual({
       operation_id: expect.any(String),
       sent: 2,
