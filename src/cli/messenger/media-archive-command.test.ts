@@ -3,8 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import type { Chat, Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { readMediaManifests } from "../../services/media-archive-manifest.js"
 import { run } from "../program.js"
@@ -89,6 +91,17 @@ const fixture = async (kind = "file") => {
       { app, commands: () => [attachmentsCommand(messenger)] },
       { env, tty: false, streams, keyring: memoryKeyring(), ...extra },
     )
+    if (words.includes("--json") && streams.stdout.length) {
+      const names = {
+        download: "media_archive",
+        check: "media_archive_check",
+        move: "media_archive_move",
+        jobs: "media_archive_timer",
+      } as const
+      const entity = names[words[1] as keyof typeof names]
+      const answer = JSON.parse(streams.stdout.join(""))
+      if (entity && answer.item) v.parse(ENTITIES[entity] as v.GenericSchema, answer.item)
+    }
     return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("") }
   }
   return { root, env, connect, close, directory, call }

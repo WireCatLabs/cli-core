@@ -45,6 +45,8 @@ shape of this file.
 
 - Analysis-consent lists accept chat and provider-identity queries, and consent commands declare their answer fields. Reading a filtered list leaves remembered permissions unchanged.
 
+- **Attachment and media archive results have declared fields.** Extraction reports and streamed file rows, retained-file transfers, saved text, archive downloads, integrity checks, relocations and timer management describe their existing receipts. MCP resource/image transfers keep byte metadata in the same shape while carrying bytes separately.
+
 - Tracked-chat lists accept a query over chat IDs and titles, filtered in the store. Tracking commands declare their answer schemas for field projection and discovery.
 
 ### Changed — may break callers

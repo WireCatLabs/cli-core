@@ -11,6 +11,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
   const _command = messenger.app.command
   return {
     attachments_show: tool({
+      output: { entity: "attachment_bytes", list: false },
       title: "Read bytes of one retained attachment",
       outputLimit: (args, defaults) =>
         args.page === undefined

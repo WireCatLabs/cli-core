@@ -42,6 +42,7 @@ const summary = (run: ExtractRun) =>
 
 const extractCommand = (messenger: Messenger): Command =>
   annotate(new Command("extract"), {
+    output: { entity: "attachment_extraction" },
     effects: FETCH,
     examples: [`${messenger.app.command} personal attachments extract --chat "Book club" --limit 10`],
   })
@@ -181,6 +182,7 @@ const listCommand = (messenger: Messenger): Command =>
 
 const showCommand = (messenger: Messenger): Command =>
   annotate(new Command("show"), {
+    output: { entity: "attachment_bytes" },
     effects: REMOTE_READ,
     examples: [`${messenger.app.command} personal attachments show "Book club" 101 --attachment 1`],
   })
@@ -232,6 +234,7 @@ const textCommand = (messenger: Messenger): Command => {
   const text = new Command("text").description("the text of one file, as an agent read it")
   readsStdin(
     annotate(text.command("set"), {
+      output: { entity: "attachment_text_change" },
       effects: LOCAL_WRITE,
       examples: [`${messenger.app.command} personal attachments text set "Book club" 101 --text-file ./transcript.txt`],
     }),
