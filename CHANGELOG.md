@@ -32,6 +32,8 @@ shape of this file.
 
 - Search commands include concrete examples in help and command discovery.
 
+- Saved-search commands include concrete examples in help and command discovery.
+
 - Configuration commands include concrete examples in help and command discovery.
 
 - Skill commands include concrete examples in help and command discovery.
