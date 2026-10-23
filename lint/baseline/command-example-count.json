@@ -1,8 +1,4 @@
 [
-  "attachments extract",
-  "attachments list",
-  "attachments show",
-  "attachments text set",
   "bot auth remove",
   "bot auth set",
   "bot auth show",

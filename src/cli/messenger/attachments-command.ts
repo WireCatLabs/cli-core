@@ -40,7 +40,10 @@ const summary = (run: ExtractRun) =>
     .join(", ")
 
 const extractCommand = (messenger: Messenger): Command =>
-  annotate(new Command("extract"), { effects: FETCH })
+  annotate(new Command("extract"), {
+    effects: FETCH,
+    examples: [`${messenger.app.command} personal attachments extract --chat "Book club" --limit 10`],
+  })
     .description(
       "read the text of downloaded files — text, PDF/DOCX text layers, ODT/ODS/XLSX/PPTX/EPUB — into the local store, where search finds them",
     )
@@ -153,7 +156,10 @@ const row = ({ message, position, name, local_path, extraction }: AttachmentItem
 const listCommand = (messenger: Messenger): Command =>
   withQuery(
     withPaging(
-      annotate(new Command("list"), { effects: REMOTE_READ }).description(
+      annotate(new Command("list"), {
+        effects: REMOTE_READ,
+        examples: [`${messenger.app.command} personal attachments list --limit 10`],
+      }).description(
         "files of stored messages, newest first: where each was saved and whether its text is held — never the text",
       ),
     ),
@@ -170,7 +176,10 @@ const listCommand = (messenger: Messenger): Command =>
   })
 
 const showCommand = (messenger: Messenger): Command =>
-  annotate(new Command("show"), { effects: REMOTE_READ })
+  annotate(new Command("show"), {
+    effects: REMOTE_READ,
+    examples: [`${messenger.app.command} personal attachments show "Book club" 101 --attachment 1`],
+  })
     .description("read a bounded chunk of one retained attachment; JSON includes base64 bytes")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator alone`)
     .argument("[message]", "the message id")
@@ -217,10 +226,16 @@ const showCommand = (messenger: Messenger): Command =>
 
 const textCommand = (messenger: Messenger): Command => {
   const text = new Command("text").description("the text of one file, as an agent read it")
-  readsStdin(annotate(text.command("set"), { effects: LOCAL_WRITE }), {
-    name: "text",
-    description: "the text of the file",
-  })
+  readsStdin(
+    annotate(text.command("set"), {
+      effects: LOCAL_WRITE,
+      examples: [`${messenger.app.command} personal attachments text set "Book club" 101 --text-file ./transcript.txt`],
+    }),
+    {
+      name: "text",
+      description: "the text of the file",
+    },
+  )
     .description("keep the text an agent read from a file — a scan, a photo — so search finds it; nothing is sent")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")

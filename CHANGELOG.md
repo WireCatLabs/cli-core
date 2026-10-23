@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- Attachment commands include concrete examples in help and command discovery.
+
 - Account commands include concrete examples in help and command discovery.
 
 - Task commands include concrete examples in help and command discovery.
