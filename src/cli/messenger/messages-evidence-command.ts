@@ -9,10 +9,12 @@ import { evidenceAnswer } from "./message-answers.js"
 
 export const evidenceCommand = (messenger: Messenger): Command =>
   annotate(new Command("evidence"), {
+    output: { entity: "evidence_packet" },
     examples: [`${messenger.app.command} personal messages evidence "Book club" --limit 10`],
     effects: LOCAL_READ,
   })
-    .description("a bounded evidence packet from stored messages, newest first")
+    .summary("a recent-chat evidence packet from stored messages")
+    .description("general chat context, newest first, with references, coverage and fingerprints for verification")
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "how many, 1–100", positiveCount("--limit"))
     .option("--cursor <cursor>", "go on from where page.next says the last packet stopped")

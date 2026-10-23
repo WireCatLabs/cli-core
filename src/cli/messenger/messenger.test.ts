@@ -200,6 +200,14 @@ const call = async (
     },
     { streams, tty: false, env, keyring: keyringOf(env), ...options },
   )
+  if (code === 0 && argv[0] === "messages" && argv.includes("--json")) {
+    const entity =
+      argv[1] === "download" ? ENTITIES.message_download : argv[1] === "context" ? ENTITIES.message_context : undefined
+    if (entity) {
+      const answer = JSON.parse(streams.stdout[0] ?? "null")
+      for (const item of answer.items ?? [answer.item]) v.parse(entity, item)
+    }
+  }
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 
@@ -945,6 +953,8 @@ describe("the shared read commands", () => {
     const over = await call(["messages", "pin", "Book", "5", "--notify"], async () => pinning, env)
     const off = await call(["messages", "unpin", "Book", "3", "--json"], async () => pinning, env)
 
+    expect(v.safeParse(ENTITIES.message_pin, JSON.parse(quiet.stdout[0] ?? "").item).success).toBe(true)
+    expect(v.safeParse(ENTITIES.message_pin, JSON.parse(off.stdout[0] ?? "").item).success).toBe(true)
     expect(JSON.parse(quiet.stdout[0] ?? "").item).toEqual({
       operation_id: expect.any(String),
       chat_id: "7",
@@ -1327,6 +1337,7 @@ describe("the shared read commands", () => {
     expect(unasked.stderr.join("\n")).toContain("--allow-dangerous")
     expect(tooMany.stderr.join("\n")).toContain("at most 10")
     const answer = JSON.parse(done.stdout[0] ?? "").item
+    expect(v.safeParse(ENTITIES.message_deletion, answer).success).toBe(true)
     expect(answer).toEqual({ operation_id: expect.any(String), chat_id: "7", deleted: ["3", "4"], for_everyone: true })
     expect(over.code).toBe(8)
     expect(deletions).toEqual([["7", ["3", "4"], { forEveryone: true }]])
@@ -2045,6 +2056,22 @@ describe("the shared read commands", () => {
       throw new Error("thread must stay local")
     })
     const context = await call(["messages", "context", "msg:chat/500/7/3", "--thread", "--json"], never, env)
+    expect(context.code, context.stderr.join(" ")).toBe(0)
+    expect(v.parse(ENTITIES.message_context, JSON.parse(context.stdout[0] ?? "null").item)).toBeDefined()
+    const threadProjection = await call(
+      ["messages", "context", "msg:chat/500/7/3", "--thread", "--json=items.ref"],
+      never,
+      env,
+    )
+    expect(threadProjection.code, threadProjection.stderr.join(" ")).toBe(0)
+    expect(JSON.parse(threadProjection.stdout[0] ?? "null").item.items[0]).toHaveProperty("ref")
+    const windowProjection = await call(
+      ["messages", "context", "msg:chat/500/7/3", "--json=items.ref"],
+      async () => backend,
+      env,
+    )
+    expect(windowProjection.code, windowProjection.stderr.join(" ")).toBe(0)
+    expect(JSON.parse(windowProjection.stdout[0] ?? "null").items[0]).toHaveProperty("ref")
     expect(context.code).toBe(0)
     expect(context.stdout).toHaveLength(1)
     const found = JSON.parse(context.stdout[0] ?? "").item
@@ -3405,6 +3432,7 @@ describe("the shared read commands", () => {
     const shown = await call(["conversations", "show", listed.items[0]?.id ?? "", "--jsonl"], never, env)
     expect(shown.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2", "3"])
     const links = JSON.parse((await call(["messages", "links", "7", "3", "--json"], never, env)).stdout[0] ?? "")
+    expect(v.safeParse(ENTITIES.message_links, links.item).success).toBe(true)
     expect(links.item).toMatchObject({
       links: [{ parent_id: "2", kind: "same_sender", chosen: true }],
       chain: ["2", "1"],
@@ -4495,6 +4523,8 @@ describe("messages transcribe", () => {
     )
 
     const answer = JSON.parse(done.stdout[0] ?? "")
+    expect(v.safeParse(ENTITIES.message_transcript, answer.item).success).toBe(true)
+    expect(v.safeParse(ENTITIES.message_transcript, JSON.parse(pending.stdout[0] ?? "").item).success).toBe(true)
     expect(answer.item).toEqual({ message_id: "5", text: "hello", pending: false, via: "chat" })
     expect(answer.next).toBeUndefined()
     expect(done.stderr).toEqual([])
@@ -5452,4 +5482,44 @@ describe("the messages reads answer in the envelope of their entity", () => {
     )
     expect(parsed.issues?.map((issue) => `${v.getDotPath(issue)}: ${issue.message}`)).toBeUndefined()
   })
+})
+
+it("declares both star receipts and refuses unknown fields before changing a star", async () => {
+  const root = mkdtempSync(join(tmpdir(), "message-star-entity-"))
+  const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+  const writes: boolean[] = []
+  const adapter: MessengerAdapter = {
+    ...fake,
+    star: async (_chat, _message, starred) => {
+      writes.push(starred)
+    },
+  }
+  for (const name of ["star", "unstar"]) {
+    const result = await call(
+      ["messages", name, "Book", "3", "--json"],
+      async () => adapter,
+      env,
+      {},
+      { messageStars: true },
+    )
+    expect(result.code).toBe(0)
+    expect(v.safeParse(ENTITIES.message_star, JSON.parse(result.stdout[0] ?? "").item).success).toBe(true)
+  }
+  const projected = await call(
+    ["messages", "star", "Book", "3", "--json=starred"],
+    async () => adapter,
+    env,
+    {},
+    { messageStars: true },
+  )
+  expect(JSON.parse(projected.stdout[0] ?? "").item).toEqual({ operation_id: expect.any(String), starred: true })
+  const invalid = await call(
+    ["messages", "unstar", "Book", "3", "--json=missing"],
+    async () => adapter,
+    env,
+    {},
+    { messageStars: true },
+  )
+  expect(invalid.code).toBe(2)
+  expect(writes).toEqual([true, false, true])
 })

@@ -12,6 +12,7 @@ export const editCommand = (messenger: Messenger): Command => {
   const edit = annotate(new Command("edit"), {
     examples: [`${messenger.app.command} personal messages edit "Book club" 101 "The meeting starts at 11."`],
     effects: REMOTE_WRITE,
+    output: { entity: "message_write" },
   })
     .description("change the text of your own message; the other side may have read it already")
     .argument("<chat>", messenger.chatArgument)

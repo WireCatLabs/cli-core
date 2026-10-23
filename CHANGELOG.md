@@ -29,6 +29,12 @@ shape of this file.
 
 - Recorded-run lists accept metadata queries before pagination, and recorded-run commands declare their answer schemas. Continuation steps keep the query.
 
+- **Message read and write schemas.** Showing a message, sending, editing, forwarding, pinning, starring and deleting declare their existing answer entities for field discovery and projection. Write receipts retain their operation id.
+
+- **Message read schemas.** Evidence packets, voice transcripts and conversation links declare separate answer entities for field discovery and projection, preserving existing response keys.
+
+- **Message context, downloads and sync have declared answers.** Context describes both message windows and bounded thread reports. Downloads retain file paths and partial extraction results; sync describes estimates, chat and all-chat progress, preparation and background jobs. General chat evidence packets and exact statistics evidence now explain their separate purposes in help and the guide.
+
 ### Changed — may break callers
 
 - **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.

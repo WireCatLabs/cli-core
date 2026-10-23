@@ -11,6 +11,7 @@ export const pinCommand = (messenger: Messenger): Command => {
   const durations = messenger.pinDurations?.length ? messenger.pinDurations : undefined
   const command = annotate(new Command("pin"), {
     effects: REMOTE_WRITE,
+    output: { entity: "message_pin" },
     examples: [
       `${tool} messages pin <chat> <message>`,
       ...(quiet ? [`${tool} messages pin <chat> <message> --notify`] : []),
@@ -43,6 +44,7 @@ export const pinCommand = (messenger: Messenger): Command => {
 export const unpinCommand = (messenger: Messenger): Command =>
   annotate(new Command("unpin"), {
     effects: REMOTE_WRITE,
+    output: { entity: "message_pin" },
     examples: [`${messenger.app.command} messages unpin <chat> <message>`],
   })
     .description("unpin a message in a chat")
@@ -62,6 +64,7 @@ export const starCommands = (messenger: Messenger): Command[] =>
     const name = starred ? "star" : "unstar"
     return annotate(new Command(name), {
       effects: REMOTE_WRITE,
+      output: { entity: "message_star" },
       examples: [`${messenger.app.command} messages ${name} <chat> <message>`],
     })
       .description(

@@ -773,6 +773,7 @@ const answerOf = (text: string): AgentAnswer => {
 /** `messages links`: why a message sits where it does in its conversation. */
 export const linksCommand = (messenger: Messenger): Command =>
   annotate(new Command("links"), {
+    output: { entity: "message_links" },
     examples: [`${messenger.app.command} personal messages links "Book club" 101`],
     effects: LOCAL_READ,
   })

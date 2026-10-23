@@ -10,6 +10,7 @@ export const forwardCommand = (messenger: Messenger): Command => {
   const forward = annotate(new Command("forward"), {
     examples: [`${messenger.app.command} personal messages forward "Book club" 101 --to "Project room"`],
     effects: REMOTE_WRITE,
+    output: { entity: "message_write" },
   })
     .description("forward one message to another chat")
     .argument("<chat>", `the chat the message is in: ${messenger.chatArgument}`)

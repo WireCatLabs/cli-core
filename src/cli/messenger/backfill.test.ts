@@ -8,6 +8,7 @@ import * as v from "valibot"
 import { describe, expect, it, onTestFinished } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { job as jobEntity } from "../../entities/job.js"
+import { messageSync } from "../../entities/message-transfer.js"
 import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
 import type { Fetching } from "../../ports/traits.js"
 import { openStore } from "../../store/store.js"
@@ -99,6 +100,7 @@ const call = async (
     },
   )
   const body = streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined
+  if (code === 0 && argv[0] === "messages" && argv[1] === "sync" && body?.item) v.parse(messageSync, body.item)
   return {
     code,
     body,

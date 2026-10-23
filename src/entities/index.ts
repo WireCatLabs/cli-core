@@ -44,8 +44,12 @@ import { meetingSeriesInventory } from "./meeting-series-inventory.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { message } from "./message.js"
+import { messageDeletion, messagePin, messageStar } from "./message-change.js"
+import { messageContext } from "./message-context.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
+import { evidencePacket, messageLinks, messageTranscript } from "./message-read.js"
+import { messageDownload, messageSync } from "./message-transfer.js"
 import { messageWrite } from "./message-write.js"
 import { model } from "./model.js"
 import { note } from "./note.js"
@@ -105,6 +109,7 @@ export {
   document,
   endedAccountSessions,
   evidence,
+  evidencePacket,
   fact,
   folder,
   hit,
@@ -119,8 +124,16 @@ export {
   member,
   memory,
   message,
+  messageContext,
   messageCounts,
+  messageDeletion,
+  messageDownload,
   messageLink,
+  messageLinks,
+  messagePin,
+  messageStar,
+  messageSync,
+  messageTranscript,
   messageWrite,
   model,
   note,
@@ -152,6 +165,9 @@ export {
 
 export const ENTITIES = {
   message,
+  message_context: messageContext,
+  message_download: messageDownload,
+  message_sync: messageSync,
   "message.hit": v.pick(message, [
     "ref",
     "chat_title",
@@ -180,6 +196,12 @@ export const ENTITIES = {
   ]),
   message_link: messageLink,
   message_write: messageWrite,
+  message_pin: messagePin,
+  message_star: messageStar,
+  message_deletion: messageDeletion,
+  message_transcript: messageTranscript,
+  message_links: messageLinks,
+  evidence_packet: evidencePacket,
   chat,
   person,
   identity,
