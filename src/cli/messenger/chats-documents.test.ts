@@ -2,8 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -176,6 +178,31 @@ describe("chats documents list", () => {
     expect(third).toMatchObject({ page: { limit: 2, has_more: false } })
     expect(third.items.map(({ ref }: { ref: string }) => ref)).toEqual(["msg:chat/500/7/1"])
     expect((await call("chats", "documents", "list", "7", "--all")).code).not.toBe(0)
+  })
+
+  it("filters by the source message before link pagination and keeps account scoping", async () => {
+    const { call } = await setup()
+    const query = 'ref:"msg:chat/500/7/2"'
+    const first = await call("chats", "documents", "list", "7", query, "--limit", "1", "--json")
+    expect(first.code).toBe(0)
+    const page = json(first)
+    expect(page.items).toHaveLength(1)
+    expect(v.safeParse(ENTITIES.document_link, page.items[0]).success).toBe(true)
+    expect(page.items[0].document_id).toBe(SHEET)
+    expect(page.next[0]).toMatchObject({ args: { chat: "7", query, page: 2 } })
+    const second = json(
+      await call("chats", "documents", "list", "7", query, "--limit", "1", "--page", "2", "--json=url,document_id"),
+    )
+    expect(second.items).toEqual([{ url: doc(PLAN), document_id: PLAN }])
+    expect(second.page.has_more).toBe(false)
+    for (const reference of ["msg:chat/999/7/2", "msg:chat/500/8/2"]) {
+      const wrongScope = json(await call("chats", "documents", "list", "7", `ref:"${reference}"`, "--json"))
+      expect(wrongScope.items).toEqual([])
+      expect(wrongScope.next).toBeUndefined()
+    }
+    const unsupported = await call("chats", "documents", "list", "7", "title:plan", "--json")
+    expect(unsupported.code).toBe(2)
+    expect(unsupported.stderr).toContain("query.unsupported-field")
   })
 
   it("answers an empty list with the sync that fetches a chat with no stored messages", async () => {

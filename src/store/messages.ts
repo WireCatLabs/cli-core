@@ -128,7 +128,7 @@ export interface AccountMessages {
   /** Keeps a finished transcript; an empty one is not kept, so the message is heard again. */
   keepTranscript(key: AccountKey, chatId: Id, messageId: Id, text: string, source: string): Promise<void>
   /** The chat's messages that may hold a Google document link, newest first, with the documents linked from each. */
-  documentLinkMessages(key: AccountKey, chatId: Id): Promise<DocumentLinkMessage[]>
+  documentLinkMessages(key: AccountKey, chatId: Id, options?: { messageId?: Id }): Promise<DocumentLinkMessage[]>
   /** Messages of the account that name this person, newest first. */
   mentioning(key: AccountKey, person: { id: Id; username: string | null }, limit: number): Promise<Page<StoredHit>>
 }
@@ -291,9 +291,9 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
       )
     },
 
-    documentLinkMessages: async (key, chatId) => {
+    documentLinkMessages: async (key, chatId, { messageId } = {}) => {
       const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? [] : documentLinkMessages(context, chatKey)
+      return chatKey === undefined ? [] : documentLinkMessages(context, chatKey, messageId)
     },
 
     mentioning: async (key, person, limit) => {

@@ -14,16 +14,20 @@ export interface DocumentLinkMessage {
 }
 
 /** Newest first. Read from the text, so an edit that removed a link drops it whatever link rows remain. */
-export const documentLinkMessages = ({ database }: StoreContext, chatKey: number): DocumentLinkMessage[] => {
-  const rows = database
-    .prepare(
-      "SELECT m.id, m.external_id, m.text, m.sent_at, m.sender_name, " +
-        "coalesce(m.sender_chat_external_id, i.external_id) AS sender_id FROM messages m " +
-        "LEFT JOIN identities i ON i.id = m.sender_identity_id " +
-        "WHERE m.chat_id = ? AND m.deleted_at IS NULL AND (m.text LIKE '%google.com%' OR m.text LIKE '%forms.gle%') " +
-        "ORDER BY m.sent_at DESC, m.id DESC",
-    )
-    .all(chatKey)
+export const documentLinkMessages = (
+  { database }: StoreContext,
+  chatKey: number,
+  messageId?: Id,
+): DocumentLinkMessage[] => {
+  const read = database.prepare(
+    "SELECT m.id, m.external_id, m.text, m.sent_at, m.sender_name, " +
+      "coalesce(m.sender_chat_external_id, i.external_id) AS sender_id FROM messages m " +
+      "LEFT JOIN identities i ON i.id = m.sender_identity_id " +
+      "WHERE m.chat_id = ? AND m.deleted_at IS NULL AND (m.text LIKE '%google.com%' OR m.text LIKE '%forms.gle%') " +
+      (messageId === undefined ? "" : "AND m.external_id = ? ") +
+      "ORDER BY m.sent_at DESC, m.id DESC",
+  )
+  const rows = messageId === undefined ? read.all(chatKey) : read.all(chatKey, messageId)
   const linked = database.prepare(
     "SELECT json_extract(d.front_matter, '$.fileId') AS file_id, d.title FROM links l " +
       "JOIN documents d ON d.id = l.to_id AND d.deleted_at IS NULL " +

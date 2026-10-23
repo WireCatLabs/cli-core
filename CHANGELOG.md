@@ -29,6 +29,8 @@ shape of this file.
 
 - Send history includes a concrete example in help and command discovery.
 
+- Chat document lists accept a source-message reference query, filtered in the store before link pagination, and declare their document-link answer fields.
+
 - Doctor reports include a concrete creation example in help and command discovery.
 
 - Recorded-run lists accept metadata queries before pagination, and recorded-run commands declare their answer schemas. Continuation steps keep the query.

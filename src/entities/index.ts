@@ -34,6 +34,7 @@ import {
 } from "./conversation-results.js"
 import { counterRefresh, counters } from "./counters.js"
 import { document } from "./document.js"
+import { documentLink } from "./document-link.js"
 import { evidence } from "./evidence.js"
 import { fact } from "./fact.js"
 import { reference } from "./fields.js"
@@ -137,6 +138,7 @@ export {
   counterRefresh,
   counters,
   document,
+  documentLink,
   endedAccountSessions,
   evidence,
   evidencePacket,
@@ -290,6 +292,7 @@ export const ENTITIES = {
   ]),
   hit,
   document,
+  document_link: documentLink,
   attachment,
   task,
   fact,
