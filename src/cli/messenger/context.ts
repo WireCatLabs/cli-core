@@ -244,6 +244,8 @@ export interface Messenger extends ServiceMessenger {
   inviteLinkUpdate?: boolean
   /** Whether every pending join request is answered at once — `chats requests accept --all`; yes when unset. */
   joinRequestsAll?: boolean
+  /** Whether `--all` can take only the requests made by one invite link — `--link`; yes when unset. */
+  joinRequestsByLink?: boolean
   /** Whether a channel post can be commented on — `messages send --comment-to`; yes when unset. */
   channelComments?: boolean
   /** Whether people added can be shown the messages from before they came — `members add --history`; yes when unset. */
