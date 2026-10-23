@@ -19,6 +19,8 @@ shape of this file.
 
 - Message deletion, chat export and duplicate-task commands use singular argument names in help and discovery. Variadic arguments still accept several values, and task argument help identifies each side of a pair.
 
+- Contact profiles, phone lookups and address-book sync summaries declare their existing answer fields. Profile schemas retain masked phones, incomplete activity counts, partial provider flags and the source and precision of account-age estimates.
+
 ### Added
 
 - Reaction commands include concrete examples in help and command discovery.

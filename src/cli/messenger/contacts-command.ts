@@ -97,7 +97,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  annotate(contacts.command("profile"), { effects: REMOTE_READ })
+  annotate(contacts.command("profile"), { effects: REMOTE_READ, output: { entity: "contact_profile" } })
     .summary("a person's profile from the messenger")
     .description(
       "everything the messenger says about one person — handles, flags, last seen, when they registered — and " +
@@ -360,7 +360,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
    * ⚠ **The number is asked for or piped, never an argument**: argv is read by `ps` and kept by shell
    * history, and a phone number is personal data.
    */
-  annotate(contacts.command("lookup"), { effects: REMOTE_READ })
+  annotate(contacts.command("lookup"), { effects: REMOTE_READ, output: { entity: "contact_lookup" } })
     .summary("find an account by a phone number")
     .description("who has this phone number — asks for it, or reads it from stdin; never an argument")
     // Commander's own refusal would repeat the number on stderr.
@@ -381,7 +381,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(contacts.command("sync"), { effects: FETCH })
+  annotate(contacts.command("sync"), { effects: FETCH, output: { entity: "contact_sync" } })
     .description("take the whole contact list from the messenger into the local store")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)

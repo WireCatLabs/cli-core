@@ -3138,6 +3138,8 @@ describe("the shared read commands", () => {
 
     expect(masked.code).toBe(0)
     const answer = JSON.parse(masked.stdout[0] ?? "null").item
+    expect(v.safeParse(ENTITIES.contact_profile, answer).success).toBe(true)
+    expect(v.safeParse(ENTITIES.contact_profile, JSON.parse(whole.stdout[0] ?? "null").item).success).toBe(true)
     expect(answer).toMatchObject({ seen: "recently", phone: "***0123", registered: { source: "estimate" } })
     expect(answer.chats).toEqual([
       {
@@ -4918,7 +4920,12 @@ describe("the guard, account and mcp config commands", () => {
     const typo = await call(["contacts", "lookup"], async () => finder, env, piped("call me"))
     const inArgv = await call(["contacts", "lookup", "34600123456"], async () => finder, env, piped(""))
 
+    expect(v.safeParse(ENTITIES.contact_lookup, json(found.stdout).item).success).toBe(true)
     expect(json(found.stdout).item).toEqual({ id: "21", name: "Adam", username: "adam_k" })
+    const unknown = await call(["contacts", "lookup", "--json=phone"], async () => finder, env, piped(""))
+    expect(unknown.code).toBe(2)
+    expect(unknown.stdout).toEqual([])
+    expect(JSON.parse(unknown.stderr.at(-1) ?? "{}").error.reason).toBe("output.unknown-field")
     expect(phones).toEqual(["34600123456"])
     expect([typo.code, inArgv.code]).toEqual([2, 2])
     expect(inArgv.stderr.join("\n")).not.toContain("600123456")
@@ -4936,6 +4943,8 @@ describe("the guard, account and mcp config commands", () => {
     ]
     const second = await call(["contacts", "sync", "--json"], async () => book, env)
 
+    expect(v.safeParse(ENTITIES.contact_sync, json(first.stdout).item).success).toBe(true)
+    expect(v.safeParse(ENTITIES.contact_sync, json(second.stdout).item).success).toBe(true)
     expect(json(first.stdout).item).toEqual({ added: 1, changed: 0, known: 1 })
     expect(json(second.stdout).item).toEqual({ added: 1, changed: 1, known: 2 })
   })
