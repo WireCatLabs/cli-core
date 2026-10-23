@@ -5,14 +5,13 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.393.0 — 23.10.2026
 
 ### Added
 
 - Tag commands include concrete examples in help and command discovery.
 
 - Chat commands include concrete examples in help and command discovery.
-
 - Contact commands include concrete examples in help and command discovery.
 - **`@wirecat/cli-base` 0.50.0 is accepted beside 0.49.** The peer range is now `>=0.49.0 <0.51.0`, so a CLI that
   takes cli-base 0.50.0 for `adaptOpenApi` (whatsapp-cli's bot API) keeps one copy of cli-base instead of two.
