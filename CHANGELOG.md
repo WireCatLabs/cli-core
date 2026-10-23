@@ -5,6 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.399.1 — 24.10.2026
+
+### Fixed
+
+- **Downloads skip service events and keyboards.** A message whose only attachment is a group event (`control`) or an inline keyboard no longer makes a media archive or `attachments download` fail with `provider.invalid-response`; both count as non-files like polls and links.
+
 ## 0.399.0 — 23.10.2026
 
 ### Changed — may break callers

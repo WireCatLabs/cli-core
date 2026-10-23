@@ -63,6 +63,22 @@ const fixture = async () => {
   return { directory, ports, download, list, run }
 }
 describe("independent media archive", () => {
+  it("skips service events and keyboards instead of failing to identify them", async () => {
+    const f = await fixture()
+    const base = message()
+    const { position: _placed, ...unplaced } = remote()
+    f.download.mockResolvedValue({ files: [unplaced], skipped: [] })
+    f.list.mockResolvedValue({
+      items: [{ ...base, attachments: [{ kind: "control" }, { kind: "inline_keyboard" }, ...base.attachments] }],
+      hasMore: false,
+    })
+    expect(await f.run()).toMatchObject({ saved: 1, complete: true })
+    expect(await checkMediaArchive(f.directory)).toMatchObject({ valid: true, checked: 1 })
+    f.list.mockResolvedValue({ items: [{ ...base, attachments: [{ kind: "control" }] }], hasMore: false })
+    f.download.mockClear()
+    expect(await f.run()).toMatchObject({ saved: 0 })
+    expect(f.download).not.toHaveBeenCalled()
+  })
   it("recovers a completed publication before and after its final link without downloading again", async () => {
     for (const linked of [false, true]) {
       const f = await fixture()
