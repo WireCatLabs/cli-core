@@ -7,7 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- `searches list`, `searches history` and `searches clear` cover only message searches. The table is shared by
+  every CLI on the store; a saved meeting search shown, run or deleted from a messenger is refused with
+  `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
+  optional list of kinds.
+
 ### Added
+
+- `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
+  same table: create, list, show, delete and `run`, which counts the run.
 
 - Account commands include concrete examples in help and command discovery.
 
@@ -55,20 +65,6 @@ shape of this file.
 
 - **Agents are no longer offered channel comments for a messenger that cannot read them.** Direct calls
   fail before connecting when the messenger declares comments unsupported.
-
-## 0.391.0 — 23.10.2026
-
-### Changed — may break callers
-
-- `searches list`, `searches history` and `searches clear` cover only message searches. The table is shared by
-  every CLI on the store; a saved meeting search shown, run or deleted from a messenger is refused with
-  `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
-  optional list of kinds.
-
-### Added
-
-- `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
-  same table: create, list, show, delete and `run`, which counts the run.
 
 ## 0.391.0 — 23.10.2026
 
