@@ -7,6 +7,7 @@ import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
+import { commandAt } from "../steps.js"
 import { groupCommands } from "./admin-commands.js"
 import { foldersCommand } from "./admin-folders-command.js"
 import { moderateCommand, rulesCommand } from "./admin-moderation-command.js"
@@ -146,6 +147,55 @@ export const chatsCommand = (messenger: Messenger): Command => {
   if (messenger.chatMarkUnread === true) chats.addCommand(markUnreadCommand(messenger))
   if (messenger.chatDeletion === true) for (const command of chatDeletionCommands(messenger)) chats.addCommand(command)
   if (messenger.personalBots === true) for (const command of botChatCommands(messenger)) chats.addCommand(command)
+
+  const examples: Record<string, string> = {
+    "admins add": `"Book club" "Alex Example"${messenger.pickAdminRights === false ? "" : ` --can ${messenger.adminRights?.[0] ?? "info"}`}`,
+    "admins remove": '"Book club" "Alex Example"',
+    create: '"Book club" "Alex Example"',
+    "documents list": '"Project room" --limit 10',
+    events: '"Book club"',
+    "folders create": '"Reading" --chat "Book club"',
+    "folders delete": '"Reading"',
+    "folders join": "https://t.me/addlist/example",
+    "folders list": "",
+    "folders order": '"Reading" "Work"',
+    "folders show": '"Reading"',
+    "folders update": '"Reading" --title "Books"',
+    inspect: "https://example.com/invite/book-club",
+    join: "https://example.com/invite/book-club",
+    leave: '"Book club"',
+    "link create": '"Book club"',
+    "link list": '"Book club"',
+    "link reset": '"Book club"',
+    "link revoke": '"Book club" https://example.com/invite/book-club',
+    "link show": '"Book club"',
+    list: "--limit 10",
+    "mark-read": '"Book club" --until-id 101',
+    "members add": '"Book club" "Alex Example"',
+    "members audit": '"Book club"',
+    "members fetch": '"Book club"',
+    "members history": '"Book club"',
+    "members list": '"Book club"',
+    "members remove": '"Book club" "Alex Example"',
+    moderate: '"Book club" --dry-run',
+    "requests accept": '"Book club" "Alex Example"',
+    "requests decline": '"Book club" "Alex Example"',
+    "requests list": '"Book club"',
+    "rules set": '"Book club" links report',
+    "rules show": '"Book club"',
+    "rules unset": '"Book club" links',
+    "send-as": '"Project room"',
+    show: '"Book club"',
+    "tracking add": '"Book club"',
+    "tracking list": "",
+    "tracking remove": '"Book club"',
+    "tracking show": '"Book club"',
+    update: '"Book club" --title "Reading group"',
+  }
+  for (const [path, args] of Object.entries(examples)) {
+    const command = commandAt(chats, path)
+    if (command) annotate(command, { examples: [`${messenger.app.command} personal chats ${path} ${args}`.trimEnd()] })
+  }
 
   return chats
 }
