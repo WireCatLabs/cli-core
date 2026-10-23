@@ -13,7 +13,6 @@ shape of this file.
 
 - **Account change and privacy schemas.** Profile updates, ended sessions and privacy reads and writes declare their existing answers for field discovery and projection. Privacy fields remain optional where a messenger does not expose a setting.
 
-
 ### Added
 
 - Recipient lists accept ID and title queries without changing the allowlist state. Recipient commands declare their answer schemas for discovery and field projection.
@@ -21,6 +20,9 @@ shape of this file.
 - **Contact answers have declared fields.** Address-book writes, private aliases and note removal, activity, bot checks, identity links, context and preparation expose their exact answer schemas. Context describes both the cross-account report and selected-chat message windows at every detail level. Field projection recognizes both shapes and refuses unknown fields before reading contact data. CLI, SDK and MCP receipts keep their existing shapes.
 
 - Send history includes a concrete example in help and command discovery.
+
+- Doctor reports include a concrete creation example in help and command discovery.
+
 ## 0.399.0 — 23.10.2026
 
 ### Changed — may break callers

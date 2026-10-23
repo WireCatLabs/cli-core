@@ -1,6 +1,5 @@
 [
   "commands schema",
-  "doctor report create",
   "replies add",
   "replies audience",
   "replies consents allow",

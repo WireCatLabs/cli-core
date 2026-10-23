@@ -90,7 +90,13 @@ const reportCommand = (messenger: Messenger): Command => {
       )
     })
 
-  destroysNothing(annotate(report.command("create"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(
+    annotate(report.command("create"), {
+      effects: LOCAL_WRITE,
+      mcp: false,
+      examples: [`${app.command} personal doctor report create --output ./problem-report.json`],
+    }),
+  )
     .description("write a problem report to a file, and say where to send it")
     .option("--run <id>", "the run the report is about; the newest failed one if not given")
     .option("--output <file>", "where to write it; a new file in this directory if not given")
