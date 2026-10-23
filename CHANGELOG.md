@@ -95,6 +95,10 @@ shape of this file.
 - `readMeetingLinks` (`@wirecat/cli-core/services`) and `MeetingStore.meetingChatLines`: links shared in the chat of
   the selected meetings, most shared first, with who shared them, in which meetings, and the Google file each names.
   Found when read, not stored; at most 100000 chat messages, more is an error.
+- `search meetings` takes `date:`, `project:`, `tag:` and `topic:` in the query: `budget project:RES date>=30d`. They
+  choose meetings as `--since-time`/`--until-time`, `--project`, `--tag` and `--topic` do, join the words with AND,
+  and are refused inside OR, NOT and groups (`query.unsupported-field`) or when the same filter is also an option.
+  Search by meaning embeds only the words. `liftMeetingFields` (`@wirecat/cli-core/meetings`) does the split.
 - A local read with an unknown profile now lists the profiles on this computer in its error and
   `details.profiles`, so a typo does not suggest linking a new account. A configured profile with no
   saved account still explains how to fill its local history.

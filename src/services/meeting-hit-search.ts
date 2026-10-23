@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { MeetingHitSearchRequest } from "../meetings/index.js"
+import { liftMeetingFields, type MeetingHitSearchRequest } from "../meetings/index.js"
 import type { VocabularyKind } from "../store/index.js"
 import type { MessageStore } from "../store/store.js"
 
@@ -75,9 +75,10 @@ export const searchMeetingHits = async (
   request: MeetingHitSearchRequest,
   options: { refreshIndex?: boolean } = {},
 ) => {
-  const { input, selection } = await resolveMeetingSelection(store, request)
+  const lifted = liftMeetingFields(query, request)
+  const { input, selection } = await resolveMeetingSelection(store, lifted.request)
   if (options.refreshIndex !== false) await refreshMeetingIndex(store.meetings, input.accountId, input.signal)
-  const result = await store.meetings.searchHits(query, input)
+  const result = await store.meetings.searchHits(lifted.query, input)
   input.signal?.throwIfAborted()
   return { ...result, selection }
 }

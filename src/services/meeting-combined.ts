@@ -3,6 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import { meaningFloor } from "../embeddings/models.js"
 import {
   formatMeetingReference,
+  liftMeetingFields,
   type MeetingHitSearchRequest,
   parseMeetingReference,
   type SearchHit,
@@ -70,10 +71,11 @@ const cursorOf = (value: string | undefined, key: string): number => {
 export const searchMeetingsCombined = async (
   store: Pick<MessageStore, "meetings" | "meetingVectors"> & { knowledge?: MessageStore["knowledge"] },
   embedder: MeetingEmbedder,
-  query: string,
+  typed: string,
   request: MeetingCombinedRequest,
 ) => {
-  const { maxChunks, maxRows, maxTextBytes, ...words } = request
+  const { maxChunks, maxRows, maxTextBytes, ...chosen } = request
+  const { query, request: words } = liftMeetingFields(typed, chosen)
   const { input, selection } = await resolveMeetingSelection(store, words)
   const { after, limit = 20, maxReadBytes, ...filters } = input
   const terms = questionTerms(query)
