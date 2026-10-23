@@ -204,6 +204,8 @@ const samples: Record<EntityName, unknown> = {
     created_at: at,
     updated_at: at,
   },
+  contact_alias: { person_id: "10", alias: null },
+  contact_note_removal: { id: "1", person_id: "10", removed: true },
   contact_note: {
     id: "n1",
     contact: "contact:telegram/42",

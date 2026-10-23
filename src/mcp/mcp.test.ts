@@ -26,6 +26,7 @@ import { settingsFor } from "../cli/settings.js"
 import { skillCommand } from "../cli/skill-command.js"
 import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
+import { ENTITIES } from "../entities/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import type { MessengerAdapter, RemoteFile, SendOptions } from "../ports/messenger.js"
 import type { Asker, GuardRequest, SendGuard } from "../sends/guard.js"
@@ -1743,9 +1744,9 @@ describe("the MCP server", () => {
       { chatId: "7", title: "AI news", username: null, description: null },
     )
     await store.close()
-    expect((await call("contacts alias set", { person: "10", alias: "Local" })).body.item).toMatchObject({
-      alias: "Local",
-    })
+    const aliased = (await call("contacts alias set", { person: "10", alias: "Local" })).body.item
+    expect(aliased).toMatchObject({ alias: "Local" })
+    expect(v.safeParse(ENTITIES.contact_alias, aliased).success).toBe(true)
     const added = await call("contacts notes add", { person: "Local", text: "Own note" })
     expect(added.body.item).toMatchObject({ revision: 1, text: "Own note" })
     const id = added.body.item.id
@@ -1754,8 +1755,12 @@ describe("the MCP server", () => {
     expect(
       (await call("contacts notes edit", { person: "10", id, text: "Edited", revision: 1 })).body.item,
     ).toMatchObject({ revision: 2 })
-    expect((await call("contacts notes remove", { person: "10", id })).body.item).toMatchObject({ removed: true })
-    expect((await call("contacts alias rm", { person: "10" })).body.item).toMatchObject({ alias: null })
+    const removed = (await call("contacts notes remove", { person: "10", id })).body.item
+    expect(removed).toMatchObject({ removed: true })
+    expect(v.safeParse(ENTITIES.contact_note_removal, removed).success).toBe(true)
+    const unaliased = (await call("contacts alias rm", { person: "10" })).body.item
+    expect(unaliased).toMatchObject({ alias: null })
+    expect(v.safeParse(ENTITIES.contact_alias, unaliased).success).toBe(true)
     expect((await call("metadata get", { chat: "7" })).body.item).toMatchObject({ metadata: { title: "AI news" } })
     expect((await call("tags auto", { chat: "7", dry_run: true })).body.item).toMatchObject({
       dry_run: true,

@@ -47,6 +47,7 @@ import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
 import { pollVote } from "./poll-vote.js"
+import { contactAlias, contactNoteRemoval } from "./private-contact.js"
 import { ranking } from "./ranking.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
@@ -72,9 +73,11 @@ export {
   chatEvent,
   chatStats,
   contact,
+  contactAlias,
   contactImport,
   contactLookup,
   contactNote,
+  contactNoteRemoval,
   contactProfile,
   contactStateChange,
   contactSync,
@@ -155,6 +158,8 @@ export const ENTITIES = {
   contact_update: contactUpdate,
   contact_state_change: contactStateChange,
   contact_import: contactImport,
+  contact_alias: contactAlias,
+  contact_note_removal: contactNoteRemoval,
   account,
   account_session: accountSession,
   note,
