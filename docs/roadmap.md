@@ -23,8 +23,9 @@ version.
 
 - **A fix for the security alerts** that `npm audit` shows today on a fresh install (from the MCP server library).
 - **A smaller install**, with features such as charts, speech and search by meaning downloaded when first used.
-- **A new source without changing this package**: one entry point for integrations, and a provider list a CLI
-  extends itself. The Slack, Google Meet and Notion CLIs need it.
+- **A new source without changing this package**: a provider list a CLI extends itself, and document code that
+  is not tied to Google Drive. The Slack, Google Meet, Notion and Calendar CLIs need it.
+- **Calendar events** in the shared store, linked to the people, meetings and chats around them.
 - **Faster search from the command line**, by finding where start-up time goes first.
 - **Search that forgives typos by default**, saying how each forgiven hit matched.
 - **Tags that a model or an agent suggests**, shown below the owner's own tags.

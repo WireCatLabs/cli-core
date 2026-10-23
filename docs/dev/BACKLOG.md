@@ -35,9 +35,12 @@ next is the [roadmap](../roadmap.md).
 - **CORE-4** · P2 · 🟡 Shared command-lint debt the CLIs baseline: examples and summaries are in open `docs/standards-*`
   and `fix/standards-*` pull requests (#1774–#1814); the flag renames wait for a breaking release.
   [Notes](BACKLOG-NOTES.md#core-4).
-- **CORE-5** · P2 · Let a new source join without editing this package: the provider registry is a fixed list
-  (`src/domain/providers.ts:14`) and there is no single `/sdk` entry point (`docs/dev/ADAPTERS.md:23`). Needed before
-  the Slack, Google Meet and Notion CLIs, and it is the "SDK for new integrations" on the public roadmap. Plan first.
+- **CORE-5** · P2 · Let a new source join without editing this package: the provider list is fixed
+  (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
+  (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No
+  separate SDK: cli-core is the shared base (owner, 2026-10-23). Plan first.
+- **CORE-26** · P2 · Calendar events in the store for the new `cal` CLI (Google Calendar first): an event entity
+  linked to people, meetings and chats, searchable like the rest. Nothing handles calendars today. Plan first.
 - **CORE-6** · P2 · Search start-up: memo and drive take 1.2–2.4 s a search; measure process start, store open and
   model load first. [Notes](BACKLOG-NOTES.md#core-6).
 - **CORE-7** · P2 · 🟡 One `--source` for every search: left are document-only selection, provider and kind coverage in
