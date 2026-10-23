@@ -16,6 +16,7 @@ export const deleteCommand = (messenger: Messenger): Command =>
   annotate(new Command("delete"), {
     examples: [`${messenger.app.command} personal messages delete "Book club" 101`],
     effects: REMOTE_WRITE,
+    output: { entity: "message_deletion" },
   })
     .description("delete messages for you only; with --for-everyone, for everyone in the chat")
     .argument("<chat>", messenger.chatArgument)

@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- **Message read and write schemas.** Showing a message, sending, editing, forwarding, pinning, starring and deleting declare their existing answer entities for field discovery and projection. Write receipts retain their operation id.
+
 - **Poll answer schemas.** Poll reads, vote and close receipts, and newly sent poll messages declare their answer entities for field discovery and projection.
 
 ## 0.394.0 — 23.10.2026

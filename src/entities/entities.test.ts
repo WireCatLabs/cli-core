@@ -36,6 +36,9 @@ const poll = {
 }
 
 const samples: Record<EntityName, unknown> = {
+  message_pin: { operation_id: "op-1", chat_id: "7", message_id: "3", pinned: false },
+  message_star: { operation_id: "op-1", chat_id: "7", message_id: "3", starred: true },
+  message_deletion: { operation_id: "op-1", chat_id: "7", deleted: ["3"], for_everyone: false },
   poll,
   poll_change: { operation_id: "op-1", poll },
   message_write: { operation_id: "op-1", message },

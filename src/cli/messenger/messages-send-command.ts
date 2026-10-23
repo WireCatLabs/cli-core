@@ -21,6 +21,7 @@ export const sendCommand = (messenger: Messenger): Command => {
   const send = annotate(new Command("send"), {
     examples: [`${messenger.app.command} personal messages send "Book club" "The meeting starts at 10."`],
     effects: REMOTE_WRITE,
+    output: { entity: "message_write" },
   })
     .description("send a text message; without [text], the text is read from stdin")
     .argument("<chat>", messenger.chatArgument)

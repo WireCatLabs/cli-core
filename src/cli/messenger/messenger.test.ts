@@ -945,6 +945,8 @@ describe("the shared read commands", () => {
     const over = await call(["messages", "pin", "Book", "5", "--notify"], async () => pinning, env)
     const off = await call(["messages", "unpin", "Book", "3", "--json"], async () => pinning, env)
 
+    expect(v.safeParse(ENTITIES.message_pin, JSON.parse(quiet.stdout[0] ?? "").item).success).toBe(true)
+    expect(v.safeParse(ENTITIES.message_pin, JSON.parse(off.stdout[0] ?? "").item).success).toBe(true)
     expect(JSON.parse(quiet.stdout[0] ?? "").item).toEqual({
       operation_id: expect.any(String),
       chat_id: "7",
@@ -1320,6 +1322,7 @@ describe("the shared read commands", () => {
     expect(unasked.stderr.join("\n")).toContain("--allow-dangerous")
     expect(tooMany.stderr.join("\n")).toContain("at most 10")
     const answer = JSON.parse(done.stdout[0] ?? "").item
+    expect(v.safeParse(ENTITIES.message_deletion, answer).success).toBe(true)
     expect(answer).toEqual({ operation_id: expect.any(String), chat_id: "7", deleted: ["3", "4"], for_everyone: true })
     expect(over.code).toBe(8)
     expect(deletions).toEqual([["7", ["3", "4"], { forEveryone: true }]])
@@ -5363,4 +5366,44 @@ describe("the messages reads answer in the envelope of their entity", () => {
     )
     expect(parsed.issues?.map((issue) => `${v.getDotPath(issue)}: ${issue.message}`)).toBeUndefined()
   })
+})
+
+it("declares both star receipts and refuses unknown fields before changing a star", async () => {
+  const root = mkdtempSync(join(tmpdir(), "message-star-entity-"))
+  const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+  const writes: boolean[] = []
+  const adapter: MessengerAdapter = {
+    ...fake,
+    star: async (_chat, _message, starred) => {
+      writes.push(starred)
+    },
+  }
+  for (const name of ["star", "unstar"]) {
+    const result = await call(
+      ["messages", name, "Book", "3", "--json"],
+      async () => adapter,
+      env,
+      {},
+      { messageStars: true },
+    )
+    expect(result.code).toBe(0)
+    expect(v.safeParse(ENTITIES.message_star, JSON.parse(result.stdout[0] ?? "").item).success).toBe(true)
+  }
+  const projected = await call(
+    ["messages", "star", "Book", "3", "--json=starred"],
+    async () => adapter,
+    env,
+    {},
+    { messageStars: true },
+  )
+  expect(JSON.parse(projected.stdout[0] ?? "").item).toEqual({ operation_id: expect.any(String), starred: true })
+  const invalid = await call(
+    ["messages", "unstar", "Book", "3", "--json=missing"],
+    async () => adapter,
+    env,
+    {},
+    { messageStars: true },
+  )
+  expect(invalid.code).toBe(2)
+  expect(writes).toEqual([true, false, true])
 })
