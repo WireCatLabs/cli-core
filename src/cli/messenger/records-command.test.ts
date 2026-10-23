@@ -2,8 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { CallRecord, Chat, Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { snakeKeys } from "../envelope.js"
 import { run } from "../program.js"
@@ -149,6 +151,7 @@ describe("reads only the server answers", () => {
     const shown = await invoke(["account", "privacy", "show", "--json"], adapter, { privacy: true })
     const elsewhere = await invoke(["account", "privacy", "show"], adapter)
 
+    expect(v.safeParse(ENTITIES.account_privacy, JSON.parse(shown.stdout).item).success).toBe(true)
     expect(JSON.parse(shown.stdout).item).toEqual({ find_by_phone: "contacts", hide_online: false })
     expect(elsewhere.code).not.toBe(0)
   })
@@ -295,6 +298,7 @@ describe("reads only the server answers", () => {
       },
     )
 
+    expect(v.safeParse(ENTITIES.account_privacy_change, JSON.parse(set.stdout).item).success).toBe(true)
     expect(JSON.parse(set.stdout).item).toMatchObject({ privacy: { find_by_phone: "contacts", hide_online: true } })
     expect(changes).toEqual([{ findByPhone: "contacts", hideOnline: true }])
     expect([wrong.code, empty.code, readOnly.code]).toEqual([2, 2, 5])
@@ -326,6 +330,7 @@ describe("reads only the server answers", () => {
 
     expect(set.code).toBe(0)
     expect(changes).toEqual([{ readReceipts: false, about: "contacts", lastSeen: "nobody" }])
+    expect(v.safeParse(ENTITIES.account_privacy, JSON.parse(shown.stdout).item).success).toBe(true)
     expect(JSON.parse(shown.stdout).item).toEqual({
       read_receipts: false,
       profile_photo: "contacts_except",

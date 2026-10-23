@@ -1192,6 +1192,8 @@ describe("chats create, join and leave", () => {
     const unasked = await call(["account", "sessions", "end", "--others"], adapter, env)
     const ended1 = await call(["account", "sessions", "end", "--others", "--yes", "--json"], adapter, env)
 
+    expect(v.safeParse(ENTITIES.account_change, answer(updated)).success).toBe(true)
+    expect(v.safeParse(ENTITIES.ended_account_sessions, answer(ended1)).success).toBe(true)
     expect(answer(updated)).toMatchObject({ account: { name: "New Name", phone: "***1222" } })
     expect(changes).toEqual([{ firstName: "New", description: "hi", photo: "me.jpg" }])
     expect([empty.code, without.code, unasked.code, ended1.code]).toEqual([2, 2, 7, 0])

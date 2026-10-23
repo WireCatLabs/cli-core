@@ -25,6 +25,10 @@ const message = {
 const author = { type: "person", id: "1", name: null }
 
 const samples: Record<EntityName, unknown> = {
+  account_change: { operation_id: "op-1", account: { id: "500", name: null, username: null } },
+  ended_account_sessions: { operation_id: "op-1", sessions: [] },
+  account_privacy: { read_receipts: false, profile_photo: "contacts_except" },
+  account_privacy_change: { operation_id: "op-1", privacy: { hide_online: true } },
   message,
   "message.hit": {
     ref: message.ref,
