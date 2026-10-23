@@ -19,4 +19,17 @@ export interface MeetingChatLinesStore {
   meetingChatLines(input: MeetingChatLinesInput): Promise<MeetingChatLine[]>
 }
 
+/** One link as the meetings' chat holds it: where and how often it was shared. */
+export interface MeetingLink {
+  url: string
+  domain: string | null
+  /** The Google Docs, Sheets, Slides, Forms or Drive file it names. */
+  documentId: string | null
+  count: number
+  firstAt: number
+  lastAt: number
+  senders: string[]
+  meetings: { meetingId: number; accountId: number; title: string | null }[]
+}
+
 export const CHAT_MESSAGES_READ = 100_000

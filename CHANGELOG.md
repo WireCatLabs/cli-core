@@ -17,6 +17,8 @@ shape of this file.
 
 ### Added
 
+- **Meeting answer schemas.** `review`, `mentions list`, `stats meetings show` and `top`, `meetings people`, `meetings passage` and `meetings task-proposal` declare their answer entities (`meeting_review`, `meeting_link`, `meeting_stats`, `meeting_speaker`, `meeting_participants`, `meeting_passage`, `meeting_task_proposal`) for field discovery and projection. `meetings/` exports the item builders the meeting CLIs share: `meetingReviewItem`, `meetingLinkItem`, `meetingStatsItem`, `meetingSpeakerItem`.
+
 - **Listener answers declare their fields.** Live messages and events, and the final serve summary, expose exact schemas for discovery and cross-CLI output contracts. Provider-only attachment references stay private.
 
 - **Poll answer schemas.** Poll reads, vote and close receipts, and newly sent poll messages declare their answer entities for field discovery and projection.

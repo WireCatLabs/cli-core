@@ -70,7 +70,13 @@ import {
   meeting,
   meetingDetails,
   meetingHit,
+  meetingLink,
+  meetingParticipants,
+  meetingPassage,
   meetingProjectEvidence,
+  meetingReview,
+  meetingSpeaker,
+  meetingStats,
   meetingSummary,
   meetingTranscript,
 } from "./meeting.js"
@@ -78,6 +84,7 @@ import { meetingFindings } from "./meeting-findings.js"
 import { meetingPreparation } from "./meeting-preparation.js"
 import { meetingProjectCandidates } from "./meeting-project-candidates.js"
 import { meetingSeriesInventory } from "./meeting-series-inventory.js"
+import { meetingTaskProposal } from "./meeting-task-proposal.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { mention, mentionDecision, mentionDetails, mentionDomain, mentionRebuild, place } from "./mention.js"
@@ -455,6 +462,13 @@ export const ENTITIES = {
   meeting_findings: meetingFindings,
   meeting_transcript: meetingTranscript,
   meeting_summary: meetingSummary,
+  meeting_review: meetingReview,
+  meeting_link: meetingLink,
+  meeting_stats: meetingStats,
+  meeting_speaker: meetingSpeaker,
+  meeting_participants: meetingParticipants,
+  meeting_passage: meetingPassage,
+  meeting_task_proposal: meetingTaskProposal,
   reference,
   relationship,
   recipient,

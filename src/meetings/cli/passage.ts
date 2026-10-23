@@ -67,6 +67,7 @@ export const createMeetingPassageCommand = (program: Command): Command => {
     {
       origin: "handwritten",
       effects: { remote: "none", local: "read" },
+      output: { entity: "meeting_passage" },
       examples: [`${program.name()} meetings passage meeting:1/1/1/0 --json`],
     },
   )
