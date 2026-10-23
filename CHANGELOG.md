@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.395.0 — 23.10.2026
+
 ### Changed — may break callers
 
 - `searches list`, `searches history` and `searches clear` cover only message searches. The table is shared by
