@@ -52,6 +52,8 @@ shape of this file.
 
 - MCP argument names follow singular CLI placeholders: `messages delete` takes `message`, chat export takes `chat`, and duplicate-task operations take `task` (with `other_task` for a pair). Update saved MCP requests using `messages`, `chats` or `dup`. CLI positional values and their order are unchanged.
 
+- **Private contact notes use `--text-file`.** `--file` continues to work as a hidden compatibility alias; giving both is refused before any note is changed. New help and discovery reserve `--file` for message attachments.
+
 ### Fixed
 
 - The option catalogue records WhatsApp's JPEG-only profile photos. Wording differences can be justified for one command without exempting that option everywhere or hiding a missing option.
@@ -61,6 +63,8 @@ shape of this file.
 - Message deletion, chat export and duplicate-task commands use singular argument names in help and discovery. Variadic arguments still accept several values, and task argument help identifies each side of a pair.
 
 - Contact profiles, phone lookups and address-book sync summaries declare their existing answer fields. Profile schemas retain masked phones, incomplete activity counts, partial provider flags and the source and precision of account-age estimates.
+
+- **Count and grouping placeholders match the shared vocabulary.** Processing limits use `<n>` and statistics grouping uses `<group>` across supported fields and calendar units; accepted values and defaults stay the same.
 
 ### Added
 
@@ -119,8 +123,6 @@ shape of this file.
   `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
   optional list of kinds.
 
-- **Private contact notes use `--text-file`.** `--file` continues to work as a hidden compatibility alias; giving both is refused before any note is changed. New help and discovery reserve `--file` for message attachments.
-
 ### Added
 
 - `search meetings` takes `date:`, `project:`, `tag:` and `topic:` in the query: `budget project:RES date>=30d`. They
@@ -156,10 +158,6 @@ shape of this file.
 - Conversation commands include examples in help and command discovery, with guidance for submitting a batch answer.
 
 - Server commands include concrete examples in help and command discovery.
-
-### Fixed
-
-- **Count and grouping placeholders match the shared vocabulary.** Processing limits use `<n>` and statistics grouping uses `<group>` across supported fields and calendar units; accepted values and defaults stay the same.
 
 ## 0.394.0 — 23.10.2026
 

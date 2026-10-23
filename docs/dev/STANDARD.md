@@ -863,7 +863,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--expire-time` | `<time>` | it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now. **messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it — so it differs on purpose (Help text rule 4)** |  | `chats link create` (tg-only), `chats link update` (tg-only), `messages pin` (wa-only) |
 | `--extract` |  | extract text from files mapped by this download |  | `messages download` |
 | `--failed` |  | every chat whose newest job failed or died |  | `store jobs retry` |
-| `--file` | `<file>` | attach a file; images go as a photo, videos as a video. Repeat it for more |  | `bot messages send` (planned), `contacts notes add`, `contacts notes edit`, `messages send` |
+| `--file` | `<file>` | attach a file; images go as a photo, videos as a video. Repeat it for more |  | `bot messages send` (planned), `messages send` |
 | `--filename` | `<name>` | the name others see for the --file, instead of its name on disk |  | `messages send` (tg, wa only) |
 | `--filter` | `query` | Strict Lucene filter: any message in the conversation must match; the meaning query stays unchanged. **search notes uses it for a query every note must also match, the meaning half unchanged** |  | `search conversations`, `search notes` |
 | `--find-by-phone` | `<who>` | who finds the account by its number: everyone, contacts or nobody |  | `account privacy set` (planned) |
@@ -1027,7 +1027,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--task` | `<id>` | a task, by its id or key as tasks list shows it |  | `tags add`, `tags remove` |
 | `--template` | `<text>` | the reply template |  | `replies edit` |
 | `--text` | `<text>` | the message's new text; - reads stdin |  | `bot callbacks answer` (planned) |
-| `--text-file` | `<path>` | read the text from this file; - or none reads stdin |  | `attachments text set` |
+| `--text-file` | `<path>` | read the text from this file; - or none reads stdin |  | `attachments text set`, `contacts notes add`, `contacts notes edit` |
 | `--thread` |  | the stored reply chain and replies instead of time neighbours; falls back when no graph exists |  | `messages context`, `search messages` |
 | `--thread-bytes` | `<n>` | at most this many bytes of whole messages and links in each context (default: 65536) |  | `messages context`, `search messages` |
 | `--thread-hops` | `<n>` | at most this many links from the hit (default: 8) |  | `messages context`, `search messages` |

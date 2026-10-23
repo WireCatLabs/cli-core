@@ -2834,14 +2834,14 @@
     "contacts notes add": {
       "in": "all",
       "options": {
-        "--file": "all"
+        "--text-file": "all"
       }
     },
     "contacts notes edit": {
       "in": "all",
       "options": {
-        "--file": "all",
-        "--revision": "all"
+        "--revision": "all",
+        "--text-file": "all"
       }
     },
     "contacts notes list": {
