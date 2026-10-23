@@ -19,6 +19,8 @@ shape of this file.
 - `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
   same table: create, list, show, delete and `run`, which counts the run.
 
+- MCP setup and diagnostic commands include examples in help and command discovery.
+
 - Account commands include concrete examples in help and command discovery.
 
 - Configuration commands include concrete examples in help and command discovery.

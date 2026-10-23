@@ -91,7 +91,10 @@ export const mcpCommand = (messenger: Messenger): Command => {
 
   command.addCommand(
     withFlags(
-      annotate(new Command("config"), { effects: LOCAL_READ }).description(
+      annotate(new Command("config"), {
+        effects: LOCAL_READ,
+        examples: [`${app.command} personal mcp config`],
+      }).description(
         "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
       ),
     ).action(async function (this: Command) {
@@ -117,7 +120,12 @@ export const mcpCommand = (messenger: Messenger): Command => {
   )
   command.addCommand(
     withFlags(
-      grantsAuthority(annotate(new Command("setup"), { effects: LOCAL_WRITE }))
+      grantsAuthority(
+        annotate(new Command("setup"), {
+          effects: LOCAL_WRITE,
+          examples: [`${app.command} personal mcp setup codex --allow-writes`],
+        }),
+      )
         .description("add this profile's local MCP server to Codex or Claude Code")
         .argument("<client>", "codex or claude-code")
         .option("--allow-writes", "acknowledge that this profile offers writing tools"),
@@ -156,9 +164,10 @@ export const mcpCommand = (messenger: Messenger): Command => {
   )
   command.addCommand(
     withFlags(
-      annotate(new Command("doctor"), { effects: LOCAL_READ }).description(
-        "check this profile's local MCP handshake and tool list",
-      ),
+      annotate(new Command("doctor"), {
+        effects: LOCAL_READ,
+        examples: [`${app.command} personal mcp doctor`],
+      }).description("check this profile's local MCP handshake and tool list"),
     ).action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const { settings, env } = context
