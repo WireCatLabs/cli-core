@@ -78,9 +78,10 @@ export const recipientsCommand = (messenger: Messenger): Command => {
 export const sendsCommand = (messenger: Messenger): Command =>
   new Command("sends").description("every attempt to send from this profile — never the text").addCommand(
     withPaging(
-      annotate(new Command("list"), { effects: LOCAL_READ }).description(
-        "attempts to send, newest first: sent, refused, failed, or not known",
-      ),
+      annotate(new Command("list"), {
+        effects: LOCAL_READ,
+        examples: [`${messenger.app.command} personal sends list --limit 10`],
+      }).description("attempts to send, newest first: sent, refused, failed, or not known"),
     ).action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const { settings, renderer, env } = context

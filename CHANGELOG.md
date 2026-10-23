@@ -11,6 +11,8 @@ shape of this file.
 
 - **Contact answers have declared fields.** Address-book writes, private aliases and note removal, activity, bot checks, identity links, context and preparation expose their exact answer schemas. Context describes both the cross-account report and selected-chat message windows at every detail level. Field projection recognizes both shapes and refuses unknown fields before reading contact data. CLI, SDK and MCP receipts keep their existing shapes.
 
+- Send history includes a concrete example in help and command discovery.
+
 ## 0.399.0 — 23.10.2026
 
 ### Changed — may break callers
