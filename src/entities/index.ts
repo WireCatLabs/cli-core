@@ -53,6 +53,7 @@ import { person } from "./person.js"
 import { pollVote } from "./poll-vote.js"
 import { contactAlias, contactNoteRemoval } from "./private-contact.js"
 import { ranking } from "./ranking.js"
+import { recipient, recipientAdded, recipientChange, recipientOff, recipientRemoved } from "./recipient.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
 import { savedSearch } from "./saved-search.js"
@@ -122,6 +123,11 @@ export {
   person,
   pollVote,
   ranking,
+  recipient,
+  recipientAdded,
+  recipientChange,
+  recipientOff,
+  recipientRemoved,
   reference,
   relationship,
   retention,
@@ -220,6 +226,11 @@ export const ENTITIES = {
   meeting_summary: meetingSummary,
   reference,
   relationship,
+  recipient,
+  recipient_change: recipientChange,
+  "recipient_change.added": recipientAdded,
+  "recipient_change.removed": recipientRemoved,
+  "recipient_change.off": recipientOff,
   tagging,
   conversation,
   saved_search: savedSearch,

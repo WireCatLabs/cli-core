@@ -16,6 +16,8 @@ shape of this file.
 
 ### Added
 
+- Recipient lists accept ID and title queries without changing the allowlist state. Recipient commands declare their answer schemas for discovery and field projection.
+
 - **Contact answers have declared fields.** Address-book writes, private aliases and note removal, activity, bot checks, identity links, context and preparation expose their exact answer schemas. Context describes both the cross-account report and selected-chat message windows at every detail level. Field projection recognizes both shapes and refuses unknown fields before reading contact data. CLI, SDK and MCP receipts keep their existing shapes.
 
 - Send history includes a concrete example in help and command discovery.

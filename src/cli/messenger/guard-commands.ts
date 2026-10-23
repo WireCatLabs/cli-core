@@ -5,10 +5,11 @@ import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { pagedList } from "../list-query.js"
+import { pagedList, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
 import { wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { RECIPIENTS_QUERY, recipientFilter } from "./recipients-query.js"
 
 /**
  * The chats this profile may send to. Off until the first `add`; `clear` deletes it, which turns it off again. It stops
@@ -21,19 +22,29 @@ export const recipientsCommand = (messenger: Messenger): Command => {
 
   const command = new Command("recipients").description("the chats this profile may send to, when the list is on")
 
-  annotate(command.command("list"), { effects: LOCAL_READ, examples: [`${tool} recipients list`] })
+  withQuery(
+    annotate(command.command("list"), { examples: [`${tool} recipients list`], effects: LOCAL_READ }),
+    RECIPIENTS_QUERY,
+  )
     .description("the chats on the list; empty and off until the first add")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      const filter = recipientFilter(words)
       const context = messengerContext(this, messenger)
       const { settings, renderer, env } = context
-      const chats = listFor(settings.profile, env).read()
-      renderAnswer(this, context, wholeList("recipients list", (chats ?? []).map(snakeKeys)))
-      if (!chats) renderer.note("the recipient list is off — this profile may send to any chat")
-      else if (chats.length === 0) renderer.note("the recipient list is on and empty — this profile may send nowhere")
+      const found = listFor(settings.profile, env).list(filter)
+      renderAnswer(this, context, wholeList("recipients list", found.items.map(snakeKeys)))
+      if (found.state === "off") renderer.note("the recipient list is off — this profile may send to any chat")
+      else if (found.state === "empty")
+        renderer.note("the recipient list is on and empty — this profile may send nowhere")
+      else if (found.items.length === 0) renderer.note("no recipients match the query")
     })
 
   grantsAuthority(
-    annotate(command.command("add"), { effects: FETCH, examples: [`${tool} recipients add "Book club"`] }),
+    annotate(command.command("add"), {
+      examples: [`${tool} recipients add "Book club"`],
+      effects: FETCH,
+      output: { entity: "recipient_change", view: "added" },
+    }),
   )
     .argument("<chat>", messenger.chatArgument)
     .description("allow sending to this chat; the first add turns the list on")
@@ -51,7 +62,11 @@ export const recipientsCommand = (messenger: Messenger): Command => {
     })
 
   grantsAuthority(
-    annotate(command.command("remove"), { effects: LOCAL_WRITE, examples: [`${tool} recipients remove "Book club"`] }),
+    annotate(command.command("remove"), {
+      examples: [`${tool} recipients remove "Book club"`],
+      effects: LOCAL_WRITE,
+      output: { entity: "recipient_change", view: "removed" },
+    }),
   )
     .argument("<chat>", "chat id, or the title as the list shows it")
     .description("stop allowing this chat; the list stays on")
@@ -63,7 +78,13 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ id: gone.id, title: gone.title, removed: true }))
     })
 
-  grantsAuthority(annotate(command.command("clear"), { effects: LOCAL_WRITE, examples: [`${tool} recipients clear`] }))
+  grantsAuthority(
+    annotate(command.command("clear"), {
+      examples: [`${tool} recipients clear`],
+      effects: LOCAL_WRITE,
+      output: { entity: "recipient_change", view: "off" },
+    }),
+  )
     .description("delete the list, which turns it off: this profile may send to any chat again")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
