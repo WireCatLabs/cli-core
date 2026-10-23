@@ -47,6 +47,12 @@ importers:
       defuddle:
         specifier: 0.19.5
         version: 0.19.5
+      dictionary-en:
+        specifier: 4.0.0
+        version: 4.0.0
+      dictionary-es:
+        specifier: 4.0.0
+        version: 4.0.0
       dictionary-ru:
         specifier: 3.0.0
         version: 3.0.0
@@ -1735,6 +1741,12 @@ packages:
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
+
+  dictionary-en@4.0.0:
+    resolution: {integrity: sha512-3NHnE1uq33ZE/CIwaZ6gqxa4BnglHnxeAcTM0GJ7cmtRGcvX9InMK/IqLtYcUMFCUpUNgybH+DzkqdgAo3F1zg==}
+
+  dictionary-es@4.0.0:
+    resolution: {integrity: sha512-8J3IYdaHYmkojxqhB+DneQpek6N/s3MwbVk3bPNGQSTBT5kxJtmbuiT0LSDP0Al6K9Vevo1sjspG8AGP9Yvxiw==}
 
   dictionary-ru@3.0.0:
     resolution: {integrity: sha512-tigem0CDnNpxEciW6ktwVH3wWB4FYpuvpwA6IR6UlF7bVu2kez6vOejVNyZgBX1TJIjuYTCTuLxzg/YOls2mRQ==}
@@ -4230,6 +4242,10 @@ snapshots:
   devlop@1.1.0:
     dependencies:
       dequal: 2.0.3
+
+  dictionary-en@4.0.0: {}
+
+  dictionary-es@4.0.0: {}
 
   dictionary-ru@3.0.0: {}
 

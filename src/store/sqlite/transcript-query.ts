@@ -1,6 +1,6 @@
+import { dictionaryLanguages, knownWord } from "../../search/dictionary.js"
 import { isNumberWord, widenWords } from "../../search/garbled.js"
 import type { ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolved.js"
-import { knownRussianWord } from "../../search/russian-dictionary.js"
 import { createStemmer, DEFAULT_STEMMERS, STEM_SEPARATOR } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
@@ -27,6 +27,20 @@ const readsTranscripts = (node: ResolvedPredicate): boolean =>
   /[\p{L}\p{N}]/u.test(normalize(node.value)) &&
   (node.field === "transcript" || (node.implicit === true && (node.field === "text" || node.field === "exact")))
 
+/** `isNumberWord` knows Russian numbers only; a widened number is a wrong fact in any language. */
+const LATIN_NUMBERS = new Set(
+  `zero one two three four five six seven eight nine ten eleven twelve twenty thirty forty fifty sixty seventy
+  eighty ninety hundred thousand million billion first second third fourth fifth sixth seventh eighth ninth tenth
+  half quarter cero uno una dos tres cuatro cinco seis siete ocho nueve diez once doce veinte treinta cuarenta
+  cincuenta sesenta setenta ochenta noventa cien ciento mil millon primero segundo tercero cuarto quinto medio`.split(
+    /\s+/,
+  ),
+)
+
+/** A word widens when its alphabet has a dictionary to tell a garbled spelling from another real word. */
+const widens = (word: string, covered: (word: string) => boolean): boolean =>
+  covered(word) && !isNumberWord(word) && !LATIN_NUMBERS.has(word)
+
 /**
  * Each leaf that reads transcripts, with what it matches there. A transcript always widens, not only when nothing
  * matched as typed text does: a correct and a garbled spelling sit in one chat. Only a single word widens —
@@ -41,7 +55,9 @@ export const transcriptTerms = (
   const terms = new Map(leaves.map((node) => [node, { match: ftsMatch(node), widened: [], from: node.value }]))
   const saved = savedStemmers(database)
   if (item !== "message" || !leaves.length || saved === null) return terms
-  const stemmer = createStemmer(saved ?? DEFAULT_STEMMERS)
+  const stemmers = saved ?? DEFAULT_STEMMERS
+  const stemmer = createStemmer(stemmers)
+  const dictionary = knownWord(dictionaryLanguages(stemmers))
   const stemsOf = (word: string) => [...new Set(stemmer.explain(word).map((part) => part.stem))]
   const widening: { node: ResolvedPredicate; literal: string; stems: string[] }[] = []
   for (const [node, one] of terms) {
@@ -51,15 +67,16 @@ export const transcriptTerms = (
     if (stems)
       Object.assign(one, { stems: node.slop === undefined ? stems : `(${stems}) NOT ${quoted(STEM_SEPARATOR)}` })
     const words = normalize(node.value).match(/[\p{L}\p{N}]+/gu) ?? []
-    if (node.operator === "term" && words.length === 1 && !isNumberWord(words[0] as string))
-      widening.push({ node, literal: words[0] as string, stems: stemsOf(node.value) })
+    const [word] = words
+    if (node.operator === "term" && word !== undefined && words.length === 1 && widens(word, dictionary.covers))
+      widening.push({ node, literal: word, stems: stemsOf(node.value) })
   }
   if (!widening.length) return terms
   const vocabulary = database
     .prepare("SELECT term, doc FROM transcript_words_vocab WHERE col = 'normalized_text'")
     .all()
     .map((row) => ({ term: String(row.term), docs: Number(row.doc) }))
-  widenWords(widening, vocabulary, stemsOf, knownRussianWord).forEach((words, at) => {
+  widenWords(widening, vocabulary, stemsOf, dictionary.known).forEach((words, at) => {
     const leaf = widening[at]
     if (leaf) Object.assign(terms.get(leaf.node) as TranscriptTerms, { widened: words })
   })
