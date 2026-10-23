@@ -5,6 +5,7 @@ import { listOf, snakeKeys } from "../envelope.js"
 
 export interface RunSearch {
   query?: string
+  terms?: readonly string[]
   status?: "success" | "failed" | "partial" | "running"
   errorCode?: string
   operation?: string
@@ -52,7 +53,7 @@ const safeEvent = (event: Record<string, unknown>) =>
 
 export const searchRuns = (
   dir: string,
-  { query = "", status, errorCode, operation, profile, since, limit = 20, page = 1 }: RunSearch = {},
+  { query = "", terms = [], status, errorCode, operation, profile, since, limit = 20, page = 1 }: RunSearch = {},
 ) => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(page) || page < 1)
     throw new CliError("validation_error", "run search uses a limit from 1 to 100 and a positive page")
@@ -60,7 +61,7 @@ export const searchRuns = (
   const from = window.since
   if (from !== undefined && !Number.isFinite(from))
     throw new CliError("validation_error", "--since-time must be a valid date or ISO timestamp")
-  const needle = query.toLowerCase()
+  const needles = [...(query ? [query] : []), ...terms].map((term) => term.toLowerCase())
   const offset = (page - 1) * limit
   const matches = []
   for (const run of listRuns(dir, from === undefined ? {} : { since: from })) {
@@ -75,12 +76,12 @@ export const searchRuns = (
         run.errorCode === errorCode ||
         run.partial?.failures.some((failure) => failure.errorCode === errorCode)) &&
       !operation &&
-      (!needle || JSON.stringify(run).toLowerCase().includes(needle))
+      needles.every((needle) => JSON.stringify(run).toLowerCase().includes(needle))
     // A finished run lists its operations and codes, so a run that cannot match is never opened.
     // One still running, or killed, has no such list and is read.
     const ruledOut =
       !metadataMatch &&
-      !needle &&
+      needles.length === 0 &&
       ((operation !== undefined && run.operations !== undefined && !run.operations.includes(operation)) ||
         (errorCode !== undefined && run.codes !== undefined && !run.codes.includes(errorCode)))
     if (ruledOut) continue
@@ -90,7 +91,7 @@ export const searchRuns = (
       (event) =>
         (!errorCode || event.error_code === errorCode || event.code === errorCode) &&
         (!operation || event.operation === operation) &&
-        (!needle || JSON.stringify(event).toLowerCase().includes(needle)),
+        needles.every((needle) => JSON.stringify(event).toLowerCase().includes(needle)),
     )
     if (!metadataMatch && filtered.length === 0) continue
     const metadata = {
@@ -137,7 +138,7 @@ export const searchRuns = (
 
 /** A page of `searchRuns` in the list envelope; `args` are the search's own, so `page.next` reruns it. */
 export const runsFound = (found: ReturnType<typeof searchRuns>, args: Record<string, unknown>) =>
-  listOf("runs search", {
+  listOf("search runs", {
     items: found.items.map(snakeKeys),
     limit: found.limit,
     has_more: found.hasMore,

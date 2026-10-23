@@ -1,0 +1,49 @@
+import * as v from "valibot"
+import { count, id, text, time } from "./fields.js"
+
+const events = v.array(v.record(v.string(), v.unknown()))
+
+export const recordedRun = v.strictObject({
+  run_id: id,
+  command: text,
+  profile: text,
+  started_at: time,
+  completed_at: v.optional(time),
+  status: v.picklist(["success", "failed", "partial", "running"]),
+  requests: v.optional(count),
+  duration_ms: v.optional(count),
+  cli_version: text,
+  runtime: v.optional(text),
+  platform: v.optional(text),
+  arch: v.optional(text),
+  error_code: v.optional(text),
+  partial: v.optional(
+    v.strictObject({
+      failed: count,
+      stop_reason: v.optional(text),
+      failures: v.array(v.strictObject({ id: text, stage: text, error_code: text, attachment: v.optional(count) })),
+    }),
+  ),
+  provider_error: v.optional(text),
+  kept_because_failed: v.optional(v.boolean()),
+  operations: v.optional(v.array(text)),
+  codes: v.optional(v.array(text)),
+  trace_id: v.optional(id),
+  directory: v.optional(text),
+  event_count: v.optional(count),
+  events: v.optional(events),
+  events_truncated: v.optional(v.boolean()),
+})
+
+export const runDetails = v.strictObject({
+  ...v.omit(recordedRun, ["events_truncated"]).entries,
+  directory: text,
+  event_count: count,
+  events,
+})
+export const runHit = v.strictObject({
+  ...v.omit(recordedRun, ["directory", "event_count"]).entries,
+  events,
+  events_truncated: v.boolean(),
+})
+export const runLocation = v.strictObject({ path: text })

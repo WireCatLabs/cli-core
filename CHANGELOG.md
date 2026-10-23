@@ -27,6 +27,12 @@ shape of this file.
 
 - Doctor reports include a concrete creation example in help and command discovery.
 
+- Recorded-run lists accept metadata queries before pagination, and recorded-run commands declare their answer schemas. Continuation steps keep the query.
+
+### Changed — may break callers
+
+- **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.
+
 ## 0.399.0 — 23.10.2026
 
 ### Changed — may break callers

@@ -460,7 +460,7 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
     const inner = keyForCommand(path.slice(1))
     return `bot.${inner ?? path.slice(1).join(".")}`
   }
-  if (top === undefined || HOUSEKEEPING.has(top)) return null
+  if (top === undefined || HOUSEKEEPING.has(top) || (top === "search" && next === "runs")) return null
   // Picture models moved from `models image` (0.270.0); a model is housekeeping wherever it is listed.
   if (top === "images" && next === "models") return null
   if (top === "attachments" && (next === "check" || next === "jobs")) return null

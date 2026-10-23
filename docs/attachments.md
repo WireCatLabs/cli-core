@@ -165,12 +165,13 @@ results can be retried using `store jobs retry`.
 Search diagnostic records without exposing message contents:
 
 ```sh
-chat runs search --status partial --json
-chat runs search --error-code rate_limited --since-time 2026-10-01 --json
+chat search runs status:partial --json
+chat search runs error_code:rate_limited --since-time 2026-10-01 --json
 ```
 
-Call MCP `chat_read` with `command: "runs search"` and `arguments` containing `query`, `status`,
-`error_code`, `operation`, `since_time`, `limit` and `page`, restricted to the active profile. Partial records keep failed IDs, stages and codes;
+Call MCP `chat_read` with `command: "search runs"` and `arguments` containing `query`, `since_time`, `limit`
+and `page`. Put `status:`, `error_code:`, `operation:` and `profile:` terms in `query`; `profile:work` narrows
+the recorded profiles to inspect. Partial records keep failed IDs, stages and codes;
 provider payloads/message text are not copied into those records. The client may still impose
 its own result-size limit. Verify uncertain write outcomes before retrying; these batch changes
 apply to independent read/download/extraction work and never authorize automatic write replay.
