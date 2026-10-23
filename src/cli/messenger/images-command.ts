@@ -16,6 +16,7 @@ export const imagesCommand = (messenger: Messenger): Command => {
   const images = new Command("images").description("search pictures by what they show, with a model on this machine")
 
   annotate(images.command("embed"), {
+    output: { entity: "image_embedding" },
     effects: FETCH,
     offline: false,
     examples: [`${messenger.app.command} images embed`, `${messenger.app.command} images embed --limit 500`],

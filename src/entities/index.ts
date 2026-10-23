@@ -41,6 +41,7 @@ import { reference } from "./fields.js"
 import { folder } from "./folder.js"
 import { hit } from "./hit.js"
 import { identity } from "./identity.js"
+import { imageEmbedding } from "./image-embedding.js"
 import { inviteLink } from "./invite-link.js"
 import { job } from "./job.js"
 import { joinRequest } from "./join-request.js"
@@ -146,6 +147,7 @@ export {
   folder,
   hit,
   identity,
+  imageEmbedding,
   inviteLink,
   job,
   joinRequest,
@@ -293,6 +295,7 @@ export const ENTITIES = {
   hit,
   document,
   document_link: documentLink,
+  image_embedding: imageEmbedding,
   attachment,
   task,
   fact,
