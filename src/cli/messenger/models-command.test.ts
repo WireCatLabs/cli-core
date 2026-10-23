@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest"
 import { placedText, textModelsDirectory } from "../../embeddings/embed.js"
 import { embeddingKeys } from "../../embeddings/keys.js"
 import { textModel } from "../../embeddings/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import { model as modelEntity } from "../../entities/model.js"
 import { modelPath, modelsDirectory, vadPath } from "../../speech/install.js"
 import { speechModel, VAD } from "../../speech/models.js"
@@ -180,8 +181,21 @@ describe("models text key", () => {
     const set = await call(["models", "text", "key", "set", "openai", "--json"], undefined, false, "sk-test\n")
     const { code, stdout, stderr } = await set.go()
     expect(code).toBe(0)
+    expect(v.safeParse(ENTITIES["model_key.stored"], JSON.parse(stdout[0] ?? "").item).success).toBe(true)
     expect(JSON.parse(stdout[0] ?? "")).toMatchObject({ item: { provider: "openai" } })
     expect([...stdout, ...stderr].join("\n")).not.toContain("sk-test")
     expect(embeddingKeys(app, set.env, set.keyring).read("openai")?.key).toBe("sk-test")
   })
+})
+
+it("declares an empty key-removal answer without connecting or exposing a secret", async () => {
+  const removed = await call(["models", "text", "key", "remove", "openai", "--json"])
+  const result = await removed.go()
+  expect(result.code).toBe(0)
+  expect(v.parse(ENTITIES["model_key.removed"], JSON.parse(result.stdout[0] ?? "").item)).toEqual({
+    provider: "openai",
+    removed: [],
+  })
+  const projected = await call(["models", "text", "key", "remove", "openai", "--json=provider"])
+  expect(JSON.parse((await projected.go()).stdout[0] ?? "").item).toEqual({ provider: "openai" })
 })

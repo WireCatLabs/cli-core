@@ -19,6 +19,8 @@ shape of this file.
 
 - **Image embedding progress has declared fields.** Discovery and projection describe the bounded batch’s model, embedded, skipped and failed counts, and whether more pictures remain. The existing receipt and processing behavior stay unchanged.
 
+- **Model key receipt schemas.** Storing or removing a model-provider key declares its provider and storage sources for field discovery and projection. No credential value appears in either schema or answer.
+
 - Recipient lists accept ID and title queries without changing the allowlist state. Recipient commands declare their answer schemas for discovery and field projection.
 
 - **Cached chat metadata declares its answers.** Cached reads describe absent or populated metadata; refresh receipts describe each successful chat or failure and whether more chats remain. Existing keys and cached-read behavior stay unchanged.

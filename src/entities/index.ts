@@ -89,6 +89,7 @@ import { evidencePacket, messageLinks, messageTranscript } from "./message-read.
 import { messageDownload, messageSync } from "./message-transfer.js"
 import { messageWrite } from "./message-write.js"
 import { model } from "./model.js"
+import { modelKey, removedModelKey, storedModelKey } from "./model-key.js"
 import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
@@ -238,6 +239,7 @@ export {
   messageTranscript,
   messageWrite,
   model,
+  modelKey,
   note,
   officialStats,
   person,
@@ -255,12 +257,14 @@ export {
   recordedRun,
   reference,
   relationship,
+  removedModelKey,
   retention,
   runDetails,
   runHit,
   runLocation,
   savedSearch,
   sendAttempt,
+  storedModelKey,
   tagChange,
   tagging,
   task,
@@ -448,6 +452,9 @@ export const ENTITIES = {
   chat_folder_order: chatFolderOrder,
   chat_rules: chatRules,
   chat_moderation: chatModeration,
+  model_key: modelKey,
+  "model_key.stored": storedModelKey,
+  "model_key.removed": removedModelKey,
   chat_event: chatEvent,
   chat_removal: chatRemoval,
   chat_muting: chatMuting,
