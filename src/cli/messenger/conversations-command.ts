@@ -714,7 +714,10 @@ const answerOf = (text: string): AgentAnswer => {
 
 /** `messages links`: why a message sits where it does in its conversation. */
 export const linksCommand = (messenger: Messenger): Command =>
-  annotate(new Command("links"), { effects: LOCAL_READ })
+  annotate(new Command("links"), {
+    examples: [`${messenger.app.command} personal messages links "Book club" 101`],
+    effects: LOCAL_READ,
+  })
     .description("why a message is in its conversation: each link it has, and the chain of answers back to the start")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")

@@ -7,7 +7,10 @@ import { type Messenger, messengerContext } from "./context.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
 
 export const forwardCommand = (messenger: Messenger): Command => {
-  const forward = annotate(new Command("forward"), { effects: REMOTE_WRITE })
+  const forward = annotate(new Command("forward"), {
+    examples: [`${messenger.app.command} personal messages forward "Book club" 101 --to "Project room"`],
+    effects: REMOTE_WRITE,
+  })
     .description("forward one message to another chat")
     .argument("<chat>", `the chat the message is in: ${messenger.chatArgument}`)
     .argument("<message>", "the message id")

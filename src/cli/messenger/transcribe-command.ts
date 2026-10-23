@@ -12,7 +12,10 @@ import { keepRefreshedRefs } from "./refreshed-refs.js"
 
 /** `messages transcribe`: a voice message as text, by the messenger or by a model on this machine. */
 export const transcribeSubcommand = (messages: Command, messenger: Messenger): Command =>
-  annotate(messages.command("transcribe"), { effects: REMOTE_READ })
+  annotate(messages.command("transcribe"), {
+    examples: [`${messenger.app.command} personal messages transcribe "Book club" 101`],
+    effects: REMOTE_READ,
+  })
     .description(
       `a voice message as text — by ${messenger.name ?? messenger.app.command} where it can, else by a model on this machine`,
     )

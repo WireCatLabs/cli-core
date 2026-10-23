@@ -9,7 +9,10 @@ import { messageItems, selfOf, viewOf } from "./message-items.js"
 
 /** Where to look after a scheduled send ended without an answer: repeating it would schedule a second one. */
 export const scheduledCommand = (messenger: Messenger): Command => {
-  const command = annotate(new Command("scheduled"), { effects: REMOTE_READ })
+  const command = annotate(new Command("scheduled"), {
+    examples: [`${messenger.app.command} personal messages scheduled "Book club"`],
+    effects: REMOTE_READ,
+  })
     .description("messages waiting to be sent later in a chat, soonest first; cancel one in the app")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {

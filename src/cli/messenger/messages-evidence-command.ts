@@ -8,7 +8,10 @@ import { type Messenger, messengerContext } from "./context.js"
 import { evidenceAnswer } from "./message-answers.js"
 
 export const evidenceCommand = (messenger: Messenger): Command =>
-  annotate(new Command("evidence"), { effects: LOCAL_READ })
+  annotate(new Command("evidence"), {
+    examples: [`${messenger.app.command} personal messages evidence "Book club" --limit 10`],
+    effects: LOCAL_READ,
+  })
     .description("a bounded evidence packet from stored messages, newest first")
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "how many, 1–100", positiveCount("--limit"))

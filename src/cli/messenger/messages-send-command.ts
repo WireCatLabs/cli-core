@@ -18,7 +18,10 @@ import { readAll } from "./stdin.js"
 export const HTML_HELP = "the text is HTML: <b>, <i>, <a href>, <code>"
 
 export const sendCommand = (messenger: Messenger): Command => {
-  const send = annotate(new Command("send"), { effects: REMOTE_WRITE })
+  const send = annotate(new Command("send"), {
+    examples: [`${messenger.app.command} personal messages send "Book club" "The meeting starts at 10."`],
+    effects: REMOTE_WRITE,
+  })
     .description("send a text message; without [text], the text is read from stdin")
     .argument("<chat>", messenger.chatArgument)
     .argument("[text]", "the message")
