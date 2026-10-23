@@ -109,7 +109,14 @@ describe("searches", () => {
     })
     expect(json(await call("searches", "show", "invoices", "--json")).item.runs).toBe(3)
 
-    expect(json(await call("searches", "clear", "--json")).item).toEqual({ cleared: 3 })
+    const refused = await call("searches", "clear", "--json=unknown_field")
+    expect(refused.code).not.toBe(0)
+    expect(JSON.parse(refused.stderr).error.reason).toBe("output.unknown-field")
+    const cleared = json(await call("searches", "clear", "--json")).item
+    expect(v.parse(ENTITIES.search_history_clear, cleared)).toEqual({ cleared: 3 })
+    const projected = await call("searches", "clear", "--json=cleared")
+    expect(projected.code, projected.stderr).toBe(0)
+    expect(json(projected).item).toEqual({ cleared: 0 })
     expect(json(await call("searches", "delete", "invoices", "--json")).item.name).toBe("invoices")
     expect(json(await call("searches", "list", "--json")).items).toEqual([])
   })

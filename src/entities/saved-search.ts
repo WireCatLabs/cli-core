@@ -16,3 +16,6 @@ export const savedSearch = v.strictObject({
   last_run_at: v.nullable(time),
   runs: count,
 })
+
+/** The number of unnamed history rows removed; saved searches remain. */
+export const searchHistoryClear = v.strictObject({ cleared: count })

@@ -620,6 +620,7 @@ const samples: Record<EntityName, unknown> = {
     default: true,
     path: "/home/someone/.local/share/WireCat/models/text/e5-small",
   },
+  search_history_clear: { cleared: 1 },
   saved_search: {
     id: "3",
     name: "invoices",

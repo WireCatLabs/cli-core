@@ -171,7 +171,11 @@ export const searchesCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(searches.command("clear"), { effects: LOCAL_WRITE, examples: [`${tool} searches clear`] })
+  annotate(searches.command("clear"), {
+    output: { entity: "search_history_clear" },
+    effects: LOCAL_WRITE,
+    examples: [`${tool} searches clear`],
+  })
     .description("empty the history; saved searches stay")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
