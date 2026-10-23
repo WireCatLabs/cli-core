@@ -136,6 +136,8 @@ const READS = [
   "search messages",
   "messages between",
   "contacts show",
+  "list",
+  "webhooks list",
 ]
 const WRITES = [
   "messages send",
@@ -147,6 +149,13 @@ const WRITES = [
   "messages delete",
   "chats members remove",
   "chats moderate",
+  "chats leave",
+  "chats admins add",
+  "chats admins remove",
+  "commands set",
+  "commands clear",
+  "webhooks set",
+  "webhooks delete",
 ]
 
 describe("bot mcp tools by permission level", () => {
@@ -158,7 +167,7 @@ describe("bot mcp tools by permission level", () => {
 
   it.each([
     ["bot: readonly hides the writes", { bot: "readonly" }, READS],
-    ["bot: deny leaves what no level stops", { bot: "deny" }, ["sends list", "recipients list"]],
+    ["bot: deny leaves what no level stops", { bot: "deny" }, ["sends list", "recipients list", "list"]],
     [
       "a key opened under a read-only bot offers that write alone",
       { bot: "readonly", "bot.messages.send": "allow" },
@@ -439,7 +448,19 @@ describe("the generated bot catalogue", () => {
       }),
     )
 
-    expect(added).toEqual({ ...ADDED, "chats rules show": ["chat"] })
+    expect(added).toEqual({
+      ...ADDED,
+      "chats rules show": ["chat"],
+      "chats admins add": ["can", "chat", "person", "title"],
+      "chats admins remove": ["chat", "person"],
+      "chats leave": ["chat"],
+      "commands clear": [],
+      "commands set": ["commands"],
+      list: ["check"],
+      "webhooks delete": ["url"],
+      "webhooks list": ["offline"],
+      "webhooks set": ["secret_stdin", "types", "url"],
+    })
   })
 
   it("**is pinned**: a command or an argument agents gain or lose shows up here", async () => {

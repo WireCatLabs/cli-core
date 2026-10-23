@@ -154,7 +154,6 @@ const scenarioText = (cli: string, scenario: Scenario, profile: boolean): string
 export const guideCommand = (app: Pick<AppIdentity, "command">, options: GuideOptions): Command => {
   const command = annotate(new Command("guide"), {
     effects: NO_EFFECTS,
-    mcp: false,
     examples: [`${app.command} guide`, `${app.command} guide <name> --json`],
   })
     .description("scenarios: the commands for a common task, in order, and why each")

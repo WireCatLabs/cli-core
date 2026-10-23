@@ -27,7 +27,7 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
   }
   const show = command.commands.find((sub) => sub.name() === "show")
   if (show) annotate(show, { examples: [`${app.command} skill show`, `${app.command} skill show follow-ups`] })
-  return annotate(command, { mcp: false })
+  return command
 }
 
 /** Skills this package ships for every CLI on it, printed by `skill show <name>`: `skills/` beside `dist/` and `src/`. */

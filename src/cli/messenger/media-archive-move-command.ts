@@ -11,7 +11,6 @@ import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js
 export const addMediaArchiveMove = (attachments: Command, messenger: Messenger): void => {
   annotate(attachments.command("move"), {
     effects: LOCAL_WRITE,
-    mcp: false,
     examples: [
       `${messenger.app.command} attachments move ./media-archive ./older-images --before-time 2026-10-01T00:00:00Z --dry-run`,
     ],

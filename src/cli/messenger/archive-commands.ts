@@ -67,7 +67,7 @@ export const storeCommand = (messenger: Messenger): Command => {
  * chat's very first message is not recorded, so it is not claimed: the stretches held are shown.
  */
 const statusCommand = (messenger: Messenger): Command =>
-  annotate(new Command("status"), { effects: LOCAL_READ, mcp: false })
+  annotate(new Command("status"), { effects: LOCAL_READ })
     .summary("what the local archive holds and what is missing")
     .description("per chat: messages stored, the oldest and newest, and the stretches held completely")
     .argument("[chat]", messenger.chatArgument)
@@ -156,7 +156,7 @@ const clearCommand = (messenger: Messenger): Command =>
  * folder, and each later run into the same folder adds only what changed.
  */
 const exportCommand = (messenger: Messenger): Command =>
-  destroysNothing(annotate(new Command("export"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(annotate(new Command("export"), { effects: LOCAL_WRITE }))
     .summary("export stored messages to files")
     .description(
       "a chat's stored messages, oldest first: --jsonl one message per line, --json the list envelope of messages; never asks the messenger",

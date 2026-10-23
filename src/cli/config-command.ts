@@ -20,9 +20,7 @@ export const configCommand = (
   config: Configuration,
   { permissionKey }: { permissionKey?: PermissionKeyOf } = {},
 ): Command => {
-  const command = annotate(new Command("config"), { mcp: false }).description(
-    "the settings in force, and where each one came from",
-  )
+  const command = new Command("config").description("the settings in force, and where each one came from")
 
   annotate(command.command("show"), { effects: LOCAL_READ, examples: [`${app.command} personal config show`] })
     .description("the profile, the profiles that exist, and each setting with where it came from")

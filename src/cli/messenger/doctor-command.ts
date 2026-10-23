@@ -63,7 +63,7 @@ const EXCLUDES = ["message text", "chat titles", "names", "phone numbers", "the 
 
 const reportCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const report = annotate(new Command("report"), { effects: REMOTE_READ, mcp: false })
+  const report = annotate(new Command("report"), { effects: REMOTE_READ })
     .description("what a problem report holds; writes nothing")
     .action(function (this: Command) {
       const output = outputFor(this)
@@ -90,7 +90,7 @@ const reportCommand = (messenger: Messenger): Command => {
       )
     })
 
-  destroysNothing(annotate(report.command("create"), { effects: LOCAL_WRITE }))
+  destroysNothing(annotate(report.command("create"), { effects: LOCAL_WRITE, mcp: false }))
     .description("write a problem report to a file, and say where to send it")
     .option("--run <id>", "the run the report is about; the newest failed one if not given")
     .option("--output <file>", "where to write it; a new file in this directory if not given")

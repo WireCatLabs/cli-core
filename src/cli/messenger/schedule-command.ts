@@ -89,7 +89,7 @@ const withWhen = (command: Command) =>
  */
 export const scheduleCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const command = annotate(new Command("schedule"), { mcp: false }).description(
+  const command = new Command("schedule").description(
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
   )
 
@@ -240,7 +240,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(command.command("run"), { effects: REMOTE_WRITE })
+  annotate(command.command("run"), { effects: REMOTE_WRITE, mcp: false })
     .description("run a schedule now, as its timer would, and wait for it")
     .argument("<name>")
     .action(async function (this: Command, name: string) {
@@ -265,7 +265,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       say({ name, removed: true }, [`Removed ${name}.`])
     })
 
-  annotate(command.command("exec"), { effects: REMOTE_WRITE })
+  annotate(command.command("exec"), { effects: REMOTE_WRITE, mcp: false })
     .description("what a timer runs, given the schedule's file; to run one by hand, use run")
     .argument("<file>")
     .action(async function (this: Command, file: string) {

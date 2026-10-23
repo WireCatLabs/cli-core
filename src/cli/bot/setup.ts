@@ -60,14 +60,14 @@ export const botMenuCommand = (bot: BotMessenger): Command => {
     })
   }
 
-  annotate(command.command("set"), { effects: REMOTE_WRITE, mcp: false })
+  annotate(command.command("set"), { effects: REMOTE_WRITE })
     .description("replace the whole menu: each command as name=description, e.g. start=Begin")
     .argument("<commands...>", "name=description, one per command")
     .action(async function (this: Command, typed: string[]) {
       await replace(this, typed.map(entryOf), "bot.commands.set")
     })
 
-  annotate(command.command("clear"), { effects: REMOTE_WRITE, mcp: false })
+  annotate(command.command("clear"), { effects: REMOTE_WRITE })
     .description("empty the menu")
     .action(async function (this: Command) {
       await replace(this, [], "bot.commands.clear")
@@ -124,7 +124,7 @@ export const botCallbacksCommand = (bot: BotMessenger): Command =>
 
 /** `bot webhooks`: where the messenger pushes this bot's updates instead of being polled. */
 export const botWebhooksCommand = (bot: BotMessenger): Command => {
-  const command = annotate(new Command("webhooks"), { mcp: false }).description(
+  const command = new Command("webhooks").description(
     "where the messenger pushes this bot's updates — while one is set, `bot watch` gets nothing",
   )
 

@@ -19,31 +19,16 @@ const withChatDeletion = () =>
     }),
   )
 
-describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
+describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-10-23)", () => {
   it.each([
-    "server",
-    "attachments jobs",
-    "attachments move",
-    "schedule",
-    "config",
     "mcp",
-    "models",
-    "skill",
     "flood",
-    "replies",
-    "doctor report",
     "complete",
-    "commands schema",
     "account sessions end",
     "chats delete",
     "chats clear",
     "bot auth",
-    "bot list",
     "bot recipients add",
-    "bot webhooks",
-    "bot commands set",
-    "bot chats leave",
-    "bot chats admins add",
     "bot mcp",
   ])("%s", (path) => {
     const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
@@ -53,15 +38,43 @@ describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
     for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
   })
 
-  it("**of store and runs, agents get only runs search, store gaps and store jobs**", () => {
-    const offered = ["runs search", "store gaps plan", "store gaps repair", "store jobs list", "store jobs show"]
-    const leaves = flatten(withChatDeletion()).filter(
-      (one) => ["store", "runs"].includes(one.path[0] ?? "") && (one.commands ?? []).length === 0,
-    )
+  it.each([
+    "attachments jobs status",
+    "attachments move",
+    "commands schema",
+    "config show",
+    "doctor report",
+    "guide",
+    "models audio list",
+    "replies status",
+    "runs list",
+    "schedule list",
+    "server status",
+    "server logs",
+    "skill show",
+    "store export",
+    "store info",
+    "store jobs cancel",
+  ])("**offers %s**: a read, or a write its own permission key limits", (path) => {
+    expect(toolsFromCommands(commands(), { exclude: [["bot"]] }).map((tool) => tool.command)).toContain(path)
+  })
 
-    for (const path of offered) expect(leaves.find((one) => one.path.join(" ") === path)?.mcp, path).not.toBe(false)
-    for (const one of leaves.filter((leaf) => !offered.includes(leaf.path.join(" "))))
-      expect(one.mcp, one.path.join(" ")).toBe(false)
+  it.each([
+    "attachments jobs install",
+    "config set",
+    "doctor report create",
+    "models audio download",
+    "replies add",
+    "schedule command",
+    "schedule run",
+    "server start",
+    "skill install",
+    "store backup",
+    "store clear",
+    "store reset",
+    "store restore",
+  ])("**keeps off %s**: it changes what a later run may do, or no permission key limits it", (path) => {
+    expect(toolsFromCommands(commands(), { exclude: [["bot"]] }).map((tool) => tool.command)).not.toContain(path)
   })
 
   it("project candidates require a separately granted MCP tool", () => {

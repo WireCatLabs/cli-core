@@ -22,7 +22,6 @@ export const runsCommand = (app: AppIdentity): Command => {
 
   annotate(command.command("list"), {
     effects: LOCAL_READ,
-    mcp: false,
     examples: [`${app.command} runs list --limit 10`],
   })
     .description("recorded runs, newest first")
@@ -42,7 +41,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       if (runs.length === 0) renderer.note("nothing recorded — a run is kept with `--record`, or when it fails")
     })
 
-  annotate(command.command("show"), { effects: LOCAL_READ, mcp: false, examples: [`${app.command} runs show run-101`] })
+  annotate(command.command("show"), { effects: LOCAL_READ, examples: [`${app.command} runs show run-101`] })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("one run: what it was, how it ended, and every event it logged")
     .option("--problems", "only failed responses, warnings and crashes")
@@ -112,7 +111,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       )
     })
 
-  annotate(command.command("path"), { effects: NO_EFFECTS, mcp: false, examples: [`${app.command} runs path run-101`] })
+  annotate(command.command("path"), { effects: NO_EFFECTS, examples: [`${app.command} runs path run-101`] })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("the directory holding one run")
     .action(function (this: Command, id: string) {
