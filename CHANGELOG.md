@@ -10,6 +10,9 @@ shape of this file.
 ### Added
 
 - Contact commands include concrete examples in help and command discovery.
+- **`@wirecat/cli-base` 0.50.0 is accepted beside 0.49.** The peer range is now `>=0.49.0 <0.51.0`, so a CLI that
+  takes cli-base 0.50.0 for `adaptOpenApi` (whatsapp-cli's bot API) keeps one copy of cli-base instead of two.
+  Nothing in cli-core calls what 0.50.0 added.
 
 ## 0.392.0 — 23.10.2026
 
