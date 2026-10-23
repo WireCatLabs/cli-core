@@ -58,7 +58,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
       chartKindOf,
       "messages",
     )
-    .option("--by <day|week>", "one point per calendar day or week (weeks start on Monday)", chartPeriodOf, "day")
+    .option("--by <group>", "one point per calendar day or week (weeks start on Monday)", chartPeriodOf, "day")
     .option("--since-time <time>", `ISO 8601, or 2h / 1d ago; ${EVENTS_DAYS} days ago if not given`)
     .option("--timezone <zone>", "the IANA timezone for calendar days")
     .option("--output <file>", "write a dark image to a new .svg or .png file")

@@ -60,7 +60,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
     )
     .option("--context <n>", "messages before and after each hit", wholeCount)
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
-    .option("--by <chat|sender|day|hour>", "what stats messages show --saved counts by", groupingOf)
+    .option("--by <group>", "count by chat, sender, day or hour for stats messages show --saved", groupingOf)
     .option("--selection <json>", "save the resolved parent ranking query and options from a drilldown")
     .option("--replace", "overwrite a saved search of the same name")
     .action(async function (this: Command, name: string, words: string[]) {

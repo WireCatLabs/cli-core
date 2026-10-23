@@ -207,7 +207,7 @@ describe("private people metadata", () => {
     expect((await f.call("--offline", "contacts", "alias", "set", "10", "Local", "--json")).code).toBe(0)
     const file = join(f.root, "own-note.txt")
     writeFileSync(file, "Own confidential fixture")
-    const added = await f.call("--offline", "contacts", "notes", "add", "Local", "--file", file, "--json")
+    const added = await f.call("--offline", "contacts", "notes", "add", "Local", "--text-file", file, "--json")
     expect(added.code).toBe(0)
     const id = added.result.item.id
     expect(added.result.item.contact).toMatch(/^contact:/)
@@ -219,6 +219,9 @@ describe("private people metadata", () => {
       (await f.call("contacts", "notes", "edit", "10", id, "--revision", "1", "--file", file, "--json")).result.item
         .revision,
     ).toBe(2)
+    const both = await f.call("contacts", "notes", "add", "10", "--text-file", file, "--file", file, "--json")
+    expect(both.code).toBe(2)
+    expect((await f.call("contacts", "notes", "list", "10", "--json")).result.items).toHaveLength(1)
     expect((await f.call("contacts", "notes", "remove", "10", id, "--json")).result.item.removed).toBe(true)
     expect((await f.call("contacts", "alias", "rm", "10", "--json")).result.item.alias).toBeNull()
     expect(

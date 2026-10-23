@@ -80,11 +80,16 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
     )
       .description(
         name === "add"
-          ? "add a private note on a person from stdin or --file; never sent"
+          ? "add a private note on a person from stdin or --text-file; never sent"
           : "replace a note's text; --revision must match the one you read",
       )
       .argument("<person>", "the person's id, reference or known name")
-      .addOption(ownerOnlyOption("--file <path>", "read note text from a file; omitted or - reads stdin"))
+      .addOption(
+        ownerOnlyOption("--text-file <path>", "read note text from a file; omitted or - reads stdin").conflicts("file"),
+      )
+      .addOption(
+        ownerOnlyOption("--file <path>", "compatibility alias for --text-file").hideHelp().conflicts("textFile"),
+      )
     if (name === "edit")
       command
         .argument("<id>", "the note id from contacts notes list")
@@ -92,7 +97,12 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
     command.action(async function (this: Command, person: string, id?: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, `contacts.notes.${name}`)
-      const { file, revision } = this.opts<{ file?: string; revision?: string }>()
+      const {
+        textFile,
+        file: legacyFile,
+        revision,
+      } = this.opts<{ textFile?: string; file?: string; revision?: string }>()
+      const file = textFile ?? legacyFile
       const text = file === undefined || file === "-" ? await readAll(context.stdin) : await readFile(file, "utf8")
       const version = Number(revision)
       if (name === "edit" && (!Number.isSafeInteger(version) || version < 1))

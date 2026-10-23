@@ -51,7 +51,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
       (value: string, previous: string[]) => [...previous, value],
       [],
     )
-    .option("--limit <number>", "process at most 1–500 chats", positiveCount("--limit"), 50)
+    .option("--limit <n>", "process at most 1–500 chats", positiveCount("--limit"), 50)
     .option("--sync-first", "read current descriptions from the messenger before classifying")
     .option("--dry-run", "preview cached classification without changing the store")
     .action(async function (this: Command) {

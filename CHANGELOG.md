@@ -119,6 +119,8 @@ shape of this file.
   `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
   optional list of kinds.
 
+- **Private contact notes use `--text-file`.** `--file` continues to work as a hidden compatibility alias; giving both is refused before any note is changed. New help and discovery reserve `--file` for message attachments.
+
 ### Added
 
 - `search meetings` takes `date:`, `project:`, `tag:` and `topic:` in the query: `budget project:RES date>=30d`. They
@@ -154,6 +156,10 @@ shape of this file.
 - Conversation commands include examples in help and command discovery, with guidance for submitting a batch answer.
 
 - Server commands include concrete examples in help and command discovery.
+
+### Fixed
+
+- **Count and grouping placeholders match the shared vocabulary.** Processing limits use `<n>` and statistics grouping uses `<group>` across supported fields and calendar units; accepted values and defaults stay the same.
 
 ## 0.394.0 — 23.10.2026
 

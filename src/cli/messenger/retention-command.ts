@@ -16,7 +16,7 @@ export const retentionCommand = (messenger: Messenger) =>
     .option("--checkpoints <durations>", "up to 10 increasing joining ages, comma separated; 1d,7d,30d by default")
     .option("--within <duration>", "activity and early departure window after joining; 7d by default")
     .addOption(
-      new Option("--by <day|week>", "group joining dates by calendar day or Monday week").choices(["day", "week"]),
+      new Option("--by <group>", "group joining dates by calendar day or Monday week").choices(["day", "week"]),
     )
     .option("--timezone <zone>", "IANA timezone for joining cohorts")
     .option("--limit <n>", "cohorts and member evidence, 1–100", positiveCount("--limit"))

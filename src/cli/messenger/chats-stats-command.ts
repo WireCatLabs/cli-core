@@ -20,7 +20,7 @@ export const statsCommand = (messenger: Messenger): Command =>
     )
     .argument("<chat>", messenger.chatArgument)
     .option("--since-time <time>", `ISO 8601, or 2h / 1d ago; ${EVENTS_DAYS} days ago if not given`)
-    .option("--by <day|week>", "also one row per calendar day or week (weeks start on Monday)", periodOf)
+    .option("--by <group>", "also one row per calendar day or week (weeks start on Monday)", periodOf)
     .option("--timezone <zone>", "the IANA timezone for calendar days")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
