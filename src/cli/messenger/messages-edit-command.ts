@@ -9,7 +9,10 @@ import { HTML_HELP } from "./messages-send-command.js"
 import { readAll } from "./stdin.js"
 
 export const editCommand = (messenger: Messenger): Command => {
-  const edit = annotate(new Command("edit"), { effects: REMOTE_WRITE })
+  const edit = annotate(new Command("edit"), {
+    examples: [`${messenger.app.command} personal messages edit "Book club" 101 "The meeting starts at 11."`],
+    effects: REMOTE_WRITE,
+  })
     .description("change the text of your own message; the other side may have read it already")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of your own message")

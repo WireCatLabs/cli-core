@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- Message commands include concrete examples in help and command discovery.
+
 ### Fixed
 
 - **Agents are no longer offered channel comments for a messenger that cannot read them.** Direct calls

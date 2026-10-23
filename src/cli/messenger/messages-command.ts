@@ -46,7 +46,10 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(evidenceCommand(messenger))
 
   const history = historyQuery(messenger)
-  const list = annotate(messages.command("list"), { effects: REMOTE_READ })
+  const list = annotate(messages.command("list"), {
+    examples: [`${messenger.app.command} personal messages list "Book club" --limit 20`],
+    effects: REMOTE_READ,
+  })
     .description("a chat's messages, oldest to newest")
     .addHelpText("after", SAVE_HELP)
     .addHelpText("after", queryHelp(history))
@@ -148,7 +151,10 @@ export const messagesCommand = (messenger: Messenger): Command => {
 
   messages.addCommand(sendCommand(messenger))
 
-  annotate(messages.command("show"), { effects: REMOTE_READ })
+  annotate(messages.command("show"), {
+    examples: [`${messenger.app.command} personal messages show "Book club" 101`],
+    effects: REMOTE_READ,
+  })
     .description("one message, by its chat and id or by its msg: locator")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
@@ -157,7 +163,12 @@ export const messagesCommand = (messenger: Messenger): Command => {
       await readWindow(this, chat, message, { before: 0, after: 0 })
     })
 
-  threadOptions(annotate(messages.command("context"), { effects: REMOTE_READ }))
+  threadOptions(
+    annotate(messages.command("context"), {
+      examples: [`${messenger.app.command} personal messages context "Book club" 101 --before-n 3 --after-n 3`],
+      effects: REMOTE_READ,
+    }),
+  )
     .description("a message and what came either side of it, oldest first")
     .addHelpText("after", SAVE_HELP)
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)

@@ -11,7 +11,10 @@ import { COMMENTS_QUERY, cursorOf, historyWindow } from "./history-query.js"
 import { messageItems, viewOf } from "./message-items.js"
 
 export const commentsCommand = (messenger: Messenger): Command => {
-  const command = annotate(new Command("comments"), { effects: REMOTE_READ })
+  const command = annotate(new Command("comments"), {
+    examples: [`${messenger.app.command} personal messages comments "News channel" 101 --limit 20`],
+    effects: REMOTE_READ,
+  })
     .description("the comments under a channel post, oldest to newest; they live in its discussion group")
     .addHelpText("after", queryHelp(COMMENTS_QUERY))
     .argument("<chat>", `the channel: ${messenger.chatArgument}`)

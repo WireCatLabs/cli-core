@@ -26,7 +26,10 @@ import { stopOnSignal } from "./patience.js"
 
 /** `messages download`: every file of one message, or with `--all` of a whole chat, never over a file already there. */
 export const downloadSubcommand = (messages: Command, messenger: Messenger): Command =>
-  annotate(messages.command("download"), { effects: FETCH })
+  annotate(messages.command("download"), {
+    examples: [`${messenger.app.command} personal messages download "Book club" 101 --output-dir ./downloads`],
+    effects: FETCH,
+  })
     .description("save a message's photos, files, videos and voice notes to a folder — or a whole chat's with --all")
     .argument("<chat>", messenger.chatArgument)
     .argument("[message]", "the message id; left out with --all")

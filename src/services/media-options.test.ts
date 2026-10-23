@@ -8,6 +8,8 @@ import type { SendGuard } from "../sends/guard.js"
 import { onlineDeps } from "./deps.js"
 import { messagesService } from "./messages.js"
 
+const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "Test", version: "1" }
+
 const photo = [
   { kind: "photo" as const, name: "synthetic.jpg", source: { kind: "bytes" as const, bytes: new Uint8Array([1]) } },
 ]
@@ -57,7 +59,12 @@ describe("media options on a send", () => {
 
 describe("the send command's media flags", () => {
   const flags = (mediaOptions?: readonly MediaOption[]) =>
-    sendCommand({ provider: "test", chatArgument: "a chat", ...(mediaOptions ? { mediaOptions } : {}) } as Messenger)
+    sendCommand({
+      app,
+      provider: "test",
+      chatArgument: "a chat",
+      ...(mediaOptions ? { mediaOptions } : {}),
+    } as Messenger)
       .options.map(({ long }) => long)
       .filter((flag) => flag === "--spoiler" || flag === "--caption-above")
 
@@ -69,7 +76,7 @@ describe("the send command's media flags", () => {
 
   it("offers --filename and --html only where the messenger has them, --html on edit too", () => {
     const offered = (messenger: Partial<Messenger>, command = sendCommand) =>
-      command({ provider: "test", chatArgument: "a chat", ...messenger } as Messenger)
+      command({ app, provider: "test", chatArgument: "a chat", ...messenger } as Messenger)
         .options.map(({ long }) => long)
         .filter((flag) => flag === "--filename" || flag === "--html")
 

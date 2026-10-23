@@ -13,7 +13,10 @@ import { type Messenger, messengerContext } from "./context.js"
  * with `--for-everyone` (max-cli `NEED-239`), and never for an agent (NEED-1423).
  */
 export const deleteCommand = (messenger: Messenger): Command =>
-  annotate(new Command("delete"), { effects: REMOTE_WRITE })
+  annotate(new Command("delete"), {
+    examples: [`${messenger.app.command} personal messages delete "Book club" 101`],
+    effects: REMOTE_WRITE,
+  })
     .description("delete messages for you only; with --for-everyone, for everyone in the chat")
     .argument("<chat>", messenger.chatArgument)
     .argument("<messages...>", `the message ids, by spaces or commas, at most ${DELETE_AT_ONCE}`)
