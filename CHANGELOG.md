@@ -60,6 +60,20 @@ shape of this file.
 
 ### Changed — may break callers
 
+- `searches list`, `searches history` and `searches clear` cover only message searches. The table is shared by
+  every CLI on the store; a saved meeting search shown, run or deleted from a messenger is refused with
+  `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
+  optional list of kinds.
+
+### Added
+
+- `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
+  same table: create, list, show, delete and `run`, which counts the run.
+
+## 0.391.0 — 23.10.2026
+
+### Changed — may break callers
+
 - Reads never mark chats read: `messages list`, `inbox` and `review` no longer take `--mark-read` or
   `--no-mark-read`. Remove `catch_up_marks_read` from configuration; it is now refused. Use
   `<cli> <profile> chats mark-read <chat>` when you intend to send a read receipt.
@@ -97,15 +111,6 @@ shape of this file.
   word, N up to 50 (`query.invalid-number` above). Words match in any form, as in a phrase; `exact:` keeps the typed
   forms. Unlike Lucene, order costs nothing: `"a b"~0` finds "b a" too. `word~1` stays an error. A saved search may
   now hold `~N`. `QUERY_OPERATORS` splits the `fuzzy / proximity` row into `proximity` and `fuzzy`.
-- `searches list`, `searches history` and `searches clear` cover only message searches. The table is shared by
-  every CLI on the store; a saved meeting search shown, run or deleted from a messenger is refused with
-  `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
-  optional list of kinds.
-
-### Added
-
-- `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
-  same table: create, list, show, delete and `run`, which counts the run.
 
 ### Fixed
 
