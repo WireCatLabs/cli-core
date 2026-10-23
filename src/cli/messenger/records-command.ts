@@ -117,7 +117,6 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
   annotate(new Command("delete"), {
     output: { entity: "chat_removal" },
     effects: REMOTE_WRITE,
-    mcp: false,
     examples: [`${messenger.app.command} personal chats delete "Book club"`],
   })
     .description("delete a chat from this account; the others in it keep it and its messages")
@@ -136,7 +135,6 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
   annotate(new Command("clear"), {
     output: { entity: "chat_removal" },
     effects: REMOTE_WRITE,
-    mcp: false,
     examples: [`${messenger.app.command} personal chats clear "Book club"`],
   })
     .description("delete every message in a chat for this account; the others in it keep theirs")

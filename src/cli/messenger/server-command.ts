@@ -257,7 +257,6 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
     destroysNothing(
       annotate(command.command("start"), {
         effects: LOCAL_WRITE,
-        mcp: false,
         examples: [`${app.command} personal server start`],
       }),
     )
@@ -272,7 +271,6 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
   destroysNothing(
     annotate(command.command("stop"), {
       effects: LOCAL_WRITE,
-      mcp: false,
       examples: [`${app.command} personal server stop`],
     }),
   )
@@ -284,7 +282,6 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
   withIdle(
     destroysNothing(
       annotate(command.command("restart"), {
-        mcp: false,
         effects: LOCAL_WRITE,
         examples: [`${app.command} personal server restart`],
       }),

@@ -93,7 +93,6 @@ const reportCommand = (messenger: Messenger): Command => {
   destroysNothing(
     annotate(report.command("create"), {
       effects: LOCAL_WRITE,
-      mcp: false,
       examples: [`${app.command} personal doctor report create --output ./problem-report.json`],
     }),
   )

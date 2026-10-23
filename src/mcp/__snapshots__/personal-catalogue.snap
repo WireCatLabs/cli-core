@@ -116,6 +116,7 @@ read  tasks related
 read  tasks show
 read  topics list
 write account privacy set
+write account sessions end
 write account update
 write attachments download
 write attachments extract
@@ -180,8 +181,10 @@ write conversations embed clear
 write conversations links add
 write conversations links clear
 write conversations rebuild
+write doctor report create
 write flood clear
 write images embed
+write images models download
 write mentions confirm
 write mentions rebuild
 write mentions reject
@@ -196,6 +199,8 @@ write messages sync
 write messages unpin
 write messages unstar
 write metadata refresh
+write models audio download
+write models text download
 write models text key remove
 write models text key set
 write polls close
@@ -219,21 +224,34 @@ write replies pause
 write replies resume
 write schedule agent
 write schedule command
+write schedule exec
 write schedule remove
+write schedule run
 write searches clear
 write searches create
 write searches delete
 write server install
+write server restart
+write server start
+write server stop
 write server uninstall
 write skill install
 write stats charts
 write stats messages counters refresh
+write store backup
+write store clear
+write store copies delete
+write store decrypt
 write store export
 write store gaps repair
 write store jobs cancel
 write store jobs clear
 write store jobs retry
+write store migrate
 write store reindex
+write store repair
+write store reset
+write store restore
 write tags add
 write tags auto
 write tags remove

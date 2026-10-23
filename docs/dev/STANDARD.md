@@ -1262,10 +1262,14 @@ The three tools, their arguments and what each permission shows are on the handb
 - `status` answers what the server is. `conversations refresh` runs what `search conversations --refresh` runs before
   it searches (NEED-551 A).
 - **Every command is a tool, writes included; the profile's permissions limit it** (owner, 2026-10-23). Left out:
-  `mcp` and `complete`, which an agent call cannot use; `upgrade` and the login; and the writes no permission key
-  limits yet — `store backup|restore|migrate|repair|reset|clear|decrypt`, `server start|stop|restart`, model
-  downloads, `schedule run|exec`, `doctor report create`, `account sessions end`, `chats delete|clear`, `bot auth`,
-  `bot store`, `bot api`.
+  `mcp` and `complete`, which an agent call cannot use; `upgrade` and the login (`bot auth` too); and `bot api`,
+  whose calls pass no send guard.
+- **The writes no level stopped before have keys of their own, `ask` by default** (NEED-1663 A), so MCP offers them
+  and over MCP they go ahead as any `ask` write: `store backup|restore|migrate|repair|reset|clear|decrypt` and
+  `store copies delete` (`store.<command>`), `server start|stop|restart`, `models audio|text download` and `images
+  models download`, `schedule run|exec`, `doctor report create`, `account sessions end`, `chats delete|clear`, and
+  `bot store fetch`. The key is the command's path; `deny` or `readonly` hides the tool. `store reset|clear|decrypt`
+  are still stopped by `deny messages` too. On the command line nothing changes: these commands ask no new question.
 - **A command that changes what a later run may do is offered only under `mcp.authority`** (NEED-1662 B): `config
   set|unset`, `schedule command|agent|remove`, `replies` rules, pause and consents, `recipients add|remove|clear`
   (the bot's too), `chats rules set|unset` (the bot's too), `server install|uninstall`, `attachments jobs

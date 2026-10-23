@@ -22,16 +22,13 @@ const withChatDeletion = () =>
   )
 
 describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-10-23)", () => {
-  it.each(["mcp", "complete", "account sessions end", "chats delete", "chats clear", "bot auth", "bot mcp"])(
-    "%s",
-    (path) => {
-      const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
+  it.each(["mcp", "complete", "bot auth", "bot mcp"])("%s", (path) => {
+    const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
 
-      expect(found, path).toBeDefined()
-      expect(found?.mcp).toBe(false)
-      for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
-    },
-  )
+    expect(found, path).toBeDefined()
+    expect(found?.mcp).toBe(false)
+    for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
+  })
 
   it.each([
     "attachments jobs status",
@@ -56,16 +53,21 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
   })
 
   it.each([
-    "doctor report create",
-    "models audio download",
-    "schedule run",
-    "server start",
-    "store backup",
-    "store clear",
-    "store reset",
-    "store restore",
-  ])("**keeps off %s**: no permission key limits it", (path) => {
-    expect(toolsFromCommands(commands(), { exclude: [["bot"]] }).map((tool) => tool.command)).not.toContain(path)
+    ["account sessions end", "account.sessions.end"],
+    ["chats delete", "chats.delete"],
+    ["chats clear", "chats.clear"],
+    ["doctor report create", "doctor.report.create"],
+    ["images models download", "images.models.download"],
+    ["schedule run", "schedule.run"],
+    ["server start", "server.start"],
+    ["store reset", "store.reset"],
+    ["store restore", "store.restore"],
+  ])("**offers %s at its default ask, and not where %s is denied** (NEED-1663)", (path, key) => {
+    const offered = (levels: Record<string, Level>) =>
+      toolsFromCommands(withChatDeletion(), { exclude: [["bot"]], levels }).map((tool) => tool.command)
+
+    expect(offered({})).toContain(path)
+    expect(offered({ [key]: "deny" })).not.toContain(path)
   })
 
   it.each([
