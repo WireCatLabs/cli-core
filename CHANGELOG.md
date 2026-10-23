@@ -31,6 +31,8 @@ shape of this file.
 
 - **Message read and write schemas.** Showing a message, sending, editing, forwarding, pinning, starring and deleting declare their existing answer entities for field discovery and projection. Write receipts retain their operation id.
 
+- **Chat-state write schemas.** Muting, archiving, pinning, marking unread, deleting a chat and clearing its history declare their existing write receipts for field discovery and projection, including their operation ids.
+
 - **Message read schemas.** Evidence packets, voice transcripts and conversation links declare separate answer entities for field discovery and projection, preserving existing response keys.
 
 - **Message context, downloads and sync have declared answers.** Context describes both message windows and bounded thread reports. Downloads retain file paths and partial extraction results; sync describes estimates, chat and all-chat progress, preparation and background jobs. General chat evidence packets and exact statistics evidence now explain their separate purposes in help and the guide.

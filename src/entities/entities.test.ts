@@ -127,6 +127,11 @@ const samples: Record<EntityName, unknown> = {
     items: [],
   },
   message_link: { ref: message.ref, url: null, access: "unavailable", reason: "offline" },
+  chat_removal: { operation_id: "op-1", chat_id: "7" },
+  chat_muting: { operation_id: "op-1", chat_id: "7", muted_until: null },
+  chat_archive: { operation_id: "op-1", chat_id: "7", archived: false },
+  chat_pin: { operation_id: "op-1", chat_id: "7", pinned: true },
+  chat_unread: { operation_id: "op-1", chat_id: "7", unread: true },
   chat: {
     ref: "chat:telegram/1/2",
     id: "2",
