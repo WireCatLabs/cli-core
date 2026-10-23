@@ -2,6 +2,7 @@ read  account list
 read  account privacy show
 read  account sessions list
 read  account show
+read  attachments check
 read  attachments list
 read  attachments show
 read  chats documents list
@@ -95,6 +96,7 @@ read  tasks show
 read  topics list
 write account privacy set
 write account update
+write attachments download
 write attachments extract
 write attachments text set
 write chats admins add

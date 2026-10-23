@@ -22,6 +22,7 @@ const withChatDeletion = () =>
 describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
   it.each([
     "server",
+    "attachments jobs",
     "schedule",
     "config",
     "mcp",

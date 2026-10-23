@@ -17,7 +17,9 @@ import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const addMediaArchiveTimers = (attachments: Command, messenger: Messenger): void => {
-  const archive = attachments.command("jobs").description("daily media archive timers for this profile")
+  const archive = annotate(attachments.command("jobs"), { mcp: false }).description(
+    "daily media archive timers for this profile",
+  )
   for (const action of ["install", "start", "stop", "status", "uninstall"] as const) {
     const command = annotate(archive.command(action), {
       effects: action === "status" ? LOCAL_READ : LOCAL_WRITE,
