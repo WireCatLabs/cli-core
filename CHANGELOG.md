@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.398.0 — 23.10.2026
+
 ### Added
 
 - Top-level summaries, listeners and shell completion include examples in help and command discovery.
