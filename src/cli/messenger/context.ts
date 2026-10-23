@@ -181,6 +181,11 @@ export interface Messenger extends ServiceMessenger {
    * connecting, as the adapter would refuse after; one connection per device makes that connection a cost.
    */
   lacks?: readonly (keyof MessengerAdapter)[]
+  /**
+   * Adapter methods this messenger can never have, where `lacks` is what it does not have yet: their commands refuse
+   * the same way and are also hidden from help, `commands` and MCP. WhatsApp: only the phone ends other sessions.
+   */
+  never?: readonly (keyof MessengerAdapter)[]
   /** Whether a message can be deleted for the owner alone; yes when unset. No: every delete is for everyone (WhatsApp). */
   deleteForMe?: boolean
   /** Whether the messenger has forum topics: `--topic`, `topic:` in `messages list` and the `topics_*` tools; yes when unset. */

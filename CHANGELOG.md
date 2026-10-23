@@ -13,6 +13,11 @@ shape of this file.
 
 - Clearing a remembered flood hold includes an example in help and command discovery.
 
+- **`Messenger.never`**: the adapter methods a messenger can never have, as opposed to `lacks`, what it does not have
+  yet. Their commands refuse as before and are also left out of help, `commands --json` and MCP. A command a
+  messenger only `lacks` stays in sight. For WhatsApp: `endOtherSessions` (only the phone ends other devices) and
+  `removeContact`.
+
 ### Security
 
 - `@modelcontextprotocol/server` 2.3.0 clears the three high-severity advisories `npm audit` reported for every
@@ -24,6 +29,9 @@ shape of this file.
   the profile `personal` (`tg personal messages list Team`), so it no longer fails with "name a profile".
 
 - `search mail` with no mail in the store points at `memo sync --only mail`; it named a `--mail` option memo does not have.
+
+- `parity.json` matches tg and max: `guide`, `mentions`, `runs search`, `tasks reject` and `--brief`/`--full` are in
+  both, and each gap planned for tg names its tg-cli backlog id.
 
 ## 0.397.0 — 23.10.2026
 

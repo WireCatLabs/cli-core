@@ -74,8 +74,8 @@ const cli = async (path: string, own: Partial<Messenger>, adapter: () => Messeng
     },
     { streams, tty: false, env },
   )
-  const error = JSON.parse(streams.stderr.at(-1) ?? "null")?.error
-  return { code, connects, message: error?.message as string | undefined }
+  const error = code === 0 ? undefined : JSON.parse(streams.stderr.at(-1) ?? "null")?.error
+  return { code, connects, message: error?.message as string | undefined, stdout: streams.stdout.join("\n") }
 }
 
 describe("a command whose one method the messenger lacks", () => {
@@ -103,4 +103,19 @@ describe("a command whose one method the messenger lacks", () => {
       expect(late).toMatchObject({ connects: [1], message: early.message })
     })
   }
+
+  it("hides a command the messenger can never do, and still refuses it typed", async () => {
+    const never: Partial<Messenger> = { never: ["endOtherSessions", "removeContact"] }
+    const shown = await cli("account sessions --help", {}, () => fakeAdapter(seed))
+    const help = await cli("account sessions --help", never, () => fakeAdapter(seed))
+    const contacts = await cli("contacts --help", never, () => fakeAdapter(seed))
+    const typed = await cli("contacts remove", never, () => fakeAdapter(seed))
+
+    expect(shown.stdout).toMatch(/^\s+end\b/m)
+    expect(help.stdout).toContain("list")
+    expect(help.stdout).not.toMatch(/^\s+end\b/m)
+    expect(contacts.stdout).toContain("rename")
+    expect(contacts.stdout).not.toMatch(/^\s+remove\b/m)
+    expect(typed).toMatchObject({ code: 2, connects: [], message: "this messenger cannot remove a contact" })
+  })
 })

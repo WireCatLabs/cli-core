@@ -25,6 +25,7 @@ import {
   TRANSCRIBE_OPTION,
 } from "./hearing-command.js"
 import { cursorOf, historyQuery, historyWindow } from "./history-query.js"
+import { hideNever } from "./lacks.js"
 import { threadAnswer } from "./message-answers.js"
 import { messageItem, messageItems, type ReadMessage, viewOf } from "./message-items.js"
 import { commentsCommand } from "./messages-comments-command.js"
@@ -217,7 +218,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(commentsCommand(messenger))
   messages.addCommand(linksCommand(messenger))
   messages.addCommand(syncCommand(messenger))
-  return messages
+  return hideNever(messenger, messages)
 }
 
 type Window = { before: number; after: number }

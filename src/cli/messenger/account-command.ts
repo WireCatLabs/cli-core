@@ -12,6 +12,7 @@ import { recalledAccount } from "./accounts.js"
 import { photoHelp, readProfilePhoto } from "./admin-commands.js"
 import { accountAnswer, renderItem, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { hideNever } from "./lacks.js"
 import { privacyCommand } from "./records-command.js"
 
 export const accountCommand = (messenger: Messenger): Command => {
@@ -100,5 +101,5 @@ export const accountCommand = (messenger: Messenger): Command => {
     )
     .addCommand(accountSessionsCommand(messenger))
   if (messenger.privacy === true) account.addCommand(privacyCommand(messenger))
-  return account
+  return hideNever(messenger, account)
 }
