@@ -1,24 +1,13 @@
 import { googleDocumentId } from "../domain/google-documents.js"
 import { findMentions } from "../domain/mentions.js"
-import type { MeetingChatLinesInput, MeetingHitSearchRequest } from "../meetings/index.js"
+import type { MeetingChatLinesInput, MeetingHitSearchRequest, MeetingLink } from "../meetings/index.js"
 import type { MessageStore } from "../store/store.js"
 import { resolveMeetingSelection } from "./meeting-hit-search.js"
 
+export type { MeetingLink }
+
 export type MeetingLinksRequest = Omit<MeetingHitSearchRequest, "limit" | "after" | "maxReadBytes"> &
   Pick<MeetingChatLinesInput, "maxMessages">
-
-/** One link as the meetings' chat holds it: where and how often it was shared. */
-export interface MeetingLink {
-  url: string
-  domain: string | null
-  /** The Google Docs, Sheets, Slides, Forms or Drive file it names. */
-  documentId: string | null
-  count: number
-  firstAt: number
-  lastAt: number
-  senders: string[]
-  meetings: { meetingId: number; accountId: number; title: string | null }[]
-}
 
 /** Links shared in the chat of the selected meetings, most shared first; found when read, not stored. */
 export const readMeetingLinks = async (

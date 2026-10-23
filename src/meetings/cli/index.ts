@@ -140,7 +140,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     },
   )
   output(
-    annotate(group.command("people"), { effects: LOCAL_READ })
+    annotate(group.command("people"), { effects: LOCAL_READ, output: { entity: "meeting_participants" } })
       .description("find meeting participants by name or email")
       .argument("<query>", "a name or an email address"),
   )
