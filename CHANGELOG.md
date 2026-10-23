@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- Chat commands include concrete examples in help and command discovery.
+
 - Contact commands include concrete examples in help and command discovery.
 
 ## 0.392.0 — 23.10.2026
