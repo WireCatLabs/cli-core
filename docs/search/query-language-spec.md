@@ -62,8 +62,11 @@ operator/field tables, budgets, presets и recipes; `docs:check` проверя�
 text — существующий SQLite FTS5 `unicode61 remove_diacritics 2` над normalized_text v1.
 NFKD/mark stripping/NFC/lowercase/control-whitespace folding не меняются. Literal с несколькими
 анализированными tokens сопоставляется как последовательность; несколько query terms — Boolean.
-Phrase proximity, boost и fuzzy profile operators отвергаются; discovery никогда не добавляет hits.
-`~` после term — alternative про prefix `word*`; после phrase — про proximity.
+Boost и fuzzy profile operators отвергаются; discovery никогда не добавляет hits.
+`~` после term — alternative про prefix `word*`. `"a b"~N` (text, exact, transcript, content, слово без поля;
+N ≤ 50) — FTS5 `NEAR(... , N)`: слова одного сообщения, между ними не больше N, порядок любой (у Lucene
+обратный порядок стоит slop). По `message_stems` строка с `STEM_SEPARATOR` (два латинских прочтения)
+проверяется в коде: `NEAR` иначе перешагивает разделитель. FIELD_VERSION не меняется: оператор был ошибкой.
 body — исходный case-sensitive keyword. Его empty quoted literal/empty regex выбирают empty body;
 empty text literal не совпадает с индексированным token.
 
@@ -113,6 +116,14 @@ NULL (импорт не знал состояния) не совпадает н�
 поэтому is:read и is:unread для них — поля почты, а не догадка по счётчику. `is:starred` у сообщения —
 `messages.starred = 1` (звезда владельца, где у мессенджера есть звёзды), и поиск без почты его принимает.
 FIELD_VERSION не меняется: поля новые.
+Расшифровка (store version 29) — текст голосового вложения (`voice`, `video_note`, `audio/ogg`) или
+`speech:*`, кто бы его ни записал. Слово без поля и `transcript:` находят её тремя путями: введённая
+форма в `attachment_words`, основы в `transcript_stems`, искажения — `widenWords` по словарю
+`transcript_words_vocab` за `knownRussianWord`, как у встреч; расширяется только term из одного слова,
+не числительное и не под `exact:`. Индексы расшифровок заполняет очередь `transcript_index_pending` перед
+каждым поиском. Tier: расшифровка 1, её другая форма 2, имя файла 3, текст файла 4, искажение 5.
+Hit только через искажение — `match: "corrected"` и `corrections`. FIELD_VERSION не меняется: поле не
+переименовано, у него шире охват; сохранённые поиски разбираются заново и получают это поведение.
 
 ## SQL compiler и порядок
 

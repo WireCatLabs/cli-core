@@ -316,11 +316,12 @@ export const QUERY_FIELDS: readonly MessageField[] = [
   {
     name: "transcript",
     example: "transcript:invoice",
-    index: "attachment_words (voice transcripts)",
+    index: "attachment_words ∪ transcript_stems; garbled spellings from transcript_words_vocab",
     aliases: [],
     type: "txt",
     operators: terms,
-    normalization: "NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed",
+    normalization:
+      "any form of the word (Snowball), widened to spellings speech recognition garbles; what a voice message said",
     support: "A2",
     validate: filled,
   },

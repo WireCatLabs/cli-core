@@ -365,7 +365,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `mime` | kw | lowercase; a value without / matches the first part; only where the messenger reports a type | `mime:"application/pdf" OR mime:image` | term, phrase, wildcard |
 | `size` | kw | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
 | `content` | txt | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
-| `transcript` | txt | NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed | `transcript:invoice` | term, phrase |
+| `transcript` | txt | any form of the word (Snowball), widened to spellings speech recognition garbles; what a voice message said | `transcript:invoice` | term, phrase |
 | `title` | txt | every word, folded as text is; notes and files only | `title:"quarterly report"` | term, phrase |
 | `site` | kw | contained, folded as text is; notes and files only | `site:wikipedia` | term, phrase |
 | `lang` | kw | language tag or its prefix, lowercase; notes and files only | `lang:ru` | term, phrase |
@@ -410,8 +410,13 @@ MAX — нет, там ищите по расширению (`filename:*.pdf`). 
 `attachments extract` — из того, что сохранил `messages download` (или сам скачивает с `--download`):
 обычный текст, Word и PDF с текстовым слоем. Сканы и фото читает агент и записывает текст обратно.
 Расшифровка голосового (`messages transcribe`, `--transcribe`) хранится отдельно и находится словом
-без поля или `transcript:`; текст, который агент записал к голосовому, — тоже расшифровка. В файлах и расшифровках слово ищется в точной форме: других форм слова
-(основ Snowball) там пока нет, и `слово*` с исправлением опечаток читают только текст сообщений.
+без поля или `transcript:`; текст, который агент записал к голосовому, — тоже расшифровка. В расшифровке
+слово ищется в любой форме, как в тексте, и **расширяется на искажения распознавания речи** — всегда, а не только
+когда точный поиск пуст: «риелтор» находит «реелтора». Правила те же, что у встреч ([MEETINGS.md](../dev/MEETINGS.md)):
+основа в одной правке от слова, которого нет в словаре; числительные не расширяются. Расширяется только одно слово —
+не фраза и не `"…"~N`, и не под `exact:`. Найденное только через искажение сообщение помечено `match: "corrected"`, а
+ответ называет искажения в `corrections`; такие сообщения идут после всех остальных находок. В тексте файлов слово ищется в
+точной форме, и `слово*` с исправлением опечаток читают только текст сообщений.
 `content:` и `transcript:` берут только term и phrase, без wildcard и regex.
 `"риелтор договор"~3` — оба слова в одном сообщении (в тексте, расшифровке, имени или тексте файла), и между
 ними не больше трёх других слов, в любом порядке. Слова — в любой форме, как во фразе; `exact:"…"~3` — только

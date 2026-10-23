@@ -1460,7 +1460,19 @@ const GROUPS = [
     "Attachments",
     "Files of a message, an email or a meeting, with their extracted text.",
     ["attachments", "~attachment_words", "~attachment_name_words"],
-    [],
+    [
+      fts(
+        "transcript_words",
+        "Word index over voice-note transcripts, rowid = attachment id: the vocabulary garbled spellings are read from.",
+        "normalized_text, scope",
+      ),
+      fts(
+        "transcript_stems",
+        "Stem index, the pair of transcript_words: a transcript found in any form of a word.",
+        "stems, scope",
+      ),
+      queue("transcript_index_pending", "voice-note transcripts"),
+    ],
   ],
   [
     "documents",

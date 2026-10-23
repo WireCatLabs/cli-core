@@ -40,6 +40,8 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
     excerpt: hit.excerpt ?? excerpt(hit.text, query),
     matched_in: hit.matchedIn,
     score: hit.score ?? undefined,
+    match: hit.match,
+    corrections: hit.corrections,
     found_in: hit.source,
     discovery: hit.discovery
       ? defined({

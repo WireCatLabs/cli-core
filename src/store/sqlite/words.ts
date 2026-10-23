@@ -11,6 +11,9 @@ export type ScoredHit = StoredHit & {
   matchedIn?: MatchPlace
   /** The text of that place, for the excerpt; never part of an answer. */
   matchedText?: string
+  /** `corrected`: found only through a spelling speech recognition garbled, in a voice note's transcript. */
+  match?: "words" | "beginnings" | "corrected"
+  corrections?: { from: string; to: string[] }[]
 }
 export type MatchPlace = "text" | "transcript" | "filename" | "file"
 

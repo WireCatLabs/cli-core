@@ -5,8 +5,8 @@ import type { QueryExecution, ResolvedNode, ResolvedPredicate } from "../../sear
 import { isStemmed } from "../../search/lucene/resolved.js"
 import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import type { SqlValue } from "../driver.js"
-import { normalize } from "../normalize.js"
 import { emailHitsByPk } from "./emails.js"
+import { placeHits } from "./hit-places.js"
 import {
   type Corpus,
   combine,
@@ -20,7 +20,8 @@ import {
 import type { StoreContext } from "./open.js"
 import { hitsByPk } from "./search.js"
 import { read } from "./transaction.js"
-import type { MatchPlace, ScoredHit } from "./words.js"
+import { type TranscriptPart, transcriptItems, transcriptTerms } from "./transcript-query.js"
+import type { ScoredHit } from "./words.js"
 
 export { type Corpus, prefixOf } from "./lucene-fields.js"
 
@@ -114,12 +115,23 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     sql: `SELECT att.attachable_id FROM attachments att WHERE att.attachable_type='${corpus.item}'${which === "any" ? "" : ` AND ${which === "file" ? "NOT " : ""}${SPEECH}`} AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?)`,
     params: [match] as SqlValue[],
   })
+  const transcripts = transcriptTerms(database, execution.root, corpus.item)
+  const said = (node: ResolvedPredicate, part?: TranscriptPart) =>
+    transcriptItems(
+      corpus.item,
+      transcripts.get(node) ?? { match: ftsMatch(node), widened: [], from: node.value },
+      part,
+    )
   /** A bare word also matches a transcript, a file's text and a word of a file's name. */
   const everywhere = (node: ResolvedPredicate, fragment: Fragment): Fragment => {
     if (!node.implicit || fragment.sql === "0") return fragment
     const match = ftsMatch(node)
-    const files = attachmentWords(match, "any")
-    const elsewhere = { sql: `${files.sql} UNION ${namedSql}`, params: [...files.params, match] }
+    const files = attachmentWords(match, "file")
+    const spoken = said(node)
+    const elsewhere = {
+      sql: `${files.sql} UNION ${spoken.sql} UNION ${namedSql}`,
+      params: [...files.params, ...spoken.params, match],
+    }
     return {
       ...fragment,
       sql: `(${fragment.sql} OR m.id IN (${elsewhere.sql}))`,
@@ -138,6 +150,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     patternOf,
     expanded,
     attachmentWords,
+    transcripts: (node) => said(node),
     everywhere,
     expand: (count) => {
       expansions += count
@@ -336,18 +349,26 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     )
     ranked.params.push(`${rankIndex.column} : (${ranking})`)
   }
-  // Among hits the message text does not hold: a transcript, then a file's name, then a file's text. bm25 scores
-  // of different indexes do not compare, and a long spreadsheet must not crowd out what was said.
-  const places = [...fragments.values()].flatMap(({ node, fragment }) =>
-    fragment.elsewhere && fragment.fts ? [ftsMatch(node)] : [],
+  // Among hits the message text does not hold: a transcript as typed, in another form, then a file's name, a file's
+  // text, and last a garbled spelling. bm25 scores of different indexes do not compare, and a long spreadsheet must
+  // not crowd out what was said.
+  const placeNodes = [...fragments.values()].flatMap(({ node, fragment }) =>
+    fragment.elsewhere && fragment.fts ? [node] : [],
   )
+  const places = placeNodes.map(ftsMatch)
   if (places.length && !execution.newest) {
+    const spoken = (part: TranscriptPart, tier: number) =>
+      placeNodes.map((node) => {
+        const one = said(node, part)
+        return { sql: `SELECT attachable_id, ${tier} FROM (${one.sql})`, params: one.params }
+      })
+    const parts = [...spoken("forms", 2), ...spoken("widened", 5)]
     ranked.sql.push(
-      `s(id, tier) AS MATERIALIZED (SELECT att.attachable_id, min(CASE WHEN ${SPEECH} THEN 1 ELSE 3 END) FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) GROUP BY att.attachable_id UNION ALL SELECT attachable_id, 2 FROM (${namedSql}))`,
+      `s(id, tier) AS MATERIALIZED (SELECT att.attachable_id, min(CASE WHEN ${SPEECH} THEN 1 ELSE 4 END) FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) GROUP BY att.attachable_id UNION ALL SELECT attachable_id, 3 FROM (${namedSql})${parts.map(({ sql }) => ` UNION ALL ${sql}`).join("")})`,
     )
-    ranked.params.push(places.join(" OR "), places.join(" OR "))
+    ranked.params.push(places.join(" OR "), places.join(" OR "), ...parts.flatMap(({ params }) => params))
   }
-  const placeTier = places.length && !execution.newest ? "coalesce((SELECT min(tier) FROM s WHERE s.id=m.id), 4)," : ""
+  const placeTier = places.length && !execution.newest ? "coalesce((SELECT min(tier) FROM s WHERE s.id=m.id), 6)," : ""
   if (exactTier) {
     ranked.sql.push(`x(id) AS MATERIALIZED (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)`)
     ranked.params.push(`normalized_text : (${exactTier})`)
@@ -394,82 +415,8 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
         count: Number(row.count),
       }))
   }
-  const placeLeaves = [...fragments.values()].filter(
-    ({ node }) =>
-      (node.operator === "term" || node.operator === "phrase") &&
-      (node.implicit || node.field === "content" || node.field === "transcript"),
-  )
-  /** Which place of each hit holds the words, first match wins in the order of `MatchPlace`. */
-  const placed = (found: ReturnType<typeof hitsByPk>, pks: number[]) => {
-    if (!placeLeaves.length || !pks.length || found.length !== pks.length) return found
-    const keys = JSON.stringify(pks)
-    const wordy = placeLeaves.filter(({ node }) => /[\p{L}\p{N}]/u.test(normalize(node.value)))
-    if (!wordy.length) return found
-    const match = wordy.map(({ node }) => ftsMatch(node)).join(" OR ")
-    const implicit = placeLeaves.some(({ node }) => node.implicit)
-    const inText = new Set(
-      implicit
-        ? database
-            .prepare(
-              `SELECT rowid AS id FROM ${corpus.words} WHERE ${corpus.words} MATCH ? AND rowid IN (SELECT value FROM json_each(?))${
-                placeLeaves.some(({ fragment }) => fragment.stems)
-                  ? ` UNION SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ? AND rowid IN (SELECT value FROM json_each(?))`
-                  : ""
-              }`,
-            )
-            .all(
-              `normalized_text : (${match})`,
-              keys,
-              ...(placeLeaves.some(({ fragment }) => fragment.stems)
-                ? [
-                    `stems : (${placeLeaves.flatMap(({ fragment }) => (fragment.stems ? [`(${fragment.stems})`] : [])).join(" OR ")})`,
-                    keys,
-                  ]
-                : []),
-            )
-            .map(({ id }) => Number(id))
-        : [],
-    )
-    const files = database
-      .prepare(
-        `SELECT att.attachable_id AS id, att.text AS text, ${SPEECH} AS speech FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id IN (SELECT value FROM json_each(?)) AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) ORDER BY att.position`,
-      )
-      .all(keys, match)
-    const fileFields = new Set(
-      placeLeaves.flatMap(({ node }) => (node.implicit ? ["transcript", "content"] : [node.field])),
-    )
-    const allNames = implicit
-      ? database
-          .prepare(
-            `SELECT att.attachable_id AS id, att.name AS name FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id IN (SELECT value FROM json_each(?)) AND att.name IS NOT NULL ORDER BY att.position`,
-          )
-          .all(keys)
-      : []
-    return found.map((hit, index) => {
-      const pk = pks[index] as number
-      const transcript = files.find((row) => Number(row.id) === pk && Number(row.speech) === 1)
-      const file = files.find((row) => Number(row.id) === pk && Number(row.speech) !== 1)
-      const name = allNames.find((row) => {
-        if (Number(row.id) !== pk) return false
-        const words = normalize(String(row.name)).split(/[^\p{L}\p{N}]+/u)
-        return wordy.some(({ node }) => {
-          const phrase = normalize(node.value).match(/[\p{L}\p{N}]+/gu) ?? []
-          if (node.slop !== undefined) return phrase.every((word) => words.includes(word))
-          return words.some((_, at) => phrase.every((word, offset) => words[at + offset] === word))
-        })
-      })
-      const place: [MatchPlace, string] | undefined = inText.has(pk)
-        ? ["text", hit.text]
-        : transcript && fileFields.has("transcript")
-          ? ["transcript", String(transcript.text)]
-          : name
-            ? ["filename", String(name.name)]
-            : file && fileFields.has("content")
-              ? ["file", String(file.text)]
-              : undefined
-      return place ? { ...hit, matchedIn: place[0], matchedText: place[1] } : hit
-    })
-  }
+  const placed = (found: ReturnType<typeof hitsByPk>, pks: number[]) =>
+    placeHits(database, corpus, [...fragments.values()], transcripts, found, pks)
   const hits = (pks: number[]) =>
     placed(mail ? emailHitsByPk(database, pks) : hitsByPk(context, pks), pks) as ReturnType<typeof hitsByPk>
   return {

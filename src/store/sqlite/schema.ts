@@ -931,6 +931,15 @@ export const attachments = sqliteTable(
   ],
 )
 
+export const transcriptIndexPending = sqliteTable(
+  "transcript_index_pending",
+  {
+    id: integer("id").notNull(),
+    indexableType: text("indexable_type").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.indexableType, table.id] })],
+)
+
 export { documentAnnotationTransfers } from "./schema/document-transfers.js"
 
 export const documents = sqliteTable(

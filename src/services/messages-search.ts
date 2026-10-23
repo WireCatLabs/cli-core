@@ -8,7 +8,7 @@ import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/reg
 import { hasStems, hasText, isStemmed, type QueryExecution, type ResolvedNode } from "../search/lucene/resolved.js"
 import { inSource, sourceOf } from "../search/query.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
-import type { StemsState } from "../store/store.js"
+import type { ScoredHit, StemsState } from "../store/store.js"
 import {
   type AccountKey,
   CHAT_LIST_KEY,
@@ -464,7 +464,9 @@ export const searchLucene = async (
     request.kind === "mail" ? { completeness: [], coverage: undefined } : await coverageOf(store, prepared, messenger)
   const items = await Promise.all(
     found.items.map(async (item) => {
-      const hit = withExcerpt(item, request.text ?? "")
+      // A garbled spelling is not among the typed words, so the excerpt looks for it too.
+      const garbled = item.corrections?.flatMap(({ to }) => to) ?? []
+      const hit = withExcerpt(item, [request.text ?? "", ...garbled].join(" "))
       if (!request.context) return hit
       const locator = parseLocator(hit.locator)
       return {
@@ -481,7 +483,7 @@ export const searchLucene = async (
   return {
     ...found,
     items,
-    corrections: [],
+    corrections: correctionsOf(found.items),
     wordsReady: prepared.wordsReady,
     stemsReady: prepared.stemsReady,
     completeness,
@@ -492,6 +494,14 @@ export const searchLucene = async (
       ? { accounts: mailAccounts.map(({ provider, account }) => ({ resource: "mail" as const, provider, account })) }
       : {}),
   }
+}
+/** The garbled spellings voice-note hits were found through, one entry per query word. */
+const correctionsOf = (items: ScoredHit[]): SearchFound["corrections"] => {
+  const found = new Map<string, Set<string>>()
+  for (const { corrections = [] } of items)
+    for (const { from, to } of corrections)
+      for (const word of to) found.set(from, (found.get(from) ?? new Set()).add(word))
+  return [...found].map(([from, to]) => ({ from, to: [...to] }))
 }
 const QUERY_PAGE_LIMIT = 1000
 const oldestFetch = (chats: ChatCompleteness[]): string | null =>

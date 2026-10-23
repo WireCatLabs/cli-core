@@ -40,6 +40,12 @@ export const message = v.strictObject({
   /** `picture`: the picture search lane found it by what the picture shows; it follows the text hits. */
   matched_in: v.optional(v.picklist(["text", "transcript", "filename", "file", "context", "picture"])),
   score: v.optional(v.number()),
+  /**
+   * `corrected`: a query word matched only a spelling speech recognition garbled in a voice note's transcript,
+   * listed in `corrections`. `words` and `beginnings`: what a discovery search matched.
+   */
+  match: v.optional(v.picklist(["words", "beginnings", "corrected"])),
+  corrections: v.optional(v.array(v.strictObject({ from: text, to: v.array(text) }))),
   /** Where a search found it: the local archive, the messenger's server, or both. */
   found_in: v.optional(v.picklist(["archive", "server", "both"])),
   /** A discovery search's partial match: how much of the question it covers, and which words it lacks. */
