@@ -7,7 +7,7 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { DEFAULT_TASK_CATEGORIES, withTaskCategory } from "../../domain/task-categories.js"
-import { task } from "../../entities/index.js"
+import { task, taskPair } from "../../entities/index.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
@@ -584,6 +584,7 @@ describe("tasks that may be one job", () => {
     database.close()
 
     const listed = json(await call("tasks", "duplicates", "--json"))
+    for (const pair of listed.items) expect(v.safeParse(taskPair, pair).success).toBe(true)
     expect(listed.items).toMatchObject([
       {
         task: { key: again },
@@ -603,6 +604,7 @@ describe("tasks that may be one job", () => {
 
     const merged = item(await call("tasks", "merge", again, "--into", invoice, "--json"))
     expect(merged).toMatchObject({ pair: { decision: "merged" }, linked: 1, task: { key: invoice } })
+    expect(v.safeParse(taskPair, merged.pair).success).toBe(true)
     expect(merged.pair).toHaveProperty("decided_at")
     expect(merged.task).toHaveProperty("created_at")
     const shown = item(await call("tasks", "show", again, "--json"))
@@ -611,6 +613,7 @@ describe("tasks that may be one job", () => {
     expect(json(await call("tasks", "duplicates", "decision:unsure", "--json")).items).toEqual([])
 
     const unmerged = item(await call("tasks", "unmerge", again, "--json"))
+    expect(v.safeParse(taskPair, unmerged.pair).success).toBe(true)
     expect(unmerged).toMatchObject({ pair: { decision: "unmerged" }, task: { key: again, status: "open" } })
 
     expect(item(await call("tasks", "duplicates", "reject", again, invoice, "--json"))).toMatchObject({

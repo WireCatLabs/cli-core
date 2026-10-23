@@ -25,6 +25,26 @@ const message = {
 const author = { type: "person", id: "1", name: null }
 
 const samples: Record<EntityName, unknown> = {
+  task_pair: {
+    task: null,
+    source: "msg:chat/500/7/1",
+    other: { ref: "task:REQ-1", key: "REQ-1", title: "Synthetic", status: "open" },
+    score: 5,
+    band: "maybe",
+    levels: {
+      text: "middle",
+      person: "same",
+      amount: "missing",
+      category: "same",
+      due: "missing",
+      reply: "no",
+      time: "near",
+    },
+    reasons: [],
+    decision: "attached",
+    decided_at: at,
+    created_at: at,
+  },
   message,
   "message.hit": {
     ref: message.ref,

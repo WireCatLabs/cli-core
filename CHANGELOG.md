@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- Duplicate-task pairs have an exact registered answer schema, including both sides, similarity evidence and decision times. Listing, rejecting and deferring pairs expose the same fields for discovery and projection.
+
 ## 0.395.0 — 23.10.2026
 
 ### Changed — may break callers

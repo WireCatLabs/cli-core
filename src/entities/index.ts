@@ -51,6 +51,7 @@ import { retention } from "./retention.js"
 import { savedSearch } from "./saved-search.js"
 import { tagging } from "./tagging.js"
 import { task } from "./task.js"
+import { taskPair } from "./task-pair.js"
 import { topic } from "./topic.js"
 
 /**
@@ -103,6 +104,7 @@ export {
   savedSearch,
   tagging,
   task,
+  taskPair,
   taskStats,
   topic,
 }
@@ -163,6 +165,7 @@ export const ENTITIES = {
   document,
   attachment,
   task,
+  task_pair: taskPair,
   fact,
   memory,
   meeting,

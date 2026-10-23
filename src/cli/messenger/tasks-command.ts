@@ -446,6 +446,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
   destroysNothing(
     annotate(duplicates.command("reject"), {
       effects: LOCAL_WRITE,
+      output: { entity: "task_pair" },
       examples: [`${tool} tasks duplicates reject PR-14 PR-12`],
     }),
   )
@@ -458,6 +459,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
   destroysNothing(
     annotate(duplicates.command("defer"), {
       effects: LOCAL_WRITE,
+      output: { entity: "task_pair" },
       examples: [`${tool} tasks duplicates defer PR-14 PR-12`],
     }),
   )
