@@ -117,6 +117,8 @@ export const ENTITIES = {
     "excerpt",
     "matched_in",
     "score",
+    "match",
+    "corrections",
     "found_in",
     "discovery",
     "context",

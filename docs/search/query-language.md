@@ -365,7 +365,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `mime` | kw | lowercase; a value without / matches the first part; only where the messenger reports a type | `mime:"application/pdf" OR mime:image` | term, phrase, wildcard |
 | `size` | kw | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
 | `content` | txt | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
-| `transcript` | txt | NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed | `transcript:invoice` | term, phrase |
+| `transcript` | txt | any form of the word (Snowball), widened to spellings speech recognition garbles; what a voice message said | `transcript:invoice` | term, phrase |
 | `title` | txt | every word, folded as text is; notes and files only | `title:"quarterly report"` | term, phrase |
 | `site` | kw | contained, folded as text is; notes and files only | `site:wikipedia` | term, phrase |
 | `lang` | kw | language tag or its prefix, lowercase; notes and files only | `lang:ru` | term, phrase |

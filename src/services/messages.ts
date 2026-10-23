@@ -105,6 +105,8 @@ export interface SearchQuery {
 export type FoundMessage = StoredHit & {
   discovery?: { coverage: number; matchedTerms: string[]; missingTerms: string[]; parent?: string }
   match?: "words" | "beginnings" | "corrected"
+  /** The garbled spellings a `corrected` hit's transcript holds, per query word. */
+  corrections?: { from: string; to: string[] }[]
   /** Where the words were: the text, a voice note's transcript, a file's name or a file's text. */
   matchedIn?: MatchPlace
   score?: number | null

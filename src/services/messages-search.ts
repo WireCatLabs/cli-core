@@ -464,7 +464,9 @@ export const searchLucene = async (
     request.kind === "mail" ? { completeness: [], coverage: undefined } : await coverageOf(store, prepared, messenger)
   const items = await Promise.all(
     found.items.map(async (item) => {
-      const hit = withExcerpt(item, request.text ?? "")
+      // A garbled spelling is not among the typed words, so the excerpt looks for it too.
+      const garbled = item.corrections?.flatMap(({ to }) => to) ?? []
+      const hit = withExcerpt(item, [request.text ?? "", ...garbled].join(" "))
       if (!request.context) return hit
       const locator = parseLocator(hit.locator)
       return {

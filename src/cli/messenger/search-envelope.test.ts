@@ -117,6 +117,30 @@ describe("search answers", () => {
     expect(answer.items.length).toBeGreaterThan(0)
   })
 
+  it("**says a voice note was found through a garbled spelling**, in the hit and the answer", async () => {
+    const { call, store } = await setup()
+    await store.messages.saveMessages(
+      account,
+      "8",
+      [{ ...message("5", "8", ""), attachments: [{ kind: "voice", mime: "audio/ogg" }] }],
+      { via: "history" },
+    )
+    const words = Array.from({ length: 60 }, (_, at) => `слово${at}`).join(" ")
+    await store.messages.keepTranscript(account, "8", "5", `${words} надо найти реелтора`, "gigaam-v3")
+    await store.close()
+    const answer = json(await call("search", "messages", "риелтор", "--json"))
+    const parsed = v.safeParse(listEnvelopeSchema(ENTITIES["message.hit"] as v.GenericSchema), answer)
+    expect(parsed.issues?.map((issue) => `${v.getDotPath(issue)}: ${issue.message}`)).toBeUndefined()
+    expect(answer.items).toEqual([
+      expect.objectContaining({
+        matched_in: "transcript",
+        match: "corrected",
+        corrections: [{ from: "риелтор", to: ["реелтора"] }],
+        excerpt: expect.stringContaining("реелтора"),
+      }),
+    ])
+  })
+
   it("pages with --page and names the next page with the same query", async () => {
     const { call, pretty, store } = await setup()
     await store.close()
