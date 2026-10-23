@@ -47,7 +47,7 @@ export const addMediaArchiveMove = (attachments: Command, messenger: Messenger):
         context,
         itemOf(snakeKeys(result)),
         () =>
-          `${result.dryRun ? `${result.selected} images selected` : `${result.moved} images moved`}; ${result.undated} undated images left in place\n`,
+          `${result.dryRun ? `${result.selected} images selected (${result.selectedBytes} bytes)` : `${result.moved} images moved (${result.movedBytes} bytes)`}; ${result.undated} undated images left in place\n`,
       )
     })
 }

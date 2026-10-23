@@ -96,7 +96,8 @@ Stale leases use the ordinary native lease recovery rules. Files use
 `NativeRecordingPartialStore` and `NativeRecordingPublication` with `.media-partial-` and
 `.media-publication-` prefixes. A completed checkpoint and scoped publication record recover a crash
 before or after linking the final file. A final file without a manifest or complete recovery evidence
-is refused. Manifests and unit files use atomic, non-overwriting publication and ordinary-file reads.
+is refused. Initial manifests and unit files use atomic, non-overwriting publication and ordinary-file reads.
+Rotation atomically replaces a source manifest with its verified relocation record.
 
 The `services` export exposes `archiveMedia`, `checkMediaArchive`, `moveMediaArchive`, `MediaArchivePorts`,
 `MediaArchiveOptions`, `MoveMediaArchiveOptions`, `MediaArchiveEntry` and `MediaIdentity`. Ports are narrow chat/account and
