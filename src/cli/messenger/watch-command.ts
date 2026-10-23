@@ -15,7 +15,11 @@ import { type Messenger, type MessengerContext, messengerContext } from "./conte
  * because a stream is not one value. Nothing is marked read.
  */
 export const watchCommand = (messenger: Messenger): Command =>
-  annotate(new Command("watch"), { effects: REMOTE_READ, lifetime: "persistent" })
+  annotate(new Command("watch"), {
+    effects: REMOTE_READ,
+    lifetime: "persistent",
+    examples: [`${messenger.app.command} personal watch --jsonl --timeout 30s`],
+  })
     .summary("stream new messages until interrupted or timed out")
     .description("print new messages as they arrive, until Ctrl-C or --timeout (either ends it normally)")
     .option("--events", "also edits, deletions, reactions, poll votes and chat events; every line then names its event")

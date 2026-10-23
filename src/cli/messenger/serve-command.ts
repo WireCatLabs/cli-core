@@ -35,9 +35,11 @@ export { type Lock, lockPath, readLock, servingProfiles } from "../../background
  * taken over. Started by a person, a service unit or `server start` — never by itself (NEED-9).
  */
 export const serveCommand = (messenger: Messenger): Command => {
-  const command = annotate(new Command("serve"), { effects: REMOTE_WRITE, lifetime: "persistent" }).description(
-    "keep the local store current until stopped — what a systemd or launchd unit runs",
-  )
+  const command = annotate(new Command("serve"), {
+    effects: REMOTE_WRITE,
+    lifetime: "persistent",
+    examples: [`${messenger.app.command} personal serve`],
+  }).description("keep the local store current until stopped — what a systemd or launchd unit runs")
 
   command.action(async function (this: Command) {
     const relay =

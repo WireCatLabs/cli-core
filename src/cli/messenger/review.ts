@@ -30,6 +30,7 @@ export const unansweredHours = (value: unknown, flag = "--unanswered"): number =
  */
 export const reviewCommand = (messenger: Messenger): Command =>
   annotate(new Command("review"), {
+    examples: [`${messenger.app.command} personal review "date>2h"`],
     effects: REMOTE_READ,
     output: { entity: "message", view: "summary" },
     query: REVIEW_QUERY,
