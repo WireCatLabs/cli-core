@@ -21,6 +21,8 @@ shape of this file.
 
 - Account commands include concrete examples in help and command discovery.
 
+- Search commands include concrete examples in help and command discovery.
+
 - Configuration commands include concrete examples in help and command discovery.
 
 - Task commands include concrete examples in help and command discovery.

@@ -7,6 +7,7 @@ import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
+import { commandAt } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { conversationsSearchCommand } from "./conversations-command.js"
 import { messagesSearchCommand } from "./messages-search-command.js"
@@ -232,5 +233,15 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
     .addCommand(notesCommand(messenger))
     .addCommand(conversationsSearchCommand(messenger))
   if (topics) search.addCommand(topicsSearchCommand(messenger))
+  for (const [path, args] of Object.entries({
+    all: "draft",
+    conversations: '"Reviewing the project draft"',
+    messages: "draft --limit 10",
+    notes: "draft --limit 10",
+    topics: '"Book club" draft',
+  })) {
+    const command = commandAt(search, path)
+    if (command) annotate(command, { examples: [`${messenger.app.command} personal search ${path} ${args}`] })
+  }
   return search
 }
