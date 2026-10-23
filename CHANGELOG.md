@@ -18,6 +18,10 @@ shape of this file.
   messenger only `lacks` stays in sight. For WhatsApp: `endOtherSessions` (only the phone ends other devices) and
   `removeContact`.
 
+- **`review --offline` reads the local store** instead of refusing, for every messenger. It shows only what was
+  already synced and says so (`missing` in JSON, a warning on the terminal); its next step starts from the same
+  point, and `--new` keeps its saved point, so an online review still sees what was never synced.
+
 ### Security
 
 - `@modelcontextprotocol/server` 2.3.0 clears the three high-severity advisories `npm audit` reported for every

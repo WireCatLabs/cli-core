@@ -11,7 +11,7 @@ import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { pointsOf } from "./catch-up.js"
-import { catchUpQuery, REVIEW_QUERY, reviewAnswer } from "./catch-up-answers.js"
+import { catchUpQuery, OFFLINE_REVIEW, REVIEW_QUERY, reviewAnswer } from "./catch-up-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { heardItems, hearForCommand, MODEL_OPTION, spokenItems, TRANSCRIBE_OPTION } from "./hearing-command.js"
 import { PARTIAL_NOTE } from "./inbox.js"
@@ -51,6 +51,10 @@ export const reviewCommand = (messenger: Messenger): Command =>
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
     .option("--new", "what changed since the last `review --new`, a point per chat — for scheduled runs")
+    .addHelpText(
+      "after",
+      "With --offline it reads the local store: only what was already synced, and --new keeps its point.",
+    )
     .addHelpText("after", "To mark a chat read, use `chats mark-read <chat>`. The other side sees it.")
     .action(async function (this: Command, query: string[]) {
       const options = this.opts<{
@@ -124,7 +128,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
           return read.length === 0 ? "" : renderMessages(spokenItems(read, hearing), viewOf(context, messenger))
         },
       )
-      saved?.save(found.checked ?? {})
+      if (!found.offline) saved?.save(found.checked ?? {})
     })
 
 /** What the answer's steps do not say: a person's context for the review just shown. */
@@ -142,6 +146,7 @@ const notes = (
         (found.tasks.review > 0 ? `, ${found.tasks.review} pair(s) to review — tasks duplicates` : ""),
     )
   if (found.partial && pretty) renderer.warn(PARTIAL_NOTE)
+  if (found.offline && pretty) renderer.warn(OFFLINE_REVIEW)
   if (found.unanswered)
     renderer.note(
       `questions from ${found.since} to ${found.until} still open after ${found.unanswered.olderThanHours} hours; ` +
