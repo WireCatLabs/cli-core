@@ -1018,6 +1018,17 @@ describe("chats create, join and leave", () => {
       { profile: "work", current: false, account: "501", name: null },
     ])
     expect(answer(named).items.map((item: { current: boolean }) => item.current)).toEqual([false, true])
+    for (const item of answer(listed).items) expect(v.safeParse(ENTITIES.account_profile, item).success).toBe(true)
+    const byProfile = await call(["account", "list", "profile:work", "--json=profile,account"], offline, unnamed)
+    expect(byProfile.code).toBe(0)
+    expect(answer(byProfile).items).toEqual([{ profile: "work", account: "501" }])
+    const withoutCurrent = await call(["account", "list", "current:true", "--json"], offline, unnamed)
+    expect(answer(withoutCurrent).items).toEqual([])
+    const currentOnly = await call(["work", "account", "list", "current:true", "--json"], offline, unnamed)
+    expect(answer(currentOnly).items).toEqual([{ profile: "work", current: true, account: "501", name: null }])
+    const unsupported = await call(["account", "list", "name:Owner", "--json"], offline, unnamed)
+    expect(unsupported.code).toBe(2)
+    expect(unsupported.stderr.join("\n")).toContain("query.unsupported-field")
   })
 
   it("**assumes no profile, not even the only one** — an account command says what to name", async () => {
@@ -1216,6 +1227,8 @@ describe("chats create, join and leave", () => {
     const unasked = await call(["account", "sessions", "end", "--others"], adapter, env)
     const ended1 = await call(["account", "sessions", "end", "--others", "--yes", "--json"], adapter, env)
 
+    expect(v.safeParse(ENTITIES.account_change, answer(updated)).success).toBe(true)
+    expect(v.safeParse(ENTITIES.ended_account_sessions, answer(ended1)).success).toBe(true)
     expect(answer(updated)).toMatchObject({ account: { name: "New Name", phone: "***1222" } })
     expect(changes).toEqual([{ firstName: "New", description: "hi", photo: "me.jpg" }])
     expect([empty.code, without.code, unasked.code, ended1.code]).toEqual([2, 2, 7, 0])

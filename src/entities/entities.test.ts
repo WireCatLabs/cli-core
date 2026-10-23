@@ -70,6 +70,10 @@ const samples: Record<EntityName, unknown> = {
     chats: [{ id: "7", title: null, kind: "group", their_messages: 1, first_at: at, last_at: at, complete: false }],
     aliases: [{ username: "old", first_seen_at: at, last_seen_at: at, source: "messages" }],
   },
+  account_change: { operation_id: "op-1", account: { id: "500", name: null, username: null } },
+  ended_account_sessions: { operation_id: "op-1", sessions: [] },
+  account_privacy: { read_receipts: false, profile_photo: "contacts_except" },
+  account_privacy_change: { operation_id: "op-1", privacy: { hide_online: true } },
   message,
   "message.hit": {
     ref: message.ref,
@@ -154,6 +158,7 @@ const samples: Record<EntityName, unknown> = {
   contact_state_change: { operation_id: "synthetic", person_id: "91" },
   contact_import: { operation_id: "synthetic", sent: 1, recognised: [{ id: "91", name: null, username: null }] },
   account: { provider: "telegram", id: "1", name: null, username: null },
+  account_profile: { profile: "work", current: false, account: null, name: null },
   account_session: { current: true, client: "app 1.0", device: null, location: null, last_active_at: at },
   note: {
     ref: "note:1",

@@ -38,6 +38,7 @@ export const accountSessionsCommand = (messenger: Messenger): Command => {
   sessions.addCommand(
     annotate(new Command("end"), {
       effects: REMOTE_WRITE,
+      output: { entity: "ended_account_sessions" },
       mcp: false,
       examples: [`${tool} account sessions end --others`],
     })
