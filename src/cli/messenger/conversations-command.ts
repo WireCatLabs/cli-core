@@ -37,6 +37,7 @@ import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
 import { answerOf as askOwner } from "./ask.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
 import { conversationShown, foundConversations, readinessList, refreshedAnswer } from "./conversation-answers.js"
+import { conversationExamples } from "./conversation-examples.js"
 import { messageItems } from "./message-items.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
 import { readAll } from "./stdin.js"
@@ -544,6 +545,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   conversations.addCommand(embed)
 
+  conversationExamples(conversations, messenger.app.command)
   return conversations
 }
 
