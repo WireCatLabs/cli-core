@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.396.0 — 23.10.2026
+
 ### Added
 
 - `SEARCHES_QUERY` (`@wirecat/cli-core/cli`): the query `searches list` takes, for another CLI's own saved searches.
