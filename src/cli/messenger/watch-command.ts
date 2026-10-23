@@ -1,28 +1,33 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import type { Meta } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { renderMessages } from "../../render/messages.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_READ } from "../effects.js"
+import { jsonlRecords, listOf } from "../envelope.js"
 import { withoutProviderRefs } from "../provider-refs.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
+import { selfOf } from "./message-items.js"
+import { watchEventItem, watchedMessageItem } from "./watch-answers.js"
 
 /**
  * New messages as they arrive, until Ctrl-C or `--timeout` — both a normal end, exit 0: listening
- * for a minute is a complete answer. One `MessageHit` per line with `--jsonl`; `--json` is refused,
+ * for a minute is a complete answer. Canonical item records and one end record with `--jsonl`; `--json` is refused,
  * because a stream is not one value. Nothing is marked read.
  */
 export const watchCommand = (messenger: Messenger): Command =>
   annotate(new Command("watch"), {
+    output: { entity: "watch_item" },
     effects: REMOTE_READ,
     lifetime: "persistent",
     examples: [`${messenger.app.command} personal watch --jsonl --timeout 30s`],
   })
     .summary("stream new messages until interrupted or timed out")
     .description("print new messages as they arrive, until Ctrl-C or --timeout (either ends it normally)")
-    .option("--events", "also edits, deletions, reactions, poll votes and chat events; every line then names its event")
+    .option("--events", "include changes and receipts; each item names its event")
     .action(async function (this: Command) {
       const events = this.opts<{ events?: boolean }>().events === true
       const context = messengerContext(this, messenger)
@@ -42,19 +47,56 @@ export const watchCommand = (messenger: Messenger): Command =>
           locale: messenger.app.locale,
         })}`
 
-      // Without --events the stream is bare messages, as it always was: a reader of it never meets
-      // a line of another shape.
+      // Event-tagged payloads are opt-in; ordinary items remain message values.
       const stop = new AbortController()
+      let connection: MessengerAdapter | undefined
+      let printed = 0
+      const account = () => {
+        if (!connection) throw new Error("watch has no connected account")
+        return selfOf(messenger, connection)
+      }
       const print = (event: MessageEvent) => {
         if (stop.signal.aborted || (!events && event.event !== "message")) return
         if (context.format === "jsonl") {
-          context.streams.data(
-            JSON.stringify(withoutProviderRefs(events ? event : (event as { message: MessageHit }).message)),
-          )
+          const data = events
+            ? watchEventItem(event, account())
+            : event.event === "message"
+              ? watchedMessageItem(event.message, account())
+              : undefined
+          if (data === undefined) return
+          context.streams.data(JSON.stringify({ type: "item", data: withoutProviderRefs(data) }))
+          printed++
         } else context.streams.data(describe(event, render))
       }
 
-      await listenUntilStopped(this, context, messenger, print, { stop, pipe: true })
+      const finish = (complete: boolean, error?: unknown) => {
+        if (context.format !== "jsonl" || environmentOf(this).commandSignal?.aborted) return
+        const issues: Meta["issues"] =
+          !complete && error instanceof CliError ? [{ code: error.code, source: "watch" }] : undefined
+        for (const record of jsonlRecords(
+          listOf("watch", {
+            items: [],
+            limit: Math.max(1, printed),
+            has_more: false,
+            paging: "cursor",
+            meta: { complete, ...(issues ? { issues } : {}) },
+          }),
+        ))
+          context.streams.data(JSON.stringify(record))
+      }
+      try {
+        await listenUntilStopped(this, context, messenger, print, {
+          stop,
+          pipe: true,
+          connected: (open) => {
+            connection = open
+          },
+        })
+      } catch (error) {
+        finish(false, error)
+        throw error
+      }
+      finish(true)
     })
 
 /**
@@ -82,7 +124,11 @@ export const listenUntilStopped = async (
     connected?: (connection: MessengerAdapter) => void
   },
 ): Promise<void> => {
-  const given = environmentOf(command).signal
+  const environment = environmentOf(command)
+  const phase = environment.untilStopped?.()
+  const given = phase
+    ? AbortSignal.any([phase, ...[environment.signal].filter((one): one is AbortSignal => one !== undefined)])
+    : environment.signal
   const end = () => stop.abort()
   given?.addEventListener("abort", end, { once: true })
   const signals = given ? [] : (["SIGINT", "SIGTERM"] as const)
@@ -120,6 +166,7 @@ export const listenUntilStopped = async (
     for (const name of signals) process.off(name, end)
     if (pipe && !given) process.stdout.off("error", closed)
     given?.removeEventListener("abort", end)
+    environment.endUntilStopped?.()
   }
 }
 

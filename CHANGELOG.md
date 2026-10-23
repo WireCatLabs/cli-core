@@ -15,6 +15,8 @@ shape of this file.
 
 ### Added
 
+- **Listener answers declare their fields.** Live messages and events, and the final serve summary, expose exact schemas for discovery and cross-CLI output contracts. Provider-only attachment references stay private.
+
 - **Poll answer schemas.** Poll reads, vote and close receipts, and newly sent poll messages declare their answer entities for field discovery and projection.
 
 - **Image embedding progress has declared fields.** Discovery and projection describe the bounded batch’s model, embedded, skipped and failed counts, and whether more pictures remain. The existing receipt and processing behavior stay unchanged.
@@ -68,6 +70,8 @@ shape of this file.
 - **Store commands declare their answers.** Archive coverage, exports, selected-chat clearing, gap plans and repairs, background jobs, health checks, maintenance and backup/restore receipts describe their existing result fields. Missing-file and partial-result variants remain explicit; stored data and command behavior stay unchanged.
 
 ### Changed — may break callers
+
+- **Watch uses the shared JSONL contract.** Read each message or event from `{ type: "item", data }` and wait for the final `type: "end"` record. Message and event fields are snake_case, message values use the canonical read shape with references, and live counter observations remain available. Normal stops and timeouts finish complete; a source failure finishes incomplete and returns its failure code. Update readers of the old raw lines.
 
 - **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.
 

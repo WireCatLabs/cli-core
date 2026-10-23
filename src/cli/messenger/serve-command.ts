@@ -36,6 +36,7 @@ export { type Lock, lockPath, readLock, servingProfiles } from "../../background
  */
 export const serveCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("serve"), {
+    output: { entity: "serve_summary" },
     effects: REMOTE_WRITE,
     lifetime: "persistent",
     examples: [`${messenger.app.command} personal serve`],

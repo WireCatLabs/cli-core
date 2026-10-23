@@ -1143,6 +1143,16 @@ same shape for a shared command, with what one messenger alone knows under `prov
 snake_case keys ([WC-OUT-12]), and the error object and exit codes ([WC-OUT-14] to [WC-OUT-19]). The rules below
 are the messenger CLIs' own; they keep their numbers, so a citation of one still finds it.
 
+`watch --jsonl` emits canonical snake_case messages inside `{ "type": "item", "data": … }`.
+With `--events`, `data.event` names the change and message/edit events carry `data.message`.
+Read `data` instead of the former raw line. Live counter observations remain under
+`counter_observations`; attachment provider references are never printed. A normal stop or timeout
+ends with one `type: "end"` record and `complete: true`. A source failure ends incomplete and exits
+nonzero, with the normal error on stderr. A closed pipe, disconnected relay client, forced second signal or output cap may
+prevent the end record: readers must treat its absence as a cut stream. `watch --json` is refused.
+The SDK's listener event objects keep their existing shape. `serve` declares its final summary
+separately as `serve_summary`.
+
 - **`inbox` and `review` are not lists**: they answer one view grouped by chat, `{ chats: [{ …, messages }] }`, in
    every messenger CLI.
 

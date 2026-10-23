@@ -1,15 +1,28 @@
 import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-base"
-import { describe, expect, it } from "vitest"
+import { CliError, captureStreams } from "@wirecat/cli-base"
+import { jsonlEndSchema, jsonlItemSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
+import { describe, expect, it, vi } from "vitest"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { ConnectOptions, Messenger } from "./context.js"
 import { messagesCommand } from "./messages-command.js"
 import { watchCommand } from "./watch-command.js"
+
+const itemsOf = (lines: string[], complete = true) => {
+  const records = lines.map((line) => JSON.parse(line))
+  expect(records.filter((record) => record.type === "end")).toHaveLength(1)
+  expect(v.parse(jsonlEndSchema, records.at(-1)).complete).toBe(complete)
+  return records.slice(0, -1).map((record) => {
+    v.parse(jsonlItemSchema(ENTITIES.watch_item), record)
+    return record.data
+  })
+}
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 
@@ -44,7 +57,7 @@ const listening =
     } as unknown as MessengerAdapter
   }
 
-const call = async (argv: string[], connect: Messenger["connect"], signal?: AbortSignal) => {
+const call = async (argv: string[], connect: Messenger["connect"], signal?: AbortSignal, realStreams = false) => {
   const root = mkdtempSync(join(tmpdir(), "watch-"))
   const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
   const messenger: Messenger = {
@@ -59,7 +72,7 @@ const call = async (argv: string[], connect: Messenger["connect"], signal?: Abor
     argv,
     { app, commands: () => [watchCommand(messenger), messagesCommand(messenger)] },
     {
-      streams,
+      ...(realStreams ? {} : { streams }),
       tty: false,
       env,
       ...(signal ? { signal } : {}),
@@ -69,6 +82,169 @@ const call = async (argv: string[], connect: Messenger["connect"], signal?: Abor
 }
 
 describe("watch", () => {
+  it("retains live observations and explicit false stars in the canonical message view", async () => {
+    const stop = new AbortController()
+    setTimeout(() => stop.abort(), 20)
+    const observed = "2026-09-27T12:00:00.000Z"
+    const { code, streams } = await call(
+      ["watch", "--jsonl"],
+      listening(
+        [
+          {
+            ...hit("1"),
+            starred: false,
+            counterObservations: { views: { value: 12, observedAt: observed, source: "remote_update" } },
+          },
+        ],
+        [],
+      ),
+      stop.signal,
+    )
+    expect(code).toBe(0)
+    expect(itemsOf(streams.stdout)).toMatchObject([
+      {
+        ref: "msg:chat/500/7/1",
+        chat_id: "7",
+        starred: false,
+        counter_observations: { views: { value: 12, observed_at: observed, source: "remote_update" } },
+      },
+    ])
+    expect(itemsOf(streams.stdout)[0]).not.toHaveProperty("chatId")
+  })
+
+  it("frames every supported event with its declared snake_case payload", async () => {
+    const stop = new AbortController()
+    setTimeout(() => stop.abort(), 30)
+    const at = "2026-09-27T12:00:00.000Z"
+    const person = { id: "9", name: "Olga", username: null }
+    const arrive: MessageEvent[] = [
+      {
+        event: "message",
+        message: {
+          ...hit("1"),
+          attachments: [
+            {
+              kind: "poll",
+              poll: {
+                chatId: "7",
+                messageId: "1",
+                question: "Synthetic?",
+                answers: [{ id: "a", text: "One", voters: 0, chosen: false }],
+                closed: false,
+                multiple: false,
+                anonymous: false,
+                voters: 0,
+              },
+            },
+          ],
+        },
+      },
+      { event: "vote", chatId: "7", chatTitle: null, messageId: "1", vote: { person, answers: ["a"], votedAt: at } },
+      {
+        event: "person_reaction",
+        chatId: "7",
+        chatTitle: null,
+        messageId: "1",
+        reaction: { person, own: false, reaction: "👍", reactedAt: at },
+      },
+      { event: "star", chatId: "7", chatTitle: null, messageId: "1", starred: false },
+      { event: "delivery", chatId: "7", chatTitle: null, messageId: "1", delivery: "read", at },
+      {
+        event: "chat_event",
+        chatId: "7",
+        chatTitle: null,
+        change: {
+          messageId: "2",
+          timestamp: at,
+          event: "promote",
+          by: { id: "500", name: "Alice" },
+          people: [{ id: "9", name: "Olga" }],
+        },
+      },
+      { event: "delete", chatId: null, chatTitle: null, messageId: "3" },
+    ]
+    const { code, streams } = await call(["watch", "--jsonl", "--events"], listening(arrive, []), stop.signal)
+    expect(code, streams.stderr.join(" ")).toBe(0)
+    const items = itemsOf(streams.stdout)
+    expect(items.map((one) => one.event)).toEqual(arrive.map((one) => one.event))
+    expect(items[1].vote).toMatchObject({ person_id: "9", voted_at: at })
+    expect(items[2].reaction).toMatchObject({ reacted_at: at })
+    expect(items[5].change).toMatchObject({ type: "promote", time: at })
+  })
+
+  it.each([false, true])(
+    "ends an interrupted source once, marking failure without exposing its text (%s)",
+    async (known) => {
+      const connect = async () =>
+        ({
+          self: () => "500",
+          close: async () => {},
+          watch: async (arrived: (event: MessageEvent) => void) => {
+            arrived({ event: "message", message: hit("1") })
+            throw known
+              ? new CliError("network_error", "synthetic source stopped")
+              : new Error("synthetic private provider payload")
+          },
+        }) as unknown as MessengerAdapter
+      const { code, streams } = await call(["watch", "--jsonl"], connect)
+      expect(code).not.toBe(0)
+      expect(itemsOf(streams.stdout, false)).toHaveLength(1)
+      const end = JSON.parse(streams.stdout.at(-1) ?? "null")
+      if (known) expect(end.issues).toEqual([{ code: "network_error", source: "watch" }])
+      else {
+        expect(end.issues).toBeUndefined()
+        expect(streams.stderr.join(" ")).toContain("internal_error")
+        expect(streams.stderr.join(" ")).toContain("command.crashed")
+      }
+      expect(streams.stdout.join("") + streams.stderr.join("")).not.toContain("synthetic private provider payload")
+    },
+  )
+
+  it("does not write a terminal record into a reader's closed pipe", async () => {
+    const stdout: string[] = []
+    let during = 0
+    const out = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(String(chunk).trimEnd())
+      return true
+    })
+    const err = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    try {
+      const connect = async () =>
+        ({
+          self: () => "500",
+          close: async () => {},
+          watch: async (arrived: (event: MessageEvent) => void) => {
+            arrived({ event: "message", message: hit("1") })
+            during = process.stdout.listenerCount("error")
+            process.stdout.emit("error", Object.assign(new Error("reader closed"), { code: "EPIPE" }))
+          },
+        }) as unknown as MessengerAdapter
+      const { code } = await call(["watch", "--jsonl"], connect, undefined, true)
+      expect(code).toBe(0)
+      expect(stdout).toHaveLength(1)
+      v.parse(jsonlItemSchema(ENTITIES.watch_item), JSON.parse(stdout[0] ?? "null"))
+      expect(process.stdout.listenerCount("error")).toBe(during - 1)
+    } finally {
+      out.mockRestore()
+      err.mockRestore()
+    }
+  })
+
+  it("ends the stream complete after a normal SIGTERM", async () => {
+    const connect = async () =>
+      ({
+        self: () => "500",
+        close: async () => {},
+        watch: async (arrived: (event: MessageEvent) => void) => {
+          arrived({ event: "message", message: hit("1") })
+          process.emit("SIGTERM")
+        },
+      }) as unknown as MessengerAdapter
+    const { code, streams } = await call(["watch", "--jsonl"], connect)
+    expect(code).toBe(0)
+    expect(itemsOf(streams.stdout)).toHaveLength(1)
+  })
+
   it("**a signal sent twice — as mtcute does after closing its storage — exits 0 and removes listeners**", async () => {
     const before = process.listenerCount("SIGTERM")
     let during = 0
@@ -100,7 +276,7 @@ describe("watch", () => {
 
     expect(code).toBe(0)
     expect(asked).toEqual([{ listen: true, events: expect.any(Function), stored: expect.any(Object) }])
-    expect(streams.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2"])
+    expect(itemsOf(streams.stdout).map((one) => one.id)).toEqual(["1", "2"])
     const offline = captureStreams()
     const messenger: Messenger = {
       app,
@@ -136,7 +312,7 @@ describe("watch", () => {
     )
 
     expect(code).toBe(0)
-    expect(streams.stdout.map((line) => JSON.parse(line).event)).toEqual([
+    expect(itemsOf(streams.stdout).map((one) => one.event)).toEqual([
       "message",
       "message",
       "edit",
@@ -245,12 +421,20 @@ describe("watch", () => {
       { event: "delete", chatId: "7", chatTitle: null, messageId: "1" },
     ]
     const { streams } = await call(["watch", "--jsonl"], listening(arrive, []), stop.signal)
-    expect(streams.stdout.map((line) => JSON.parse(line).id)).toEqual(["1"])
+    expect(itemsOf(streams.stdout).map((one) => one.id)).toEqual(["1"])
   })
 
   it("ends normally at --timeout", async () => {
-    const { code } = await call(["watch", "--jsonl", "--timeout", "30ms"], listening([], []))
+    const { code, streams } = await call(["watch", "--jsonl", "--timeout", "30ms"], listening([], []))
     expect(code).toBe(0)
+    expect(itemsOf(streams.stdout)).toEqual([])
+  })
+
+  it("does not claim completion after the output cap refuses a message", async () => {
+    const { code, streams } = await call(["watch", "--jsonl", "--max-output-bytes", "1"], listening([hit("1")], []))
+    expect(code).toBe(13)
+    expect(streams.stdout).toEqual([])
+    expect(streams.stderr.join(" ")).toContain("output.too-large")
   })
 
   it("refuses --json, which promises one value, and a messenger that cannot listen", async () => {
