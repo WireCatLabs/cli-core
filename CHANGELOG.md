@@ -54,6 +54,13 @@ shape of this file.
   forms. Unlike Lucene, order costs nothing: `"a b"~0` finds "b a" too. `word~1` stays an error. A saved search may
   now hold `~N`. `QUERY_OPERATORS` splits the `fuzzy / proximity` row into `proximity` and `fuzzy`.
 
+### Fixed
+
+- **An agent's text on a voice note is its transcript.** `transcript:`, the transcripts-first ranking, `matched_in`
+  and a mention's `transcript` field counted only text speech recognition wrote (`speech:<model>`), so a voice note
+  an agent transcribed was found as file text. A transcript is now the text of a voice attachment (`voice`,
+  `video_note` or `audio/ogg`), whoever wrote it.
+
 ## 0.389.0 — 22.10.2026
 
 ### Added

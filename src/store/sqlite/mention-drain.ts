@@ -9,6 +9,7 @@ import {
 import { findNames, findUnknownNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
+import { speech } from "./lucene-fields.js"
 import { storePhoneCountries } from "./phone-countries.js"
 import { placeOf } from "./place-key.js"
 
@@ -130,11 +131,11 @@ export const SOURCES = {
       "SELECT count(*) AS n FROM attachments a JOIN messages m ON m.id = a.attachable_id " +
       "WHERE a.attachable_type = 'message' AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL",
     page:
-      "SELECT a.id, a.text, CASE WHEN coalesce(a.extractor, '') LIKE 'speech:%' THEN 'transcript' ELSE 'file_text' END AS field, " +
+      `SELECT a.id, a.text, CASE WHEN ${speech("a")} THEN 'transcript' ELSE 'file_text' END AS field, ` +
       "m.chat_id FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id > ? AND a.attachable_type = 'message' " +
       "AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL ORDER BY a.id LIMIT ?",
     one:
-      "SELECT a.text, CASE WHEN coalesce(a.extractor, '') LIKE 'speech:%' THEN 'transcript' ELSE 'file_text' END AS field, " +
+      `SELECT a.text, CASE WHEN ${speech("a")} THEN 'transcript' ELSE 'file_text' END AS field, ` +
       "m.chat_id FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id = ? AND a.attachable_type = 'message' " +
       "AND a.text IS NOT NULL AND m.deleted_at IS NULL",
   },
