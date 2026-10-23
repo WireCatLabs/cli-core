@@ -21,6 +21,8 @@ shape of this file.
 
 ### Added
 
+- Reaction commands include concrete examples in help and command discovery.
+
 - Recipient-list commands include concrete examples in help and command discovery.
 
 - Saved-search commands include concrete examples in help and command discovery.

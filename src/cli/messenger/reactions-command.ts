@@ -8,7 +8,10 @@ import { type Messenger, messengerContext } from "./context.js"
 export const reactionsCommand = (messenger: Messenger): Command => {
   const reactions = new Command("reactions").description("react to messages")
 
-  annotate(reactions.command("add"), { effects: REMOTE_WRITE })
+  annotate(reactions.command("add"), {
+    effects: REMOTE_WRITE,
+    examples: [`${messenger.app.command} personal reactions add "Book club" 101 👍`],
+  })
     .description("put your reaction on a message; it replaces the one you had")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")
@@ -21,7 +24,10 @@ export const reactionsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(reacted)))
     })
 
-  annotate(reactions.command("remove"), { effects: REMOTE_WRITE })
+  annotate(reactions.command("remove"), {
+    effects: REMOTE_WRITE,
+    examples: [`${messenger.app.command} personal reactions remove "Book club" 101`],
+  })
     .description("take your reaction off a message")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")
