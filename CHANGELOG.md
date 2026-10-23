@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.401.0 — 24.10.2026
+
 ### Changed — may break callers
 
 - **`events list` writes times as ISO 8601 and ids as strings**, as every other answer does: `starts_at`, `ends_at`, `deleted_at`, `created_at` and `updated_at` were epoch milliseconds, `id` and `event_series_id` numbers. No field is gone.
