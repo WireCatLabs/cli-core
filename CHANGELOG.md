@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- Statistics commands include examples in help and command discovery, with guidance for reusing an exact evidence selection.
+
 - Store commands include concrete examples in help and command discovery.
 
 ## 0.393.0 — 23.10.2026
