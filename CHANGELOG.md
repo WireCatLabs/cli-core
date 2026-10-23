@@ -9,6 +9,8 @@ shape of this file.
 
 ### Changed — may break callers
 
+- cli-core requires cli-base 0.50.1 or newer within the 0.50 line for profile-preserving command corrections and concise skill summaries.
+
 - `searches list`, `searches history` and `searches clear` cover only message searches. The table is shared by
   every CLI on the store; a saved meeting search shown, run or deleted from a messenger is refused with
   `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
@@ -34,6 +36,10 @@ shape of this file.
 - Conversation commands include examples in help and command discovery, with guidance for submitting a batch answer.
 
 - Server commands include concrete examples in help and command discovery.
+
+### Fixed
+
+- **Joined command hints keep the chosen profile.** A command path passed as one argument is refused with a correction that preserves a separate explicit profile, including when global options come first.
 
 ## 0.394.0 — 23.10.2026
 

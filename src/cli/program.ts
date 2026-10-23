@@ -443,6 +443,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       refuseJoinedPath(
         program,
         words.filter((word) => !word.startsWith("-")),
+        profile !== undefined && !/\s/.test(profile) ? [profile] : [],
       )
   } catch (failure) {
     const settled = await settleFailure(failure, { definition, program, rest: lifted, profile, options })
