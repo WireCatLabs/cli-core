@@ -9,7 +9,11 @@ import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js
 export const metadataCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
   const command = new Command("metadata").description("cached group/channel descriptions for local automatic tags")
-  annotate(command.command("get"), { effects: LOCAL_READ, examples: [`${tool} metadata get --chat 7`] })
+  annotate(command.command("get"), {
+    output: { entity: "chat_metadata" },
+    effects: LOCAL_READ,
+    examples: [`${tool} metadata get --chat 7`],
+  })
     .description("a stored chat's cached description, as automatic tags read it")
     .requiredOption("--chat <chat>", "a stored chat")
     .action(async function (this: Command) {
@@ -22,6 +26,7 @@ export const metadataCommand = (messenger: Messenger): Command => {
       )
     })
   annotate(command.command("refresh"), {
+    output: { entity: "chat_metadata_refresh" },
     effects: FETCH,
     examples: [`${tool} metadata refresh --chat 7 --chat 8`, `${tool} metadata refresh --only-missing --limit 20`],
   })
