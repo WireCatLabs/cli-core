@@ -1654,6 +1654,8 @@ describe("the MCP server", () => {
       due: "2h",
       category: "documents",
     })
+    v.parse(ENTITIES.task_created, added.body.item)
+    v.parse(ENTITIES.task_card, planned.body.item)
     expect(planned.body.item).toMatchObject({
       title: "Send the plan",
       category: "documents",
@@ -1661,6 +1663,7 @@ describe("the MCP server", () => {
       next_check_at: null,
     })
     const linked = await call("tasks link", { task: taskId, targets: ["https://example.com/plan"] })
+    v.parse(ENTITIES.task_links, linked.body.item)
     expect(linked.body.item.links).toMatchObject([{ target_text: "https://example.com/plan", kind: "related-to" }])
     expect((await call("tasks agenda", { due_within: "1d", query: "chat_kind:dialog" })).body.item.tasks).toMatchObject(
       [{ id: taskId, title: "Send the plan", reasons: ["due"] }],
@@ -1722,8 +1725,11 @@ describe("the MCP server", () => {
 
     expect((await call("tasks duplicates", {})).body).toMatchObject({ items: [] })
     const merged = await call("tasks merge", { task: second.key, into: first })
+    v.parse(ENTITIES.task_merge, merged.body.item)
     expect(merged.body.item).toMatchObject({ pair: { decision: "merged" }, task: { key: first } })
-    expect((await call("tasks unmerge", { task: second.key })).body.item).toMatchObject({ task: { status: "open" } })
+    const unmerged = (await call("tasks unmerge", { task: second.key })).body.item
+    v.parse(ENTITIES.task_unmerge, unmerged)
+    expect(unmerged).toMatchObject({ task: { status: "open" } })
     expect((await call("tasks duplicates reject", { task: second.key, other_task: first })).body.item).toMatchObject({
       decision: "rejected",
     })

@@ -106,6 +106,18 @@ import { sendAttempt } from "./send-attempt.js"
 import { automaticTags, tagChange } from "./tag-change.js"
 import { tagging } from "./tagging.js"
 import { task } from "./task.js"
+import { taskPair } from "./task-pair.js"
+import {
+  taskCard,
+  taskCategories,
+  taskClosed,
+  taskCreated,
+  taskLinks,
+  taskMerge,
+  taskScan,
+  taskSimilar,
+  taskUnmerge,
+} from "./task-results.js"
 import { topic } from "./topic.js"
 
 /**
@@ -252,7 +264,17 @@ export {
   tagChange,
   tagging,
   task,
+  taskCard,
+  taskCategories,
+  taskClosed,
+  taskCreated,
+  taskLinks,
+  taskMerge,
+  taskPair,
+  taskScan,
+  taskSimilar,
   taskStats,
+  taskUnmerge,
   topic,
   trackedChat,
   trackedChatHistory,
@@ -359,6 +381,16 @@ export const ENTITIES = {
   media_archive_move: mediaArchiveMove,
   media_archive_timer: mediaArchiveTimer,
   task,
+  task_pair: taskPair,
+  task_card: taskCard,
+  task_created: taskCreated,
+  task_closed: taskClosed,
+  task_links: taskLinks,
+  task_similar: taskSimilar,
+  task_merge: taskMerge,
+  task_unmerge: taskUnmerge,
+  task_categories: taskCategories,
+  task_scan: taskScan,
   fact,
   memory,
   meeting,
