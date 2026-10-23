@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- `SEARCHES_QUERY` (`@wirecat/cli-core/cli`): the query `searches list` takes, for another CLI's own saved searches.
+
 - **A voice note's transcript is found in any form of a word, and widened to the spellings speech recognition
   garbles (store version 29).** «риелтор» finds a transcript saying «риелтору», and «реелтора»: always, not only when
   nothing matched, by meeting search's rules — one stem edit from a word the Russian dictionary does not know, never
