@@ -2796,6 +2796,17 @@ describe("sending over MCP", () => {
     expect((await call("messages scheduled", { chat: "7" })).isError).toBe(true)
   })
 
+  it("offers no channel comments when the messenger declares them unsupported", async () => {
+    const { call, client } = await connect(scripted(), {
+      own: { channelComments: false },
+      connect: async () => {
+        throw new Error("must not connect")
+      },
+    })
+    expect(await client.commands()).not.toContain("messages comments")
+    expect((await call("messages comments", { chat: "7", post: "1" })).isError).toBe(true)
+  })
+
   it("offers no tool whose one method the messenger lacks, and never connects for it", async () => {
     const connects: number[] = []
     const { call, client } = await connect(scripted(), {

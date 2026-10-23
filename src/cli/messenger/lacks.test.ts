@@ -39,6 +39,7 @@ const argvOf = (root: string): Record<string, string[]> => {
     "contacts remove": [person],
     "contacts rename": [person, "Ana"],
     "contacts import": [book],
+    "messages comments": [chat, message],
     "messages pin": [chat, message],
     "messages unpin": [chat, message],
   }
@@ -78,6 +79,15 @@ const cli = async (path: string, own: Partial<Messenger>, adapter: () => Messeng
 }
 
 describe("a command whose one method the messenger lacks", () => {
+  it("refuses comments from a messenger that declares them unsupported before connecting", async () => {
+    const result = await cli("messages comments", { channelComments: false }, () => fakeAdapter(seed))
+    expect(result).toMatchObject({
+      code: 2,
+      connects: [],
+      message: "this messenger cannot read comments on a channel post",
+    })
+  })
+
   for (const [path, [method, what]] of Object.entries(COMMAND_NEEDS)) {
     it(`${path} refuses before connecting, as the adapter would after`, async () => {
       const without = () => {

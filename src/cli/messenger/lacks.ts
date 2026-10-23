@@ -23,6 +23,7 @@ export const COMMAND_NEEDS: Readonly<Record<string, Need>> = {
   "contacts remove": ["removeContact", "remove a contact"],
   "contacts rename": ["renameContact", "rename a contact"],
   "contacts import": ["importContacts", "import contacts"],
+  "messages comments": ["comments", "read comments on a channel post"],
   "messages pin": ["pin", "pin a message"],
   "messages unpin": ["unpin", "unpin a message"],
 }
@@ -31,6 +32,7 @@ export const COMMAND_NEEDS: Readonly<Record<string, Need>> = {
 const STORE_ANSWERS: ReadonlySet<string> = new Set(["chats events"])
 
 interface Lacking {
+  channelComments?: boolean
   lacks?: readonly (keyof MessengerAdapter)[]
   history?: "server" | "store"
 }
@@ -38,7 +40,9 @@ interface Lacking {
 /** The one method this command needs and this messenger never has; none when it has it or the store answers. */
 export const lackedNeed = (messenger: Lacking | undefined, path: string): Need | undefined => {
   const need = COMMAND_NEEDS[path]
-  if (!need || !messenger?.lacks?.includes(need[0])) return undefined
+  if (!need) return undefined
+  if (path === "messages comments" && messenger?.channelComments === false) return need
+  if (!messenger?.lacks?.includes(need[0])) return undefined
   return messenger.history === "store" && STORE_ANSWERS.has(path) ? undefined : need
 }
 
