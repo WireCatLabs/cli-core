@@ -159,7 +159,7 @@ const exportCommand = (messenger: Messenger): Command =>
     .description(
       "a chat's stored messages, oldest first: --jsonl one message per line, --json the list envelope of messages; never asks the messenger",
     )
-    .argument("[chats...]", `${messenger.chatArgument}; several with --output-dir`)
+    .argument("[chat...]", `${messenger.chatArgument}; several with --output-dir`)
     .option(
       "--format <format>",
       "jsonl: one message per line, the default with --output; markdown: a transcript with a heading per day, replies and forwards quoted",

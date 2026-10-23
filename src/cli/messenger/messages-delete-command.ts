@@ -19,7 +19,7 @@ export const deleteCommand = (messenger: Messenger): Command =>
   })
     .description("delete messages for you only; with --for-everyone, for everyone in the chat")
     .argument("<chat>", messenger.chatArgument)
-    .argument("<messages...>", `the message ids, by spaces or commas, at most ${DELETE_AT_ONCE}`)
+    .argument("<message...>", `the message ids, by spaces or commas, at most ${DELETE_AT_ONCE}`)
     .addOption(
       ownerOnlyOption("--for-everyone", "delete for everyone in the chat, not only for you — they cannot get it back"),
     )

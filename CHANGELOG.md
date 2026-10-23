@@ -14,6 +14,8 @@ shape of this file.
   `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
   optional list of kinds.
 
+- MCP argument names follow singular CLI placeholders: `messages delete` takes `message`, chat export takes `chat`, and duplicate-task operations take `task` (with `other_task` for a pair). Update saved MCP requests using `messages`, `chats` or `dup`. CLI positional values and their order are unchanged.
+
 ### Added
 
 - `search meetings` takes `date:`, `project:`, `tag:` and `topic:` in the query: `budget project:RES date>=30d`. They
@@ -39,6 +41,10 @@ shape of this file.
 - Conversation commands include examples in help and command discovery, with guidance for submitting a batch answer.
 
 - Server commands include concrete examples in help and command discovery.
+
+### Fixed
+
+- Message deletion, chat export and duplicate-task commands use singular argument names in help and discovery. Variadic arguments still accept several values, and task argument help identifies each side of a pair.
 
 ## 0.394.0 — 23.10.2026
 

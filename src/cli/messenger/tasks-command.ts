@@ -451,8 +451,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
   )
     .summary("two tasks are not the same job: the pair is never offered again")
     .description("two tasks are not the same job: the pair leaves the list and is never offered again")
-    .argument("<dup>", "the task listed as the duplicate, by its id or key")
-    .argument("<task>", "the task it was paired with")
+    .argument("<task>", "the task listed as the duplicate, by its id or key")
+    .argument("<other-task>", "the task it was paired with")
     .action(decided("rejected", "tasks.duplicates.reject"))
 
   destroysNothing(
@@ -463,8 +463,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
   )
     .summary("the fields and the text cannot tell: leave the pair to the owner")
     .description("the fields and the text cannot tell: leave the pair to the owner, who lists it with decision:unsure")
-    .argument("<dup>", "the task listed as the duplicate, by its id or key")
-    .argument("<task>", "the task it was paired with")
+    .argument("<task>", "the task listed as the duplicate, by its id or key")
+    .argument("<other-task>", "the task it was paired with")
     .action(decided("unsure", "tasks.duplicates.defer"))
 
   destroysNothing(
@@ -475,7 +475,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       "one job seen twice: link every message of the duplicate to the task and close the duplicate dismissed, " +
         "duplicate-of the task; nothing is deleted, and tasks unmerge undoes it",
     )
-    .argument("<dup>", "the duplicate, by its id or key; it must be open")
+    .argument("<task>", "the duplicate, by its id or key; it must be open")
     .requiredOption("--into <id>", "the task that stays, by its id or key")
     .action(async function (this: Command, dup: string) {
       const context = messengerContext(this, messenger)
@@ -499,7 +499,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .description(
       "undo a merge: reopen the task and remove its duplicate-of relation; messages the merge linked stay linked",
     )
-    .argument("<dup>", "the merged task, by its id or key")
+    .argument("<task>", "the merged task, by its id or key")
     .action(async function (this: Command, dup: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.unmerge")
