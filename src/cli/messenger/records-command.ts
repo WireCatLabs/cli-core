@@ -114,7 +114,11 @@ export const callsCommand = (messenger: Messenger): Command => {
 
 /** `chats delete` and `chats clear` — for this account only; at the default level they ask first. */
 export const chatDeletionCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("delete"), { effects: REMOTE_WRITE, mcp: false })
+  annotate(new Command("delete"), {
+    effects: REMOTE_WRITE,
+    mcp: false,
+    examples: [`${messenger.app.command} personal chats delete "Book club"`],
+  })
     .description("delete a chat from this account; the others in it keep it and its messages")
     .argument("<chat>", messenger.chatArgument)
     .addOption(
@@ -128,7 +132,11 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
         itemOf(snakeKeys(await context.withServices((services) => services.admin.deleteChat(chat)))),
       )
     }),
-  annotate(new Command("clear"), { effects: REMOTE_WRITE, mcp: false })
+  annotate(new Command("clear"), {
+    effects: REMOTE_WRITE,
+    mcp: false,
+    examples: [`${messenger.app.command} personal chats clear "Book club"`],
+  })
     .description("delete every message in a chat for this account; the others in it keep theirs")
     .argument("<chat>", messenger.chatArgument)
     .addOption(
