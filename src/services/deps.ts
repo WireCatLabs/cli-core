@@ -122,7 +122,7 @@ export const nothingStored = (messenger: MessengerTraits): string =>
 export const PUSHED = "this messenger's history is read from the local store"
 
 export const OFFLINE =
-  "--offline answers only from what is kept locally: `chats list|show`, `messages list|show|context` and `contacts list|show`"
+  "--offline answers only from what is kept locally: `chats list|show`, `messages list|show|context`, `contacts list|show` and `review`"
 
 /** Over a connection that is already open — an MCP session holds one for minutes. */
 export const onlineDeps = (

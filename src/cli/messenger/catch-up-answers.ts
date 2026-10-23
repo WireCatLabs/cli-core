@@ -79,7 +79,12 @@ const catchUpList = (
   found: Shared,
   hearing: Hearing | undefined,
   reader: AccountKey,
-  { transcribe, first = [], meta = {} }: { transcribe: boolean; first?: NextStep[]; meta?: Partial<Meta> },
+  {
+    transcribe,
+    first = [],
+    meta = {},
+    left = [],
+  }: { transcribe: boolean; first?: NextStep[]; meta?: Partial<Meta>; left?: Missing[] },
 ) => {
   const read = found.chats
     .flatMap((chat) => heard(chat.messages, hearing).map((message) => ({ ...message, chatTitle: chat.title })))
@@ -102,6 +107,7 @@ const catchUpList = (
       ? [{ field: "items", why: `${found.quiet} muted or archived chats left out`, step: `${command}.all` }]
       : []),
     ...hearingMissing(hearing, transcribe),
+    ...left,
   ]
   return listOf(command, {
     items: read.map((message) => summaryOf(message, reader)),
@@ -120,6 +126,10 @@ export const inboxAnswer = (
   transcribe: boolean,
   meta: Partial<Meta> = {},
 ) => catchUpList("inbox", inbox, hearing, reader, { transcribe, meta })
+
+/** What `review --offline` cannot see. */
+export const OFFLINE_REVIEW =
+  "offline: only what was already synced to the local store; run review without --offline for the rest"
 
 const quoted = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
 
@@ -141,6 +151,7 @@ export const reviewAnswer = (
   return catchUpList("review", found, hearing, reader, {
     transcribe,
     first: continues ? [nextStep("review.next", { args: { query: query.join(" ") } })] : [],
+    ...(found.offline ? { left: [{ field: "items", why: OFFLINE_REVIEW }] } : {}),
     ...(meta === undefined ? {} : { meta }),
   })
 }

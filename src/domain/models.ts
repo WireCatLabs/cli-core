@@ -557,6 +557,8 @@ export interface Review {
   checked?: Record<Id, string>
   /** Tasks the review opened and closed in the store, by the rules; absent when the store was not open. */
   tasks?: { added: number; closed: number; review: number }
+  /** `--offline`: read from the local store, so it holds only what was already synced. */
+  offline?: true
 }
 
 /** One change to who is in a chat, or to the chat itself, read from a service message. */

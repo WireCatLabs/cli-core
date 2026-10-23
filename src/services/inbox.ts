@@ -328,7 +328,7 @@ export interface InboxService {
 
 export const inboxService = (deps: ServiceDeps): InboxService => {
   const reader = async (): Promise<InboxReader> => {
-    if (deps.reads === "store") return storeReader(deps, await deps.store(), await deps.account())
+    if (deps.reads === "store" || deps.offline) return storeReader(deps, await deps.store(), await deps.account())
     const connection = await deps.connection()
     return {
       chats: capability(connection, "chats", "list chats"),
@@ -354,9 +354,7 @@ export const inboxService = (deps: ServiceDeps): InboxService => {
     },
 
     review: async (options) => {
-      if (deps.offline && deps.reads !== "store") {
-        throw new CliError("validation_error", "`review` asks the messenger what changed; with `--offline` nothing did")
-      }
+      const synced = deps.offline && deps.reads !== "store"
       let tasks: RuleResult | undefined
       const found = await reviewIn(await reader(), {
         ...options,
@@ -370,7 +368,9 @@ export const inboxService = (deps: ServiceDeps): InboxService => {
             })
         },
       })
-      return tasks ? { ...found, tasks } : found
+      // What was never synced may sit before `until`, so the next review must not start there.
+      const offline = synced ? { complete: false, offline: true as const } : {}
+      return { ...found, ...offline, ...(tasks ? { tasks } : {}) }
     },
   }
 }

@@ -643,6 +643,24 @@ describe("a messenger whose history is read from the store", () => {
     expect(JSON.parse(offline.stdout).items).toEqual([])
   })
 
+  it("**review --offline reads the store** without connecting, and says it holds only what was synced", async () => {
+    const env = await filled()
+    const offline = await call(["review", 'date>"2026-09-01T00:00:00Z"', "--offline", "--json"], env, async () => {
+      throw new Error("connected")
+    })
+
+    expect(offline.stderr).toBe("")
+    expect(offline.code).toBe(0)
+    const answer = JSON.parse(offline.stdout)
+    expect(answer.items.map((one: { text: string }) => one.text)).toEqual([
+      "chapter three",
+      "chapter three",
+      "chapter three",
+    ])
+    expect(answer.missing).toContainEqual(expect.objectContaining({ why: expect.stringContaining("already synced") }))
+    expect(answer.next[0].args.query).toBe('date>"2026-09-01T00:00:00.000Z"')
+  })
+
   it("**download --all pages the store** and asks the messenger only for the files, resuming from the store", async () => {
     const env = sandbox()
     const withFiles = thread.map((one) => ({ ...one, attachments: one.id === "2" ? [] : [{ kind: "file" }] }))
