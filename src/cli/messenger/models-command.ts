@@ -92,10 +92,14 @@ const modelLine = (item: ModelItem, width: number) =>
   (item.downloaded ? "downloaded" : "—".padEnd(10))
 
 export const modelsCommand = (messenger: Messenger): Command => {
+  const tool = `${messenger.app.command} personal`
   const models = annotate(new Command("models"), { mcp: false }).description("models that run on this machine")
   const audio = models.command("audio").description("speech models for transcribing voice messages")
 
-  withQuery(annotate(audio.command("list"), { effects: LOCAL_READ }), MODELS_QUERY)
+  withQuery(
+    annotate(audio.command("list"), { effects: LOCAL_READ, examples: [`${tool} models audio list`] }),
+    MODELS_QUERY,
+  )
     .description("the speech models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
@@ -111,7 +115,13 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  reachesOtherService(annotate(audio.command("download"), { effects: FETCH, output: { entity: "model" } }))
+  reachesOtherService(
+    annotate(audio.command("download"), {
+      effects: FETCH,
+      output: { entity: "model" },
+      examples: [`${tool} models audio download parakeet-v3`],
+    }),
+  )
     .argument("<model>", "a model id from `models audio list`")
     .description("download a speech model once, checked against the sha256 this version expects")
     .action(async function (this: Command, id: string) {
@@ -145,7 +155,10 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   const text = models.command("text").description("embedding models for searching conversations by meaning")
 
-  withQuery(annotate(text.command("list"), { effects: LOCAL_READ }), MODELS_QUERY)
+  withQuery(
+    annotate(text.command("list"), { effects: LOCAL_READ, examples: [`${tool} models text list`] }),
+    MODELS_QUERY,
+  )
     .description("the embedding models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
@@ -168,7 +181,13 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  reachesOtherService(annotate(text.command("download"), { effects: FETCH, output: { entity: "model" } }))
+  reachesOtherService(
+    annotate(text.command("download"), {
+      effects: FETCH,
+      output: { entity: "model" },
+      examples: [`${tool} models text download ${DEFAULT_TEXT_MODEL}`],
+    }),
+  )
     .argument("<model>", "a model id from `models text list`")
     .addOption(new Option("--accept-terms", "accept the model's licence terms, for a model that has its own"))
     .description("download an embedding model once, checked against the sha256 this version expects")
@@ -189,7 +208,9 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   const key = text.command("key").description("API keys for embedding and analysis providers")
 
-  grantsAuthority(annotate(key.command("set"), { effects: LOCAL_WRITE }))
+  grantsAuthority(
+    annotate(key.command("set"), { effects: LOCAL_WRITE, examples: [`${tool} models text key set openai`] }),
+  )
     .argument("<provider>", "openai, anthropic, or the host of a --base-url server that wants a key")
     .description("store a key, typed at a hidden prompt or piped on stdin — never as an argument")
     .action(async function (this: Command, provider: string) {
@@ -203,7 +224,9 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  grantsAuthority(annotate(key.command("remove"), { effects: LOCAL_WRITE }))
+  grantsAuthority(
+    annotate(key.command("remove"), { effects: LOCAL_WRITE, examples: [`${tool} models text key remove openai`] }),
+  )
     .argument("<provider>", "openai, anthropic, or a server's host")
     .description("forget a stored key")
     .action(async function (this: Command, provider: string) {
