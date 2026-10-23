@@ -361,7 +361,7 @@ export {
   noteHitItem,
 } from "./messenger/search-answers.js"
 export { searchCommand } from "./messenger/search-command.js"
-export { searchesCommand } from "./messenger/searches-command.js"
+export { SEARCHES_QUERY, searchesCommand } from "./messenger/searches-command.js"
 export { serveCommand, servingProfiles } from "./messenger/serve-command.js"
 export { DAY_MS, FIRST_FETCH_MS, type MemberFetches, memberFetches } from "./messenger/serve-members.js"
 export { STEMS_EVERY_MS, STEMS_SLICE_MS, type StemFills, stemFills } from "./messenger/serve-stems.js"
