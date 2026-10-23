@@ -83,6 +83,18 @@ describe("voice-note transcripts", () => {
     expect(ids(await search(store, "договор"))).toEqual([])
   })
 
+  it("**widen English and Spanish words too**, never to a real word nor a number", async () => {
+    const store = await seeded({
+      "1": "we need the budjet by friday",
+      "2": "the cast was great",
+      "3": "necesito el presupesto y nuebe copias",
+    })
+    expect(ids(await search(store, "budget"))).toEqual(["1"])
+    expect(ids(await search(store, "cost"))).toEqual([])
+    expect(ids(await search(store, "presupuesto"))).toEqual(["3"])
+    expect(ids(await search(store, "nueve"))).toEqual([])
+  })
+
   it("index a transcript written after the first search", async () => {
     const store = await seeded({ "1": "пока ничего" })
     expect(ids(await search(store, "риелтор"))).toEqual([])

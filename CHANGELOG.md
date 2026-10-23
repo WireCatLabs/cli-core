@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Voice-note search no longer turns an English word into another real English word.** A word in a transcript widens to the spellings speech recognition garbles only past a dictionary of its language: Russian as before, and now English and Spanish, following the store's word-form languages (`search_stemmers`). Before, «cost» also found «cast». A Latin word with no dictionary for its language, and English and Spanish number words, no longer widen.
+
 ## 0.401.0 — 24.10.2026
 
 ### Changed — may break callers
