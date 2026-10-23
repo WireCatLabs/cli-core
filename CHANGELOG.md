@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.396.0 — 23.10.2026
+
 ### Changed — may break callers
 
 - **Command discovery uses `--json`.** `commands`, scoped discovery and `commands schema` refuse `--jsonl` with `output.one-object`, instead of printing a line with no stream end record. Use `--json` for the discovery document.
