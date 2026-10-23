@@ -287,6 +287,7 @@ const samples: Record<EntityName, unknown> = {
     sender: { id: null, name: null },
   },
   document: { ref: "document:1", id: "1", title: "t", url: null, source_modified_at: at, stored_at: at },
+  image_embedding: { model: "tiny", embedded: 2, skipped: 1, failed: 1, more: true },
   attachment: { kind: "photo", width: 10, height: 10 },
   task: { ref: "task:1", id: "1", title: null, kind: "question", state: "open", created_at: at },
   fact: {

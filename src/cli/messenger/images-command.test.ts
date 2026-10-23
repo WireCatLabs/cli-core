@@ -4,7 +4,9 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
+import { ENTITIES } from "../../entities/index.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
@@ -60,10 +62,23 @@ describe("images embed CLI", () => {
     const { call, embed } = fixture()
     const answer = await call(["images", "embed", "--chat", "7", "--limit", "3", "--json"])
     expect(answer.code).toBe(0)
+    v.parse(ENTITIES.image_embedding, JSON.parse(answer.stdout).item)
     expect(JSON.parse(answer.stdout)).toMatchObject({ item: { embedded: 2, skipped: 1, failed: 1, more: true } })
     expect(embed).toHaveBeenCalledOnce()
     expect(embed.mock.calls[0]?.[0]).toMatchObject({ chat: "7", limit: 3 })
     expect(embed.mock.calls[0]?.[0].signal?.aborted).toBe(true)
+  })
+
+  it("projects embedding progress and refuses unknown fields before invoking the service", async () => {
+    const { call, embed } = fixture()
+    const projected = await call(["images", "embed", "--json=embedded,failed,more"])
+    expect(projected.code, projected.stderr).toBe(0)
+    expect(JSON.parse(projected.stdout).item).toEqual({ embedded: 2, failed: 1, more: true })
+    embed.mockClear()
+    const invalid = await call(["images", "embed", "--json=unknown_field"])
+    expect(invalid.code).not.toBe(0)
+    expect(JSON.parse(invalid.stderr).error.reason).toBe("output.unknown-field")
+    expect(embed).not.toHaveBeenCalled()
   })
 
   it("renders progress and continuation in pretty output with the default batch bound", async () => {
