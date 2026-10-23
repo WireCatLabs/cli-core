@@ -121,6 +121,10 @@
       "value": "<n>",
       "meaning": "how many messages before it"
     },
+    "--before-time": {
+      "value": "<time>",
+      "meaning": "read what came before this time"
+    },
     "--block": {
       "value": "<value>",
       "meaning": "Set to `true` if user should be blocked in chat."
@@ -1296,6 +1300,17 @@
     "attachments": {
       "in": "all"
     },
+    "attachments check": {
+      "in": "all"
+    },
+    "attachments download": {
+      "in": "all",
+      "options": {
+        "--chat": "all",
+        "--pause": "all",
+        "--since-time": "all"
+      }
+    },
     "attachments extract": {
       "in": "all",
       "options": {
@@ -1321,6 +1336,30 @@
         }
       }
     },
+    "attachments jobs": {
+      "in": "all"
+    },
+    "attachments jobs install": {
+      "in": "all",
+      "options": {
+        "--at": "all",
+        "--chat": "all",
+        "--since-time": "all",
+        "--timezone": "all"
+      }
+    },
+    "attachments jobs start": {
+      "in": "all"
+    },
+    "attachments jobs status": {
+      "in": "all"
+    },
+    "attachments jobs stop": {
+      "in": "all"
+    },
+    "attachments jobs uninstall": {
+      "in": "all"
+    },
     "attachments list": {
       "in": "all",
       "options": {
@@ -1333,6 +1372,13 @@
         "--page": {
           "in": "all"
         }
+      }
+    },
+    "attachments move": {
+      "in": "all",
+      "options": {
+        "--before-time": "all",
+        "--dry-run": "all"
       }
     },
     "attachments show": {

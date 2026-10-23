@@ -62,6 +62,10 @@ describe("command effects", () => {
     expect(marked.filter(({ command }) => metaOf(command).effects?.local !== "write")).toEqual([])
     expect(marked.map(({ path }) => path).sort()).toEqual(
       [
+        "attachments jobs install",
+        "attachments jobs start",
+        "attachments jobs stop",
+        "attachments jobs uninstall",
         "bot auth remove",
         "bot auth set",
         "bot chats rules set",
@@ -144,6 +148,7 @@ describe("command effects", () => {
     )
     expect(refused.sort()).toEqual(
       [
+        "attachments move",
         "attachments text set",
         "chats tracking add",
         "chats tracking remove",

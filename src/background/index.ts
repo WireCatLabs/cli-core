@@ -8,6 +8,8 @@ export {
   readCheckpoint,
   saveCheckpoint,
 } from "./checkpoints.js"
+export type { DailyArchiveTimer, DailyArchiveTimerInput } from "./daily-archive-timer.js"
+export { dailyArchiveTimer, manageDailyArchiveTimer } from "./daily-archive-timer.js"
 export { holdLock, type Lock, lockPath, readLock, releaseLock, servingProfiles, takeLock } from "./lock.js"
 export { alive, carries, holdersOf } from "./processes.js"
 export {

@@ -294,6 +294,7 @@ const NAMED_WRITE_KEYS = [
   "stats.contacts.top.sync-first",
   "account.sessions.list",
   "attachments.extract",
+  "attachments.move",
   "attachments.text.set",
   "bot.callbacks.answer",
   "bot.chats.action",
@@ -427,6 +428,7 @@ export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => 
   if (path[0] === "bot") return readKeysForCommand(path.slice(1)).map((key) => `bot.${key}`)
   const key = keyForCommand(path)
   if (!key) return []
+  if (path[0] === "attachments" && path[1] === "download") return [key, "messages", "chats"]
   if (path[0] === "attachments" && (path[1] === "extract" || path[1] === "show")) return [key, "messages"]
   if (path[0] === "store" && path[1] === "gaps" && path[2] === "repair") return [key, "messages"]
   // A search shows what people wrote, so `deny messages` reaches every leaf that reads messages.
@@ -461,6 +463,8 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   if (top === undefined || HOUSEKEEPING.has(top)) return null
   // Picture models moved from `models image` (0.270.0); a model is housekeeping wherever it is listed.
   if (top === "images" && next === "models") return null
+  if (top === "attachments" && (next === "check" || next === "jobs")) return null
+  if (top === "attachments" && next === "download") return "messages"
   if (top === "store" && next !== undefined && STORE_MAINTENANCE.has(next)) return null
   // The agent's answers write only to the local store: their own key, so read-only messages can still link (phase 4 A10).
   if (top === "conversations" && next === "links") return "conversations.links"

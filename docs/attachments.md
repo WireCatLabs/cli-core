@@ -5,6 +5,7 @@ and save literal extracted text so local content search finds the message. A ser
 `local_path` is useful only to agents that share that filesystem.
 
 First download the message's files with the existing message-download workflow.
+For independent backups that survive source deletion, use the [media archive](dev/MEDIA-ARCHIVE.md).
 Use `attachments list is:needs_text` to find its `message` locator and `position`.
 Then request `attachments show`:
 

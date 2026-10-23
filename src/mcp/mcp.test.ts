@@ -709,6 +709,7 @@ describe("the MCP server", () => {
       "account list",
       "account sessions list",
       "account show",
+      "attachments check",
       "attachments list",
       "attachments show",
       "chats documents list",
