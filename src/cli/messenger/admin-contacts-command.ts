@@ -14,13 +14,18 @@ const PERSON = "person id — `contacts lookup` finds one — or part of a known
 export const contactWriteCommands = (messenger: Messenger): Command[] => {
   const simple = (
     [
-      ["add", "add a person to your contacts — `contacts list` still shows only people you have a dialog with"],
+      [
+        "add",
+        "add a person to your contacts — `contacts list` still shows only people you have a dialog with",
+        "add a person to your contacts",
+      ],
       ["remove", "remove a person from your contacts; the chat stays, a name you gave them may not"],
       ["block", "stop a person from writing to you — they need not be a contact"],
       ["unblock", "let a blocked person write to you again"],
     ] as const
-  ).map(([name, description]) =>
+  ).map(([name, description, summary]) =>
     annotate(new Command(name), { effects: REMOTE_WRITE })
+      .summary(summary ?? description)
       .description(description)
       .argument("<person>", PERSON)
       .action(async function (this: Command, person: string) {
@@ -31,10 +36,11 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
   )
 
   const rename = annotate(new Command("rename"), { effects: REMOTE_WRITE })
+    .summary("change a contact's name in the messenger address book")
     .description("rename the contact in the messenger address book; use contacts alias for a private local name")
     .argument("<person>", PERSON)
     .argument("<first-name>", "the name you want to see for them")
-    .argument("[last-name]")
+    .argument("[last-name]", "the last name you want to see for them")
     .action(async function (this: Command, person: string, firstName: string, lastName?: string) {
       const context = messengerContext(this, messenger)
       const renamed = await context.withServices((services) => services.people.rename(person, firstName, lastName))

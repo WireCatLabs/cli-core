@@ -70,6 +70,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
           // Where the history is pushed, the store answers, --offline too.
           ...(messenger.history === "store" ? {} : { offline: false }),
         })
+          .summary("stored membership and title changes")
           .description(
             "who joined, left, was added or removed, and by whom — from the chat's service messages; " +
               `the last ${EVENTS_DAYS} days unless the query names time`,

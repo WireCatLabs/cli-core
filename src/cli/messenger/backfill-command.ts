@@ -57,6 +57,7 @@ export const syncCommand = (messenger: Messenger): Command => {
     effects: FETCH,
     cooperative: true,
   })
+    .summary("fetch and save a chat's message history")
     .description(
       "bring a chat's history in the local store up to date, newest first; run it again to continue; --all syncs every chat",
     )
@@ -320,6 +321,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
   })
 
   annotate(command.command("show"), { effects: LOCAL_READ })
+    .summary("one archive job's status and log")
     .description("one background job — the newest when none is named — and what the store now holds of its chat")
     .argument("[job]", "the job id `messages sync --background` printed")
     .action(async function (this: Command, id: string | undefined) {
@@ -334,6 +336,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
     })
 
   destroysNothing(annotate(command.command("cancel"), { effects: LOCAL_WRITE, mcp: false }))
+    .summary("cancel a queued or running archive job")
     .description("stop a running background job after its current page; a later sync resumes where it stopped")
     .argument("<job>", "the job id")
     .action(function (this: Command, id: string) {
@@ -348,6 +351,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
     })
 
   destroysNothing(annotate(command.command("retry"), { effects: LOCAL_WRITE, mcp: false }))
+    .summary("retry an archive job")
     .description("start a partial, failed or died job again, as a new job; the sync resumes where the store stopped")
     .argument("[job]", "the job id")
     .option("--failed", "every chat whose newest job partial, failed or died")

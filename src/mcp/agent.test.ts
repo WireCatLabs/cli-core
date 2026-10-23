@@ -130,7 +130,7 @@ describe("runCommandForAgent", () => {
   it("**a write at level ask goes ahead**, with nobody to answer", async () => {
     const { program, ctx, connection } = setup()
 
-    const answer = await runCommandForAgent(program, ["messages", "delete"], { chat: "Book", messages: ["11"] }, ctx)
+    const answer = await runCommandForAgent(program, ["messages", "delete"], { chat: "Book", message: ["11"] }, ctx)
 
     expect(answer).toHaveProperty("result")
     expect(connection.deleted).toEqual([{ ids: ["11"], forEveryone: false }])
@@ -179,14 +179,14 @@ describe("runCommandForAgent", () => {
     const forEveryone = await runCommandForAgent(
       plain.program,
       ["messages", "delete"],
-      { chat: "Book", messages: ["11"], for_everyone: true },
+      { chat: "Book", message: ["11"], for_everyone: true },
       plain.ctx,
     )
     const whatsapp = setup({ name: "WhatsApp", deleteForMe: false })
     const onlyForEveryone = await runCommandForAgent(
       whatsapp.program,
       ["messages", "delete"],
-      { chat: "Book", messages: ["11"] },
+      { chat: "Book", message: ["11"] },
       whatsapp.ctx,
     )
 

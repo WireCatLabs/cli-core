@@ -17,6 +17,7 @@ export const floodCommand = (messenger: Messenger): Command => {
     .description(`the waits ${name} asked this profile to keep, and a hold on its writes`)
     .addCommand(
       grantsAuthority(annotate(new Command("clear"), { effects: LOCAL_WRITE }))
+        .summary("clear a profile's stored rate-limit hold")
         .description(
           `forget them, lift the hold and the profile's pace, once ${name} no longer limits the account; changes nothing there`,
         )

@@ -13,6 +13,7 @@ const GROUPINGS: StatsGrouping[] = ["chat", "sender", "day", "hour"]
 
 export const messagesStatsCommand = (messenger: Messenger): Command =>
   syncOptions(annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "message_counts" } }), messenger)
+    .summary("count stored messages by chat, sender, day or hour")
     .description(
       `how many stored messages match, by chat, sender, day or hour — the local store only${syncsFirst(messenger) ? "; optionally fetches new messages with --sync-first" : ""}`,
     )

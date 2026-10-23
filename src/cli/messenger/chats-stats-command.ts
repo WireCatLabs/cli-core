@@ -13,6 +13,7 @@ const PERIODS: StatsPeriod[] = ["day", "week"]
 
 export const statsCommand = (messenger: Messenger): Command =>
   annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "chat_stats" } })
+    .summary("activity and participation in one chat")
     .description(
       "a group's or channel's numbers for a period: messages, active members, replies, reactions, questions answered, " +
         `joins and leaves — counted from the local store; ${messenger.history === "store" ? "joins and leaves too" : "joins and leaves are asked of the messenger"}`,

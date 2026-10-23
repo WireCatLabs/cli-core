@@ -39,6 +39,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
     output: { entity: "message", view: "summary" },
     query: INBOX_QUERY,
   })
+    .summary("unread chats and their newest messages")
     .description("other people's unread messages in every chat; --new for what arrived since the last check")
     .addHelpText("after", queryHelp(INBOX_QUERY))
     .argument("[query...]", "from when: date>2h, date>2026-10-01; the saved point stays put")

@@ -100,6 +100,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
     annotate(audio.command("list"), { effects: LOCAL_READ, examples: [`${tool} models audio list`] }),
     MODELS_QUERY,
   )
+    .summary("speech models and their download status")
     .description("the speech models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
@@ -159,6 +160,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
     annotate(text.command("list"), { effects: LOCAL_READ, examples: [`${tool} models text list`] }),
     MODELS_QUERY,
   )
+    .summary("embedding models and their download status")
     .description("the embedding models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
@@ -190,6 +192,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
   )
     .argument("<model>", "a model id from `models text list`")
     .addOption(new Option("--accept-terms", "accept the model's licence terms, for a model that has its own"))
+    .summary("download and verify an embedding model")
     .description("download an embedding model once, checked against the sha256 this version expects")
     .action(async function (this: Command, id: string, options: { acceptTerms?: boolean }) {
       const context = baseContext(this, messenger.resolveSettings)

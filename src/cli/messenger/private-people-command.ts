@@ -21,8 +21,8 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const alias = new Command("alias").description("a private local display name in the selected account")
   annotate(alias.command("set"), { effects: LOCAL_WRITE })
     .description("your own name for a person in this account; kept on this machine, never sent")
-    .argument("<person>")
-    .argument("<alias>")
+    .argument("<person>", "the person's id, reference or known name")
+    .argument("<alias>", "the private name to use for this person")
     .action(async function (this: Command, person: string, value: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "contacts.alias.set")
@@ -34,7 +34,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
     })
   annotate(alias.command("rm"), { effects: LOCAL_WRITE })
     .description("drop your local name for a person; their own name shows again")
-    .argument("<person>")
+    .argument("<person>", "the person's id, reference or known name")
     .action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "contacts.alias.rm")
@@ -50,7 +50,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   withQuery(
     annotate(notes.command("list"), { effects: LOCAL_READ })
       .description("every private note you keep on a person, oldest first")
-      .argument("<person>"),
+      .argument("<person>", "the person's id, reference or known name"),
     NOTES_QUERY,
   ).action(async function (this: Command, person: string, words: string[]) {
     const context = messengerContext(this, messenger)
@@ -60,8 +60,8 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   })
   annotate(notes.command("show"), { effects: LOCAL_READ, output: { entity: "contact_note" } })
     .description("one private note on a person, with its revision for edit")
-    .argument("<person>")
-    .argument("<id>")
+    .argument("<person>", "the person's id, reference or known name")
+    .argument("<id>", "the note id from contacts notes list")
     .action(async function (this: Command, person: string, id: string) {
       const context = messengerContext(this, messenger)
       renderAnswer(
@@ -83,10 +83,12 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
           ? "add a private note on a person from stdin or --file; never sent"
           : "replace a note's text; --revision must match the one you read",
       )
-      .argument("<person>")
+      .argument("<person>", "the person's id, reference or known name")
       .addOption(ownerOnlyOption("--file <path>", "read note text from a file; omitted or - reads stdin"))
     if (name === "edit")
-      command.argument("<id>").requiredOption("--revision <n>", "the revision you read before editing")
+      command
+        .argument("<id>", "the note id from contacts notes list")
+        .requiredOption("--revision <n>", "the revision you read before editing")
     command.action(async function (this: Command, person: string, id?: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, `contacts.notes.${name}`)
@@ -105,8 +107,8 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   }
   annotate(notes.command("remove"), { effects: LOCAL_WRITE })
     .description("delete one private note on a person")
-    .argument("<person>")
-    .argument("<id>")
+    .argument("<person>", "the person's id, reference or known name")
+    .argument("<id>", "the note id from contacts notes list")
     .action(async function (this: Command, person: string, id: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "contacts.notes.remove")

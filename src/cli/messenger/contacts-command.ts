@@ -98,6 +98,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
   )
 
   annotate(contacts.command("profile"), { effects: REMOTE_READ })
+    .summary("a person's profile from the messenger")
     .description(
       "everything the messenger says about one person — handles, flags, last seen, when they registered — and " +
         "how many of their messages the store holds in each chat you share, the first and the last, and the " +
@@ -122,6 +123,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     })
 
   const contextCommand = annotate(contacts.command("context"), { effects: REMOTE_READ })
+    .summary("what the local archive knows about a person")
     .description(
       "what the store holds about one person, in every messenger linked to them: shared chats, the last " +
         "messages each way, their recent messages, where others mentioned them — never connects",
@@ -240,6 +242,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(contacts.command("timeline"), { effects: REMOTE_READ })
+    .summary("one person's activity across their linked identities")
     .description(
       "everything one person took part in, in every messenger linked to them — messages they wrote or were " +
         "mentioned in, chats, mail, meetings, tasks — newest first, from the store; never connects",
@@ -296,6 +299,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(contacts.command("check"), { effects: REMOTE_READ })
+    .summary("check a person's profile and messages for signs of abuse")
     .description(
       registriesCover(messenger.provider)
         ? "whether one person looks like a bot, a fake or a spammer: their profile, what they wrote in the store, " +
@@ -326,6 +330,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(contacts.command("link"), { effects: LOCAL_WRITE })
+    .summary("link identities that belong to one person")
     .description("record that two people in the store are one person — the same name is never enough")
     .argument("<person>", "their id, @username, or part of their name")
     .argument(
@@ -356,6 +361,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
    * history, and a phone number is personal data.
    */
   annotate(contacts.command("lookup"), { effects: REMOTE_READ })
+    .summary("find an account by a phone number")
     .description("who has this phone number — asks for it, or reads it from stdin; never an argument")
     // Commander's own refusal would repeat the number on stderr.
     .allowExcessArguments()

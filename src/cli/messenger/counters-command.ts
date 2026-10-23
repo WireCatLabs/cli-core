@@ -12,6 +12,7 @@ export const countersCommand = (messenger: Messenger) => {
   const parent = new Command("counters").description("per-counter observations and bounded remote refresh")
   for (const operation of ["show", "refresh"] as const) {
     const command = new Command(operation)
+      .summary("refresh message counters from the messenger")
       .description(
         operation === "show"
           ? "show saved counter values and their observation freshness"

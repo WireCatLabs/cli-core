@@ -1287,7 +1287,10 @@
         "--description": "all",
         "--first-name": "all",
         "--last-name": "all",
-        "--photo": "all"
+        "--photo": {
+          "in": "all",
+          "wording": "WhatsApp accepts JPEG (.jpg or .jpeg) profile photos; help names each messenger's accepted image formats (WC-CMD-25)."
+        }
       }
     },
     "attachments": {

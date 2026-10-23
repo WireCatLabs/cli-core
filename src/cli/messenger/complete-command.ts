@@ -36,7 +36,7 @@ export const completeCommand = (
 ): Command =>
   annotate(new Command("complete"), { effects: LOCAL_READ, mcp: false })
     .description(`shell completion: \`${messenger.app.command} complete zsh\` prints the script to source`)
-    .argument("[words...]")
+    .argument("[words...]", "zsh for the shell script, or command words to complete")
     .allowUnknownOption()
     .helpOption(false)
     .action(async function (this: Command, words: string[]) {

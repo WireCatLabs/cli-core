@@ -139,6 +139,7 @@ const refuseWhileServing = (command: Command, messenger: Messenger) => {
 
 const repairCommand = (messenger: Messenger): Command =>
   annotate(new Command("repair"), { effects: LOCAL_WRITE, mcp: false })
+    .summary("repair table shapes while keeping the old tables")
     .description(
       "bring every table to this build's shape, deleting nothing: a table of the wrong shape is kept as a copy beside a new one",
     )
@@ -202,6 +203,7 @@ const copiesCommand = (): Command =>
 
 const infoCommand = (): Command =>
   annotate(new Command("info"), { effects: LOCAL_READ, mcp: false })
+    .summary("the local archive's format, size and contents")
     .description("the store file: where it is, its size, its schema and how many rows it holds; changes nothing")
     .action(async function (this: Command) {
       const path = storePath(environmentOf(this).env ?? process.env)
@@ -233,6 +235,7 @@ const infoCommand = (): Command =>
  */
 const checkCommand = (messenger: Messenger): Command =>
   annotate(new Command("check"), { effects: LOCAL_READ, mcp: false })
+    .summary("check the local archive for problems")
     .description("whether the store is healthy — integrity, search indexes, disk, and which chats are behind")
     .action(async function (this: Command) {
       const { renderer } = outputFor(this)
@@ -426,6 +429,7 @@ const chatsBehind = (database: CacheDatabase) =>
 
 const migrateCommand = (messenger: Messenger): Command =>
   annotate(new Command("migrate"), { effects: LOCAL_WRITE, mcp: false })
+    .summary("migrate an older local archive")
     .description(
       "bring the store up to this build's schema, then normalize, index and stem the messages and notes stored before it",
     )
@@ -495,6 +499,7 @@ const buildNoteIndex = (database: CacheDatabase, note: (text: string) => void, {
 
 const reindexCommand = (messenger: Messenger): Command =>
   destroysNothing(annotate(new Command("reindex"), { effects: LOCAL_WRITE, mcp: false }))
+    .summary("rebuild the local archive's search indexes")
     .description(
       "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored; loses nothing",
     )
@@ -613,6 +618,7 @@ const decryptCommand = (): Command =>
  */
 const restoreCommand = (messenger: Messenger): Command =>
   annotate(new Command("restore"), { effects: LOCAL_WRITE, mcp: false })
+    .summary("restore a backup while keeping the current store")
     .description("put a backup in place of the store; the store it replaces is kept beside it, never deleted")
     .argument("<file>", "a file `store backup` wrote; one written with --encrypt asks for its password")
     .action(async function (this: Command, file: string) {
@@ -739,6 +745,7 @@ const quiesce = async (
  */
 const resetCommand = (messenger: Messenger): Command =>
   annotate(new Command("reset"), { effects: LOCAL_WRITE, mcp: false })
+    .summary("back up the local archive and replace it with an empty one")
     .description(
       "back the store up beside itself, then delete it and start an empty one at this build's schema; asks first, or --yes",
     )

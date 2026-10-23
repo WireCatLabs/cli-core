@@ -45,9 +45,11 @@ const withFlags = (command: Command): Command =>
 export const mcpCommand = (messenger: Messenger): Command => {
   const { app } = messenger
   const command = withFlags(
-    annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent", mcp: false }).description(
-      `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp\``,
-    ),
+    annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent", mcp: false })
+      .summary("serve this profile's commands to an AI agent")
+      .description(
+        `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp\``,
+      ),
   )
     .option(
       "--http",
@@ -94,9 +96,11 @@ export const mcpCommand = (messenger: Messenger): Command => {
       annotate(new Command("config"), {
         effects: LOCAL_READ,
         examples: [`${app.command} personal mcp config`],
-      }).description(
-        "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
-      ),
+      })
+        .summary("print this profile's local MCP configuration")
+        .description(
+          "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
+        ),
     ).action(async function (this: Command) {
       const flags = this.optsWithGlobals<McpFlags>()
       const context = messengerContext(this, messenger)

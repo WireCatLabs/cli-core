@@ -14,9 +14,11 @@ const SESSIONS_QUERY = unfilteredQuery("account_session", accountSession)
 /** `account sessions …` — where else the account is logged in, not this tool's own `session`. */
 export const accountSessionsCommand = (messenger: Messenger): Command => {
   const tool = `${messenger.app.command} personal`
-  const sessions = new Command("sessions").description(
-    `where else this account is logged in — not \`${messenger.app.command} session\`, which is this tool's own login`,
-  )
+  const sessions = new Command("sessions")
+    .summary("devices and apps signed in to this account")
+    .description(
+      `where else this account is logged in — not \`${messenger.app.command} session\`, which is this tool's own login`,
+    )
 
   withQuery(
     annotate(sessions.command("list"), { effects: REMOTE_READ, examples: [`${tool} account sessions list`] }),
