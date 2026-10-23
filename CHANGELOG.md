@@ -9,7 +9,17 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`events list` writes times as ISO 8601 and ids as strings**, as every other answer does: `starts_at`, `ends_at`, `deleted_at`, `created_at` and `updated_at` were epoch milliseconds, `id` and `event_series_id` numbers. No field is gone.
+
 - **List duplicate-task pairs explicitly.** Use `tasks duplicates list [query...]` in CLI and MCP calls. The bare `tasks duplicates` group shows help or refuses in machine mode; it no longer reads the store. Reject and defer remain under that group.
+
+### Fixed
+
+- **`search all` pages meeting matches.** With a meeting account in the search, `--page 2` repeated the meetings of the first page, and `has_more` could be false while meeting matches remained. The merged list is now read as deep as the page and cut, so pages follow on and `has_more` holds.
+
+### Added
+
+- **Meeting answers keep what they knew.** A `search all` meeting hit carries its `scope` (transcript, chat or summary) and its stored line `id`, so two passages of one meeting stay apart. New entities `meeting_evidence`, `meeting_person_context` and `event`; `cli` exports `allAnswer`, `meetingEvidenceItem` and `meetingPersonContextItem`.
 
 ## 0.400.0 — 24.10.2026
 

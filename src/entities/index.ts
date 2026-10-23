@@ -67,6 +67,7 @@ import { joinRequest } from "./join-request.js"
 import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
+  event,
   meeting,
   meetingDetails,
   meetingHit,
@@ -80,6 +81,7 @@ import {
   meetingSummary,
   meetingTranscript,
 } from "./meeting.js"
+import { meetingEvidence, meetingPersonContext } from "./meeting-evidence.js"
 import { meetingFindings } from "./meeting-findings.js"
 import { meetingPreparation } from "./meeting-preparation.js"
 import { meetingProjectCandidates } from "./meeting-project-candidates.js"
@@ -462,6 +464,9 @@ export const ENTITIES = {
   meeting_findings: meetingFindings,
   meeting_transcript: meetingTranscript,
   meeting_summary: meetingSummary,
+  meeting_evidence: meetingEvidence,
+  meeting_person_context: meetingPersonContext,
+  event,
   meeting_review: meetingReview,
   meeting_link: meetingLink,
   meeting_stats: meetingStats,

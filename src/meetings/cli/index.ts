@@ -7,6 +7,7 @@ import { type ImportFile, importFiles } from "../import.js"
 import { MEETING_QUERY } from "../item.js"
 import type { MeetingParticipantSearchOptions } from "../participant-search.js"
 import { pull } from "../pull.js"
+import { eventItem } from "../read-answers.js"
 import {
   listed,
   MEETING_QUERY_GUIDE,
@@ -192,9 +193,10 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
   output(
     annotate(program.command("events").description("the owner's stored events").command("list"), {
       effects: LOCAL_READ,
+      output: { entity: "event" },
     }).description("list stored events"),
   ).action(async (_opts: unknown, command: Command) => {
-    print(listed(await deps.store.events()), command)
+    print(listed((await deps.store.events()).map(eventItem)), command)
   })
 }
 

@@ -300,6 +300,7 @@ export {
   withQuery,
 } from "./list-query.js"
 export { addMeetingBatchCommand, formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
+export { meetingEvidenceItem, meetingPersonContextItem } from "./meeting-evidence-answer.js"
 export { parseEvidenceFindingsJson, parseMeetingFindingsJson } from "./meeting-findings-input.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export { addMeetingPreparationCommand } from "./meeting-preparation-command.js"
@@ -354,6 +355,7 @@ export { repliesCommand } from "./messenger/replies-command.js"
 export { reviewCommand } from "./messenger/review.js"
 export { scheduleCommand } from "./messenger/schedule-command.js"
 export {
+  allAnswer,
   allHitItem,
   type HitItem,
   type MessageHitItem,

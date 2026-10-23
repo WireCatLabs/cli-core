@@ -179,6 +179,8 @@ export {
 export { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
 export {
+  event,
+  eventItem,
   meetingLink,
   meetingLinkItem,
   meetingParticipants,
