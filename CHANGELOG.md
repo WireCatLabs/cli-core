@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.401.0 — 24.10.2026
+
 ## 0.400.0 — 24.10.2026
 
 ### Fixed
