@@ -822,7 +822,7 @@ describe("the MCP server", () => {
       "tags list",
       "tasks agenda",
       "tasks categories",
-      "tasks duplicates",
+      "tasks duplicates list",
       "tasks list",
       "tasks related",
       "tasks show",
@@ -1767,7 +1767,7 @@ describe("the MCP server", () => {
     const second = (await add("msg:chat/500/7/103", { new: true })).body.item
     expect(second).toMatchObject({ created: true })
 
-    expect((await call("tasks duplicates", {})).body).toMatchObject({ items: [] })
+    expect((await call("tasks duplicates list", {})).body).toMatchObject({ items: [] })
     const merged = await call("tasks merge", { task: second.key, into: first })
     v.parse(ENTITIES.task_merge, merged.body.item)
     expect(merged.body.item).toMatchObject({ pair: { decision: "merged" }, task: { key: first } })
@@ -1780,7 +1780,7 @@ describe("the MCP server", () => {
     expect((await call("tasks duplicates defer", { task: second.key, other_task: first })).body.item).toMatchObject({
       decision: "unsure",
     })
-    expect((await call("tasks duplicates", { query: "decision:unsure" })).body.items).toHaveLength(1)
+    expect((await call("tasks duplicates list", { query: "decision:unsure" })).body.items).toHaveLength(1)
   })
 
   it("**claims and releases a task through MCP**, and the agenda keeps your own claim and hides another's", async () => {

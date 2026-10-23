@@ -8,7 +8,7 @@ import { categorize, type TaskCategory } from "./task-categories.js"
 export interface RuleResult {
   added: number
   closed: number
-  /** Opened tasks that may be the same job as another: on the review list (`tasks duplicates`). */
+  /** Opened tasks that may be the same job as another: on the review list (`tasks duplicates list`). */
   review: number
   /** Tasks the rules found but did not open: over the per-chat limit, or a dry run. */
   held?: number

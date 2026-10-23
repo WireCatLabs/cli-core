@@ -110,7 +110,7 @@ read  store status
 read  tags list
 read  tasks agenda
 read  tasks categories
-read  tasks duplicates
+read  tasks duplicates list
 read  tasks list
 read  tasks related
 read  tasks show

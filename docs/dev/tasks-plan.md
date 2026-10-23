@@ -41,7 +41,7 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
    target records a relation (0.274.0).
 4. **Duplicates: the chain runs on creation (step 5, store version 15).** `tasks add` refuses a likely or maybe
    candidate and takes `--into` or `--new`; a rule-made task opens and its candidates go to `task_pairs` as
-   `review` (`src/store/sqlite/task-pairs.ts`); `tasks duplicates`, `merge`, `unmerge`, `duplicates reject` /
+   `review` (`src/store/sqlite/task-pairs.ts`); `tasks duplicates list`, `merge`, `unmerge`, `duplicates reject` /
    `unsure` decide. A message attached or merged into a task is linked as `evidence`, and a rule opens no second
    task for it (`findBySource(…, { linked: true })`). The chain on a message linked to an existing task — built
    2026-10-16, no store change (§ 8).
@@ -239,8 +239,8 @@ module with the reason for each number; nothing else hard-codes them.
   arXiv 2504.19413).
 - **Who reviews (owner, NEED-1103 A):** the agent that goes through tasks after `sync` decides each pair a rule
   left in "likely" or "maybe" — it reads the meaning the fields miss — and passes the owner only the pairs it is
-  unsure about (`tasks duplicates --unsure`). Its merges can be undone like any other.
-- **The review list:** `tasks duplicates` lists pairs a rule left in "likely" or "maybe", newest first, with reasons.
+  unsure about (`tasks duplicates list decision:unsure`). Its merges can be undone like any other.
+- **The review list:** `tasks duplicates list` lists pairs a rule left in "likely" or "maybe", newest first, with reasons.
   `tasks merge <dup> --into <task>` links every message of the duplicate to the task, closes the duplicate
   `dismissed` with a `duplicate-of` relation, and records the decision; `tasks duplicates reject <dup> <task>`
   records "not the same" so the pair is not offered again.
@@ -270,7 +270,7 @@ apart. If real answers show "likely" pairs are almost always accepted, merging t
   the reply lookup.
 - **After a link the check runs again** for that task (`reviewDuplicates`): `tasks link` / MCP `tasks_link` with a
   `msg:` target, `tasks add --into`, and `tasks merge` (which links the duplicate's messages to the task that stays).
-  New likely or maybe pairs go to `tasks duplicates`, with the newer task as the would-be duplicate; the answer's
+  New likely or maybe pairs go to `tasks duplicates list`, with the newer task as the would-be duplicate; the answer's
   `review` counts them. The link always stands, nothing merges on a score, and a closed task is not checked. No
   rule links a message to an existing task (a rule only skips a message already attached), so rules add no trigger.
 - The source message's text was not read before, so a rule's task — whose title is a placeholder — compared on no
@@ -359,7 +359,7 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
    `agenda --claimed`, relation kinds `duplicate-of` and `discovered-from` — store version 13.
 3. **`task_words` / `task_stems`**, the normalizer + signature extraction, digit groups joined, a stop-word list.
 4. **Scoring module** (candidates, comparison, weights, bands), tuned on the test set.
-5. **`tasks add` check** (`--into`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`;
+5. **`tasks add` check** (`--into`, `--new`), rules through the chain, `tasks duplicates list`, `merge`, `unmerge`;
    relations between message tasks — built (store version 15, `task_pairs`). The check on a message linked to a
    task (§ 8) — built, no store change.
 6. **`agenda --category --tag`**, the MCP tools `tasks_claim` / `tasks_release`, and the category list in the

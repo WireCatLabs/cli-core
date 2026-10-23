@@ -80,7 +80,7 @@ export const TASK_QUERY = {
   }),
 } as const satisfies QueryRegistry
 
-/** Which pairs `tasks duplicates` lists: those waiting for the reviewing agent, or those it left to the owner. */
+/** Which pairs `tasks duplicates list` lists: those waiting for the reviewing agent, or those it left to the owner. */
 export const PAIR_DECISIONS = ["review", "unsure"] as const
 export type PairDecision = (typeof PAIR_DECISIONS)[number]
 
@@ -284,7 +284,7 @@ export interface TasksService {
   /**
    * Links a task to stored things (`msg:`, `chat:`, `person:`, `document:`…) or, for what the store does
    * not hold, to the text as written — a URL, a message not saved yet. After a `msg:` target, `review` counts the
-   * pairs the duplicate check sent to `tasks duplicates`.
+   * pairs the duplicate check sent to `tasks duplicates list`.
    */
   link(
     id: string,

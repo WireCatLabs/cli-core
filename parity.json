@@ -4745,13 +4745,16 @@
       }
     },
     "tasks duplicates": {
+      "in": "all"
+    },
+    "tasks duplicates defer": {
+      "in": "all"
+    },
+    "tasks duplicates list": {
       "in": "all",
       "options": {
         "--limit": "all"
       }
-    },
-    "tasks duplicates defer": {
-      "in": "all"
     },
     "tasks duplicates reject": {
       "in": "all"

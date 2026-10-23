@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -136,6 +136,27 @@ describe("tasks", () => {
     expect(refused.code).not.toBe(0)
     expect(JSON.parse(refused.stderr).error.reason).toBe("output.unknown-field")
     expect(item(await call("tasks", "show", added.id, "--json")).title).toBe(before.title)
+  })
+
+  it("requires an explicit duplicate-pair list leaf without opening the store", async () => {
+    const root = mkdtempSync(join(tmpdir(), "duplicates-group-"))
+    const env = {
+      CHAT_PROFILE: "synthetic",
+      CHAT_CONFIG_DIR: join(root, "config"),
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CACHE_DIR: join(root, "cache"),
+      MESSAGING_STORE: join(root, "store.sqlite"),
+    }
+    const streams = captureStreams()
+    const code = await run(
+      ["tasks", "duplicates", "--json"],
+      { app, commands: () => [tasksCommand(messenger)] },
+      { env, streams, tty: false },
+    )
+    expect(code).toBe(2)
+    expect(streams.stdout).toEqual([])
+    expect(JSON.parse(streams.stderr[0] ?? "").error).toMatchObject({ code: "validation_error" })
+    expect(existsSync(env.MESSAGING_STORE)).toBe(false)
   })
 
   it("**tasks scan lists what a chat's history would open**, and opens it only with --yes", async () => {
@@ -597,7 +618,7 @@ describe("tasks that may be one job", () => {
     const invoice = item(await call(...request(PROMISE, "Send the invoice for 15 000 rub"))).card.key
     const opened = item(await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send", "--new")))
     expect(opened).toMatchObject({ created: true })
-    expect(json(await call("tasks", "duplicates", "--json")).items).toEqual([])
+    expect(json(await call("tasks", "duplicates", "list", "--json")).items).toEqual([])
 
     const database = await openCache(join(call.root, "m.db"))
     expect(
@@ -620,7 +641,7 @@ describe("tasks that may be one job", () => {
       .run()
     database.close()
 
-    const listed = json(await call("tasks", "duplicates", "--json"))
+    const listed = json(await call("tasks", "duplicates", "list", "--json"))
     expect(listed.items).toMatchObject([
       {
         task: { key: again },
@@ -630,13 +651,13 @@ describe("tasks that may be one job", () => {
         levels: expect.any(Object),
       },
     ])
-    expect((await call.pretty("tasks", "duplicates")).stdout.join("")).toContain(invoice)
+    expect((await call.pretty("tasks", "duplicates", "list")).stdout.join("")).toContain(invoice)
 
     expect(item(await call("tasks", "duplicates", "defer", again, invoice, "--json"))).toMatchObject({
       decision: "unsure",
     })
-    expect(json(await call("tasks", "duplicates", "--json")).items).toEqual([])
-    expect(json(await call("tasks", "duplicates", "decision:unsure", "--json")).items).toHaveLength(1)
+    expect(json(await call("tasks", "duplicates", "list", "--json")).items).toEqual([])
+    expect(json(await call("tasks", "duplicates", "list", "decision:unsure", "--json")).items).toHaveLength(1)
 
     const merged = item(await call("tasks", "merge", again, "--into", invoice, "--json"))
     expect(merged).toMatchObject({ pair: { decision: "merged" }, linked: 1, task: { key: invoice } })
@@ -645,7 +666,7 @@ describe("tasks that may be one job", () => {
     const shown = item(await call("tasks", "show", again, "--json"))
     expect(shown).toMatchObject({ status: "dismissed" })
     expect(shown.links).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "duplicate-of" })]))
-    expect(json(await call("tasks", "duplicates", "decision:unsure", "--json")).items).toEqual([])
+    expect(json(await call("tasks", "duplicates", "list", "decision:unsure", "--json")).items).toEqual([])
 
     const unmerged = item(await call("tasks", "unmerge", again, "--json"))
     expect(unmerged).toMatchObject({ pair: { decision: "unmerged" }, task: { key: again, status: "open" } })
