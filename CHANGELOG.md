@@ -40,6 +40,10 @@ shape of this file.
 
 - Server commands include concrete examples in help and command discovery.
 
+### Fixed
+
+- **Input-field errors name the command's flags.** Adapters can report unsupported or conflicting domain fields through `input.field-unsupported` or `input.field-conflict`. The CLI maps declared fields to flags in the human message and structured parameter, while SDK errors stay independent of command syntax. Unknown fields are kept without guessing.
+
 ## 0.394.0 — 23.10.2026
 
 ### Added

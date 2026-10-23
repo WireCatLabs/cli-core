@@ -37,6 +37,7 @@ import {
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
+import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { movedPath, movedPointer } from "./moved.js"
@@ -693,6 +694,7 @@ const failed = (
     targets: judgedTargets(program),
     ...(effects ? { effects } : {}),
   })
+  showInputFields(object, (path && commandAt(program, path)) || program)
   const command = path || app.command
   return {
     object,
