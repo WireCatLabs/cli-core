@@ -7,7 +7,7 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { DEFAULT_TASK_CATEGORIES, withTaskCategory } from "../../domain/task-categories.js"
-import { task } from "../../entities/index.js"
+import { ENTITIES, task } from "../../entities/index.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
@@ -91,6 +91,30 @@ const setup = async (config?: object) => {
         },
         { streams, tty, env },
       )
+      if (code === 0 && argv[0] === "tasks" && argv.includes("--json")) {
+        const names = {
+          "tasks add": "task_created",
+          "tasks plan": "task_card",
+          "tasks link": "task_links",
+          "tasks show": "task_card",
+          "tasks related": "task_similar",
+          "tasks duplicates": "task_pair",
+          "tasks merge": "task_merge",
+          "tasks unmerge": "task_unmerge",
+          "tasks categories": "task_categories",
+          "tasks scan": "task_scan",
+          "tasks claim": "task_card",
+          "tasks release": "task_card",
+          "tasks close": "task_closed",
+          "tasks reject": "task_card",
+        } as const
+        const entity = names[argv.slice(0, 2).join(" ") as keyof typeof names]
+        if (entity) {
+          const answer = JSON.parse(streams.stdout.join(""))
+          const schema = ENTITIES[entity] as v.GenericSchema
+          for (const item of answer.items ?? [answer.item]) v.parse(schema, item)
+        }
+      }
       return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
     }
   return Object.assign(runs(false), { pretty: runs(true), root, env: env as NodeJS.ProcessEnv })
@@ -101,6 +125,19 @@ const item = (result: { stdout: string[] }) => json(result).item
 const PROMISE = "msg:chat/500/7/1"
 
 describe("tasks", () => {
+  it("projects task-card fields and refuses an unknown field before changing a task", async () => {
+    const call = await setup()
+    const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
+    const projected = await call("tasks", "show", added.id, "--json=key,title,status")
+    expect(projected.code, projected.stderr).toBe(0)
+    expect(Object.keys(item(projected)).sort()).toEqual(["key", "status", "title"])
+    const before = item(await call("tasks", "show", added.id, "--json"))
+    const refused = await call("tasks", "plan", added.id, "--title", "Must stay unchanged", "--json=unknown_field")
+    expect(refused.code).not.toBe(0)
+    expect(JSON.parse(refused.stderr).error.reason).toBe("output.unknown-field")
+    expect(item(await call("tasks", "show", added.id, "--json")).title).toBe(before.title)
+  })
+
   it("**tasks scan lists what a chat's history would open**, and opens it only with --yes", async () => {
     const call = await setup()
     const dry = json(await call("tasks", "scan", "7", "--last", "2", "--json"))

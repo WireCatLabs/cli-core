@@ -32,6 +32,5 @@ it("every declared output of a shared command names an entity cli-core has", () 
     return name === undefined || name in ENTITIES ? [] : [`${commandPathOf(command).join(" ")}: ${name}`]
   })
 
-  // Baseline: task_pair has no entity yet, so its schema is still the open envelope.
-  expect(unknown).toEqual(["tasks duplicates: task_pair"])
+  expect(unknown).toEqual([])
 })

@@ -228,6 +228,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
   planOptions(
     destroysNothing(
       annotate(tasks.command("add"), {
+        output: { entity: "task_created" },
         effects: LOCAL_WRITE,
         examples: [`${tool} personal tasks add note:101 --type promise --category documents --title "Review draft"`],
       }),
@@ -297,6 +298,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
   planOptions(
     destroysNothing(
       annotate(tasks.command("plan"), {
+        output: { entity: "task_card" },
         effects: LOCAL_WRITE,
         examples: [`${tool} personal tasks plan DOC-12 --title "Review draft"`],
       }),
@@ -323,6 +325,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   destroysNothing(
     annotate(tasks.command("link"), {
+      output: { entity: "task_links" },
       effects: LOCAL_WRITE,
       examples: [`${tool} personal tasks link DOC-12 https://example.com/draft`],
     }),
@@ -361,7 +364,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
         context.renderer.note(`${linked.review} possible duplicate pair(s) went to tasks duplicates`)
     })
 
-  annotate(tasks.command("show"), { effects: LOCAL_READ, examples: [`${tool} personal tasks show DOC-12`] })
+  annotate(tasks.command("show"), {
+    output: { entity: "task_card" },
+    effects: LOCAL_READ,
+    examples: [`${tool} personal tasks show DOC-12`],
+  })
     .description("one task: its plan and everything linked to it")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .action(async function (this: Command, id: string) {
@@ -370,7 +377,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(shown)), () => `${card(shown)}\n`)
     })
 
-  annotate(tasks.command("related"), { effects: LOCAL_READ, examples: [`${tool} tasks related PR-12`] })
+  annotate(tasks.command("related"), {
+    output: { entity: "task_similar" },
+    effects: LOCAL_READ,
+    examples: [`${tool} tasks related PR-12`],
+  })
     .summary("tasks that may be the same job as this one, best first; merges nothing")
     .description(
       "tasks that may be the same job as this one, best first, each with a band — likely, maybe, different — and the " +
@@ -447,6 +458,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   destroysNothing(
     annotate(duplicates.command("reject"), {
+      output: { entity: "task_pair" },
       effects: LOCAL_WRITE,
       examples: [`${tool} tasks duplicates reject PR-14 PR-12`],
     }),
@@ -459,6 +471,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   destroysNothing(
     annotate(duplicates.command("defer"), {
+      output: { entity: "task_pair" },
       effects: LOCAL_WRITE,
       examples: [`${tool} tasks duplicates defer PR-14 PR-12`],
     }),
@@ -470,7 +483,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .action(decided("unsure", "tasks.duplicates.defer"))
 
   destroysNothing(
-    annotate(tasks.command("merge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks merge PR-14 --into PR-12`] }),
+    annotate(tasks.command("merge"), {
+      output: { entity: "task_merge" },
+      effects: LOCAL_WRITE,
+      examples: [`${tool} tasks merge PR-14 --into PR-12`],
+    }),
   )
     .summary("one job seen twice: fold the duplicate into the task that stays")
     .description(
@@ -495,7 +512,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   destroysNothing(
-    annotate(tasks.command("unmerge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks unmerge PR-14`] }),
+    annotate(tasks.command("unmerge"), {
+      output: { entity: "task_unmerge" },
+      effects: LOCAL_WRITE,
+      examples: [`${tool} tasks unmerge PR-14`],
+    }),
   )
     .summary("undo a merge: reopen the task and remove its duplicate-of relation")
     .description(
@@ -561,7 +582,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)
     })
 
-  annotate(tasks.command("categories"), { effects: LOCAL_READ, examples: [`${tool} tasks categories`] })
+  annotate(tasks.command("categories"), {
+    output: { entity: "task_categories" },
+    effects: LOCAL_READ,
+    examples: [`${tool} tasks categories`],
+  })
     .summary("the categories a task takes, with what each means")
     .description("the categories a task takes, with what each means and the words a rule picks it by")
     .action(async function (this: Command) {
@@ -588,6 +613,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   destroysNothing(
     annotate(tasks.command("scan"), {
+      output: { entity: "task_scan" },
       effects: LOCAL_WRITE,
       examples: [`${tool} tasks scan <chat>`, `${tool} tasks scan <chat> --last 300 --yes`],
     }),
@@ -627,7 +653,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   destroysNothing(
-    annotate(tasks.command("claim"), { effects: LOCAL_WRITE, examples: [`${tool} tasks claim PR-12 --lease 2h`] }),
+    annotate(tasks.command("claim"), {
+      output: { entity: "task_card" },
+      effects: LOCAL_WRITE,
+      examples: [`${tool} tasks claim PR-12 --lease 2h`],
+    }),
   )
     .description("take an open task so no other agent works it at once; the claim lapses by itself")
     .argument("<task>", "the task's id or key, as tasks list shows it")
@@ -646,7 +676,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   destroysNothing(
-    annotate(tasks.command("release"), { effects: LOCAL_WRITE, examples: [`${tool} tasks release PR-12`] }),
+    annotate(tasks.command("release"), {
+      output: { entity: "task_card" },
+      effects: LOCAL_WRITE,
+      examples: [`${tool} tasks release PR-12`],
+    }),
   )
     .description("give back a task you claimed, before the claim lapses; the owner may release any")
     .argument("<task>", "the task's id or key, as tasks list shows it")
@@ -660,6 +694,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   destroysNothing(
     annotate(tasks.command("close"), {
+      output: { entity: "task_closed" },
       effects: LOCAL_WRITE,
       examples: [
         `${tool} tasks close Q-15 --as done --certainty 0.9 --reason answered-in-chat`,
@@ -725,7 +760,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
         )
     })
 
-  annotate(tasks.command("reject"), { effects: LOCAL_WRITE, examples: [`${tool} tasks reject Q-15`] })
+  annotate(tasks.command("reject"), {
+    output: { entity: "task_card" },
+    effects: LOCAL_WRITE,
+    examples: [`${tool} tasks reject Q-15`],
+  })
     .summary("refuse an agent's close of a task: it stays open and the suggestion goes")
     .description(
       "refuse the close an agent suggested: the task stays open and leaves close:suggested; the agent may close it again",

@@ -53,6 +53,8 @@ shape of this file.
 
 - Tracked-chat lists accept a query over chat IDs and titles, filtered in the store. Tracking commands declare their answer schemas for field projection and discovery.
 
+- **Task actions declare their answers.** Task cards, source previews, creation and close receipts, relationships, similarity and duplicate decisions, merges, categories and rule scans expose their exact existing fields for discovery and projection. Stored tasks and actions keep their behavior.
+
 ### Changed — may break callers
 
 - **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.
