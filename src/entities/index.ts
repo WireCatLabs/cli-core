@@ -10,6 +10,7 @@ import { analysisConsent, analysisConsentRevocation } from "./analysis-consent.j
 import { attachment } from "./attachment.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
+import { chatArchive, chatMuting, chatPin, chatRemoval, chatUnread } from "./chat-change.js"
 import { chatEvent } from "./chat-event.js"
 import { cachedChatMetadata, chatMetadata, chatMetadataRefresh } from "./chat-metadata.js"
 import { chatStats, taskStats } from "./chat-stats.js"
@@ -111,11 +112,16 @@ export {
   cachedChatMetadata,
   chart,
   chat,
+  chatArchive,
   chatEvent,
   chatMetadata,
   chatMetadataRefresh,
+  chatMuting,
+  chatPin,
+  chatRemoval,
   chatStats,
   chatTracking,
+  chatUnread,
   contact,
   contactActivity,
   contactAlias,
@@ -349,6 +355,11 @@ export const ENTITIES = {
   agenda,
   model,
   chat_event: chatEvent,
+  chat_removal: chatRemoval,
+  chat_muting: chatMuting,
+  chat_archive: chatArchive,
+  chat_pin: chatPin,
+  chat_unread: chatUnread,
   invite_link: inviteLink,
   join_request: joinRequest,
   member,

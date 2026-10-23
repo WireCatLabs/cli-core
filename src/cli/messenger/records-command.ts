@@ -115,6 +115,7 @@ export const callsCommand = (messenger: Messenger): Command => {
 /** `chats delete` and `chats clear` — for this account only; at the default level they ask first. */
 export const chatDeletionCommands = (messenger: Messenger): Command[] => [
   annotate(new Command("delete"), {
+    output: { entity: "chat_removal" },
     effects: REMOTE_WRITE,
     mcp: false,
     examples: [`${messenger.app.command} personal chats delete "Book club"`],
@@ -133,6 +134,7 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
       )
     }),
   annotate(new Command("clear"), {
+    output: { entity: "chat_removal" },
     effects: REMOTE_WRITE,
     mcp: false,
     examples: [`${messenger.app.command} personal chats clear "Book club"`],
@@ -155,6 +157,7 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
 /** `chats mute` and `unmute` — the owner's own notifications for one chat; nobody in it is told. */
 export const muteCommands = (messenger: Messenger): Command[] => [
   annotate(new Command("mute"), {
+    output: { entity: "chat_muting" },
     effects: REMOTE_WRITE,
     examples: [
       `${messenger.app.command} chats mute "Book club"`,
@@ -175,6 +178,7 @@ export const muteCommands = (messenger: Messenger): Command[] => [
       )
     }),
   annotate(new Command("unmute"), {
+    output: { entity: "chat_muting" },
     effects: REMOTE_WRITE,
     examples: [`${messenger.app.command} chats unmute "Book club"`],
   })
@@ -194,9 +198,11 @@ const onChatCommand = (
   messenger: Messenger,
   name: string,
   description: string,
+  entity: "chat_archive" | "chat_pin" | "chat_unread",
   change: (services: Services, chat: string) => Promise<object>,
 ): Command =>
   annotate(new Command(name), {
+    output: { entity },
     effects: REMOTE_WRITE,
     examples: [`${messenger.app.command} chats ${name} 123456789`],
   })
@@ -209,20 +215,32 @@ const onChatCommand = (
 
 /** `chats archive` and `unarchive` — the messenger's archive of chats, not the local store. */
 export const archiveCommands = (messenger: Messenger): Command[] => [
-  onChatCommand(messenger, "archive", "move a chat into the archive; nobody in it is told", (services, chat) =>
-    services.account.archive(chat, true),
+  onChatCommand(
+    messenger,
+    "archive",
+    "move a chat into the archive; nobody in it is told",
+    "chat_archive",
+    (services, chat) => services.account.archive(chat, true),
   ),
-  onChatCommand(messenger, "unarchive", "bring an archived chat back to the chat list", (services, chat) =>
-    services.account.archive(chat, false),
+  onChatCommand(
+    messenger,
+    "unarchive",
+    "bring an archived chat back to the chat list",
+    "chat_archive",
+    (services, chat) => services.account.archive(chat, false),
   ),
 ]
 
 /** `chats pin` and `unpin` — where the chat sits in the owner's list; `messages pin` pins a message for everyone. */
 export const chatPinCommands = (messenger: Messenger): Command[] => [
-  onChatCommand(messenger, "pin", "keep a chat at the top of your chat list; nobody in it is told", (services, chat) =>
-    services.account.pinChat(chat, true),
+  onChatCommand(
+    messenger,
+    "pin",
+    "keep a chat at the top of your chat list; nobody in it is told",
+    "chat_pin",
+    (services, chat) => services.account.pinChat(chat, true),
   ),
-  onChatCommand(messenger, "unpin", "let a pinned chat move down the chat list again", (services, chat) =>
+  onChatCommand(messenger, "unpin", "let a pinned chat move down the chat list again", "chat_pin", (services, chat) =>
     services.account.pinChat(chat, false),
   ),
 ]
@@ -233,6 +251,7 @@ export const markUnreadCommand = (messenger: Messenger): Command =>
     messenger,
     "mark-unread",
     "mark a chat unread on your own devices; nobody in it is told",
+    "chat_unread",
     (services, chat) => services.account.markUnread(chat),
   )
 

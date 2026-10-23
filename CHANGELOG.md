@@ -43,6 +43,8 @@ shape of this file.
 
 - **Message read and write schemas.** Showing a message, sending, editing, forwarding, pinning, starring and deleting declare their existing answer entities for field discovery and projection. Write receipts retain their operation id.
 
+- **Chat-state write schemas.** Muting, archiving, pinning, marking unread, deleting a chat and clearing its history declare their existing write receipts for field discovery and projection, including their operation ids.
+
 - **Message read schemas.** Evidence packets, voice transcripts and conversation links declare separate answer entities for field discovery and projection, preserving existing response keys.
 
 - **Conversation results have declared schemas.** Builds, analysis, message batches, link changes, embedding progress, readiness, related conversations and search hits describe their existing answer fields for discovery and projection, including bounded preparation and empty batches.
