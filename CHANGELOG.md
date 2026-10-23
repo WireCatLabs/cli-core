@@ -45,6 +45,8 @@ shape of this file.
 
 - **Chat-state write schemas.** Muting, archiving, pinning, marking unread, deleting a chat and clearing its history declare their existing write receipts for field discovery and projection, including their operation ids.
 
+- **Chat administration declares its answers.** Invite inspection, posting identities, read receipts, roster fetches, membership and group changes, invitations, join requests, administrators, folder writes and moderation expose their exact existing result fields, including operation identifiers and partial outcomes.
+
 - **Message read schemas.** Evidence packets, voice transcripts and conversation links declare separate answer entities for field discovery and projection, preserving existing response keys.
 
 - **Conversation results have declared schemas.** Builds, analysis, message batches, link changes, embedding progress, readiness, related conversations and search hits describe their existing answer fields for discovery and projection, including bounded preparation and empty batches.

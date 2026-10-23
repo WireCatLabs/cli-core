@@ -97,7 +97,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
   )
   folders.addCommand(
     withRules(
-      annotate(new Command("create"), { effects: REMOTE_WRITE })
+      annotate(new Command("create"), { output: { entity: "chat_folder_change" }, effects: REMOTE_WRITE })
         .description("create a chat folder")
         .argument("<title>", "the folder's name; the app may refuse a long one")
         .option("--chat <chat>", "a chat to put in it, by id or name; repeat it for more", collect),
@@ -112,7 +112,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
   )
   folders.addCommand(
     withRules(
-      annotate(new Command("update"), { effects: REMOTE_WRITE })
+      annotate(new Command("update"), { output: { entity: "chat_folder_change" }, effects: REMOTE_WRITE })
         .description("rename a folder, or change which chats are in it")
         .argument("<folder>", "folder id, or its title exactly")
         .option("--title <title>", "a new name")
@@ -137,7 +137,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
     }),
   )
   folders.addCommand(
-    annotate(new Command("delete"), { effects: REMOTE_WRITE })
+    annotate(new Command("delete"), { output: { entity: "chat_folder_removal" }, effects: REMOTE_WRITE })
       .description("delete a folder; the chats in it stay")
       .argument("<folder>", "folder id, or its title exactly")
       .action(async function (this: Command, folder: string) {
@@ -147,7 +147,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
   )
   if (messenger.folderOrder !== false)
     folders.addCommand(
-      annotate(new Command("order"), { effects: REMOTE_WRITE })
+      annotate(new Command("order"), { output: { entity: "chat_folder_order" }, effects: REMOTE_WRITE })
         .description("put folders in this order; the ones not named keep theirs after them")
         .argument("<folders...>", "folder ids, or titles exactly, first one first")
         .action(async function (this: Command, typed: string[]) {
@@ -157,7 +157,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
     )
   if (messenger.folderJoin !== false)
     folders.addCommand(
-      annotate(new Command("join"), { effects: REMOTE_WRITE })
+      annotate(new Command("join"), { output: { entity: "chat_folder_change" }, effects: REMOTE_WRITE })
         .description(
           "add a folder someone shared by a link; joins every chat in it, and the others there see you joined",
         )

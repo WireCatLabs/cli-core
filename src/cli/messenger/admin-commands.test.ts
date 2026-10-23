@@ -82,6 +82,44 @@ const call = async (
     },
     { streams, tty: false, env },
   )
+  if (code === 0 && argv[0] === "chats" && argv.includes("--json")) {
+    const names = {
+      "chats inspect": "chat_inspection",
+      "chats send-as": "chat_sender",
+      "chats mark-read": "chat_read",
+      "chats members fetch": "chat_members_fetch",
+      "chats members add": "chat_members_change",
+      "chats members remove": "chat_members_change",
+      "chats create": "chat_group_change",
+      "chats join": "chat_group_change",
+      "chats leave": "chat_removal",
+      "chats update": "chat_group_change",
+      "chats link show": "chat_invite",
+      "chats link create": "chat_invite_change",
+      "chats link revoke": "chat_invite_change",
+      "chats link update": "chat_invite_change",
+      "chats link reset": "chat_group_change",
+      "chats requests accept": "chat_request_change",
+      "chats requests decline": "chat_request_change",
+      "chats admins add": "chat_admin_change",
+      "chats admins remove": "chat_admin_change",
+      "chats folders create": "chat_folder_change",
+      "chats folders update": "chat_folder_change",
+      "chats folders join": "chat_folder_change",
+      "chats folders delete": "chat_folder_removal",
+      "chats folders order": "chat_folder_order",
+      "chats rules": "chat_rules",
+      "chats moderate": "chat_moderation",
+    } as const
+    const path = Object.keys(names)
+      .sort((a, b) => b.length - a.length)
+      .find((key) => argv.slice(0, key.split(" ").length).join(" ") === key)
+    if (path) {
+      const answer = JSON.parse(streams.stdout[0] ?? "null")
+      const schema = ENTITIES[names[path as keyof typeof names]] as v.GenericSchema
+      for (const item of answer.items ?? [answer.item]) v.parse(schema, item)
+    }
+  }
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 

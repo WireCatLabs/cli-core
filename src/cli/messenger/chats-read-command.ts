@@ -5,7 +5,7 @@ import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const markReadCommand = (messenger: Messenger): Command => {
-  const read = annotate(new Command("mark-read"), { effects: REMOTE_WRITE })
+  const read = annotate(new Command("mark-read"), { output: { entity: "chat_read" }, effects: REMOTE_WRITE })
     .description("mark a chat read; the other side sees that you read it")
     .argument("<chat>", messenger.chatArgument)
     .option("--until-id <id>", "only up to this message id; the newest by default")

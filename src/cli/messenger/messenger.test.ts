@@ -210,6 +210,32 @@ const call = async (
   }
   if (code === 0 && argv.includes("--json")) {
     const names = {
+      "chats inspect": "chat_inspection",
+      "chats send-as": "chat_sender",
+      "chats mark-read": "chat_read",
+      "chats members fetch": "chat_members_fetch",
+      "chats members add": "chat_members_change",
+      "chats members remove": "chat_members_change",
+      "chats create": "chat_group_change",
+      "chats join": "chat_group_change",
+      "chats leave": "chat_removal",
+      "chats update": "chat_group_change",
+      "chats link show": "chat_invite",
+      "chats link create": "chat_invite_change",
+      "chats link revoke": "chat_invite_change",
+      "chats link update": "chat_invite_change",
+      "chats link reset": "chat_group_change",
+      "chats requests accept": "chat_request_change",
+      "chats requests decline": "chat_request_change",
+      "chats admins add": "chat_admin_change",
+      "chats admins remove": "chat_admin_change",
+      "chats folders create": "chat_folder_change",
+      "chats folders update": "chat_folder_change",
+      "chats folders join": "chat_folder_change",
+      "chats folders delete": "chat_folder_removal",
+      "chats folders order": "chat_folder_order",
+      "chats rules": "chat_rules",
+      "chats moderate": "chat_moderation",
       "conversations build": "conversation_build",
       "conversations show": "conversation.details",
       "conversations list": "conversation",
@@ -5202,6 +5228,22 @@ describe("the guard, account and mcp config commands", () => {
 
     expect(json(found.stdout).item).toMatchObject({ title: "Book club", member: false, approval_needed: true })
     expect(links).toEqual(["https://t.me/+abc"])
+    const projected = await call(
+      ["chats", "inspect", "https://t.me/+abc", "--json=title,approval_needed"],
+      async () => reader,
+      env,
+    )
+    expect(projected.code, projected.stderr.join(" ")).toBe(0)
+    expect(json(projected.stdout).item).toEqual({ title: "Book club", approval_needed: true })
+    const connected = links.length
+    const unknown = await call(
+      ["chats", "inspect", "https://t.me/+abc", "--json=unknown_field"],
+      async () => reader,
+      env,
+    )
+    expect(unknown.code).not.toBe(0)
+    expect(links).toHaveLength(connected)
+
     expect((await call(["chats", "inspect", "x", "--offline"], async () => reader, env)).code).toBe(2)
     expect((await call(["chats", "inspect", "x"], async () => fake, env)).code).toBe(2)
   })

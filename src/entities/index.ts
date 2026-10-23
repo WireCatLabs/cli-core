@@ -10,9 +10,25 @@ import { analysisConsent, analysisConsentRevocation } from "./analysis-consent.j
 import { attachment } from "./attachment.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
+import {
+  chatAdminChange,
+  chatFolderChange,
+  chatFolderOrder,
+  chatFolderRemoval,
+  chatGroupChange,
+  chatInspection,
+  chatInvite,
+  chatInviteChange,
+  chatMembersChange,
+  chatMembersFetch,
+  chatRead,
+  chatRequestChange,
+  chatSender,
+} from "./chat-admin.js"
 import { chatArchive, chatMuting, chatPin, chatRemoval, chatUnread } from "./chat-change.js"
 import { chatEvent } from "./chat-event.js"
 import { cachedChatMetadata, chatMetadata, chatMetadataRefresh } from "./chat-metadata.js"
+import { chatModeration, chatRules } from "./chat-moderation.js"
 import { chatStats, taskStats } from "./chat-stats.js"
 import { chatTracking, trackedChat, trackedChatHistory } from "./chat-tracking.js"
 import { contact } from "./contact.js"
@@ -112,13 +128,28 @@ export {
   cachedChatMetadata,
   chart,
   chat,
+  chatAdminChange,
   chatArchive,
   chatEvent,
+  chatFolderChange,
+  chatFolderOrder,
+  chatFolderRemoval,
+  chatGroupChange,
+  chatInspection,
+  chatInvite,
+  chatInviteChange,
+  chatMembersChange,
+  chatMembersFetch,
   chatMetadata,
   chatMetadataRefresh,
+  chatModeration,
   chatMuting,
   chatPin,
+  chatRead,
   chatRemoval,
+  chatRequestChange,
+  chatRules,
+  chatSender,
   chatStats,
   chatTracking,
   chatUnread,
@@ -354,6 +385,21 @@ export const ENTITIES = {
   job,
   agenda,
   model,
+  chat_group_change: chatGroupChange,
+  chat_inspection: chatInspection,
+  chat_sender: chatSender,
+  chat_read: chatRead,
+  chat_members_fetch: chatMembersFetch,
+  chat_members_change: chatMembersChange,
+  chat_invite: chatInvite,
+  chat_invite_change: chatInviteChange,
+  chat_request_change: chatRequestChange,
+  chat_admin_change: chatAdminChange,
+  chat_folder_change: chatFolderChange,
+  chat_folder_removal: chatFolderRemoval,
+  chat_folder_order: chatFolderOrder,
+  chat_rules: chatRules,
+  chat_moderation: chatModeration,
   chat_event: chatEvent,
   chat_removal: chatRemoval,
   chat_muting: chatMuting,
