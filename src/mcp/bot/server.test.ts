@@ -5,8 +5,10 @@ import { Client } from "@modelcontextprotocol/client"
 import { InMemoryTransport } from "@modelcontextprotocol/server"
 import { toJsonSchema } from "@valibot/to-json-schema"
 import { captureStreams, memoryKeyring } from "@wirecat/cli-base"
+import type { ManifestOperation } from "@wirecat/cli-base/codegen"
 import { describeProgram } from "@wirecat/cli-base/commands"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { generatedApiCommand } from "../../cli/bot/api.js"
 import { botCommand } from "../../cli/bot/command.js"
 import type { BotAdapter, BotMessenger } from "../../cli/bot/port.js"
 import { ChatRegistry } from "../../cli/bot/registry.js"
@@ -246,6 +248,76 @@ describe("bot mcp tools by permission level", () => {
 
     expect(status.body.item).toMatchObject({ profile: "sales", auth: { bot: "Sales", id: "42" } })
     expect((status.body.item as { writes: string[] }).writes).toContain("messages send")
+  })
+})
+
+describe("bot api over MCP, behind bot.api (NEED-1679)", () => {
+  const operation = (id: string, effect: ManifestOperation["effect"]): ManifestOperation => ({
+    id,
+    command: id,
+    binding: { kind: "rpc", name: id },
+    effect,
+    tags: [],
+    parameters: [],
+  })
+  const withApi = () => {
+    const tree = botCommand(bot)
+    tree.addCommand(
+      generatedApiCommand({
+        operations: [operation("get-me", "read"), operation("send-message", "write")],
+        checkParameter: () => undefined,
+        execute: async (_command, one) => {
+          calls.push(`api ${one.id}`)
+        },
+      }),
+    )
+    return { app, commands: () => [tree] }
+  }
+  const connectApi = () => {
+    const program = withApi()
+    return connect({
+      program: {
+        run: (argv, environment) => run(argv, program, environment),
+        commands: describeProgram(createProgram(program)),
+      },
+      authority: changesAuthorityAt(createProgram(program)),
+    })
+  }
+  const allow = (level: string) => configure({ bot: { profiles: { sales: { permissions: { "bot.api": level } } } } })
+  const API = ["api get-me", "api send-message"]
+
+  it.each([
+    ["by default", undefined],
+    ["under a broader bot: allow", { bot: "allow" }],
+    ["at bot.api: deny", { "bot.api": "deny" }],
+    ["at bot.api: readonly", { "bot.api": "readonly" }],
+  ])("**hides it** %s", async (_name, permissions) => {
+    if (permissions) configure({ bot: { profiles: { sales: { permissions } } } })
+
+    expect((await connectApi()).offered.filter((name) => name.startsWith("api "))).toEqual([])
+  })
+
+  it("**offers it once the owner allows bot.api**, and runs a call", async () => {
+    allow("allow")
+    const { offered, client, tools } = await connectApi()
+
+    expect(offered.filter((name) => name.startsWith("api ")).sort()).toEqual(API)
+    expect(tools.find((tool) => tool.command === "api send-message")?.writes).toBe(true)
+    expect((await call(client, "api send-message")).isError).toBe(false)
+    expect(calls).toEqual(["api send-message"])
+  })
+
+  it("**refuses, naming the key and the terminal command, once the owner turns it off** while the server runs", async () => {
+    allow("allow")
+    const { client } = await connectApi()
+    configure({})
+
+    const refused = await call(client, "api send-message")
+
+    expect(refused.error?.code).toBe("permission_error")
+    expect(JSON.stringify(refused.body)).toContain("bot.api")
+    expect(JSON.stringify(refused.body)).toContain("config set --bot permissions.bot.api allow")
+    expect(calls).toEqual([])
   })
 })
 

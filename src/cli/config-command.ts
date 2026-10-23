@@ -2,7 +2,7 @@ import { CliError, pathsAreOverridden } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type AppIdentity, envName } from "../ports/app.js"
-import { AUTHORITY_KEY } from "../sends/permissions.js"
+import { AUTHORITY_KEY, BOT_API_KEY } from "../sends/permissions.js"
 import { loadSnakeCaseConfig } from "./config-keys.js"
 import { baseContext, environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
@@ -142,7 +142,7 @@ export const configCommand = (
           `this process is locked to profile ${settings.profile} (${lock}) — ${setting === "default_profile" ? setting : "--defaults"} changes other profiles`,
         )
       }
-      if (environmentOf(this).agent) refuseAuthorityKey(setting, action === "set" ? String(given) : undefined)
+      if (environmentOf(this).agent) refuseGuardedKey(setting, action === "set" ? String(given) : undefined)
       if (action === "set") refuseUnknownKey(this, setting, String(given), permissionKey)
       const saved = config.changeSetting(settings.configPath, {
         profile: defaults || setting === "default_profile" ? undefined : settings.profile,
@@ -196,10 +196,11 @@ export const refuseUnknownKey = (
 }
 
 /**
- * An agent may hold `mcp.authority` and change other settings, but never the key that let it in: on any profile, in
- * the defaults, or by replacing `permissions` whole. Only the owner, in a terminal, turns it on or off (NEED-1662).
+ * An agent may hold `mcp.authority` or `bot.api` and change other settings, but never the key that let it in: on any
+ * profile, in the defaults, or by replacing `permissions` whole. Only the owner, in a terminal, turns it on or off
+ * (NEED-1662, NEED-1679).
  */
-const refuseAuthorityKey = (setting: string, value: string | undefined): void => {
+const refuseGuardedKey = (setting: string, value: string | undefined): void => {
   const keys = setting.startsWith("permissions.")
     ? [setting.slice("permissions.".length)]
     : setting === "permissions"
@@ -207,11 +208,16 @@ const refuseAuthorityKey = (setting: string, value: string | undefined): void =>
         ? ["mcp"]
         : objectKeys(value)
       : []
-  if (!keys.some((key) => key === "mcp" || key.startsWith("mcp."))) return
+  const guarded = keys.some((key) => key === BOT_API_KEY || key.startsWith(`${BOT_API_KEY}.`))
+    ? BOT_API_KEY
+    : keys.some((key) => key === "mcp" || key.startsWith("mcp."))
+      ? AUTHORITY_KEY
+      : undefined
+  if (!guarded) return
   throw new CliError(
     "permission_error",
-    `an agent cannot change permissions.${AUTHORITY_KEY} — the owner sets it in a terminal`,
-    { permission: AUTHORITY_KEY },
+    `an agent cannot change permissions.${guarded} — the owner sets it in a terminal`,
+    { permission: guarded },
   )
 }
 

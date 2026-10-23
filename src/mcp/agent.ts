@@ -18,6 +18,8 @@ import type { MessengerAdapter } from "../ports/messenger.js"
 import {
   AUTHORITY_KEY,
   authorityAllowed,
+  botApiAllowed,
+  isBotApi,
   keyForCommand,
   type Level,
   levelFor,
@@ -253,7 +255,8 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
         info.mcp !== false &&
         info.lifetime === undefined &&
         !(readOnly && (changesMessenger(info) || authority?.(info.path))) &&
-        (levels === undefined || refusal(info, levels, keyOf, authority) === undefined),
+        (levels === undefined ||
+          (refusal(info, levels, keyOf, authority) === undefined && (!isBotApi(info.path) || botApiAllowed(levels)))),
     )
     .map((info) => ({
       command: info.path.slice(root.length).join(" "),
@@ -342,6 +345,7 @@ export const runCommandForAgent = async (
         },
         ...(ctx.overrides?.length ? { overrides: ctx.overrides } : {}),
         authority: levels !== undefined && authorityAllowed(levels),
+        botApi: levels !== undefined && botApiAllowed(levels),
       },
       // Opened only when the command asks: a read the store answers never connects.
       ...(lend

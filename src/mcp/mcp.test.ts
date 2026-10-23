@@ -1223,17 +1223,19 @@ describe("the MCP server", () => {
     })
 
     it.each([
-      ["permissions.mcp.authority", "deny"],
-      ["permissions.mcp", "allow"],
-      ["permissions", '{"mcp.authority":"allow"}'],
-    ])("**never lets an agent change the key itself**: config set %s", async (setting, value) => {
+      ["permissions.mcp.authority", "deny", "mcp.authority"],
+      ["permissions.mcp", "allow", "mcp.authority"],
+      ["permissions", '{"mcp.authority":"allow"}', "mcp.authority"],
+      ["permissions.bot.api", "allow", "bot.api"],
+      ["permissions", '{"bot.api":"allow"}', "bot.api"],
+    ])("**never lets an agent change the key itself**: config set %s", async (setting, value, key) => {
       const { call, env } = await connect(scripted(), { config: levels({ "mcp.authority": "allow" }) })
       const before = readFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), "utf8")
 
       const refused = await call("config set", { setting, value })
 
       expect(refused.isError).toBe(true)
-      expect(refused.body.error).toMatchObject({ code: "permission_error", details: { permission: "mcp.authority" } })
+      expect(refused.body.error).toMatchObject({ code: "permission_error", details: { permission: key } })
       expect(readFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), "utf8")).toBe(before)
     })
 

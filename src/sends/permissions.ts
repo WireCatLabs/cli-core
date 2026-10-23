@@ -128,6 +128,21 @@ export const authorityAllowed = (levels: Readonly<Record<PermissionKey, Level>>)
   return level === "allow" || level === "ask"
 }
 
+/** Lets an MCP server offer `bot api`, whose calls skip the send guard and the bot's recipient list (NEED-1679). */
+export const BOT_API_KEY: PermissionKey = "bot.api"
+
+export const isBotApi = (path: readonly string[]): boolean => path[0] === "bot" && path[1] === "api"
+
+/**
+ * Deny by default for an MCP server only: the key stays out of `DEFAULT_PERMISSIONS` because the command line's
+ * `bot api` is checked per operation (`bot.api.<operation>`), and a default there would deny it for the owner too.
+ * A broader `bot: allow` does not lift it; `ask` goes ahead over MCP, as for any write.
+ */
+export const botApiAllowed = (levels: Readonly<Record<PermissionKey, Level>>): boolean => {
+  const { level } = levelFor(levels, BOT_API_KEY, { ...DEFAULT_PERMISSIONS, [BOT_API_KEY]: "deny" })
+  return level === "allow" || level === "ask"
+}
+
 /** The resources at the top of the command tree, which `readOnly` and `allow` turn read-only as a whole. */
 export const RESOURCES = [
   "messages",

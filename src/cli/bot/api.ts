@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { apiFlagOf, apiOptionKey, readApiBody } from "./api-input.js"
 
 export interface ApiCommandInput {
@@ -25,7 +26,7 @@ export interface ApiCommands {
 }
 
 export const generatedApiCommand = (api: ApiCommands): Command => {
-  const group = annotate(new Command("api"), { mcp: false }).description(
+  const group = new Command("api").description(
     api.description ?? "every operation of the official Bot API, generated from its schema",
   )
   group.option(
@@ -37,9 +38,9 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       operation.binding.kind === "http"
         ? `${operation.binding.method} ${operation.binding.path}`
         : operation.binding.name
-    const command = new Command(operation.command).description(
-      `${operation.summary ?? operation.id} — ${operation.effect} (${binding})`,
-    )
+    const command = annotate(new Command(operation.command), {
+      effects: operation.effect === "read" ? REMOTE_READ : REMOTE_WRITE,
+    }).description(`${operation.summary ?? operation.id} — ${operation.effect} (${binding})`)
     for (const parameter of operation.parameters) {
       if (parameter.sensitive) continue
       const option = new Option(
