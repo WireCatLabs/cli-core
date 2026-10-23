@@ -54,6 +54,7 @@ import { pollVote } from "./poll-vote.js"
 import { contactAlias, contactNoteRemoval } from "./private-contact.js"
 import { ranking } from "./ranking.js"
 import { recipient, recipientAdded, recipientChange, recipientOff, recipientRemoved } from "./recipient.js"
+import { recordedRun, runDetails, runHit, runLocation } from "./recorded-run.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
 import { savedSearch } from "./saved-search.js"
@@ -128,9 +129,13 @@ export {
   recipientChange,
   recipientOff,
   recipientRemoved,
+  recordedRun,
   reference,
   relationship,
   retention,
+  runDetails,
+  runHit,
+  runLocation,
   savedSearch,
   tagging,
   task,
@@ -231,6 +236,10 @@ export const ENTITIES = {
   "recipient_change.added": recipientAdded,
   "recipient_change.removed": recipientRemoved,
   "recipient_change.off": recipientOff,
+  run: recordedRun,
+  "run.details": runDetails,
+  "run.hit": runHit,
+  run_location: runLocation,
   tagging,
   conversation,
   saved_search: savedSearch,

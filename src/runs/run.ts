@@ -212,20 +212,41 @@ const writeRunFile = (dir: string, metadata: RunMetadata): void => {
   }
 }
 
+export interface RunListFilter {
+  runId?: string
+  command?: string
+  profile?: string
+  status?: RunMetadata["status"]
+  errorCode?: string
+}
+
+const matchesListFilter = (run: RunMetadata, filter: RunListFilter): boolean =>
+  (filter.runId === undefined || run.runId === filter.runId) &&
+  (filter.command === undefined || run.command === filter.command) &&
+  (filter.profile === undefined || run.profile === filter.profile) &&
+  (filter.status === undefined || run.status === filter.status) &&
+  (filter.errorCode === undefined || run.errorCode === filter.errorCode)
+
 /**
  * Newest first, which is the order anyone asking "what did I just do" wants. Days before `since` are
  * not opened, nor any day once `atLeast` runs are in hand.
  */
 export const listRuns = (
   runsDir: string,
-  { since, atLeast = Number.POSITIVE_INFINITY }: { since?: number; atLeast?: number } = {},
+  {
+    since,
+    atLeast = Number.POSITIVE_INFINITY,
+    filter = {},
+  }: { since?: number; atLeast?: number; filter?: RunListFilter } = {},
 ): RunMetadata[] => {
   const first = since === undefined ? undefined : day(new Date(since))
   const runs: RunMetadata[] = []
 
   for (const date of days(runsDir).sort().reverse()) {
     if ((first !== undefined && date < first) || runs.length >= atLeast) break
-    runs.push(...runsOfDay(join(runsDir, date)))
+    for (const metadata of runsOfDay(join(runsDir, date))) {
+      if (matchesListFilter(metadata, filter)) runs.push(metadata)
+    }
   }
   return runs
 }

@@ -6,8 +6,10 @@ import { findRun, listRuns, readEvents, runsDirFor } from "../../runs/run.js"
 import { environmentOf, outputFor } from "../context.js"
 import { LOCAL_READ, NO_EFFECTS } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { lineOf } from "../steps.js"
+import { RUNS_QUERY, runListFilter } from "./query.js"
 import { type RunSearch, runsFound, searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */
@@ -20,28 +22,42 @@ export const runsCommand = (app: AppIdentity): Command => {
     return found
   }
 
-  annotate(command.command("list"), {
-    effects: LOCAL_READ,
-    examples: [`${app.command} runs list --limit 10`],
-  })
+  withQuery(
+    annotate(command.command("list"), {
+      examples: [`${app.command} runs list --limit 10`],
+      effects: LOCAL_READ,
+    }),
+    RUNS_QUERY,
+  )
     .description("recorded runs, newest first")
     .option("--limit <n>", "how many to show", positiveCount("--limit"), 20)
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"), 1)
-    .action(function (this: Command) {
+    .action(function (this: Command, words: string[]) {
+      const filter = runListFilter(words)
       const { limit, page } = this.opts<{ limit: number; page: number }>()
       const output = outputFor(this)
       const { renderer } = output
-      const runs = listRuns(dir(this), { atLeast: page * limit + 1 })
+      const runs = listRuns(dir(this), { atLeast: page * limit + 1, filter })
       const shown = runs.slice((page - 1) * limit, page * limit)
       renderAnswer(
         this,
         output,
-        listOf("runs list", { items: shown.map(snakeKeys), limit, page, has_more: runs.length > page * limit }),
+        listOf("runs list", {
+          items: shown.map(snakeKeys),
+          limit,
+          page,
+          has_more: runs.length > page * limit,
+          args: words.length ? { query: typedQuery(words) } : {},
+        }),
       )
       if (runs.length === 0) renderer.note("nothing recorded — a run is kept with `--record`, or when it fails")
     })
 
-  annotate(command.command("show"), { effects: LOCAL_READ, examples: [`${app.command} runs show run-101`] })
+  annotate(command.command("show"), {
+    examples: [`${app.command} runs show run-101`],
+    effects: LOCAL_READ,
+    output: { entity: "run", view: "details" },
+  })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("one run: what it was, how it ended, and every event it logged")
     .option("--problems", "only failed responses, warnings and crashes")
@@ -70,8 +86,9 @@ export const runsCommand = (app: AppIdentity): Command => {
     })
 
   annotate(command.command("search"), {
-    effects: LOCAL_READ,
     examples: [`${app.command} runs search timeout --limit 10`],
+    effects: LOCAL_READ,
+    output: { entity: "run", view: "hit" },
   })
     .description("search recorded diagnostic metadata and events; no message contents")
     .argument("[query]", "case-insensitive literal diagnostic text")
@@ -111,7 +128,11 @@ export const runsCommand = (app: AppIdentity): Command => {
       )
     })
 
-  annotate(command.command("path"), { effects: NO_EFFECTS, examples: [`${app.command} runs path run-101`] })
+  annotate(command.command("path"), {
+    examples: [`${app.command} runs path run-101`],
+    effects: NO_EFFECTS,
+    output: { entity: "run_location" },
+  })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("the directory holding one run")
     .action(function (this: Command, id: string) {

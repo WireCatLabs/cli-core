@@ -23,6 +23,8 @@ shape of this file.
 
 - Doctor reports include a concrete creation example in help and command discovery.
 
+- Recorded-run lists accept metadata queries before pagination, and recorded-run commands declare their answer schemas. Continuation steps keep the query.
+
 ## 0.399.0 — 23.10.2026
 
 ### Changed — may break callers
