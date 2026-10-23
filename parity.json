@@ -25,7 +25,7 @@
     },
     "--all": {
       "meaning": "every row, no paging",
-      "note": "chats requests accept and decline take every pending request instead \u2014 counted against the hourly limit first \u2014 so it differs on purpose (Help text rule 4)"
+      "note": "chats requests confirm and reject take every pending request instead — counted against the hourly limit first — so it differs on purpose (Help text rule 4)"
     },
     "--all-bots": {
       "meaning": "also read every other bot's copy on this machine that read_other_bots allows"
@@ -123,7 +123,7 @@
     },
     "--batch": {
       "value": "<id>",
-      "meaning": "the batch id `conversations batches next` printed"
+      "meaning": "the batch id `conversations batches show` printed"
     },
     "--before-n": {
       "value": "<n>",
@@ -292,8 +292,8 @@
     },
     "--description": {
       "value": "<text>",
-      "meaning": "the new about text \u2014 of a chat or of your account",
-      "note": "tasks add and tasks plan use Markdown for task details, completion criteria and next steps"
+      "meaning": "the new about text — of a chat or of your account",
+      "note": "tasks add and tasks update use Markdown for task details, completion criteria and next steps"
     },
     "--dims": {
       "value": "<n>",
@@ -1012,8 +1012,8 @@
     },
     "--title": {
       "value": "<title>",
-      "meaning": "the new name \u2014 of a chat, a folder or a forum topic",
-      "note": "tasks add and tasks plan use this for the action and its object, in one line"
+      "meaning": "the new name — of a chat, a folder or a forum topic",
+      "note": "tasks add and tasks update use this for the action and its object, in one line"
     },
     "--to": {
       "value": "<chat>",
@@ -1374,10 +1374,7 @@
         "--page": "all"
       }
     },
-    "attachments text": {
-      "in": "all"
-    },
-    "attachments text set": {
+    "attachments update": {
       "in": "all",
       "options": {
         "--attachment": {
@@ -2359,10 +2356,10 @@
     "chats leave": {
       "in": "all"
     },
-    "chats link": {
+    "chats links": {
       "in": "all"
     },
-    "chats link create": {
+    "chats links create": {
       "in": ["tg"],
       "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces",
       "options": {
@@ -2380,7 +2377,7 @@
         }
       }
     },
-    "chats link list": {
+    "chats links list": {
       "in": ["tg"],
       "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces",
       "options": {
@@ -2390,17 +2387,17 @@
         }
       }
     },
-    "chats link reset": {
-      "in": "all"
-    },
-    "chats link revoke": {
+    "chats links remove": {
       "in": ["tg"],
       "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces"
     },
-    "chats link show": {
+    "chats links reset": {
       "in": "all"
     },
-    "chats link update": {
+    "chats links show": {
+      "in": "all"
+    },
+    "chats links update": {
       "in": ["tg"],
       "reason": "max-cli has no way to change an invite link; WhatsApp has one invite link per group, which chats link reset replaces",
       "options": {
@@ -2490,7 +2487,7 @@
         }
       }
     },
-    "chats members audit": {
+    "chats members check": {
       "in": "all",
       "options": {
         "--deep": "all",
@@ -2554,23 +2551,7 @@
     "chats requests": {
       "in": "all"
     },
-    "chats requests accept": {
-      "in": "all",
-      "options": {
-        "--all": {
-          "in": ["tg"],
-          "planned": {
-            "max": "max-cli#771: one request answers them all (opcode 77)"
-          },
-          "reason": "WhatsApp answers one join request at a time"
-        },
-        "--link": {
-          "in": ["tg"],
-          "reason": "MAX does not say which invite link a request came by; WhatsApp answers one join request at a time"
-        }
-      }
-    },
-    "chats requests decline": {
+    "chats requests confirm": {
       "in": "all",
       "options": {
         "--all": {
@@ -2591,6 +2572,22 @@
       "options": {
         "--limit": "all",
         "--page": "all"
+      }
+    },
+    "chats requests reject": {
+      "in": "all",
+      "options": {
+        "--all": {
+          "in": ["tg"],
+          "planned": {
+            "max": "max-cli#771: one request answers them all (opcode 77)"
+          },
+          "reason": "WhatsApp answers one join request at a time"
+        },
+        "--link": {
+          "in": ["tg"],
+          "reason": "MAX does not say which invite link a request came by; WhatsApp answers one join request at a time"
+        }
       }
     },
     "chats rules": {
@@ -2736,7 +2733,7 @@
     "commands": {
       "in": "all"
     },
-    "commands schema": {
+    "commands info": {
       "in": "all"
     },
     "complete": {
@@ -2773,13 +2770,13 @@
     "contacts add": {
       "in": "all"
     },
-    "contacts alias": {
+    "contacts aliases": {
       "in": "all"
     },
-    "contacts alias rm": {
+    "contacts aliases remove": {
       "in": "all"
     },
-    "contacts alias set": {
+    "contacts aliases set": {
       "in": "all"
     },
     "contacts block": {
@@ -2803,8 +2800,24 @@
         }
       }
     },
+    "contacts events": {
+      "in": "all",
+      "options": {
+        "--cursor": "all",
+        "--limit": "all",
+        "--scope": "all",
+        "--since-time": "all",
+        "--until-time": "all"
+      }
+    },
     "contacts import": {
       "in": "all"
+    },
+    "contacts info": {
+      "in": "all",
+      "options": {
+        "--show-phone": "all"
+      }
     },
     "contacts link": {
       "in": "all"
@@ -2853,12 +2866,6 @@
         "--since-time": "all"
       }
     },
-    "contacts profile": {
-      "in": "all",
-      "options": {
-        "--show-phone": "all"
-      }
-    },
     "contacts remove": {
       "in": ["max", "tg"],
       "planned": {
@@ -2879,16 +2886,6 @@
     "contacts sync": {
       "in": "all"
     },
-    "contacts timeline": {
-      "in": "all",
-      "options": {
-        "--cursor": "all",
-        "--limit": "all",
-        "--scope": "all",
-        "--since-time": "all",
-        "--until-time": "all"
-      }
-    },
     "contacts unblock": {
       "in": "all"
     },
@@ -2901,7 +2898,7 @@
     "conversations batches": {
       "in": "all"
     },
-    "conversations batches next": {
+    "conversations batches show": {
       "in": "all",
       "options": {
         "--chat": "all",
@@ -2915,40 +2912,13 @@
         "--size": "all"
       }
     },
-    "conversations build": {
-      "in": "all",
-      "options": {
-        "--analysis-provider": {
-          "in": "all"
-        },
-        "--analyze": {
-          "in": "all"
-        },
-        "--base-url": {
-          "in": "all"
-        },
-        "--chat": "all",
-        "--max-chats": {
-          "in": "all"
-        },
-        "--max-tokens": {
-          "in": "all"
-        },
-        "--model": {
-          "in": "all"
-        },
-        "--size": {
-          "in": "all"
-        }
-      }
-    },
     "conversations consents": {
       "in": "all"
     },
     "conversations consents list": {
       "in": "all"
     },
-    "conversations consents revoke": {
+    "conversations consents remove": {
       "in": "all",
       "options": {
         "--chat": {
@@ -2978,7 +2948,10 @@
         "--threads": "all"
       }
     },
-    "conversations embed clear": {
+    "conversations embeddings": {
+      "in": "all"
+    },
+    "conversations embeddings clear": {
       "in": "all",
       "options": {
         "--base-url": "all",
@@ -2988,7 +2961,7 @@
         "--model": "all"
       }
     },
-    "conversations embed status": {
+    "conversations embeddings status": {
       "in": "all",
       "options": {
         "--base-url": "all",
@@ -3016,6 +2989,33 @@
           "in": "all"
         },
         "--chat": {
+          "in": "all"
+        }
+      }
+    },
+    "conversations links rebuild": {
+      "in": "all",
+      "options": {
+        "--analysis-provider": {
+          "in": "all"
+        },
+        "--analyze": {
+          "in": "all"
+        },
+        "--base-url": {
+          "in": "all"
+        },
+        "--chat": "all",
+        "--max-chats": {
+          "in": "all"
+        },
+        "--max-tokens": {
+          "in": "all"
+        },
+        "--model": {
+          "in": "all"
+        },
+        "--size": {
           "in": "all"
         }
       }
@@ -3087,15 +3087,18 @@
         "--online": "all"
       }
     },
-    "doctor report": {
+    "doctor reports": {
       "in": "all"
     },
-    "doctor report create": {
+    "doctor reports create": {
       "in": "all",
       "options": {
         "--output": "all",
         "--run": "all"
       }
+    },
+    "doctor reports show": {
+      "in": "all"
     },
     "flood": {
       "in": ["max", "tg"],
@@ -3169,6 +3172,19 @@
         }
       }
     },
+    "mcp add": {
+      "in": "all",
+      "options": {
+        "--allow-writes": "all",
+        "--permission": "all"
+      }
+    },
+    "mcp check": {
+      "in": "all",
+      "options": {
+        "--permission": "all"
+      }
+    },
     "mcp config": {
       "in": "all",
       "options": {
@@ -3181,19 +3197,6 @@
             "wa": "P7"
           }
         }
-      }
-    },
-    "mcp doctor": {
-      "in": "all",
-      "options": {
-        "--permission": "all"
-      }
-    },
-    "mcp setup": {
-      "in": "all",
-      "options": {
-        "--allow-writes": "all",
-        "--permission": "all"
       }
     },
     "mentions": {
@@ -3507,7 +3510,7 @@
         "wa": "wa backlog: metadata (needs the group read)"
       }
     },
-    "metadata get": {
+    "metadata show": {
       "in": ["max", "tg"],
       "planned": {
         "wa": "wa backlog: metadata (needs the group read)"
@@ -3521,7 +3524,7 @@
         }
       }
     },
-    "metadata refresh": {
+    "metadata sync": {
       "in": ["max", "tg"],
       "planned": {
         "wa": "wa backlog: metadata (needs the group read)"
@@ -3550,34 +3553,22 @@
     "models": {
       "in": "all"
     },
-    "models audio": {
-      "in": "all"
-    },
-    "models audio download": {
-      "in": "all"
-    },
-    "models audio list": {
-      "in": "all"
-    },
-    "models text": {
-      "in": "all"
-    },
-    "models text download": {
+    "models download": {
       "in": "all",
       "options": {
         "--accept-terms": "all"
       }
     },
-    "models text key": {
+    "models keys": {
       "in": "all"
     },
-    "models text key remove": {
+    "models keys remove": {
       "in": "all"
     },
-    "models text key set": {
+    "models keys set": {
       "in": "all"
     },
-    "models text list": {
+    "models list": {
       "in": "all"
     },
     "polls": {
@@ -4363,7 +4354,20 @@
     "stats messages counters": {
       "in": "all"
     },
-    "stats messages counters refresh": {
+    "stats messages counters show": {
+      "in": "all",
+      "options": {
+        "--chat": "all",
+        "--counters": "all",
+        "--exact": "all",
+        "--limit": "all",
+        "--max-age": "all",
+        "--selection": "all",
+        "--source": "all",
+        "--timezone": "all"
+      }
+    },
+    "stats messages counters sync": {
       "in": "all",
       "options": {
         "--chat": "all",
@@ -4375,19 +4379,6 @@
         "--selection": "all",
         "--source": "all",
         "--sync-time": "all",
-        "--timezone": "all"
-      }
-    },
-    "stats messages counters show": {
-      "in": "all",
-      "options": {
-        "--chat": "all",
-        "--counters": "all",
-        "--exact": "all",
-        "--limit": "all",
-        "--max-age": "all",
-        "--selection": "all",
-        "--source": "all",
         "--timezone": "all"
       }
     },
@@ -4571,9 +4562,6 @@
     "store gaps": {
       "in": "all"
     },
-    "store gaps plan": {
-      "in": "all"
-    },
     "store gaps repair": {
       "in": "all",
       "options": {
@@ -4590,6 +4578,9 @@
         "--pause": "all",
         "--repair-time": "all"
       }
+    },
+    "store gaps show": {
+      "in": "all"
     },
     "store info": {
       "in": "all"
@@ -4623,7 +4614,7 @@
     "store migrate": {
       "in": "all"
     },
-    "store reindex": {
+    "store rebuild": {
       "in": "all"
     },
     "store repair": {
@@ -4664,7 +4655,10 @@
         }
       }
     },
-    "tags auto": {
+    "tags list": {
+      "in": "all"
+    },
+    "tags rebuild": {
       "in": "all",
       "options": {
         "--chat": "all",
@@ -4672,9 +4666,6 @@
         "--limit": "all",
         "--sync-first": "all"
       }
-    },
-    "tags list": {
-      "in": "all"
     },
     "tags remove": {
       "in": "all",
@@ -4796,17 +4787,6 @@
         "--into": "all"
       }
     },
-    "tasks plan": {
-      "in": "all",
-      "options": {
-        "--assignee": "all",
-        "--category": "all",
-        "--description": "all",
-        "--due": "all",
-        "--remind-time": "all",
-        "--title": "all"
-      }
-    },
     "tasks reject": {
       "in": "all",
       "options": {
@@ -4836,6 +4816,17 @@
     },
     "tasks unmerge": {
       "in": "all"
+    },
+    "tasks update": {
+      "in": "all",
+      "options": {
+        "--assignee": "all",
+        "--category": "all",
+        "--description": "all",
+        "--due": "all",
+        "--remind-time": "all",
+        "--title": "all"
+      }
     },
     "topics": {
       "in": ["tg"],

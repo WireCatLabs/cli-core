@@ -10,7 +10,7 @@ import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
-import { destroysNothing, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
+import { destroysNothing, LOCAL_WRITE, NO_EFFECTS, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { lineOf, nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
@@ -63,11 +63,15 @@ const EXCLUDES = ["message text", "chat titles", "names", "phone numbers", "the 
 
 const reportCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const report = annotate(new Command("report"), { effects: REMOTE_READ })
+  const report = new Command("reports").description("problem reports")
+  annotate(report.command("show"), {
+    effects: NO_EFFECTS,
+    examples: [`${app.command} doctor reports show`],
+  })
     .description("what a problem report holds; writes nothing")
     .action(function (this: Command) {
       const output = outputFor(this)
-      const create = lineOf(this, "doctor report create")
+      const create = lineOf(this, "doctor reports create")
       renderAnswer(
         this,
         output,
@@ -93,7 +97,7 @@ const reportCommand = (messenger: Messenger): Command => {
   destroysNothing(
     annotate(report.command("create"), {
       effects: LOCAL_WRITE,
-      examples: [`${app.command} personal doctor report create --output ./problem-report.json`],
+      examples: [`${app.command} personal doctor reports create --output ./problem-report.json`],
     }),
   )
     .description("write a problem report to a file, and say where to send it")

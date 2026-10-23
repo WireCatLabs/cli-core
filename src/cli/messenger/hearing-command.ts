@@ -10,7 +10,7 @@ export const TRANSCRIBE_OPTION = [
 
 export const MODEL_OPTION = [
   "--model <model>",
-  "which downloaded speech model hears them, with --transcribe; `models audio list` shows them",
+  "which downloaded speech model hears them, with --transcribe; `models list` shows them",
 ] as const
 
 /**

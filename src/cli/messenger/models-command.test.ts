@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, truncateSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
@@ -51,6 +51,7 @@ const call = async (argv: string[], speechModels?: string[], tty = false, stdin?
     CHAT_PROFILE: "default",
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
+    MESSAGING_STORE: join(root, "store.sqlite"),
     WIRECAT_STATE_DIR: join(root, "cache"),
   }
   const keyring = memoryKeyring()
@@ -71,10 +72,10 @@ const call = async (argv: string[], speechModels?: string[], tty = false, stdin?
     sized(vadPath(directory), VAD.bytes)
     for (const file of model.files) sized(modelPath(directory, model)(file.name), file.bytes)
   }
-  const go = async () => {
+  const go = async (args = argv) => {
     const streams = captureStreams()
     const code = await run(
-      argv,
+      args,
       { app, commands: () => [modelsCommand(messenger)] },
       {
         streams,
@@ -89,9 +90,35 @@ const call = async (argv: string[], speechModels?: string[], tty = false, stdin?
   return { go, place, env, keyring }
 }
 
+describe("canonical model commands", () => {
+  it("lists both model kinds and filters each catalogue", async () => {
+    const { go, env } = await call(["models", "list", "--json"])
+    const all = JSON.parse((await go()).stdout[0] ?? "null")
+    expect(new Set(all.items.map((item: { id: string }) => item.id)).size).toBe(all.items.length)
+    for (const kind of ["audio", "text"]) {
+      const selected = JSON.parse((await go(["models", "list", `kind:${kind}`, "--json"])).stdout[0] ?? "null")
+      expect(selected.items).toEqual(all.items.filter((item: { kind: string }) => item.kind === kind))
+    }
+    const missing = JSON.parse(
+      (await go(["models", "list", "id:e5-small downloaded:false", "--json"])).stdout[0] ?? "null",
+    )
+    expect(missing.items).toHaveLength(1)
+    expect(missing.items[0]).toMatchObject({ id: "e5-small", kind: "text", downloaded: false })
+    expect(existsSync(env.MESSAGING_STORE)).toBe(false)
+  })
+
+  it("uses canonical key commands and keeps key material out of the receipt", async () => {
+    const { go } = await call(["models", "keys", "set", "openai", "--json"], undefined, false, "synthetic-key\n")
+    const result = await go()
+    expect(result.code).toBe(0)
+    expect(result.stdout.join("")).not.toContain("synthetic-key")
+    expect(JSON.parse(result.stdout[0] ?? "null").item).toMatchObject({ provider: "openai", stored: "keyring" })
+  })
+})
+
 describe("models audio", () => {
   it("**checks a downloaded model works** by loading it, and fetches nothing it already has", async () => {
-    const { go, place, env } = await call(["models", "audio", "download", "gigaam-v3-ctc", "--json"])
+    const { go, place, env } = await call(["models", "download", "gigaam-v3-ctc", "--json"])
     place("gigaam-v3-ctc")
 
     const { code, stdout } = await go()
@@ -107,28 +134,32 @@ describe("models audio", () => {
     expect(recognized).toBe(1)
   })
 
-  it("refuses a model it does not know, naming the ones it does", async () => {
-    const { go } = await call(["models", "audio", "download", "whisper"])
+  it("refuses an unknown model and points to the model catalogue", async () => {
+    const { go } = await call(["models", "download", "whisper"])
     const { code, stderr } = await go()
 
     expect(code).not.toBe(0)
-    expect(stderr.join("")).toContain("parakeet-v3")
+    expect(stderr.join("")).toContain("models list")
   })
 
   it("**lists the CLI's own order**, marking the downloaded ones and the default", async () => {
-    const { go, place } = await call(["models", "audio", "list"], ["gigaam-v3"], true)
+    const { go, place } = await call(["models", "list", "kind:audio"], ["gigaam-v3"], true)
     place("gigaam-v3")
 
     const lines = (await go()).stdout.join("").trim().split("\n")
 
-    expect(lines.map((line) => line.slice(0, 16).trim())).toEqual(["* gigaam-v3", "parakeet-v3", "gigaam-v3-ctc"])
+    expect(lines.map((line) => line.replace(/^audio\s+/, "").match(/^(?:\* )?[^ ]+/)?.[0])).toEqual([
+      "* gigaam-v3",
+      "parakeet-v3",
+      "gigaam-v3-ctc",
+    ])
     expect(lines[0]).toContain("downloaded")
   })
 })
 
 describe("models text", () => {
   it("**lists the embedding models**, e5-small the default, marking the downloaded ones", async () => {
-    const { go, env } = await call(["models", "text", "list", "--json"])
+    const { go, env } = await call(["models", "list", "kind:text", "--json"])
     const model = textModel("e5-small")
     for (const [file, path] of placedText(model, textModelsDirectory(env))) {
       mkdirSync(dirname(path), { recursive: true })
@@ -149,24 +180,24 @@ describe("models text", () => {
   })
 
   it("names the download step while the default embedding model is missing", async () => {
-    const { go } = await call(["models", "text", "list", "--json"])
+    const { go } = await call(["models", "list", "kind:text", "--json"])
     const answer = v.parse(listEnvelopeSchema(modelEntity), JSON.parse((await go()).stdout[0] ?? ""))
     expect(answer.next).toMatchObject([{ step: "models.download", args: { model: "e5-small" } }])
     expect(answer.items[0]).toMatchObject({ kind: "text", size_bytes: expect.any(Number) })
     expect(answer.items[0]?.path).toMatch(/e5-small$/)
   })
 
-  it("refuses a query term: the catalog has nothing to filter", async () => {
-    const { go } = await call(["models", "text", "list", "kind:text", "--json"])
+  it("refuses a query field outside the model catalogue", async () => {
+    const { go } = await call(["models", "list", "kind:text", "unknown:value", "--json"])
 
     const { code, stderr } = await go()
 
     expect(code).toBe(2)
-    expect(stderr.join("")).toContain("query.unsupported-field")
+    expect(stderr.join("")).toContain("query.unknown-field")
   })
 
   it("refuses a model with its own licence until its terms are accepted, downloading nothing", async () => {
-    const { go } = await call(["models", "text", "download", "embeddinggemma", "--json"])
+    const { go } = await call(["models", "download", "embeddinggemma", "--json"])
 
     const { code, stderr } = await go()
 
@@ -176,9 +207,9 @@ describe("models text", () => {
   })
 })
 
-describe("models text key", () => {
+describe("models keys", () => {
   it("**stores a piped key where only the user reads it**, never echoing it", async () => {
-    const set = await call(["models", "text", "key", "set", "openai", "--json"], undefined, false, "sk-test\n")
+    const set = await call(["models", "keys", "set", "openai", "--json"], undefined, false, "sk-test\n")
     const { code, stdout, stderr } = await set.go()
     expect(code).toBe(0)
     expect(v.safeParse(ENTITIES["model_key.stored"], JSON.parse(stdout[0] ?? "").item).success).toBe(true)
@@ -188,14 +219,18 @@ describe("models text key", () => {
   })
 })
 
-it("declares an empty key-removal answer without connecting or exposing a secret", async () => {
-  const removed = await call(["models", "text", "key", "remove", "openai", "--json"])
-  const result = await removed.go()
-  expect(result.code).toBe(0)
-  expect(v.parse(ENTITIES["model_key.removed"], JSON.parse(result.stdout[0] ?? "").item)).toEqual({
+it("declares canonical key-removal fields and rejects a secret projection before input", async () => {
+  const { go } = await call(["models", "keys", "remove", "openai", "--json"])
+  const removed = await go()
+  expect(removed.code).toBe(0)
+  expect(v.parse(ENTITIES["model_key.removed"], JSON.parse(removed.stdout[0] ?? "null").item)).toEqual({
     provider: "openai",
     removed: [],
   })
-  const projected = await call(["models", "text", "key", "remove", "openai", "--json=provider"])
-  expect(JSON.parse((await projected.go()).stdout[0] ?? "").item).toEqual({ provider: "openai" })
+  const projected = await go(["models", "keys", "remove", "openai", "--json=provider"])
+  expect(JSON.parse(projected.stdout[0] ?? "null").item).toEqual({ provider: "openai" })
+  const refused = await go(["models", "keys", "set", "openai", "--json=key"])
+  expect(refused.code).toBe(2)
+  expect(refused.stdout).toEqual([])
+  expect(refused.stderr.join(" ")).toContain("output.unknown-field")
 })

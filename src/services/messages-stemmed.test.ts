@@ -155,7 +155,7 @@ describe("stemmed strict search", () => {
       built: "snowball-3.1.1 cyrillic=russian latin=english,spanish",
       wanted: "snowball-3.1.1 cyrillic=russian latin=english",
     })
-    expect(refused.message).toContain("store reindex")
+    expect(refused.message).toContain("store rebuild")
     expect(await ids(store, "exact:running")).toEqual([1])
 
     const database = await openCache(path)
@@ -176,7 +176,7 @@ describe("stemmed strict search", () => {
     expect(found.query?.stemming).toEqual({ applied: false, reason: "building", done: 0, total: 7, pending: 0 })
   })
 
-  it("**still refuses stems the owner chose until store reindex**", async () => {
+  it("**still refuses stems the owner chose until store rebuild**", async () => {
     const { store } = await open(TEXTS)
     await store.searchIndex.saveStemmers({ cyrillic: "none", latin: "english" })
     const refused = await failure(searchLucene(store, account, { text: "квартира", limit: 10 }))

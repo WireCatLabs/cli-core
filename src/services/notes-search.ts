@@ -109,11 +109,11 @@ export interface NotesEmbedded {
 /** Chunks one batch embeds: one short transaction writes each, as for conversations. */
 const NOTE_BATCH = 8
 
-/** `command` is given only by a tool that has `models text download`; any other gets the tools that do. */
+/** `command` is given only by a tool that has `models download`; any other gets the tools that do. */
 const downloadHint = (model: string, command: string | undefined) =>
   command === undefined
-    ? `install it with a WireCat CLI that has \`models text download\` (tg, max or wa); they share the model folder`
-    : `\`${command} models text download ${model}\``
+    ? `install it with a WireCat CLI that has \`models download\` (tg, max or wa); they share the model folder`
+    : `\`${command} models download ${model}\``
 
 const localModel = (choice: string | undefined, env: NodeJS.ProcessEnv | undefined, command: string | undefined) => {
   const model = textModel(choice ?? DEFAULT_TEXT_MODEL)

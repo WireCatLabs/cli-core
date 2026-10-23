@@ -508,7 +508,7 @@ describe("the MCP server", () => {
     })
     const shown = await call("stats messages counters show", { chat: "7", counters: "views", limit: 1 })
     expect(shown.isError, JSON.stringify(shown.body)).toBe(false)
-    const preview = await call("stats messages counters refresh", {
+    const preview = await call("stats messages counters sync", {
       selection: shown.body.item.selection,
       counters: "views",
       dry_run: true,
@@ -517,7 +517,7 @@ describe("the MCP server", () => {
     expect(preview.isError, JSON.stringify(preview.body)).toBe(false)
     expect(preview.body.item).toMatchObject({ dry_run: true, supported: ["views"] })
     expect(fetchCounters).not.toHaveBeenCalled()
-    const refreshed = await call("stats messages counters refresh", {
+    const refreshed = await call("stats messages counters sync", {
       selection: shown.body.item.selection,
       counters: "views",
       limit: 1,
@@ -720,10 +720,10 @@ describe("the MCP server", () => {
       "chats folders list",
       "chats folders show",
       "chats inspect",
-      "chats link list",
-      "chats link show",
+      "chats links list",
+      "chats links show",
       "chats list",
-      "chats members audit",
+      "chats members check",
       "chats members history",
       "chats members list",
       "chats requests list",
@@ -733,28 +733,28 @@ describe("the MCP server", () => {
       "chats tracking list",
       "chats tracking show",
       "commands",
-      "commands schema",
+      "commands info",
       "config show",
       "contacts check",
       "contacts context",
+      "contacts events",
+      "contacts info",
       "contacts list",
       "contacts lookup",
       "contacts notes list",
       "contacts notes show",
       "contacts prepare",
-      "contacts profile",
       "contacts show",
-      "contacts timeline",
-      "conversations batches next",
+      "conversations batches show",
       "conversations batches status",
       "conversations consents list",
-      "conversations embed status",
+      "conversations embeddings status",
       "conversations list",
       "conversations related",
       "conversations show",
       "conversations status",
       "doctor",
-      "doctor report",
+      "doctor reports show",
       "guide",
       "images models list",
       "inbox",
@@ -772,9 +772,8 @@ describe("the MCP server", () => {
       "messages scheduled",
       "messages show",
       "messages transcribe",
-      "metadata get",
-      "models audio list",
-      "models text list",
+      "metadata show",
+      "models list",
       "polls show",
       "recipients list",
       "replies consents show",
@@ -814,7 +813,7 @@ describe("the MCP server", () => {
       "stats tasks show",
       "status",
       "store check",
-      "store gaps plan",
+      "store gaps show",
       "store info",
       "store jobs list",
       "store jobs show",
@@ -895,7 +894,7 @@ describe("the MCP server", () => {
       }),
     )
 
-    const { body } = await call("chats members audit", { chat: "7", max_pages: 1 })
+    const { body } = await call("chats members check", { chat: "7", max_pages: 1 })
 
     expect(body).toMatchObject({ items: [{ id: "40", score: 4 }], page: { has_more: false } })
     expect(body.meta.truncated).toBeUndefined()
@@ -1020,7 +1019,7 @@ describe("the MCP server", () => {
       }),
     )
 
-    const { body } = await call("contacts profile", { person: "Olga" })
+    const { body } = await call("contacts info", { person: "Olga" })
 
     expect(body.item).toMatchObject({ id: "9", phone: "***0123", seen: "week" })
     expect(body.item.chats).toMatchObject([{ id: "7", kind: "group" }])
@@ -1325,7 +1324,7 @@ describe("the MCP server", () => {
 
     const before = await call("conversations list", { chat: "7" })
     expect(before.isError).toBe(true)
-    expect(JSON.stringify(before.body)).toContain("conversations build --chat 7")
+    expect(JSON.stringify(before.body)).toContain("conversations links rebuild --chat 7")
 
     const store = await openStore({ path: env.MESSAGING_STORE })
     const account = { provider: "chat", account: "500" }
@@ -1370,7 +1369,7 @@ describe("the MCP server", () => {
     const backend = scripted({ history: async () => ({ items: records, hasMore: false }), markRead })
     const { call, session, env } = await connect(backend)
     await call("messages list", { chat: "7" })
-    await call("conversations build", { chat: "7" })
+    await call("conversations links rebuild", { chat: "7" })
     await session.close()
     const inferred = models.opened
     const context = await call("messages context", { chat: "7", message: "5", thread: true })
@@ -1444,14 +1443,14 @@ describe("the MCP server", () => {
     const inferred = models.opened
     const prompt = (await raw.getPrompt({ name: "link-conversations" })).messages[0]
     expect(prompt?.content).toMatchObject({ type: "text", text: expect.stringContaining("Wait for a yes") })
-    expect((await call("conversations build", { chat: "7" })).body.item.conversations).toBe(4)
+    expect((await call("conversations links rebuild", { chat: "7" })).body.item.conversations).toBe(4)
     expect((await call("conversations batches status", { chat: "7" })).body.item).toMatchObject({
       messages: 4,
       batches: 1,
       characters: expect.any(Number),
       tokens_estimate: expect.any(Number),
     })
-    const batch = (await call("conversations batches next", { chat: "7", size: 10 })).body.item
+    const batch = (await call("conversations batches show", { chat: "7", size: 10 })).body.item
     const answers = [
       { message: "1", parent: null, confidence: 1 },
       { message: "2", parent: null, confidence: 1 },
@@ -1472,8 +1471,8 @@ describe("the MCP server", () => {
         })
       ).body.item.stored,
     ).toBe(4)
-    expect((await call("conversations batches next", { chat: "7" })).body.item).toEqual({ batch: null })
-    expect((await call("conversations build", { chat: "7" })).body.item.conversations).toBe(2)
+    expect((await call("conversations batches show", { chat: "7" })).body.item).toEqual({ batch: null })
+    expect((await call("conversations links rebuild", { chat: "7" })).body.item.conversations).toBe(2)
     for (const [root, members] of [
       ["1", ["1", "3"]],
       ["2", ["2", "4"]],
@@ -1485,7 +1484,7 @@ describe("the MCP server", () => {
     expect(
       (await call("conversations links clear", { chat: "7", answer_model: "synthetic-agent" })).body.item.cleared,
     ).toBe(4)
-    expect((await call("conversations build", { chat: "7" })).body.item.conversations).toBe(4)
+    expect((await call("conversations links rebuild", { chat: "7" })).body.item.conversations).toBe(4)
     expect(telegram.opened()).toBe(opened)
     expect(models.opened).toBe(inferred)
     expect(streams.stderr.join("\n")).not.toContain("oven")
@@ -1494,7 +1493,7 @@ describe("the MCP server", () => {
   it("refuses a stale MCP batch atomically when the chat changes", async () => {
     const { call, env } = await connect(scripted())
     await call("messages list", { chat: "7" })
-    const batch = (await call("conversations batches next", { chat: "7" })).body.item.batch
+    const batch = (await call("conversations batches show", { chat: "7" })).body.item.batch
     const store = await openStore({ path: env.MESSAGING_STORE })
     await store.messages.markDeleted({ provider: "chat", account: "500" }, ["1"], { chatId: "7" })
     await store.close()
@@ -1503,7 +1502,7 @@ describe("the MCP server", () => {
       answer: { model: "synthetic-agent", answers: [{ message: "1", parent: null, confidence: 1 }] },
     })
     expect(result.isError).toBe(true)
-    expect((await call("conversations batches next", { chat: "7" })).body.item).toEqual({ batch: null })
+    expect((await call("conversations batches show", { chat: "7" })).body.item).toEqual({ batch: null })
   })
 
   it("**hides every write under setup's read-only answer**, even one the profile allows", async () => {
@@ -1521,7 +1520,7 @@ describe("the MCP server", () => {
       const { client, call } = await connect(scripted(), { config: levels({ "conversations.links": level }) })
       const names = await client.commands()
       expect(names).toContain("conversations batches status")
-      expect(names).toContain("conversations batches next")
+      expect(names).toContain("conversations batches show")
       for (const tool of ["links add", "links clear"]) {
         expect(names.includes(`conversations ${tool}`)).toBe(level === "allow" || level === "ask")
       }
@@ -1552,10 +1551,10 @@ describe("the MCP server", () => {
       ["searches clear", {}],
       ["contacts notes edit", { person: "Alice", id: "1", text: "x", revision: 1 }],
       ["contacts notes remove", { person: "Alice", id: "1" }],
-      ["contacts alias rm", { person: "Alice" }],
+      ["contacts aliases remove", { person: "Alice" }],
       ["tags remove", { chat: "7", tag: ["work"] }],
       ["searches create", { name: "daily", query: "dog", replace: true }],
-      ["contacts alias set", { person: "Alice", alias: "Al" }],
+      ["contacts aliases set", { person: "Alice", alias: "Al" }],
       ["tags add", { chat: "7", tag: ["work"] }],
       ["contacts notes add", { person: "Alice", text: "met at the fair" }],
     ] as const) {
@@ -1578,7 +1577,7 @@ describe("the MCP server", () => {
     const added = await call("tasks add", { message: "msg:chat/500/7/101", type: "promise", category: "money" })
     expect(added.isError, JSON.stringify(added.body)).toBe(false)
     const task = added.body.item.id
-    expect((await call("tasks plan", { task, title: "Send the plan" })).isError).toBe(false)
+    expect((await call("tasks update", { task, title: "Send the plan" })).isError).toBe(false)
     const closed = await call("tasks close", { task, as: "done", certainty: 1 })
     expect(closed.body.item).toMatchObject({ state: "open", close_suggestion: { as: "done", certainty: 1 } })
   })
@@ -1704,7 +1703,7 @@ describe("the MCP server", () => {
       items: [{ id: taskId, source_message: "msg:chat/500/7/101" }],
       page: { has_more: false },
     })
-    const planned = await call("tasks plan", {
+    const planned = await call("tasks update", {
       task: taskId,
       title: "Send the plan",
       due: "2h",
@@ -1832,9 +1831,10 @@ describe("the MCP server", () => {
       { chatId: "7", title: "AI news", username: null, description: null },
     )
     await store.close()
-    const aliased = (await call("contacts alias set", { person: "10", alias: "Local" })).body.item
+    const aliased = (await call("contacts aliases set", { person: "10", alias: "Local" })).body.item
     expect(aliased).toMatchObject({ alias: "Local" })
     expect(v.safeParse(ENTITIES.contact_alias, aliased).success).toBe(true)
+
     const added = await call("contacts notes add", { person: "Local", text: "Own note" })
     expect(added.body.item).toMatchObject({ revision: 1, text: "Own note" })
     const id = added.body.item.id
@@ -1846,11 +1846,11 @@ describe("the MCP server", () => {
     const removed = (await call("contacts notes remove", { person: "10", id })).body.item
     expect(removed).toMatchObject({ removed: true })
     expect(v.safeParse(ENTITIES.contact_note_removal, removed).success).toBe(true)
-    const unaliased = (await call("contacts alias rm", { person: "10" })).body.item
+    const unaliased = (await call("contacts aliases remove", { person: "10" })).body.item
     expect(unaliased).toMatchObject({ alias: null })
     expect(v.safeParse(ENTITIES.contact_alias, unaliased).success).toBe(true)
-    expect((await call("metadata get", { chat: "7" })).body.item).toMatchObject({ metadata: { title: "AI news" } })
-    const preview = (await call("tags auto", { chat: "7", dry_run: true })).body.item
+    expect((await call("metadata show", { chat: "7" })).body.item).toMatchObject({ metadata: { title: "AI news" } })
+    const preview = (await call("tags rebuild", { chat: "7", dry_run: true })).body.item
     v.parse(ENTITIES.automatic_tags, preview)
     expect(preview).toMatchObject({
       dry_run: true,
@@ -1861,10 +1861,10 @@ describe("the MCP server", () => {
     })
     const names = await readonly.client.commands()
     expect(names).toContain("contacts notes list")
-    expect(names).not.toContain("contacts alias set")
+    expect(names).not.toContain("contacts aliases set")
     expect(names).not.toContain("contacts notes add")
-    expect(names).not.toContain("tags auto")
-    expect(names).not.toContain("metadata refresh")
+    expect(names).not.toContain("tags rebuild")
+    expect(names).not.toContain("metadata sync")
   })
 
   it("**tags through MCP as the command does**, hides the writes where tags are read-only, and goes ahead at ask", async () => {
@@ -1929,8 +1929,9 @@ describe("the MCP server", () => {
       ],
       page: { has_more: false },
     })
-    const kept = await call("attachments text set", { chat: "msg:chat/500/9/108", text: "Квартальный отчёт" })
+    const kept = await call("attachments update", { chat: "msg:chat/500/9/108", text: "Квартальный отчёт" })
     v.parse(ENTITIES.attachment_text_change, kept.body.item)
+
     expect(kept.body.item).toEqual({
       ref: "msg:chat/500/9/108",
       attachment: 1,
@@ -1945,7 +1946,7 @@ describe("the MCP server", () => {
     const readOnly = await connect(scripted(), { config: levels({ attachments: "readonly" }) })
     const names = await readOnly.client.commands()
     expect(names).toContain("attachments list")
-    expect(names).not.toContain("attachments text set")
+    expect(names).not.toContain("attachments update")
   })
 
   it("delivers retained PDF bytes through the real three-tool transport and honors message permissions", async () => {
@@ -2171,8 +2172,8 @@ describe("the MCP server", () => {
       "store copies delete",
       "store decrypt",
       "store export",
-      "store gaps plan",
       "store gaps repair",
+      "store gaps show",
       "store info",
       "store jobs cancel",
       "store jobs clear",
@@ -2180,10 +2181,11 @@ describe("the MCP server", () => {
       "store jobs retry",
       "store jobs show",
       "store migrate",
-      "store reindex",
+      "store rebuild",
       "store repair",
       "store reset",
       "store restore",
+
       "store status",
     ])
   })
@@ -2246,8 +2248,9 @@ describe("the MCP server", () => {
     await store.sync.markRange({ provider: "chat", account: "500" }, "7", 100, 101)
     await store.sync.markRange({ provider: "chat", account: "500" }, "7", 103, 104)
     await store.close()
-    const plan = await call("store gaps plan", { chat: "7" })
+    const plan = await call("store gaps show", { chat: "7" })
     v.parse(ENTITIES.store_gap_plan, plan.body.item)
+
     expect(plan.body.item.gaps).toEqual([{ from: 102, to: 102 }])
     expect(backend.opened()).toBe(0)
     const repaired = await call("store gaps repair", {
@@ -2273,7 +2276,7 @@ describe("the MCP server", () => {
     const backend = scripted()
     const { call } = await connect(backend, {
       root,
-      config: levels({ store: "allow", "conversations.links": "readonly", "conversations.embed": "allow" }),
+      config: levels({ store: "allow", "conversations.links": "readonly", "conversations.embeddings": "allow" }),
     })
     const result = await call("store gaps repair", { chat: "7", catch_up: true })
     expect(result.isError).toBe(true)
@@ -2392,11 +2395,11 @@ describe("the MCP server", () => {
   })
 
   it("runs conversations rebuild where conversations.embed asks, and hides it where it is read-only", async () => {
-    const asked = await connect(scripted(), { config: levels({ "conversations.embed": "ask" }) })
+    const asked = await connect(scripted(), { config: levels({ "conversations.embeddings": "ask" }) })
     await asked.call("chats list")
     expect((await asked.call("conversations rebuild")).body?.error?.code).not.toBe("confirmation_required")
 
-    const { client } = await connect(scripted(), { config: levels({ "conversations.embed": "readonly" }) })
+    const { client } = await connect(scripted(), { config: levels({ "conversations.embeddings": "readonly" }) })
     const names = await client.commands()
     expect(names).toContain("search conversations")
     expect(names).not.toContain("conversations rebuild")
@@ -2633,7 +2636,7 @@ describe("the transcribe tool", () => {
     const { isError, body } = await (await connect()).call("messages transcribe", { chat: "7", message: "5" })
 
     expect(isError).toBe(true)
-    expect(body.error.message).toContain("chat default models audio download parakeet-v3")
+    expect(body.error.message).toContain("chat default models download parakeet-v3")
   })
 })
 
@@ -2642,7 +2645,7 @@ describe("the catalogue follows each CLI's own command tree", () => {
     const commands = await (await connect(scripted())).client.commands()
 
     expect(commands).toEqual(
-      expect.arrayContaining(["chats link create", "metadata get", "metadata refresh", "messages photo"]),
+      expect.arrayContaining(["chats links create", "metadata show", "metadata sync", "messages photo"]),
     )
   })
 
@@ -2650,8 +2653,8 @@ describe("the catalogue follows each CLI's own command tree", () => {
     const { client } = await connect(scripted(), { own: { inviteLinkCreate: false }, unmounted: ["metadata"] })
     const commands = await client.commands()
 
-    expect(commands.filter((one) => one === "chats link create" || one.startsWith("metadata "))).toEqual([])
-    expect(commands).toEqual(expect.arrayContaining(["chats link show", "messages photo", "conversations rebuild"]))
+    expect(commands.filter((one) => one === "chats links create" || one.startsWith("metadata "))).toEqual([])
+    expect(commands).toEqual(expect.arrayContaining(["chats links show", "messages photo", "conversations rebuild"]))
   })
 })
 
@@ -3711,8 +3714,8 @@ describe("sending over MCP", () => {
     const { call } = await connect(telegram, {})
 
     await call("chats update", { chat: "7", title: "Books", all_can_pin: "on" })
-    const shown = await call("chats link show", { chat: "7" })
-    const reset = await call("chats link reset", { chat: "7" })
+    const shown = await call("chats links show", { chat: "7" })
+    const reset = await call("chats links reset", { chat: "7" })
     v.parse(ENTITIES.chat_invite, shown.body.item)
     v.parse(ENTITIES.chat_group_change, reset.body.item)
 
@@ -3732,9 +3735,9 @@ describe("sending over MCP", () => {
         return { link, approval: false, expiresAt: null, maxUses: change.maxUses ?? null }
       },
     })
-    const { call } = await connect(telegram, { inviteLinkUpdate: true, permission: ["chats.link.update=allow"] })
+    const { call } = await connect(telegram, { inviteLinkUpdate: true, permission: ["chats.links.update=allow"] })
 
-    const changed = await call("chats link update", {
+    const changed = await call("chats links update", {
       chat: "7",
       link: "https://t.me/+x",
       approval: false,

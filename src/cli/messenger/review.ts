@@ -1,10 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command, Option } from "commander"
+import { Command } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import type { Review } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
-import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf, REVIEW_DAYS, reviewStart, UNANSWERED_HOURS } from "../../services/inbox.js"
 import { type Hearing, modelWith } from "../../speech/hearing.js"
 import { REMOTE_READ } from "../effects.js"
@@ -42,7 +41,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
       "[query...]",
       `where the last review ended and which chat: date>2h, chat:"Book club"; ${REVIEW_DAYS} days ago if no date`,
     )
-    .addOption(new Option("--kind <kinds>", `compatibility spelling for kind:; ${CHAT_KINDS.join(", ")}`).hideHelp())
+
     .option(
       "--unanswered [duration]",
       `only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d; ${UNANSWERED_HOURS}h if not given`,

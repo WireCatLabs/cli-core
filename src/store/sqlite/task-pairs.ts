@@ -15,7 +15,7 @@ import { recordTaskEvent } from "./work-tasks.js"
 
 /**
  * What became of a pair: `review` waits for the agent that reviews after a sync, `unsure` for the owner; the rest
- * are labelled pairs (tasks plan, "Learn from answers") — `merged`, `attached` say one job, `rejected`, `unmerged`,
+ * are labelled pairs (tasks update, "Learn from answers") — `merged`, `attached` say one job, `rejected`, `unmerged`,
  * `new` say two.
  */
 export const TASK_PAIR_DECISIONS = ["review", "unsure", "merged", "rejected", "unmerged", "attached", "new"] as const

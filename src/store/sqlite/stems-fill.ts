@@ -24,7 +24,7 @@ import { writeBatch } from "./transaction.js"
 /**
  * Brings the stems towards "ready" in short write transactions: the messages up to the watermark, then
  * the queue. One stemmer per run, so its cache serves every batch. Never rebuilds: a row built by other
- * choices is left for `store migrate` or `store reindex`.
+ * choices is left for `store migrate` or `store rebuild`.
  */
 export const fillStems = (
   database: CacheDatabase,
@@ -85,7 +85,7 @@ const newer = (a: number[], b: number[]): boolean => {
 
 /**
  * Empties the stems and starts them again from the newest message, claimed by the store's setting —
- * for `store reindex`, and for `store migrate` when the stems were built by other choices. A row built
+ * for `store rebuild`, and for `store migrate` when the stems were built by other choices. A row built
  * by a newer Snowball than this binary has is refused: rebuilding it would downgrade every newer tool.
  */
 export const resetStems = (
@@ -127,7 +127,7 @@ export const resetStems = (
 
 /**
  * Stems an older tool built with its own default, while nobody chose stemmers, start again with this
- * build's default: nobody chose the old one, so it waits for no `store reindex`. Like a first fill
+ * build's default: nobody chose the old one, so it waits for no `store rebuild`. Like a first fill
  * from then on. A saved default is replaced only by newer defaults, so two versions never rebuild each
  * other's. A row a newer Snowball built is left for an upgrade.
  */

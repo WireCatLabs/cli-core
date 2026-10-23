@@ -8,9 +8,9 @@ import { sharedProgram } from "../testing/shared-program.js"
 import { createProgram, run } from "./program.js"
 
 const cases = [
-  ["conversations", "build", "--analysis-provider", "openai", "--provider", "openai"],
+  ["conversations", "links", "rebuild", "--analysis-provider", "openai", "--provider", "openai"],
   ["conversations", "embed", "--embedding-provider", "local", "--provider", "local"],
-  ["conversations", "consents", "revoke", "--consent-provider", "synthetic", "--provider", "synthetic"],
+  ["conversations", "consents", "remove", "--consent-provider", "synthetic", "--provider", "synthetic"],
   ["conversations", "links", "clear", "--chat", "7", "--answer-model", "synthetic", "--model", "synthetic"],
   ["tags", "remove", "synthetic", "--chat", "7", "--claim", "manual", "--source", "auto"],
   ["inbox", "kind:group", "--kind", "channel"],
@@ -18,7 +18,7 @@ const cases = [
 ]
 
 describe("renamed option meanings", () => {
-  it.each(cases)("refuses conflicting spellings before any store or provider work: %j", async (...argv) => {
+  it.each(cases)("refuses retired spellings before any store or provider work: %j", async (...argv) => {
     const root = mkdtempSync(join(tmpdir(), "option-meanings-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -32,16 +32,16 @@ describe("renamed option meanings", () => {
     expect(streams.stdout).toEqual([])
     const error = JSON.parse(streams.stderr.at(-1) ?? "{}").error
     expect(error.code).toBe("validation_error")
-    expect(error.message).toMatch(/cannot be used|not both/)
+    expect(error.message).toMatch(/unknown option/)
     expect(existsSync(env.MESSAGING_STORE)).toBe(false)
   })
 
-  it("advertises the distinct meanings and hides their compatibility spellings", () => {
+  it("advertises canonical meanings and refuses their retired spellings", () => {
     const commands = flatten(describeProgram(createProgram(sharedProgram)))
     for (const [path, canonical, legacy] of [
-      ["conversations build", "--analysis-provider", "--provider"],
+      ["conversations links rebuild", "--analysis-provider", "--provider"],
       ["conversations embed", "--embedding-provider", "--provider"],
-      ["conversations consents revoke", "--consent-provider", "--provider"],
+      ["conversations consents remove", "--consent-provider", "--provider"],
       ["conversations links clear", "--answer-model", "--model"],
       ["tags remove", "--claim", "--source"],
       ["replies edit", "--template-mode", "--model"],

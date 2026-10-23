@@ -165,7 +165,7 @@ const changeCategory = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting:
     return {
       result: { store: storePath(env), file, scope: "shared", setting, value: set ? taskCategoryValue(set) : null },
       note: [
-        `saved in ${file} — rules, tasks add and tasks plan in tg, MAX and memo take categories from it; ` +
+        `saved in ${file} — rules, tasks add and tasks update in tg, MAX and memo take categories from it; ` +
           "tasks keep the category they have",
         ...unlisted,
       ].join("\n"),

@@ -850,7 +850,7 @@ describe("post-fetch catch-up controls", () => {
         profiles: {
           default: {
             search_catch_up: true,
-            permissions: { "conversations.links": "readonly", "conversations.embed": "allow" },
+            permissions: { "conversations.links": "readonly", "conversations.embeddings": "allow" },
           },
         },
       }),

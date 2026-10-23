@@ -100,7 +100,7 @@ describe("counter services", () => {
       unsupported: ["reactions", "comments"],
     })
     expect(f.fetchCounters).toHaveBeenCalledWith("7", "3", ["views"], expect.any(AbortSignal))
-    expect(f.check).toHaveBeenCalledWith({ chatId: null, key: "stats.messages.counters.refresh" }, { reserve: false })
+    expect(f.check).toHaveBeenCalledWith({ chatId: null, key: "stats.messages.counters.sync" }, { reserve: false })
     expect((await f.service.show({ chat: "7", limit: 1, counters: "views" })).items[0]?.counters[0]).toMatchObject({
       value: 20,
       freshness: "fresh",

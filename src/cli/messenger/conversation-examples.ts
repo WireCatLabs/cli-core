@@ -4,13 +4,14 @@ import { commandAt } from "../steps.js"
 
 export const conversationExamples = (root: Command, tool: string): void => {
   const examples: Record<string, string> = {
-    "batches next": '--chat "Book club"',
+    "batches show": '--chat "Book club"',
     "batches status": '--chat "Book club"',
-    build: '--chat "Book club"',
+    "links rebuild": '--chat "Book club"',
     "consents list": "",
-    "consents revoke": '--chat "Book club"',
-    "embed clear": '--chat "Book club"',
-    "embed status": '--chat "Book club"',
+    "consents remove": '--chat "Book club"',
+    embed: '--chat "Book club"',
+    "embeddings clear": '--chat "Book club"',
+    "embeddings status": '--chat "Book club"',
     "links add": '--batch "$batch"',
     "links clear": '--chat "Book club"',
     list: '"Book club"',
@@ -24,6 +25,6 @@ export const conversationExamples = (root: Command, tool: string): void => {
   }
   commandAt(root, "links add")?.addHelpText(
     "after",
-    "\nSet batch to the id from conversations batches next; supply the JSON answer to that batch on stdin.\n",
+    "\nSet batch to the id from conversations batches show; supply the JSON answer to that batch on stdin.\n",
   )
 }

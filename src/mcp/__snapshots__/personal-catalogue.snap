@@ -11,10 +11,10 @@ read  chats events
 read  chats folders list
 read  chats folders show
 read  chats inspect
-read  chats link list
-read  chats link show
+read  chats links list
+read  chats links show
 read  chats list
-read  chats members audit
+read  chats members check
 read  chats members history
 read  chats members list
 read  chats requests list
@@ -24,28 +24,28 @@ read  chats show
 read  chats tracking list
 read  chats tracking show
 read  commands
-read  commands schema
+read  commands info
 read  config show
 read  contacts check
 read  contacts context
+read  contacts events
+read  contacts info
 read  contacts list
 read  contacts lookup
 read  contacts notes list
 read  contacts notes show
 read  contacts prepare
-read  contacts profile
 read  contacts show
-read  contacts timeline
-read  conversations batches next
+read  conversations batches show
 read  conversations batches status
 read  conversations consents list
-read  conversations embed status
+read  conversations embeddings status
 read  conversations list
 read  conversations related
 read  conversations show
 read  conversations status
 read  doctor
-read  doctor report
+read  doctor reports show
 read  guide
 read  images models list
 read  inbox
@@ -62,9 +62,8 @@ read  messages list
 read  messages scheduled
 read  messages show
 read  messages transcribe
-read  metadata get
-read  models audio list
-read  models text list
+read  metadata show
+read  models list
 read  polls show
 read  recipients list
 read  replies consents show
@@ -102,7 +101,7 @@ read  stats messages top
 read  stats messages unanswered
 read  stats tasks show
 read  store check
-read  store gaps plan
+read  store gaps show
 read  store info
 read  store jobs list
 read  store jobs show
@@ -125,7 +124,7 @@ write attachments jobs start
 write attachments jobs stop
 write attachments jobs uninstall
 write attachments move
-write attachments text set
+write attachments update
 write chats admins add
 write chats admins remove
 write chats archive
@@ -137,9 +136,9 @@ write chats folders order
 write chats folders update
 write chats join
 write chats leave
-write chats link create
-write chats link reset
-write chats link revoke
+write chats links create
+write chats links remove
+write chats links reset
 write chats mark-read
 write chats mark-unread
 write chats members add
@@ -148,8 +147,8 @@ write chats members remove
 write chats moderate
 write chats mute
 write chats pin
-write chats requests accept
-write chats requests decline
+write chats requests confirm
+write chats requests reject
 write chats rules set
 write chats rules unset
 write chats tracking add
@@ -161,8 +160,8 @@ write chats update
 write config set
 write config unset
 write contacts add
-write contacts alias rm
-write contacts alias set
+write contacts aliases remove
+write contacts aliases set
 write contacts block
 write contacts import
 write contacts link
@@ -174,14 +173,14 @@ write contacts rename
 write contacts sync
 write contacts unblock
 write contacts unlink
-write conversations build
-write conversations consents revoke
+write conversations consents remove
 write conversations embed
-write conversations embed clear
+write conversations embeddings clear
 write conversations links add
 write conversations links clear
+write conversations links rebuild
 write conversations rebuild
-write doctor report create
+write doctor reports create
 write flood clear
 write images embed
 write images models download
@@ -198,11 +197,10 @@ write messages star
 write messages sync
 write messages unpin
 write messages unstar
-write metadata refresh
-write models audio download
-write models text download
-write models text key remove
-write models text key set
+write metadata sync
+write models download
+write models keys remove
+write models keys set
 write polls close
 write polls create
 write polls vote
@@ -237,7 +235,7 @@ write server stop
 write server uninstall
 write skill install
 write stats charts
-write stats messages counters refresh
+write stats messages counters sync
 write store backup
 write store clear
 write store copies delete
@@ -248,12 +246,12 @@ write store jobs cancel
 write store jobs clear
 write store jobs retry
 write store migrate
-write store reindex
+write store rebuild
 write store repair
 write store reset
 write store restore
 write tags add
-write tags auto
+write tags rebuild
 write tags remove
 write tasks add
 write tasks claim
@@ -262,11 +260,11 @@ write tasks duplicates defer
 write tasks duplicates reject
 write tasks link
 write tasks merge
-write tasks plan
 write tasks reject
 write tasks release
 write tasks scan
 write tasks unmerge
+write tasks update
 write topics create
 write topics delete
 write topics edit

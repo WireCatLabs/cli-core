@@ -1,6 +1,6 @@
 # AI providers for search
 
-Search defaults to local `e5-small` embeddings. Conversation analysis defaults to your own agent using the linking skill; ordinary `conversations build` uses stored messages and local rules. Configuration alone never starts analysis.
+Search defaults to local `e5-small` embeddings. Conversation analysis defaults to your own agent using the linking skill; ordinary `conversations links rebuild` uses stored messages and local rules. Configuration alone never starts analysis.
 
 These shared SDK settings/options reach MAX and Telegram at their next cli-core dependency bump.
 
@@ -51,13 +51,13 @@ requests on shutdown, so a timed-out one-shot does not leave an HTTP request hol
 ```sh
 max config set embedding_provider openai
 max config set embedding_model text-embedding-3-small
-max models text key set openai
+max models keys set openai
 max conversations embed --chat '<chat>' --yes
 
 max config set analysis_provider anthropic
 max config set analysis_model '<model from your provider>'
-max models text key set anthropic
-max conversations build --chat '<chat>' --analyze --max-tokens 100000 --yes
+max models keys set anthropic
+max conversations links rebuild --chat '<chat>' --analyze --max-tokens 100000 --yes
 ```
 
 Keys go in the OS keyring or the existing protected credential file, never config or command arguments. Public OpenAI and Anthropic can use `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, or their prefixed forms. A custom base URL uses its exact host (including port) as the key name:
@@ -67,7 +67,7 @@ max config set analysis_provider openai
 max config set analysis_base_url http://localhost:11434/v1
 max config set analysis_model '<your installed Ollama model>'
 # A remote compatible server that needs a key:
-max models text key set '<endpoint host[:port]>'
+max models keys set '<endpoint host[:port]>'
 ```
 
 Custom endpoints never inherit the public OpenAI/Anthropic key. URLs must be HTTP/S without embedded credentials, query or fragment. Anthropic is analysis only: [Anthropic offers no embedding model](https://platform.claude.com/docs/en/build-with-claude/embeddings). OpenAI-style analysis uses Chat Completions; custom servers use the compatible `max_tokens` field, while api.openai.com uses `max_completion_tokens`. [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility) covers a subset of that API. Choose a model that returns JSON and token usage; there is no automatic provider fallback or retry.
@@ -76,9 +76,9 @@ Before analysis sends its first batch, the CLI explains the endpoint/model, mess
 
 ```sh
 max conversations consents list --json
-max conversations consents revoke --chat '<chat>'
-max conversations consents revoke --consent-provider '<exact identity from the list>'
-max conversations consents revoke                     # every remembered analysis consent in this account
+max conversations consents remove --chat '<chat>'
+max conversations consents remove --consent-provider '<exact identity from the list>'
+max conversations consents remove                     # every remembered analysis consent in this account
 ```
 
 Revocation removes permission for future batches, including subsequent batches of a running analysis command; an already submitted request cannot be recalled. Local write permissions still apply to analysis, consent storage and revocation. No messenger messages are sent or marked read.

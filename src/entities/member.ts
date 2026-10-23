@@ -17,9 +17,9 @@ export const member = v.strictObject({
   deleted: v.optional(v.boolean()),
   flagged: v.optional(v.picklist(["scam", "fake"])),
   has_photo: v.optional(v.boolean()),
-  /** `chats members audit`: how much they look like a bot — a hint, never a verdict. */
+  /** `chats members check`: how much they look like a bot — a hint, never a verdict. */
   score: v.optional(count),
   reasons: v.optional(v.array(text)),
-  /** `chats members audit --deep`: the whole person check, as `contacts check` answers it. */
+  /** `chats members check --deep`: the whole person check, as `contacts check` answers it. */
   check: v.optional(v.record(v.string(), v.unknown())),
 })

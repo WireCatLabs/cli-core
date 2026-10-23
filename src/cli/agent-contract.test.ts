@@ -205,7 +205,7 @@ describe("agent CLI contract", () => {
   })
 
   it("publishes a separately versioned schema without changing the application version", async () => {
-    const result = await invoke(["commands", "schema", "messages", "send", "--json"])
+    const result = await invoke(["commands", "info", "messages", "send", "--json"])
     expect(result.result).toBe(0)
     expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject({
       version: "1.2.3",

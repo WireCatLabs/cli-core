@@ -253,7 +253,7 @@ export const prepareLucene = async (
 /**
  * The stemmer a search with stemmed words runs with. While the stems are built, or chosen by a newer
  * tool, none: a half-built stem index would silently drop matches, while the word index answers each
- * word's own form. Stems waiting for the owner's `store reindex` still refuse.
+ * word's own form. Stems waiting for the owner's `store rebuild` still refuse.
  */
 export const searchStemming = async (
   store: MessageStore,
@@ -312,7 +312,7 @@ const stemsNotReady = (state: StemsState | undefined, command: string | undefine
   if (state.cause === "stemmer_changed")
     throw new CliError(
       "validation_error",
-      `the stems were built by ${state.built}, and the store now asks for ${state.wanted} — run \`${cli}store reindex\` (or \`${cli}store migrate\`), or ${exact}`,
+      `the stems were built by ${state.built}, and the store now asks for ${state.wanted} — run \`${cli}store rebuild\` (or \`${cli}store migrate\`), or ${exact}`,
       details,
     )
   if (state.cause === "stemmer_unknown")

@@ -144,7 +144,7 @@ const refused = (why: string) => new CliError("validation_error", `the answer wa
 const windowOf = (context: StoreContext, id: string) => {
   const { orm } = context
   const [, chat, first, last] = BATCH_ID.exec(id) ?? []
-  if (!chat) throw refused(`${id} is not a batch id from \`conversations batches next\``)
+  if (!chat) throw refused(`${id} is not a batch id from \`conversations batches show\``)
   const chatKey = Number(chat)
   const ends = orm.all<{ pk: number; sent_at: number }>(
     sql`SELECT id AS pk, sent_at FROM messages WHERE chat_id = ${chatKey} AND deleted_at IS NULL AND id IN (${Number(first)}, ${Number(last)})

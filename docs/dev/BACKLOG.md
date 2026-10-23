@@ -25,10 +25,10 @@ None open.
 
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
-- **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` Shared command standards: complete remaining result entities, examples and vocabulary paths
-  in the `docs/standards-*` and `fix/standards-*` pull requests. Contact result schemas are complete; other groups
-  remain. The option-meaning migration is in #1810;
-  compatibility aliases remain for one release. [Notes](BACKLOG-NOTES.md#core-4).
+- **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,
+  examples and list queries are merged. Canonical command paths and removal of compatibility spellings are in
+  held draft #1837; consumer adoption still needs its coordinated release. New bot query/schema gaps are separate
+  from the original personal-account audit. [Notes](BACKLOG-NOTES.md#core-4).
 - **CORE-28** · P2 · 🚧 `fix/standards-vocabulary-paths` Hidden option aliases are removed by
   [#1837](https://github.com/WireCatLabs/cli-core/pull/1837), including the aliases from #1810. Hold merge and
   release until the next weekly breaking window, no earlier than 2026-10-30 19:36:27 UTC (WC-REL-9).
