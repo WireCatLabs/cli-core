@@ -197,9 +197,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
   )
 
   withQuery(
-    annotate(tasks.command("list"), { effects: LOCAL_READ }).description(
-      "tasks, oldest first, with their message or note source",
-    ),
+    annotate(tasks.command("list"), {
+      effects: LOCAL_READ,
+      examples: [`${tool} personal tasks list --limit 10`],
+    }).description("tasks, oldest first, with their message or note source"),
     TASK_QUERY,
   )
     .option("--limit <n>", "how many", positiveCount("--limit"))
@@ -223,7 +224,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   planOptions(
-    destroysNothing(annotate(tasks.command("add"), { effects: LOCAL_WRITE }))
+    destroysNothing(
+      annotate(tasks.command("add"), {
+        effects: LOCAL_WRITE,
+        examples: [`${tool} personal tasks add note:101 --type promise --category documents --title "Review draft"`],
+      }),
+    )
       .description("add a task for a stored message or note — a promise, a request")
       .argument("<message>", "a message locator, msg:<provider>/<account>/<chat>/<message>, or note:<id>")
       .requiredOption("--type <type>", "the task's type: question, request, mention or promise", taskTypeOf)
@@ -287,7 +293,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
   })
 
   planOptions(
-    destroysNothing(annotate(tasks.command("plan"), { effects: LOCAL_WRITE }))
+    destroysNothing(
+      annotate(tasks.command("plan"), {
+        effects: LOCAL_WRITE,
+        examples: [`${tool} personal tasks plan DOC-12 --title "Review draft"`],
+      }),
+    )
       .summary("set a task's title, description, due date, next check, category and assignee")
       .description(
         "set a task's title, description, due date, next check, category and assignee; nothing reaches the messenger",
@@ -308,7 +319,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
     renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
   })
 
-  destroysNothing(annotate(tasks.command("link"), { effects: LOCAL_WRITE }))
+  destroysNothing(
+    annotate(tasks.command("link"), {
+      effects: LOCAL_WRITE,
+      examples: [`${tool} personal tasks link DOC-12 https://example.com/draft`],
+    }),
+  )
     .description("link a task to messages, chats, people or URLs — or to another task: task:<id>")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .argument(
@@ -343,7 +359,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         context.renderer.note(`${linked.review} possible duplicate pair(s) went to tasks duplicates`)
     })
 
-  annotate(tasks.command("show"), { effects: LOCAL_READ })
+  annotate(tasks.command("show"), { effects: LOCAL_READ, examples: [`${tool} personal tasks show DOC-12`] })
     .description("one task: its plan and everything linked to it")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .action(async function (this: Command, id: string) {
@@ -492,7 +508,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   withQuery(
-    annotate(tasks.command("agenda"), { effects: LOCAL_READ })
+    annotate(tasks.command("agenda"), { effects: LOCAL_READ, examples: [`${tool} personal tasks agenda`] })
       .summary("what needs a look today: tasks due, chats you owe or wait on, what you are owed")
       .description(
         "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
