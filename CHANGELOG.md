@@ -25,6 +25,8 @@ shape of this file.
 
 - **Reaction answer schemas.** Add and remove declare the same reaction-change entity, including the operation id and a null reaction when removed. Field discovery and projection now describe these write receipts.
 
+- **Tag changes declare their results.** Add and remove expose precise chat, contact, message and task target shapes. Automatic tagging describes each classification or failed chat, including preview status and remaining work; existing receipts and ownership claims stay unchanged.
+
 - Send history includes a concrete example in help and command discovery.
 
 - Doctor reports include a concrete creation example in help and command discovery.

@@ -1784,7 +1784,9 @@ describe("the MCP server", () => {
     expect(unaliased).toMatchObject({ alias: null })
     expect(v.safeParse(ENTITIES.contact_alias, unaliased).success).toBe(true)
     expect((await call("metadata get", { chat: "7" })).body.item).toMatchObject({ metadata: { title: "AI news" } })
-    expect((await call("tags auto", { chat: "7", dry_run: true })).body.item).toMatchObject({
+    const preview = (await call("tags auto", { chat: "7", dry_run: true })).body.item
+    v.parse(ENTITIES.automatic_tags, preview)
+    expect(preview).toMatchObject({
       dry_run: true,
       items: [{ chat_id: "7" }],
     })
@@ -1808,6 +1810,7 @@ describe("the MCP server", () => {
     await store.close()
 
     const added = await call("tags add", { tag: ["Paid"], chat: "7", message: "101" })
+    v.parse(ENTITIES.tag_change, added.body.item)
     expect(added.body.item).toMatchObject({ target: { type: "message", message_id: "101" }, added: ["paid"] })
     expect((await call("tags list", { query: "tag:paid" })).body).toMatchObject({
       items: [{ tag: "paid", type: "message", target: "msg:chat/500/7/101" }],
@@ -1819,7 +1822,9 @@ describe("the MCP server", () => {
       "103",
       "108",
     ])
-    expect((await call("tags remove", { tag: ["paid"], message: "msg:chat/500/7/101" })).body.item).toMatchObject({
+    const removed = (await call("tags remove", { tag: ["paid"], message: "msg:chat/500/7/101" })).body.item
+    v.parse(ENTITIES.tag_change, removed)
+    expect(removed).toMatchObject({
       removed: ["paid"],
     })
     const twoTargets = await call("tags add", { tag: ["x"], chat: "7", contact: "11" })
