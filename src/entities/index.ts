@@ -8,6 +8,7 @@ import { adminReport } from "./admin-report.js"
 import { agenda } from "./agenda.js"
 import { analysisConsent, analysisConsentRevocation } from "./analysis-consent.js"
 import { attachment } from "./attachment.js"
+import { attachmentBytes, attachmentExtraction, attachmentTextChange } from "./attachment-results.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
@@ -46,6 +47,7 @@ import { imageEmbedding } from "./image-embedding.js"
 import { inviteLink } from "./invite-link.js"
 import { job } from "./job.js"
 import { joinRequest } from "./join-request.js"
+import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
   meeting,
   meetingDetails,
@@ -107,6 +109,9 @@ export {
   analysisConsent,
   analysisConsentRevocation,
   attachment,
+  attachmentBytes,
+  attachmentExtraction,
+  attachmentTextChange,
   automaticTags,
   cachedChatMetadata,
   chart,
@@ -157,6 +162,10 @@ export {
   job,
   joinRequest,
   linkedPerson,
+  mediaArchive,
+  mediaArchiveCheck,
+  mediaArchiveMove,
+  mediaArchiveTimer,
   meeting,
   meetingProjectCandidates,
   meetingSeriesInventory,
@@ -305,6 +314,13 @@ export const ENTITIES = {
   document_link: documentLink,
   image_embedding: imageEmbedding,
   attachment,
+  attachment_bytes: attachmentBytes,
+  attachment_extraction: attachmentExtraction,
+  attachment_text_change: attachmentTextChange,
+  media_archive: mediaArchive,
+  media_archive_check: mediaArchiveCheck,
+  media_archive_move: mediaArchiveMove,
+  media_archive_timer: mediaArchiveTimer,
   task,
   fact,
   memory,

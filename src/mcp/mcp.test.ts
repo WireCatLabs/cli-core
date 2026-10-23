@@ -1868,6 +1868,7 @@ describe("the MCP server", () => {
       page: { has_more: false },
     })
     const kept = await call("attachments text set", { chat: "msg:chat/500/9/108", text: "Квартальный отчёт" })
+    v.parse(ENTITIES.attachment_text_change, kept.body.item)
     expect(kept.body.item).toEqual({
       ref: "msg:chat/500/9/108",
       attachment: 1,
@@ -1918,11 +1919,13 @@ describe("the MCP server", () => {
       },
     })
     expect(answer.structuredContent).toMatchObject({ item: { complete: true, total_bytes: bytes.length } })
+    v.parse(ENTITIES.attachment_bytes, (answer.structuredContent as { item: unknown }).item)
     expect(JSON.stringify(answer.structuredContent)).not.toContain("base64")
     const fallback = await client.run({
       command: "attachments show",
       arguments: { message: "msg:chat/500/7/902", format: "base64", chunk_bytes: 5 },
     })
+    v.parse(ENTITIES.attachment_bytes, (fallback.structuredContent as { item: unknown }).item)
     expect((fallback.structuredContent as { item: unknown }).item).toMatchObject({
       base64: bytes.subarray(0, 5).toString("base64"),
       next_offset_bytes: 5,
@@ -1936,6 +1939,7 @@ describe("the MCP server", () => {
     expect(preview.isError).not.toBe(true)
     expect(preview.content[0]).toMatchObject({ type: "image", mimeType: "image/png" })
     expect(preview.structuredContent).toMatchObject({ item: { pdf: { page: 1, page_count: 1 }, complete: true } })
+    v.parse(ENTITIES.attachment_bytes, (preview.structuredContent as { item: unknown }).item)
     expect(JSON.stringify(preview.structuredContent)).not.toContain("base64")
     const foreign = await client.run({
       command: "attachments show",

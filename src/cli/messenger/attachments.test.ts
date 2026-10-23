@@ -12,6 +12,7 @@ import type { LoadEngine } from "../../attachments/extract.js"
 import { importEngine } from "../../attachments/extract.js"
 import type { Attachment, Chat, Message } from "../../domain/models.js"
 import { attachment } from "../../entities/attachment.js"
+import { ENTITIES } from "../../entities/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
@@ -162,6 +163,17 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
           ...(stdin === undefined ? {} : { stdin: Object.assign(Readable.from([stdin]), { isTTY: false }) }),
         },
       )
+      if (code === 0 && argv[0] === "attachments" && argv.includes("--json")) {
+        const schema =
+          argv[1] === "extract"
+            ? ENTITIES.attachment_extraction
+            : argv[1] === "show"
+              ? ENTITIES.attachment_bytes
+              : argv[1] === "text"
+                ? ENTITIES.attachment_text_change
+                : undefined
+        if (schema) v.parse(schema as v.GenericSchema, JSON.parse(streams.stdout.join("")).item)
+      }
       return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
     }
   return { call: runs(false), pretty: runs(true), piped: (text: string) => runs(false, text), root, env, files }
@@ -175,6 +187,16 @@ const hits = async (call: (...argv: string[]) => Promise<{ stdout: string }>, qu
   json(await call("search", "messages", query, "--json")).items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))
 
 describe("attachments extract", () => {
+  it("projects transfer fields and refuses unknown fields before reading retained bytes", async () => {
+    const fixture = await setup()
+    const projected = await fixture.call("attachments", "show", "7", "1", "--json=ref,complete,total_bytes")
+    expect(projected.code, projected.stderr).toBe(0)
+    expect(Object.keys(json(projected)).sort()).toEqual(["complete", "ref", "total_bytes"])
+    const unknown = await fixture.call("attachments", "show", "7", "1", "--json=unknown_field")
+    expect(unknown.code).not.toBe(0)
+    expect(JSON.parse(unknown.stderr).error.reason).toBe("output.unknown-field")
+  })
+
   it("renders a retained PDF page as bounded PNG without connecting, extracting or storing text", async () => {
     const fixture = await setup()
     const done = await fixture.call("attachments", "show", "7", "3", "--page", "1", "--json")

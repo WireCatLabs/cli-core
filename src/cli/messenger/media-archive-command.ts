@@ -15,6 +15,7 @@ import { stopOnSignal } from "./patience.js"
 
 export const addMediaArchiveCommands = (archive: Command, messenger: Messenger): void => {
   annotate(archive.command("download"), {
+    output: { entity: "media_archive" },
     effects: FETCH,
     examples: [`${messenger.app.command} attachments download ./media-archive`],
   })
@@ -72,6 +73,7 @@ export const addMediaArchiveCommands = (archive: Command, messenger: Messenger):
       }
     })
   annotate(archive.command("check"), {
+    output: { entity: "media_archive_check" },
     effects: LOCAL_READ,
     examples: [`${messenger.app.command} attachments check ./media-archive`],
   })
