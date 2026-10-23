@@ -19,6 +19,10 @@ shape of this file.
 
 - Message deletion, chat export and duplicate-task commands use singular argument names in help and discovery. Variadic arguments still accept several values, and task argument help identifies each side of a pair.
 
+### Added
+
+- Recipient-list commands include concrete examples in help and command discovery.
+
 ## 0.396.0 — 23.10.2026
 
 ### Changed — may break callers
