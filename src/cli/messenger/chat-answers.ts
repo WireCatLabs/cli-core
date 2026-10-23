@@ -269,12 +269,12 @@ export const chatShown = (account: AccountKey, card: Parameters<typeof chatAnswe
 
 /** The lowest score `score>=n` asks for; the audit's own floor when the query names none. */
 export const scoreFloor = (ast: QueryAst | undefined): number => {
-  const term = nativeTerms(ast, "chats members audit").get("score")
+  const term = nativeTerms(ast, "chats members check").get("score")
   if (!term) return AUDIT_MIN_SCORE
   const upper = term.operator === "range" ? (term.upper ?? "*") : term.value
   if (term.operator !== "range" || upper !== "*")
     queryError("query.unsupported-operator", term.span, "score takes a lower bound: score>=3", {
-      command: "chats members audit",
+      command: "chats members check",
       guide: LIST_QUERY_GUIDE,
     })
   const floor = Number(term.value)
@@ -282,7 +282,7 @@ export const scoreFloor = (ast: QueryAst | undefined): number => {
 }
 
 export const auditAnswer = (audit: MembersAudit) =>
-  wholeList("chats members audit", audit.items.map(memberAnswer), {
+  wholeList("chats members check", audit.items.map(memberAnswer), {
     ...(audit.more ? { meta: { truncated: true } } : {}),
     ...(audit.completeness && audit.completeness.state !== "complete"
       ? {

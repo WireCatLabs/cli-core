@@ -143,7 +143,7 @@ describe("filling the word index", () => {
     expect(Number(database.prepare("SELECT count(*) AS n FROM search_terms").get()?.n)).toBe(32)
   })
 
-  it("**starts again from scratch on a reset**, for `store reindex`", async () => {
+  it("**starts again from scratch on a reset**, for `store rebuild`", async () => {
     const database = await large(30)
     fillSearchIndex(database)
 

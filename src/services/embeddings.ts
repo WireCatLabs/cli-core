@@ -31,7 +31,7 @@ export interface Embedded {
   chat: Id
   model: string
   embedded: number
-  /** Chunks whose messages changed since the build: `conversations build` cuts them again. */
+  /** Chunks whose messages changed since the build: `conversations links rebuild` cuts them again. */
   skipped: number
 }
 
@@ -77,7 +77,7 @@ export interface EmbeddingsService {
   related(chat: string, message: Id, options: { model?: ModelChoice; limit: number }): Promise<RelatedConversations>
   /**
    * How fresh one chat's conversations and vectors are, or every built chat's — and then how many group chats
-   * were never built, which `conversations build` would also do.
+   * were never built, which `conversations links rebuild` would also do.
    */
   readiness(options: {
     chat?: string
@@ -145,9 +145,9 @@ export interface SearchReadiness {
   wordsOnly: Id[]
   /** Searched by meaning, but some chunks have no vector yet: `conversations embed`. */
   partial: Id[]
-  /** Messages or rules changed since the build: `conversations build`. */
+  /** Messages or rules changed since the build: `conversations links rebuild`. */
   stale: Id[]
-  /** Never built, so their matches cannot be shown: `conversations build`. */
+  /** Never built, so their matches cannot be shown: `conversations links rebuild`. */
   notBuilt: Id[]
 }
 

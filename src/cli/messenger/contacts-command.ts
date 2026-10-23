@@ -98,7 +98,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  annotate(contacts.command("profile"), { effects: REMOTE_READ, output: { entity: "contact_profile" } })
+  annotate(contacts.command("info"), { effects: REMOTE_READ, output: { entity: "contact_profile" } })
     .summary("a person's profile from the messenger")
     .description(
       "everything the messenger says about one person — handles, flags, last seen, when they registered — and " +
@@ -246,7 +246,11 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(contacts.command("timeline"), { effects: REMOTE_READ, output: { entity: "contact_activity" } })
+  annotate(contacts.command("events"), {
+    effects: REMOTE_READ,
+    output: { entity: "contact_activity" },
+  })
+
     .summary("one person's activity across their linked identities")
     .description(
       "everything one person took part in, in every messenger linked to them — messages they wrote or were " +
@@ -286,7 +290,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       renderAnswer(
         this,
         context,
-        listOf("contacts timeline", {
+        listOf("contacts events", {
           items: items.map(snakeKeys),
           limit: limits.items,
           has_more: hasMore,
@@ -399,8 +403,8 @@ export const contactsCommand = (messenger: Messenger): Command => {
   for (const command of contactWriteCommands(messenger)) contacts.addCommand(command)
   const examples: Record<string, string> = {
     add: '"Alex Example"',
-    "alias rm": '"Alex Example"',
-    "alias set": '"Alex Example" "Reading partner"',
+    "aliases remove": '"Alex Example"',
+    "aliases set": '"Alex Example" "Reading partner"',
     block: '"Alex Example"',
     check: '"Alex Example"',
     context: '"Alex Example" --limit 10',
@@ -413,12 +417,12 @@ export const contactsCommand = (messenger: Messenger): Command => {
     "notes list": '"Alex Example"',
     "notes remove": '"Alex Example" 1',
     "notes show": '"Alex Example" 1',
-    profile: '"Alex Example"',
+    info: '"Alex Example"',
     remove: '"Alex Example"',
     rename: '"Alex Example" Alex Example',
     show: '"Alex Example"',
     sync: "",
-    timeline: '"Alex Example" --limit 10',
+    events: '"Alex Example" --limit 10',
     unblock: '"Alex Example"',
     unlink: '"Alex Example"',
   }

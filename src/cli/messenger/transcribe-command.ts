@@ -24,7 +24,7 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of a voice message")
     .option("--local", "use the model on this machine, never the messenger")
-    .option("--model <model>", "which downloaded model; implies --local (`models audio list`)")
+    .option("--model <model>", "which downloaded model; implies --local (`models list`)")
     .action(async function (this: Command, chat: string, messageId: string) {
       const context = messengerContext(this, messenger)
       const choice = {

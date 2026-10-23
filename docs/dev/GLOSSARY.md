@@ -24,29 +24,30 @@ another meaning.
 | Verb | One meaning | CLIs | Not | Violations |
 |---|---|---|---|---|
 | `list` | show many | all | `ls` | drive `shared-drives` (a list with no verb) |
-| `show` | show one | all | `get`, `view` | tg/max `metadata get`, max `bot comments get`, drive `documents get`, `files get`, `comments get`, `permissions get`, `revisions get` |
+| `show` | show one | all | `get`, `view` | tg/max `metadata show`, max `bot comments get`, drive `documents get`, `files get`, `comments get`, `permissions get`, `revisions get` |
 | `search` | find by text, under `search <resource>` | all | `find`, `query` | drive `search` (root leaf, no resource), memo/drive `memories search` (a resource's own search leaf) |
+
 | `create` / `delete` | make or destroy a thing | all | `mkdir`, `trash`, `rm` | drive `files mkdir`, `files trash` (see NEED-991) |
-| `add` / `remove` | put an existing thing into a set, or take it out | all | `rm`, `attach` | tg/max `contacts alias rm`; memo `folders attach` |
-| `update` | change a thing's fields | all | `plan`, `edit` for fields | tg/max `tasks plan` (sets title, due date) |
+| `add` / `remove` | put an existing thing into a set, or take it out | all | `rm`, `attach` | tg/max `contacts aliases remove`; memo `folders attach` |
+| `update` | change a thing's fields | all | `plan`, `edit` for fields | tg/max `tasks update` (sets title, due date) |
 | `set` / `unset` | one named key | all | `configure` | drive `models configure` |
-| `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; `--all` for every chat or source (owner, 2026-10-12) | all | `import` for a catch-up, `refresh`, `store fetch` | memo `import` and `notes import` (to become `memo sync`), memo `mail <account> import`, tg/max `metadata refresh`, `stats messages counters refresh`; tg/max `contacts sync` help says "forget where the last sync left off and take the whole list again" — its help still describes a full re-read of the list, not only what changed |
+| `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; `--all` for every chat or source (owner, 2026-10-12) | all | `import` for a catch-up, `refresh`, `store fetch` | memo `import` and `notes import` (to become `memo sync`), memo `mail <account> import`, tg/max `metadata sync`, `stats messages counters sync`; tg/max `contacts sync` help says "forget where the last sync left off and take the whole list again" — its help still describes a full re-read of the list, not only what changed |
 | `fetch` | one bounded pull of one named thing from the messenger, not a catch-up | tg, max | `refresh`, `get` | `bot store fetch` ([STANDARD.md, Bot](STANDARD.md#bot) wants the personal name, `bot messages sync`); `--refresh` options (`contacts context`, `search conversations`) |
 | `import` | bring a file or list the user gives into the store or the messenger, once | all | — | memo `import`, `notes import` (a repeatable catch-up: `sync`) |
 | `export` | write from the store to a file | all | — | none |
 | `extract` | read the text inside files already on this machine into the store | tg, max | — | drive `memories extract` (sends text to a model and proposes memories: another meaning) |
 | `link` / `unlink` | record that two identities are one person, or undo it | tg, max | — | `tasks link` (a task and what it concerns; with a `task:` target, task to task), memo `projects meetings link`, drive `people link` (a Google user to a person); tg/max `messages link` (a view: the permalink) |
 | `confirm` | the owner accepts what an agent proposed | memo, drive | `accept`, `approve` | memo `facts accept`, `actions approve` vs `relationships confirm`, `memories confirm` (three words, one meaning) |
-| `reject` | the owner refuses what an agent proposed | memo | `decline`, `deny` | none in memo; tg/max `chats requests decline`, `replies consents deny` are the messenger's own words |
+| `reject` | the owner refuses what an agent proposed | memo | `decline`, `deny` | none in memo; tg/max `chats requests reject`, `replies consents deny` are the messenger's own words |
 | `start` / `stop` | a running process or a login session | all | `on` / `off`, `enable` | tg/max `replies on` / `off`, memo `auto on` / `off`, tg `topics enable` |
 | `pause` / `resume` | stop and restart what a running process does, without stopping it | tg, max | `snooze` for a process | none |
-| `check` | verify, change nothing | tg, max | `audit`, `preflight` | tg/max `chats members audit`, memo `vocabulary audit`, `vocabulary preflight` |
+| `check` | verify, change nothing | tg, max | `audit`, `preflight` | tg/max `chats members check`, memo `vocabulary audit`, `vocabulary preflight` |
 | `cancel` | stop a job or a pending thing | all | — | none |
 | `status` | how a thing stands right now | all | `readiness` | memo `tasks readiness` |
 | `info` | facts about a singular thing itself | tg, max | — | none |
 | `move` / `copy` | a file in the source | drive | — | none |
 | `restore` | put a backup back, or take a thing out of the trash | tg, max, drive | — | drive `files restore` (out of the trash: a second meaning) |
-| `rebuild` | compute again, from what the store holds, what the tool derives from it, keeping the owner's decisions | tg, max | — | none; tg/max `store reindex` is not in the vocabulary |
+| `rebuild` | compute again, from what the store holds, what the tool derives from it, keeping the owner's decisions | tg, max | — | none; tg/max `store rebuild` is not in the vocabulary |
 
 Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a registry entry or a rename.
 
@@ -65,12 +66,12 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | store (local store) | the one SQLite database tg, max, memo and drive share on this machine | archive, cache, message database, shared store | memo help says "shared store"; drive help says "cached sources"; max keeps a per-profile **cache**, a different thing ([STANDARD.md, Messenger words](STANDARD.md#messenger-words)) |
 | message | one post in a messenger chat, or one email | item, post (except a channel post), hit | none |
 | attachment | a file of a stored message | file, media | max `chats media` (the messenger's media list: allowed as the messenger's word) |
-| file text | the text read from an attachment and kept in the store, found by `content:` | extracted text, OCR text | `attachments text set` is the right place; no conflict found |
+| file text | the text read from an attachment and kept in the store, found by `content:` | extracted text, OCR text | `attachments update` is the right place; no conflict found |
 | transcript | the text of speech: a voice message or a meeting recording | — | tg/max `store export --format markdown` calls a day-by-day export "a transcript" |
 | note | text the owner writes, or a file from a notes folder | memo, annotation, document | tg/max `contacts notes` are notes about a contact (same table, fine); drive help says "local shared memos about a source document" |
 | document | a file imported from Google Drive or Docs | source, note | drive help says "imported sources" for documents; drive keeps documents as `note:` rows (`drive-cli/src/store.ts:111`), so one thing has two names |
 | folder | **open (NEED-988)**: three different things share the word | — | tg `chats folders` (Telegram chat folders), memo `folders` (notes folders), drive `folders` (Google Drive folders chosen to sync) |
-| tag | a label the owner puts on a thing; a `topic` is a tag kind only the owner makes | label | memo help says "labels" for tags; tg `tags auto` makes tags from rules |
+| tag | a label the owner puts on a thing; a `topic` is a tag kind only the owner makes | label | memo help says "labels" for tags; tg `tags rebuild` makes tags from rules |
 | topic | forum topics in a group: `topics`, `search topics` (cli-base vocabulary) | — | memo `vocabulary create` (a kind of tag) |
 | project | the owner's work unit with a task key | entity | `entity:` references still parse for old files |
 | organization | a company, team, family or community | entity | none |
@@ -84,7 +85,7 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | mention | a phone, e-mail address, link, document or known person's name found in one place of a stored text, normalized; found → linked or dismissed | extraction, entity, link (`links` joins two stored records) | none |
 | reference | the typed name of any stored thing: `msg:`, `chat:`, `contact:`, `note:`, `document:`, `person:`, `task:`, `fact:`, `memory:` (`src/domain/references.ts`) | ref, id | see [Output keys](#output-keys) |
 | locator | the reference of one message: `msg:<provider>/<account>/<chat>/<message>` only (`src/domain/locator.ts`) | ref | memo `search` puts `note:` and `task:` references in `locator` (`cli-memo/src/search/command.ts:82,123`) |
-| profile | the name of one login of this CLI on this machine; chosen, never assumed | account (for this meaning) | memo `mail <account>`, `--account`; drive help "account profiles"; tg/max `contacts profile` (a person's card: another meaning) |
+| profile | the name of one login of this CLI on this machine; chosen, never assumed | account (for this meaning) | memo `mail <account>`, `--account`; drive help "account profiles"; tg/max `contacts info` (a person's card: another meaning) |
 | account | the messenger or mail account behind a profile; also `provider/account` in the store key | profile | tg/max `account list` lists profiles |
 | source | where stored data came from: a messenger, a mailbox, a notes folder, Google Drive | — | memo `tags add` "Put labels on one source" (means one stored thing); drive "imported sources" (means documents) |
 | search hit | one result of a search | result, match, item | JSON key is `items` in some searches and `hits` in others; see below |

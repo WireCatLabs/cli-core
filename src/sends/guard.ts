@@ -23,12 +23,12 @@ const HOUR_MS = 60 * 60 * 1000
  */
 const READS_UNDER_HOLD = new Set<PermissionKey>([
   "attachments.extract",
-  "conversations.embed",
+  "conversations.embeddings",
   "conversations.links",
   "messages.server-search",
   "messages.sync-first",
   "stats.contacts.top.sync-first",
-  "stats.messages.counters.refresh",
+  "stats.messages.counters.sync",
   "stats.messages.show.sync-first",
   "stats.messages.top.sync-first",
   "store.gaps.repair",

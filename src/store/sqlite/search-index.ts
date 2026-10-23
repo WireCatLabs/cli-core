@@ -186,7 +186,7 @@ const buildTerms = (
 
 /**
  * Empties the word index and its vocabulary and starts the fill again from the newest message — for
- * `store reindex`. Messages written meanwhile are indexed by the triggers, as after the migration.
+ * `store rebuild`. Messages written meanwhile are indexed by the triggers, as after the migration.
  */
 export const resetSearchIndex = (database: CacheDatabase): void => {
   if (!searchIndexState(database)) return

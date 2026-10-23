@@ -31,7 +31,7 @@ const line = ({ status, ref, attachment, name, chars }: ExtractItem) =>
 const summary = (run: ExtractRun) =>
   [
     `${run.extracted} extracted`,
-    run.needsAgent ? `${run.needsAgent} for an agent to read (attachments text set)` : "",
+    run.needsAgent ? `${run.needsAgent} for an agent to read (attachments update)` : "",
     run.failed ? `${run.failed} unreadable` : "",
     run.unchanged ? `${run.unchanged} unchanged` : "",
     run.notDownloaded ? `${run.notDownloaded} not downloaded (--download)` : "",
@@ -230,13 +230,13 @@ const showCommand = (messenger: Messenger): Command =>
       }
     })
 
-const textCommand = (messenger: Messenger): Command => {
-  const text = new Command("text").description("the text of one file, as an agent read it")
-  readsStdin(
-    annotate(text.command("set"), {
+const textUpdateCommand = (messenger: Messenger): Command => {
+  const update = readsStdin(
+    annotate(new Command("update"), {
       output: { entity: "attachment_text_change" },
+
       effects: LOCAL_WRITE,
-      examples: [`${messenger.app.command} personal attachments text set "Book club" 101 --text-file ./transcript.txt`],
+      examples: [`${messenger.app.command} personal attachments update "Book club" 101 --text-file ./transcript.txt`],
     }),
     {
       name: "text",
@@ -251,7 +251,7 @@ const textCommand = (messenger: Messenger): Command => {
     .addOption(ownerOnlyOption("--text-file <path>", "read the text from this file; - or none reads stdin"))
     .action(async function (this: Command, chat: string, message: string | undefined) {
       const context = messengerContext(this, messenger)
-      refuseLocalWrite(context, messenger.app.command, "attachments.text.set")
+      refuseLocalWrite(context, messenger.app.command, "attachments.update")
       const { attachment, textFile } = this.opts<{ attachment?: number; textFile?: string }>()
       const given =
         textFile === undefined || textFile === "-" ? await readAll(context.stdin) : readFileSync(textFile, "utf8")
@@ -270,7 +270,7 @@ const textCommand = (messenger: Messenger): Command => {
         () => `${done.ref} #${done.attachment}  ${done.chars} characters kept\n`,
       )
     })
-  return text
+  return update
 }
 
 /** Files of stored messages: what is in them, for `content:` in a search. Nothing here is sent. */
@@ -281,7 +281,7 @@ export const attachmentsCommand = (messenger: Messenger): Command => {
     .addCommand(extractCommand(messenger))
     .addCommand(listCommand(messenger))
     .addCommand(showCommand(messenger))
-    .addCommand(textCommand(messenger))
+    .addCommand(textUpdateCommand(messenger))
   addMediaArchiveCommands(attachments, messenger)
   return attachments
 }

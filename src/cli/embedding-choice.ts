@@ -16,7 +16,7 @@ export interface ModelOptions {
   concurrency?: number
 }
 
-/** A local model id, or a remote model with its key from `models text key set`. */
+/** A local model id, or a remote model with its key from `models keys set`. */
 export const embeddingChoice = (
   { model, provider, embeddingProvider, baseUrl, dims, concurrency }: ModelOptions,
   app: AppIdentity,
@@ -54,7 +54,7 @@ export const embeddingChoice = (
   if (!key && needKey && baseUrl === undefined) {
     throw new CliError(
       "authentication_error",
-      `no OpenAI key — \`${typedCommand(app.command, "models text key set openai")}\`, or OPENAI_API_KEY`,
+      `no OpenAI key — \`${typedCommand(app.command, "models keys set openai")}\`, or OPENAI_API_KEY`,
     )
   }
   return { remote, ...(key ? { apiKey: key } : {}), ...(concurrency ? { concurrency } : {}) }

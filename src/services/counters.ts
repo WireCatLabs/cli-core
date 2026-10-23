@@ -140,7 +140,7 @@ export const countersService = (deps: ServiceDeps) => {
       }
       if (query.dryRun) return preview
       if (deps.offline) throw new CliError("validation_error", "counter refresh requires an online session")
-      const request = { chatId: null, key: "stats.messages.counters.refresh" }
+      const request = { chatId: null, key: "stats.messages.counters.sync" }
       await deps.guard.ask?.(request)
       deps.guard.check(request, { reserve: false })
       const controller = new AbortController(),

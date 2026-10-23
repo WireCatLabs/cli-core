@@ -714,7 +714,7 @@ export const unlistedNote = (unlisted: readonly UnlistedCategory[], tool: string
   unlisted.map(
     ({ name, open, total }) =>
       `${total} task${total === 1 ? "" : "s"} (${open} open) still use ${name}, which is not in the list: ` +
-      `${tool} tasks list category:${name} shows them, ${tool} tasks plan <id> --category <name> moves one`,
+      `${tool} tasks list category:${name} shows them, ${tool} tasks update <id> --category <name> moves one`,
   )
 
 const LANGUAGES = ["en", "ru", "es"] as const

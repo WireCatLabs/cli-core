@@ -1,9 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command, Option } from "commander"
+import { Command } from "commander"
 import type { MessageHit } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
-import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { modelWith } from "../../speech/hearing.js"
 import { REMOTE_READ } from "../effects.js"
@@ -47,7 +46,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
     .option("--new", "what arrived since the last check, each message once — for scheduled runs")
     .option("--limit <n>", "at most this many per chat, the newest", positiveCount("--limit"))
     .option("--all", "muted and archived chats too — left out unless they mention you or reply to you")
-    .addOption(new Option("--kind <kinds>", `compatibility spelling for kind:; ${CHAT_KINDS.join(", ")}`).hideHelp())
+
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
     .addHelpText("after", "To mark a chat read, use `chats mark-read <chat>`. The other side sees it.")

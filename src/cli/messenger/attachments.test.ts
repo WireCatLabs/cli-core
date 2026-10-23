@@ -546,10 +546,10 @@ describe("attachments extract", () => {
     expect(refused.stderr).toContain("permissions.attachments.extract allow")
   })
 
-  it("**store reindex rebuilds the files' word index**", async () => {
+  it("**store rebuild rebuilds the files' word index**", async () => {
     const { call } = await setup()
     await call("attachments", "extract")
-    expect(json(await call("store", "reindex", "--json"))).toMatchObject({ file_texts: 3 })
+    expect(json(await call("store", "rebuild", "--json"))).toMatchObject({ file_texts: 3 })
     expect(await hits(call, "content:invoice")).toEqual(["1"])
   })
 })
@@ -658,7 +658,7 @@ describe("an agent's text for a file", () => {
 
     const textFile = join(root, "read.txt")
     writeFileSync(textFile, "Акт сверки за март")
-    const kept = json(await call("attachments", "text", "set", "Work fixture", "4", "--text-file", textFile, "--json"))
+    const kept = json(await call("attachments", "update", "Work fixture", "4", "--text-file", textFile, "--json"))
     expect(kept).toEqual({
       ref: "msg:chat/500/7/4",
       attachment: 1,
@@ -666,7 +666,7 @@ describe("an agent's text for a file", () => {
       chars: 18,
       replaced: "extracted",
     })
-    const fromStdin = await piped("Фото доски: план релиза")("attachments", "text", "set", "msg:chat/500/7/5", "--json")
+    const fromStdin = await piped("Фото доски: план релиза")("attachments", "update", "msg:chat/500/7/5", "--json")
     expect(json(fromStdin)).toMatchObject({ ref: "msg:chat/500/7/5", replaced: "extracted" })
     expect(fromStdin.stderr).not.toContain("релиза")
 
@@ -683,27 +683,25 @@ describe("an agent's text for a file", () => {
 
   it("refuses empty text, a message the store lacks, an unknown file number, another account and read-only", async () => {
     const { piped, env } = await setup()
-    expect((await piped("  ")("attachments", "text", "set", "7", "4")).stderr).toContain("empty")
-    expect((await piped("x")("attachments", "text", "set", "7", "99")).code).toBe(6)
-    expect((await piped("x")("attachments", "text", "set", "7", "4", "--attachment", "2")).stderr).toContain(
+    expect((await piped("  ")("attachments", "update", "7", "4")).stderr).toContain("empty")
+    expect((await piped("x")("attachments", "update", "7", "99")).code).toBe(6)
+    expect((await piped("x")("attachments", "update", "7", "4", "--attachment", "2")).stderr).toContain(
       "no file number 2",
     )
-    expect((await piped("x")("attachments", "text", "set", "msg:chat/501/7/4")).stderr).toContain("another account")
-    expect((await piped("x")("attachments", "text", "set", "7")).stderr).toContain("which message")
+    expect((await piped("x")("attachments", "update", "msg:chat/501/7/4")).stderr).toContain("another account")
+    expect((await piped("x")("attachments", "update", "7")).stderr).toContain("which message")
     const store = await openStore({ path: env.MESSAGING_STORE })
     await store.messages.saveMessages(OWNER, "7", [message("8", [{ kind: "photo" }, { kind: "photo" }])], {
       via: "history",
     })
     await store.close()
-    expect((await piped("x")("attachments", "text", "set", "7", "8")).stderr).toContain("has 2 files")
-    expect(json(await piped("x")("attachments", "text", "set", "7", "8", "--attachment", "2", "--json"))).toMatchObject(
-      {
-        attachment: 2,
-      },
-    )
-    const locked = await setup({
-      config: { profiles: { default: { permissions: { "attachments.text.set": "readonly" } } } },
+    expect((await piped("x")("attachments", "update", "7", "8")).stderr).toContain("has 2 files")
+    expect(json(await piped("x")("attachments", "update", "7", "8", "--attachment", "2", "--json"))).toMatchObject({
+      attachment: 2,
     })
-    expect((await locked.piped("x")("attachments", "text", "set", "7", "4")).code).toBe(5)
+    const locked = await setup({
+      config: { profiles: { default: { permissions: { "attachments.update": "readonly" } } } },
+    })
+    expect((await locked.piped("x")("attachments", "update", "7", "4")).code).toBe(5)
   })
 })

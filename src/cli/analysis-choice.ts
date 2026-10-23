@@ -55,6 +55,6 @@ export const analysisChoice = (
   const keyName = customUrl === undefined ? provider : endpointKeyName(baseUrl)
   const apiKey = embeddingKeys(app, env, keyring).read(keyName)?.key
   if (!apiKey && customUrl === undefined)
-    throw new CliError("authentication_error", `no ${provider} key — use models text key set ${provider}`)
+    throw new CliError("authentication_error", `no ${provider} key — use models keys set ${provider}`)
   return { provider, model, baseUrl, ...(apiKey ? { apiKey } : {}) }
 }

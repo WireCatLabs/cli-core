@@ -1,4 +1,5 @@
 import type { Command } from "commander"
+import { canonicalPermissionKey } from "../sends/permission-aliases.js"
 import { keyForCommand, type PermissionKey, WRITE_KEYS } from "../sends/permissions.js"
 
 export type PermissionKeyOf = (command: Command) => PermissionKey | null | undefined
@@ -28,6 +29,7 @@ export const knownPermissionKeys = (
 ): Set<PermissionKey> => {
   const known = new Set<PermissionKey>()
   const add = (key: PermissionKey) => {
+    key = canonicalPermissionKey(key)
     for (let parts = key.split("."); parts.length > 0; parts = parts.slice(0, -1)) known.add(parts.join("."))
   }
   for (const one of everyCommand(rootOf(command))) {

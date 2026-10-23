@@ -18,26 +18,28 @@ const everyNote = (command: string, items: ContactNoteItem[]) =>
   listOf(command, { items, limit: Math.max(1, items.length), has_more: false })
 
 export const privatePeopleCommands = (messenger: Messenger): Command[] => {
-  const alias = new Command("alias").description("a private local display name in the selected account")
+  const alias = new Command("aliases").description("a private local display name in the selected account")
   annotate(alias.command("set"), { effects: LOCAL_WRITE, output: { entity: "contact_alias" } })
+
     .description("your own name for a person in this account; kept on this machine, never sent")
     .argument("<person>", "the person's id, reference or known name")
     .argument("<alias>", "the private name to use for this person")
     .action(async function (this: Command, person: string, value: string) {
       const context = messengerContext(this, messenger)
-      refuseLocalWrite(context, messenger.app.command, "contacts.alias.set")
+      refuseLocalWrite(context, messenger.app.command, "contacts.aliases.set")
       renderAnswer(
         this,
         context,
         itemOf(snakeKeys(await context.withServices((services) => services.privatePeople.alias(person, value)))),
       )
     })
-  annotate(alias.command("rm"), { effects: LOCAL_WRITE, output: { entity: "contact_alias" } })
+  annotate(alias.command("remove"), { effects: LOCAL_WRITE, output: { entity: "contact_alias" } })
+
     .description("drop your local name for a person; their own name shows again")
     .argument("<person>", "the person's id, reference or known name")
     .action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
-      refuseLocalWrite(context, messenger.app.command, "contacts.alias.rm")
+      refuseLocalWrite(context, messenger.app.command, "contacts.aliases.remove")
       renderAnswer(
         this,
         context,
@@ -84,12 +86,8 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
           : "replace a note's text; --revision must match the one you read",
       )
       .argument("<person>", "the person's id, reference or known name")
-      .addOption(
-        ownerOnlyOption("--text-file <path>", "read note text from a file; omitted or - reads stdin").conflicts("file"),
-      )
-      .addOption(
-        ownerOnlyOption("--file <path>", "compatibility alias for --text-file").hideHelp().conflicts("textFile"),
-      )
+      .addOption(ownerOnlyOption("--text-file <path>", "read note text from a file; omitted or - reads stdin"))
+
     if (name === "edit")
       command
         .argument("<id>", "the note id from contacts notes list")

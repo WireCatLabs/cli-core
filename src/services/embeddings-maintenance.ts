@@ -33,7 +33,7 @@ const CHARS_PER_TOKEN_AT_LEAST = 3
 const notDownloaded = (deps: ServiceDeps, id: string) =>
   new CliError(
     "not_found",
-    `${id} is not downloaded — \`${typedCommand(deps.messenger.app.command, `models text download ${id}`)}\``,
+    `${id} is not downloaded — \`${typedCommand(deps.messenger.app.command, `models download ${id}`)}\``,
     {
       reason: "model.not-downloaded",
       model: id,
@@ -43,7 +43,7 @@ const notDownloaded = (deps: ServiceDeps, id: string) =>
 export const notBuiltError = (deps: ServiceDeps, chatId: Id) =>
   new CliError(
     "not_found",
-    `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations build --chat ${chatId}`)}\``,
+    `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations links rebuild --chat ${chatId}`)}\``,
   )
 
 export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT_TEXT_MODEL) => {

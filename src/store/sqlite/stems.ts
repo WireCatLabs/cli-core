@@ -28,7 +28,7 @@ export interface StemsState {
   /** Every live message is stemmed by `wanted`: stemmed search may run. */
   ready: boolean
   /**
-   * Why it is not ready: still filling, built by other choices and waiting for `store reindex`, or the
+   * Why it is not ready: still filling, built by other choices and waiting for `store rebuild`, or the
    * store asks for choices only a newer tool knows.
    */
   cause?: "building" | "stemmer_changed" | "stemmer_unknown"

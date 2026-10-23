@@ -7,7 +7,8 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { DEFAULT_TASK_CATEGORIES, withTaskCategory } from "../../domain/task-categories.js"
-import { ENTITIES, task } from "../../entities/index.js"
+import { ENTITIES, task, taskPair } from "../../entities/index.js"
+
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
@@ -94,7 +95,7 @@ const setup = async (config?: object) => {
       if (code === 0 && argv[0] === "tasks" && argv.includes("--json")) {
         const names = {
           "tasks add": "task_created",
-          "tasks plan": "task_card",
+          "tasks update": "task_card",
           "tasks link": "task_links",
           "tasks show": "task_card",
           "tasks related": "task_similar",
@@ -132,7 +133,7 @@ describe("tasks", () => {
     expect(projected.code, projected.stderr).toBe(0)
     expect(Object.keys(item(projected)).sort()).toEqual(["key", "status", "title"])
     const before = item(await call("tasks", "show", added.id, "--json"))
-    const refused = await call("tasks", "plan", added.id, "--title", "Must stay unchanged", "--json=unknown_field")
+    const refused = await call("tasks", "update", added.id, "--title", "Must stay unchanged", "--json=unknown_field")
     expect(refused.code).not.toBe(0)
     expect(JSON.parse(refused.stderr).error.reason).toBe("output.unknown-field")
     expect(item(await call("tasks", "show", added.id, "--json")).title).toBe(before.title)
@@ -186,7 +187,7 @@ describe("tasks", () => {
     const listed = async (query: string) => json(await call("tasks", "list", query, "--json")).items.length
     expect([await listed("assignee:any"), await listed("assignee:none")]).toEqual([1, 0])
 
-    await call("tasks", "plan", added.id, "--assignee", "none", "--json")
+    await call("tasks", "update", added.id, "--assignee", "none", "--json")
     expect([await listed("assignee:any"), await listed("assignee:none")]).toEqual([0, 1])
   })
 
@@ -265,7 +266,7 @@ describe("tasks", () => {
     const before = item(await ok("tasks", "show", key)).title
     await ok(
       "tasks",
-      "plan",
+      "update",
       key,
       "--title",
       "send Ana the invoice",
@@ -399,11 +400,11 @@ describe("tasks", () => {
     })
 
     const planned = item(
-      await call("tasks", "plan", added.id, "--due", "none", "--remind-time", "2026-01-01", "--json"),
+      await call("tasks", "update", added.id, "--due", "none", "--remind-time", "2026-01-01", "--json"),
     )
     expect(planned).toMatchObject({ due_at: null, next_check_at: new Date(2026, 0, 1).toISOString() })
-    expect((await call("tasks", "plan", added.id)).code).not.toBe(0)
-    expect((await call("tasks", "plan", added.id, "--due", "soon")).stderr).toContain("--due takes")
+    expect((await call("tasks", "update", added.id)).code).not.toBe(0)
+    expect((await call("tasks", "update", added.id, "--due", "soon")).stderr).toContain("--due takes")
 
     const linked = item(
       await call(
@@ -429,7 +430,7 @@ describe("tasks", () => {
       [],
     )
     expect((await call("tasks", "agenda", "--waiting", "soon")).stderr).toContain("--waiting takes")
-    await call("tasks", "plan", added.id, "--assignee", "sender")
+    await call("tasks", "update", added.id, "--assignee", "sender")
     const printed = (await call.pretty("tasks", "agenda", "--within", "3650d")).stdout.join("")
     expect(printed).toContain("Send the invoice")
     expect(printed).toContain("unsynced — moved, newest message not stored")
@@ -444,10 +445,10 @@ describe("tasks", () => {
     expect(listed.map(({ name }: { name: string }) => name)).toEqual(DEFAULT_TASK_CATEGORIES.map(({ name }) => name))
     const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
     expect(added).toMatchObject({ key: "PR-1", category: "money" })
-    expect(item(await call("tasks", "plan", "PR-1", "--category", "Documents", "--json")).category).toBe("documents")
+    expect(item(await call("tasks", "update", "PR-1", "--category", "Documents", "--json")).category).toBe("documents")
     expect(json(await call("tasks", "list", "category:documents", "key:PR-1", "--json")).items).toHaveLength(1)
     expect(json(await call("tasks", "list", "category:money", "--json")).items).toEqual([])
-    expect((await call("tasks", "plan", "PR-1", "--category", "finance")).stderr).toContain("--category takes taxes")
+    expect((await call("tasks", "update", "PR-1", "--category", "finance")).stderr).toContain("--category takes taxes")
 
     expect((await call("tags", "add", "urgent", "--task", "PR-1", "--json")).code).toBe(0)
     expect(json(await call("tasks", "list", "tag:urgent", "--json")).items).toMatchObject([{ key: "PR-1" }])
@@ -553,7 +554,7 @@ it("**takes a category from the list the owner edited in the store**, and refuse
   expect(
     item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "Garden", "--json")),
   ).toMatchObject({ category: "garden" })
-  const removed = await call("tasks", "plan", "PR-1", "--category", "personal", "--json")
+  const removed = await call("tasks", "update", "PR-1", "--category", "personal", "--json")
   expect([removed.code, removed.stderr]).toEqual([2, expect.stringContaining("--category takes taxes")])
 })
 
@@ -642,6 +643,8 @@ describe("tasks that may be one job", () => {
     database.close()
 
     const listed = json(await call("tasks", "duplicates", "list", "--json"))
+    for (const pair of listed.items) expect(v.safeParse(taskPair, pair).success).toBe(true)
+
     expect(listed.items).toMatchObject([
       {
         task: { key: again },
@@ -661,6 +664,7 @@ describe("tasks that may be one job", () => {
 
     const merged = item(await call("tasks", "merge", again, "--into", invoice, "--json"))
     expect(merged).toMatchObject({ pair: { decision: "merged" }, linked: 1, task: { key: invoice } })
+    expect(v.safeParse(taskPair, merged.pair).success).toBe(true)
     expect(merged.pair).toHaveProperty("decided_at")
     expect(merged.task).toHaveProperty("created_at")
     const shown = item(await call("tasks", "show", again, "--json"))
@@ -669,6 +673,7 @@ describe("tasks that may be one job", () => {
     expect(json(await call("tasks", "duplicates", "list", "decision:unsure", "--json")).items).toEqual([])
 
     const unmerged = item(await call("tasks", "unmerge", again, "--json"))
+    expect(v.safeParse(taskPair, unmerged.pair).success).toBe(true)
     expect(unmerged).toMatchObject({ pair: { decision: "unmerged" }, task: { key: again, status: "open" } })
 
     expect(item(await call("tasks", "duplicates", "reject", again, invoice, "--json"))).toMatchObject({

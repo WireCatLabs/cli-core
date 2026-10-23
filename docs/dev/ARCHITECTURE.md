@@ -170,7 +170,7 @@ only when the hash still matches; a chunk whose messages changed since the build
 search re-reads each meaning hit the same way (`chunkFreshness`) and marks it stale or drops it, and
 `tombstone` deletes the vectors of the chunks a deleted message was in (`purgeVectorsOf`); how fresh each chat
 is, is one query (`readiness`) behind `conversations status` and search's `readiness`. The same readiness picks
-what `conversations build` and `embed` without `--chat`, `search conversations --catch-up` and MCP `conversations_refresh` do:
+what `conversations links rebuild` and `embed` without `--chat`, `search conversations --catch-up` and MCP `conversations_refresh` do:
 one service method, `embeddings.refresh`, bounded by chats and chunks. How
 the search over them works, end to end and measured: [search-indexes.md](../storage/search-indexes.md#search-by-meaning).
 
@@ -236,8 +236,8 @@ exact conditions over it. A bare word (`Predicate.implicit`) also matches there 
 ORs those sets in (`elsewhere`), the query is driven by the union of the sets and ranked by `message_words`
 joined LEFT, with hits outside the message text tiered transcript → file name → file text (`lucene.ts`). No
 foreign key, so the purges of older builds still work; triggers erase the text when its message is tombstoned
-or deleted, or its attachment deleted (NEED-393 A, tested against 0.49.0). `store reindex` rebuilds the index.
-`attachments list is:needs_text` and `attachments text set` (MCP `attachments_list`, `attachments_text_set`) are
+or deleted, or its attachment deleted (NEED-393 A, tested against 0.49.0). `store rebuild` rebuilds the index.
+`attachments list is:needs_text` and `attachments update` (MCP `attachments_list`, `attachments_text_set`) are
 how an agent finds a scan, reads it itself and writes the text back, all through `services.attachments`.
 
 Remote agents receive retained bytes through bounded `attachments show` / `attachments_show`,
@@ -297,7 +297,7 @@ migration; a larger one records in `search_index_state` the highest `pk` the bat
 `fillSearchIndex` (`src/store/sqlite/search-index.ts`) gets it there in batches of 5,000 — the
 normalized text first, then the words, then the typo vocabulary (`search_terms`,
 `search_term_trigrams`), then the words of messages stored since — from `store migrate`,
-`store reindex`, and up to 200 ms before each
+`store rebuild`, and up to 200 ms before each
 `search messages`. When everything is built it returns without taking the write lock. `search messages`
 ranks by it. `src/store/sqlite/words.ts` keeps `knownTerms` and `termCandidates`, which `--discover`
 uses for typo correction; `src/store/search-plan.test.ts` fails if a search reads an index once per message.
@@ -309,16 +309,16 @@ OR the stems (`src/store/sqlite/lucene.ts`), so no exact hit is lost to a differ
 the words only. A stemmed query is driven by a materialized set of the messages its indexes name, read by
 key, and ranked by a materialized stems bm25 joined LEFT, exact forms first — joining the stems as the
 ranked table would drop exact-only hits, and joining it row by row was 80× slower (`bench/stemming`).
-While the stems are building, or chosen by a newer tool, search and stats run a stemmed query on the word index alone and say so in `query.stemming` (`applied: false`); only stems waiting for the owner's `store reindex` refuse with `index.not-ready` (`searchStemming`, `src/services/messages-search.ts`). `serve` fills building stems a slice at a time (`stemFills`). A default the store saved carries `origin: "default"` and the defaults' version, so a newer default replaces it and an older build leaves it. SQL cannot stem, so the triggers only queue the message in `message_stems_pending`, and JS
+While the stems are building, or chosen by a newer tool, search and stats run a stemmed query on the word index alone and say so in `query.stemming` (`applied: false`); only stems waiting for the owner's `store rebuild` refuse with `index.not-ready` (`searchStemming`, `src/services/messages-search.ts`). `serve` fills building stems a slice at a time (`stemFills`). A default the store saved carries `origin: "default"` and the defaults' version, so a newer default replaces it and an older build leaves it. SQL cannot stem, so the triggers only queue the message in `message_stems_pending`, and JS
 writes the stems (`src/store/sqlite/stems.ts`): every store write empties up to 500 queued messages
 before its `COMMIT`, and `fillStems` stems the messages up to the watermark and then the queue — on
-open for a small file, in `store migrate`, `store reindex`, and inside the same 200 ms before a search.
+open for a small file, in `store migrate`, `store rebuild`, and inside the same 200 ms before a search.
 The `analyzer` column of the row records the Snowball version and stemmer choices that built it; the
 first fill claims an unbuilt row. The choices are store-wide (`store_settings`, written by
 `config set search_stemmers.cyrillic|latin`), since every profile, tg and MAX share one index. Ready
 means filled to the watermark, an empty queue, and the analyzer this binary would build — an older
 binary runs the triggers and never drains, so a flag alone would lie. Stems built by other choices are
-written by nobody and rebuilt only by `store migrate` or `store reindex`, never by a search, so two
+written by nobody and rebuilt only by `store migrate` or `store rebuild`, never by a search, so two
 tools with different settings or Snowball versions cannot rebuild each other's index in turn; a row a
 newer Snowball built is refused with "upgrade this tool". The first claim and every rebuild also save the
 choices, so a tool with another default sees a setting and refuses as "unknown" instead of rebuilding.
@@ -339,7 +339,7 @@ may still write the old ones, so `openStore` copies what is missing on every ope
 `note_stems`, same tokenizer and the store's stemmer choices — and their rows in `chunks`, whose hashes find their
 vectors in `chunk_vectors` beside the conversations'. Triggers on `notes` only queue the note in
 `note_index_pending`; `drainNoteIndex` (`src/store/sqlite/note-index.ts`) writes words, stems and chunks
-in JS before every notes search, `chunksToEmbed` and `nearest`, and in `store migrate` and `store reindex`.
+in JS before every notes search, `chunksToEmbed` and `nearest`, and in `store migrate` and `store rebuild`.
 Notes are few, so a change of stemmer choices queues them all again at the next drain instead of waiting
 for a reindex. `searchNotes` (`src/store/sqlite/note-search.ts`) compiles the same parsed query as
 messages over the fields a note has (`text`, `exact`, `body`, `tag`, `date`, `in`) and refuses the rest;
@@ -518,7 +518,7 @@ it holds (NEED-1389):
   and writes `relay: { path, protocol }` into the lock. `run()`'s `preAction` (`relayTarget`, `src/cli/relay-route.ts`)
   sends a command there when the lock's process is alive and offers a relay, and the command reaches the messenger
   (`effects.remote` not `none`) — except `serve`, `server`, `bot`, logins (`lifetime: "interactive"`), a command
-  whose remote side is another service (`reachesOtherService`: `conversations build` and `embed`, `search
+  whose remote side is another service (`reachesOtherService`: `conversations links rebuild` and `embed`, `search
   conversations`, the model downloads), `--offline`, `--dry-run` and `mcp --http`.
 - **The command, not the adapter.** The client sends its argv, environment, working directory and stdin
   (`src/background/relay.ts`, one JSON object per line); serve runs `run()` again in-process (`runCommand`) and
@@ -666,7 +666,7 @@ kept rather than removing another account's valid cache. Deletion safeguards rem
 
 ## Interior archive gap repair
 
-`store gaps plan <chat>` uses recorded inclusive coverage ranges, with versioned account/chat/order
+`store gaps show <chat>` uses recorded inclusive coverage ranges, with versioned account/chat/order
 identity and a fingerprint. Unknown archive edges remain separate from interior gaps; message-id
 holes and quiet periods alone do not establish missing history. Planning is local.
 
