@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Command discovery uses `--json`.** `commands`, scoped discovery and `commands schema` refuse `--jsonl` with `output.one-object`, instead of printing a line with no stream end record. Use `--json` for the discovery document.
+
+- cli-core requires cli-base 0.50.1 or newer within the 0.50 line for profile-preserving command corrections and concise skill summaries.
+
+### Fixed
+
+- **Unknown-command explanations are separated.** The explanation of a word read as a profile follows the command error with a dash, keeping both parts readable on one line.
+
+- **Input-field errors name the command's flags.** Adapters can report unsupported or conflicting domain fields through `input.field-unsupported` or `input.field-conflict`. The CLI maps declared fields to flags in the human message and structured parameter, while SDK errors stay independent of command syntax. Unknown fields are kept without guessing.
+
+- **Joined command hints keep the chosen profile.** A command path passed as one argument is refused with a correction that preserves a separate explicit profile, including when global options come first.
+
 ### Added
 
 - `SEARCHES_QUERY` (`@wirecat/cli-core/cli`): the query `searches list` takes, for another CLI's own saved searches.

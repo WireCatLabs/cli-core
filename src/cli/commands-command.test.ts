@@ -199,8 +199,13 @@ describe("commands as text", () => {
     expect(listed).toContain("Other\n  memo people show")
   })
 
-  it("keeps the JSON document on --json and --jsonl", async () => {
+  it("keeps discovery as one JSON document and refuses JSONL before printing", async () => {
     expect(JSON.parse((await text(["commands", "--json"])).stdout).contract).toBe(3)
-    expect(JSON.parse((await text(["commands", "--jsonl"])).stdout.split("\n")[0] ?? "").cli).toBe("app")
+    for (const path of [["commands"], ["commands", "chats"], ["commands", "schema", "chats", "list"]]) {
+      const result = await text([...path, "--jsonl"])
+      expect(result.code).toBe(2)
+      expect(result.stdout).toBe("")
+      expect(JSON.parse(result.stderr).error).toMatchObject({ code: "validation_error", reason: "output.one-object" })
+    }
   })
 })

@@ -37,6 +37,7 @@ import {
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
+import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { movedPath, movedPointer } from "./moved.js"
@@ -443,6 +444,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       refuseJoinedPath(
         program,
         words.filter((word) => !word.startsWith("-")),
+        profile !== undefined && !/\s/.test(profile) ? [profile] : [],
       )
   } catch (failure) {
     const settled = await settleFailure(failure, { definition, program, rest: lifted, profile, options })
@@ -506,7 +508,8 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         rest[0] !== undefined &&
         !commandWords(program).has(rest[0])
       ) {
-        message += ` "${profile}" is not a command, so it was read as a profile name — which left "${rest[0]}" to be one.`
+        message = message.trimEnd()
+        message += ` — "${profile}" is not a command, so it was read as a profile name — which left "${rest[0]}" to be one.`
       }
       const failure = new CliError("validation_error", message)
       const settled = await settleFailure(failure, { definition, program, rest, profile, options })
@@ -693,6 +696,7 @@ const failed = (
     targets: judgedTargets(program),
     ...(effects ? { effects } : {}),
   })
+  showInputFields(object, (path && commandAt(program, path)) || program)
   const command = path || app.command
   return {
     object,

@@ -101,8 +101,9 @@ describe("running a messenger CLI", () => {
 
   it.each([
     [["chats list", "--help"], "app chats list"],
-    [["personal", "chats list"], "app chats list"],
-    [["personal", "--json", "chats list", "--limit", "5"], "app chats list"],
+    [["--json", "personal", "chats list"], "app personal chats list"],
+    [["personal", "chats list"], "app personal chats list"],
+    [["personal", "--json", "chats list", "--limit", "5"], "app personal chats list"],
   ])("refuses a command path given as one argument, %j, instead of printing the root help", async (argv, fix) => {
     let ran = false
     const { code, stdout, stderr } = await call(argv, async () => {
@@ -215,7 +216,7 @@ describe("running a messenger CLI", () => {
     const { code, stderr } = await call(["chat", "list"])
 
     expect(code).toBe(2)
-    expect(JSON.parse(stderr[0] ?? "").error.message).toContain('"chat" is not a command')
+    expect(JSON.parse(stderr[0] ?? "").error.message).toMatch(/ — "chat" is not a command/)
   })
 
   it("**closes what the command tracked when --timeout expires**, then reports a timeout", async () => {
