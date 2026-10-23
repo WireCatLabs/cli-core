@@ -744,6 +744,7 @@ const samples: Record<EntityName, unknown> = {
     has_more: false,
     dry_run: true,
   },
+  send_attempt: { at, profile: "work", chat_id: "7", outcome: "sent", kind: "message", operation_id: "op-1" },
   tagging: {
     tag: "work",
     type: "chat",

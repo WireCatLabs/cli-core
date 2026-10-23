@@ -5,11 +5,12 @@ import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { pagedList, withQuery } from "../list-query.js"
+import { pagedList, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
 import { wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { RECIPIENTS_QUERY, recipientFilter } from "./recipients-query.js"
+import { SENDS_QUERY, sendFilter } from "./sends-query.js"
 
 /**
  * The chats this profile may send to. Off until the first `add`; `clear` deletes it, which turns it off again. It stops
@@ -98,15 +99,19 @@ export const recipientsCommand = (messenger: Messenger): Command => {
 /** Every attempt to send from this profile, kept whatever `--record` says. Never the text. */
 export const sendsCommand = (messenger: Messenger): Command =>
   new Command("sends").description("every attempt to send from this profile — never the text").addCommand(
-    withPaging(
-      annotate(new Command("list"), {
-        effects: LOCAL_READ,
-        examples: [`${messenger.app.command} personal sends list --limit 10`],
-      }).description("attempts to send, newest first: sent, refused, failed, or not known"),
-    ).action(async function (this: Command) {
+    withQuery(
+      withPaging(
+        annotate(new Command("list"), {
+          effects: LOCAL_READ,
+          examples: [`${messenger.app.command} personal sends list --limit 10`],
+        }).description("attempts to send, newest first: sent, refused, failed, or not known"),
+      ),
+      SENDS_QUERY,
+    ).action(async function (this: Command, words: string[]) {
+      const filter = sendFilter(words)
       const context = messengerContext(this, messenger)
       const { settings, renderer, env } = context
-      const entries = new SendJournal(sendsPathFor(messenger.app, settings.profile, env)).entries().reverse()
+      const entries = new SendJournal(sendsPathFor(messenger.app, settings.profile, env)).entries(filter).reverse()
       const from = settings.all ? 0 : (settings.page - 1) * settings.limit
       const shown = settings.all ? entries : entries.slice(from, from + settings.limit)
       renderAnswer(
@@ -114,9 +119,13 @@ export const sendsCommand = (messenger: Messenger): Command =>
         context,
         pagedList("sends list", settings, {
           items: shown.map(snakeKeys),
+          args: words.length ? { query: typedQuery(words) } : {},
           has_more: from + shown.length < entries.length,
         }),
       )
-      if (entries.length === 0) renderer.note(`profile ${settings.profile} has not tried to send anything`)
+      if (entries.length === 0)
+        renderer.note(
+          filter ? "no send attempts match the query" : `profile ${settings.profile} has not tried to send anything`,
+        )
     }),
   )

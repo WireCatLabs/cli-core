@@ -63,3 +63,20 @@ it("names one run for the whole process when nothing is running", () => {
   expect(first.run_id).toMatch(/-process-/)
   expect(second.run_id).toBe(first.run_id)
 })
+
+it("filters settled attempts without reviving reservations and leaves the journal unchanged", () => {
+  const path = journalFile()
+  const journal = new SendJournal(path)
+  const base = { at: "2026-10-13T08:00:00.000Z", profile: "work", chatId: "7", operationId: "op-1" }
+  journal.append({ ...base, outcome: "reserved", reservation: "reserve-1" })
+  journal.append({ ...base, outcome: "failed", reservation: "reserve-1", errorCode: "timeout", key: "messages.send" })
+  journal.append({ ...base, chatId: "8", operationId: "op-2", outcome: "sent" })
+  const before = readFileSync(path, "utf8")
+  expect(journal.entries({ outcome: "reserved" })).toEqual([])
+  expect(journal.entries({ outcome: "failed", chatId: "7", key: "messages.send", errorCode: "timeout" })).toMatchObject(
+    [{ operationId: "op-1", outcome: "failed" }],
+  )
+  expect(journal.entries({ operationId: "op-2" })).toMatchObject([{ chatId: "8", outcome: "sent" }])
+  expect(journal.entries({ outcome: "failed", chatId: "8" })).toEqual([])
+  expect(readFileSync(path, "utf8")).toBe(before)
+})
