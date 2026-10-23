@@ -21,6 +21,8 @@ shape of this file.
 
 - Contact profiles, phone lookups and address-book sync summaries declare their existing answer fields. Profile schemas retain masked phones, incomplete activity counts, partial provider flags and the source and precision of account-age estimates.
 
+- Contact activity, abuse checks and linked-identity receipts declare their exact result entities, so discovery and field projection describe the returned data.
+
 ### Added
 
 - Reaction commands include concrete examples in help and command discovery.
