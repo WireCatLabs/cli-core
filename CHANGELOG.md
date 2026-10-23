@@ -17,6 +17,14 @@ shape of this file.
   vocabulary, `transcript_stems` and `transcript_index_pending`, filled before each search; existing transcripts are
   queued on upgrade.
 
+### Changed — may break callers
+
+- **Command discovery uses `--json`.** `commands`, scoped discovery and `commands schema` refuse `--jsonl` with `output.one-object`, instead of printing a line with no stream end record. Use `--json` for the discovery document.
+
+### Fixed
+
+- **Unknown-command explanations are separated.** The explanation of a word read as a profile follows the command error with a dash, keeping both parts readable on one line.
+
 ## 0.395.0 — 23.10.2026
 
 ### Changed — may break callers

@@ -215,7 +215,7 @@ describe("running a messenger CLI", () => {
     const { code, stderr } = await call(["chat", "list"])
 
     expect(code).toBe(2)
-    expect(JSON.parse(stderr[0] ?? "").error.message).toContain('"chat" is not a command')
+    expect(JSON.parse(stderr[0] ?? "").error.message).toMatch(/ — "chat" is not a command/)
   })
 
   it("**closes what the command tracked when --timeout expires**, then reports a timeout", async () => {

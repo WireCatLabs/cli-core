@@ -23,6 +23,12 @@ export const CONTRACT = 3
 export const commandsCommand = (app: AppIdentity): Command => {
   const command = annotate(new Command("commands"), { effects: NO_EFFECTS })
     .description("every command by section, one line each; --json: the contract, one path per call")
+    .hook("preAction", (_command, action) => {
+      if (action.optsWithGlobals<{ jsonl?: boolean }>().jsonl)
+        throw new CliError("validation_error", "command discovery is one JSON object — use --json", {
+          reason: "output.one-object",
+        })
+    })
     .argument("[path...]", "one command path, for example: search messages; inspect other groups in separate calls")
     .action(function (this: Command, path: string[]) {
       const root = rootOf(this)
