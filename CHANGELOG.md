@@ -41,6 +41,8 @@ shape of this file.
 
 - Send-attempt lists accept queries over their stored metadata before pagination. Continuation steps keep the query, and discovery declares the answer fields.
 
+- **Clearing search history declares its receipt.** Discovery and JSON projection expose the existing cleared count; saved searches remain untouched.
+
 - Recorded-run lists accept metadata queries before pagination, and recorded-run commands declare their answer schemas. Continuation steps keep the query.
 
 - **Message read and write schemas.** Showing a message, sending, editing, forwarding, pinning, starring and deleting declare their existing answer entities for field discovery and projection. Write receipts retain their operation id.

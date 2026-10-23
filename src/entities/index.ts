@@ -102,7 +102,7 @@ import { recipient, recipientAdded, recipientChange, recipientOff, recipientRemo
 import { recordedRun, runDetails, runHit, runLocation } from "./recorded-run.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
-import { savedSearch } from "./saved-search.js"
+import { savedSearch, searchHistoryClear } from "./saved-search.js"
 import { sendAttempt } from "./send-attempt.js"
 import { automaticTags, tagChange } from "./tag-change.js"
 import { tagging } from "./tagging.js"
@@ -263,6 +263,7 @@ export {
   runHit,
   runLocation,
   savedSearch,
+  searchHistoryClear,
   sendAttempt,
   storedModelKey,
   tagChange,
@@ -434,6 +435,7 @@ export const ENTITIES = {
   conversation_hit: conversationHit,
   conversation,
   saved_search: savedSearch,
+  search_history_clear: searchHistoryClear,
   job,
   agenda,
   model,
