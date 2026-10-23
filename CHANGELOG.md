@@ -25,6 +25,8 @@ shape of this file.
 
 - **Unknown-command explanations are separated.** The explanation of a word read as a profile follows the command error with a dash, keeping both parts readable on one line.
 
+- **Input-field errors name the command's flags.** Adapters can report unsupported or conflicting domain fields through `input.field-unsupported` or `input.field-conflict`. The CLI maps declared fields to flags in the human message and structured parameter, while SDK errors stay independent of command syntax. Unknown fields are kept without guessing.
+
 ## 0.395.0 — 23.10.2026
 
 ### Changed — may break callers

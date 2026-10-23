@@ -86,9 +86,25 @@ const OTHERS: Entry[] = [
   ["vocabulary.stale", "configuration_error", "the vocabulary changed meanwhile"],
 ]
 
+export const INPUT_FIELD_REASONS: ErrorReason[] = defineReasons([
+  {
+    reason: "input.field-conflict",
+    code: "validation_error",
+    message: "the input fields conflict",
+    details: ["fields"],
+  },
+  {
+    reason: "input.field-unsupported",
+    code: "validation_error",
+    message: "the input field is not supported",
+    details: ["fields"],
+  },
+])
+
 /** Every reason this package raises; cli-base's own are known to the handler already. */
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
+  ...INPUT_FIELD_REASONS,
   ...[...QUERY, ...OTHERS].map(([reason, code, message]) => ({
     reason,
     code,
