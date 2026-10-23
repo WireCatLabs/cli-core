@@ -37,6 +37,8 @@ shape of this file.
   yes when unset. `joinRequestsAll` now turns on `--all` alone, so a messenger that answers every request at once
   but does not say which invite link each came by (MAX) offers `--all` without `--link`.
 
+- Account lists accept profile and current-profile query terms, and declare their answer fields for discovery and projection.
+
 ## 0.398.0 — 23.10.2026
 
 ### Added

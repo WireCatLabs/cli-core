@@ -154,6 +154,7 @@ const samples: Record<EntityName, unknown> = {
   contact_state_change: { operation_id: "synthetic", person_id: "91" },
   contact_import: { operation_id: "synthetic", sent: 1, recognised: [{ id: "91", name: null, username: null }] },
   account: { provider: "telegram", id: "1", name: null, username: null },
+  account_profile: { profile: "work", current: false, account: null, name: null },
   account_session: { current: true, client: "app 1.0", device: null, location: null, last_active_at: at },
   note: {
     ref: "note:1",

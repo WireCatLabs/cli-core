@@ -6,7 +6,9 @@ import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
+import { queryTerms, withQuery } from "../list-query.js"
 import { NONE_NAMED } from "../settings.js"
+import { ACCOUNT_PROFILES_QUERY } from "./account-profile-query.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
 import { recalledAccount } from "./accounts.js"
 import { photoHelp, readProfilePhoto } from "./admin-commands.js"
@@ -20,16 +22,25 @@ export const accountCommand = (messenger: Messenger): Command => {
   const account = new Command("account")
     .description("the logged-in account")
     .addCommand(
-      annotate(new Command("list"), { effects: REMOTE_READ, examples: [`${tool} account list`] })
+      withQuery(
+        annotate(new Command("list"), { effects: REMOTE_READ, examples: [`${tool} account list`] }),
+        ACCOUNT_PROFILES_QUERY,
+      )
         .summary("profiles on this computer and their signed-in accounts")
         .description("every profile on this computer, and the account each is logged in as; asks the messenger nothing")
-        .action(async function (this: Command) {
+        .action(async function (this: Command, words: string[]) {
+          const terms = queryTerms(words, ACCOUNT_PROFILES_QUERY, "account list")
           const context = messengerContext(this, messenger, { needsProfile: false })
           const { app, provider } = messenger
           const current = context.settings.sources.profile === NONE_NAMED ? undefined : context.settings.profile
-          const profiles = [
-            ...new Set([...(current === undefined ? [] : [current]), ...context.settings.profilesHere]),
-          ].sort()
+          const profiles = [...new Set([...(current === undefined ? [] : [current]), ...context.settings.profilesHere])]
+            .filter((profile) => terms.get("profile") === undefined || profile === terms.get("profile"))
+            .filter(
+              (profile) =>
+                terms.get("current") === undefined ||
+                (profile === current) === (terms.get("current")?.toLowerCase() === "true"),
+            )
+            .sort()
           const store = existsSync(storePath(context.env))
             ? await openStore({ env: context.env }).catch(() => undefined)
             : undefined

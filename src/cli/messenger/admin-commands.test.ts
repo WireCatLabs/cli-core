@@ -1018,6 +1018,17 @@ describe("chats create, join and leave", () => {
       { profile: "work", current: false, account: "501", name: null },
     ])
     expect(answer(named).items.map((item: { current: boolean }) => item.current)).toEqual([false, true])
+    for (const item of answer(listed).items) expect(v.safeParse(ENTITIES.account_profile, item).success).toBe(true)
+    const byProfile = await call(["account", "list", "profile:work", "--json=profile,account"], offline, unnamed)
+    expect(byProfile.code).toBe(0)
+    expect(answer(byProfile).items).toEqual([{ profile: "work", account: "501" }])
+    const withoutCurrent = await call(["account", "list", "current:true", "--json"], offline, unnamed)
+    expect(answer(withoutCurrent).items).toEqual([])
+    const currentOnly = await call(["work", "account", "list", "current:true", "--json"], offline, unnamed)
+    expect(answer(currentOnly).items).toEqual([{ profile: "work", current: true, account: "501", name: null }])
+    const unsupported = await call(["account", "list", "name:Owner", "--json"], offline, unnamed)
+    expect(unsupported.code).toBe(2)
+    expect(unsupported.stderr.join("\n")).toContain("query.unsupported-field")
   })
 
   it("**assumes no profile, not even the only one** — an account command says what to name", async () => {
