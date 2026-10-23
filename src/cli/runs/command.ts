@@ -20,7 +20,11 @@ export const runsCommand = (app: AppIdentity): Command => {
     return found
   }
 
-  annotate(command.command("list"), { effects: LOCAL_READ, mcp: false })
+  annotate(command.command("list"), {
+    effects: LOCAL_READ,
+    mcp: false,
+    examples: [`${app.command} runs list --limit 10`],
+  })
     .description("recorded runs, newest first")
     .option("--limit <n>", "how many to show", positiveCount("--limit"), 20)
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"), 1)
@@ -38,7 +42,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       if (runs.length === 0) renderer.note("nothing recorded — a run is kept with `--record`, or when it fails")
     })
 
-  annotate(command.command("show"), { effects: LOCAL_READ, mcp: false })
+  annotate(command.command("show"), { effects: LOCAL_READ, mcp: false, examples: [`${app.command} runs show run-101`] })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("one run: what it was, how it ended, and every event it logged")
     .option("--problems", "only failed responses, warnings and crashes")
@@ -66,7 +70,10 @@ export const runsCommand = (app: AppIdentity): Command => {
         )
     })
 
-  annotate(command.command("search"), { effects: LOCAL_READ })
+  annotate(command.command("search"), {
+    effects: LOCAL_READ,
+    examples: [`${app.command} runs search timeout --limit 10`],
+  })
     .description("search recorded diagnostic metadata and events; no message contents")
     .argument("[query]", "case-insensitive literal diagnostic text")
     .addOption(new Option("--status <status>", "run outcome").choices(["success", "failed", "partial", "running"]))
@@ -105,7 +112,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       )
     })
 
-  annotate(command.command("path"), { effects: NO_EFFECTS, mcp: false })
+  annotate(command.command("path"), { effects: NO_EFFECTS, mcp: false, examples: [`${app.command} runs path run-101`] })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("the directory holding one run")
     .action(function (this: Command, id: string) {
