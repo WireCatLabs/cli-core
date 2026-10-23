@@ -167,6 +167,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
 
   threadOptions(
     annotate(messages.command("context"), {
+      output: { entity: "message_context" },
       examples: [`${messenger.app.command} personal messages context "Book club" 101 --before-n 3 --after-n 3`],
       effects: REMOTE_READ,
     }),

@@ -71,6 +71,10 @@ Coverage and graph quality tell you when held history is incomplete. No metric p
 
 ## Follow the evidence
 
+Use `stats messages evidence` to explain a statistic: pass the row’s exact selection and component
+to retrieve its contributing messages, answer pairs or retention members. For general recent chat
+context, use `messages evidence <chat>`; its packet contains references, coverage and fingerprints.
+
 A ranking answers one item; its `rows` each carry a `selection` and the row's `id`. The answer's
 `next` names the top row's evidence command ready to run. Pass a row's selection as JSON, with its
 message locator (`ref`) or native person `id`:

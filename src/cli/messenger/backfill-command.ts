@@ -53,6 +53,7 @@ const ALL_CHATS = "--all"
 export const syncCommand = (messenger: Messenger): Command => {
   const fetching = messenger.fetching ?? FETCHING
   return annotate(new Command("sync"), {
+    output: { entity: "message_sync" },
     examples: [`${messenger.app.command} personal messages sync "Book club" --last 100`],
     effects: FETCH,
     cooperative: true,

@@ -45,9 +45,11 @@ import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { message } from "./message.js"
 import { messageDeletion, messagePin, messageStar } from "./message-change.js"
+import { messageContext } from "./message-context.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
 import { evidencePacket, messageLinks, messageTranscript } from "./message-read.js"
+import { messageDownload, messageSync } from "./message-transfer.js"
 import { messageWrite } from "./message-write.js"
 import { model } from "./model.js"
 import { note } from "./note.js"
@@ -122,12 +124,15 @@ export {
   member,
   memory,
   message,
+  messageContext,
   messageCounts,
   messageDeletion,
+  messageDownload,
   messageLink,
   messageLinks,
   messagePin,
   messageStar,
+  messageSync,
   messageTranscript,
   messageWrite,
   model,
@@ -160,6 +165,9 @@ export {
 
 export const ENTITIES = {
   message,
+  message_context: messageContext,
+  message_download: messageDownload,
+  message_sync: messageSync,
   "message.hit": v.pick(message, [
     "ref",
     "chat_title",

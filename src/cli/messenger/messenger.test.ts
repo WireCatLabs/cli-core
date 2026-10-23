@@ -200,6 +200,14 @@ const call = async (
     },
     { streams, tty: false, env, keyring: keyringOf(env), ...options },
   )
+  if (code === 0 && argv[0] === "messages" && argv.includes("--json")) {
+    const entity =
+      argv[1] === "download" ? ENTITIES.message_download : argv[1] === "context" ? ENTITIES.message_context : undefined
+    if (entity) {
+      const answer = JSON.parse(streams.stdout[0] ?? "null")
+      for (const item of answer.items ?? [answer.item]) v.parse(entity, item)
+    }
+  }
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 
@@ -2048,6 +2056,22 @@ describe("the shared read commands", () => {
       throw new Error("thread must stay local")
     })
     const context = await call(["messages", "context", "msg:chat/500/7/3", "--thread", "--json"], never, env)
+    expect(context.code, context.stderr.join(" ")).toBe(0)
+    expect(v.parse(ENTITIES.message_context, JSON.parse(context.stdout[0] ?? "null").item)).toBeDefined()
+    const threadProjection = await call(
+      ["messages", "context", "msg:chat/500/7/3", "--thread", "--json=items.ref"],
+      never,
+      env,
+    )
+    expect(threadProjection.code, threadProjection.stderr.join(" ")).toBe(0)
+    expect(JSON.parse(threadProjection.stdout[0] ?? "null").item.items[0]).toHaveProperty("ref")
+    const windowProjection = await call(
+      ["messages", "context", "msg:chat/500/7/3", "--json=items.ref"],
+      async () => backend,
+      env,
+    )
+    expect(windowProjection.code, windowProjection.stderr.join(" ")).toBe(0)
+    expect(JSON.parse(windowProjection.stdout[0] ?? "null").items[0]).toHaveProperty("ref")
     expect(context.code).toBe(0)
     expect(context.stdout).toHaveLength(1)
     const found = JSON.parse(context.stdout[0] ?? "").item

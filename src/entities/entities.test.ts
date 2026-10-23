@@ -88,6 +88,9 @@ const samples: Record<EntityName, unknown> = {
   message_star: { operation_id: "op-1", chat_id: "7", message_id: "3", starred: true },
   message_deletion: { operation_id: "op-1", chat_id: "7", deleted: ["3"], for_everyone: false },
   message,
+  message_context: message,
+  message_download: { files: [{ kind: "file", path: "./synthetic.txt", bytes: 1 }] },
+  message_sync: { chat: "7", fetched: 1, complete: true, ranges: [{ from: 1, to: 1 }] },
   "message.hit": {
     ref: message.ref,
     chat_title: "Synthetic chat",

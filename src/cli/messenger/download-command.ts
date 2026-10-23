@@ -27,6 +27,7 @@ import { stopOnSignal } from "./patience.js"
 /** `messages download`: every file of one message, or with `--all` of a whole chat, never over a file already there. */
 export const downloadSubcommand = (messages: Command, messenger: Messenger): Command =>
   annotate(messages.command("download"), {
+    output: { entity: "message_download" },
     examples: [`${messenger.app.command} personal messages download "Book club" 101 --output-dir ./downloads`],
     effects: FETCH,
   })
