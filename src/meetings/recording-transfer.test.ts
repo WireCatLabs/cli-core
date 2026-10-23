@@ -350,7 +350,7 @@ it("snapshots response getters, body and close method before a host await", asyn
   expect(reads).toBe(1)
   expect(closed).toBe(1)
 })
-it("closes a response if a metadata getter throws while capturing it", async () => {
+it("closes a response if a metadata showter throws while capturing it", async () => {
   const reply = response()
   let closed = 0
   reply.close = async () => {

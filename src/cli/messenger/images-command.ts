@@ -36,7 +36,7 @@ export const imagesCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command) {
       const { chat, limit = DEFAULT_LIMIT } = this.opts<{ chat?: string; limit?: number }>()
       const context = messengerContext(this, messenger)
-      refuseLocalWrite(context, messenger.app.command, "conversations.embed")
+      refuseLocalWrite(context, messenger.app.command, "conversations.embeddings")
       const controller = new AbortController()
       context.track({ close: async () => controller.abort() })
       const done = await context.withServices((services) =>

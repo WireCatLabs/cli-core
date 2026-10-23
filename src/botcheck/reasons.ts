@@ -1,4 +1,4 @@
-/** What `chats members audit` judges from a member list and the store. */
+/** What `chats members check` judges from a member list and the store. */
 export type AuditReason =
   | "bot"
   | "scam"

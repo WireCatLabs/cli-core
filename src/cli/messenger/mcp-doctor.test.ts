@@ -19,12 +19,12 @@ const doctorOf = async (script: string) => {
     provider: "chat",
     resolveSettings: settingsFor(app).resolveSettings,
     connect: async () => {
-      throw new Error("mcp doctor must not connect")
+      throw new Error("mcp check must not connect")
     },
     chatArgument: "a chat",
   }
   const streams = captureStreams()
-  const code = await run(["mcp", "doctor", "--json"], { app, commands: () => [mcpCommand(messenger)] }, {
+  const code = await run(["mcp", "check", "--json"], { app, commands: () => [mcpCommand(messenger)] }, {
     streams,
     tty: false,
     env: {
@@ -38,7 +38,7 @@ const doctorOf = async (script: string) => {
   return { code, root, stdout: streams.stdout.join("\n"), stderr: streams.stderr.join("\n") }
 }
 
-describe("mcp doctor", () => {
+describe("mcp check", () => {
   it("**shows the end of a server's stderr when it fails to start**, with the home folder, ids and tokens hidden", async () => {
     const { code, root, stderr } = await doctorOf(
       [

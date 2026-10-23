@@ -176,7 +176,7 @@ export const syncCommand = (messenger: Messenger): Command => {
       if (prepare) {
         validateCatchUpBounds(preparation)
         refuseLocalWrite(context, messenger.app.command, "conversations.links")
-        refuseLocalWrite(context, messenger.app.command, "conversations.embed")
+        refuseLocalWrite(context, messenger.app.command, "conversations.embeddings")
       }
       if (background) {
         const named = chat ?? ALL_CHATS

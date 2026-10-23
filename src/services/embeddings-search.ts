@@ -298,7 +298,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       const { vectors } = await store.vectors.conversationVectors(account, source.id, target.key)
       if (vectors.length === 0) {
         const [own] = await readinessOf(deps, chatId, target.key)
-        const step = own && isStale(own) ? "build" : "embed"
+        const step = own && isStale(own) ? "links rebuild" : "embed"
         throw new CliError(
           "not_found",
           `conversation ${source.id} has no vector of ${target.id} that matches its messages now — ` +

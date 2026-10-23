@@ -298,7 +298,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     if (deps.offline) {
       throw new CliError(
         "validation_error",
-        "`chats members audit` reads the member list from the messenger; not with --offline",
+        "`chats members check` reads the member list from the messenger; not with --offline",
       )
     }
     const connection = await deps.connection()

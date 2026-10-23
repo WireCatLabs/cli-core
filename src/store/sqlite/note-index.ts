@@ -188,7 +188,7 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
 
 /**
  * Indexes one corpus's rows written since the last drain, in short write transactions. These corpora are
- * small, so a change of stemmer choices simply queues every row again instead of waiting for `store reindex`.
+ * small, so a change of stemmer choices simply queues every row again instead of waiting for `store rebuild`.
  */
 export const drainCorpus = (
   database: CacheDatabase,
@@ -249,7 +249,7 @@ export const drainNoteIndex = (
   drainCorpus(database, CORPORA.document, stemmerFor, options) +
   drainCorpus(database, CORPORA.note, stemmerFor, options)
 
-/** Queues every document, note and memory again — for `store reindex`. */
+/** Queues every document, note and memory again — for `store rebuild`. */
 export const resetNoteIndex = (database: CacheDatabase): boolean => {
   write(database, () => {
     for (const corpus of Object.values(CORPORA))

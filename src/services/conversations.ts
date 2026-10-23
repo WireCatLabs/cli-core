@@ -86,7 +86,7 @@ export interface ConversationsService {
   batchStatus(chat: string, size: number): Promise<BatchStatus>
   /** The next window for the agent; `undefined` when every message is answered (A1–A4). */
   nextBatch(chat: string, size: number): Promise<LinkBatch | undefined>
-  /** Stores the agent's answer to a batch, all or nothing (A5); `conversations build` then uses it. */
+  /** Stores the agent's answer to a batch, all or nothing (A5); `conversations links rebuild` then uses it. */
   addAnswers(batch: string, answer: AgentAnswer): Promise<{ chat: Id; stored: number }>
   /** Drops the agent's answers for a chat, or one model's (A10). */
   clearAnswers(chat: string, model?: string): Promise<{ chat: Id; cleared: number }>
@@ -115,7 +115,7 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
   const notBuilt = (chatId: Id) =>
     new CliError(
       "not_found",
-      `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations build --chat ${chatId}`)}\``,
+      `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations links rebuild --chat ${chatId}`)}\``,
     )
 
   return {

@@ -114,7 +114,7 @@ export const openRemote = (
       if (response.status === 401 || response.status === 403) {
         throw new CliError(
           "authentication_error",
-          `${remote.provider} refused the key (HTTP ${response.status}${code}) — set it again with \`models text key set\``,
+          `${remote.provider} refused the key (HTTP ${response.status}${code}) — set it again with \`models keys set\``,
         )
       }
       const again = response.status === 429 || response.status >= 500

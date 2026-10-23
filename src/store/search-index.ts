@@ -36,7 +36,7 @@ export interface SearchIndexStore {
    * apply, `null` when a newer tool saved one this build does not know.
    */
   stemmers(): Promise<Stemmers | null | undefined>
-  /** Saves them; stems built by other choices wait for `store reindex` or `store migrate`. */
+  /** Saves them; stems built by other choices wait for `store rebuild` or `store migrate`. */
   saveStemmers(stemmers: Stemmers): Promise<void>
 }
 

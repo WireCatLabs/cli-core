@@ -182,7 +182,7 @@ export interface InviteLink {
   joined?: number
 }
 
-/** What `chats link update` changes; a field left out stays as it is. */
+/** What `chats links update` changes; a field left out stays as it is. */
 export interface InviteLinkChange {
   approval?: boolean
   /** ISO 8601; `null` makes it never expire. */
@@ -805,7 +805,7 @@ export interface Registered {
   precision: "day" | "month"
 }
 
-/** Everything the messenger itself says about one person, as `contacts profile` reads it. */
+/** Everything the messenger itself says about one person, as `contacts info` reads it. */
 export interface ProfileFacts {
   id: Id
   name: string | null
@@ -861,7 +861,7 @@ export interface PersonAlias {
   source: "profile" | "messages"
 }
 
-/** `contacts profile`: the person, and their activity in every chat shared with them. */
+/** `contacts info`: the person, and their activity in every chat shared with them. */
 export interface PersonProfile extends Omit<ProfileFacts, "chats"> {
   chats: SharedChatActivity[]
   /** Earlier names and usernames, oldest first; the current ones are not repeated. */

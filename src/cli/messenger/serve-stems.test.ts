@@ -69,7 +69,7 @@ describe("serve's stem fill", () => {
     expect(fills.summary().stemmed).toBe(3)
   })
 
-  it("**leaves stems the owner's choice made stale** for store reindex", async () => {
+  it("**leaves stems the owner's choice made stale** for store rebuild", async () => {
     const { store } = await withMessages(["houses"])
     await store.searchIndex.saveStemmers({ cyrillic: "none", latin: "english" })
     const fills = stemFills({ withStore: (work) => work(store), warn: () => {}, everyMs: 1 })

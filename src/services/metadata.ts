@@ -12,11 +12,11 @@ export const metadataService = (deps: ServiceDeps) => {
     return { store, account, chatId }
   }
   const refresh = async (reference: string) => {
-    if (deps.offline) throw new CliError("validation_error", "metadata refresh needs a connection; omit --offline")
+    if (deps.offline) throw new CliError("validation_error", "metadata sync needs a connection; omit --offline")
     const { store, account, chatId } = await held(reference)
     const found = (await store.chats.chats(account, {})).items.find((chat) => chat.id === chatId)
     if (!found || (found.kind !== "group" && found.kind !== "channel"))
-      throw new CliError("validation_error", "metadata refresh applies to groups and channels")
+      throw new CliError("validation_error", "metadata sync applies to groups and channels")
     const read = async (adapter: Awaited<ReturnType<ServiceDeps["connection"]>>) =>
       capability(adapter, "group", "read group or channel metadata")(chatId)
     const card = deps.withConnection ? await deps.withConnection(read) : await read(await deps.connection())

@@ -220,7 +220,7 @@ export const adminService = (deps: ServiceDeps): AdminService => {
     },
 
     link: async (chat) => {
-      const group = await capability(await online("chats link show"), "group", "read a group")(chat)
+      const group = await capability(await online("chats links show"), "group", "read a group")(chat)
       if (group.link === null) {
         throw new CliError(
           "not_found",
@@ -231,7 +231,7 @@ export const adminService = (deps: ServiceDeps): AdminService => {
     },
 
     resetLink: async (chat) => {
-      const connection = await online("chats link reset")
+      const connection = await online("chats links reset")
       const reset = capability(connection, "resetInviteLink", "replace an invite link")
       const { id: chatId } = await connection.resolve(chat)
       const operationId = newOperationId()
@@ -243,7 +243,7 @@ export const adminService = (deps: ServiceDeps): AdminService => {
 
     createLink: async (chat, { approval, expires, maxUses }) => {
       const expiresAt = linkLimits({ approval, expires, maxUses })
-      const connection = await online("chats link create")
+      const connection = await online("chats links create")
       const create = capability(connection, "createInviteLink", "make another invite link")
       const { id: chatId } = await connection.resolve(chat)
       const operationId = newOperationId()
@@ -323,8 +323,8 @@ export const adminService = (deps: ServiceDeps): AdminService => {
 
     revokeLink: async (chat, link) => {
       if (link.trim() === "")
-        throw new CliError("validation_error", "which link? give it as `chats link list` shows it")
-      const connection = await online("chats link revoke")
+        throw new CliError("validation_error", "which link? give it as `chats links list` shows it")
+      const connection = await online("chats links remove")
       const revoke = capability(connection, "revokeInviteLink", "revoke an invite link")
       const { id: chatId } = await connection.resolve(chat)
       const operationId = newOperationId()
@@ -336,7 +336,7 @@ export const adminService = (deps: ServiceDeps): AdminService => {
 
     updateLink: async (chat, link, { approval, expires, maxUses }) => {
       if (link.trim() === "")
-        throw new CliError("validation_error", "which link? give it as `chats link list` shows it")
+        throw new CliError("validation_error", "which link? give it as `chats links list` shows it")
       if (approval === undefined && expires === undefined && maxUses === undefined)
         throw new CliError(
           "validation_error",
@@ -344,7 +344,7 @@ export const adminService = (deps: ServiceDeps): AdminService => {
         )
       const limited = linkLimits({ approval, expires: expires === "never" ? undefined : expires, maxUses })
       const expiresAt = expires === "never" ? null : limited
-      const connection = await online("chats link update")
+      const connection = await online("chats links update")
       const update = capability(connection, "updateInviteLink", "change an invite link")
       const { id: chatId } = await connection.resolve(chat)
       const change: InviteLinkChange = {

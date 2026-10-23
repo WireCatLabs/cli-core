@@ -97,17 +97,17 @@ export const membersAudit = async (
   query: QueryWords,
   options: Omit<Parameters<Services["chats"]["audit"]>[1], "minScore">,
 ) => {
-  const minScore = scoreFloor(listQuery(typedQuery(query), AUDIT_QUERY, "chats members audit"))
+  const minScore = scoreFloor(listQuery(typedQuery(query), AUDIT_QUERY, "chats members check"))
   const audit = await services.chats.audit(chat, { ...options, minScore })
   return { audit, body: auditAnswer(audit) }
 }
 
 /** The source takes a count but no offset, so page n reads n pages and shows the last. */
 export const inviteLinks = async (services: Services, chat: string, query: QueryWords, { limit, page }: Paging) => {
-  const terms = nativeTerms(listQuery(typedQuery(query), LINKS_QUERY, "chats link list"), "chats link list")
+  const terms = nativeTerms(listQuery(typedQuery(query), LINKS_QUERY, "chats links list"), "chats links list")
   const revoked = terms.get("revoked")?.value.toLowerCase() === "true"
   const found = await services.admin.links(chat, { limit: limit * page, revoked })
-  return listOf("chats link list", {
+  return listOf("chats links list", {
     items: found.items.slice((page - 1) * limit).map(inviteLinkAnswer),
     limit,
     has_more: found.hasMore,

@@ -76,9 +76,7 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
     if (flag === "--template-mode <mode>") option.conflicts("model")
     edit.addOption(option)
   }
-  edit.addOption(
-    new Option("--model <mode>", "compatibility alias for --template-mode").hideHelp().conflicts("templateMode"),
-  )
+
   // Commander gives negated-only flags a true default; omission must preserve the saved field.
   edit.action(function (this: Command, id: string) {
     const options = this.opts<RuleEdits & { templateMode?: string }>()

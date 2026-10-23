@@ -137,7 +137,7 @@ describe("text of attachments in the store (version 19)", () => {
     expect(await raw(again.path, "SELECT count(*) AS n FROM attachments WHERE text IS NOT NULL")).toEqual([{ n: 0 }])
   })
 
-  it("**`store reindex` rebuilds the files' word index from the kept text**", async () => {
+  it("**`store rebuild` rebuilds the files' word index from the kept text**", async () => {
     const { store, path, pk } = await seeded()
     await store.attachments.keepAttachmentText(pk, { text: "Ёлка invoice", origin: "extracted", extractor: "plain" })
     await store.close()
@@ -156,7 +156,7 @@ describe("text of attachments in the store (version 19)", () => {
     expect(await found(reopened, "content:елка")).toEqual(["1"])
   })
 
-  it("**`store reindex` gives a voice note the transcript kept before transcripts reached the attachment index**", async () => {
+  it("**`store rebuild` gives a voice note the transcript kept before transcripts reached the attachment index**", async () => {
     const path = fresh()
     const store = await openStore({ path })
     await store.messages.saveMessages(OWNER, "-1", [message("3", "", [{ kind: "voice", mime: "audio/ogg" }])], {

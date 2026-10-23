@@ -3,7 +3,7 @@ import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "./stem.js"
 import { amountOf, dayOf, dueDayOf, type TaskAmount } from "./task-signature.js"
 
 /**
- * How alike two tasks are, field by field, as the tasks plan's duplicate chain scores them
+ * How alike two tasks are, field by field, as the tasks update's duplicate chain scores them
  * (`docs/dev/tasks-plan.md`, "Duplicates — the comparison chain" § 1, 4, 5). Ported from the scorer that
  * tuned the weights, WireCatLabs/cli-testing `performance/tasks/duplicates/` (cli-testing#60); the counts
  * quoted beside each weight are that run's duplicate / other candidate pairs at the level.

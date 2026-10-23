@@ -11,7 +11,7 @@ import { countersAnswer, refreshAnswer, refuseJsonl } from "./stats-answers.js"
 export const countersCommand = (messenger: Messenger) => {
   const parent = new Command("counters").description("per-counter observations and bounded remote refresh")
   for (const operation of ["show", "refresh"] as const) {
-    const command = new Command(operation)
+    const command = new Command(operation === "refresh" ? "sync" : operation)
       .summary("refresh message counters from the messenger")
       .description(
         operation === "show"
@@ -29,6 +29,7 @@ export const countersCommand = (messenger: Messenger) => {
       )
       .option("--counters <names>", "distinct views,reactions,comments fields; all three by default")
       .option("--limit <n>", "messages, 1–100; 20 by default", positiveCount("--limit"))
+    if (operation === "refresh") command
     if (operation === "show") command.option("--max-age <duration>", "maximum fresh observation age; 24h by default")
     annotate(
       command,
@@ -46,7 +47,7 @@ export const countersCommand = (messenger: Messenger) => {
         options = this.opts<CounterQuery>()
       refuseJsonl(context.format)
       if (operation === "refresh" && !options.dryRun)
-        refuseLocalWrite(context, messenger.app.command, "stats.messages.counters.refresh")
+        refuseLocalWrite(context, messenger.app.command, "stats.messages.counters.sync")
       const query = {
         ...options,
         limit: options.limit ?? 20,

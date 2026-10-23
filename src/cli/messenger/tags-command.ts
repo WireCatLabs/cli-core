@@ -42,10 +42,10 @@ export const tagsCommand = (messenger: Messenger): Command => {
     )
 
   changesStore(
-    annotate(tags.command("auto"), {
+    annotate(tags.command("rebuild"), {
       output: { entity: "automatic_tags" },
       effects: FETCH,
-      examples: [`${tool} tags auto --chat "Book club" --dry-run`],
+      examples: [`${tool} tags rebuild --chat "Book club" --dry-run`],
     }),
   )
     .description("derive local group/channel tags from cached metadata using keyword rules")
@@ -66,7 +66,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
         syncFirst?: boolean
         dryRun?: boolean
       }>()
-      if (!dryRun) refuseLocalWrite(context, messenger.app.command, "tags.auto")
+      if (!dryRun) refuseLocalWrite(context, messenger.app.command, "tags.rebuild")
       const done = await context.withServices((services) =>
         services.metadata.auto({ chats: chat, limit: Number(limit), refresh: syncFirst, dryRun }),
       )
@@ -102,17 +102,8 @@ export const tagsCommand = (messenger: Messenger): Command => {
     messenger,
     "untag",
   )
-    .addOption(
-      new Option("--claim <claim>", "remove only this ownership claim: manual or auto")
-        .argParser(sourceOf)
-        .conflicts("source"),
-    )
-    .addOption(
-      new Option("--source <manual|auto>", "compatibility alias for --claim")
-        .argParser(sourceOf)
-        .hideHelp()
-        .conflicts("claim"),
-    )
+    .addOption(new Option("--claim <claim>", "remove only this ownership claim: manual or auto").argParser(sourceOf))
+
     .action(async function (this: Command, given: string[]) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tags.remove")

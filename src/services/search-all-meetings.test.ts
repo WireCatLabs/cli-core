@@ -353,13 +353,13 @@ describe("opt-in meeting-inclusive search", () => {
     const notes = request({ only: ["notes"], env })
     const zoom = await searchAllIncludingMeetings(store, account, notes)
     expect(zoom.notes?.meaningSkipped).toBe(
-      "e5-small is not downloaded — install it with a WireCat CLI that has `models text download` (tg, max or wa); " +
+      "e5-small is not downloaded — install it with a WireCat CLI that has `models download` (tg, max or wa); " +
         "they share the model folder",
     )
     const max = await searchAllIncludingMeetings(store, account, notes, {
       app: { command: "max", appName: "max-cli", envPrefix: "MAX", description: "", version: "1.0.0" },
     })
-    expect(max.notes?.meaningSkipped).toBe("e5-small is not downloaded — `max models text download e5-small`")
+    expect(max.notes?.meaningSkipped).toBe("e5-small is not downloaded — `max models download e5-small`")
     const memo = await searchAllIncludingMeetings(store, account, notes, {
       app: { command: "tg", appName: "memo", envPrefix: "MEMO", description: "", version: "1.0.0" },
       hintCommand: null,

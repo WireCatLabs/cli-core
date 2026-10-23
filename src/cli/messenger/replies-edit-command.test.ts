@@ -43,10 +43,10 @@ const setup = () => {
 }
 
 describe("reply editors", () => {
-  it("keeps the legacy template mode and refuses both spellings without changing the rule", async () => {
+  it("sets the canonical template mode and refuses the retired flag without changing the rule", async () => {
     const { path, invoke } = setup()
     expect((await invoke("add", "away")).code).toBe(0)
-    expect((await invoke("edit", "away", "--model", "may-reword")).code).toBe(0)
+    expect((await invoke("edit", "away", "--template-mode", "may-reword")).code).toBe(0)
     const before = readFileSync(path, "utf8")
     expect((await invoke("edit", "away", "--model", "fill-only", "--template-mode", "may-reword")).code).toBe(2)
     expect(readFileSync(path, "utf8")).toBe(before)
@@ -196,7 +196,7 @@ describe("reply editors", () => {
     ["edit", "away", "--do", "nothing"],
     ["edit", "away", "--do", ""],
     ["edit", "away", "--kinds", "channel"],
-    ["edit", "away", "--model", "unknown"],
+    ["edit", "away", "--template-mode", "unknown"],
     ["edit", "away", "--per-chat", "0/1d"],
     ["edit", "away", "--per-person", "unlimited"],
     ["edit", "away", "--outside", "09:00-19:00"],

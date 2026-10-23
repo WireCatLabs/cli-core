@@ -83,8 +83,8 @@ describe("the conversations service", () => {
   it("names the command that builds a chat not built yet", async () => {
     const conversations = await service()
 
-    await expect(conversations.list("7", { limit: 10 })).rejects.toThrow("chat conversations build --chat 7")
-    await expect(conversations.show({ chat: "7", message: "1" })).rejects.toThrow("conversations build")
+    await expect(conversations.list("7", { limit: 10 })).rejects.toThrow("chat conversations links rebuild --chat 7")
+    await expect(conversations.show({ chat: "7", message: "1" })).rejects.toThrow("conversations links rebuild")
   })
 
   it("refuses to build a chat the store holds nothing of", async () => {

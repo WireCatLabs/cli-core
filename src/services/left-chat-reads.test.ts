@@ -71,7 +71,7 @@ describe("reads of a left chat's kept history by a numeric id", () => {
   it.each([
     [LEFT, LEFT],
     [OLD, NEW],
-  ])("**%s finds the kept chat %s** in a search by --chat or chat:, and in metadata get", async (typed, kept) => {
+  ])("**%s finds the kept chat %s** in a search by --chat or chat:, and in metadata show", async (typed, kept) => {
     const { messages, metadata } = await services()
     const chatsOf = async (request: Parameters<typeof messages.search>[0]) =>
       (await messages.search(request)).items.map(({ chatId }) => chatId)

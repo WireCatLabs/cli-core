@@ -23,7 +23,8 @@ const count = (value: string) => {
 }
 export const gapsCommand = (messenger: Messenger) => {
   const group = new Command("gaps").description("inspect recorded interior coverage gaps and explicitly fetch them")
-  annotate(group.command("plan"), { output: { entity: "store_gap_plan" }, effects: LOCAL_READ })
+  annotate(group.command("show"), { output: { entity: "store_gap_plan" }, effects: LOCAL_READ })
+
     .description("local coverage plan; missing message ids alone do not imply missing history")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -89,7 +90,7 @@ export const gapsCommand = (messenger: Messenger) => {
       if (prepare) {
         validateCatchUpBounds(preparation)
         refuseLocalWrite(context, messenger.app.command, "conversations.links")
-        refuseLocalWrite(context, messenger.app.command, "conversations.embed")
+        refuseLocalWrite(context, messenger.app.command, "conversations.embeddings")
       }
       if (args.background) {
         const planned = await context.withServices((services) => services.gaps.plan(chat))

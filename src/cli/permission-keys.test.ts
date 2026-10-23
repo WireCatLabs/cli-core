@@ -34,7 +34,7 @@ describe("the permission keys a file may name", () => {
   it("knows every command, its parents and the write keys, and nothing else", () => {
     const known = knownPermissionKeys(program())
     expect([...known]).toEqual(expect.arrayContaining(["messages", "messages.list", "messages.send", "polls.vote"]))
-    expect(known.has("doctor.report")).toBe(true)
+    expect(known.has("doctor.reports")).toBe(true)
     expect(known.has("doctor.show")).toBe(false)
     expect(unknownPermissionKeys({ messages: "readonly", "messages.dlete": "allow" }, known)).toEqual([
       "messages.dlete",

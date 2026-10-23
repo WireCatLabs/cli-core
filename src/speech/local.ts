@@ -71,7 +71,7 @@ export const openLocalSpeechRecognizer = async (
   if (!isInstalled(model, directory))
     throw new CliError(
       "not_found",
-      `speech model ${description.model} is not installed; download it explicitly with a WireCat messenger's models audio download command`,
+      `speech model ${description.model} is not installed; download it explicitly with a WireCat messenger's models download command`,
       { reason: "model.not-downloaded", model: description.model },
     )
   const { openRecognizer, toModelRate } = await import("./recognize.js")
