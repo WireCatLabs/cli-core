@@ -284,12 +284,12 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
       olderThan:
         query.olderThan === undefined && pinned
           ? pinned.options.olderThan
-          : duration(query.olderThan ?? "24h", "--older-than"),
+          : duration(query.olderThan ?? "24h", "older_than"),
       within: query.within === undefined && pinned ? pinned.options.within : duration(query.within ?? "7d", "--within"),
       joinSince: window.since ?? pinned?.options.joinSince ?? cutoff - 30 * 86_400_000,
       joinUntil: window.until ?? pinned?.options.joinUntil ?? cutoff,
-      minViews: count(query.minViews ?? pinned?.options.minViews ?? 1, "--min-views"),
-      maxReplies: count(query.maxReplies ?? pinned?.options.maxReplies ?? 0, "--max-replies"),
+      minViews: count(query.minViews ?? pinned?.options.minViews ?? 1, "min_views"),
+      maxReplies: count(query.maxReplies ?? pinned?.options.maxReplies ?? 0, "max_replies"),
       answerers:
         query.answerers === undefined && pinned
           ? pinned.options.answerers

@@ -63,10 +63,10 @@ export const rankingOptions = (target: RankingTarget, input: RankingInput): Rank
   const measures: readonly string[] = target === "messages" ? MESSAGE_MEASURES : AUTHOR_MEASURES
   const { measure, score, weights: given, minMessages } = input
   const messageKind = input.messageKind ?? "all"
-  if (!["all", "posts", "comments"].includes(messageKind)) invalid("--message-kind takes all, posts or comments")
-  if (target === "messages" && minMessages !== undefined) invalid("--min-messages applies to stats contacts top")
+  if (!["all", "posts", "comments"].includes(messageKind)) invalid("message_kind takes all, posts or comments")
+  if (target === "messages" && minMessages !== undefined) invalid("min_messages applies to stats contacts top")
   if (minMessages !== undefined && (!Number.isSafeInteger(minMessages) || minMessages < 1))
-    invalid("--min-messages takes a positive integer")
+    invalid("min_messages takes a positive integer")
   if (measure !== undefined && !measures.includes(measure)) invalid(`--measure takes ${measures.join(", ")}`)
   if (measure !== undefined && (score !== undefined || given !== undefined))
     invalid("--measure cannot be combined with --score or --weights")

@@ -81,7 +81,7 @@ const setup = async (permissions?: object) => {
 describe("administrator statistics command views", () => {
   it("returns stored report rows and exact evidence without a connection", async () => {
     const { call, connect } = await setup()
-    const result = await call(["stats", "messages", "unanswered", "--chat", "7", "--json", "--older-than", "1h"])
+    const result = await call(["stats", "messages", "unanswered", "chat:7", "--json", "older_than:1h"])
     expect(result.code, result.stderr).toBe(0)
     const found = v.parse(itemEnvelopeSchema(ENTITIES.admin_report), JSON.parse(result.stdout))
     expect(found.item).toMatchObject({
@@ -136,17 +136,17 @@ describe("administrator statistics command views", () => {
       timezone: "Asia/Vladivostok",
       window: { since: "2026-08-31T14:00:00.000Z", until: "2026-09-01T13:59:59.999Z" },
     })
-    const discussion = await call(["stats", "messages", "discussion", "--max-replies", "2", "--json"])
+    const discussion = await call(["stats", "messages", "discussion", "max_replies:2", "--json"])
     expect(discussion.code, discussion.stderr).toBe(0)
     expect(JSON.parse(discussion.stdout).item).toMatchObject({ report: "discussion", rows: [] })
     expect(connect).not.toHaveBeenCalled()
   })
   it("refuses JSONL for a report, keeps its quality in JSON, and enforces message-read permission", async () => {
     const { call } = await setup()
-    const lines = await call(["stats", "messages", "unanswered", "--jsonl", "--older-than", "1h"])
+    const lines = await call(["stats", "messages", "unanswered", "--jsonl", "older_than:1h"])
     expect(lines.code).not.toBe(0)
     expect(JSON.parse(lines.stderr).error).toMatchObject({ code: "validation_error", reason: "output.one-object" })
-    const result = await call(["stats", "messages", "unanswered", "--json", "--older-than", "1h"])
+    const result = await call(["stats", "messages", "unanswered", "--json", "older_than:1h"])
     expect(result.code, result.stderr).toBe(0)
     expect(JSON.parse(result.stdout).item).toMatchObject({
       report: "unanswered",
@@ -159,6 +159,6 @@ describe("administrator statistics command views", () => {
   it("rejects incomplete response input and invalid nonnegative counters", async () => {
     const { call } = await setup()
     expect((await call(["stats", "contacts", "responses", "--json"])).code).not.toBe(0)
-    expect((await call(["stats", "messages", "discussion", "--min-views", "-1", "--json"])).code).not.toBe(0)
+    expect((await call(["stats", "messages", "discussion", "min_views:-1", "--json"])).code).not.toBe(0)
   })
 })

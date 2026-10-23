@@ -33,6 +33,8 @@ shape of this file.
 
 - **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.
 
+- **Statistics select rows through their query.** Rankings use `message_kind:` with `posts`, `comments` or `all`, and author rankings `min_messages:5`; discussion uses `min_views:10` and `max_replies:0`; unanswered questions use `older_than:24h`. These predicates replace the corresponding filter flags and reach the existing SQL selection before aggregation or row limits. The same reports select chats with `chat:` and exact words with `exact:` instead of `--chat` and `--exact`; source and timezone remain options. Saved CLI/MCP requests must migrate. Stored selections and SDK parameters retain their meanings.
+
 ## 0.399.0 — 23.10.2026
 
 ### Changed — may break callers
