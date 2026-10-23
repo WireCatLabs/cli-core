@@ -10,7 +10,7 @@ import {
   requireBearerAuth,
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server"
-import { type Listening, listen } from "./node.js"
+import { type Listening, listen } from "../../http/listen.js"
 import { ownerLogin } from "./oauth.js"
 
 export const MCP_PATH = "/mcp"

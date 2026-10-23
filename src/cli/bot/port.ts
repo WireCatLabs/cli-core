@@ -182,6 +182,42 @@ export interface BotUpdateRef {
 /** One update as `bot watch` prints it; without `update`, a redelivery is printed and kept again. */
 export type BotEvent = (MessageEvent | BotNotice) & { update?: BotUpdateRef }
 
+/** One request as it reached `bot watch --public-url`: the body exactly as sent, never parsed and written again. */
+export interface BotWebhookRequest {
+  method: string
+  /** Path and query, against the local listener. */
+  url: URL
+  headers: Headers
+  body: Uint8Array
+}
+
+/** What the receiver answers a request that is not a delivery. */
+export interface BotWebhookAnswer {
+  status: number
+  body?: string
+}
+
+/**
+ * Receiving the bot's updates on a public address the owner's tunnel forwards to this machine, for a
+ * messenger that pushes and cannot be polled.
+ */
+export interface BotWebhookIntake {
+  /** A request that is not a delivery — a subscription handshake — answered here; `undefined` for a delivery. */
+  webhookHandshake(request: BotWebhookRequest): BotWebhookAnswer | undefined
+  /** Whether a delivery comes from the messenger: its signature over the raw body, compared in constant time. */
+  webhookAuthentic(request: BotWebhookRequest): boolean
+  /** The delivery's events, each with the update it came in, so a redelivery is recognised. Throws on a body it cannot read. */
+  webhookEvents(request: BotWebhookRequest): BotEvent[]
+}
+
+/** A secret beside the token that the messenger's bot needs, kept the same way — a webhook's signing key. */
+export interface BotSecret {
+  /** In `--secret <name>` and the keyring account, lowercase with hyphens. */
+  name: string
+  /** What it is and where the owner finds it, for the help and the prompt. */
+  description: string
+}
+
 export interface BotUpdatesPage {
   events: BotEvent[]
   /** Where the next call starts; the same as given when nothing came. Opaque to the caller. */
@@ -213,6 +249,7 @@ export type BotAdapter = Pick<MessengerCore, "me" | "close"> &
   Partial<BotCallbacks> &
   Partial<BotWebhooks> &
   Partial<BotUpdates> &
+  Partial<BotWebhookIntake> &
   Partial<BotPeople>
 
 export interface BotNativeApi {
@@ -247,6 +284,8 @@ export interface BotMessenger {
   adminRights?: readonly AdminRight[]
   /** Whether `bot webhooks set --add` keeps the other addresses; a messenger with one address has no `--add`. */
   manyWebhooks?: boolean
+  /** Secrets beside the token, each set with `bot auth set --secret <name>`; none when unset. */
+  secrets?: readonly BotSecret[]
   /** Mount shared bot me; consumers with an existing response migrate explicitly. */
   identity?: boolean
   /**

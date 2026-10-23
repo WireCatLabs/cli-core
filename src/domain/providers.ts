@@ -16,6 +16,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "telegram-bot", kind: "messages", aliases: ["tg-bot"] },
   { name: "max", kind: "messages", aliases: [] },
   { name: "max-bot", kind: "messages", aliases: [] },
+  { name: "whatsapp", kind: "messages", aliases: ["wa"] },
+  { name: "whatsapp-bot", kind: "messages", aliases: ["wa-bot"] },
   { name: "email", kind: "mail", aliases: [] },
   { name: "notes", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
