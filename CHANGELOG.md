@@ -19,6 +19,8 @@ shape of this file.
   vocabulary, `transcript_stems` and `transcript_index_pending`, filled before each search; existing transcripts are
   queued on upgrade.
 
+- Attachment commands include concrete examples in help and command discovery.
+
 ## 0.395.0 — 23.10.2026
 
 ### Changed — may break callers
