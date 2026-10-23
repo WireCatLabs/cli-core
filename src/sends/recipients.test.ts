@@ -96,3 +96,17 @@ describe("two writers of one recipient list", () => {
     expect(readFileSync(list.path, "utf8")).toBe(before)
   })
 })
+
+it("queries recipients without changing the allowlist or confusing its empty and off states", () => {
+  const off = listAt()
+  expect(off.list({ id: "7" })).toEqual({ state: "off", items: [] })
+  expect(existsSync(off.path)).toBe(false)
+  const empty = listAt([])
+  expect(empty.list()).toEqual({ state: "empty", items: [] })
+  const list = listAt([entry("7"), entry("8", { title: "Bo" })])
+  const before = readFileSync(list.path, "utf8")
+  expect(list.list({ title: "ana" })).toEqual({ state: "on", items: [entry("7")] })
+  expect(list.list({ id: "8", title: "Bo" }).items).toEqual([entry("8", { title: "Bo" })])
+  expect(list.list({ id: "7", title: "Bo" })).toEqual({ state: "on", items: [] })
+  expect(readFileSync(list.path, "utf8")).toBe(before)
+})

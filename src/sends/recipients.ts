@@ -13,6 +13,11 @@ export interface Recipient {
   addedAt: string
 }
 
+export interface RecipientFilter {
+  id?: Id
+  title?: string
+}
+
 /**
  * A state file, not a setting: the configuration schema has deliberately no place for a chat id,
  * and this list is data about a profile rather than a preference.
@@ -49,6 +54,19 @@ export class RecipientList {
         `the recipient list ${this.path} cannot be read (${error instanceof Error ? error.message : String(error)}) — ` +
           `fix the file or turn the list off with \`${this.command} recipients clear\``,
       )
+    }
+  }
+
+  list(filter: RecipientFilter = {}): { state: "off" | "empty" | "on"; items: Recipient[] } {
+    const chats = this.read()
+    // A query that matches nothing must not describe a nonempty allowlist as allowing nowhere.
+    return {
+      state: chats === undefined ? "off" : chats.length === 0 ? "empty" : "on",
+      items: (chats ?? []).filter(
+        (chat) =>
+          (filter.id === undefined || chat.id === filter.id) &&
+          (filter.title === undefined || chat.title?.toLocaleLowerCase() === filter.title.toLocaleLowerCase()),
+      ),
     }
   }
 

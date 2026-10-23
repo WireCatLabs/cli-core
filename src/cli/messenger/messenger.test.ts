@@ -4659,6 +4659,18 @@ describe("the guard, account and mcp config commands", () => {
       items: [{ id: "7" }],
     })
 
+    const filtered = await call(["recipients", "list", 'title:"book club"', "--json"], online, env)
+    expect(filtered.code).toBe(0)
+    expect(v.safeParse(ENTITIES.recipient, json(filtered.stdout).items[0]).success).toBe(true)
+    const projected = await call(["recipients", "list", "id:7", "--json=id,title"], online, env)
+    expect(json(projected.stdout).items).toEqual([{ id: "7", title: "Book club" }])
+    const noMatch = await call(["recipients", "list", "id:99", "--json"], online, env)
+    expect(json(noMatch.stdout).items).toEqual([])
+    expect(noMatch.stderr.join("\n")).toContain("no recipients match")
+    expect(noMatch.stderr.join("\n")).not.toContain("may send nowhere")
+    const unsupported = await call(["recipients", "list", "added_at>=7d", "--json"], online, env)
+    expect(unsupported.code).toBe(2)
+    expect(unsupported.stderr.join("\n")).toContain("query.unsupported-field")
     const stranger = await call(["recipients", "remove", "99"], online, env)
     expect(stranger.code).not.toBe(0)
     expect(stranger.stderr.join("\n")).toContain("99 is not on the recipient list")
