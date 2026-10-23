@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- Task commands include concrete examples in help and command discovery.
+
 - Model commands include concrete examples in help and command discovery.
 
 - Conversation commands include examples in help and command discovery, with guidance for submitting a batch answer.
