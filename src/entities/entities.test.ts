@@ -615,6 +615,8 @@ const samples: Record<EntityName, unknown> = {
     ],
     unlisted_categories: [{ name: "finance", open_tasks: 2 }],
   },
+  analysis_consent: { chat: "7", provider: "openai:https://example.test/v1", at },
+  analysis_consent_revocation: { revoked: true },
   conversation: {
     id: "1",
     chat: "chat:chat/500/7",

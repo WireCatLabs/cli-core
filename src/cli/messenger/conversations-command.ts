@@ -34,6 +34,7 @@ import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-que
 import { positiveCount } from "../paging.js"
 import { readsStdin } from "../stdin-field.js"
 import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
+import { ANALYSIS_CONSENTS_QUERY, analysisConsentFilter } from "./analysis-consents-query.js"
 import { answerOf as askOwner } from "./ask.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
 import { conversationShown, foundConversations, readinessList, refreshedAnswer } from "./conversation-answers.js"
@@ -537,11 +538,12 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   const consents = conversations
     .command("consents")
     .description("remembered analysis permissions for this account's chats and provider endpoints")
-  annotate(consents.command("list"), { effects: LOCAL_READ })
+  withQuery(annotate(consents.command("list"), { effects: LOCAL_READ }), ANALYSIS_CONSENTS_QUERY)
     .description("which chats and provider endpoints you allowed to analyse, and when")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      const filter = analysisConsentFilter(words)
       const context = messengerContext(this, messenger)
-      const items = await context.withStore((store, account) => analysisConsents(store, account).list())
+      const items = await context.withStore((store, account) => analysisConsents(store, account).list(filter))
       renderAnswer(
         this,
         context,
@@ -552,7 +554,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         }),
       )
     })
-  annotate(consents.command("revoke"), { effects: LOCAL_WRITE })
+  annotate(consents.command("revoke"), { effects: LOCAL_WRITE, output: { entity: "analysis_consent_revocation" } })
     .description("forget analysis permissions so the next analysis asks again")
     .option("--chat <chat>", "revoke only this chat's consents; defaults to every chat")
     .addOption(

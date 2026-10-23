@@ -4,8 +4,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
+import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import { type LinkBatch, openStore } from "../../store/store.js"
 import { configCommand } from "../config-command.js"
 import { run } from "../program.js"
@@ -160,6 +162,23 @@ describe("analysis CLI consent and configuration", () => {
     expect(json(await call("conversations", "consents", "list", "--json")).items).toMatchObject([
       { chat: "9", provider: `openai:${baseUrl}` },
     ])
+    const selected = json(await call("conversations", "consents", "list", "chat:9", "--json"))
+    expect(selected.items).toHaveLength(1)
+    expect(v.safeParse(ENTITIES.analysis_consent, selected.items[0]).success).toBe(true)
+    const projected = await call(
+      "conversations",
+      "consents",
+      "list",
+      `provider:"openai:${baseUrl}"`,
+      "--json=chat,provider",
+    )
+    expect(projected.code).toBe(0)
+    expect(json(projected).items).toEqual([{ chat: "9", provider: `openai:${baseUrl}` }])
+    expect(json(await call("conversations", "consents", "list", "chat:10", "--json")).items).toEqual([])
+    const unsupported = await call("conversations", "consents", "list", "at>=7d", "--json")
+    expect(unsupported.code).toBe(2)
+    expect(unsupported.stderr).toContain("query.unsupported-field")
+    expect(calls()).toBe(2)
     await add("10")
     expect((await call("conversations", "build", "--analyze", "--chat", "10", "--json")).code).not.toBe(0)
     await add("9", "3")
