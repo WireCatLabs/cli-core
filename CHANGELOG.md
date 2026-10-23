@@ -13,6 +13,8 @@ shape of this file.
 
 - **Account change and privacy schemas.** Profile updates, ended sessions and privacy reads and writes declare their existing answers for field discovery and projection. Privacy fields remain optional where a messenger does not expose a setting.
 
+- **`contacts timeline` stays in its account for tasks.** A task assigned to the person now shows only when its project belongs to the asked account or to no account; before, tasks from another account of the same messenger showed too. Task rows now also name the account of their project.
+
 ### Added
 
 - **Poll answer schemas.** Poll reads, vote and close receipts, and newly sent poll messages declare their answer entities for field discovery and projection.
