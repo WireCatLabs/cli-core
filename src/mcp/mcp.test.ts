@@ -1670,13 +1670,13 @@ describe("the MCP server", () => {
     expect(second).toMatchObject({ created: true })
 
     expect((await call("tasks duplicates", {})).body).toMatchObject({ items: [] })
-    const merged = await call("tasks merge", { dup: second.key, into: first })
+    const merged = await call("tasks merge", { task: second.key, into: first })
     expect(merged.body.item).toMatchObject({ pair: { decision: "merged" }, task: { key: first } })
-    expect((await call("tasks unmerge", { dup: second.key })).body.item).toMatchObject({ task: { status: "open" } })
-    expect((await call("tasks duplicates reject", { dup: second.key, task: first })).body.item).toMatchObject({
+    expect((await call("tasks unmerge", { task: second.key })).body.item).toMatchObject({ task: { status: "open" } })
+    expect((await call("tasks duplicates reject", { task: second.key, other_task: first })).body.item).toMatchObject({
       decision: "rejected",
     })
-    expect((await call("tasks duplicates defer", { dup: second.key, task: first })).body.item).toMatchObject({
+    expect((await call("tasks duplicates defer", { task: second.key, other_task: first })).body.item).toMatchObject({
       decision: "unsure",
     })
     expect((await call("tasks duplicates", { query: "decision:unsure" })).body.items).toHaveLength(1)
@@ -3366,8 +3366,8 @@ describe("sending over MCP", () => {
     const { call } = await connect(telegram, {})
     const readonly = await (await connect(telegram, { config: levels({ messages: "readonly" }) })).client.commands()
 
-    const { body } = await call("messages delete", { chat: "7", messages: ["1", "2"] })
-    const everyone = await call("messages delete", { chat: "7", messages: ["3"], for_everyone: true })
+    const { body } = await call("messages delete", { chat: "7", message: ["1", "2"] })
+    const everyone = await call("messages delete", { chat: "7", message: ["3"], for_everyone: true })
 
     expect(readonly).not.toContain("messages delete")
     expect(body.item).toEqual({
@@ -3380,7 +3380,7 @@ describe("sending over MCP", () => {
     expect(deletions).toEqual([["7", ["1", "2"], { forEveryone: false }]])
     const denied = await (await connect(telegram, { config: levels({ "messages.delete": "deny" }) })).call(
       "messages delete",
-      { chat: "7", messages: ["4"] },
+      { chat: "7", message: ["4"] },
     )
     expect(denied.isError).toBe(true)
     expect(deletions).toHaveLength(1)
@@ -3403,7 +3403,7 @@ describe("sending over MCP", () => {
       },
     })
 
-    const refused = await call("messages delete", { chat: "7", messages: ["1"] })
+    const refused = await call("messages delete", { chat: "7", message: ["1"] })
 
     expect(refused).toMatchObject({
       isError: true,

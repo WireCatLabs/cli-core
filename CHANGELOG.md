@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- MCP argument names follow singular CLI placeholders: `messages delete` takes `message`, chat export takes `chat`, and duplicate-task operations take `task` (with `other_task` for a pair). Update saved MCP requests using `messages`, `chats` or `dup`. CLI positional values and their order are unchanged.
+
+### Fixed
+
+- The option catalogue records WhatsApp's JPEG-only profile photos. Wording differences can be justified for one command without exempting that option everywhere or hiding a missing option.
+
+- **Short command summaries and argument help.** Messenger commands keep their detailed descriptions while help and discovery show concise summaries. Contact notes, aliases, contact surnames and shell completion explain their positional arguments.
+
+- Message deletion, chat export and duplicate-task commands use singular argument names in help and discovery. Variadic arguments still accept several values, and task argument help identifies each side of a pair.
+
 ## 0.396.0 — 23.10.2026
 
 ### Changed — may break callers

@@ -34,6 +34,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
     output: { entity: "message", view: "summary" },
     query: REVIEW_QUERY,
   })
+    .summary("chats with new activity or unanswered messages")
     .description("every message, yours too, in chats that changed since a point — for reviewing who owes what")
     .addHelpText("after", queryHelp(REVIEW_QUERY))
     .argument(

@@ -30,11 +30,14 @@ export const SEARCHES_QUERY = unfilteredQuery("saved_search", savedSearch)
 
 /** Saved searches and the history of `search messages` and `stats messages show`, in the local store only. */
 export const searchesCommand = (messenger: Messenger): Command => {
-  const searches = new Command("searches").description(
-    "saved searches and the history of search messages and stats messages show, kept in the local store; --saved runs one",
-  )
+  const searches = new Command("searches")
+    .summary("saved searches and their run history")
+    .description(
+      "saved searches and the history of search messages and stats messages show, kept in the local store; --saved runs one",
+    )
 
   annotate(searches.command("create"), { effects: LOCAL_WRITE, output: { entity: "saved_search" } })
+    .summary("save a search and its query")
     .description("save a search under a name without running it; search messages --saved <name> runs it")
     .argument("<name>", "up to 64 letters a–z, digits and hyphens, not only digits")
     .argument("[query...]", "the query, as for search messages; none matches every stored message")
@@ -114,6 +117,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
   annotate(withPaging(annotate(searches.command("history"), { effects: LOCAL_READ })), {
     output: { entity: "saved_search" },
   })
+    .summary("past searches and counts, without their results")
     .description("the searches and counts that ran, newest first — saved ones included; never their results")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)

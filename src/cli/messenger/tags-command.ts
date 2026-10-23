@@ -35,9 +35,11 @@ const sourceOf = (value: string): "manual" | "auto" => {
 /** The owner's labels, in the local store only: `tag:` in a search finds what they label. */
 export const tagsCommand = (messenger: Messenger): Command => {
   const tool = `${messenger.app.command} personal`
-  const tags = new Command("tags").description(
-    "your own labels on chats, people, messages and tasks, kept in the local store and never sent; tag: in a search finds them",
-  )
+  const tags = new Command("tags")
+    .summary("tags on stored messages and other records")
+    .description(
+      "your own labels on chats, people, messages and tasks, kept in the local store and never sent; tag: in a search finds them",
+    )
 
   changesStore(
     annotate(tags.command("auto"), { effects: FETCH, examples: [`${tool} tags auto --chat "Book club" --dry-run`] }),
@@ -113,7 +115,9 @@ export const tagsCommand = (messenger: Messenger): Command => {
     annotate(tags.command("list"), {
       effects: LOCAL_READ,
       examples: [`${tool} tags list`, `${tool} tags list tag:reading`],
-    }).description("what is tagged: this account's chats, messages and tasks, and the people of its messenger"),
+    })
+      .summary("tagged chats, people, messages and tasks")
+      .description("what is tagged: this account's chats, messages and tasks, and the people of its messenger"),
     TAGGING_QUERY,
   ).action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)

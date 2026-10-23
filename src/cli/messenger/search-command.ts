@@ -45,6 +45,7 @@ const maxMeetingsOf = (value: string): number | "all" => {
 
 const allCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("all"), { effects: REMOTE_READ, partial: true })
+    .summary("search stored messages, notes and selected meeting transcripts")
     .description(
       (messenger.serverSearch
         ? "search messenger messages and notes in the local store, and the messenger's server for messages " +
@@ -148,6 +149,7 @@ const allCommand = (messenger: Messenger): Command => {
 
 const notesCommand = (messenger: Messenger): Command =>
   annotate(new Command("notes"), { effects: LOCAL_READ, partial: true, output: { entity: "note", view: "hit" } })
+    .summary("find stored notes by words and filters")
     .description(
       "search the notes — written in memo, or imported from a notes folder — by words and, with the local " +
         "text model, by meaning; each hit says which found it and what it links to",
@@ -224,9 +226,11 @@ const notesCommand = (messenger: Messenger): Command =>
  * hierarchy"). `topics` only where the CLI has forum topics.
  */
 export const searchCommand = (messenger: Messenger, { topics = false }: { topics?: boolean } = {}): Command => {
-  const search = new Command("search").description(
-    "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; for mail, the separate memo CLI: memo search mail",
-  )
+  const search = new Command("search")
+    .summary("search the local archive")
+    .description(
+      "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; for mail, the separate memo CLI: memo search mail",
+    )
   search
     .addCommand(allCommand(messenger))
     .addCommand(messagesSearchCommand(messenger))

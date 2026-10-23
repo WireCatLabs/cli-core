@@ -44,6 +44,7 @@ const extractCommand = (messenger: Messenger): Command =>
     effects: FETCH,
     examples: [`${messenger.app.command} personal attachments extract --chat "Book club" --limit 10`],
   })
+    .summary("extract text from retained message files")
     .description(
       "read the text of downloaded files — text, PDF/DOCX text layers, ODT/ODS/XLSX/PPTX/EPUB — into the local store, where search finds them",
     )
@@ -159,9 +160,11 @@ const listCommand = (messenger: Messenger): Command =>
       annotate(new Command("list"), {
         effects: REMOTE_READ,
         examples: [`${messenger.app.command} personal attachments list --limit 10`],
-      }).description(
-        "files of stored messages, newest first: where each was saved and whether its text is held — never the text",
-      ),
+      })
+        .summary("stored message files, saved paths and text status")
+        .description(
+          "files of stored messages, newest first: where each was saved and whether its text is held — never the text",
+        ),
     ),
     ATTACHMENT_QUERY,
   ).action(async function (this: Command, words: string[]) {
@@ -236,6 +239,7 @@ const textCommand = (messenger: Messenger): Command => {
       description: "the text of the file",
     },
   )
+    .summary("save the text read from one message file")
     .description("keep the text an agent read from a file — a scan, a photo — so search finds it; nothing is sent")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
@@ -268,6 +272,7 @@ const textCommand = (messenger: Messenger): Command => {
 /** Files of stored messages: what is in them, for `content:` in a search. Nothing here is sent. */
 export const attachmentsCommand = (messenger: Messenger): Command =>
   new Command("attachments")
+    .summary("stored message files and their retained text")
     .description("the files of stored messages: their text in the local store, where search finds it")
     .addCommand(extractCommand(messenger))
     .addCommand(listCommand(messenger))

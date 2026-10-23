@@ -969,7 +969,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--permission` | `<key=level>` | make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys |  | `mcp`, `mcp config`, `mcp doctor`, `mcp setup` |
 | `--personal` |  | the personal account's section of the profile's settings |  | `config set`, `config unset` |
 | `--phone-number` | `<who>` | who sees the number: everyone, contacts or nobody |  | `account privacy set` (planned) |
-| `--photo` | `<file>` | an image file — a profile photo in `account update`, a group's photo in `chats update`, a photo to send in `messages send` |  | `account update`, `bot messages send` (planned), `chats update` (planned), `messages send` |
+| `--photo` | `<file>` | an image file — a profile photo in `account update`, a group's photo in `chats update`, a photo to send in `messages send` |  | `account update` — WhatsApp accepts JPEG (.jpg or .jpeg) profile photos; help names each messenger's accepted image formats (WC-CMD-25)., `bot messages send` (planned), `chats update` (planned), `messages send` |
 | `--pin` | `<chat>` | pin this chat at the top of the folder; repeat it for more |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--pinned` | `<on\|off>` | on pins a forum topic at the top of the list, off unpins it |  | `topics edit` (tg-only) |
 | `--port` | `<port>` | the local port behind the tunnel, for mcp --http or bot watch --public-url |  | `bot watch`, `mcp` |

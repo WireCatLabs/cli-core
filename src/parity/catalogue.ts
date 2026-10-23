@@ -17,7 +17,11 @@ export const renderCatalogue = (manifest: Manifest): string => {
   const add = (name: string, label: string) => commands.set(name, [...(commands.get(name) ?? []), label])
   for (const [name, entry] of Object.entries(manifest.globalOptions)) add(name, `every command${where(entry)}`)
   for (const [path, row] of Object.entries(manifest.commands))
-    for (const [name, entry] of Object.entries(row.options ?? {})) add(name, `\`${path}\`${where(entry)}`)
+    for (const [name, entry] of Object.entries(row.options ?? {}))
+      add(
+        name,
+        `\`${path}\`${where(entry)}${typeof entry !== "string" && entry.wording ? ` — ${cell(entry.wording)}` : ""}`,
+      )
 
   const rows = Object.entries(manifest.options).map(([name, option]) => {
     const meaning = option.note ? `${option.meaning}. **${option.note}**` : option.meaning

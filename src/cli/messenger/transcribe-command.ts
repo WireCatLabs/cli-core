@@ -16,6 +16,7 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
     examples: [`${messenger.app.command} personal messages transcribe "Book club" 101`],
     effects: REMOTE_READ,
   })
+    .summary("transcribe one voice message")
     .description(
       `a voice message as text — by ${messenger.name ?? messenger.app.command} where it can, else by a model on this machine`,
     )

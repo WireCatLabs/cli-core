@@ -20,6 +20,7 @@ export const accountCommand = (messenger: Messenger): Command => {
     .description("the logged-in account")
     .addCommand(
       annotate(new Command("list"), { effects: REMOTE_READ, examples: [`${tool} account list`] })
+        .summary("profiles on this computer and their signed-in accounts")
         .description("every profile on this computer, and the account each is logged in as; asks the messenger nothing")
         .action(async function (this: Command) {
           const context = messengerContext(this, messenger, { needsProfile: false })

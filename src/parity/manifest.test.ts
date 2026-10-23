@@ -47,6 +47,14 @@ describe("manifestProblems", () => {
     ])
   })
 
+  it("requires a nonempty reason for an option's wording exception", () => {
+    expect(
+      manifestProblems(
+        manifest({ store: { in: "all", options: { "--all": { in: "all", wording: " " }, "--max": "all" } } }),
+      ),
+    ).toEqual(["store --all: a wording exception needs its reason"])
+  })
+
   it("refuses a row that a row only one CLI has, for a reason, already covers", () => {
     const problems = manifestProblems({
       ...manifest({ topics: { in: ["tg"], reason: "MAX has none" }, "topics list": { in: "all" } }),

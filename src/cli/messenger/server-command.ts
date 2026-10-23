@@ -113,9 +113,11 @@ const lockProcess =
  */
 export const serverCommand = (messenger: Messenger, options: ServerOptions = {}): Command => {
   const { app } = messenger
-  const command = annotate(new Command("server"), { mcp: false }).description(
-    `\`${app.command} serve\` in the background: start, stop, restart, status, logs; install adds a systemd or launchd unit`,
-  )
+  const command = annotate(new Command("server"), { mcp: false })
+    .summary("manage this profile's background server")
+    .description(
+      `\`${app.command} serve\` in the background: start, stop, restart, status, logs; install adds a systemd or launchd unit`,
+    )
   const marker = (profile: string) => `${app.envPrefix}_SERVER=${profile}`
   const serveArgv = options.serveArgv ?? ["serve"]
 
@@ -254,7 +256,11 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
   withIdle(
     destroysNothing(
       annotate(command.command("start"), { effects: LOCAL_WRITE, examples: [`${app.command} personal server start`] }),
-    ).description("start serve in the background — through the unit if one is installed — and answer once it connects"),
+    )
+      .summary("start this profile's background server")
+      .description(
+        "start serve in the background — through the unit if one is installed — and answer once it connects",
+      ),
   ).action(async function (this: Command) {
     await start(prepare(this), idleArgs(this))
   })
@@ -282,6 +288,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
   })
 
   annotate(command.command("status"), { effects: LOCAL_READ, examples: [`${app.command} personal server status`] })
+    .summary("this profile's background-server status")
     .description("whether serve runs for this profile, since when, who started it, and the unit if there is one")
     .action(async function (this: Command) {
       const prepared = prepare(this)

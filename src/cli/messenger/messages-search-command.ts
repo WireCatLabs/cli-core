@@ -29,6 +29,7 @@ export const messagesSearchCommand = (messenger: Messenger): Command => {
   })
   const syncing = syncsFirst(messenger) ? "; optionally fetches new messages with --sync-first" : ""
   return command
+    .summary("find messages by words and filters")
     .description(
       messenger.serverSearch
         ? `search messenger messages in the local store and on the messenger's server (--backend)${syncing}; --discover searches the archive only`

@@ -8,6 +8,7 @@ import { refuseJsonl, retentionAnswer } from "./stats-answers.js"
 
 export const retentionCommand = (messenger: Messenger) =>
   annotate(new Command("retention"), { effects: REMOTE_READ, output: { entity: "retention" } })
+    .summary("joining cohorts and observed membership checkpoints")
     .description("joining cohorts and observed checkpoint membership from saved roster observations")
     .argument("<chat>", messenger.chatArgument)
     .option("--since-time <time>", "joining period starts at ISO 8601 or a relative time; last 90 days by default")

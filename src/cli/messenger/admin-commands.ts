@@ -76,6 +76,7 @@ export const readProfilePhoto = (messenger: Messenger, path: string, env: NodeJS
 const updateCommand = (messenger: Messenger): Command => {
   const keys = messenger.groupSettings ?? GROUP_SETTINGS
   const update = annotate(new Command("update"), { effects: REMOTE_WRITE })
+    .summary("change a group or channel's profile and settings")
     .description("rename a group or channel, change its description, or turn one of its settings on or off")
     .argument("<chat>", messenger.chatArgument)
     .option("--title <title>", "the new name")

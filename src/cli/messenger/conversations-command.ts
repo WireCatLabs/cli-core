@@ -47,12 +47,15 @@ import { readAll } from "./stdin.js"
  * mentions, one sender's messages in a row. From the store alone; nothing is built until asked (phase 3).
  */
 export const conversationsCommand = (messenger: Messenger): Command => {
-  const conversations = new Command("conversations").description(
-    "the conversations inside a chat, found in the stored messages by replies, mentions and who wrote next",
-  )
+  const conversations = new Command("conversations")
+    .summary("group stored messages into conversations")
+    .description(
+      "the conversations inside a chat, found in the stored messages by replies, mentions and who wrote next",
+    )
 
   boundOptions(
     reachesOtherService(annotate(conversations.command("build"), { effects: REMOTE_WRITE }))
+      .summary("build conversation links from stored messages")
       .description(
         "find a chat's conversations in what the store holds, replacing the last build; without --chat, every " +
           "chat that changed since its build and every group never built; never asks the messenger",
@@ -165,6 +168,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   withQuery(
     annotate(conversations.command("list"), { effects: LOCAL_READ })
+      .summary("stored conversations in one chat")
       .description("a chat's conversations, the newest first: when, how many messages, how many people")
       .argument("<chat>", messenger.chatArgument),
     CONVERSATION_QUERY,
@@ -183,6 +187,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(conversations.command("show"), { effects: LOCAL_READ })
+    .summary("one conversation and its messages")
     .description("one conversation's messages, oldest first — by its id, or the one a message is in")
     .argument(
       "<conversation>",
@@ -217,6 +222,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   withModelOptions(
     annotate(conversations.command("related"), { effects: LOCAL_READ })
+      .summary("conversations nearest in meaning to a message's conversation")
       .description(
         "the conversations nearest in meaning to the one a message is in, in every built chat, best first — " +
           "from the vectors `conversations embed` stored; runs no model",
@@ -242,6 +248,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   withModelOptions(
     annotate(conversations.command("status"), { effects: LOCAL_READ })
+      .summary("which chats are ready for conversation search")
       .description(
         "how fresh each built chat's conversations and vectors are: messages the build has not seen, chunks " +
           "with a current, stale or missing vector",
@@ -270,6 +277,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   const batches = conversations
     .command("batches")
+    .summary("batches waiting for an agent's conversation links")
     .description("windows of a chat for your own AI agent to link: which earlier message each one answers")
   const sizeOption = (command: Command) =>
     command.option(
@@ -280,6 +288,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   sizeOption(
     annotate(batches.command("status"), { effects: LOCAL_READ })
+      .summary("progress of conversation-link batches")
       .description("how many messages still wait for an answer, in how many batches, and how much text")
       .requiredOption("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -298,6 +307,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   sizeOption(
     annotate(batches.command("next"), { effects: LOCAL_READ })
+      .summary("get the next batch of messages to link")
       .description("the next window to answer, with the messages before it; message text goes to stdout only")
       .requiredOption("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -334,6 +344,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     description: '{ "model", "skill"?, "answers": [{ "message", "parent", "confidence" }] }',
     json: true,
   })
+    .summary("save an agent's conversation-link answers")
     .description(
       'store your agent\'s answer to a batch, read as JSON from stdin: { "model", "answers": [{ "message", ' +
         '"parent", "confidence" }] }; all or nothing',
@@ -354,6 +365,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(links.command("clear"), { effects: LOCAL_WRITE })
+    .summary("remove an agent's saved conversation-link answers")
     .description("drop your agent's answers for a chat, or only one model's; messages are never touched")
     .requiredOption("--chat <chat>", messenger.chatArgument)
     .option("--model <model>", "only the answers this model gave")
@@ -367,6 +379,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   const embed = withModelOptions(
     reachesOtherService(annotate(new Command("embed"), { effects: REMOTE_WRITE }))
+      .summary("prepare conversation vectors for meaning search")
       .description(
         "compute a vector for each chunk of a chat's conversations for search by meaning — on this machine, or " +
           "with --provider through a service and your key; resumes where it stopped; without --chat, every " +
@@ -439,6 +452,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   withModelOptions(
     annotate(embed.command("status"), { effects: LOCAL_READ })
+      .summary("which conversation vectors are ready or stale")
       .description("how many chunks of a chat have a vector of the model, how many are left, and what is left costs")
       .option("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -461,6 +475,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
 
   withModelOptions(
     destroysNothing(annotate(embed.command("clear"), { effects: LOCAL_WRITE }))
+      .summary("remove stored conversation vectors")
       .description("drop a chat's vectors, or only one model's; messages and conversations are never touched")
       .option("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -720,6 +735,7 @@ export const linksCommand = (messenger: Messenger): Command =>
     examples: [`${messenger.app.command} personal messages links "Book club" 101`],
     effects: LOCAL_READ,
   })
+    .summary("why a message belongs to its conversation")
     .description("why a message is in its conversation: each link it has, and the chain of answers back to the start")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")
@@ -772,6 +788,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
     ),
     messenger,
   )
+    .summary("find conversations by words and meaning")
     .description(
       "the conversations nearest to a query in meaning and in words, best first, in one chat or every one — " +
         "meaning after `conversations embed`; runs on this machine",

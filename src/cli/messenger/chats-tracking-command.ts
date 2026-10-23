@@ -15,9 +15,11 @@ interface TrackedAnswer {
 
 /** The chats whose member lists `serve` fetches daily; kept in the local store, never sent. */
 export const trackingCommand = (messenger: Messenger): Command => {
-  const tracking = new Command("tracking").description(
-    "the chats whose member lists serve fetches daily into the local store — chats members fetch --track adds one",
-  )
+  const tracking = new Command("tracking")
+    .summary("chats whose member lists are fetched daily")
+    .description(
+      "the chats whose member lists serve fetches daily into the local store — chats members fetch --track adds one",
+    )
 
   annotate(tracking.command("list"), { effects: LOCAL_READ })
     .description("every tracked chat: since when, and its last member count")
@@ -44,6 +46,7 @@ export const trackingCommand = (messenger: Messenger): Command => {
     })
 
   annotate(tracking.command("show"), { effects: LOCAL_READ })
+    .summary("one chat's member tracking and daily counts")
     .description(`one chat: whether it is tracked, and its member count per day for the last ${TRACKED_DAYS} days`)
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {

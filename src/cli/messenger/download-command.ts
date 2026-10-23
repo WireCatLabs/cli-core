@@ -30,6 +30,7 @@ export const downloadSubcommand = (messages: Command, messenger: Messenger): Com
     examples: [`${messenger.app.command} personal messages download "Book club" 101 --output-dir ./downloads`],
     effects: FETCH,
   })
+    .summary("download files attached to stored messages")
     .description("save a message's photos, files, videos and voice notes to a folder — or a whole chat's with --all")
     .argument("<chat>", messenger.chatArgument)
     .argument("[message]", "the message id; left out with --all")

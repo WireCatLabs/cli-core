@@ -15,7 +15,7 @@ export interface Presence {
 }
 
 /** An option: `"all"` alone, or where it is and why not elsewhere. */
-export type Entry = "all" | Presence
+export type Entry = "all" | (Presence & { wording?: string })
 
 export interface CommandRow extends Presence {
   /** On a planned row: it stands for every path below it, which then have no rows of their own. */
@@ -66,6 +66,8 @@ const entryProblems = (clis: readonly Cli[], where: string, entry: Entry | Comma
   const problems: string[] = []
   const names = entry.in === "all" ? [] : Array.isArray(entry.in) ? entry.in : undefined
   if (names === undefined) return [`${where}: "in" is neither "all" nor a list of CLIs`]
+  if ("wording" in entry && (typeof entry.wording !== "string" || entry.wording.trim() === ""))
+    problems.push(`${where}: a wording exception needs its reason`)
   const planned = Object.entries(entry.planned ?? {})
   for (const name of [...names, ...planned.map(([name]) => name)])
     if (!clis.includes(name))

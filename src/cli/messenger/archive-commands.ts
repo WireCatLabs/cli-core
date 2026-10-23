@@ -68,6 +68,7 @@ export const storeCommand = (messenger: Messenger): Command => {
  */
 const statusCommand = (messenger: Messenger): Command =>
   annotate(new Command("status"), { effects: LOCAL_READ, mcp: false })
+    .summary("what the local archive holds and what is missing")
     .description("per chat: messages stored, the oldest and newest, and the stretches held completely")
     .argument("[chat]", messenger.chatArgument)
     .action(async function (this: Command, chat: string | undefined) {
@@ -156,10 +157,11 @@ const clearCommand = (messenger: Messenger): Command =>
  */
 const exportCommand = (messenger: Messenger): Command =>
   destroysNothing(annotate(new Command("export"), { effects: LOCAL_WRITE, mcp: false }))
+    .summary("export stored messages to files")
     .description(
       "a chat's stored messages, oldest first: --jsonl one message per line, --json the list envelope of messages; never asks the messenger",
     )
-    .argument("[chats...]", `${messenger.chatArgument}; several with --output-dir`)
+    .argument("[chat...]", `${messenger.chatArgument}; several with --output-dir`)
     .option(
       "--format <format>",
       "jsonl: one message per line, the default with --output; markdown: a transcript with a heading per day, replies and forwards quoted",

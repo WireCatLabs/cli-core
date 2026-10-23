@@ -21,6 +21,7 @@ export const membersCommand = (messenger: Messenger): Command => {
       withQuery(
         withPaging(
           annotate(new Command("list"), { effects: REMOTE_READ })
+            .summary("group members and their roles")
             .description("everyone in a group, a page at a time, with their role and when they were last seen")
             .argument("<chat>", messenger.chatArgument),
         ),
@@ -46,6 +47,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         annotate(new Command("audit"), { effects: REMOTE_READ, offline: false })
+          .summary("members that look like bots, with reasons")
           .description(
             "members that look like bots, each with its reasons — read from the member list and the local store; " +
               "never one request per person, and it removes nobody",
@@ -105,6 +107,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         annotate(new Command("history"), { effects: LOCAL_READ })
+          .summary("stored membership changes")
           .description(
             "who joined, who left and whose profile changed, oldest first — what chats members fetch recorded in the " +
               "local store; never asks the messenger",
@@ -137,6 +140,7 @@ export const membersCommand = (messenger: Messenger): Command => {
   )
 
   const fetch = annotate(new Command("fetch"), { effects: FETCH, offline: false })
+    .summary("save the group's current membership")
     .description(
       "read a group's whole member list into the local store's member history: who joined, who left, daily " +
         "counts and profile changes; someone is recorded as gone only when every member was read",

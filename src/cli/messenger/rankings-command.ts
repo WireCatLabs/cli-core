@@ -36,6 +36,7 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
     annotate(new Command("top"), { effects: REMOTE_READ, output: { entity: "ranking" } }),
     messenger,
   )
+    .summary("rank messages or people by a measure or score")
     .description(
       `rank ${target === "messages" ? "stored messages" : "the human authors of stored messages"} by a measure or explainable score; counters are snapshots with per-field observation freshness`,
     )
@@ -129,6 +130,7 @@ const emojiSplit = (reactions: readonly { reaction: string; count: number }[]) =
 
 export const rankingEvidenceCommand = (messenger: Messenger, target: RankingTarget): Command =>
   annotate(new Command("evidence"), { effects: LOCAL_READ, output: { entity: "evidence" } })
+    .summary("evidence for an exact statistics selection")
     .description("bounded messages, answer pairs or retention members from an exact drilldown selection")
     .argument(
       target === "messages" ? "<message>" : "<person>",

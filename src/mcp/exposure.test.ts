@@ -78,7 +78,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
       (tool) => tool.command === "messages delete",
     )
 
-    expect(Object.keys(remove?.input.entries ?? {}).sort()).toEqual(["chat", "messages"])
+    expect(Object.keys(remove?.input.entries ?? {}).sort()).toEqual(["chat", "message"])
   })
 
   it("**the personal catalogue is pinned**, so moving the personal server onto it changes nothing unseen", async () => {

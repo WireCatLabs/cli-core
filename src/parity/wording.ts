@@ -56,6 +56,7 @@ export const wordingProblems = (manifest: Manifest, programs: readonly CommandsJ
     if (clis.length < 2) return []
     const sentences = clis.map((cli) => said.get(cli)?.get(where))
     if (sentences.every((sentence) => sentence === sentences[0])) return []
+    if (typeof entry !== "string" && entry.wording && sentences.every((sentence) => sentence !== undefined)) return []
     return [`${where}: ${clis.map((cli, index) => `${cli} says "${sentences[index]}"`).join(", ")}`]
   })
 }
