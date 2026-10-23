@@ -1708,14 +1708,24 @@
     },
     "bot mcp config": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
-      "options": {}
+      "options": {},
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot me": {
       "in": ["max", "tg"],
       "planned": {
         "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
+    },
+    "bot media": {
+      "in": [],
+      "reason": "MAX and Telegram bots read a file from the message itself; Meta hands a media id whose address lives five minutes",
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      },
+      "subtree": true
     },
     "bot messages": {
       "in": ["max", "tg"],
