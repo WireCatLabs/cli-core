@@ -11,6 +11,7 @@ import { chatEvent } from "./chat-event.js"
 import { chatStats, taskStats } from "./chat-stats.js"
 import { contact } from "./contact.js"
 import { contactActivity, contactCheck, linkedPerson } from "./contact-activity.js"
+import { contactContext, contactPreparation } from "./contact-context.js"
 import { contactNote } from "./contact-note.js"
 import { contactLookup, contactProfile, contactSync } from "./contact-read.js"
 import { contactImport, contactStateChange, contactUpdate } from "./contact-write.js"
@@ -77,10 +78,12 @@ export {
   contactActivity,
   contactAlias,
   contactCheck,
+  contactContext,
   contactImport,
   contactLookup,
   contactNote,
   contactNoteRemoval,
+  contactPreparation,
   contactProfile,
   contactStateChange,
   contactSync,
@@ -154,6 +157,8 @@ export const ENTITIES = {
   chat,
   person,
   identity,
+  contact_context: contactContext,
+  contact_preparation: contactPreparation,
   contact_activity: contactActivity,
   contact_check: contactCheck,
   linked_person: linkedPerson,

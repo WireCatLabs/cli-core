@@ -24,7 +24,38 @@ const message = {
 }
 const author = { type: "person", id: "1", name: null }
 
+const contactContextSample = {
+  person: { uid: "1", provider: "telegram", id: "9", name: null, identities: [] },
+  shared: [],
+  last: { from_them: null, from_me: null, from_them_anywhere: null },
+  recent: { direct: [], groups: [] },
+  mentions: [],
+  limits: { messages: 10, bytes: 1024 },
+  complete: true,
+  not_read: [],
+}
+const sectionCoverage = { included: 0, has_more: false, cut_by: null }
+
 const samples: Record<EntityName, unknown> = {
+  contact_context: contactContextSample,
+  contact_preparation: {
+    ...contactContextSample,
+    prepare: {
+      waiting: [],
+      tasks: [],
+      facts: [],
+      notes: [],
+      meetings: [],
+      limits: { items: 10, bytes: 1024 },
+      coverage: {
+        waiting: { ...sectionCoverage, rule: "their message is the newest the store holds in a one-to-one chat" },
+        tasks: { ...sectionCoverage, selection: "open, assigned to them in any role", accounts: [] },
+        facts: { ...sectionCoverage, selection: "accepted, about them or a project they are a member of" },
+        notes: { ...sectionCoverage, selection: "written by you, about them" },
+        meetings: { ...sectionCoverage, read: "every account of the store that saw them", accounts: [], pending: 0 },
+      },
+    },
+  },
   contact_lookup: { id: "10", name: null, username: null },
   contact_sync: { added: 1, changed: 0, known: 2 },
   contact_profile: {

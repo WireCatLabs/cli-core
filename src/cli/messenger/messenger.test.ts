@@ -2928,6 +2928,7 @@ describe("the shared read commands", () => {
     expect(found.code).toBe(0)
     expect(found.stdout).toHaveLength(1)
     const answer = JSON.parse(found.stdout[0] ?? "null").item
+    expect(v.safeParse(ENTITIES.contact_context, answer).success).toBe(true)
     expect(answer.person.identities.map((one: { provider: string }) => one.provider)).toEqual(["max", "telegram"])
     expect(answer.recent.direct).toHaveLength(2)
 
@@ -2940,6 +2941,7 @@ describe("the shared read commands", () => {
     )
     expect(prepared.code).toBe(0)
     const brief = JSON.parse(prepared.stdout[0] ?? "null").item
+    expect(v.safeParse(ENTITIES.contact_preparation, brief).success).toBe(true)
     expect(brief.recent.direct).toHaveLength(2)
     expect(brief.prepare.waiting.map((one: { provider: string }) => one.provider).sort()).toEqual(["max", "telegram"])
     expect(brief.prepare.coverage.notes).not.toHaveProperty("withheld")
@@ -2951,6 +2953,7 @@ describe("the shared read commands", () => {
       {},
       { provider: "telegram" },
     )
+    expect(v.safeParse(ENTITIES.contact_context, JSON.parse(inChat.stdout[0] ?? "null").item).success).toBe(true)
     expect(JSON.parse(inChat.stdout[0] ?? "null").item.chats).toEqual([
       expect.objectContaining({ chat: { id: "11", title: "Ana", kind: "dialog" }, messages: [{ at, text: "hello" }] }),
     ])
@@ -2961,7 +2964,38 @@ describe("the shared read commands", () => {
       {},
       { provider: "telegram" },
     )
+    expect(v.safeParse(ENTITIES.contact_context, JSON.parse(detailed.stdout[0] ?? "null").item).success).toBe(true)
     expect(JSON.parse(detailed.stdout[0] ?? "null").item.chats[0].messages[0].locator).toBe("msg:telegram/500/11/1")
+    const completeDetail = await call(
+      ["contacts", "context", "11", "--chat", "11", "-vv", "--offline", "--json"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(completeDetail.code).toBe(0)
+    const fullAnswer = JSON.parse(completeDetail.stdout[0] ?? "null").item
+    const fullParsed = v.safeParse(ENTITIES.contact_context, fullAnswer)
+    expect(fullParsed.success, JSON.stringify(fullParsed.issues?.map((issue) => issue.message))).toBe(true)
+    const projectedContext = await call(
+      ["contacts", "context", "11", "--chat", "11", "--offline", "--json=chats"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(projectedContext.code).toBe(0)
+    expect(Object.keys(JSON.parse(projectedContext.stdout[0] ?? "null").item)).toEqual(["chats"])
+    const unknownField = await call(
+      ["contacts", "context", "11", "--offline", "--json=unknown"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(unknownField.code).toBe(2)
+    expect(unknownField.stdout).toEqual([])
+    expect(unknownField.stderr.join(" ")).toContain("output.unknown-field")
     const lonely = await call(
       ["contacts", "context", "11", "--sync-first", "--offline", "--json"],
       never,

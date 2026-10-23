@@ -123,7 +123,10 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  const contextCommand = annotate(contacts.command("context"), { effects: REMOTE_READ })
+  const contextCommand = annotate(contacts.command("context"), {
+    effects: REMOTE_READ,
+    output: { entity: "contact_context" },
+  })
     .summary("what the local archive knows about a person")
     .description(
       "what the store holds about one person, in every messenger linked to them: shared chats, the last " +
@@ -202,6 +205,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
 
   annotate(contacts.command("prepare"), {
     effects: REMOTE_READ,
+    output: { entity: "contact_preparation" },
     examples: [`${messenger.app.command} contacts prepare Ana`],
   })
     .summary("what to know before you talk to someone, each item with its reference")
