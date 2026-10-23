@@ -24,8 +24,8 @@ importers:
         specifier: 0.2.0
         version: 0.2.0
       '@modelcontextprotocol/server':
-        specifier: 2.1.0
-        version: 2.1.0
+        specifier: 2.3.0
+        version: 2.3.0
       '@resvg/resvg-js':
         specifier: 2.6.2
         version: 2.6.2
@@ -890,16 +890,16 @@ packages:
     resolution: {integrity: sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/core@2.1.0':
-    resolution: {integrity: sha512-YdFj5gMRHr0gYNAhTbQDgjLHiEJdIAUYxomhKseUNye7ZGlISQmUoLh2sveFFCiQ7j2YMffT1kgSND0FSfIFjQ==}
-    engines: {node: '>=20'}
-
   '@modelcontextprotocol/core@2.2.0':
     resolution: {integrity: sha512-iLhmprRmWI8EcosOA3wVvww22z02NkgqhV4fBH6f/odQBsi7xnJc0HGmi21yWO+/iKw2yzqVE127Zhna5/+JXw==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/server@2.1.0':
-    resolution: {integrity: sha512-FdvwZU5N03O77Suh35JqjAqq5R1ZTEPFtwu6N4BgBq28qrQtrCnpbLL5U2pwYCuE194jAw0xnlOVmIqhfoYuUQ==}
+  '@modelcontextprotocol/core@2.3.0':
+    resolution: {integrity: sha512-09BHFaNVBe5pB2AhzCfLj0cqmsKLERvZQ4FblzP90UMGLaXVqdZPByFjURwsUYCmxonUW2yAwgTTvle+8O2/8w==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/server@2.3.0':
+    resolution: {integrity: sha512-+6b0LdsQLmHsvS7J6sQJ4weTpzUn61fU1JKS+321/+IyDYoHW5CR2Tgqcs6GgAAQvlesCo6yX3xttgmx+XGtJw==}
     engines: {node: '>=20'}
 
   '@napi-rs/canvas-android-arm64@1.0.10':
@@ -3039,6 +3039,9 @@ packages:
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
   zrender@6.1.0:
     resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
@@ -3548,18 +3551,18 @@ snapshots:
       pkce-challenge: 5.0.1
       zod: 4.6.5
 
-  '@modelcontextprotocol/core@2.1.0':
-    dependencies:
-      zod: 4.6.5
-
   '@modelcontextprotocol/core@2.2.0':
     dependencies:
       zod: 4.6.5
 
-  '@modelcontextprotocol/server@2.1.0':
+  '@modelcontextprotocol/core@2.3.0':
     dependencies:
-      '@modelcontextprotocol/core': 2.1.0
-      zod: 4.6.5
+      zod: 4.6.7
+
+  '@modelcontextprotocol/server@2.3.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.3.0
+      zod: 4.6.7
 
   '@napi-rs/canvas-android-arm64@1.0.10':
     optional: true
@@ -5547,6 +5550,8 @@ snapshots:
       readable-stream: 3.6.2
 
   zod@4.6.5: {}
+
+  zod@4.6.7: {}
 
   zrender@6.1.0:
     dependencies:
