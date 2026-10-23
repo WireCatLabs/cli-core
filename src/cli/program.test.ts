@@ -101,8 +101,9 @@ describe("running a messenger CLI", () => {
 
   it.each([
     [["chats list", "--help"], "app chats list"],
-    [["personal", "chats list"], "app chats list"],
-    [["personal", "--json", "chats list", "--limit", "5"], "app chats list"],
+    [["--json", "personal", "chats list"], "app personal chats list"],
+    [["personal", "chats list"], "app personal chats list"],
+    [["personal", "--json", "chats list", "--limit", "5"], "app personal chats list"],
   ])("refuses a command path given as one argument, %j, instead of printing the root help", async (argv, fix) => {
     let ran = false
     const { code, stdout, stderr } = await call(argv, async () => {
