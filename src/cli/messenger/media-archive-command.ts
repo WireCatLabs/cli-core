@@ -9,6 +9,7 @@ import { environmentOf, setExitCode } from "../context.js"
 import { FETCH, LOCAL_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { addMediaArchiveMove } from "./media-archive-move-command.js"
 import { addMediaArchiveTimers } from "./media-archive-timer-command.js"
 import { stopOnSignal } from "./patience.js"
 
@@ -90,4 +91,5 @@ export const addMediaArchiveCommands = (archive: Command, messenger: Messenger):
       )
     })
   addMediaArchiveTimers(archive, messenger)
+  addMediaArchiveMove(archive, messenger)
 }

@@ -22,6 +22,7 @@ export const archiveMediaFile = async (
   file: () => Promise<RemoteFile>,
   beforeWrite: () => Promise<void>,
   signal?: AbortSignal,
+  metadata: { messageTime?: string; mime?: string; expected?: { size: number; sha256: string } } = {},
 ): Promise<MediaArchiveEntry> => {
   const key = mediaKey(identity)
   const locator: RecordingAssetLocator = {
@@ -47,6 +48,10 @@ export const archiveMediaFile = async (
         const one = parseMediaEntry(value)
         if (mediaKey(one) !== key || one.kind !== kind)
           throw new CliError("validation_error", "media recovery identity mismatch")
+        if (metadata.expected && (one.size !== metadata.expected.size || one.sha256 !== metadata.expected.sha256))
+          throw new CliError("validation_error", "media recovery checksum differs from the source")
+        if (metadata.expected && (one.messageTime !== metadata.messageTime || one.mime !== metadata.mime))
+          throw new CliError("validation_error", "media recovery metadata differs from the source")
         return one
       },
     },
@@ -105,7 +110,18 @@ export const archiveMediaFile = async (
   } finally {
     await writer.close()
   }
-  const entry = parseMediaEntry({ ...identity, version: 1, kind, path: `${key}.bin`, ...proof })
+  if (metadata.expected && (proof.size !== metadata.expected.size || proof.sha256 !== metadata.expected.sha256))
+    throw new CliError("validation_error", "media source changed while copying; nothing was published")
+  const mime = (metadata.mime ?? remote.mime)?.split(";", 1)[0]?.trim().toLowerCase()
+  const entry = parseMediaEntry({
+    ...identity,
+    version: 1,
+    kind,
+    path: `${key}.bin`,
+    ...proof,
+    ...(metadata.messageTime ? { messageTime: metadata.messageTime } : {}),
+    ...(mime && mime.length <= 127 && /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(mime) ? { mime } : {}),
+  })
   await beforeWrite()
   await publication.write(entry)
   await beforeWrite()

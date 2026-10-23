@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises"
+import { access, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -36,7 +36,7 @@ const message: Message = {
   forwardedFrom: null,
   reactions: null,
 }
-const fixture = async () => {
+const fixture = async (kind = "file") => {
   const root = await mkdtemp(join(tmpdir(), "media-command-"))
   const env = {
     HOME: root,
@@ -56,12 +56,12 @@ const fixture = async () => {
     chats: async () => ({ items: [chat], hasMore: false }),
     resolve: async () => chat,
     chat: async () => ({ ...chat, members: [] }),
-    history: async () => ({ items: [message], hasMore: false }),
+    history: async () => ({ items: [{ ...message, attachments: [{ kind }] }], hasMore: false }),
     download: async () => ({
       skipped: [],
       files: [
         {
-          kind: "file",
+          kind,
           position: 0,
           size: 3,
           bytes: async function* () {
@@ -94,6 +94,36 @@ const fixture = async () => {
   return { root, env, connect, close, directory, call }
 }
 describe("media archive commands", () => {
+  it("previews and moves older images offline, honoring write denials without connecting", async () => {
+    const f = await fixture("photo")
+    expect((await f.call(["attachments", "download", f.directory, "--json"])).code).toBe(0)
+    f.connect.mockClear()
+    const destination = join(f.root, "old-images")
+    const args = [
+      "attachments",
+      "move",
+      f.directory,
+      destination,
+      "--before-time",
+      "2026-10-10T00:00:00Z",
+      "--offline",
+      "--json",
+    ]
+    const preview = await f.call([...args, "--dry-run"])
+    expect(preview.code, preview.stderr).toBe(0)
+    expect(JSON.parse(preview.stdout).item).toMatchObject({ selected: 1, moved: 0, dry_run: true })
+    await expect(access(destination)).rejects.toMatchObject({ code: "ENOENT" })
+    const denied = await f.call([...args, "--permission", "attachments.move=readonly"])
+    expect(denied.code).not.toBe(0)
+    await expect(access(destination)).rejects.toMatchObject({ code: "ENOENT" })
+    const moved = await f.call(args)
+    expect(moved.code, moved.stderr).toBe(0)
+    expect(JSON.parse(moved.stdout).item).toMatchObject({ moved: 1, complete: true })
+    const checked = await f.call(["attachments", "check", f.directory, "--offline", "--json"])
+    expect(checked.code).toBe(0)
+    expect(JSON.parse(checked.stdout).item).toMatchObject({ valid: true })
+    expect(f.connect).not.toHaveBeenCalled()
+  })
   it("downloads through the service lifetime, checks entirely offline, and reports checksum failure with nonzero exit", async () => {
     const f = await fixture()
     const saved = await f.call([

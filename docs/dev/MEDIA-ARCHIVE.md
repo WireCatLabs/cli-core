@@ -52,23 +52,54 @@ an active download finishes. Uninstall requires a disabled, inactive timer and a
 It leaves the archive intact. Changed schedules or executable paths require stop, uninstall and install.
 Foreign or edited unit files are preserved. Non-Linux platforms can run downloads manually.
 
+## Move older images
+
+Use `attachments move <dir> <archive-dir> --before-time <ISO timestamp with zone>` to move images
+whose message date is strictly before the cutoff into another verified archive. Photos and attachments
+with an `image/*` MIME type are selected; other files and images at the cutoff stay in place.
+
+```sh
+chat example attachments move ./media-archive /mnt/archive/older-images --before-time 2026-10-01T00:00:00Z --dry-run
+chat example attachments move ./media-archive /mnt/archive/older-images --before-time 2026-10-01T00:00:00Z --timeout 6h
+chat example attachments check ./media-archive --offline
+```
+
+The preview reports selected counts and bytes without creating the destination. The move verifies
+both archives, copies and verifies each selected image, durably records its new location in the source
+manifest, then removes the verified local bytes. It never overwrites an existing destination file.
+Completed moves survive interruption; repeat the command to finish. Source manifests remain small
+relocation records, so subsequent downloads verify the moved copies and do not download them again.
+Further moves from the destination are supported; checks follow the chain and lock all linked folders.
+Cycles and conflicting destination copies are refused. These operations never contact a messenger.
+
+Keep linked archives available at their recorded paths: offline storage makes verification fail and
+stops downloads from silently recreating duplicate copies. Use another filesystem to free space on the
+original disk; moving within one filesystem changes which folder holds the bytes. Images from earlier
+draft archives without a recorded message date are left in place, counted as `undated`, and yield
+`complete: false`. The command does not guess dates from file modification times.
+
 ## Storage and recovery contract
 
 Each file identity contains provider, account, chat, message and attachment position. SHA-256 of a JSON
 array of those fields names `<identity-hash>.bin` and `.media-archive-<identity-hash>.json`. The manifest
-contains exactly `version: 1`, those identity fields, attachment kind, basename, byte size and SHA-256.
+contains `version: 1`, those identity fields, attachment kind, basename, byte size and SHA-256.
+New downloads also retain the canonical UTC `messageTime` and, when available, normalized `mime`.
+An optional absolute `relocatedTo` directory points to another scoped manifest and verified copy.
+Earlier manifests without these optional fields remain readable and verifiable.
 It contains no sender text, original filename, URL, media key or provider reference. This format is
 independent of Zoom's recording manifests.
 
-One canonical destination has one native writer lease under `.media-writers`, shared by downloads and
-verification. Stale leases use the ordinary native lease recovery rules. Files use
+One canonical destination has one native writer lease under `.media-writers`, shared by downloads,
+rotation and verification. Linked folders are locked in canonical path order after discovering and
+rechecking relocation records; at most 64 archive locations may be linked in one operation.
+Stale leases use the ordinary native lease recovery rules. Files use
 `NativeRecordingPartialStore` and `NativeRecordingPublication` with `.media-partial-` and
 `.media-publication-` prefixes. A completed checkpoint and scoped publication record recover a crash
 before or after linking the final file. A final file without a manifest or complete recovery evidence
 is refused. Manifests and unit files use atomic, non-overwriting publication and ordinary-file reads.
 
-The `services` export exposes `archiveMedia`, `checkMediaArchive`, `MediaArchivePorts`,
-`MediaArchiveOptions`, `MediaArchiveEntry` and `MediaIdentity`. Ports are narrow chat/account and
+The `services` export exposes `archiveMedia`, `checkMediaArchive`, `moveMediaArchive`, `MediaArchivePorts`,
+`MediaArchiveOptions`, `MoveMediaArchiveOptions`, `MediaArchiveEntry` and `MediaIdentity`. Ports are narrow chat/account and
 message/download services. The `background` export exposes the provider-neutral daily unit planner
 and manager; machine calls are injected for tests. Archive copies are deliberately not registered as
 retained attachment paths: extraction and retained-file transfer continue to use ordinary downloads.

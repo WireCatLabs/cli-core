@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { readdir } from "node:fs/promises"
-import { join } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { openOrdinaryFile, readBoundedUtf8File, writeFileAtomic } from "../files/index.js"
 
@@ -17,6 +17,9 @@ export interface MediaArchiveEntry extends MediaIdentity {
   path: string
   size: number
   sha256: string
+  messageTime?: string
+  mime?: string
+  relocatedTo?: string
 }
 export const mediaKey = (one: MediaIdentity): string =>
   createHash("sha256")
@@ -32,7 +35,32 @@ export const parseMediaEntry = (value: unknown): MediaArchiveEntry => {
     typeof one !== "object" ||
     Array.isArray(one) ||
     one.version !== 1 ||
-    Object.keys(one).sort().join(",") !== "account,chat,kind,message,path,position,provider,sha256,size,version" ||
+    Object.keys(one).some(
+      (key) =>
+        ![
+          "account",
+          "chat",
+          "kind",
+          "message",
+          "path",
+          "position",
+          "provider",
+          "sha256",
+          "size",
+          "version",
+          "messageTime",
+          "mime",
+          "relocatedTo",
+        ].includes(key),
+    ) ||
+    (one.messageTime !== undefined &&
+      (typeof one.messageTime !== "string" ||
+        !Number.isFinite(Date.parse(one.messageTime)) ||
+        new Date(one.messageTime).toISOString() !== one.messageTime)) ||
+    (one.mime !== undefined &&
+      (typeof one.mime !== "string" || one.mime.length > 127 || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(one.mime))) ||
+    (one.relocatedTo !== undefined &&
+      (typeof one.relocatedTo !== "string" || !isAbsolute(one.relocatedTo) || /[\p{Cc}]/u.test(one.relocatedTo))) ||
     [one.provider, one.account, one.chat, one.message, one.kind].some(
       (text) => typeof text !== "string" || !text.trim() || text.length > 512 || /[\0\r\n]/.test(text),
     ) ||
@@ -80,9 +108,32 @@ export const readMediaManifests = async (root: string, signal?: AbortSignal): Pr
   return entries
 }
 export const verifyMediaEntry = async (root: string, one: MediaArchiveEntry, signal?: AbortSignal) => {
-  const actual = await mediaFingerprint(join(root, one.path), signal)
+  let location = resolve(root)
+  let entry = one
+  const visited = new Set<string>()
+  while (entry.relocatedTo !== undefined) {
+    signal?.throwIfAborted()
+    if (visited.has(location) || visited.size >= 64)
+      throw new CliError("validation_error", "media archive relocation cycle or excessive depth")
+    visited.add(location)
+    location = resolve(entry.relocatedTo)
+    const target = parseMediaEntry(
+      JSON.parse(await readBoundedUtf8File(join(location, mediaManifestName(one)), { maxBytes: 16384 })),
+    )
+    if (!sameMediaCopy(one, target)) return false
+    entry = target
+  }
+  if (visited.has(location)) return false
+  const actual = await mediaFingerprint(join(location, one.path), signal)
   return actual.size === one.size && actual.sha256 === one.sha256
 }
+export const sameMediaCopy = (a: MediaArchiveEntry, b: MediaArchiveEntry): boolean =>
+  mediaKey(a) === mediaKey(b) &&
+  a.size === b.size &&
+  a.sha256 === b.sha256 &&
+  a.kind === b.kind &&
+  a.messageTime === b.messageTime &&
+  a.mime === b.mime
 export const commitMediaEntry = (root: string, one: MediaArchiveEntry, beforePublish: () => Promise<void>) =>
   writeFileAtomic(join(root, mediaManifestName(one)), JSON.stringify(parseMediaEntry(one)), {
     overwrite: false,

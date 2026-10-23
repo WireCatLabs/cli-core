@@ -294,6 +294,7 @@ const NAMED_WRITE_KEYS = [
   "stats.contacts.top.sync-first",
   "account.sessions.list",
   "attachments.extract",
+  "attachments.move",
   "attachments.text.set",
   "bot.callbacks.answer",
   "bot.chats.action",

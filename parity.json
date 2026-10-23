@@ -121,6 +121,10 @@
       "value": "<n>",
       "meaning": "how many messages before it"
     },
+    "--before-time": {
+      "value": "<time>",
+      "meaning": "read what came before this time"
+    },
     "--block": {
       "value": "<value>",
       "meaning": "Set to `true` if user should be blocked in chat."
@@ -1368,6 +1372,13 @@
         "--page": {
           "in": "all"
         }
+      }
+    },
+    "attachments move": {
+      "in": "all",
+      "options": {
+        "--before-time": "all",
+        "--dry-run": "all"
       }
     },
     "attachments show": {

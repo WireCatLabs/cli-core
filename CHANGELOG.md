@@ -15,6 +15,9 @@ shape of this file.
   opt-in Linux daily timers. Archive files stay independent of message-store deletion; interrupted streams
   restart from byte zero because messenger downloads expose no range validators.
   Download help clarifies that receiving messages saves no media copies and names the command to stop a daily timer.
+  `attachments move <dir> <archive-dir> --before-time <time>` moves older images to verified cold storage;
+  `--dry-run` previews counts and bytes. Relocation records preserve offline verification and prevent duplicate
+  downloads. New manifests retain message dates and image MIME types; undated draft images are left in place.
 
 ### Changed — may break callers
 

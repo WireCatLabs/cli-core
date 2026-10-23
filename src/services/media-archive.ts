@@ -1,14 +1,12 @@
-import { mkdir, realpath } from "node:fs/promises"
-import { join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import { matchDownloads, NOT_FILES } from "../domain/attachments.js"
 import type { Message } from "../domain/models.js"
-import { acquireLock } from "../files/index.js"
 import type { Download } from "../ports/messenger.js"
 import type { AccountKey } from "../store/store.js"
 import type { ChatsService } from "./chats.js"
 import { archiveMediaFile } from "./media-archive-files.js"
+import { withMediaArchiveLocks } from "./media-archive-locks.js"
 import { type MediaArchiveEntry, mediaKey, readMediaManifests, verifyMediaEntry } from "./media-archive-manifest.js"
 import type { MessagesService } from "./messages.js"
 
@@ -26,43 +24,23 @@ export interface MediaArchiveOptions {
   signal?: AbortSignal
   onSaved?: (entry: MediaArchiveEntry) => void
 }
-export const validateMediaSince = (value?: string): number | undefined => {
+export const validateMediaSince = (value?: string, flag = "--since-time"): number | undefined => {
   if (value === undefined) return undefined
   if (
     !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/.test(value) ||
     !Number.isFinite(Date.parse(value))
   )
-    throw new CliError("validation_error", "--since-time needs an ISO timestamp with a time zone")
+    throw new CliError("validation_error", `${flag} needs an ISO timestamp with a time zone`)
   const date = value.slice(0, 10)
   if (new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
-    throw new CliError("validation_error", "--since-time has an invalid calendar date")
+    throw new CliError("validation_error", `${flag} has an invalid calendar date`)
   return Date.parse(value)
 }
-const withArchiveLock = async <T>(
-  directory: string,
-  signal: AbortSignal | undefined,
-  run: (root: string, beforeWrite: () => Promise<void>) => Promise<T>,
-  create = false,
-): Promise<T> => {
-  signal?.throwIfAborted()
-  if (create) await mkdir(directory, { recursive: true, mode: 0o700 })
-  const root = await realpath(directory)
-  const lease = await acquireLock(join(root, ".media-writers"), { signal })
-  const beforeWrite = async () => {
-    signal?.throwIfAborted()
-    if (!(await lease.held())) throw new CliError("validation_error", "media archive writer lost its lock")
-  }
-  try {
-    return await run(root, beforeWrite)
-  } finally {
-    await lease.release()
-  }
-}
 export const checkMediaArchive = (directory: string, signal?: AbortSignal) =>
-  withArchiveLock(directory, signal, async (root) => {
+  withMediaArchiveLocks(directory, signal, async (root) => {
     const entries = await readMediaManifests(root, signal)
     if (!entries.length) throw new CliError("not_found", "no media archive manifests in this directory")
-    const files: { path: string; valid: boolean }[] = []
+    const files: { path: string; valid: boolean; archiveDirectory?: string }[] = []
     for (const entry of entries) {
       let valid = false
       try {
@@ -70,7 +48,7 @@ export const checkMediaArchive = (directory: string, signal?: AbortSignal) =>
       } catch {
         signal?.throwIfAborted()
       }
-      files.push({ path: entry.path, valid })
+      files.push({ path: entry.path, valid, ...(entry.relocatedTo ? { archiveDirectory: entry.relocatedTo } : {}) })
     }
     return { valid: files.every((one) => one.valid), checked: files.length, files }
   })
@@ -117,6 +95,7 @@ const saveMessage = async (
       },
       beforeWrite,
       options.signal,
+      { messageTime: new Date(message.timestamp).toISOString(), ...(attachment.mime ? { mime: attachment.mime } : {}) },
     )
     known.set(key, entry)
     saved++
@@ -137,7 +116,7 @@ export const archiveMedia = async (ports: MediaArchivePorts, options: MediaArchi
     pauseMs < 0
   )
     throw new CliError("validation_error", "invalid media archive page size or pause")
-  return withArchiveLock(
+  return withMediaArchiveLocks(
     options.directory,
     options.signal,
     async (root, beforeWrite) => {
@@ -220,6 +199,6 @@ export const archiveMedia = async (ports: MediaArchivePorts, options: MediaArchi
       }
       return { directory: root, chats, saved, existing, complete: true }
     },
-    true,
+    { create: true },
   )
 }

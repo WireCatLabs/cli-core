@@ -148,6 +148,7 @@ describe("command effects", () => {
     )
     expect(refused.sort()).toEqual(
       [
+        "attachments move",
         "attachments text set",
         "chats tracking add",
         "chats tracking remove",

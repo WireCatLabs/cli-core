@@ -17,6 +17,8 @@ export { excerpt } from "./excerpt.js"
 export type { MediaArchiveOptions, MediaArchivePorts } from "./media-archive.js"
 export { archiveMedia, checkMediaArchive } from "./media-archive.js"
 export type { MediaArchiveEntry, MediaIdentity } from "./media-archive-manifest.js"
+export type { MoveMediaArchiveOptions } from "./media-archive-move.js"
+export { moveMediaArchive } from "./media-archive-move.js"
 export {
   type DownloadedModel,
   downloadImageModel,
