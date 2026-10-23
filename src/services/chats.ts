@@ -28,6 +28,7 @@ import {
   type MemberCount,
   queryFilter,
   type RosterChange,
+  TRACKED_CHAT_COLUMNS,
   type TrackedChat,
 } from "../store/store.js"
 import { type ChatStats, chatStats, type StatsPeriod } from "./chat-stats.js"
@@ -112,7 +113,7 @@ export interface ChatsService {
    */
   fetchMembers(chat: string, options: { budget?: number; pauseMs?: number; track?: boolean }): Promise<FetchedMembers>
   /** The chats whose members `serve` fetches daily, from the store. */
-  tracked(): Promise<TrackedChat[]>
+  tracked(query?: QueryAst): Promise<TrackedChat[]>
   /** One chat's tracking and its member counts of the last `TRACKED_DAYS` days, tracked or not. */
   trackedChat(chat: string): Promise<{ chatId: Id; trackedAt: string | null; counts: MemberCount[] }>
   /** Joins, leaves and profile changes the store recorded, oldest first; `since` in ms. Never asks the messenger. */
@@ -352,7 +353,10 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     return { chatId, read: members.length, participants, complete, more, ...change, tracked }
   },
 
-  tracked: async () => (await accountStore(deps)).roster.trackedChats(),
+  tracked: async (query) => {
+    const where = query ? queryFilter(query, TRACKED_CHAT_COLUMNS, { command: "chats tracking list" }) : undefined
+    return (await accountStore(deps)).roster.trackedChats(where ? { where } : {})
+  },
 
   memberHistory: async (chat, { since }) => {
     const store = await accountStore(deps)

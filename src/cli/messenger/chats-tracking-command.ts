@@ -3,15 +3,10 @@ import { Command } from "commander"
 import { TRACKED_DAYS } from "../../services/chats.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { lines, wholeList } from "./chat-answers.js"
+import { TRACKING_QUERY } from "./chat-queries.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
-
-interface TrackedAnswer {
-  chat_id: string
-  title: string | null
-  tracked_at: string
-  last_count: { day: string; participants: number | null; complete: boolean } | null
-}
 
 /** The chats whose member lists `serve` fetches daily; kept in the local store, never sent. */
 export const trackingCommand = (messenger: Messenger): Command => {
@@ -21,17 +16,23 @@ export const trackingCommand = (messenger: Messenger): Command => {
       "the chats whose member lists serve fetches daily into the local store — chats members fetch --track adds one",
     )
 
-  annotate(tracking.command("list"), { effects: LOCAL_READ })
+  withQuery(annotate(tracking.command("list"), { effects: LOCAL_READ }), TRACKING_QUERY)
     .description("every tracked chat: since when, and its last member count")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      const query = listQuery(typedQuery(words), TRACKING_QUERY, "chats tracking list")
       const context = messengerContext(this, messenger)
-      const found = await context.withServices((services) => services.chats.tracked())
+      const found = await context.withServices((services) => services.chats.tracked(query))
       renderAnswer(
         this,
         context,
         wholeList(
           "chats tracking list",
-          found.map((one) => snakeKeys(one) as TrackedAnswer),
+          found.map(({ chatId, title, trackedAt, lastCount }) => ({
+            chat_id: chatId,
+            title,
+            tracked_at: trackedAt,
+            last_count: lastCount,
+          })),
         ),
         lines(({ chat_id, title, tracked_at, last_count }) =>
           [
@@ -45,7 +46,7 @@ export const trackingCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(tracking.command("show"), { effects: LOCAL_READ })
+  annotate(tracking.command("show"), { effects: LOCAL_READ, output: { entity: "tracked_chat_history" } })
     .summary("one chat's member tracking and daily counts")
     .description(`one chat: whether it is tracked, and its member count per day for the last ${TRACKED_DAYS} days`)
     .argument("<chat>", messenger.chatArgument)
@@ -62,7 +63,7 @@ export const trackingCommand = (messenger: Messenger): Command => {
     ["add", true, "fetch this chat's member list daily while serve runs, from its next run"],
     ["remove", false, "stop fetching it daily; the history already kept stays"],
   ] as const) {
-    annotate(tracking.command(verb), { effects: LOCAL_WRITE })
+    annotate(tracking.command(verb), { effects: LOCAL_WRITE, output: { entity: "chat_tracking" } })
       .description(description)
       .argument("<chat>", messenger.chatArgument)
       .action(async function (this: Command, chat: string) {

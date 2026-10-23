@@ -1,9 +1,10 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
 import type { GroupMember } from "../domain/models.js"
-import { type AccountKey, openStore } from "./store.js"
+import { type AccountKey, openStore, queryFilter, TRACKED_CHAT_COLUMNS } from "./store.js"
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "member-history-")), "messages.db")
 const OWNER: AccountKey = { provider: "telegram", account: "1" }
@@ -133,6 +134,34 @@ describe("member history", () => {
     await store.roster.trackMembers(OWNER, "7", false)
     expect(await store.roster.trackedChats(OWNER)).toEqual([])
     expect(await store.roster.memberCounts(OWNER, "7")).toHaveLength(1)
+    await store.close()
+  })
+
+  it("filters tracked chats in SQL and keeps each account's tracking separate", async () => {
+    const { store } = await clocked()
+    const other = { provider: "telegram", account: "2" }
+    await store.chats.saveChats(OWNER, [
+      { id: "8", title: "Project room", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+      { id: "9", title: "Club annex", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+    ])
+    await store.chats.saveChats(other, [
+      { id: "10", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+    ])
+    await store.roster.trackMembers(OWNER, "7", true)
+    await store.roster.trackMembers(OWNER, "8", true)
+    await store.roster.trackMembers(other, "10", true)
+    const ids = async (text: string) =>
+      (
+        await store.roster.trackedChats(OWNER, {
+          where: queryFilter(parseLucene(text, { defaultField: "none" }), TRACKED_CHAT_COLUMNS),
+        })
+      ).map((one) => one.chatId)
+    expect(await ids("title:club")).toEqual(["7"])
+    expect(await ids("chat_id:8")).toEqual(["8"])
+    expect(await ids("title:club OR chat_id:8")).toEqual(["7", "8"])
+    expect(await ids("title:club AND chat_id:8")).toEqual([])
+    expect(await ids("NOT title:club")).toEqual(["8"])
+    expect(await ids('chat_id:"7\' OR 1=1 --"')).toEqual([])
     await store.close()
   })
 

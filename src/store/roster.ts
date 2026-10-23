@@ -5,6 +5,7 @@ import { keysOver } from "./keys.js"
 import { chatEventsOf, saveChatEvents } from "./sqlite/chat-events.js"
 import * as chatQueries from "./sqlite/chats.js"
 import type { StoreContext } from "./sqlite/open.js"
+import type { Where } from "./sqlite/query-filter.js"
 import { type RetentionResult, retentionQuery } from "./sqlite/retention.js"
 import type {
   MemberCount,
@@ -40,7 +41,7 @@ export interface RosterStore {
   chatEvents(key: AccountKey, chatId: Id, options?: { since?: string; limit?: number }): Promise<ChatEvent[]>
   /** Starts or stops `serve`'s daily fetch of the chat's members; history already kept stays. */
   trackMembers(key: AccountKey, chatId: Id, tracked: boolean): Promise<void>
-  trackedChats(key: AccountKey): Promise<TrackedChat[]>
+  trackedChats(key: AccountKey, options?: { where?: Where }): Promise<TrackedChat[]>
   retention(
     key: AccountKey,
     chatId: Id,
@@ -110,9 +111,9 @@ export const rosterStoreOver = (context: StoreContext): RosterStore => {
     trackMembers: async (key, chatId, tracked) =>
       write(database, () => roster.setTracked(context, chatPkFor(accountPk(key), chatId), tracked)),
 
-    trackedChats: async (key) => {
+    trackedChats: async (key, { where } = {}) => {
       const accountKey = findAccountPk(key)
-      return accountKey === undefined ? [] : roster.trackedChats(context, accountKey)
+      return accountKey === undefined ? [] : roster.trackedChats(context, accountKey, where)
     },
 
     retention: async (key, chatId, options, evidence) => {

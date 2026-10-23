@@ -3,6 +3,7 @@ import type { GroupMember, Id, Provider } from "../../domain/models.js"
 import { and, asc, eq, gte, inArray, isNotNull, isNull, or, sql } from "./drizzle/core.js"
 import { identityPk, seenIdentity } from "./identities.js"
 import type { StoreContext } from "./open.js"
+import { bound, type Where } from "./query-filter.js"
 import { chatMembers, chats, identities, identityRevisions, memberCounts, memberStays } from "./schema.js"
 
 export interface RosterRead {
@@ -293,11 +294,11 @@ export const setTracked = ({ orm, now }: StoreContext, chatKey: number, tracked:
     .run()
 }
 
-export const trackedChats = (context: StoreContext, accountKey: number): TrackedChat[] =>
+export const trackedChats = (context: StoreContext, accountKey: number, where?: Where): TrackedChat[] =>
   context.orm
     .select({ pk: chats.id, chatId: chats.externalId, title: chats.title, trackedAt: chats.membersTrackedAt })
     .from(chats)
-    .where(and(eq(chats.accountId, accountKey), isNotNull(chats.membersTrackedAt)))
+    .where(and(eq(chats.accountId, accountKey), isNotNull(chats.membersTrackedAt), where ? bound(where) : undefined))
     .orderBy(asc(chats.membersTrackedAt))
     .all()
     .map(({ pk, chatId, title, trackedAt }) => ({

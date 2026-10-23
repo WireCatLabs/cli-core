@@ -456,6 +456,8 @@ export const CHAT_COLUMNS = {
   participants_count: { type: "num", sql: "chats.participants_count" },
 } as const satisfies ColumnMap
 
+export const TRACKED_CHAT_COLUMNS = { chat_id: CHAT_COLUMNS.id, title: CHAT_COLUMNS.title } as const satisfies ColumnMap
+
 /** `title:*book*` and `title:book` ask the same: the title holds "book". */
 export const titlePart = (value: string): string => value.replace(/^\*+|\*+$/g, "").trim()
 

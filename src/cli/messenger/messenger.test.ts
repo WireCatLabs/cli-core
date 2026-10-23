@@ -2873,6 +2873,55 @@ describe("the shared read commands", () => {
       expect(JSON.parse(tracked.stdout[0] ?? "null").items.map((one: { chat_id: string }) => one.chat_id)).toEqual([
         "7",
       ])
+      const trackedItem = JSON.parse(tracked.stdout[0] ?? "null").items[0]
+      expect(v.safeParse(ENTITIES.tracked_chat, trackedItem).success).toBe(true)
+      for (const [query, expected] of [
+        ["chat_id:7", ["7"]],
+        ["chat_id:missing", []],
+      ] as const) {
+        const filtered = await call(
+          ["chats", "tracking", "list", query, "--offline", "--json"],
+          never,
+          env,
+          {},
+          { provider },
+        )
+        expect(filtered.code).toBe(0)
+        expect(JSON.parse(filtered.stdout[0] ?? "null").items.map((one: { chat_id: string }) => one.chat_id)).toEqual(
+          expected,
+        )
+      }
+      const invalidTracking = await call(
+        ["chats", "tracking", "list", "missing:true", "--offline", "--json"],
+        never,
+        env,
+        {},
+        { provider },
+      )
+      expect(invalidTracking.code).toBe(2)
+      expect(invalidTracking.stderr.join("\n")).toContain("query.unknown-field")
+      const trackingHistory = await call(
+        ["chats", "tracking", "show", "7", "--offline", "--json"],
+        never,
+        env,
+        {},
+        { provider },
+      )
+      expect(
+        v.safeParse(ENTITIES.tracked_chat_history, JSON.parse(trackingHistory.stdout[0] ?? "null").item).success,
+      ).toBe(true)
+      const trackingChange = await call(
+        ["chats", "tracking", "add", "7", "--offline", "--json=chat_id,tracked"],
+        never,
+        env,
+        {},
+        { provider },
+      )
+      expect(trackingChange.code).toBe(0)
+      expect(v.parse(ENTITIES.chat_tracking, JSON.parse(trackingChange.stdout[0] ?? "null").item)).toEqual({
+        chat_id: "7",
+        tracked: true,
+      })
       for (const recipe of searchRecipes.negative) {
         const result = await call(["search", "messages", recipe.query, "--json"], never, env, {}, { provider })
         expect(result.code).toBe(2)
