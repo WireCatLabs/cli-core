@@ -214,7 +214,11 @@ export const modelsCommand = (messenger: Messenger): Command => {
   const key = text.command("key").description("API keys for embedding and analysis providers")
 
   grantsAuthority(
-    annotate(key.command("set"), { effects: LOCAL_WRITE, examples: [`${tool} models text key set openai`] }),
+    annotate(key.command("set"), {
+      effects: LOCAL_WRITE,
+      output: { entity: "model_key", view: "stored" },
+      examples: [`${tool} models text key set openai`],
+    }),
   )
     .argument("<provider>", "openai, anthropic, or the host of a --base-url server that wants a key")
     .description("store a key, typed at a hidden prompt or piped on stdin — never as an argument")
@@ -230,7 +234,11 @@ export const modelsCommand = (messenger: Messenger): Command => {
     })
 
   grantsAuthority(
-    annotate(key.command("remove"), { effects: LOCAL_WRITE, examples: [`${tool} models text key remove openai`] }),
+    annotate(key.command("remove"), {
+      effects: LOCAL_WRITE,
+      output: { entity: "model_key", view: "removed" },
+      examples: [`${tool} models text key remove openai`],
+    }),
   )
     .argument("<provider>", "openai, anthropic, or a server's host")
     .description("forget a stored key")

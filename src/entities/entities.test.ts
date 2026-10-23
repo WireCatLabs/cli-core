@@ -705,6 +705,9 @@ const samples: Record<EntityName, unknown> = {
     updated_at: at,
   },
   reference: "note:42",
+  model_key: { provider: "openai", stored: "keyring" },
+  "model_key.stored": { provider: "openai", stored: "keyring" },
+  "model_key.removed": { provider: "openai", removed: [] },
   model: {
     id: "e5-small",
     kind: "text",
