@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { sendTime } from "../../domain/send-time.js"
 import { threadIdOf } from "../../domain/thread.js"
 import { typedSendAs } from "../../sends/send-as.js"
@@ -16,6 +16,12 @@ import { readAll } from "./stdin.js"
  * of what this profile tried to send, and it never holds the text.
  */
 export const HTML_HELP = "the text is HTML: <b>, <i>, <a href>, <code>"
+
+const collect = (value: string, previous: string[]) => [...previous, value]
+
+/** The empty list as its default is what tells the MCP tool to take a list for it. */
+const repeatable = (flags: string, description: string) =>
+  new Option(flags, description).argParser(collect).default([], "none")
 
 export const sendCommand = (messenger: Messenger): Command => {
   const send = annotate(new Command("send"), {
@@ -41,9 +47,14 @@ export const sendCommand = (messenger: Messenger): Command => {
   send
     .option("--no-preview", "no preview card for a link in the text")
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
-    .option("--file <file>", "attach a file; the text becomes its caption")
-    .option("--photo <file>", "attach a .jpg, .png or .webp as a photo; the text becomes its caption")
-    .option("--as-file", "send the --file as a file to download, a video included")
+    .addOption(repeatable("--file <file>", "attach a file; the text becomes its caption; repeat it for an album"))
+    .addOption(
+      repeatable(
+        "--photo <file>",
+        "attach a .jpg, .png or .webp as a photo; the text becomes its caption; repeat it for an album",
+      ),
+    )
+    .option("--as-file", "send each --file as a file to download, a video included")
     .option("--voice <file>", "send an Ogg Opus file as a voice message, alone, with no text")
     .addOption(
       ownerOnlyOption("--allow-any-file", "send a file even from credential folders or this CLI's own folders"),
@@ -104,8 +115,8 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
     md?: boolean
     html?: boolean
     atTime?: string
-    file?: string
-    photo?: string
+    file: string[]
+    photo: string[]
     voice?: string
     asFile?: boolean
     filename?: string
@@ -125,8 +136,8 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
   const read = { app: messenger.app, env: context.env, anyFile: allowAnyFile === true }
   const attachments = await readAttachments(
     {
-      ...(photo === undefined ? {} : { photo }),
-      ...(file === undefined ? {} : { file }),
+      photo,
+      file,
       ...(voice === undefined ? {} : { voice }),
       ...(text === undefined ? {} : { text }),
       asFile: asFile === true,

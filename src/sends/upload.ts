@@ -235,15 +235,19 @@ export const readUpload = async (
   return { kind, name: basename(path), source: { kind: "file", path: resolve(path), size } }
 }
 
-const checkFilename = (filename: string, file: string | undefined): void => {
-  if (file === undefined) throw new CliError("validation_error", "--filename names a --file; give one")
+const checkFilename = (filename: string, files: readonly string[]): void => {
+  if (files.length === 0) throw new CliError("validation_error", "--filename names a --file; give one")
+  if (files.length > 1) throw new CliError("validation_error", "--filename names one --file; an album keeps its names")
   if (filename.trim() === "" || /[/\\\0]/.test(filename) || filename.length > 255)
     throw new CliError("validation_error", "--filename is a name, not a path: no / or \\, at most 255 characters")
 }
 
+const listOf = (value: string | readonly string[] | undefined): readonly string[] =>
+  value === undefined ? [] : typeof value === "string" ? [value] : value
+
 /**
- * What a send attaches, as `messages send` and its tool take it. A voice message goes alone, as the
- * messengers' own apps send one.
+ * What a send attaches, as `messages send` and its tool take it. More than one photo or file is an album: photos
+ * first, then files, each in the order given. A voice message goes alone, as the messengers' own apps send one.
  */
 export const readAttachments = async (
   {
@@ -253,27 +257,33 @@ export const readAttachments = async (
     asFile,
     filename,
     text,
-  }: { photo?: string; file?: string; voice?: string; asFile?: boolean; filename?: string; text?: string },
+  }: {
+    photo?: string | readonly string[]
+    file?: string | readonly string[]
+    voice?: string
+    asFile?: boolean
+    filename?: string
+    text?: string
+  },
   read: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean },
 ): Promise<Upload[]> => {
-  if (voice !== undefined && (photo !== undefined || file !== undefined || (text ?? "").trim() !== "")) {
+  const photos = listOf(photo)
+  const files = listOf(file)
+  if (voice !== undefined && (photos.length > 0 || files.length > 0 || (text ?? "").trim() !== "")) {
     throw new CliError("validation_error", "a voice message goes alone — no text, no file, no photo beside it")
   }
-  if (asFile && file === undefined) throw new CliError("validation_error", "--as-file is about a --file; give one")
-  if (filename !== undefined) checkFilename(filename, file)
-  return [
-    ...(photo === undefined ? [] : [await readUpload("photo", photo, read)]),
-    ...(file === undefined
-      ? []
-      : [
-          {
-            ...(await readUpload("file", file, read)),
-            ...(filename === undefined ? {} : { name: filename }),
-            ...(asFile ? { asFile: true as const } : {}),
-          },
-        ]),
-    ...(voice === undefined ? [] : [await readUpload("voice", voice, read)]),
-  ]
+  if (asFile && files.length === 0) throw new CliError("validation_error", "--as-file is about a --file; give one")
+  if (filename !== undefined) checkFilename(filename, files)
+  const uploads: Upload[] = []
+  for (const one of photos) uploads.push(await readUpload("photo", one, read))
+  for (const one of files)
+    uploads.push({
+      ...(await readUpload("file", one, read)),
+      ...(filename === undefined ? {} : { name: filename }),
+      ...(asFile ? { asFile: true as const } : {}),
+    })
+  if (voice !== undefined) uploads.push(await readUpload("voice", voice, read))
+  return uploads
 }
 
 /** A sticker to send from a file: a WebP image of at most `maxBytes`, behind the same file guard as `--file`. */

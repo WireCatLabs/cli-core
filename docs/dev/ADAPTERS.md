@@ -130,6 +130,21 @@ Each `send` gets a `sendId`. It is the send's identity.
   example, WhatsApp answers a send to a re-keyed person's phone-form id with the LID chat; an echo of the
   phone-form id would create a second chat for the same person.
 
+## Albums
+
+`messages send` repeats `--photo` and `--file` (and its MCP tool takes a list for `photo` and `file`). More than
+one attachment reaches `send` as `attachments`, photos first, then files, each in the order given: an album.
+
+- Each photo or file counts as one send toward the hourly limit (`NEED-1660`). cli-core weighs it before `send` is
+  called; the adapter does not count.
+- An adapter whose messenger cannot send an album, or not this mix (a bot, a document beside a photo), throws
+  `validation_error` before anything goes, saying what it can send. The refused attempt does not count.
+- Send the album as one request under the send's `sendId`, so a repeat after `outcome_unknown` still makes one copy.
+  Derive each item's own client id from the `sendId` where the messenger wants one per item.
+- Return `message` as the first message of the album and `messages` as all of them, in order. cli-core saves each
+  one and answers `messages send --json` with a `messages` list beside `message`. An adapter that leaves
+  `messages` out still works; the answer then names the first message only.
+
 ## Errors
 
 Throw a `CliError` from `@wirecat/cli-base` with a code from its closed list: `validation_error`,

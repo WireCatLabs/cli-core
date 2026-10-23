@@ -89,7 +89,10 @@ export interface SendOptions {
   formatting?: TextSpan[]
   /** ISO time: the messenger holds it and sends it then, under a new id. */
   at?: string
-  /** Sent in one message, `text` as the caption. More than one is an album. */
+  /**
+   * Sent in one message, `text` as the caption. More than one is an album: photos first, then files, each in the
+   * order given. An adapter whose messenger cannot send one refuses it with `validation_error` before anything goes.
+   */
   attachments?: Upload[]
   /** One sticker by id, alone: no text, no attachment. Only where `Messenger.stickers` is on. */
   sticker?: Id
@@ -127,7 +130,13 @@ export interface NewPoll {
 }
 
 export interface Sent {
+  /** The message sent; for an album, its first. */
   message: Message
+  /**
+   * For an album, every message it made, in order, `message` among them. Unset for a single message, and where an
+   * adapter has not learned to answer with them yet.
+   */
+  messages?: Message[]
   /** The send's identity. Repeat it after an unknown outcome, never a new one. */
   sendId: string
 }

@@ -106,6 +106,9 @@ The agent writes the reply into the chat's draft; the person reads it and presse
 - `Sent` returns one message; the album returns several — the result shape changes for this case.
 - Guard: `messages.send`, normal send guard; each item counts toward the hourly limit (decide).
 - Medium. Remove the line from tg's roadmap and "Not in tg yet" when it ships.
+- **Core side done (2026-10-24):** repeatable `--photo`/`--file` (lists over MCP), `Sent.messages`, the answer's
+  `messages` list, and the guard weighing each item (`NEED-1660` A). What an adapter does is in
+  [ADAPTERS.md](ADAPTERS.md#albums). tg's adapter is what remains.
 
 ### 4. Archive, chat pins and unread — shared commands built; tg and max adapters open
 

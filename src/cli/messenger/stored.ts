@@ -467,7 +467,10 @@ export const stored = (
       const sent = await messenger.send(chatId, text, options)
       // A scheduled message is not in the chat yet, and it will arrive under another id.
       if (options.at === undefined) {
-        await save("messages.send", (opened) => saveSent(opened, account, chatId, sent.message, { via: "send" }))
+        await save("messages.send", async (opened) => {
+          for (const message of sent.messages ?? [sent.message])
+            await saveSent(opened, account, chatId, message, { via: "send" })
+        })
       }
       return sent
     },

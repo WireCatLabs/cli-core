@@ -21,6 +21,12 @@ shape of this file.
 
 ### Added
 
+- **Album sends.** `messages send` takes `--photo` and `--file` more than once, and its MCP tool takes a list for
+  `photo` and `file`; together they go as one album, photos first. Each photo or file counts as one send toward the
+  hourly limit. An adapter returns every message of the album as `Sent.messages`, and `--json` answers with a
+  `messages` list beside `message`, which stays the first. A messenger that cannot send an album refuses it before
+  anything goes. A single attachment sends and answers as before.
+
 - **Mirror runner for folder sync.** `syncMirrors` syncs each of a CLI's mirrors both ways under one lock and reports
   a partly failed mirror as a `mirror.partial` issue; `fileMirrorState`, `mirrorId`, `mirrorStatus` and
   `conflictReport` are the state file, id, local plan and conflict report drive-cli's `mirrors` used, moved here so

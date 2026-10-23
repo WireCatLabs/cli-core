@@ -614,6 +614,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         sendId: id,
         operationId: id,
         length: text.length,
+        ...(attachments.length > 1 ? { count: attachments.length } : {}),
         ...(replyTo === undefined ? {} : { replyTo }),
         ...(threadId === undefined ? {} : { threadId }),
         ...(sendAs === undefined ? {} : { sendAs }),

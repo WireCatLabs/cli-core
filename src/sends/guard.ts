@@ -40,7 +40,7 @@ export interface GuardRequest {
   chatId: Id | null
   kind?: SendKind
   action?: ChatAction | AccountAction
-  /** Messages a deletion names, or people a chat change adds. */
+  /** Messages a deletion names or an album sends, or people a chat change adds. */
   count?: number
   sendId?: string
   sendAs?: Id
@@ -122,12 +122,12 @@ const countsTowardLimit = ({ kind = "message", action, notify }: Counted) =>
   action === "contact-import"
 
 /**
- * Each deleted message, each person added to a group or let in by a request, and each imported number
- * counts as one.
+ * Each deleted message, each photo or file of an album (`NEED-1660`), each person added to a group or let in by a
+ * request, and each imported number counts as one.
  */
-const weightOf = ({ kind, action, count, people }: Counted): number =>
-  kind === "delete"
-    ? (count ?? 1)
+const weightOf = ({ kind = "message", action, count, people }: Counted): number =>
+  kind === "delete" || (kind === "message" && action === undefined)
+    ? Math.max(1, count ?? 1)
     : action === "create" || action === "members.add" || action === "requests.accept" || action === "contact-import"
       ? Math.max(1, people ?? count ?? 1)
       : 1
@@ -331,7 +331,11 @@ export const sendGuard = ({
         reservation: id,
         ...(kind ? { kind } : {}),
         ...(action ? { action } : {}),
-        ...(asked.people === undefined ? {} : kind === "delete" ? { count: asked.people } : { people: asked.people }),
+        ...(asked.people === undefined
+          ? {}
+          : kind === "delete" || kind === "message" || kind === undefined
+            ? { count: asked.people }
+            : { people: asked.people }),
         ...(sendId === undefined ? {} : { sendId }),
         ...(operationId === undefined ? {} : { operationId }),
         ...(scheduledFor ? { scheduledFor } : {}),
