@@ -13,6 +13,15 @@ shape of this file.
   `--no-mark-read`. Remove `catch_up_marks_read` from configuration; it is now refused. Use
   `<cli> <profile> chats mark-read <chat>` when you intend to send a read receipt.
 - `tags auto` declares its messenger read, including the preparatory read requested with `--sync-first`.
+
+### Added
+
+- `readMeetingReview` (`@wirecat/cli-core/services`) and `MeetingStore.meetingReview`: the newest meetings of a
+  selection, each with its newest summary (overview, next steps), transcript lines and words, the three who talked
+  longest and its confirmed projects. No transcript text is read out.
+- `readMeetingLinks` (`@wirecat/cli-core/services`) and `MeetingStore.meetingChatLines`: links shared in the chat of
+  the selected meetings, most shared first, with who shared them, in which meetings, and the Google file each names.
+  Found when read, not stored; at most 100000 chat messages, more is an error.
 - A local read with an unknown profile now lists the profiles on this computer in its error and
   `details.profiles`, so a typo does not suggest linking a new account. A configured profile with no
   saved account still explains how to fill its local history.

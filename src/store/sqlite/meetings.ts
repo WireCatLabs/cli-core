@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type {
   Attachment,
   ChatLine,
+  MeetingChatLinesStore,
   MeetingContextStore,
   MeetingDetails,
   MeetingFilter,
@@ -10,6 +11,7 @@ import type {
   MeetingPreparationKnowledgeStore,
   MeetingPreparationNotesStore,
   MeetingRelatedHistoryStore,
+  MeetingReviewStore,
   MeetingSave,
   MeetingSearchIndexStore,
   MeetingSearchStore,
@@ -32,6 +34,7 @@ import * as eventQueries from "./events.js"
 import { fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { meetingIdentityPk } from "./identities.js"
+import { meetingChatLinesOver } from "./meeting-chat-lines.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
@@ -42,6 +45,7 @@ import { meetingPreparationKnowledgeOver } from "./meeting-preparation-knowledge
 import { meetingPreparationNotesOver } from "./meeting-preparation-notes.js"
 import { type MeetingContextReadCapabilities, type MeetingReadCapabilities, meetingReadsOver } from "./meeting-reads.js"
 import { meetingRelatedHistoryOver } from "./meeting-related-history.js"
+import { meetingReviewOver } from "./meeting-review.js"
 import { meetingSeriesHistoryOver } from "./meeting-series-history.js"
 import { meetingStatsOver } from "./meeting-stats.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
@@ -762,7 +766,9 @@ export type StoredMeetings = MeetingStore &
   MeetingTranscriptReceiptStore &
   MeetingContextStore &
   MeetingSearchIndexStore &
-  MeetingStatsStore
+  MeetingStatsStore &
+  MeetingReviewStore &
+  MeetingChatLinesStore
 
 /** The `MeetingStore` of `src/meetings/` over the shared store. */
 export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
@@ -776,6 +782,8 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     ...meetingRelatedHistoryOver(context),
     ...meetingHitSearchOver(context),
     ...meetingStatsOver(context),
+    ...meetingReviewOver(context),
+    ...meetingChatLinesOver(context),
     ...meetingParticipantSearchOver(context),
     ...meetingHitIndexOver(context),
     ...meetingContextLinksOver(context),
