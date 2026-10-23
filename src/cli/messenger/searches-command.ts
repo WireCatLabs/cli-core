@@ -30,13 +30,18 @@ export const SEARCHES_QUERY = unfilteredQuery("saved_search", savedSearch)
 
 /** Saved searches and the history of `search messages` and `stats messages show`, in the local store only. */
 export const searchesCommand = (messenger: Messenger): Command => {
+  const tool = `${messenger.app.command} personal`
   const searches = new Command("searches")
     .summary("saved searches and their run history")
     .description(
       "saved searches and the history of search messages and stats messages show, kept in the local store; --saved runs one",
     )
 
-  annotate(searches.command("create"), { effects: LOCAL_WRITE, output: { entity: "saved_search" } })
+  annotate(searches.command("create"), {
+    effects: LOCAL_WRITE,
+    output: { entity: "saved_search" },
+    examples: [`${tool} searches create project-drafts draft --chat "Project room"`],
+  })
     .summary("save a search and its query")
     .description("save a search under a name without running it; search messages --saved <name> runs it")
     .argument("<name>", "up to 64 letters a–z, digits and hyphens, not only digits")
@@ -88,7 +93,11 @@ export const searchesCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(savedSearchItem(saved)), () => `${line(saved)}\n`)
     })
 
-  annotate(searches.command("show"), { effects: REMOTE_READ, output: { entity: "saved_search" } })
+  annotate(searches.command("show"), {
+    effects: REMOTE_READ,
+    output: { entity: "saved_search" },
+    examples: [`${tool} searches show project-drafts`],
+  })
     .description("one saved search or earlier run: its query, options and how often it ran")
     .argument("<name|id>", "a saved search's name, or the id of any row of searches history")
     .action(async function (this: Command, reference: string) {
@@ -97,7 +106,10 @@ export const searchesCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(savedSearchItem(found)), () => `${line(found)}\n`)
     })
 
-  withQuery(annotate(searches.command("list"), { effects: LOCAL_READ }), SEARCHES_QUERY)
+  withQuery(
+    annotate(searches.command("list"), { effects: LOCAL_READ, examples: [`${tool} searches list`] }),
+    SEARCHES_QUERY,
+  )
     .description("the saved searches, by name")
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
@@ -114,9 +126,14 @@ export const searchesCommand = (messenger: Messenger): Command => {
         context.renderer.note("no saved searches — `searches create <name> <query>` saves one")
     })
 
-  annotate(withPaging(annotate(searches.command("history"), { effects: LOCAL_READ })), {
-    output: { entity: "saved_search" },
-  })
+  annotate(
+    withPaging(
+      annotate(searches.command("history"), { effects: LOCAL_READ, examples: [`${tool} searches history --limit 10`] }),
+    ),
+    {
+      output: { entity: "saved_search" },
+    },
+  )
     .summary("past searches and counts, without their results")
     .description("the searches and counts that ran, newest first — saved ones included; never their results")
     .action(async function (this: Command) {
@@ -135,7 +152,11 @@ export const searchesCommand = (messenger: Messenger): Command => {
       if (found.items.length === 0 && context.format === "pretty") context.renderer.note("no searches ran yet")
     })
 
-  annotate(searches.command("delete"), { effects: LOCAL_WRITE, output: { entity: "saved_search" } })
+  annotate(searches.command("delete"), {
+    effects: LOCAL_WRITE,
+    output: { entity: "saved_search" },
+    examples: [`${tool} searches delete project-drafts`],
+  })
     .description("delete a saved search, or one run from the history")
     .argument("<name|id>", "a saved search's name, or the id of any row of searches history")
     .action(async function (this: Command, reference: string) {
@@ -150,7 +171,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(searches.command("clear"), { effects: LOCAL_WRITE })
+  annotate(searches.command("clear"), { effects: LOCAL_WRITE, examples: [`${tool} searches clear`] })
     .description("empty the history; saved searches stay")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
