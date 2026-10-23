@@ -36,6 +36,20 @@ export const preparationUpcoming = v.strictObject({
     missing: v.array(v.picklist(["schedule-details", "occurrence-details"])),
   }),
 })
+/** One stored transcript line as evidence: where it is, who said it, and its text. */
+export const preparationCue = v.strictObject({
+  ref: reference,
+  fingerprint: id,
+  transcript_id: id,
+  content_hash: text,
+  position: count,
+  offset_ms: count,
+  end_ms: count,
+  speaker_participant_id: v.nullable(id),
+  speaker_name: text,
+  text: v.string(),
+  revision: v.picklist(["current", "superseded"]),
+})
 export const preparationEvidence = v.strictObject({
   schema_version: v.literal(1),
   kind: v.literal("meeting"),
@@ -57,21 +71,7 @@ export const preparationEvidence = v.strictObject({
     input: v.literal("bounded-meeting-pages"),
     archive_completeness: v.literal("unknown"),
   }),
-  items: v.array(
-    v.strictObject({
-      ref: reference,
-      fingerprint: id,
-      transcript_id: id,
-      content_hash: text,
-      position: count,
-      offset_ms: count,
-      end_ms: count,
-      speaker_participant_id: v.nullable(id),
-      speaker_name: text,
-      text: v.string(),
-      revision: v.picklist(["current", "superseded"]),
-    }),
-  ),
+  items: v.array(preparationCue),
 })
 export const preparationContext = v.strictObject({
   participants: page(v.strictObject({ id, identity_id: id, display_name: text, person_uid: v.nullable(id) })),

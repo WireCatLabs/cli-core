@@ -1,6 +1,7 @@
 import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { MeetingLink } from "./links.js"
+import type { Event } from "./model.js"
 import { formatMeetingReference } from "./reference.js"
 import type { MeetingReviewItem } from "./review.js"
 import type { MeetingSpeakerStats, MeetingStats } from "./stats.js"
@@ -203,4 +204,36 @@ export const meetingPassage = v.strictObject({
       revision,
     }),
   ),
+})
+
+/** A stored event a meeting belongs to; `id` is what `meetings update --event-id` takes. */
+export const event = v.strictObject({
+  id: v.pipe(v.string(), v.minLength(1)),
+  event_series_id: v.nullable(text),
+  title: v.nullable(text),
+  description: v.nullable(text),
+  location: v.nullable(text),
+  starts_at: v.nullable(isoTime),
+  ends_at: v.nullable(isoTime),
+  timezone: v.nullable(text),
+  /** `auto`: made from a meeting; `owner`: made by hand. */
+  origin: v.picklist(["auto", "owner"]),
+  deleted_at: v.nullable(isoTime),
+  created_at: isoTime,
+  updated_at: isoTime,
+})
+
+export const eventItem = (one: Event): v.InferOutput<typeof event> => ({
+  id: String(one.id),
+  event_series_id: one.eventSeriesId === null ? null : String(one.eventSeriesId),
+  title: one.title,
+  description: one.description,
+  location: one.location,
+  starts_at: iso(one.startsAt),
+  ends_at: iso(one.endsAt),
+  timezone: one.timezone,
+  origin: one.origin,
+  deleted_at: iso(one.deletedAt),
+  created_at: new Date(one.createdAt).toISOString(),
+  updated_at: new Date(one.updatedAt).toISOString(),
 })

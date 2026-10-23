@@ -4,6 +4,7 @@ import { meetingPreparation } from "../entities/index.js"
 import type { MeetingPreparation } from "../services/index.js"
 import { itemOf, metaNow, sealed, snakeKeys } from "./envelope.js"
 import { mapPreparationCommunications } from "./meeting-communications.js"
+import { mapEvidence } from "./meeting-evidence-answer.js"
 import { boundMeetingPreparationItem } from "./meeting-preparation-budget.js"
 import { mapPreparationProjectEvidence } from "./meeting-preparation-projects.js"
 
@@ -20,20 +21,6 @@ const mapMeeting = (meeting: MeetingPreparation["items"][number]["meeting"]) => 
     updatedAt: at(meeting.updatedAt),
   }
 }
-const mapEvidence = (evidence: MeetingPreparation["items"][number]["evidence"]) => {
-  return {
-    ...evidence,
-    coverage: { ...evidence.coverage, nextTranscriptId: id(evidence.coverage.nextTranscriptId) },
-    items: evidence.items.map(({ reference, startMs, ...cue }) => ({
-      ...cue,
-      ref: reference,
-      offsetMs: startMs,
-      transcriptId: id(cue.transcriptId),
-      speakerParticipantId: id(cue.speakerParticipantId),
-    })),
-  }
-}
-
 export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   const candidate = packet.upcoming.candidate
   const mapped = snakeKeys({

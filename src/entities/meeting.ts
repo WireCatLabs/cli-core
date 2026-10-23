@@ -1,4 +1,5 @@
 export {
+  event,
   meeting,
   meetingDetails,
   meetingHit,

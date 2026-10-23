@@ -7,6 +7,7 @@ import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { SearchFound, SearchQuery } from "./messages.js"
+import { MAX_SEARCH_OFFSET } from "./messages-archive-search.js"
 import { RRF_K } from "./notes-search.js"
 import {
   RESOURCES_SEARCHED,
@@ -216,29 +217,33 @@ export const searchAllIncludingMeetings = async (
     whole(request.meetingCursor.hitOffset, 0, Number.MAX_SAFE_INTEGER, "cursor hit offset")
   }
   cancelled(request.signal)
-  const legacy = await searchAll(
-    store,
-    account,
-    { ...request, only: only.filter((one): one is SearchedResource => one !== "meetings") },
-    messenger,
-    searchMessages,
-  )
+  const others = { ...request, only: only.filter((one): one is SearchedResource => one !== "meetings") }
+  if (!only.includes("meetings")) {
+    const found = await searchAll(store, account, others, messenger, searchMessages)
+    cancelled(request.signal)
+    return found
+  }
+  // Meetings rank with the rest, so a later page is the same merge read deeper, then cut.
+  const offset = request.offset ?? 0
+  const window = offset + request.limit
+  const legacy = await searchAll(store, account, { ...others, offset: 0, limit: window }, messenger, searchMessages)
   cancelled(request.signal)
-  if (!only.includes("meetings")) return legacy
   const compiled = meetingQuery(request.text, request.exact)
   if ("reason" in compiled)
     return {
       ...legacy,
+      items: legacy.items.slice(offset),
       skipped: [...legacy.skipped, { resource: "meetings", code: "validation_error", reason: compiled.reason }],
     }
   let meetings: CollectedMeetings
   const meetingAccount = request.meetingAccount ?? account
   try {
-    meetings = await collectMeetings(store, meetingAccount, request, compiled.query)
+    meetings = await collectMeetings(store, meetingAccount, { ...request, limit: window }, compiled.query)
   } catch (error) {
     if (codeOf(error) !== "not_found") throw error
     return {
       ...legacy,
+      items: legacy.items.slice(offset),
       skipped: [
         ...legacy.skipped,
         { resource: "meetings", code: "not_found", reason: "the selected meeting account is not stored" },
@@ -257,14 +262,17 @@ export const searchAllIncludingMeetings = async (
       ranked.set(key, held)
     })
   const ordered = [...ranked.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
-  const items = ordered.slice(0, request.limit)
-  const returnedMeetings = items.filter((item) => item.kind === "meeting").length
+  const items = ordered.slice(offset, window)
+  const returnedMeetings = ordered.slice(0, window).filter((item) => item.kind === "meeting").length
   const nextCursor =
     meetings.items[returnedMeetings]?.before ?? (!meetings.coverage.complete ? meetings.after : undefined)
+  const more = legacy.hasMore || ordered.length > window
+  const { nextOffset: _, ...rest } = legacy
   return {
-    ...legacy,
+    ...rest,
     items,
-    hasMore: legacy.hasMore || ordered.length > request.limit ? true : meetings.coverage.complete ? false : null,
+    hasMore: more ? true : meetings.coverage.complete ? false : null,
+    ...(more && window <= MAX_SEARCH_OFFSET ? { nextOffset: window } : {}),
     searched: [...legacy.searched, "meetings"],
     accounts: [
       ...legacy.accounts,

@@ -172,6 +172,22 @@ describe("opt-in meeting-inclusive search", () => {
     expect(cursor).toBeUndefined()
   })
 
+  it("pages meeting hits by offset as the merged list, without repeating the page before", async () => {
+    const { store, save } = await fixture()
+    await save("many-matches", ["needle one", "needle two", "needle three"])
+    const first = await searchAllIncludingMeetings(store, account, request({ limit: 2 }))
+    expect(first.hasMore).toBe(true)
+    expect(first.nextOffset).toBe(2)
+    const second = await searchAllIncludingMeetings(store, account, request({ limit: 2, offset: first.nextOffset }))
+    expect([...first.items, ...second.items].map((item) => item.text)).toEqual([
+      "needle one",
+      "needle two",
+      "needle three",
+    ])
+    expect(second.hasMore).toBe(false)
+    expect(second.nextOffset).toBeUndefined()
+  })
+
   it("keeps the first unreturned meeting hit when legacy fusion fills the output limit", async () => {
     const { store, save } = await fixture()
     await save("meeting-match", "needle meeting")

@@ -20,4 +20,8 @@ export const hit = v.strictObject({
   found_by: v.optional(v.array(v.picklist(["title", "words", "meaning"]))),
   /** How far into the meeting the passage is. */
   offset_ms: v.optional(v.nullable(count)),
+  /** A meeting passage's place: its transcript, chat or summary. */
+  scope: v.optional(v.picklist(["transcript", "chat", "summary"])),
+  /** A meeting passage's stored line, so two passages of one meeting stay apart; `search meetings` gives the same. */
+  id: v.optional(v.pipe(v.string(), v.minLength(1))),
 })

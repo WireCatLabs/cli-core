@@ -193,6 +193,8 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         timestamp: item.timestamp,
         excerpt: item.text,
         offset_ms: item.startMs,
+        scope: item.scope,
+        id: String(item.id),
       }
     : defined({
         kind: item.kind,
