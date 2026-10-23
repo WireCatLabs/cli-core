@@ -24,7 +24,21 @@ const message = {
 }
 const author = { type: "person", id: "1", name: null }
 
+const poll = {
+  chat_id: "7",
+  message_id: "3",
+  question: "Friday?",
+  answers: [],
+  closed: false,
+  multiple: false,
+  anonymous: false,
+  voters: null,
+}
+
 const samples: Record<EntityName, unknown> = {
+  poll,
+  poll_change: { operation_id: "op-1", poll },
+  message_write: { operation_id: "op-1", message },
   message,
   "message.hit": {
     ref: message.ref,

@@ -34,7 +34,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       : "read a poll, vote in it, close your own, create one",
   )
 
-  annotate(polls.command("show"), { effects: REMOTE_READ })
+  annotate(polls.command("show"), { effects: REMOTE_READ, output: { entity: "poll" } })
     .description("a poll and its answer ids, as the message carries it now")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of the message that carries the poll")
@@ -95,7 +95,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       }),
     )
 
-  annotate(polls.command("vote"), { effects: REMOTE_WRITE })
+  annotate(polls.command("vote"), { effects: REMOTE_WRITE, output: { entity: "poll_change" } })
     .description(
       messenger.pollAnonymous === false
         ? "vote in a poll, or take your vote back; the others see it"
@@ -128,7 +128,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
     })
 
   if (messenger.pollClose !== false)
-    annotate(polls.command("close"), { effects: REMOTE_WRITE })
+    annotate(polls.command("close"), { effects: REMOTE_WRITE, output: { entity: "poll_change" } })
       .description("close your own poll; nobody can vote after that, and it cannot be reopened")
       .argument("<chat>", messenger.chatArgument)
       .argument("<message>", "the id of your own message that carries the poll")
@@ -140,7 +140,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
         renderAnswer(this, context, itemOf(snakeKeys(closed)))
       })
 
-  const create = annotate(polls.command("create"), { effects: REMOTE_WRITE })
+  const create = annotate(polls.command("create"), { effects: REMOTE_WRITE, output: { entity: "message_write" } })
     .description(
       messenger.pollAnonymous === false
         ? "send a poll to a chat, as a message of its own; everyone sees who voted for what"

@@ -1452,7 +1452,7 @@ describe("the shared read commands", () => {
 
     const shown = await call(["polls", "show", "Book", "3", "--json"], async () => polling, env)
     const none = await call(["polls", "vote", "Book", "3"], async () => polling, env)
-    await call(["polls", "vote", "Book", "3", "MQ"], async () => polling, env)
+    const voted = await call(["polls", "vote", "Book", "3", "MQ", "--json"], async () => polling, env)
     await call(["polls", "vote", "Book", "3", "--retract"], async () => polling, env)
     const closed = await call(["polls", "close", "Book", "3", "--json"], async () => polling, env)
     const created = await call(
@@ -1473,6 +1473,13 @@ describe("the shared read commands", () => {
       env,
     )
 
+    expect(v.safeParse(ENTITIES.poll, JSON.parse(shown.stdout[0] ?? "").item).success).toBe(true)
+    for (const result of [voted, closed]) {
+      expect(v.safeParse(ENTITIES.poll_change, JSON.parse(result.stdout[0] ?? "").item).success).toBe(true)
+    }
+    expect(v.safeParse(ENTITIES.message_write, JSON.parse(created.stdout[0] ?? "").item).success).toBe(true)
+    const projected = await call(["polls", "show", "Book", "3", "--json=question"], async () => polling, env)
+    expect(JSON.parse(projected.stdout[0] ?? "").item).toEqual({ question: "Friday?" })
     expect(JSON.parse(shown.stdout[0] ?? "").item.answers.map((one: { id: string }) => one.id)).toEqual(["MA", "MQ"])
     expect(none.stderr.join("\n")).toContain("polls show")
     expect(JSON.parse(closed.stdout[0] ?? "").item.poll.closed).toBe(true)
