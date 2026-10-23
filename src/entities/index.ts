@@ -10,8 +10,11 @@ import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
 import { chatStats, taskStats } from "./chat-stats.js"
 import { contact } from "./contact.js"
+import { contactActivity, contactCheck, linkedPerson } from "./contact-activity.js"
+import { contactContext, contactPreparation } from "./contact-context.js"
 import { contactNote } from "./contact-note.js"
 import { contactLookup, contactProfile, contactSync } from "./contact-read.js"
+import { contactImport, contactStateChange, contactUpdate } from "./contact-write.js"
 import { conversation } from "./conversation.js"
 import { counterRefresh, counters } from "./counters.js"
 import { document } from "./document.js"
@@ -46,6 +49,7 @@ import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
 import { pollVote } from "./poll-vote.js"
+import { contactAlias, contactNoteRemoval } from "./private-contact.js"
 import { ranking } from "./ranking.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
@@ -71,10 +75,19 @@ export {
   chatEvent,
   chatStats,
   contact,
+  contactActivity,
+  contactAlias,
+  contactCheck,
+  contactContext,
+  contactImport,
   contactLookup,
   contactNote,
+  contactNoteRemoval,
+  contactPreparation,
   contactProfile,
+  contactStateChange,
   contactSync,
+  contactUpdate,
   conversation,
   counterRefresh,
   counters,
@@ -87,6 +100,7 @@ export {
   inviteLink,
   job,
   joinRequest,
+  linkedPerson,
   meeting,
   meetingProjectCandidates,
   meetingSeriesInventory,
@@ -143,11 +157,21 @@ export const ENTITIES = {
   chat,
   person,
   identity,
+  contact_context: contactContext,
+  contact_preparation: contactPreparation,
+  contact_activity: contactActivity,
+  contact_check: contactCheck,
+  linked_person: linkedPerson,
   contact,
   contact_note: contactNote,
   contact_lookup: contactLookup,
   contact_profile: contactProfile,
   contact_sync: contactSync,
+  contact_update: contactUpdate,
+  contact_state_change: contactStateChange,
+  contact_import: contactImport,
+  contact_alias: contactAlias,
+  contact_note_removal: contactNoteRemoval,
   account,
   account_session: accountSession,
   note,

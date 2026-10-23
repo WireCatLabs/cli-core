@@ -123,7 +123,10 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  const contextCommand = annotate(contacts.command("context"), { effects: REMOTE_READ })
+  const contextCommand = annotate(contacts.command("context"), {
+    effects: REMOTE_READ,
+    output: { entity: "contact_context" },
+  })
     .summary("what the local archive knows about a person")
     .description(
       "what the store holds about one person, in every messenger linked to them: shared chats, the last " +
@@ -202,6 +205,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
 
   annotate(contacts.command("prepare"), {
     effects: REMOTE_READ,
+    output: { entity: "contact_preparation" },
     examples: [`${messenger.app.command} contacts prepare Ana`],
   })
     .summary("what to know before you talk to someone, each item with its reference")
@@ -242,7 +246,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(contacts.command("timeline"), { effects: REMOTE_READ })
+  annotate(contacts.command("timeline"), { effects: REMOTE_READ, output: { entity: "contact_activity" } })
     .summary("one person's activity across their linked identities")
     .description(
       "everything one person took part in, in every messenger linked to them — messages they wrote or were " +
@@ -299,7 +303,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(contacts.command("check"), { effects: REMOTE_READ })
+  annotate(contacts.command("check"), { effects: REMOTE_READ, output: { entity: "contact_check" } })
     .summary("check a person's profile and messages for signs of abuse")
     .description(
       registriesCover(messenger.provider)
@@ -330,7 +334,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(answer)))
     })
 
-  annotate(contacts.command("link"), { effects: LOCAL_WRITE })
+  annotate(contacts.command("link"), { effects: LOCAL_WRITE, output: { entity: "linked_person" } })
     .summary("link identities that belong to one person")
     .description("record that two people in the store are one person — the same name is never enough")
     .argument("<person>", "their id, @username, or part of their name")
@@ -345,7 +349,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       context.renderer.success(`${linked.identities.length} identities are now one person`)
     })
 
-  annotate(contacts.command("unlink"), { effects: LOCAL_WRITE })
+  annotate(contacts.command("unlink"), { effects: LOCAL_WRITE, output: { entity: "linked_person" } })
     .description("undo contacts link for one identity: it is a person of its own again")
     .argument("<person>", "their id, @username, or part of their name; <messenger>:<person> for another messenger")
     .action(async function (this: Command, person: string) {

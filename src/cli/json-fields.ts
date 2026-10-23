@@ -33,13 +33,24 @@ export const entityFields = (table: Readonly<Record<string, EntityFields>>): Jso
   }
 }
 
+const schemaFields = (schema: unknown): string[] | undefined => {
+  if (typeof schema !== "object" || schema === null) return undefined
+  if ("entries" in schema && typeof schema.entries === "object" && schema.entries !== null)
+    return Object.keys(schema.entries)
+  if ("type" in schema && schema.type === "union" && "options" in schema && Array.isArray(schema.options)) {
+    const branches = schema.options.map(schemaFields)
+    return branches.every((fields) => fields !== undefined) ? [...new Set(branches.flat())] : undefined
+  }
+  return undefined
+}
+
 /** The fields of the answer a command declares (`annotate(…, { output })`); nothing until it declares one. */
 export const answerFields = (command: Command | undefined, resolve?: JsonFieldsResolver): string[] | undefined => {
   const own = resolve?.(command)
   if (own !== undefined) return [...own]
   const name = declaredEntity(command)
   const schema = name === undefined ? undefined : ENTITIES[name as EntityName]
-  return schema && "entries" in schema ? namesOf(schema) : undefined
+  return schemaFields(schema)
 }
 
 const PATHS = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(,[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*)*$/

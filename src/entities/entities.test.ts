@@ -24,7 +24,38 @@ const message = {
 }
 const author = { type: "person", id: "1", name: null }
 
+const contactContextSample = {
+  person: { uid: "1", provider: "telegram", id: "9", name: null, identities: [] },
+  shared: [],
+  last: { from_them: null, from_me: null, from_them_anywhere: null },
+  recent: { direct: [], groups: [] },
+  mentions: [],
+  limits: { messages: 10, bytes: 1024 },
+  complete: true,
+  not_read: [],
+}
+const sectionCoverage = { included: 0, has_more: false, cut_by: null }
+
 const samples: Record<EntityName, unknown> = {
+  contact_context: contactContextSample,
+  contact_preparation: {
+    ...contactContextSample,
+    prepare: {
+      waiting: [],
+      tasks: [],
+      facts: [],
+      notes: [],
+      meetings: [],
+      limits: { items: 10, bytes: 1024 },
+      coverage: {
+        waiting: { ...sectionCoverage, rule: "their message is the newest the store holds in a one-to-one chat" },
+        tasks: { ...sectionCoverage, selection: "open, assigned to them in any role", accounts: [] },
+        facts: { ...sectionCoverage, selection: "accepted, about them or a project they are a member of" },
+        notes: { ...sectionCoverage, selection: "written by you, about them" },
+        meetings: { ...sectionCoverage, read: "every account of the store that saw them", accounts: [], pending: 0 },
+      },
+    },
+  },
   contact_lookup: { id: "10", name: null, username: null },
   contact_sync: { added: 1, changed: 0, known: 2 },
   contact_profile: {
@@ -73,6 +104,43 @@ const samples: Record<EntityName, unknown> = {
     participants_count: 3,
   },
   person: { ref: "person:1", name: "Synthetic" },
+  linked_person: {
+    uid: "1",
+    name: null,
+    identities: [
+      {
+        provider: "max",
+        id: "10",
+        name: null,
+        username: null,
+        is_bot: null,
+        accounts: ["1"],
+        method: "manual",
+        linked_by: "owner",
+        linked_at: at,
+      },
+    ],
+  },
+  contact_activity: {
+    at,
+    subject: "message",
+    subject_id: 1,
+    role: "sender",
+    scope: "personal",
+    provider: "telegram",
+    account: "1",
+    chat_id: "2",
+    locator: "msg:telegram/1/2/3",
+    project_id: null,
+  },
+  contact_check: {
+    person: { id: "9", name: null, username: null, provider: "telegram" },
+    score: 3,
+    reasons: [{ reason: "cas_banned", weight: 3, source: "registry:cas" }],
+    registries: [{ name: "cas", answer: "listed", checked_at: at, reasons: ["cas_banned"] }],
+    unknown: ["no_photo"],
+    checked_at: at,
+  },
   identity: { ref: "contact:telegram/9", provider: "telegram", account: "1", id: "9", name: null, username: null },
   contact: {
     ref: "contact:telegram/9",
@@ -82,6 +150,9 @@ const samples: Record<EntityName, unknown> = {
     description: null,
     last_messaged_at: null,
   },
+  contact_update: { operation_id: "synthetic", person: { id: "91", name: null, username: null } },
+  contact_state_change: { operation_id: "synthetic", person_id: "91" },
+  contact_import: { operation_id: "synthetic", sent: 1, recognised: [{ id: "91", name: null, username: null }] },
   account: { provider: "telegram", id: "1", name: null, username: null },
   account_session: { current: true, client: "app 1.0", device: null, location: null, last_active_at: at },
   note: {
@@ -201,6 +272,8 @@ const samples: Record<EntityName, unknown> = {
     created_at: at,
     updated_at: at,
   },
+  contact_alias: { person_id: "10", alias: null },
+  contact_note_removal: { id: "1", person_id: "10", removed: true },
   contact_note: {
     id: "n1",
     contact: "contact:telegram/42",

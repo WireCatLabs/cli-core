@@ -2915,6 +2915,7 @@ describe("the shared read commands", () => {
       },
     )
     expect(linked.code).toBe(0)
+    expect(v.safeParse(ENTITIES.linked_person, JSON.parse(linked.stdout[0] ?? "null").item).success).toBe(true)
     const found = await call(
       ["contacts", "context", "11", "--offline", "--json"],
       never,
@@ -2927,6 +2928,7 @@ describe("the shared read commands", () => {
     expect(found.code).toBe(0)
     expect(found.stdout).toHaveLength(1)
     const answer = JSON.parse(found.stdout[0] ?? "null").item
+    expect(v.safeParse(ENTITIES.contact_context, answer).success).toBe(true)
     expect(answer.person.identities.map((one: { provider: string }) => one.provider)).toEqual(["max", "telegram"])
     expect(answer.recent.direct).toHaveLength(2)
 
@@ -2939,6 +2941,7 @@ describe("the shared read commands", () => {
     )
     expect(prepared.code).toBe(0)
     const brief = JSON.parse(prepared.stdout[0] ?? "null").item
+    expect(v.safeParse(ENTITIES.contact_preparation, brief).success).toBe(true)
     expect(brief.recent.direct).toHaveLength(2)
     expect(brief.prepare.waiting.map((one: { provider: string }) => one.provider).sort()).toEqual(["max", "telegram"])
     expect(brief.prepare.coverage.notes).not.toHaveProperty("withheld")
@@ -2950,6 +2953,7 @@ describe("the shared read commands", () => {
       {},
       { provider: "telegram" },
     )
+    expect(v.safeParse(ENTITIES.contact_context, JSON.parse(inChat.stdout[0] ?? "null").item).success).toBe(true)
     expect(JSON.parse(inChat.stdout[0] ?? "null").item.chats).toEqual([
       expect.objectContaining({ chat: { id: "11", title: "Ana", kind: "dialog" }, messages: [{ at, text: "hello" }] }),
     ])
@@ -2960,7 +2964,38 @@ describe("the shared read commands", () => {
       {},
       { provider: "telegram" },
     )
+    expect(v.safeParse(ENTITIES.contact_context, JSON.parse(detailed.stdout[0] ?? "null").item).success).toBe(true)
     expect(JSON.parse(detailed.stdout[0] ?? "null").item.chats[0].messages[0].locator).toBe("msg:telegram/500/11/1")
+    const completeDetail = await call(
+      ["contacts", "context", "11", "--chat", "11", "-vv", "--offline", "--json"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(completeDetail.code).toBe(0)
+    const fullAnswer = JSON.parse(completeDetail.stdout[0] ?? "null").item
+    const fullParsed = v.safeParse(ENTITIES.contact_context, fullAnswer)
+    expect(fullParsed.success, JSON.stringify(fullParsed.issues?.map((issue) => issue.message))).toBe(true)
+    const projectedContext = await call(
+      ["contacts", "context", "11", "--chat", "11", "--offline", "--json=chats"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(projectedContext.code).toBe(0)
+    expect(Object.keys(JSON.parse(projectedContext.stdout[0] ?? "null").item)).toEqual(["chats"])
+    const unknownField = await call(
+      ["contacts", "context", "11", "--offline", "--json=unknown"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(unknownField.code).toBe(2)
+    expect(unknownField.stdout).toEqual([])
+    expect(unknownField.stderr.join(" ")).toContain("output.unknown-field")
     const lonely = await call(
       ["contacts", "context", "11", "--sync-first", "--offline", "--json"],
       never,
@@ -2981,6 +3016,25 @@ describe("the shared read commands", () => {
       },
     )
     expect(mine.code).toBe(0)
+    expect(v.safeParse(ENTITIES.linked_person, JSON.parse(mine.stdout[0] ?? "null").item).success).toBe(true)
+    const unlinked = await call(
+      ["contacts", "unlink", "max:m5", "--offline", "--json"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(unlinked.code).toBe(0)
+    expect(v.safeParse(ENTITIES.linked_person, JSON.parse(unlinked.stdout[0] ?? "null").item).success).toBe(true)
+    const projected = await call(
+      ["contacts", "link", "11", "max:m5", "--offline", "--json=uid"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(projected.code).toBe(0)
+    expect(Object.keys(JSON.parse(projected.stdout[0] ?? "null").item)).toEqual(["uid"])
   })
 
   it("contacts timeline lists what a person took part in, newest first, within a time range and scope", async () => {
@@ -3039,7 +3093,9 @@ describe("the shared read commands", () => {
         },
       )
       expect(result.code).toBe(0)
-      return JSON.parse(result.stdout[0] ?? "null")
+      const answer = JSON.parse(result.stdout[0] ?? "null")
+      for (const item of answer.items) expect(v.safeParse(ENTITIES.contact_activity, item).success).toBe(true)
+      return answer
     }
 
     const all = await timeline()
@@ -3235,6 +3291,7 @@ describe("the shared read commands", () => {
       expect(checked.code).toBe(0)
       expect(checked.stdout).toHaveLength(1)
       const answer = JSON.parse(checked.stdout[0] ?? "null").item
+      expect(v.safeParse(ENTITIES.contact_check, answer).success).toBe(true)
       expect(answer.reasons.map((one: { reason: string }) => one.reason)).toEqual(
         expect.arrayContaining(["lols_banned", "no_bio", "photo_recent", "odd_name", "no_username"]),
       )

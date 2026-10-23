@@ -24,7 +24,10 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
       ["unblock", "let a blocked person write to you again"],
     ] as const
   ).map(([name, description, summary]) =>
-    annotate(new Command(name), { effects: REMOTE_WRITE })
+    annotate(new Command(name), {
+      effects: REMOTE_WRITE,
+      output: { entity: name === "add" ? "contact_update" : "contact_state_change" },
+    })
       .summary(summary ?? description)
       .description(description)
       .argument("<person>", PERSON)
@@ -35,7 +38,7 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
       }),
   )
 
-  const rename = annotate(new Command("rename"), { effects: REMOTE_WRITE })
+  const rename = annotate(new Command("rename"), { effects: REMOTE_WRITE, output: { entity: "contact_update" } })
     .summary("change a contact's name in the messenger address book")
     .description("rename the contact in the messenger address book; use contacts alias for a private local name")
     .argument("<person>", PERSON)
@@ -48,7 +51,7 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
     })
 
   /** A file rather than argv: these are phone numbers, and argv is read by `ps` and kept by the shell. */
-  const importing = annotate(new Command("import"), { effects: REMOTE_WRITE })
+  const importing = annotate(new Command("import"), { effects: REMOTE_WRITE, output: { entity: "contact_import" } })
     .description("upload phone numbers and add the people the messenger has under them")
     .argument("<file>", "one person per line: number, then a comma, a tab or a semicolon, then the name")
     .action(async function (this: Command, file: string) {
