@@ -22,7 +22,6 @@ export const addMediaArchiveTimers = (attachments: Command, messenger: Messenger
     const command = annotate(archive.command(action), {
       output: { entity: "media_archive_timer" },
       effects: action === "status" ? LOCAL_READ : LOCAL_WRITE,
-      ...(action === "status" ? {} : { mcp: false }),
       examples: [`${messenger.app.command} attachments jobs ${action} ./media-archive`],
     })
       .description(

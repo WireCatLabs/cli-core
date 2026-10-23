@@ -1205,6 +1205,50 @@ describe("the MCP server", () => {
     expect(telegram.opened()).toBe(0)
   })
 
+  describe("commands that change what a later run may do (NEED-1662)", () => {
+    const AUTHORITY = ["config set", "recipients add", "replies add", "schedule command", "server install"]
+
+    it("**are not offered by default**, nor under a broader allow of `mcp`", async () => {
+      for (const config of [undefined, levels({ mcp: "allow" })]) {
+        const offered = await (await connect(scripted(), config ? { config } : {})).client.commands()
+        expect(offered.filter((one) => AUTHORITY.includes(one))).toEqual([])
+      }
+    })
+
+    it("**are offered and run once the owner allows mcp.authority**", async () => {
+      const { client, call } = await connect(scripted(), { config: levels({ "mcp.authority": "allow" }) })
+
+      expect((await client.commands()).filter((one) => AUTHORITY.includes(one)).sort()).toEqual(AUTHORITY)
+      expect((await call("config set", { setting: "limit", value: "20" })).body.item).toMatchObject({ value: 20 })
+    })
+
+    it.each([
+      ["permissions.mcp.authority", "deny"],
+      ["permissions.mcp", "allow"],
+      ["permissions", '{"mcp.authority":"allow"}'],
+    ])("**never lets an agent change the key itself**: config set %s", async (setting, value) => {
+      const { call, env } = await connect(scripted(), { config: levels({ "mcp.authority": "allow" }) })
+      const before = readFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), "utf8")
+
+      const refused = await call("config set", { setting, value })
+
+      expect(refused.isError).toBe(true)
+      expect(refused.body.error).toMatchObject({ code: "permission_error", details: { permission: "mcp.authority" } })
+      expect(readFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), "utf8")).toBe(before)
+    })
+
+    it("**refuses, naming the key, once the owner turns it off** while the server runs", async () => {
+      const { call, env } = await connect(scripted(), { config: levels({ "mcp.authority": "allow" }) })
+      writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify(levels({})))
+
+      const refused = await call("config set", { setting: "limit", value: "20" })
+
+      expect(refused.isError).toBe(true)
+      expect(refused.body.error.code).toBe("permission_error")
+      expect(refused.body.error.message).toContain("mcp.authority")
+    })
+  })
+
   it.each(["legacy", "modern"] as const)("returns a chart image over the %s MCP transport", async (era) => {
     const telegram = scripted()
     const { client, call } = await connect(telegram, { era })

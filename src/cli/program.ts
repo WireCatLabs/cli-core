@@ -21,7 +21,7 @@ import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
-import { keyForCommand } from "../sends/permissions.js"
+import { AUTHORITY_KEY, keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
@@ -327,6 +327,14 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         "permission_error",
         `this process is read-only (${lock}) — \`${command} ${path.join(" ")}\` changes what a later run may do; ` +
           `run it without ${lock}`,
+      )
+    if (options.agent && options.agent.authority !== true && changesAuthorityNow(action))
+      throw new CliError(
+        "permission_error",
+        `\`${command} ${path.join(" ")}\` changes what a later run may do, and this profile keeps that from agents ` +
+          `(${AUTHORITY_KEY}) — the owner turns it on in a terminal: ` +
+          `\`${command} <profile> config set${path[0] === "bot" ? " --bot" : ""} permissions.${AUTHORITY_KEY} allow\``,
+        { permission: AUTHORITY_KEY, sent: false },
       )
     const { lifetime, cooperative: stopsAtItsPace } = metaOf(action)
     const persistent = lifetime === "persistent"

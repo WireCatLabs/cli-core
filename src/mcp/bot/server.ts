@@ -30,6 +30,8 @@ export interface BotServerOptions {
   levels?: () => Readonly<Record<PermissionKey, Level>>
   /** The key a CLI's own bot command is guarded by, from its full path, when `keyForCommand` does not know it. */
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
+  /** Whether a command changes what a later run may do; such a command is offered only under `mcp.authority`. */
+  authority?: (path: readonly string[]) => boolean
   env: NodeJS.ProcessEnv
   skill?: URL
 }
@@ -51,6 +53,7 @@ export const createBotServer = (options: BotServerOptions) => {
     levels: settings.permissions,
     readOnly: readOnlyLockOf(bot.app, env) !== undefined,
     ...(options.keyOf ? { keyOf: options.keyOf } : {}),
+    ...(options.authority ? { authority: options.authority } : {}),
     offline: true,
     // Another bot's copy is this bot's to read only where `read_other_bots` says so.
     ...(settings.readOtherBots ? {} : { omit: ["all_bots", "bots"] }),

@@ -1262,12 +1262,20 @@ The three tools, their arguments and what each permission shows are on the handb
 - `status` answers what the server is. `conversations refresh` runs what `search conversations --refresh` runs before
   it searches (NEED-551 A).
 - **Every command is a tool, writes included; the profile's permissions limit it** (owner, 2026-10-23). Left out:
-  `mcp` and `complete`, which an agent call cannot use; `upgrade` and the login; a command that changes what a later
-  run may do (`config set`, `schedule`, `replies` rules and consents, `recipients`, `chats rules`, `server install`,
-  `skill install`, model keys, `flood clear`), which a read-only lock could otherwise hand to an unlocked run
-  (SEC-47); and the writes no permission key limits yet — `store backup|restore|migrate|repair|reset|clear|decrypt`,
-  `server start|stop|restart`, model downloads, `schedule run|exec`, `doctor report create`, `account sessions end`,
-  `chats delete|clear`, `bot auth`, `bot recipients`, `bot store`, `bot api`.
+  `mcp` and `complete`, which an agent call cannot use; `upgrade` and the login; and the writes no permission key
+  limits yet — `store backup|restore|migrate|repair|reset|clear|decrypt`, `server start|stop|restart`, model
+  downloads, `schedule run|exec`, `doctor report create`, `account sessions end`, `chats delete|clear`, `bot auth`,
+  `bot store`, `bot api`.
+- **A command that changes what a later run may do is offered only under `mcp.authority`** (NEED-1662 B): `config
+  set|unset`, `schedule command|agent|remove`, `replies` rules, pause and consents, `recipients add|remove|clear`
+  (the bot's too), `chats rules set|unset` (the bot's too), `server install|uninstall`, `attachments jobs
+  install|start|stop|uninstall`, `skill install`, `models text key set|remove`, `flood clear` — every command
+  marked `grantsAuthority`. The key is `deny` by default, and a broader `mcp: allow` does not lift it; at `deny` or
+  `readonly` the server does not offer these tools, and a call made after the owner turned it off is refused with
+  an error naming the key. The owner turns it on in a terminal — `<cli> <profile> config set
+  permissions.mcp.authority allow`, with `--bot` for a bot server — and restarts the server. An agent never changes
+  the key itself: `config set|unset` run over MCP refuses `permissions.mcp…` and a whole `permissions` that names
+  it, on any profile and in the defaults. `<PREFIX>_READ_ONLY` still refuses them all (SEC-47).
 
 `stats charts --output` selects SVG or PNG by the file extension; images never go to stdout.
 The stored-only `stats_charts` tool accepts optional `format: json|png` (default `json`).
