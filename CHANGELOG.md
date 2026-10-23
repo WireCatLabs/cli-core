@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.401.0 — 24.10.2026
+
 ### Changed — may break callers
 
 - **List duplicate-task pairs explicitly.** Use `tasks duplicates list [query...]` in CLI and MCP calls. The bare `tasks duplicates` group shows help or refuses in machine mode; it no longer reads the store. Reject and defer remain under that group.
