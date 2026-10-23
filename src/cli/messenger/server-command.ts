@@ -252,23 +252,28 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
     options.idle ? sub.option("--idle <duration>", "stop after this long with nobody using it — 15m, 1h") : sub
 
   withIdle(
-    destroysNothing(annotate(command.command("start"), { effects: LOCAL_WRITE })).description(
-      "start serve in the background — through the unit if one is installed — and answer once it connects",
-    ),
+    destroysNothing(
+      annotate(command.command("start"), { effects: LOCAL_WRITE, examples: [`${app.command} personal server start`] }),
+    ).description("start serve in the background — through the unit if one is installed — and answer once it connects"),
   ).action(async function (this: Command) {
     await start(prepare(this), idleArgs(this))
   })
 
-  destroysNothing(annotate(command.command("stop"), { effects: LOCAL_WRITE }))
+  destroysNothing(
+    annotate(command.command("stop"), { effects: LOCAL_WRITE, examples: [`${app.command} personal server stop`] }),
+  )
     .description("stop this profile's serve — through the unit if it runs under one")
     .action(async function (this: Command) {
       await stop(prepare(this))
     })
 
   withIdle(
-    destroysNothing(annotate(command.command("restart"), { effects: LOCAL_WRITE })).description(
-      "stop it and start it again",
-    ),
+    destroysNothing(
+      annotate(command.command("restart"), {
+        effects: LOCAL_WRITE,
+        examples: [`${app.command} personal server restart`],
+      }),
+    ).description("stop it and start it again"),
   ).action(async function (this: Command) {
     const args = idleArgs(this)
     const prepared = prepare(this)
@@ -276,7 +281,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
     await start(prepared, args)
   })
 
-  annotate(command.command("status"), { effects: LOCAL_READ })
+  annotate(command.command("status"), { effects: LOCAL_READ, examples: [`${app.command} personal server status`] })
     .description("whether serve runs for this profile, since when, who started it, and the unit if there is one")
     .action(async function (this: Command) {
       const prepared = prepare(this)
@@ -352,7 +357,10 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       )
     })
 
-  annotate(command.command("logs"), { effects: LOCAL_READ })
+  annotate(command.command("logs"), {
+    effects: LOCAL_READ,
+    examples: [`${app.command} personal server logs --limit 20`],
+  })
     .description("serve's latest log lines — from the journal under systemd, else its log file")
     .option("-n, --limit <n>", "how many lines", (value) => wholeNumber(value), 50)
     .action(async function (this: Command) {
@@ -365,7 +373,12 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       )
     })
 
-  grantsAuthority(annotate(command.command("install"), { effects: LOCAL_WRITE }))
+  grantsAuthority(
+    annotate(command.command("install"), {
+      effects: LOCAL_WRITE,
+      examples: [`${app.command} personal server install`],
+    }),
+  )
     .description("write a systemd user unit or a launchd agent for this profile; starts nothing")
     .action(function (this: Command) {
       const { context, platform, unit, say } = prepare(this)
@@ -381,7 +394,12 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       ])
     })
 
-  grantsAuthority(annotate(command.command("uninstall"), { effects: LOCAL_WRITE }))
+  grantsAuthority(
+    annotate(command.command("uninstall"), {
+      effects: LOCAL_WRITE,
+      examples: [`${app.command} personal server uninstall`],
+    }),
+  )
     .description("remove this profile's unit; stop it first")
     .action(async function (this: Command) {
       const { context, platform, unit, say } = prepare(this)
