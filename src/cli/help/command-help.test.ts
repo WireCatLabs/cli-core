@@ -119,14 +119,8 @@ describe("generated command help", () => {
   it("reports the commands still on a generated example", () => {
     const report = exampleReport(createProgram(tool))
 
-    expect(report.written).toEqual(["messages link"])
-    expect(report.generated).toEqual([
-      "commands schema",
-      "messages list",
-      "messages send",
-      "messages delete",
-      "search messages",
-    ])
-    expect(report.text).toMatch(/^tg: 1 of 6 commands have a written example; 5 show a generated one:/)
+    expect(report.written).toEqual(["commands schema", "messages link"])
+    expect(report.generated).toEqual(["messages list", "messages send", "messages delete", "search messages"])
+    expect(report.text).toMatch(/^tg: 2 of 6 commands have a written example; 4 show a generated one:/)
   })
 })

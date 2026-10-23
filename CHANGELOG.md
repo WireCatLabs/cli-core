@@ -38,6 +38,8 @@ shape of this file.
 
 - Skill commands include concrete examples in help and command discovery.
 
+- Command-schema discovery includes an example in help and command discovery.
+
 - Task commands include concrete examples in help and command discovery.
 
 - Chat deletion and history clearing include examples in help and command discovery.
