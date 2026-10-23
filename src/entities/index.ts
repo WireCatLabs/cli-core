@@ -45,6 +45,7 @@ import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
 import { pollVote } from "./poll-vote.js"
+import { contactAlias, contactNoteRemoval } from "./private-contact.js"
 import { ranking } from "./ranking.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
@@ -70,7 +71,9 @@ export {
   chatEvent,
   chatStats,
   contact,
+  contactAlias,
   contactNote,
+  contactNoteRemoval,
   conversation,
   counterRefresh,
   counters,
@@ -141,6 +144,8 @@ export const ENTITIES = {
   identity,
   contact,
   contact_note: contactNote,
+  contact_alias: contactAlias,
+  contact_note_removal: contactNoteRemoval,
   account,
   account_session: accountSession,
   note,

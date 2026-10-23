@@ -25,6 +25,8 @@ const message = {
 const author = { type: "person", id: "1", name: null }
 
 const samples: Record<EntityName, unknown> = {
+  contact_alias: { person_id: "10", alias: null },
+  contact_note_removal: { id: "1", person_id: "10", removed: true },
   message,
   "message.hit": {
     ref: message.ref,

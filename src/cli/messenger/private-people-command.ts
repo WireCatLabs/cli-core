@@ -19,7 +19,7 @@ const everyNote = (command: string, items: ContactNoteItem[]) =>
 
 export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const alias = new Command("alias").description("a private local display name in the selected account")
-  annotate(alias.command("set"), { effects: LOCAL_WRITE })
+  annotate(alias.command("set"), { effects: LOCAL_WRITE, output: { entity: "contact_alias" } })
     .description("your own name for a person in this account; kept on this machine, never sent")
     .argument("<person>")
     .argument("<alias>")
@@ -32,7 +32,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
         itemOf(snakeKeys(await context.withServices((services) => services.privatePeople.alias(person, value)))),
       )
     })
-  annotate(alias.command("rm"), { effects: LOCAL_WRITE })
+  annotate(alias.command("rm"), { effects: LOCAL_WRITE, output: { entity: "contact_alias" } })
     .description("drop your local name for a person; their own name shows again")
     .argument("<person>")
     .action(async function (this: Command, person: string) {
@@ -103,7 +103,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       renderAnswer(this, context, itemOf(saved))
     })
   }
-  annotate(notes.command("remove"), { effects: LOCAL_WRITE })
+  annotate(notes.command("remove"), { effects: LOCAL_WRITE, output: { entity: "contact_note_removal" } })
     .description("delete one private note on a person")
     .argument("<person>")
     .argument("<id>")

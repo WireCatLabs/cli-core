@@ -17,6 +17,10 @@ shape of this file.
   vocabulary, `transcript_stems` and `transcript_index_pending`, filled before each search; existing transcripts are
   queued on upgrade.
 
+### Fixed
+
+- Private contact alias changes and note removals declare their existing answer fields for discovery and projection. Alias removal keeps its nullable alias, and note removal keeps its boolean result.
+
 ## 0.395.0 — 23.10.2026
 
 ### Changed — may break callers
