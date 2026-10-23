@@ -9,6 +9,8 @@ shape of this file.
 
 ### Fixed
 
+- **Downloads skip service events and keyboards.** A message whose only attachment is a group event (`control`) or an inline keyboard no longer makes a media archive or `attachments download` fail with `provider.invalid-response`; both count as non-files like polls and links.
+
 - Account lists accept profile and current-profile query terms, and declare their answer fields for discovery and projection.
 
 - **Account change and privacy schemas.** Profile updates, ended sessions and privacy reads and writes declare their existing answers for field discovery and projection. Privacy fields remain optional where a messenger does not expose a setting.
