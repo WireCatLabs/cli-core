@@ -153,6 +153,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(sendCommand(messenger))
 
   annotate(messages.command("show"), {
+    output: { entity: "message" },
     examples: [`${messenger.app.command} personal messages show "Book club" 101`],
     effects: REMOTE_READ,
   })

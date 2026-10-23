@@ -29,6 +29,8 @@ shape of this file.
 
 - Recorded-run lists accept metadata queries before pagination, and recorded-run commands declare their answer schemas. Continuation steps keep the query.
 
+- **Message read and write schemas.** Showing a message, sending, editing, forwarding, pinning, starring and deleting declare their existing answer entities for field discovery and projection. Write receipts retain their operation id.
+
 ### Changed — may break callers
 
 - **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.

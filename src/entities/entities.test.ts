@@ -84,6 +84,9 @@ const samples: Record<EntityName, unknown> = {
   ended_account_sessions: { operation_id: "op-1", sessions: [] },
   account_privacy: { read_receipts: false, profile_photo: "contacts_except" },
   account_privacy_change: { operation_id: "op-1", privacy: { hide_online: true } },
+  message_pin: { operation_id: "op-1", chat_id: "7", message_id: "3", pinned: false },
+  message_star: { operation_id: "op-1", chat_id: "7", message_id: "3", starred: true },
+  message_deletion: { operation_id: "op-1", chat_id: "7", deleted: ["3"], for_everyone: false },
   message,
   "message.hit": {
     ref: message.ref,

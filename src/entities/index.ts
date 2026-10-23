@@ -44,6 +44,7 @@ import { meetingSeriesInventory } from "./meeting-series-inventory.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { message } from "./message.js"
+import { messageDeletion, messagePin, messageStar } from "./message-change.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
 import { messageWrite } from "./message-write.js"
@@ -120,7 +121,10 @@ export {
   memory,
   message,
   messageCounts,
+  messageDeletion,
   messageLink,
+  messagePin,
+  messageStar,
   messageWrite,
   model,
   note,
@@ -180,6 +184,9 @@ export const ENTITIES = {
   ]),
   message_link: messageLink,
   message_write: messageWrite,
+  message_pin: messagePin,
+  message_star: messageStar,
+  message_deletion: messageDeletion,
   chat,
   person,
   identity,
