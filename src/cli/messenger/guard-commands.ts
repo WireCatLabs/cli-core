@@ -15,12 +15,13 @@ import { type Messenger, messengerContext } from "./context.js"
  * a model that a message talked into writing somewhere, not an agent set on getting around it.
  */
 export const recipientsCommand = (messenger: Messenger): Command => {
+  const tool = `${messenger.app.command} personal`
   const listFor = (profile: string, env: NodeJS.ProcessEnv) =>
     new RecipientList(recipientsPathFor(messenger.app, profile, env), messenger.app.command)
 
   const command = new Command("recipients").description("the chats this profile may send to, when the list is on")
 
-  annotate(command.command("list"), { effects: LOCAL_READ })
+  annotate(command.command("list"), { effects: LOCAL_READ, examples: [`${tool} recipients list`] })
     .description("the chats on the list; empty and off until the first add")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -31,7 +32,9 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       else if (chats.length === 0) renderer.note("the recipient list is on and empty — this profile may send nowhere")
     })
 
-  grantsAuthority(annotate(command.command("add"), { effects: FETCH }))
+  grantsAuthority(
+    annotate(command.command("add"), { effects: FETCH, examples: [`${tool} recipients add "Book club"`] }),
+  )
     .argument("<chat>", messenger.chatArgument)
     .description("allow sending to this chat; the first add turns the list on")
     .action(async function (this: Command, chat: string) {
@@ -47,7 +50,9 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ id: found.id, title: found.title, added }))
     })
 
-  grantsAuthority(annotate(command.command("remove"), { effects: LOCAL_WRITE }))
+  grantsAuthority(
+    annotate(command.command("remove"), { effects: LOCAL_WRITE, examples: [`${tool} recipients remove "Book club"`] }),
+  )
     .argument("<chat>", "chat id, or the title as the list shows it")
     .description("stop allowing this chat; the list stays on")
     .action(async function (this: Command, chat: string) {
@@ -58,7 +63,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ id: gone.id, title: gone.title, removed: true }))
     })
 
-  grantsAuthority(annotate(command.command("clear"), { effects: LOCAL_WRITE }))
+  grantsAuthority(annotate(command.command("clear"), { effects: LOCAL_WRITE, examples: [`${tool} recipients clear`] }))
     .description("delete the list, which turns it off: this profile may send to any chat again")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)

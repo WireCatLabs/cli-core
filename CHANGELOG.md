@@ -26,6 +26,8 @@ shape of this file.
 
 - MCP setup and diagnostic commands include examples in help and command discovery.
 
+- Recipient-list commands include concrete examples in help and command discovery.
+
 - Account commands include concrete examples in help and command discovery.
 
 - Search commands include concrete examples in help and command discovery.
