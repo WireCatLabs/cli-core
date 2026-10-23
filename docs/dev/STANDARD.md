@@ -805,7 +805,7 @@ These moved to the handbook: the shared global flags ([WC-CMD-14]), no prompt wi
 declared `effects` ([WC-CMD-17]), the one-shot deadline ([WC-LIFE-5]), when a retry is safe ([WC-OUT-20]),
 projection with `--json=a,b` ([WC-OUT-21]) and the output size cap ([WC-OUT-22]).
 
-`commands schema <path...>` describes raw argv inputs, result schemas, effects, permissions, conditional arguments
+`commands info <path...>` describes raw argv inputs, result schemas, effects, permissions, conditional arguments
 and safe-retry semantics in JSON Schema 2020-12. Open provider extensions are labelled; a structural schema is not
 evidence of complete business validation.
 

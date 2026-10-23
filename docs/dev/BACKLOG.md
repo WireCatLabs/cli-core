@@ -53,3 +53,6 @@ None open.
 - **CORE-11** · P2 · 🚧 `feat/transcript-index` Voice-note transcripts searchable in any word form (#1761, store
   version 29).
 - **CORE-12** · P2 · 🚧 `feat/media-archive` Verified media archives and daily timers (draft #1758).
+
+- **CORE-27** · P2 · Remove the `commands schema` alias after the compatibility release that introduces
+  `commands info`. Start at `src/cli/commands-command.ts` and [#1824](https://github.com/WireCatLabs/cli-core/pull/1824).

@@ -172,7 +172,7 @@ describe("commands as text", () => {
 
       Set up
         app commands [path]                                   every command by section, one line each; --json: the contract, one path per call
-        app commands schema <path>                            one command's argv and result schemas, effects, permissions and retry guidance
+        app commands info <path>                              one command's argv and result schemas, effects, permissions and retry guidance
         app session start                                     log in (writes)
 
       Other
@@ -199,9 +199,24 @@ describe("commands as text", () => {
     expect(listed).toContain("Other\n  memo people show")
   })
 
+  it("keeps the legacy schema spelling compatible while discovery advertises info", async () => {
+    const canonical = await text(["commands", "info", "messages", "list", "--json"])
+    const legacy = await text(["commands", "schema", "messages", "list", "--json"])
+    expect(canonical.code).toBe(0)
+    expect(legacy).toEqual(canonical)
+    const catalogue = JSON.parse((await text(["commands", "--json"])).stdout)
+    const discovery = catalogue.commands.find((one: { name: string }) => one.name === "commands")
+    expect(discovery.commands.map((one: { name: string }) => one.name)).toEqual(["info"])
+  })
+
   it("keeps discovery as one JSON document and refuses JSONL before printing", async () => {
     expect(JSON.parse((await text(["commands", "--json"])).stdout).contract).toBe(3)
-    for (const path of [["commands"], ["commands", "chats"], ["commands", "schema", "chats", "list"]]) {
+    for (const path of [
+      ["commands"],
+      ["commands", "chats"],
+      ["commands", "info", "chats", "list"],
+      ["commands", "schema", "chats", "list"],
+    ]) {
       const result = await text([...path, "--jsonl"])
       expect(result.code).toBe(2)
       expect(result.stdout).toBe("")

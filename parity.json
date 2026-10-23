@@ -2730,7 +2730,7 @@
     "commands": {
       "in": "all"
     },
-    "commands schema": {
+    "commands info": {
       "in": "all"
     },
     "complete": {

@@ -58,7 +58,7 @@ const tasks: AgentTask[] = [
     maxCalls: 2,
     check: (calls) =>
       calls.length === 1 &&
-      calls[0]?.argv.slice(0, 4).join(" ") === "commands schema messages list" &&
+      calls[0]?.argv.slice(0, 4).join(" ") === "commands info messages list" &&
       calls[0].exitCode === 0,
   },
   {
@@ -107,7 +107,7 @@ const baseline: AgentPolicy = async (task, call) => {
   const read = ["messages", "list", "synthetic-chat", "--json", "--no-record"]
   switch (task.id) {
     case "discovery":
-      await call(["commands", "schema", "messages", "list", "--json"])
+      await call(["commands", "info", "messages", "list", "--json"])
       break
     case "ambiguity": {
       const failure = await call(["messages", "list", "ambiguous", "--json"])

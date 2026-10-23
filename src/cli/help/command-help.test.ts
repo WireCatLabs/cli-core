@@ -69,7 +69,7 @@ describe("generated command help", () => {
 
     expect(code).toBe(0)
     expect(stdout.slice(stdout.indexOf("Returns:"))).toMatchInlineSnapshot(`
-      "Returns:       message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands schema messages list
+      "Returns:       message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands info messages list
       Next usually:  tg messages link <chat> <message>
                      tg messages delete <chat> <message>
       Example:       tg personal messages list Team
@@ -94,7 +94,7 @@ describe("generated command help", () => {
   })
 
   it("names no profile in the example of a command that reads none", async () => {
-    expect((await help(["commands", "schema"])).stdout).toMatch(/Example: +tg commands schema/)
+    expect((await help(["commands", "info"])).stdout).toMatch(/Example: +tg commands info/)
   })
 
   it("keeps the profile a written example already names", () => {
@@ -129,7 +129,7 @@ describe("generated command help", () => {
 
   it("renders the same three as Markdown for docs/commands.md", () => {
     expect(commandHelpMarkdown(createProgram(tool), ["messages", "list"])).toEqual([
-      "**Returns:** message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands schema messages list",
+      "**Returns:** message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands info messages list",
       "**Next usually:** `tg messages link <chat> <message>`, `tg messages delete <chat> <message>`",
       "**Example:** `tg personal messages list Team`",
     ])
@@ -139,7 +139,7 @@ describe("generated command help", () => {
   it("reports the commands still on a generated example", () => {
     const report = exampleReport(createProgram(tool))
 
-    expect(report.written).toEqual(["commands schema", "messages link"])
+    expect(report.written).toEqual(["commands info", "messages link"])
     expect(report.generated).toEqual(["messages list", "messages send", "messages delete", "search messages"])
     expect(report.text).toMatch(/^tg: 2 of 6 commands have a written example; 4 show a generated one:/)
   })

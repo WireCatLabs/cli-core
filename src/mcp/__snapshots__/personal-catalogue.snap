@@ -24,7 +24,7 @@ read  chats show
 read  chats tracking list
 read  chats tracking show
 read  commands
-read  commands schema
+read  commands info
 read  config show
 read  contacts check
 read  contacts context

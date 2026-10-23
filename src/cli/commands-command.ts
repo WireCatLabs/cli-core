@@ -56,9 +56,9 @@ export const commandsCommand = (app: AppIdentity): Command => {
       })
     })
   command.addCommand(
-    annotate(new Command("schema"), {
+    annotate(new Command("info").alias("schema"), {
       effects: NO_EFFECTS,
-      examples: [`${app.command} commands schema messages list`],
+      examples: [`${app.command} commands info messages list`],
     })
       .description("one command's argv and result schemas, effects, permissions and retry guidance")
       .argument("<path...>", "one command path, for example: stats messages show")

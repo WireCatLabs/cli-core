@@ -733,7 +733,7 @@ describe("the MCP server", () => {
       "chats tracking list",
       "chats tracking show",
       "commands",
-      "commands schema",
+      "commands info",
       "config show",
       "contacts check",
       "contacts context",

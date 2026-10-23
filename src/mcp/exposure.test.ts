@@ -33,7 +33,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
   it.each([
     "attachments jobs status",
     "attachments move",
-    "commands schema",
+    "commands info",
     "config show",
     "doctor report",
     "guide",
