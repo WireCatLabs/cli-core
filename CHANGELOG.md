@@ -16,6 +16,18 @@ shape of this file.
 
 ### Added
 
+- **`bot watch --public-url <url> [--port <n>]` receives a bot's updates by webhook.** For a messenger that pushes and
+  cannot be polled — WhatsApp's Cloud API — the command listens on 127.0.0.1 (port 8766 by default) behind the owner's
+  tunnel, answers the subscription handshake, refuses a delivery whose signature does not match (401) or that comes
+  for another host (403), and answers 200 only after the batch is kept, so the messenger sends again what was not.
+  The same copy, redelivery check and `keepUpdates` run as for polling. A messenger opts in with the new
+  `BotWebhookIntake` port piece (`webhookHandshake`, `webhookAuthentic`, `webhookEvents`); one without it refuses.
+- **`BotMessenger.secrets` and `bot auth set --secret <name>`** keep a secret beside the bot token, the same way
+  (keyring account `bot:<profile>:<name>`, `<PREFIX>_BOT_<NAME>`, then a 0600 file) — a webhook's signing key.
+  `BotTokenStore` gains `readSecret`, `writeSecret` and `removeSecret`; `bot auth show` says where each comes from and
+  `bot auth remove` forgets them too. Without `secrets` nothing changes.
+- **`--source` knows `whatsapp` (`wa`) and `whatsapp-bot` (`wa-bot`).**
+
 - `readMeetingReview` (`@wirecat/cli-core/services`) and `MeetingStore.meetingReview`: the newest meetings of a
   selection, each with its newest summary (overview, next steps), transcript lines and words, the three who talked
   longest and its confirmed projects. No transcript text is read out.

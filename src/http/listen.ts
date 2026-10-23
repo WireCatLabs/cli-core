@@ -10,7 +10,7 @@ export interface Listening {
   close(): Promise<void>
 }
 
-/** Larger bodies are refused unread: the port faces the internet, and MCP requests are small JSON. */
+/** Larger bodies are refused unread: the port faces the internet. MCP requests are small JSON. */
 export const MAX_BODY = 4 * 1024 * 1024
 
 class TooLarge extends Error {}
@@ -31,14 +31,14 @@ const readBody = (incoming: IncomingMessage, limit: number): Promise<Buffer> =>
     incoming.once("error", reject)
   })
 
-const toRequest = async (incoming: IncomingMessage, origin: string): Promise<Request> => {
+const toRequest = async (incoming: IncomingMessage, origin: string, maxBody: number): Promise<Request> => {
   const headers = new Headers()
   for (const [name, value] of Object.entries(incoming.headers)) {
     if (Array.isArray(value)) for (const one of value) headers.append(name, one)
     else if (value !== undefined) headers.set(name, value)
   }
   const method = incoming.method ?? "GET"
-  const body = method === "GET" || method === "HEAD" ? undefined : await readBody(incoming, MAX_BODY)
+  const body = method === "GET" || method === "HEAD" ? undefined : await readBody(incoming, maxBody)
   if (body) headers.set("content-length", String(body.length))
   return new Request(new URL(incoming.url ?? "/", origin), { method, headers, ...(body ? { body } : {}) })
 }
@@ -55,10 +55,13 @@ const send = async (response: Response, outgoing: ServerResponse) => {
  * Binds `host` only — never every interface: the public address is the owner's tunnel.
  * `close` ends open streams too, so the process can exit.
  */
-export const listen = (handle: Handle, { host, port }: { host: string; port: number }): Promise<Listening> =>
+export const listen = (
+  handle: Handle,
+  { host, port, maxBody = MAX_BODY }: { host: string; port: number; maxBody?: number },
+): Promise<Listening> =>
   new Promise((resolve, reject) => {
     const server = createServer((incoming, outgoing) => {
-      toRequest(incoming, `http://${host}`)
+      toRequest(incoming, `http://${host}`, maxBody)
         .then(handle)
         .then((response) => send(response, outgoing))
         .catch((error: unknown) => {

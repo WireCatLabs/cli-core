@@ -783,7 +783,7 @@
     },
     "--port": {
       "value": "<port>",
-      "meaning": "the local port for --http"
+      "meaning": "the local port behind the tunnel, for mcp --http or bot watch --public-url"
     },
     "--problems": {
       "meaning": "only failed responses, warnings and crashes"
@@ -802,7 +802,7 @@
     },
     "--public-url": {
       "value": "<url>",
-      "meaning": "the tunnel's https address the browser apps use"
+      "meaning": "the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch"
     },
     "--question": {
       "meaning": "match only questions"
@@ -880,6 +880,10 @@
     "--score": {
       "value": "<helpful|active|engaging>",
       "meaning": "the named ranking score preset; not with an explicit --measure"
+    },
+    "--secret": {
+      "value": "<name>",
+      "meaning": "keep this secret beside the bot token instead of the token, at a hidden prompt; never from the command line"
     },
     "--secret-stdin": {
       "meaning": "a secret MAX sends back in X-Max-Bot-Api-Secret — asked for, or read from a pipe"
@@ -1362,104 +1366,158 @@
     },
     "bot": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot api": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--allow-any-file": {
           "in": [],
           "planned": {
-            "tg": "tg's next cli-core bump: one flag on bot api for every @path field, not one per file-carrying operation"
+            "tg": "tg's next cli-core bump: one flag on bot api for every @path field, not one per file-carrying operation",
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
           },
-          "reason": "max's bot api reads no @path files; max uploads bot files through bot uploads put, which has the flag; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "reason": "max's bot api reads no @path files; max uploads bot files through bot uploads put, which has the flag"
         },
         "--store-token": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot auth": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot auth remove": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot auth set": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      },
+      "options": {
+        "--secret": {
+          "in": [],
+          "reason": "only a messenger with a secret beside the token has one: max and tg have none",
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
+        }
+      }
     },
     "bot auth show": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot callbacks": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot callbacks answer": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--notification": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--text": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot chats": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats action": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats admins": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats admins add": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--can": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--title": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot chats admins list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats admins remove": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats leave": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats members": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats members add": {
       "in": ["max"],
@@ -1481,75 +1539,109 @@
     },
     "bot chats members remove": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--block": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot chats moderate": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--allow-dangerous": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--dry-run": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--max-actions": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--no-block": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--since-time": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot chats rules": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats rules set": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats rules show": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats rules unset": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot chats show": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot commands": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot commands clear": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot commands list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot commands set": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot comments": {
       "in": ["max"],
@@ -1557,44 +1649,62 @@
     },
     "bot contacts": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot contacts show": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--all-bots": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--bots": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--limit": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--sync-first": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--check": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot mcp": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
-      "options": {}
+      "options": {},
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot mcp config": {
       "in": ["max", "tg"],
@@ -1603,189 +1713,273 @@
     },
     "bot me": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot messages": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot messages between": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--all-bots": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--bots": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--limit": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot messages delete": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--allow-dangerous": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot messages edit": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--html": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--md": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot messages list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--limit": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot messages pin": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--notify": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot messages send": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--allow-any-file": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--as-file": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--file": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--html": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--md": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--photo": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--reply-to": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--silent": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--voice": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot messages show": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot messages unpin": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot recipients": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot recipients add": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot recipients clear": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot recipients list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot recipients remove": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot search": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot search messages": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--all-bots": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--bots": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--from": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--limit": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--newest": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--page": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot sends": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot sends list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot store": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "reason": "Meta's Cloud API keeps no history a bot can fetch; WhatsApp bots get only what arrives by webhook"
     },
     "bot store fetch": {
       "in": ["max", "tg"],
@@ -1817,39 +2011,60 @@
         }
       }
     },
+    "bot templates": {
+      "in": [],
+      "reason": "message templates are WhatsApp Business's; MAX and Telegram bots write freely",
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      },
+      "subtree": true
+    },
     "bot uploads": {
       "in": ["max"],
       "reason": "Telegram has no upload-only step: a file goes up with the message that carries it; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot watch": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--events": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
+        "--port": "all",
+        "--public-url": "all",
         "--types": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot webhooks": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot webhooks delete": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot webhooks list": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
     },
     "bot webhooks set": {
       "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--add": {
           "in": ["max"],
@@ -1857,12 +2072,19 @@
         },
         "--secret-stdin": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         },
         "--types": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
         }
+      },
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "calls": {

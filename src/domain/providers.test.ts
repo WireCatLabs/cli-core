@@ -11,6 +11,7 @@ describe("the provider registry", () => {
   it("resolves an alias to its provider and a provider to its kind", () => {
     expect(providerNamed("TG")?.name).toBe("telegram")
     expect(providerNamed("tg-bot")?.name).toBe("telegram-bot")
+    expect(providerNamed("wa-bot")?.name).toBe("whatsapp-bot")
     expect(kindOf("zoom")).toBe("meetings")
     expect(kindOf("email")).toBe("mail")
     expect(kindOf("folder")).toBe("notes")

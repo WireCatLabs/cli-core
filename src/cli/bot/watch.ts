@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { Message, MessageHit } from "../../domain/models.js"
+import { portOf, publicUrlOf } from "../../http/public-url.js"
 import { renderMessages } from "../../render/messages.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
@@ -11,6 +12,7 @@ import { botCan, botIdOf } from "./messages.js"
 import type { BotEvent, BotMessenger, BotNotice } from "./port.js"
 import { botFiles } from "./registry.js"
 import { PressLog, UpdatesCursor } from "./updates.js"
+import { receiveWebhooks, WEBHOOK_PORT } from "./webhook-receiver.js"
 
 /** Under Telegram's transport timeout of 30 s, so a quiet poll ends as an answer, not as a failure. */
 const WAIT_SECONDS = 25
@@ -101,6 +103,8 @@ const keep = async (
  * normal end. Each batch is kept before it is printed, and the cursor moves only after that: an end
  * at any moment never loses a batch. An update the messenger names by id is recorded and skipped when it
  * comes again after being handled; one without an id may print twice. A read: it changes nothing anyone sees.
+ * With `--public-url` the messenger pushes each batch to a local receiver behind the owner's tunnel
+ * instead, and a batch is acknowledged only once kept, so the messenger sends again what was not.
  */
 export const botWatchCommand = (bot: BotMessenger): Command =>
   annotate(new Command("watch"), { effects: REMOTE_WRITE, lifetime: "persistent" })
@@ -110,12 +114,28 @@ export const botWatchCommand = (bot: BotMessenger): Command =>
       "also edits, deletions, buttons pressed and people coming and going; every line names its event",
     )
     .option("--types <types>", "only these update types, comma-separated, in the messenger's words")
+    .option(
+      "--public-url <url>",
+      "receive by webhook at your tunnel's https address instead of polling, e.g. https://<name>.ts.net",
+    )
+    .option("--port <port>", `the local port behind the tunnel for --public-url (default ${WEBHOOK_PORT})`)
     .action(async function (this: Command) {
-      const { events: everything, types: typed } = this.opts<{ events?: boolean; types?: string }>()
+      const flags = this.opts<{ events?: boolean; types?: string; publicUrl?: string; port?: string }>()
+      const { events: everything, types: typed } = flags
       const context = online(botContext(this, bot), this)
       if (context.format === "json") {
         throw new CliError("validation_error", "watch is a stream — use --jsonl for one update per line")
       }
+      if (flags.port !== undefined && flags.publicUrl === undefined)
+        throw new CliError("validation_error", "--port is the local port behind --public-url; give both")
+      const publicUrl =
+        flags.publicUrl === undefined
+          ? undefined
+          : publicUrlOf(flags.publicUrl, {
+              missing: "--public-url",
+              reaches: `${bot.name ?? "the messenger"} delivers the bot's updates`,
+            })
+      const port = portOf(flags.port, WEBHOOK_PORT)
       const types = typed
         ?.split(",")
         .map((one) => one.trim())
@@ -178,6 +198,46 @@ export const botWatchCommand = (bot: BotMessenger): Command =>
         await context.run(
           async (events) => {
             const adapter = await context.authenticated({ events, stop: stop.signal })
+            const warn = context.renderer.warn
+            /** Keeps, prints and settles one batch; `false` when it was not kept and must come again. */
+            const take = async (botId: string, batch: BotEvent[]): Promise<boolean> => {
+              const handled = await context.copy.received(botId, batch, warn)
+              const fresh = batch.filter((event) => !(event.update && handled.has(event.update.id)))
+              if (fresh.length > 0 && !(await keep(this, context, bot, botId, fresh, adapter.senders?.()))) {
+                await context.copy.settle(botId, fresh, "not_kept", warn)
+                return false
+              }
+              for (const event of fresh) print(event)
+              await context.copy.settle(botId, fresh, null, warn)
+              const seen = [...new Set(batch.flatMap((event) => chatOf(event) ?? []))].filter((id) => CHAT_ID.test(id))
+              if (seen.length > 0) context.registry.observe(seen.map((id) => ({ id })))
+              return true
+            }
+
+            if (publicUrl) {
+              const intake = {
+                webhookHandshake: botCan(adapter, "webhookHandshake", bot, "receive its updates by webhook"),
+                webhookAuthentic: botCan(adapter, "webhookAuthentic", bot, "receive its updates by webhook"),
+                webhookEvents: botCan(adapter, "webhookEvents", bot, "receive its updates by webhook"),
+              }
+              const botId = await botIdOf(context, adapter)
+              const wanted = (event: BotEvent) =>
+                !types || (event.update !== undefined && types.includes(event.update.kind))
+              await receiveWebhooks({
+                intake,
+                publicUrl,
+                port,
+                take: (batch) => take(botId, batch.filter(wanted)),
+                signal: stop.signal,
+                warn,
+                listening: (local) =>
+                  context.renderer.note(
+                    `receiving at ${publicUrl.origin} through ${local.host} — the tunnel must forward there; Ctrl-C to stop`,
+                  ),
+              })
+              return
+            }
+
             const poll = botCan(adapter, "updates", bot, "take updates")
             if (adapter.webhooks && (await adapter.webhooks()).length > 0) {
               throw new CliError(
@@ -209,21 +269,11 @@ export const botWatchCommand = (bot: BotMessenger): Command =>
                 await retry(`${bot.name ?? "the messenger"} did not answer (${code ?? "unknown"})`)
                 continue
               }
-              const warn = context.renderer.warn
-              const handled = await context.copy.received(botId, page.events, warn)
-              const fresh = page.events.filter((event) => !(event.update && handled.has(event.update.id)))
-              if (fresh.length > 0 && !(await keep(this, context, bot, botId, fresh, adapter.senders?.()))) {
-                await context.copy.settle(botId, fresh, "not_kept", warn)
+              if (!(await take(botId, page.events))) {
                 await retry("the updates were not kept")
                 continue
               }
               failures = 0
-              for (const event of fresh) print(event)
-              await context.copy.settle(botId, fresh, null, warn)
-              const seen = [...new Set(page.events.flatMap((event) => chatOf(event) ?? []))].filter((id) =>
-                CHAT_ID.test(id),
-              )
-              if (seen.length > 0) context.registry.observe(seen.map((id) => ({ id })))
               if (page.cursor !== undefined && page.cursor !== at) {
                 at = page.cursor
                 cursor.write(at)

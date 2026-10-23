@@ -20,33 +20,64 @@ import { botStoreCommand } from "./store.js"
 import { BotTokenStore } from "./token.js"
 import { botWatchCommand } from "./watch.js"
 
+/** Where each of the messenger's other secrets comes from, `null` when it is not set; never the value. */
+const secretSources = (bot: BotMessenger, tokens: BotTokenStore) =>
+  bot.secrets?.length
+    ? { secrets: Object.fromEntries(bot.secrets.map((one) => [one.name, tokens.readSecret(one.name)?.source ?? null])) }
+    : {}
+
 const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
   const auth = annotate(new Command("auth"), { mcp: false }).description("the bot token this profile uses")
 
-  grantsAuthority(annotate(auth.command("set"), { effects: LOCAL_WRITE }))
-    .description(
-      `check a bot token with ${bot.name ?? "the messenger"}, then keep it — typed at a hidden prompt or piped on stdin`,
+  const set = grantsAuthority(annotate(auth.command("set"), { effects: LOCAL_WRITE })).description(
+    `check a bot token with ${bot.name ?? "the messenger"}, then keep it — typed at a hidden prompt or piped on stdin`,
+  )
+  const secrets = bot.secrets ?? []
+  if (secrets.length > 0)
+    set.option(
+      "--secret <name>",
+      `keep this secret instead of the token, the same way: ${secrets.map((one) => `${one.name} (${one.description})`).join("; ")}`,
     )
-    .action(async function (this: Command) {
-      const context = online(botContext(this, bot), this)
-      await context.run(async (events) => {
-        const token = (await context.readSecret("Bot token: ")).trim()
-        if (!token) throw new CliError("validation_error", "no token given")
-        const account = await (await context.connect(token, { events })).me()
-        const stored = context.tokens.write(token)
-        context.registry.touch()
-        if (context.env[tokenVariable]) {
-          context.streams.diagnostic(`${tokenVariable} is set, and it wins over the token just kept until it is unset`)
-        }
+  set.action(async function (this: Command) {
+    const { secret: named } = this.opts<{ secret?: string }>()
+    if (named !== undefined) {
+      const secret = secrets.find((one) => one.name === named)
+      if (!secret)
+        throw new CliError(
+          "validation_error",
+          `no secret called "${named}" — one of: ${secrets.map((one) => one.name).join(", ")}`,
+        )
+      const context = botContext(this, bot)
+      await context.run(async () => {
+        const value = (await context.readSecret(`${secret.description}: `)).trim()
+        if (!value) throw new CliError("validation_error", "no secret given")
         renderItem(this, context, {
           profile: context.profile,
-          stored,
-          bot: account.name,
-          id: account.id,
-          username: account.username,
+          secret: secret.name,
+          stored: context.tokens.writeSecret(secret.name, value),
         })
       })
+      return
+    }
+    const context = online(botContext(this, bot), this)
+    await context.run(async (events) => {
+      const token = (await context.readSecret("Bot token: ")).trim()
+      if (!token) throw new CliError("validation_error", "no token given")
+      const account = await (await context.connect(token, { events })).me()
+      const stored = context.tokens.write(token)
+      context.registry.touch()
+      if (context.env[tokenVariable]) {
+        context.streams.diagnostic(`${tokenVariable} is set, and it wins over the token just kept until it is unset`)
+      }
+      renderItem(this, context, {
+        profile: context.profile,
+        stored,
+        bot: account.name,
+        id: account.id,
+        username: account.username,
+      })
     })
+  })
 
   annotate(auth.command("show"), { effects: LOCAL_READ })
     .description("where this profile's bot token comes from, and which bot it is")
@@ -61,6 +92,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
           bot: account.name,
           id: account.id,
           username: account.username,
+          ...secretSources(bot, context.tokens),
         })
       })
     })
@@ -69,9 +101,17 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
     .description("forget this profile's bot token")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
-      await context.run(async () =>
-        renderAnswer(this, context, itemOf({ profile: context.profile, removed: context.tokens.remove() })),
-      )
+      await context.run(async () => {
+        const removed = context.tokens.remove()
+        const secrets = Object.fromEntries(
+          (bot.secrets ?? []).map((one) => [one.name, context.tokens.removeSecret(one.name)]),
+        )
+        renderAnswer(
+          this,
+          context,
+          itemOf({ profile: context.profile, removed, ...(bot.secrets?.length ? { secrets } : {}) }),
+        )
+      })
     })
 
   return auth

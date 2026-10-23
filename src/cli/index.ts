@@ -163,10 +163,14 @@ export {
   type BotNotice,
   type BotPeople,
   type BotPress,
+  type BotSecret,
   type BotSendOptions,
   type BotUpdates,
   type BotUpdatesPage,
   type BotWebhook,
+  type BotWebhookAnswer,
+  type BotWebhookIntake,
+  type BotWebhookRequest,
   type BotWebhooks,
 } from "./bot/port.js"
 export { botFiles, botsDirectory, ChatRegistry, registryProfiles, type SeenChat } from "./bot/registry.js"

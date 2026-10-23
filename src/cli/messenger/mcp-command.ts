@@ -6,6 +6,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { installerOf } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
+import { portOf, publicUrlOf } from "../../http/public-url.js"
 import { type AppIdentity, envName } from "../../ports/app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
@@ -33,34 +34,6 @@ const DEFAULT_PORT = 8765
 /** Where `mcp --http` keeps the hashes of the tokens it issued — per profile, in the state folder. */
 export const httpTokenFile = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "mcp-http", `${profile}.json`)
-
-const publicUrlOf = (app: AppIdentity, given: string | undefined): URL => {
-  const example = `--public-url https://<name>.ts.net`
-  if (!given) throw new CliError("configuration_error", `--http needs the tunnel's address: ${example}`)
-  let url: URL
-  try {
-    url = new URL(given)
-  } catch {
-    throw new CliError("validation_error", `--public-url is not an address: ${example}`)
-  }
-  const local = url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)
-  if (url.protocol !== "https:" && !local)
-    throw new CliError(
-      "validation_error",
-      `--public-url must be https — the browser apps reach ${app.command} through it`,
-    )
-  if (url.pathname !== "/" || url.search || url.hash)
-    throw new CliError("validation_error", `--public-url is the tunnel's address only, without a path: ${example}`)
-  return url
-}
-
-const portOf = (given: string | undefined): number => {
-  if (given === undefined) return DEFAULT_PORT
-  const port = Number(given)
-  if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new CliError("validation_error", "--port takes 1–65535")
-  return port
-}
 
 const withFlags = (command: Command): Command =>
   command.option(
@@ -93,7 +66,10 @@ export const mcpCommand = (messenger: Messenger): Command => {
       return
     }
     if (flags.http) {
-      const publicUrl = publicUrlOf(app, flags.publicUrl)
+      const publicUrl = publicUrlOf(flags.publicUrl, {
+        missing: "--http",
+        reaches: `the browser apps reach ${app.command}`,
+      })
       const { serveOverHttpUntilStopped } = await import("../../mcp/server.js")
       await serveOverHttpUntilStopped(
         this,
@@ -102,7 +78,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
         {},
         {
           publicUrl,
-          port: portOf(flags.port),
+          port: portOf(flags.port, DEFAULT_PORT),
           tokenFile: httpTokenFile(app, context.settings.profile, context.env),
         },
       )
