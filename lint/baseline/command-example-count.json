@@ -1,9 +1,4 @@
 [
-  "account list",
-  "account sessions end",
-  "account sessions list",
-  "account show",
-  "account update",
   "attachments extract",
   "attachments list",
   "attachments show",

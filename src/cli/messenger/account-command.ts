@@ -15,10 +15,11 @@ import { type Messenger, messengerContext } from "./context.js"
 import { privacyCommand } from "./records-command.js"
 
 export const accountCommand = (messenger: Messenger): Command => {
+  const tool = `${messenger.app.command} personal`
   const account = new Command("account")
     .description("the logged-in account")
     .addCommand(
-      annotate(new Command("list"), { effects: REMOTE_READ })
+      annotate(new Command("list"), { effects: REMOTE_READ, examples: [`${tool} account list`] })
         .description("every profile on this computer, and the account each is logged in as; asks the messenger nothing")
         .action(async function (this: Command) {
           const context = messengerContext(this, messenger, { needsProfile: false })
@@ -48,7 +49,11 @@ export const accountCommand = (messenger: Messenger): Command => {
         }),
     )
     .addCommand(
-      annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "account" } })
+      annotate(new Command("show"), {
+        effects: REMOTE_READ,
+        output: { entity: "account" },
+        examples: [`${tool} account show`],
+      })
         .description("who this profile is logged in as; the phone number shows its last four digits")
         .option("--show-phone", "print the whole phone number")
         .action(async function (this: Command) {
@@ -63,7 +68,7 @@ export const accountCommand = (messenger: Messenger): Command => {
         }),
     )
     .addCommand(
-      annotate(new Command("update"), { effects: REMOTE_WRITE })
+      annotate(new Command("update"), { effects: REMOTE_WRITE, examples: [`${tool} account update --first-name Alex`] })
         .description("change the name, the description or the photo everyone sees on your profile")
         .option("--first-name <name>", "your first name")
         .option("--last-name <name>", "your last name")

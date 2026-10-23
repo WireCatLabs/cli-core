@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- Account commands include concrete examples in help and command discovery.
+
 - Task commands include concrete examples in help and command discovery.
 
 - Model commands include concrete examples in help and command discovery.
