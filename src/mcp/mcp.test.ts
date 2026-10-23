@@ -1157,6 +1157,7 @@ describe("the MCP server", () => {
     expect(evidence?.writes).toBe(false)
     const first = await call("messages evidence", { chat: "Book", limit: 1 })
     expect(first.isError).toBe(false)
+    v.parse(ENTITIES.evidence_packet, first.body.item)
     expect(first.body.item).toMatchObject({
       kind: "chats",
       source: { provider: "chat", account: "500", chat: "7" },
@@ -1305,6 +1306,7 @@ describe("the MCP server", () => {
     const inferred = models.opened
     const context = await call("messages context", { chat: "7", message: "5", thread: true })
     expect(context.isError).toBe(false)
+    v.parse(ENTITIES.message_context, context.body.item)
     expect(context.body.item.items.map((item: { id: string }) => item.id)).toEqual(["1", "3", "5", "6"])
     expect(context.body.item).toMatchObject({ mode: "thread", chain: ["3", "1"], stale: false })
     const located = await call("messages context", { chat: "msg:chat/500/7/5", thread: true })
@@ -2664,6 +2666,7 @@ describe("sending over MCP", () => {
     const { isError, body } = await call("messages send", { chat: "Book club", text: "see you", reply_to: "1" })
 
     expect(isError).toBe(false)
+    v.parse(ENTITIES.message_write, body.item)
     expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.item.operation_id, replyTo: "1" }])
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ outcome: "sent", chatId: "7", replyTo: "1", messageId: "99" })
