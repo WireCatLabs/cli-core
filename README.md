@@ -25,6 +25,7 @@ write. A messenger plugs in as one adapter and gets all of it.
 |---|---|
 | [Architecture](docs/dev/ARCHITECTURE.md) | The layers, the module map, the store internals and migrations, who consumes what |
 | [Document workflows](docs/dev/DOCUMENTS.md) | Shared file ingestion, sync, scoped knowledge and extraction; the ports a file provider supplies |
+| [Media archives](docs/dev/MEDIA-ARCHIVE.md) | Independent verified file copies, interruption recovery and opt-in daily timers |
 | [Write an adapter](docs/dev/ADAPTERS.md) | How to add a messenger: the port, the `Messenger` description, the contract cases |
 | [Messenger rules](docs/dev/STANDARD.md) | What binds tg, max and wa beyond the [CLI standards handbook](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/README.md): parity, the option catalogue, `bot` |
 | [Glossary](docs/dev/GLOSSARY.md) | One word, one meaning across the tools |

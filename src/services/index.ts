@@ -14,6 +14,9 @@ export type {
 } from "./context-evidence.js"
 export { contextEvidenceFingerprint, createContextEvidenceReader } from "./context-evidence.js"
 export { excerpt } from "./excerpt.js"
+export type { MediaArchiveOptions, MediaArchivePorts } from "./media-archive.js"
+export { archiveMedia, checkMediaArchive } from "./media-archive.js"
+export type { MediaArchiveEntry, MediaIdentity } from "./media-archive-manifest.js"
 export {
   type DownloadedModel,
   downloadImageModel,

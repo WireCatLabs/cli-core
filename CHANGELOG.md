@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Independent media archives for messenger CLIs.** `attachments download <dir>` saves files by account,
+  chat, message and position, verifies size and SHA-256 on reruns, and preserves completed downloads after
+  interruption. `attachments check <dir>` verifies copies offline. `attachments jobs` installs and manages
+  opt-in Linux daily timers. Archive files stay independent of message-store deletion; interrupted streams
+  restart from byte zero because messenger downloads expose no range validators.
+
 ### Changed — may break callers
 
 - MCP argument names follow singular CLI placeholders: `messages delete` takes `message`, chat export takes `chat`, and duplicate-task operations take `task` (with `other_task` for a pair). Update saved MCP requests using `messages`, `chats` or `dup`. CLI positional values and their order are unchanged.

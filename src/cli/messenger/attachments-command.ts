@@ -15,6 +15,7 @@ import { withPaging } from "../paging.js"
 import { readsStdin } from "../stdin-field.js"
 import { nextStep } from "../steps.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
+import { addMediaArchiveCommands } from "./media-archive-command.js"
 import { stopOnSignal } from "./patience.js"
 import { readAll } from "./stdin.js"
 
@@ -270,11 +271,14 @@ const textCommand = (messenger: Messenger): Command => {
 }
 
 /** Files of stored messages: what is in them, for `content:` in a search. Nothing here is sent. */
-export const attachmentsCommand = (messenger: Messenger): Command =>
-  new Command("attachments")
+export const attachmentsCommand = (messenger: Messenger): Command => {
+  const attachments = new Command("attachments")
     .summary("stored message files and their retained text")
     .description("the files of stored messages: their text in the local store, where search finds it")
     .addCommand(extractCommand(messenger))
     .addCommand(listCommand(messenger))
     .addCommand(showCommand(messenger))
     .addCommand(textCommand(messenger))
+  addMediaArchiveCommands(attachments, messenger)
+  return attachments
+}
