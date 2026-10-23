@@ -23,7 +23,7 @@ const count = (value: string) => {
 }
 export const gapsCommand = (messenger: Messenger) => {
   const group = new Command("gaps").description("inspect recorded interior coverage gaps and explicitly fetch them")
-  annotate(group.command("plan"), { effects: LOCAL_READ })
+  annotate(group.command("plan"), { output: { entity: "store_gap_plan" }, effects: LOCAL_READ })
     .description("local coverage plan; missing message ids alone do not imply missing history")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -31,7 +31,7 @@ export const gapsCommand = (messenger: Messenger) => {
       renderAnswer(this, context, itemOf(snakeKeys(await context.withServices((services) => services.gaps.plan(chat)))))
     })
   const fetching = messenger.fetching ?? FETCHING
-  annotate(group.command("repair"), { effects: FETCH })
+  annotate(group.command("repair"), { output: { entity: "store_gap_repair" }, effects: FETCH })
     .description("fetch bounded interior gaps and recheck coverage; never delete unseen messages")
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "total messages in this repair, 500 by default", count)

@@ -12,10 +12,12 @@ import {
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
 import { DEFAULT_TASK_CATEGORIES } from "../../domain/task-categories.js"
+import { ENTITIES } from "../../entities/index.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
@@ -82,10 +84,39 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, storeLockWaitMs?: nu
     { streams, tty: false, env, ...(storeLockWaitMs ? { storeLockWaitMs } : {}) },
   )
   const body = JSON.parse(streams.stdout[0] ?? "null")
+  if (argv[0] === "store" && argv.includes("--json") && body?.item) {
+    const names = {
+      info: "store_info",
+      check: "store_check",
+      migrate: "store_migration",
+      reindex: "store_reindex",
+      backup: "store_backup",
+      decrypt: "store_decrypt",
+      restore: "store_restore",
+      reset: "store_reset",
+      repair: "store_repair",
+      copies: "store_copy_removal",
+    } as const
+    const entity = names[argv[1] as keyof typeof names]
+    if (entity) v.parse(ENTITIES[entity] as v.GenericSchema, body.item)
+  }
+
   return { code, stdout: streams.stdout, stderr: streams.stderr, body, answer: body?.item ?? body }
 }
 
 describe("store info", () => {
+  it("projects store fields and refuses an unknown reset field before changing the store", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const projected = await call(["store", "info", "--json=path,rows.messages"], env)
+    expect(projected.code, projected.stderr.join(" ")).toBe(0)
+    expect(projected.answer).toEqual({ path: env.MESSAGING_STORE, rows: { messages: 2 } })
+    const refused = await call(["store", "reset", "--yes", "--json=unknown_field"], env)
+    expect(refused.code).not.toBe(0)
+    expect(JSON.parse(refused.stderr.join("")).error.reason).toBe("output.unknown-field")
+    expect((await call(["store", "info", "--json"], env)).answer.rows.messages).toBe(2)
+  })
+
   it("says there is no file rather than creating one", async () => {
     const env = envFor()
     const { answer } = await call(["store", "info", "--json"], env)

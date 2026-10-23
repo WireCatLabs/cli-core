@@ -2,8 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import type { Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
@@ -71,6 +73,18 @@ const fixture = async () => {
       { env, streams, tty: false, ...extra },
     )
     const answer = JSON.parse(streams.stdout.join("") || "null")
+    if (code === 0 && answer?.item) {
+      const schema =
+        argv[1] === "gaps"
+          ? argv[2] === "plan"
+            ? ENTITIES.store_gap_plan
+            : ENTITIES.store_gap_repair
+          : argv[1] === "jobs" && argv[2] === "show"
+            ? ENTITIES.store_job_details
+            : undefined
+      if (schema) v.parse(schema as v.GenericSchema, answer.item)
+    }
+
     return { code, body: answer?.item ?? answer, stderr: streams.stderr.join("") }
   }
   return { call, connect, env }

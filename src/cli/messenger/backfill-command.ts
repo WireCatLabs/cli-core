@@ -321,7 +321,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       context.renderer.note(`no ${query ? "matching " : ""}background sync jobs for this profile`)
   })
 
-  annotate(command.command("show"), { effects: LOCAL_READ })
+  annotate(command.command("show"), { output: { entity: "store_job_details" }, effects: LOCAL_READ })
     .summary("one archive job's status and log")
     .description("one background job — the newest when none is named — and what the store now holds of its chat")
     .argument("[job]", "the job id `messages sync --background` printed")
@@ -336,7 +336,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys({ ...jobDetails(job), ...(held ? { held } : {}), log: job.log })))
     })
 
-  destroysNothing(annotate(command.command("cancel"), { effects: LOCAL_WRITE }))
+  destroysNothing(annotate(command.command("cancel"), { output: { entity: "store_job_cancel" }, effects: LOCAL_WRITE }))
     .summary("cancel a queued or running archive job")
     .description("stop a running background job after its current page; a later sync resumes where it stopped")
     .argument("<job>", "the job id")
@@ -351,7 +351,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ job: job.id, cancelled: true }))
     })
 
-  destroysNothing(annotate(command.command("retry"), { effects: LOCAL_WRITE }))
+  destroysNothing(annotate(command.command("retry"), { output: { entity: "store_job_retry" }, effects: LOCAL_WRITE }))
     .summary("retry an archive job")
     .description("start a partial, failed or died job again, as a new job; the sync resumes where the store stopped")
     .argument("[job]", "the job id")
@@ -393,7 +393,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
         context.renderer.note("no partial, failed or died jobs to retry")
     })
 
-  destroysNothing(annotate(command.command("clear"), { effects: LOCAL_WRITE }))
+  destroysNothing(annotate(command.command("clear"), { output: { entity: "store_job_clear" }, effects: LOCAL_WRITE }))
     .description("forget finished jobs and remove their logs; a running job is kept")
     .action(function (this: Command) {
       const context = messengerContext(this, messenger)
