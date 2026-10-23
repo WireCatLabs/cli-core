@@ -19,6 +19,8 @@ shape of this file.
 
 - Recipient lists accept ID and title queries without changing the allowlist state. Recipient commands declare their answer schemas for discovery and field projection.
 
+- **Cached chat metadata declares its answers.** Cached reads describe absent or populated metadata; refresh receipts describe each successful chat or failure and whether more chats remain. Existing keys and cached-read behavior stay unchanged.
+
 - **Contact answers have declared fields.** Address-book writes, private aliases and note removal, activity, bot checks, identity links, context and preparation expose their exact answer schemas. Context describes both the cross-account report and selected-chat message windows at every detail level. Field projection recognizes both shapes and refuses unknown fields before reading contact data. CLI, SDK and MCP receipts keep their existing shapes.
 
 - **Mention answers have declared fields.** Mentions, details, linked domains, confirmed places, decisions and rebuild receipts expose their existing schemas for discovery, JSON field projection and MCP. Numeric local IDs and cross-account decision behavior stay unchanged.

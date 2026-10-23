@@ -127,6 +127,11 @@ const samples: Record<EntityName, unknown> = {
     items: [],
   },
   message_link: { ref: message.ref, url: null, access: "unavailable", reason: "offline" },
+  chat_metadata: { chat_id: "7", metadata: null },
+  chat_metadata_refresh: {
+    chats: [{ chat_id: "7", title: null, username: null, description: null, fetched_at: at }],
+    has_more: false,
+  },
   chat: {
     ref: "chat:telegram/1/2",
     id: "2",

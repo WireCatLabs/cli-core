@@ -11,6 +11,7 @@ import { attachment } from "./attachment.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
+import { cachedChatMetadata, chatMetadata, chatMetadataRefresh } from "./chat-metadata.js"
 import { chatStats, taskStats } from "./chat-stats.js"
 import { chatTracking, trackedChat, trackedChatHistory } from "./chat-tracking.js"
 import { contact } from "./contact.js"
@@ -105,9 +106,12 @@ export {
   analysisConsentRevocation,
   attachment,
   automaticTags,
+  cachedChatMetadata,
   chart,
   chat,
   chatEvent,
+  chatMetadata,
+  chatMetadataRefresh,
   chatStats,
   chatTracking,
   contact,
@@ -243,6 +247,8 @@ export const ENTITIES = {
   message_transcript: messageTranscript,
   message_links: messageLinks,
   evidence_packet: evidencePacket,
+  chat_metadata: cachedChatMetadata,
+  chat_metadata_refresh: chatMetadataRefresh,
   chat,
   mention,
   "mention.details": mentionDetails,
