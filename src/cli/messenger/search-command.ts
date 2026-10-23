@@ -48,8 +48,8 @@ const allCommand = (messenger: Messenger): Command => {
     .summary("search stored messages, notes and selected meeting transcripts")
     .description(
       (messenger.serverSearch
-        ? "search messenger messages and notes in the local store, and the messenger's server for messages " +
-          "(--backend; notes are local only)"
+        ? "search messenger messages and notes in the local store, and by default the messenger's server for " +
+          "messages too (notes are local only; --backend archive or --offline keeps it to the local store)"
         : "search messenger messages and notes in the local store") +
         ", and a meeting account's transcripts when --source names one — best match first; not mail (the separate memo CLI searches it: memo search mail), " +
         "tasks, people, memories or projects. Use it when you do not know where something was written; search messages " +

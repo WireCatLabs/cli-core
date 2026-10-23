@@ -37,6 +37,9 @@ shape of this file.
 - `parity.json` matches tg and max: `guide`, `mentions`, `runs search`, `tasks reject` and `--brief`/`--full` are in
   both, and each gap planned for tg names its tg-cli backlog id.
 
+- `search all --help` says the messenger's server is asked by default and names `--backend archive` and `--offline`
+  to keep it to the local store.
+
 ## 0.397.0 — 23.10.2026
 
 ### Changed — may break callers
