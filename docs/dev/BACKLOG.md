@@ -19,9 +19,7 @@ next is the [roadmap](../roadmap.md).
 
 ## Launch blockers (P1)
 
-- **CORE-1** · P1 · 🟡 The MCP server library had three high-severity advisories, so a fresh install of any WireCat CLI
-  reports 8 high alerts in `npm audit`. `@modelcontextprotocol/server` 2.3.0 is merged (#1699); left: release, then
-  every CLI adopts it.
+None open.
 
 ## Next (P2)
 
