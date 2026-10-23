@@ -8,6 +8,7 @@ import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { withoutProviderRefs } from "../provider-refs.js"
 import { type BotContext, botContext, online } from "./context.js"
+import { botExamples } from "./examples.js"
 import { botCan, botIdOf } from "./messages.js"
 import type { BotEvent, BotMessenger, BotNotice } from "./port.js"
 import { botFiles } from "./registry.js"
@@ -107,8 +108,13 @@ const keep = async (
  * instead, and a batch is acknowledged only once kept, so the messenger sends again what was not.
  */
 export const botWatchCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("watch"), { effects: REMOTE_WRITE, lifetime: "persistent" })
+  annotate(new Command("watch"), {
+    effects: REMOTE_WRITE,
+    lifetime: "persistent",
+    examples: botExamples(bot, "watch --jsonl", "watch --events"),
+  })
     .description("print new messages as they arrive and keep them, until Ctrl-C or --timeout (either ends it normally)")
+    .summary("print new messages as they arrive and keep them, until Ctrl-C")
     .option(
       "--events",
       "also edits, deletions, buttons pressed and people coming and going; every line names its event",

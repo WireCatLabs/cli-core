@@ -14,6 +14,7 @@ import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption, REMOTE_WRITE
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "../messenger/ask.js"
 import { type BotContext, botContext, online } from "./context.js"
+import { botExamples } from "./examples.js"
 import { botCan, botIdOf } from "./messages.js"
 import type { BotAdapter, BotMessenger } from "./port.js"
 import { botFiles } from "./registry.js"
@@ -43,15 +44,21 @@ const shown = (context: BotContext, chatId: Id, rules: ModerationRules) => {
 /** `bot chats rules show|set|unset`: kept on this machine, the chat named the bot's way. */
 export const botRulesCommand = (bot: BotMessenger): Command => {
   const command = new Command("rules").description("a chat's moderation rules for this bot, kept on this machine")
-  annotate(command.command("show"), { effects: LOCAL_READ })
+  annotate(command.command("show"), { effects: LOCAL_READ, examples: botExamples(bot, "chats rules show Team") })
     .description("the chat's rules; the defaults, marked not saved, if it has none yet")
     .argument("<chat>", CHAT)
     .action(function (this: Command, chat: string) {
       const context = botContext(this, bot)
       renderAnswer(this, context, shown(context, context.chatRef(chat), rulesOf(context, bot)))
     })
-  grantsAuthority(annotate(command.command("set"), { effects: LOCAL_WRITE }))
+  grantsAuthority(
+    annotate(command.command("set"), {
+      effects: LOCAL_WRITE,
+      examples: botExamples(bot, "chats rules set Team links delete"),
+    }),
+  )
     .description(`change one rule — ${RULE_KEYS.join(", ")}`)
+    .summary("change one moderation rule of a chat")
     .argument("<chat>", CHAT)
     .argument("<key>", "the rule")
     .argument("<value>", "its new value")
@@ -65,7 +72,12 @@ export const botRulesCommand = (bot: BotMessenger): Command => {
       rules.set(chatId, titleOf(context, chatId), key, value)
       renderAnswer(this, context, shown(context, chatId, rules))
     })
-  grantsAuthority(annotate(command.command("unset"), { effects: LOCAL_WRITE }))
+  grantsAuthority(
+    annotate(command.command("unset"), {
+      effects: LOCAL_WRITE,
+      examples: botExamples(bot, "chats rules unset Team links"),
+    }),
+  )
     .description("put one rule back to its default")
     .argument("<chat>", CHAT)
     .argument("<key>", "the rule")
@@ -173,8 +185,12 @@ const yes = (answer: string) => /^\s*y(es)?\s*$/i.test(answer)
  * what the rules name. A removal bans unless `--no-block`.
  */
 export const botModerateCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("moderate"), { effects: REMOTE_WRITE })
+  annotate(new Command("moderate"), {
+    effects: REMOTE_WRITE,
+    examples: botExamples(bot, "chats moderate Team --dry-run"),
+  })
     .description("judge a group's new messages and joins by its rules, and act as they allow — as the bot")
+    .summary("act on a group's new messages and joins by its rules, as the bot")
     .argument("<chat>", CHAT)
     .option("--since-time <time>", "judge what came after this ISO 8601 time, or 2h / 1d ago; the saved point stays")
     .option("--dry-run", "judge and plan; do nothing")

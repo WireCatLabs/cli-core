@@ -14,6 +14,7 @@ import { messageItem } from "../messenger/message-items.js"
 import { positiveCount } from "../paging.js"
 import { asFirstWord } from "../profile.js"
 import { type BotContext, botContext } from "./context.js"
+import { botExamples } from "./examples.js"
 import { botCan } from "./messages.js"
 import type { BotMessenger } from "./port.js"
 import { ChatRegistry, registryProfiles } from "./registry.js"
@@ -170,10 +171,14 @@ const cardOf = async (
 
 /** `bot contacts show`: one person this bot has seen write, from the local copy. */
 export const botContactsCommand = (bot: BotMessenger): Command => {
-  const command = new Command("contacts").description(
-    `people this bot has seen write — from the local copy on this machine, never asking ${bot.name ?? "the messenger"} unless told to`,
+  const command = new Command("contacts")
+    .description(
+      `people this bot has seen write — from the local copy on this machine, never asking ${bot.name ?? "the messenger"} unless told to`,
+    )
+    .summary("the people this bot has seen write, from the local copy")
+  acrossOptions(
+    annotate(command.command("show"), { effects: REMOTE_READ, examples: botExamples(bot, "contacts show @ann") }),
   )
-  acrossOptions(annotate(command.command("show"), { effects: REMOTE_READ }))
     .argument("<who>", "an id, @username or part of a name")
     .option("--limit <n>", "how many messages from the private chat", positiveCount("--limit"))
     .option("--sync-first", "read the private chat with them again from the messenger first — one request")
@@ -181,6 +186,7 @@ export const botContactsCommand = (bot: BotMessenger): Command => {
       "one person: the chats they wrote in (with their last message there) and the latest messages of their " +
         "private chat with the bot",
     )
+    .summary("one person: the chats they wrote in and their chat with the bot")
     .action(async function (this: Command, who: string, options: Across & { syncFirst?: boolean; limit?: number }) {
       const context = botContext(this, bot)
       const across = { allBots: options.allBots === true, bots: options.bots ?? [] }
@@ -255,7 +261,12 @@ const search = (
 /** `bot search messages`: the messages this bot's local copy holds. */
 export const botSearchCommand = (bot: BotMessenger): Command => {
   const group = new Command("search").description("find what this bot's local copy holds, by text")
-  acrossOptions(annotate(group.command("messages"), { effects: REMOTE_READ }))
+  acrossOptions(
+    annotate(group.command("messages"), {
+      effects: REMOTE_READ,
+      examples: botExamples(bot, "search messages refund", "search messages invoice --from @ann"),
+    }),
+  )
     .argument("[query...]", "the words to find")
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
@@ -270,6 +281,7 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
         'match first; a Lucene query: every word must appear; "a phrase", -word, a OR b, from: chat: date: has:; ' +
         "by text, by --from, or both",
     )
+    .summary("search the messages this bot has seen, in the local copy, by text")
     .action(async function (
       this: Command,
       query: string[],
@@ -307,7 +319,12 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
 
 /** `bot messages between`, over the local copy, added to the shared `messages` group. */
 export const addBotCopyReads = (messages: Command, bot: BotMessenger): void => {
-  acrossOptions(annotate(messages.command("between"), { effects: REMOTE_READ }))
+  acrossOptions(
+    annotate(messages.command("between"), {
+      effects: REMOTE_READ,
+      examples: botExamples(bot, "messages between @ann @bob"),
+    }),
+  )
     .argument("<people...>", "two or more people — an id, @username or part of a name each")
     .option("--limit <n>", "how many of the latest messages from each chat", positiveCount("--limit"))
     .description(
@@ -315,6 +332,7 @@ export const addBotCopyReads = (messages: Command, bot: BotMessenger): void => {
         "chat, oldest first; --limit counts per chat. Common chats are the ones this copy saw each of them " +
         `write in, not a member list from ${bot.name ?? "the messenger"}`,
     )
+    .summary("what two or more people wrote in the chats they share, from the local copy")
     .action(async function (this: Command, references: string[], options: Across & { limit?: number }) {
       const context = botContext(this, bot)
       if (references.length < 2) throw new CliError("validation_error", "name at least two people")

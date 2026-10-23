@@ -15,6 +15,7 @@ import { messageItem } from "../messenger/message-items.js"
 import { readAll } from "../messenger/stdin.js"
 import { positiveCount } from "../paging.js"
 import { type BotContext, botContext } from "./context.js"
+import { botExamples } from "./examples.js"
 import type { BotAdapter, BotMessenger } from "./port.js"
 
 /** The adapter's `method`, or a refusal naming what this messenger's bot cannot do. */
@@ -86,7 +87,14 @@ const seen = (context: BotContext, message: Message) => {
 }
 
 const sendCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("send"), { effects: REMOTE_WRITE })
+  annotate(new Command("send"), {
+    effects: REMOTE_WRITE,
+    examples: botExamples(
+      bot,
+      'messages send Team "Doors open at 9"',
+      'messages send Team "Here it is" --file report.pdf',
+    ),
+  })
     .description("send a message as the bot; without [text], the text is read from stdin")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("[text]", "the message")
@@ -171,11 +179,12 @@ const sendCommand = (bot: BotMessenger): Command =>
     })
 
 const listCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("list"), { effects: REMOTE_READ })
+  annotate(new Command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "messages list Team --limit 20") })
     .description(
       `the latest messages in a chat; where ${bot.name ?? "the messenger"} gives a bot no history, and with --offline, ` +
         "the ones this bot has seen on this machine",
     )
+    .summary("the latest messages in a chat")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .option("--limit <n>", "how many, the newest", positiveCount("--limit"))
     .action(async function (this: Command, chat: string) {
@@ -210,7 +219,7 @@ const listCommand = (bot: BotMessenger): Command =>
     })
 
 const showCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("show"), { effects: REMOTE_READ })
+  annotate(new Command("show"), { effects: REMOTE_READ, examples: botExamples(bot, "messages show Team 101") })
     .description("one message by its id in a chat")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")
@@ -244,7 +253,10 @@ const showCommand = (bot: BotMessenger): Command =>
     })
 
 const editCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("edit"), { effects: REMOTE_WRITE })
+  annotate(new Command("edit"), {
+    effects: REMOTE_WRITE,
+    examples: botExamples(bot, 'messages edit Team 101 "Doors open at 10"'),
+  })
     .description("replace the text of a message the bot sent")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")
@@ -280,7 +292,7 @@ const editCommand = (bot: BotMessenger): Command =>
     })
 
 const deleteCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("delete"), { effects: REMOTE_WRITE })
+  annotate(new Command("delete"), { effects: REMOTE_WRITE, examples: botExamples(bot, "messages delete Team 101") })
     .description("delete messages in a chat the bot can delete in; it cannot be undone")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<messages...>", "message ids")
@@ -303,7 +315,10 @@ const deleteCommand = (bot: BotMessenger): Command =>
     })
 
 const pinCommand = (bot: BotMessenger, pin: boolean): Command => {
-  const command = annotate(new Command(pin ? "pin" : "unpin"), { effects: REMOTE_WRITE })
+  const command = annotate(new Command(pin ? "pin" : "unpin"), {
+    effects: REMOTE_WRITE,
+    examples: botExamples(bot, `messages ${pin ? "pin" : "unpin"} Team 101`),
+  })
     .description(pin ? "pin a message in a chat; quietly unless --notify" : "unpin a message in a chat")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")

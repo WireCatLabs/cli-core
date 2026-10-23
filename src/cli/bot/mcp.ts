@@ -8,6 +8,7 @@ import { itemOf, renderAnswer } from "../envelope.js"
 import { type McpEnvironment, serverEntry } from "../messenger/mcp-command.js"
 import { nextStep, rootOf } from "../steps.js"
 import { botContext } from "./context.js"
+import { botExamples } from "./examples.js"
 import type { BotMessenger } from "./port.js"
 
 /** `bot mcp`, mounted only for a messenger that hands in its `run` on `BotMessenger.mcp`. */
@@ -17,6 +18,7 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
     .description(
       `serve this bot to an agent over MCP, on stdin and stdout — \`claude mcp add sales-bot -- ${app.command} sales bot mcp\``,
     )
+    .summary("serve this bot to an agent over MCP, on stdin and stdout")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
       if (!context.tokens.read()) {
@@ -44,8 +46,9 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
     })
 
   command.addCommand(
-    annotate(new Command("config"), { effects: LOCAL_READ })
+    annotate(new Command("config"), { effects: LOCAL_READ, examples: botExamples(bot, "mcp config") })
       .description("print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing")
+      .summary("print the mcpServers entry for an MCP client; writes nothing")
       .action(function (this: Command) {
         const context = botContext(this, bot)
         const { settings, env } = context

@@ -21,6 +21,10 @@ shape of this file.
 
 ### Added
 
+- **The shared `bot` commands have help examples and short summaries.** Each leaf under `bot` shows one to three
+  examples in the calling CLI's own words, and every summary fits 80 characters; `bot recipients add|remove` describe
+  their `<chat>`. A CLI that baselined these for `command-example-count`, `command-help-too-long` or
+  `missing-argument-help` sees "stale baseline entry" and removes the lines; tg, max and wa grow no baseline for them.
 - **`Messenger.joinRequestsByLink`**: whether `chats requests accept|decline --all` can be narrowed with `--link`;
   yes when unset. `joinRequestsAll` now turns on `--all` alone, so a messenger that answers every request at once
   but does not say which invite link each came by (MAX) offers `--all` without `--link`.

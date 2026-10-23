@@ -1,7 +1,1 @@
-[
-  "bot recipients add <chat>",
-  "bot recipients remove <chat>",
-  "schedule exec <file>",
-  "schedule remove <name>",
-  "schedule run <name>"
-]
+["schedule exec <file>", "schedule remove <name>", "schedule run <name>"]
