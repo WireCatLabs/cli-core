@@ -14,6 +14,7 @@ import { dateWindow } from "../../services/moment.js"
 import type { LeftChat } from "../../store/chats.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { commandAt } from "../steps.js"
 import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { admitPassword, linesOf, openFolder, runFileFor, saveManifest, sealRun, writeChanges } from "./export-folder.js"
@@ -32,6 +33,32 @@ export const storeCommand = (messenger: Messenger): Command => {
     .addCommand(exportCommand(messenger))
     .addCommand(clearCommand(messenger))
   for (const command of storeMaintenanceCommands(messenger)) store.addCommand(command)
+  const examples: Record<string, string> = {
+    backup: "./backup.db",
+    check: "",
+    clear: "--left --dry-run",
+    "copies delete": "messages_copy_1",
+    decrypt: "./backup.enc --output ./restored.db",
+    export: '"Book club" --output ./messages.jsonl',
+    "gaps plan": '"Book club"',
+    "gaps repair": '"Book club" --limit 100',
+    info: "",
+    "jobs cancel": "job-101",
+    "jobs clear": "",
+    "jobs list": "",
+    "jobs retry": "--failed",
+    "jobs show": "",
+    migrate: "",
+    reindex: "",
+    repair: "--dry-run",
+    reset: "",
+    restore: "./backup.db",
+    status: '"Book club"',
+  }
+  for (const [path, args] of Object.entries(examples)) {
+    const command = commandAt(store, path)
+    if (command) annotate(command, { examples: [`${messenger.app.command} personal store ${path} ${args}`.trimEnd()] })
+  }
   return store
 }
 
