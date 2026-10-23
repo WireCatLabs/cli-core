@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- Tag commands include concrete examples in help and command discovery.
+
 - Chat commands include concrete examples in help and command discovery.
 
 - Contact commands include concrete examples in help and command discovery.
