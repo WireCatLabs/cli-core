@@ -41,8 +41,14 @@ export interface Corpus {
   thread: string
 }
 
-/** A voice note's transcript is its attachment's text, written by speech recognition (`speech:<model>`). */
-export const SPEECH = "coalesce(att.extractor,'') LIKE 'speech:%'"
+/**
+ * A voice note's transcript is its attachment's text, whoever wrote it: speech recognition (`speech:<model>`) or an
+ * agent, which writes the text of a voice attachment as `agent`. The voice attachment is the one
+ * `intoVoiceAttachment` picks.
+ */
+export const speech = (alias: string) =>
+  `(coalesce(${alias}.extractor,'') LIKE 'speech:%' OR ${alias}.kind IN ('voice','video_note') OR coalesce(${alias}.mime,'')='audio/ogg')`
+export const SPEECH = speech("att")
 export const quoted = (value: string) => `"${value.replaceAll('"', '""')}"`
 /** A leaf's words as an FTS5 match: a phrase, or with `~N` its words at most N apart, in any order. */
 export const ftsMatch = (node: ResolvedPredicate): string => {

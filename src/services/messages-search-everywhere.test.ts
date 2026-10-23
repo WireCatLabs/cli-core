@@ -102,6 +102,24 @@ describe("a plain word searches everywhere", () => {
     expect((await search(store, '"heron river"~3')).items[0]?.matchedIn).toBe("transcript")
   })
 
+  it("**counts an agent's text on a voice note as its transcript**", async () => {
+    const store = await seeded()
+    await store.messages.saveMessages(account, "1", [message("10", "", [{ kind: "voice", mime: "audio/ogg" }])], {
+      via: "history",
+    })
+    const voice = (await store.attachments.fileAttachments(account, { limit: 20 })).find(
+      ({ messageId }) => messageId === "10",
+    )
+    await store.attachments.keepAttachmentText(voice?.pk as number, {
+      text: "Voice message, transcript: the egret is nesting",
+      origin: "agent",
+      extractor: "agent",
+    })
+    expect(ids(await search(store, "transcript:egret"))).toEqual(["10"])
+    expect(ids(await search(store, "content:egret"))).toEqual([])
+    expect((await search(store, "egret")).items[0]?.matchedIn).toBe("transcript")
+  })
+
   it("keeps Boolean logic over every place a word can be", async () => {
     const store = await seeded()
     expect(ids(await search(store, "heron AND table"))).toEqual(["3"])
