@@ -1,7 +1,15 @@
 import type { ProviderMetadata } from "./models.js"
 
 /** Attachments that are never a file, so their messages cost no download request. */
-export const NOT_FILES: ReadonlySet<string> = new Set(["webpage", "share", "poll", "location", "contact"])
+export const NOT_FILES: ReadonlySet<string> = new Set([
+  "webpage",
+  "share",
+  "poll",
+  "location",
+  "contact",
+  "control",
+  "inline_keyboard",
+])
 
 /** The stored kinds `has:<kind>` matches: MAX stores a file as `file`, Telegram as `document`. */
 export const storedKinds = (kind: string): string[] => (kind === "file" ? ["file", "document"] : [kind])
