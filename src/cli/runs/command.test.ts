@@ -2,12 +2,14 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { ENTITIES } from "../../entities/index.js"
 import { listRuns, runsDirFor, startRun } from "../../runs/run.js"
 import { run } from "../program.js"
 import { runsCommand } from "./command.js"
+import { runsSearchCommand } from "./search-command.js"
 
 describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
   it.each(["pretty", "jsonl", "json"])("offers a supported continuation in %s", async (format) => {
@@ -30,7 +32,7 @@ describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
     const argv = ["runs", "list", "--limit", "1", ...(format === "pretty" ? [] : [`--${format}`])]
     const code = await run(
       argv,
-      { app, commands: () => [runsCommand(app)] },
+      { app, commands: () => [runsCommand(app), new Command("search").addCommand(runsSearchCommand(app))] },
       { streams, env, tty: format === "pretty" },
     )
     expect(code).toBe(0)
@@ -69,7 +71,7 @@ it("shows every event of a run, and only its problems with --problems", async ()
     const streams = captureStreams()
     await run(
       ["runs", "show", item.id, "--json", ...flags],
-      { app, commands: () => [runsCommand(app)] },
+      { app, commands: () => [runsCommand(app), new Command("search").addCommand(runsSearchCommand(app))] },
       { streams, env },
     )
     return JSON.parse(streams.stdout[0] ?? "").item
@@ -112,7 +114,11 @@ it("filters run metadata before paging and preserves the query in continuation",
   const before = listRuns(dir)
   const call = async (words: string[]) => {
     const streams = captureStreams()
-    const code = await run(words, { app, commands: () => [runsCommand(app)] }, { streams, env, tty: false })
+    const code = await run(
+      words,
+      { app, commands: () => [runsCommand(app), new Command("search").addCommand(runsSearchCommand(app))] },
+      { streams, env, tty: false },
+    )
     return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
   }
   const query = "profile:work status:FAILED error_code:timeout"
@@ -131,7 +137,7 @@ it("filters run metadata before paging and preserves the query in continuation",
   expect(
     JSON.parse(projected.stdout).items.every((row: object) => Object.keys(row).sort().join(",") === "run_id,status"),
   ).toBe(true)
-  const search = await call(["runs", "search", "--status", "failed", "--json"])
+  const search = await call(["search", "runs", "status:failed", "--json"])
   expect(search.code).toBe(0)
   for (const row of JSON.parse(search.stdout).items) expect(v.safeParse(ENTITIES["run.hit"], row).success).toBe(true)
   const path = await call(["runs", "path", page.items[0].run_id, "--json"])

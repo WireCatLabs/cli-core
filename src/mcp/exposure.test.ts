@@ -48,6 +48,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     "models audio list",
     "replies status",
     "runs list",
+    "search runs",
     "schedule list",
     "server status",
     "server logs",

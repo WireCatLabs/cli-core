@@ -25,7 +25,7 @@ another meaning.
 |---|---|---|---|---|
 | `list` | show many | all | `ls` | drive `shared-drives` (a list with no verb) |
 | `show` | show one | all | `get`, `view` | tg/max `metadata get`, max `bot comments get`, drive `documents get`, `files get`, `comments get`, `permissions get`, `revisions get` |
-| `search` | find by text, under `search <resource>` | all | `find`, `query` | drive `search` (root leaf, no resource), memo/drive `memories search` (a resource's own search leaf), tg/max `runs search` |
+| `search` | find by text, under `search <resource>` | all | `find`, `query` | drive `search` (root leaf, no resource), memo/drive `memories search` (a resource's own search leaf) |
 | `create` / `delete` | make or destroy a thing | all | `mkdir`, `trash`, `rm` | drive `files mkdir`, `files trash` (see NEED-991) |
 | `add` / `remove` | put an existing thing into a set, or take it out | all | `rm`, `attach` | tg/max `contacts alias rm`; memo `folders attach` |
 | `update` | change a thing's fields | all | `plan`, `edit` for fields | tg/max `tasks plan` (sets title, due date) |

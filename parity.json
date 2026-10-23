@@ -337,10 +337,6 @@
     "--encrypt": {
       "meaning": "compress and encrypt with a password, typed at a hidden prompt or piped on stdin; never kept"
     },
-    "--error-code": {
-      "value": "<code>",
-      "meaning": "filter diagnostic runs by a stable error code"
-    },
     "--events": {
       "meaning": "also print edits, deletions and reactions; every line then names its event",
       "note": "watch updates use this flag independently of the group event --type filter"
@@ -727,10 +723,6 @@
       "value": "<on|off>",
       "meaning": "only the owner may change the name and photo"
     },
-    "--operation": {
-      "value": "<name>",
-      "meaning": "filter diagnostic events by operation"
-    },
     "--operation-id": {
       "value": "<id>",
       "meaning": "identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated"
@@ -810,10 +802,6 @@
     },
     "--problems": {
       "meaning": "only failed responses, warnings and crashes"
-    },
-    "--profile": {
-      "value": "<name>",
-      "meaning": "filter diagnostic runs by recorded profile"
     },
     "--profile-photo": {
       "value": "<who>",
@@ -967,10 +955,6 @@
     "--start": {
       "value": "<param>",
       "meaning": "the start parameter the bot or app reads; for chats start, a link's own ?start= when not given"
-    },
-    "--status": {
-      "value": "<status>",
-      "meaning": "filter diagnostic runs by outcome"
     },
     "--sticker": {
       "value": "<id>",
@@ -3829,18 +3813,6 @@
     "runs path": {
       "in": "all"
     },
-    "runs search": {
-      "in": "all",
-      "options": {
-        "--error-code": "all",
-        "--limit": "all",
-        "--operation": "all",
-        "--page": "all",
-        "--profile": "all",
-        "--since-time": "all",
-        "--status": "all"
-      }
-    },
     "runs show": {
       "in": "all",
       "options": {
@@ -4090,6 +4062,14 @@
           }
         },
         "--timezone": "all"
+      }
+    },
+    "search runs": {
+      "in": "all",
+      "options": {
+        "--limit": "all",
+        "--page": "all",
+        "--since-time": "all"
       }
     },
     "search topics": {

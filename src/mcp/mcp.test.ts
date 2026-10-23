@@ -29,6 +29,7 @@ import type { Chat, Message } from "../domain/models.js"
 import { ENTITIES } from "../entities/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import type { MessengerAdapter, RemoteFile, SendOptions } from "../ports/messenger.js"
+import { listRuns, runsDirFor, startRun } from "../runs/run.js"
 import type { Asker, GuardRequest, SendGuard } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
 import { RESOURCES } from "../sends/permissions.js"
@@ -782,13 +783,13 @@ describe("the MCP server", () => {
       "review",
       "runs list",
       "runs path",
-      "runs search",
       "runs show",
       "schedule list",
       "search all",
       "search conversations",
       "search messages",
       "search notes",
+      "search runs",
       "search topics",
       "searches history",
       "searches list",
@@ -2067,7 +2068,6 @@ describe("the MCP server", () => {
     expect(commands.filter((one) => one.startsWith("store ") || one.startsWith("runs ")).sort()).toEqual([
       "runs list",
       "runs path",
-      "runs search",
       "runs show",
       "store check",
       "store export",
@@ -2082,6 +2082,37 @@ describe("the MCP server", () => {
       "store reindex",
       "store status",
     ])
+  })
+
+  it("searches diagnostic runs through MCP without opening a messenger or its message store", async () => {
+    const backend = scripted()
+    const { call, client, env } = await connect(backend, { config: levels({ messages: "deny", search: "deny" }) })
+    const dir = runsDirFor(app, env)
+    const diagnostic = startRun({
+      runsDir: dir,
+      profile: "default",
+      command: "messages download",
+      service: "chat",
+      cliVersion: app.version,
+    })
+    diagnostic.logger.info({
+      event: "response",
+      operation: "messages.download",
+      errorCode: "timeout",
+      message: "synthetic private payload",
+    })
+    await diagnostic.finish("failed", { errorCode: "timeout" })
+    const before = listRuns(dir).map(({ runId }) => runId)
+    expect(await client.commands()).toContain("search runs")
+    const found = await call("search runs", {
+      query: "status:failed error_code:timeout operation:messages.download",
+      limit: 1,
+    })
+    expect(found.isError).toBe(false)
+    expect(v.parse(ENTITIES["run.hit"], found.body.items[0]).run_id).toBe(before[0])
+    expect(JSON.stringify(found.body)).not.toContain("synthetic private payload")
+    expect(backend.opened()).toBe(0)
+    expect(listRuns(dir).map(({ runId }) => runId)).toEqual(before)
   })
 
   it("plans gaps locally and repairs them through the retained session", async () => {

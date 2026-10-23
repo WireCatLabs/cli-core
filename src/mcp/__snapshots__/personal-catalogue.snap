@@ -73,13 +73,13 @@ read  replies test
 read  review
 read  runs list
 read  runs path
-read  runs search
 read  runs show
 read  schedule list
 read  search all
 read  search conversations
 read  search messages
 read  search notes
+read  search runs
 read  search topics
 read  searches history
 read  searches list

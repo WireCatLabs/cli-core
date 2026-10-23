@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command, Option } from "commander"
+import { Command } from "commander"
 import type { AppIdentity } from "../../ports/app.js"
 import { findRun, listRuns, readEvents, runsDirFor } from "../../runs/run.js"
 import { environmentOf, outputFor } from "../context.js"
@@ -10,7 +10,6 @@ import { typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { lineOf } from "../steps.js"
 import { RUNS_QUERY, runListFilter } from "./query.js"
-import { type RunSearch, runsFound, searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */
 export const runsCommand = (app: AppIdentity): Command => {
@@ -83,49 +82,6 @@ export const runsCommand = (app: AppIdentity): Command => {
         renderer.note(
           `${events.length - shown.length} other events — \`${lineOf(this, `runs show ${id}`)}\` shows them all`,
         )
-    })
-
-  annotate(command.command("search"), {
-    examples: [`${app.command} runs search timeout --limit 10`],
-    effects: LOCAL_READ,
-    output: { entity: "run", view: "hit" },
-  })
-    .description("search recorded diagnostic metadata and events; no message contents")
-    .argument("[query]", "case-insensitive literal diagnostic text")
-    .addOption(new Option("--status <status>", "run outcome").choices(["success", "failed", "partial", "running"]))
-    .option("--error-code <code>", "one stable error code")
-    .option("--operation <name>", "one operation, such as messages.download")
-    .option("--profile <name>", "one recorded profile")
-    .option("--since-time <time>", "runs starting on or after an ISO time or 2h / 1d ago")
-    .option("--limit <n>", "matches per page, at most 100", positiveCount("--limit"), 20)
-    .option("--page <n>", "result page", positiveCount("--page"), 1)
-    .action(function (this: Command, query?: string) {
-      const options = this.opts<{
-        status?: RunSearch["status"]
-        errorCode?: string
-        operation?: string
-        profile?: string
-        sinceTime?: string
-        limit: number
-        page: number
-      }>()
-      const found = searchRuns(dir(this), {
-        ...options,
-        since: options.sinceTime,
-        ...(query === undefined ? {} : { query }),
-      })
-      renderAnswer(
-        this,
-        outputFor(this),
-        runsFound(found, {
-          query,
-          status: options.status,
-          error_code: options.errorCode,
-          operation: options.operation,
-          profile: options.profile,
-          since_time: options.sinceTime,
-        }),
-      )
     })
 
   annotate(command.command("path"), {

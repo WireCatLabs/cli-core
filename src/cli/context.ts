@@ -198,7 +198,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
         ? recorded(
             {
               app: environment.app,
-              // An agent's run is named `mcp <command>`, so `runs search` and `sends list` tell it from the owner's.
+              // An agent's run is named `mcp <command>`, so `search runs` and `sends list` tell it from the owner's.
               command: name ?? `${environment.agent ? "mcp " : ""}${commandPath(command)}`,
               profile: settings.profile,
               record: settings.record,

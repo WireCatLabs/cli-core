@@ -95,7 +95,7 @@ export const runsDirFor = (app: AppIdentity, env: NodeJS.ProcessEnv = process.en
  * `run.json` is written **now**, with `status: "running"`, and again by `finish`. A directory
  * holding events and no metadata is a special case `runs list` would carry forever.
  *
- * Each write also appends the metadata to the day's `index.jsonl`, which `runs list` and `runs search`
+ * Each write also appends the metadata to the day's `index.jsonl`, which `runs list` and `search runs`
  * read instead of every `run.json`. It is only a cache: pruned with its day, and a day without one is read
  * the slow way.
  */
