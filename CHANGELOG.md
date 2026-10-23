@@ -5,6 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Message read schemas.** Evidence packets, voice transcripts and conversation links declare separate answer entities for field discovery and projection, preserving existing response keys.
+
 ## 0.394.0 — 23.10.2026
 
 ### Added

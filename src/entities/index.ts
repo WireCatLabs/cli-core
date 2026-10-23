@@ -40,6 +40,7 @@ import { memory } from "./memory.js"
 import { message } from "./message.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
+import { evidencePacket, messageLinks, messageTranscript } from "./message-read.js"
 import { model } from "./model.js"
 import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
@@ -76,6 +77,7 @@ export {
   counters,
   document,
   evidence,
+  evidencePacket,
   fact,
   folder,
   hit,
@@ -91,6 +93,8 @@ export {
   message,
   messageCounts,
   messageLink,
+  messageLinks,
+  messageTranscript,
   model,
   note,
   officialStats,
@@ -134,6 +138,9 @@ export const ENTITIES = {
     "attachments",
   ]),
   message_link: messageLink,
+  message_transcript: messageTranscript,
+  message_links: messageLinks,
+  evidence_packet: evidencePacket,
   chat,
   person,
   identity,

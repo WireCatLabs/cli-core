@@ -9,6 +9,7 @@ import { evidenceAnswer } from "./message-answers.js"
 
 export const evidenceCommand = (messenger: Messenger): Command =>
   annotate(new Command("evidence"), {
+    output: { entity: "evidence_packet" },
     examples: [`${messenger.app.command} personal messages evidence "Book club" --limit 10`],
     effects: LOCAL_READ,
   })

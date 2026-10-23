@@ -25,6 +25,19 @@ const message = {
 const author = { type: "person", id: "1", name: null }
 
 const samples: Record<EntityName, unknown> = {
+  message_transcript: { message_id: "3", text: "", pending: true, via: "chat" },
+  message_links: { chat: "7", message: "3", links: [], chain: [] },
+  evidence_packet: {
+    schema_version: 1,
+    id: "packet-1",
+    kind: "chats",
+    source: { provider: "chat", account: "500", chat: "7" },
+    fingerprint: "a".repeat(64),
+    limits: { messages: 10, bytes: 65536 },
+    content_bytes: 2,
+    coverage: { provided: 0, included: 0, omitted: 0, has_more: false, history: "unknown", truncated_by: null },
+    items: [],
+  },
   message,
   "message.hit": {
     ref: message.ref,

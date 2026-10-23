@@ -1,9 +1,12 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
+import { evidenceAnswer } from "../cli/messenger/message-answers.js"
 import { parseLocator } from "../domain/locator.js"
 import type { Message } from "../domain/models.js"
+import { ENTITIES } from "../entities/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { readEvidencePacket } from "./evidence-read.js"
 
@@ -54,6 +57,7 @@ describe("stored evidence", () => {
     await store.messages.saveMessages({ ...account, account: "another" }, "room", [message("private")], { via: "test" })
     const first = await readEvidencePacket(store, account, { chat: "Example", limit: 2 })
     expect(ids(first)).toEqual(["c", "b"])
+    expect(v.safeParse(ENTITIES.evidence_packet, evidenceAnswer(first, "room", 2).item).success).toBe(true)
     expect(first).toMatchObject({
       kind: "chats",
       source: { ...account, chat: "room" },
@@ -82,6 +86,7 @@ describe("stored evidence", () => {
   it("reports an oversized newest message as an obstruction without advancing past it", async () => {
     const store = await seeded([message("a"), message("b", "x".repeat(64 * 1024))])
     const packet = await readEvidencePacket(store, account, { chat: "room", limit: 2 })
+    expect(v.safeParse(ENTITIES.evidence_packet, evidenceAnswer(packet, "room", 2).item).success).toBe(true)
     expect(packet).toMatchObject({ items: [], nextBeforeId: null, contentBytes: 2 })
     expect(packet.coverage).toMatchObject({ provided: 2, omitted: 2, truncatedBy: "bytes", history: "unknown" })
   })
