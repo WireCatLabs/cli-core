@@ -33,6 +33,8 @@ shape of this file.
 
 - Conversation commands include examples in help and command discovery, with guidance for submitting a batch answer.
 
+- Server commands include concrete examples in help and command discovery.
+
 ## 0.394.0 — 23.10.2026
 
 ### Added
