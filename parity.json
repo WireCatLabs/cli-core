@@ -1119,22 +1119,10 @@
     }
   },
   "globalOptions": {
-    "--brief": {
-      "in": ["wa"],
-      "planned": {
-        "max": "each CLI’s next cli-core bump",
-        "tg": "each CLI’s next cli-core bump"
-      }
-    },
+    "--brief": "all",
     "--debug": "all",
     "--dry-run": "all",
-    "--full": {
-      "in": ["wa"],
-      "planned": {
-        "max": "each CLI’s next cli-core bump",
-        "tg": "each CLI’s next cli-core bump"
-      }
-    },
+    "--full": "all",
     "--json": "all",
     "--jsonl": "all",
     "--max-input-bytes": "all",
@@ -1176,14 +1164,14 @@
     "account privacy": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "tg": "tg-cli TG-22: account privacy",
         "wa": "wa backlog: account privacy"
       }
     },
     "account privacy set": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: settings writes (mute, privacy)",
+        "tg": "tg-cli TG-22: account privacy",
         "wa": "wa backlog: account privacy"
       },
       "options": {
@@ -1197,28 +1185,28 @@
         "--calls": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "tg": "tg-cli TG-22: account privacy",
             "wa": "wa backlog: account privacy"
           }
         },
         "--chat-invites": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "tg": "tg-cli TG-22: account privacy",
             "wa": "wa backlog: account privacy"
           }
         },
         "--find-by-phone": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "tg": "tg-cli TG-22: account privacy",
             "wa": "wa backlog: account privacy"
           }
         },
         "--hide-online": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "tg": "tg-cli TG-22: account privacy",
             "wa": "wa backlog: account privacy"
           }
         },
@@ -1232,7 +1220,7 @@
         "--phone-number": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "tg": "tg-cli TG-22: account privacy",
             "wa": "wa backlog: account privacy"
           }
         },
@@ -1255,7 +1243,7 @@
     "account privacy show": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "tg": "tg-cli TG-22: account privacy",
         "wa": "wa backlog: account privacy"
       }
     },
@@ -2149,21 +2137,21 @@
     "calls": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "tg": "tg-cli TG-18: calls and chat media",
         "wa": "wa backlog: calls"
       }
     },
     "calls list": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "tg": "tg-cli TG-18: calls and chat media",
         "wa": "wa backlog: calls"
       },
       "options": {
         "--limit": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "tg": "tg-cli TG-18: calls and chat media",
             "wa": "wa backlog: calls"
           }
         }
@@ -2192,14 +2180,14 @@
     "chats app": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: start a bot, open its mini app",
+        "tg": "tg-cli TG-19: start a bot, open its mini app",
         "wa": "wa backlog: not assessed yet"
       },
       "options": {
         "--start": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: start a bot, open its mini app",
+            "tg": "tg-cli TG-19: start a bot, open its mini app",
             "wa": "wa backlog: not assessed yet"
           }
         }
@@ -2208,7 +2196,7 @@
     "chats archive": {
       "in": [],
       "planned": {
-        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "tg": "tg-cli TG-5: chat archive, pin and unread",
         "wa": "wa stream S1: chat archive, pin and unread"
       },
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
@@ -2216,14 +2204,14 @@
     "chats clear": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: chats delete and clear",
+        "tg": "tg-cli TG-17: chats delete and clear",
         "wa": "wa backlog: chats delete and clear"
       },
       "options": {
         "--allow-dangerous": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: chats delete and clear",
+            "tg": "tg-cli TG-17: chats delete and clear",
             "wa": "wa backlog: chats delete and clear"
           }
         }
@@ -2238,14 +2226,14 @@
     "chats delete": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: chats delete and clear",
+        "tg": "tg-cli TG-17: chats delete and clear",
         "wa": "wa backlog: chats delete and clear"
       },
       "options": {
         "--allow-dangerous": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: chats delete and clear",
+            "tg": "tg-cli TG-17: chats delete and clear",
             "wa": "wa backlog: chats delete and clear"
           }
         }
@@ -2468,7 +2456,7 @@
     "chats mark-unread": {
       "in": [],
       "planned": {
-        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "tg": "tg-cli TG-5: chat archive, pin and unread",
         "wa": "wa stream S1: chat archive, pin and unread"
       },
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
@@ -2476,28 +2464,28 @@
     "chats media": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "tg": "tg-cli TG-18: calls and chat media",
         "wa": "wa backlog: not assessed yet"
       },
       "options": {
         "--cursor": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "tg": "tg-cli TG-18: calls and chat media",
             "wa": "wa backlog: not assessed yet"
           }
         },
         "--limit": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "tg": "tg-cli TG-18: calls and chat media",
             "wa": "wa backlog: not assessed yet"
           }
         },
         "--type": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "tg": "tg-cli TG-18: calls and chat media",
             "wa": "wa backlog: not assessed yet"
           }
         }
@@ -2555,14 +2543,14 @@
     "chats mute": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: settings writes (mute, privacy)",
+        "tg": "tg-cli TG-6: chats mute and unmute",
         "wa": "wa backlog: chats mute"
       },
       "options": {
         "--until": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "tg": "tg-cli TG-6: chats mute and unmute",
             "wa": "wa backlog: chats mute"
           }
         }
@@ -2571,7 +2559,7 @@
     "chats pin": {
       "in": [],
       "planned": {
-        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "tg": "tg-cli TG-5: chat archive, pin and unread",
         "wa": "wa stream S1: chat archive, pin and unread"
       },
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
@@ -2634,14 +2622,14 @@
     "chats start": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: start a bot, open its mini app",
+        "tg": "tg-cli TG-19: start a bot, open its mini app",
         "wa": "wa backlog: not assessed yet"
       },
       "options": {
         "--start": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: start a bot, open its mini app",
+            "tg": "tg-cli TG-19: start a bot, open its mini app",
             "wa": "wa backlog: not assessed yet"
           }
         }
@@ -2665,7 +2653,7 @@
     "chats unarchive": {
       "in": [],
       "planned": {
-        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "tg": "tg-cli TG-5: chat archive, pin and unread",
         "wa": "wa stream S1: chat archive, pin and unread"
       },
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
@@ -2673,14 +2661,14 @@
     "chats unmute": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: settings writes (mute, privacy)",
+        "tg": "tg-cli TG-6: chats mute and unmute",
         "wa": "wa backlog: chats mute"
       }
     },
     "chats unpin": {
       "in": [],
       "planned": {
-        "tg": "tg-cli backlog: chat archive, pin and unread",
+        "tg": "tg-cli TG-5: chat archive, pin and unread",
         "wa": "wa stream S1: chat archive, pin and unread"
       },
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
@@ -2696,7 +2684,7 @@
         "--disappear-time": {
           "in": [],
           "planned": {
-            "tg": "tg-cli backlog: Telegram's default banned rights (send, change info) and auto-delete timer",
+            "tg": "tg-cli TG-21: Telegram's default banned rights (send, change info) and auto-delete timer",
             "wa": "wa's next cli-core bump"
           },
           "reason": "MAX has no such switch: PyMax's ChatOption has five, and cli-core names them all"
@@ -2717,7 +2705,7 @@
         "--only-admins-edit-info": {
           "in": [],
           "planned": {
-            "tg": "tg-cli backlog: Telegram's default banned rights (send, change info) and auto-delete timer",
+            "tg": "tg-cli TG-21: Telegram's default banned rights (send, change info) and auto-delete timer",
             "wa": "wa's next cli-core bump"
           },
           "reason": "MAX has no such switch: PyMax's ChatOption has five, and cli-core names them all"
@@ -2725,7 +2713,7 @@
         "--only-admins-send": {
           "in": [],
           "planned": {
-            "tg": "tg-cli backlog: Telegram's default banned rights (send, change info) and auto-delete timer",
+            "tg": "tg-cli TG-21: Telegram's default banned rights (send, change info) and auto-delete timer",
             "wa": "wa's next cli-core bump"
           },
           "reason": "MAX has no such switch: PyMax's ChatOption has five, and cli-core names them all"
@@ -2737,14 +2725,14 @@
         "--photo": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: chats update --photo",
+            "tg": "tg-cli TG-21: chats update --photo",
             "wa": "wa backlog: the group photo"
           }
         },
         "--remove-photo": {
           "in": [],
           "planned": {
-            "tg": "tg-cli backlog: chats update --photo",
+            "tg": "tg-cli TG-21: chats update --photo",
             "wa": "wa #55: chats update --photo and --remove-photo"
           },
           "reason": "MAX: no measured request takes a group's photo away"
@@ -3126,10 +3114,8 @@
       }
     },
     "guide": {
-      "in": [],
+      "in": ["max", "tg"],
       "planned": {
-        "max": "help-navigation pass: max-cli#737 mounts guide with scenarios",
-        "tg": "help-navigation pass: mount guide with scenarios",
         "wa": "help-navigation pass: mount guide with scenarios"
       }
     },
@@ -3216,147 +3202,49 @@
       }
     },
     "mentions": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      }
+      "in": "all"
     },
     "mentions confirm": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      },
+      "in": "all",
       "options": {
-        "--all-in-chat": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        },
-        "--as-owner": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        }
+        "--all-in-chat": "all",
+        "--as-owner": "all"
       }
     },
     "mentions domains": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      },
+      "in": "all",
       "options": {
-        "--limit": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        },
-        "--page": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        }
+        "--limit": "all",
+        "--page": "all"
       }
     },
     "mentions list": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      },
+      "in": "all",
       "options": {
-        "--limit": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        },
-        "--new": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        },
-        "--page": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        }
+        "--limit": "all",
+        "--new": "all",
+        "--page": "all"
       }
     },
     "mentions places": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      },
+      "in": "all",
       "options": {
-        "--limit": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        },
-        "--page": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        }
+        "--limit": "all",
+        "--page": "all"
       }
     },
     "mentions rebuild": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      }
+      "in": "all"
     },
     "mentions reject": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      },
+      "in": "all",
       "options": {
-        "--all-in-chat": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        },
-        "--as-owner": {
-          "in": ["wa"],
-          "planned": {
-            "max": "mentions (docs/dev/mentions-plan.md)",
-            "tg": "mentions (docs/dev/mentions-plan.md)"
-          }
-        }
+        "--all-in-chat": "all",
+        "--as-owner": "all"
       }
     },
     "mentions show": {
-      "in": ["wa"],
-      "planned": {
-        "max": "mentions (docs/dev/mentions-plan.md)",
-        "tg": "mentions (docs/dev/mentions-plan.md)"
-      }
+      "in": "all"
     },
     "messages": {
       "in": "all"
@@ -3486,7 +3374,7 @@
     "messages press": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: press inline buttons",
+        "tg": "tg-cli TG-19: press inline buttons",
         "wa": "wa backlog: not assessed yet"
       }
     },
@@ -3540,7 +3428,7 @@
         "--sticker": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: stickers"
+            "tg": "tg-cli TG-20: stickers"
           },
           "reason": "WhatsApp has no sticker sets to take an id from; wa sends a sticker from a file, --sticker-file"
         },
@@ -3916,11 +3804,7 @@
       "in": "all"
     },
     "runs search": {
-      "in": ["wa"],
-      "planned": {
-        "max": "max-cli: adopt the attachment-budget maintenance release",
-        "tg": "tg-cli: adopt the attachment-budget maintenance release"
-      },
+      "in": "all",
       "options": {
         "--error-code": "all",
         "--limit": "all",
@@ -4636,21 +4520,21 @@
     "stickers": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: stickers",
+        "tg": "tg-cli TG-20: stickers",
         "wa": "wa backlog: stickers"
       }
     },
     "stickers list": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: stickers",
+        "tg": "tg-cli TG-20: stickers",
         "wa": "wa backlog: stickers"
       },
       "options": {
         "--set": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: stickers",
+            "tg": "tg-cli TG-20: stickers",
             "wa": "wa backlog: stickers"
           }
         }
@@ -4937,19 +4821,9 @@
       }
     },
     "tasks reject": {
-      "in": ["wa"],
-      "planned": {
-        "max": "each CLI’s next cli-core bump",
-        "tg": "each CLI’s next cli-core bump"
-      },
+      "in": "all",
       "options": {
-        "--as-owner": {
-          "in": ["wa"],
-          "planned": {
-            "max": "each CLI’s next cli-core bump",
-            "tg": "each CLI’s next cli-core bump"
-          }
-        }
+        "--as-owner": "all"
       }
     },
     "tasks related": {

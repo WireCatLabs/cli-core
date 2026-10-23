@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { Command } from "commander"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 
 type Need = readonly [method: keyof MessengerAdapter, what: string]
@@ -34,6 +35,7 @@ const STORE_ANSWERS: ReadonlySet<string> = new Set(["chats events"])
 interface Lacking {
   channelComments?: boolean
   lacks?: readonly (keyof MessengerAdapter)[]
+  never?: readonly (keyof MessengerAdapter)[]
   history?: "server" | "store"
 }
 
@@ -42,7 +44,7 @@ export const lackedNeed = (messenger: Lacking | undefined, path: string): Need |
   const need = COMMAND_NEEDS[path]
   if (!need) return undefined
   if (path === "messages comments" && messenger?.channelComments === false) return need
-  if (!messenger?.lacks?.includes(need[0])) return undefined
+  if (!messenger?.lacks?.includes(need[0]) && !messenger?.never?.includes(need[0])) return undefined
   return messenger.history === "store" && STORE_ANSWERS.has(path) ? undefined : need
 }
 
@@ -50,4 +52,21 @@ export const lackedNeed = (messenger: Lacking | undefined, path: string): Need |
 export const refuseLacking = (messenger: Lacking | undefined, path: readonly string[]) => {
   const need = lackedNeed(messenger, path.join(" "))
   if (need) throw new CliError("validation_error", `this messenger cannot ${need[1]}`)
+}
+
+/**
+ * Hides under `group` each command whose one method this messenger can `never` have, from help, `commands` and MCP;
+ * typed anyway, it still refuses. A method it only `lacks` keeps its command in sight, since it may come.
+ */
+export const hideNever = <T extends Command>(messenger: Lacking, group: T): T => {
+  const walk = (command: Command, path: readonly string[]) => {
+    for (const child of command.commands) {
+      const at = [...path, child.name()]
+      const need = COMMAND_NEEDS[at.join(" ")]
+      if (need && messenger.never?.includes(need[0])) (child as Command & { _hidden: boolean })._hidden = true
+      walk(child, at)
+    }
+  }
+  walk(group, [group.name()])
+  return group
 }

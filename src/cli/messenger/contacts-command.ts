@@ -19,6 +19,7 @@ import { commandAt, nextStep } from "../steps.js"
 import { contactWriteCommands } from "./admin-contacts-command.js"
 import { contactAnswer, lines, pageOf } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { hideNever } from "./lacks.js"
 import { CONTACTS_QUERY, notesAllowed } from "./people-queries.js"
 import { privatePeopleCommands } from "./private-people-command.js"
 import { syncsFirst } from "./search-sync-options.js"
@@ -422,5 +423,5 @@ export const contactsCommand = (messenger: Messenger): Command => {
     if (command)
       annotate(command, { examples: [`${messenger.app.command} personal contacts ${path} ${args}`.trimEnd()] })
   }
-  return contacts
+  return hideNever(messenger, contacts)
 }

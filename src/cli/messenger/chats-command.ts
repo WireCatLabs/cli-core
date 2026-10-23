@@ -20,6 +20,7 @@ import { membersCommand } from "./chats-members-command.js"
 import { markReadCommand } from "./chats-read-command.js"
 import { trackingCommand } from "./chats-tracking-command.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { hideNever } from "./lacks.js"
 import {
   archiveCommands,
   chatDeletionCommands,
@@ -198,7 +199,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
     if (command) annotate(command, { examples: [`${messenger.app.command} personal chats ${path} ${args}`.trimEnd()] })
   }
 
-  return chats
+  return hideNever(messenger, chats)
 }
 
 /** Where the history is pushed, the chat list and a chat's card answer from the store and never connect. */
