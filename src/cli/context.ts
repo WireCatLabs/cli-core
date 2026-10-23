@@ -86,6 +86,8 @@ export interface AgentRun {
   overrides?: readonly string[]
   /** The server's levels allow `mcp.authority`: a command that changes what a later run may do may run. */
   authority?: boolean
+  /** The server's levels allow `bot.api`: a raw Bot API call, past the send guard, may run. */
+  botApi?: boolean
 }
 
 export interface RelayedRun {

@@ -21,7 +21,7 @@ import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
-import { AUTHORITY_KEY, keyForCommand } from "../sends/permissions.js"
+import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
@@ -335,6 +335,14 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           `(${AUTHORITY_KEY}) — the owner turns it on in a terminal: ` +
           `\`${command} <profile> config set${path[0] === "bot" ? " --bot" : ""} permissions.${AUTHORITY_KEY} allow\``,
         { permission: AUTHORITY_KEY, sent: false },
+      )
+    if (options.agent && options.agent.botApi !== true && isBotApi(path))
+      throw new CliError(
+        "permission_error",
+        `\`${command} ${path.join(" ")}\` calls the Bot API directly, past the send guard and the recipient list, ` +
+          `and this profile keeps that from agents (${BOT_API_KEY}) — the owner turns it on in a terminal: ` +
+          `\`${command} <profile> config set --bot permissions.${BOT_API_KEY} allow\``,
+        { permission: BOT_API_KEY, sent: false },
       )
     const { lifetime, cooperative: stopsAtItsPace } = metaOf(action)
     const persistent = lifetime === "persistent"
