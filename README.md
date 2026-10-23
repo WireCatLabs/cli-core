@@ -4,7 +4,8 @@
 
 # @wirecat/cli-core
 
-The engine behind the WireCat command-line tools for Telegram, MAX, mail, notes and meetings. Everything that
+The engine behind the WireCat command-line tools for Telegram, MAX, WhatsApp, mail, notes, meetings and Google
+Drive. Everything that
 does not depend on one messenger lives here: the data model, a local SQLite store with full-text and semantic
 search, a Lucene query language, the shared commands, an MCP server for AI agents, and the guard around every
 write. A messenger plugs in as one adapter and gets all of it.
@@ -73,7 +74,7 @@ It runs on Node 22.16+ and 24+, and on Bun.
 
 ```mermaid
 flowchart TB
-  tools["tg · max · memo · zm · drive"] --> interface
+  tools["tg · max · wa · memo · zm · drive"] --> interface
   subgraph core ["@wirecat/cli-core"]
     interface["Interface: CLI commands and MCP tools"] --> services["Services: one use case each"]
     services --> ports["Ports: MessengerAdapter · MeetingSource · TaskStore"]
@@ -89,7 +90,7 @@ Five layers, and each calls only the layers below it: domain, adapters behind a 
 
 - **The CLI and the MCP server are two adapters over the same services.** A command and its MCP tool answer with
   the same data, because one service produces it.
-- **A port with one required core and optional groups.** `MessengerCore` is what every messenger must do. Seventeen
+- **A port with one required core and optional groups.** `MessengerCore` is what every messenger must do. The other
   groups — server reads, polls, forums, reactions and the rest — are optional and reached through `capability()`.
   A messenger without a group refuses the command before connecting; it never crashes and never silently drops an
   option.
@@ -117,8 +118,9 @@ code and its document must agree. A search plan that reads an index once per mes
 - **One query language for every list and every source.** A TypeScript port of the Apache Lucene 9.12.3 parsers,
   with no runtime parser dependency. Phrases, `AND` / `OR` / `NOT`, `+required`, grouping, field groups like
   `from:(alice OR bob)`, ranges `date:[2026-01-01 TO 2026-02-01}`, comparisons `size>10MB`, wildcards and regular
-  expressions. 27 fields: sender, chat, date, file name, MIME type, transcript, subject, label and more. Fuzzy
-  and proximity operators are refused with an error that names the alternative.
+  expressions. 27 fields: sender, chat, date, file name, MIME type, transcript, subject, label and more.
+  Proximity `"invoice paid"~3` finds the words close together in one message; the fuzzy operator `word~1` is
+  refused with an error that names the alternative.
   [Syntax](docs/search/query-language.md) · [grammar](docs/search/query-language-spec.md)
 - **Any three letters inside a word.** An FTS5 trigram index finds `port` inside `report`. A
   second, word index ranks by BM25.
@@ -212,8 +214,9 @@ they deliberately differ. A rule changes in its own pull request, before the cod
 - **Built for agents.** `--no-input` never prompts. Input and output are bounded (16 MiB in, 4 MiB out) and fail
   visibly instead of truncating. One-shot commands time out after 30 seconds and close what they hold. `--dry-run`
   previews any write.
-- **The tool never picks an account.** The profile is the first word of every account command; without one, the
-  command stops and lists the choices — even when there is only one.
+- **The tool never picks an account.** Every account command names its profile — the first word in tg, max and
+  wa, an option such as `--account` or `--profile` in the others; without one, the command stops and lists the
+  choices — even when there is only one.
 - **Run records keep ids and timings, never content.** A failure is kept by default, so `runs show` can explain it
   without anyone sending a log full of messages.
 - **Tests that cannot touch real data.** A sandbox keeps every test away from the owner's store, and no test may
@@ -254,8 +257,7 @@ describe("the adapter keeps the port's promises", () => {
 **Before 1.0, any release may break a caller.** Releases are frequent, sometimes several a day, and any of them
 may change any entry point. Every such change is listed in the [changelog](CHANGELOG.md) under "Changed — may break
 callers", with what to change. tg-cli and max-cli pin an exact version and move to a new one in their own pull request.
-Pin an exact version too: as of 18.10.2026, 132 of the 321 versions in the changelog break callers, and no patch
-release has.
+Pin an exact version too.
 The full list of entry points and what each holds is in the [API reference](docs/REFERENCE.md).
 
 ⚠ **Errors are recognised by shape, not by class** (`isCliFailure`). A package linked during development brings its
