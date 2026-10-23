@@ -2915,6 +2915,7 @@ describe("the shared read commands", () => {
       },
     )
     expect(linked.code).toBe(0)
+    expect(v.safeParse(ENTITIES.linked_person, JSON.parse(linked.stdout[0] ?? "null").item).success).toBe(true)
     const found = await call(
       ["contacts", "context", "11", "--offline", "--json"],
       never,
@@ -2981,6 +2982,25 @@ describe("the shared read commands", () => {
       },
     )
     expect(mine.code).toBe(0)
+    expect(v.safeParse(ENTITIES.linked_person, JSON.parse(mine.stdout[0] ?? "null").item).success).toBe(true)
+    const unlinked = await call(
+      ["contacts", "unlink", "max:m5", "--offline", "--json"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(unlinked.code).toBe(0)
+    expect(v.safeParse(ENTITIES.linked_person, JSON.parse(unlinked.stdout[0] ?? "null").item).success).toBe(true)
+    const projected = await call(
+      ["contacts", "link", "11", "max:m5", "--offline", "--json=uid"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(projected.code).toBe(0)
+    expect(Object.keys(JSON.parse(projected.stdout[0] ?? "null").item)).toEqual(["uid"])
   })
 
   it("contacts timeline lists what a person took part in, newest first, within a time range and scope", async () => {
@@ -3039,7 +3059,9 @@ describe("the shared read commands", () => {
         },
       )
       expect(result.code).toBe(0)
-      return JSON.parse(result.stdout[0] ?? "null")
+      const answer = JSON.parse(result.stdout[0] ?? "null")
+      for (const item of answer.items) expect(v.safeParse(ENTITIES.contact_activity, item).success).toBe(true)
+      return answer
     }
 
     const all = await timeline()
@@ -3235,6 +3257,7 @@ describe("the shared read commands", () => {
       expect(checked.code).toBe(0)
       expect(checked.stdout).toHaveLength(1)
       const answer = JSON.parse(checked.stdout[0] ?? "null").item
+      expect(v.safeParse(ENTITIES.contact_check, answer).success).toBe(true)
       expect(answer.reasons.map((one: { reason: string }) => one.reason)).toEqual(
         expect.arrayContaining(["lols_banned", "no_bio", "photo_recent", "odd_name", "no_username"]),
       )

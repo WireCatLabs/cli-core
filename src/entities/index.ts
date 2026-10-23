@@ -10,6 +10,7 @@ import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
 import { chatStats, taskStats } from "./chat-stats.js"
 import { contact } from "./contact.js"
+import { contactActivity, contactCheck, linkedPerson } from "./contact-activity.js"
 import { contactNote } from "./contact-note.js"
 import { contactLookup, contactProfile, contactSync } from "./contact-read.js"
 import { contactImport, contactStateChange, contactUpdate } from "./contact-write.js"
@@ -73,7 +74,9 @@ export {
   chatEvent,
   chatStats,
   contact,
+  contactActivity,
   contactAlias,
+  contactCheck,
   contactImport,
   contactLookup,
   contactNote,
@@ -94,6 +97,7 @@ export {
   inviteLink,
   job,
   joinRequest,
+  linkedPerson,
   meeting,
   meetingProjectCandidates,
   meetingSeriesInventory,
@@ -150,6 +154,9 @@ export const ENTITIES = {
   chat,
   person,
   identity,
+  contact_activity: contactActivity,
+  contact_check: contactCheck,
+  linked_person: linkedPerson,
   contact,
   contact_note: contactNote,
   contact_lookup: contactLookup,
