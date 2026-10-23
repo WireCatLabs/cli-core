@@ -2,8 +2,10 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
+import { ENTITIES, type EntityName } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -68,6 +70,20 @@ const setup = async (extra: Record<string, string> = {}, seeded: Message[] = [])
   return async (...argv: string[]) => {
     const streams = captureStreams()
     const code = await run(argv, { app, commands: () => [mentionsCommand(messenger)] }, { streams, tty: false, env })
+    if (code === 0 && argv.includes("--json")) {
+      const names: Record<string, EntityName> = {
+        list: "mention",
+        domains: "mention_domain",
+        places: "place",
+        show: "mention.details",
+        confirm: "mention_decision",
+        reject: "mention_decision",
+        rebuild: "mention_rebuild",
+      }
+      const schema = ENTITIES[names[argv[1] ?? ""] as EntityName] as v.GenericSchema
+      const answer = JSON.parse(streams.stdout.join(""))
+      for (const item of answer.items ?? [answer.item]) v.parse(schema, item)
+    }
     return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
   }
 }
@@ -111,6 +127,16 @@ describe("mentions", () => {
     const names = await chat("mentions", "rebuild", "person-name", "--json")
     expect(names.code, names.stderr).toBe(0)
     expect((await chat("mentions", "rebuild", "vehicle")).code).not.toBe(0)
+  })
+
+  it("projects declared mention fields and refuses an unknown field", async () => {
+    const chat = await setup()
+    const projected = await chat("mentions", "list", "kind:phone", "--json=value,locator")
+    expect(projected.code, projected.stderr).toBe(0)
+    expect(JSON.parse(projected.stdout).items).toEqual([{ value: "+79000000001", locator: "msg:chat/500/7/1" }])
+    const unknown = await chat("mentions", "list", "--json=unknown_field")
+    expect(unknown.code).not.toBe(0)
+    expect(JSON.parse(unknown.stderr).error.reason).toBe("output.unknown-field")
   })
 
   it("pages confirmed places through the shared CLI and stops at the end", async () => {

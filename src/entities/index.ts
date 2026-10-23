@@ -44,6 +44,7 @@ import { meetingProjectCandidates } from "./meeting-project-candidates.js"
 import { meetingSeriesInventory } from "./meeting-series-inventory.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
+import { mention, mentionDecision, mentionDetails, mentionDomain, mentionRebuild, place } from "./mention.js"
 import { message } from "./message.js"
 import { messageDeletion, messagePin, messageStar } from "./message-change.js"
 import { messageContext } from "./message-context.js"
@@ -126,6 +127,11 @@ export {
   meetingSeriesInventory,
   member,
   memory,
+  mention,
+  mentionDecision,
+  mentionDetails,
+  mentionDomain,
+  mentionRebuild,
   message,
   messageContext,
   messageCounts,
@@ -142,6 +148,7 @@ export {
   note,
   officialStats,
   person,
+  place,
   poll,
   pollChange,
   pollVote,
@@ -206,6 +213,12 @@ export const ENTITIES = {
   message_links: messageLinks,
   evidence_packet: evidencePacket,
   chat,
+  mention,
+  "mention.details": mentionDetails,
+  mention_domain: mentionDomain,
+  mention_decision: mentionDecision,
+  mention_rebuild: mentionRebuild,
+  place,
   person,
   identity,
   contact_context: contactContext,

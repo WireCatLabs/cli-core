@@ -4,6 +4,7 @@ export interface ListedCommand {
   command: string
   title: string
   writes: boolean
+  output?: unknown
   arguments: { properties?: Record<string, unknown> }
 }
 

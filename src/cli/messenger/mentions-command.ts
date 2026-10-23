@@ -23,6 +23,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
   )
 
   annotate(mentions.command("list"), {
+    output: { entity: "mention" },
     effects: LOCAL_READ,
     query: MENTION_QUERY,
     examples: [
@@ -75,6 +76,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(mentions.command("domains"), {
+    output: { entity: "mention_domain" },
     effects: LOCAL_READ,
     query: MENTION_QUERY,
     examples: [`${tool} mentions domains`, `${tool} mentions domains status:found`],
@@ -109,7 +111,11 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(mentions.command("places"), { effects: LOCAL_READ, examples: [`${tool} mentions places`] })
+  annotate(mentions.command("places"), {
+    output: { entity: "place" },
+    effects: LOCAL_READ,
+    examples: [`${tool} mentions places`],
+  })
     .summary("confirmed street addresses, most mentioned first")
     .description("confirmed addresses, in every account, most mentioned first; `mentions confirm <id>` adds one")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
@@ -128,7 +134,11 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(mentions.command("show"), { effects: LOCAL_READ, examples: [`${tool} mentions show 12`] })
+  annotate(mentions.command("show"), {
+    output: { entity: "mention", view: "details" },
+    effects: LOCAL_READ,
+    examples: [`${tool} mentions show 12`],
+  })
     .description("one mention, the text around it, and how many other places hold its value")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
     .action(async function (this: Command, id: number) {
@@ -146,6 +156,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(mentions.command("confirm"), {
+    output: { entity: "mention_decision" },
     effects: LOCAL_WRITE,
     examples: [
       `${tool} mentions confirm 12 person:7`,
@@ -179,6 +190,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(mentions.command("reject"), {
+    output: { entity: "mention_decision" },
     effects: LOCAL_WRITE,
     examples: [`${tool} mentions reject 12`],
   })
@@ -203,6 +215,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
 
   destroysNothing(
     annotate(mentions.command("rebuild"), {
+      output: { entity: "mention_rebuild" },
       effects: LOCAL_WRITE,
       examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild person-name`],
     }),

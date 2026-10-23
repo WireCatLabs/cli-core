@@ -1141,6 +1141,25 @@ describe("the MCP server", () => {
     expect(JSON.stringify(bounded.body)).toContain(MEETINGS_UNNAMED)
   })
 
+  it("declares and returns stored mention list and detail schemas through MCP", async () => {
+    const backend = scripted({
+      history: async () => ({ items: [{ ...message, text: "call +79000000001" }], hasMore: false }),
+    })
+    const { call, client } = await connect(backend)
+    await call("messages list", { chat: "7" })
+    const opened = backend.opened()
+    const listed = await call("mentions list", { query: "kind:phone" })
+    expect(listed.isError).toBe(false)
+    expect(listed.body.items).toHaveLength(1)
+    const mention = v.parse(ENTITIES.mention, listed.body.items[0])
+    const shown = await call("mentions show", { id: String(mention.id) })
+    expect(shown.isError, JSON.stringify(shown.body)).toBe(false)
+    v.parse(ENTITIES["mention.details"], shown.body.item)
+    const described = await client.describe("mentions show")
+    expect(JSON.stringify(described?.output)).toContain("same_value")
+    expect(backend.opened()).toBe(opened)
+  })
+
   it("prepares stored evidence with a cursor and typed failures without connecting", async () => {
     const root = await filledRoot()
     const telegram = scripted()
