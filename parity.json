@@ -1296,6 +1296,17 @@
     "attachments": {
       "in": "all"
     },
+    "attachments check": {
+      "in": "all"
+    },
+    "attachments download": {
+      "in": "all",
+      "options": {
+        "--chat": "all",
+        "--pause": "all",
+        "--since-time": "all"
+      }
+    },
     "attachments extract": {
       "in": "all",
       "options": {
@@ -1320,6 +1331,30 @@
           "in": "all"
         }
       }
+    },
+    "attachments jobs": {
+      "in": "all"
+    },
+    "attachments jobs install": {
+      "in": "all",
+      "options": {
+        "--at": "all",
+        "--chat": "all",
+        "--since-time": "all",
+        "--timezone": "all"
+      }
+    },
+    "attachments jobs start": {
+      "in": "all"
+    },
+    "attachments jobs status": {
+      "in": "all"
+    },
+    "attachments jobs stop": {
+      "in": "all"
+    },
+    "attachments jobs uninstall": {
+      "in": "all"
     },
     "attachments list": {
       "in": "all",
