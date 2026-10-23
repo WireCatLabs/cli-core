@@ -25,6 +25,8 @@ shape of this file.
 
 - Task commands include concrete examples in help and command discovery.
 
+- Chat deletion and history clearing include examples in help and command discovery.
+
 - Poll commands include concrete examples in help and command discovery.
 
 - Model commands include concrete examples in help and command discovery.
