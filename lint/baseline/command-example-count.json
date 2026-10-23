@@ -39,7 +39,6 @@
   "bot webhooks delete",
   "bot webhooks list",
   "bot webhooks set",
-  "commands schema",
   "complete",
   "doctor report create",
   "flood clear",
