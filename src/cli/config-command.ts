@@ -24,7 +24,7 @@ export const configCommand = (
     "the settings in force, and where each one came from",
   )
 
-  annotate(command.command("show"), { effects: LOCAL_READ })
+  annotate(command.command("show"), { effects: LOCAL_READ, examples: [`${app.command} personal config show`] })
     .description("the profile, the profiles that exist, and each setting with where it came from")
     .option("--bot", "the settings a bot command on this profile gets, rather than the personal account's")
     .action(async function (this: Command) {
@@ -61,7 +61,12 @@ export const configCommand = (
     })
 
   for (const action of ["set", "unset"] as const) {
-    const sub = grantsAuthority(annotate(command.command(action), { effects: LOCAL_WRITE }))
+    const sub = grantsAuthority(
+      annotate(command.command(action), {
+        effects: LOCAL_WRITE,
+        examples: [`${app.command} personal config ${action} limit${action === "set" ? " 20" : ""}`],
+      }),
+    )
       .argument(
         "<setting>",
         // default_profile is only removed now: `config unset` still takes it, `config set` refuses it.
