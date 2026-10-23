@@ -27,9 +27,12 @@ next is the [roadmap](../roadmap.md).
 
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
-- **CORE-4** · P2 · 🟡 Shared command-lint debt the CLIs baseline: examples and summaries are in open `docs/standards-*`
-  and `fix/standards-*` pull requests (#1774–#1814); the flag renames wait for a breaking release.
-  [Notes](BACKLOG-NOTES.md#core-4).
+- **CORE-4** · P2 · 🟡 Shared command standards: complete remaining result entities, examples and vocabulary paths
+  in the `docs/standards-*` and `fix/standards-*` pull requests. The option-meaning migration is in #1810;
+  compatibility aliases remain for one release. [Notes](BACKLOG-NOTES.md#core-4).
+- **CORE-28** · P2 · Remove hidden option aliases after one compatibility release. The canonical spellings and
+  query replacements are listed in [#1810](https://github.com/WireCatLabs/cli-core/pull/1810); start at
+  `src/cli/option-meanings.test.ts` and the group-update duration options.
 - **CORE-5** · P2 · Let a new source join without editing this package: the provider list is fixed
   (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
   (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No

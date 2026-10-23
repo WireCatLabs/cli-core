@@ -6,6 +6,7 @@ import type { AppIdentity } from "../ports/app.js"
 import type { Settings } from "./settings.js"
 
 export interface AnalysisOptions {
+  analysisProvider?: string
   provider?: string
   model?: string
   baseUrl?: string
@@ -17,6 +18,9 @@ export const analysisChoice = (
   env: NodeJS.ProcessEnv,
   keyring?: KeyringStore,
 ): AnalysisProvider => {
+  if (options.analysisProvider !== undefined && options.provider !== undefined)
+    throw new CliError("validation_error", "give --analysis-provider or its legacy --provider spelling, not both")
+  options = { ...options, provider: options.analysisProvider ?? options.provider }
   const configured = { ...settings.models?.default, ...settings.models?.analysis }
   settings = {
     ...settings,

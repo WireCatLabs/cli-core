@@ -5,13 +5,14 @@ moved here word for word so the lists stay short. A note is deleted with its ite
 
 ## CORE-4
 
-- **Shared command-lint debt the CLIs baseline** (WC-CMD-1/10/13/19/22/24, WC-ACCT-8): measured on wa (2026-10-17),
-  all on shared commands — 195 leaves without examples, 88 summaries over 80 characters, 13 arguments without help,
-  no declared `output.entity` outside tests, and 7 flags with two meanings (`--by`, `--file`, `--kind`, `--limit`,
-  `--model`, `--provider`, `--source`). `--provider` names an AI model provider on `conversations build/embed/
-  related/status` and `search conversations` but a messenger elsewhere, and `tags remove --source` means
-  manual/auto; renaming them (`--model-provider`, `--origin`) breaks tg's and max's scripts, so it waits for a
-  breaking release, with the old names as aliases (decided 2026-10-17).
+cli-core 0.397.0 supplies concise command summaries and positional argument help. Remaining examples and
+vocabulary paths are tracked in `lint/baseline/`; commands that return owner data still need precise result
+entities, completed by command group.
+
+The option migration in [#1810](https://github.com/WireCatLabs/cli-core/pull/1810) distinguishes analysis,
+embedding and consent providers, tag ownership, stored-answer models and reply-template policies. Catch-up
+chat kinds use query terms. Hidden CLI aliases last one compatibility release; saved MCP requests use the
+canonical argument names. CORE-28 tracks alias removal.
 
 ## CORE-6
 

@@ -3544,7 +3544,7 @@ describe("the shared read commands", () => {
       expect(sent).toEqual([])
 
       const locked = await call(
-        ["conversations", "embed", "--chat", "7", "--provider", "openai", "--yes", "--json"],
+        ["conversations", "embed", "--chat", "7", "--embedding-provider", "openai", "--yes", "--json"],
         never,
         { ...env, CHAT_READ_ONLY: "1" },
       )
@@ -3568,10 +3568,14 @@ describe("the shared read commands", () => {
       expect(agreed.stderr.join("\n")).not.toContain("sk-test")
 
       sent.length = 0
-      const query = await call(["search", "conversations", "anything", "--provider", "openai", "--json"], never, {
-        ...env,
-        CHAT_READ_ONLY: "1",
-      })
+      const query = await call(
+        ["search", "conversations", "anything", "--embedding-provider", "openai", "--json"],
+        never,
+        {
+          ...env,
+          CHAT_READ_ONLY: "1",
+        },
+      )
       expect(query.code).toBe(5)
       expect(JSON.parse(query.stderr.find((line) => line.startsWith("{")) ?? "{}").error.message).toBe(
         "this process is read-only (CHAT_READ_ONLY) — it cannot send the query to api.openai.com",

@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { TAGGING_QUERY, type TaggingItem, type TagTargetInput, type TagTargetView } from "../../services/tags.js"
 import { changesStore, FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -28,7 +28,7 @@ const describe = ({ type, chatId, personId, messageId, taskId }: TagTargetView) 
 const line = (one: TaggingItem) => `${one.tag}  ${one.type}  ${one.name ?? ""} (${one.target})`
 
 const sourceOf = (value: string): "manual" | "auto" => {
-  if (value !== "manual" && value !== "auto") throw new CliError("validation_error", "--source takes manual or auto")
+  if (value !== "manual" && value !== "auto") throw new CliError("validation_error", "--claim takes manual or auto")
   return value
 }
 
@@ -96,13 +96,27 @@ export const tagsCommand = (messenger: Messenger): Command => {
     messenger,
     "untag",
   )
-    .option("--source <manual|auto>", "remove only this ownership claim", sourceOf)
+    .addOption(
+      new Option("--claim <claim>", "remove only this ownership claim: manual or auto")
+        .argParser(sourceOf)
+        .conflicts("source"),
+    )
+    .addOption(
+      new Option("--source <manual|auto>", "compatibility alias for --claim")
+        .argParser(sourceOf)
+        .hideHelp()
+        .conflicts("claim"),
+    )
     .action(async function (this: Command, given: string[]) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tags.remove")
       const target = this.opts<TagTargetInput>()
       const done = await context.withServices((services) =>
-        services.tags.remove(target, given, this.opts<{ source?: "manual" | "auto" }>().source),
+        services.tags.remove(
+          target,
+          given,
+          this.opts<{ claim?: "manual" | "auto" }>().claim ?? this.opts<{ source?: "manual" | "auto" }>().source,
+        ),
       )
       renderAnswer(this, context, itemOf(snakeKeys(done)), () =>
         done.removed.length ? `${describe(done.target)}: ${done.removed.join(", ")} removed\n` : "",

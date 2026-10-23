@@ -161,6 +161,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `star` | mark a message so the owner finds it again; only the owner sees the star |  |
 | `unstar` | take the owner's star off a message |  |
 | `vote` | answer a poll |  |
+| `answer` | reply to a button someone pressed under a bot's message |  |
+| `action` | show what a bot is doing in a chat, such as typing, for a few seconds |  |
+| `watch` | follow new events as they come, and keep them |  |
 | `close` | close a thing that stays: a poll, a task |  |
 | `join` | join a chat |  |
 | `leave` | leave a chat |  |
@@ -185,6 +188,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `unmerge` | undo a merge |  |
 | `defer` | leave a decision undecided, for the owner |  |
 | `embed` | compute the vectors a meaning search reads, for what is stored and has none |  |
+| `decrypt` | write an unencrypted copy of a file sealed by the tool, using the supplied password |  |
+| `retry` | start a fresh attempt at partial or failed work, retaining the previous attempt |  |
 
 <!-- verbs: end -->
 
@@ -211,6 +216,17 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `categories` | the categories a thing takes, with what each means |
 | `domains` | the internet domains links point to, most linked first |
 | `places` | the street addresses confirmed as places, most mentioned first |
+| `comments` | replies attached to a selected source item |
+| `links` | links held for a selected thing |
+| `voters` | people whose recorded votes are visible for a selected poll |
+| `charts` | time series drawn from selected statistics, optionally rendered to a file |
+| `newcomers` | members observed joining during the selected time window |
+| `retention` | whether members of a selected cohort remain or return over time |
+| `responses` | observed replies between participants and the time taken to answer |
+| `discussion` | source posts compared by known views and observed discussion replies |
+| `unanswered` | questions without an observed qualifying answer |
+| `me` | the account a profile's token belongs to |
+| `between` | the messages between two given messages of one chat |
 
 <!-- views: end -->
 
@@ -259,6 +275,23 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `mentions` | collection | phones, e-mail addresses, links and documents found in stored text, each where it was written |  |
 | `images` | collection | pictures in stored messages, searched by what they show |  |
 | `duplicates` | collection | pairs of things that may be one, each waiting for a decision |  |
+| `sessions` | collection | devices and applications signed in to an account |  |
+| `folders` | collection | named groupings of chats or source files |  |
+| `links` | collection | stored or source-provided connections between selected things |  |
+| `requests` | collection | requests waiting for an explicit decision |  |
+| `rules` | collection | saved rules the owner applies to selected things |  |
+| `conversations` | collection | derived stretches of chat messages grouped by topic |  |
+| `batches` | collection | bounded work packets submitted or waiting for processing |  |
+| `consents` | collection | recorded permission to process selected data with a specified service |  |
+| `embeddings` | collection | vectors computed from stored content for similarity search |  |
+| `reports` | collection | saved reports about selected data or a tool's state |  |
+| `keys` | collection | credentials for a selected external service |  |
+| `counters` | collection | stored observations of source counts, with their freshness |  |
+| `gaps` | collection | ranges a source could contain that the local store does not hold |  |
+| `callbacks` | collection | button presses a bot received and may answer |  |
+| `webhooks` | collection | addresses a messenger pushes a bot's updates to |  |
+| `templates` | collection | messages a business has approved in advance, the only kind some messengers deliver late |  |
+| `media` | collection | files people sent, held by the messenger under an id |  |
 | `session` | singular | this tool's login |  |
 | `account` | singular | the messenger or mail account behind a profile |  |
 | `config` | singular | a profile's settings |  |
@@ -271,6 +304,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `vocabulary` | singular | the owner's catalogue of canonical names, with their aliases |  |
 | `api` | singular | the source's own API, one command per operation |  |
 | `privacy` | singular | who may find, see, call or add the account |  |
+| `metadata` | singular | a profile's cached source attributes |  |
+| `auth` | singular | the credentials a bot profile uses: its token and the secrets beside it |  |
 
 <!-- resources: end -->
 
@@ -485,6 +520,17 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--workers` | `<n>` | count | sessions in parallel on this machine, each with its own copy of the model | sessions |
 | `--input` | `<mode>` | choice | how supplied cell values are parsed: literal values or provider-interpreted formulas and locale formats |  |
 | `--render` | `<mode>` | choice | how returned cell values are represented: formatted display values, unformatted values or formulas |  |
+| `--analysis-provider` | `<provider>` | choice | who analyses the selected text: the calling agent or a configured model service |  |
+| `--embedding-provider` | `<provider>` | choice | who computes embeddings: a local model or a configured remote model service |  |
+| `--consent-provider` | `<identity>` | string | the exact model-service identity whose recorded consent is being removed |  |
+| `--claim` | `<claim>` | choice | the ownership claim to remove from a tag: manual or auto |  |
+| `--answer-model` | `<model>` | string | remove only stored analysis answers made by this model; does not run a model |  |
+| `--template-mode` | `<mode>` | choice | the saved reply template's policy: fill-only or may-reword |  |
+| `--disappear-after` | `<duration\|off>` | duration | how long a new chat message is kept after sending; off keeps messages |  |
+| `--only-admins-edit-info` | `<on\|off>` | choice | only admins may change the chat's name, photo and description |  |
+| `--only-admins-send` | `<on\|off>` | choice | only admins may send messages to the chat |  |
+| `--remove-photo` |  | switch | remove the chat's photo; not with a replacement photo |  |
+| `--sticker-file` | `<file>` | path | a local sticker file to send as a message |  |
 | `--target-store` | `<file>` | path | explicit destination store file for checking or restoring selected annotations |  |
 | `--bindings` | `<file>` | path | JSON file mapping source typed references to explicitly selected destination references |  |
 | `--context-source` | `<id=cursor>` | string | explicitly selected communications source, optionally with its scoped continuation cursor; repeat for more sources |  |
@@ -543,6 +589,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--recheck-since-time` | `<time>` | time | look again from this day, for what arrived late |  |
 | `--run` | `<id>` | id | the run it is about |  |
 | `--target` | `<ref>` | string | what it acts on, as a reference: msg:, chat:, person:, task:, … |  |
+| `--secret` | `<name>` | choice | which secret beside a bot's token to keep, typed at a hidden prompt; never the secret itself |  |
+| `--store-token` | `<profile>` | string | keep a token an operation returns only in this bot profile's keyring; never print it |  |
 | `--task` | `<id>` | id | a task, by id |  |
 | `--to` | `<chat>` | id | the chat it goes to |  |
 | `--topic` | `<id>` | id | the forum topic, in a chat that has topics |  |
@@ -786,8 +834,10 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate` (planned), `bot messages delete` (planned), `chats clear` (planned), `chats delete` (planned), `chats moderate`, `messages delete`, `store clear` |
 | `--allow-people` | `<ids>` | replace allowed sender ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
 | `--allow-writes` |  | acknowledge that the profile offers writing tools when installing local MCP |  | `mcp setup` |
+| `--analysis-provider` | `<provider>` | analysis: agent, openai or anthropic |  | `conversations build` |
 | `--analyze` |  | link conversation batches using the configured analysis provider, with remembered chat/provider consent |  | `conversations build` |
 | `--anonymous` |  | nobody sees who voted for what |  | `polls create` (max, tg only) |
+| `--answer-model` | `<model>` | only the stored answers this model gave |  | `conversations links clear` |
 | `--answerer` | `<person>` | stored name, alias, @username, ID or scoped person locator; ambiguous names require a choice; repeat it for more |  | `stats chats newcomers`, `stats contacts responses`, `stats messages unanswered` |
 | `--app` | `<how>` | the first time only: how to get this profile's app from my.telegram.org | `browser` | `session start` (tg-only), `setup` (tg-only) |
 | `--approval` |  | who joins by it asks first, and an admin lets them in |  | `chats link create` (tg-only), `chats link update` (tg-only) |
@@ -826,11 +876,13 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--check` |  | say whether a newer version exists, and install nothing |  | `bot list` (planned), `upgrade` |
 | `--checkpoints` | `<durations>` | elapsed joining ages to inspect, such as 1d,7d,30d |  | `stats chats retention` |
 | `--chunk-bytes` | `<n>` | maximum source bytes returned from a retained attachment; 1–1048576 | `524288` | `attachments show` |
+| `--claim` | `<claim>` | remove only this ownership claim: manual or auto |  | `tags remove` |
 | `--close-time` | `<delay>` | it closes by itself this long after sending, like 90s or 5m |  | `polls create` (tg-only) |
 | `--closed` | `<on\|off>` | on closes a forum topic to new messages, off reopens it |  | `topics edit` (tg-only) |
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
 | `--component` | `<name>` | the ranking component whose contributing messages or answer pairs to read |  | `stats contacts evidence`, `stats messages evidence` |
 | `--concurrency` | `<n>` | remote: requests at once (default: 4) |  | `attachments extract`, `conversations embed` |
+| `--consent-provider` | `<identity>` | exact provider identity from consents list; defaults to every provider |  | `conversations consents revoke` |
 | `--contact` | `<person>` | the person to tag or untag: their id, @username or name, as the local store knows them |  | `tags add`, `tags remove` |
 | `--contacts-only` |  | match only contacts |  | `replies edit` |
 | `--context` | `<n>` | messages before and after each hit |  | `search messages`, `searches create` |
@@ -845,13 +897,14 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--deny-people` | `<ids>` | replace denied sender ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--description` | `<text>` | the new about text — of a chat or of your account. **tasks add and tasks plan use Markdown for task details, completion criteria and next steps** |  | `account update`, `chats update`, `tasks add`, `tasks plan` |
 | `--dims` | `<n>` | remote: the vector size — needed with --base-url; shortens an OpenAI model's |  | `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
-| `--disappear-time` | `<duration\|off>` | new messages disappear this long after sending: 24h, 7d, 90d; off keeps them |  | `chats update` (planned) |
+| `--disappear-after` | `<duration\|off>` | new messages disappear this long after sending: 24h, 7d, 90d; off keeps them |  | `chats update` (planned) |
 | `--discover` |  | find partial lexical matches and eligible replies in the local archive; results are evidence, not confirmed answers |  | `search messages` |
 | `--do` | `<actions>` | actions: reply, task, or both, comma-separated |  | `replies edit` |
 | `--download` |  | first save, from the messenger, the files no download saved yet |  | `attachments extract` |
 | `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `messages sync`, `stats messages counters refresh`, `store clear`, `store repair`, `tags auto` |
 | `--due` | `<time>` | when a task must be done: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks plan` |
 | `--due-within` | `<duration>` | list tasks due within this: 30m, 2h, 1d | `1d` | `tasks agenda` |
+| `--embedding-provider` | `<provider>` | embedding provider: local or openai; flags override profile settings |  | `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
 | `--emoji` | `<emoji>` | the folder's icon |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--encrypt` |  | compress and encrypt with a password, typed at a hidden prompt or piped on stdin; never kept |  | `store backup`, `store export` |
 | `--error-code` | `<code>` | filter diagnostic runs by a stable error code |  | `runs search` |
@@ -887,7 +940,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--join-approval` | `<on\|off>` | people ask to join, and an admin lets them in |  | `chats update` (tg, wa only) |
 | `--json` |  | machine-readable output: one JSON value on stdout, nothing else |  | every command |
 | `--jsonl` |  | machine-readable output: one JSON object per line, for streaming and jq |  | every command |
-| `--kind` | `<kind>` | only chats of this kind: dialog, group, channel or saved |  | `inbox`, `review`, `tasks link` |
+| `--kind` | `<kind>` | the kind of link to record; the command lists the supported task and evidence relations |  | `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch` (max, tg only), `messages sync`, `tasks scan` |
 | `--last-name` | `<name>` | your last name |  | `account update` |
@@ -923,7 +976,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--method` | `<method>` | how to log in when there is no session |  | `setup` |
 | `--min-messages` | `<n>` | minimum selected messages for a ranked author | `1; 5 for engaging unless explicitly set` | `stats contacts top` |
 | `--min-views` | `<n>` | minimum known cumulative views |  | `stats messages discussion` |
-| `--model` | `<id>` | which downloaded speech model hears them; `models audio list` shows them. **max's own copy is worded differently until T6 moves the command onto the shared one (e13); replies edit uses this option for legacy template mode: fill-only or may-reword; use ai blocks instead** |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations related`, `conversations status`, `inbox`, `messages list`, `messages transcribe`, `replies edit`, `review`, `search conversations` |
+| `--model` | `<model>` | which model runs analysis, embedding or local speech recognition; the command identifies the applicable model family |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `inbox`, `messages list`, `messages transcribe` — MAX retains its own transcriber and names its model-list command; the shared TG/WA transcriber explains that choosing a model implies local recognition. Both select a downloaded speech model. Align the remaining MAX command when it adopts the shared transcriber., `review`, `search conversations` |
 | `--multiple` |  | people may pick several answers |  | `polls create` |
 | `--new` |  | what arrived since the last check, each message once — for scheduled runs. **tasks add instead opens the task although tasks that may be the same job were listed** |  | `inbox`, `mentions list`, `review`, `tasks add` |
 | `--newest` |  | newest first instead of best first |  | `bot search messages` (planned), `search messages`, `searches create` |
@@ -977,7 +1030,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--problems` |  | only failed responses, warnings and crashes |  | `runs show` |
 | `--profile` | `<name>` | filter diagnostic runs by recorded profile |  | `runs search` |
 | `--profile-photo` | `<who>` | who sees the profile photo: everyone, contacts or nobody |  | `account privacy set` (planned) |
-| `--provider` | `<provider>` | embedding provider: local or openai; analysis: agent, openai or anthropic; consents revoke: exact provider identity from the list |  | `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
 | `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp` |
 | `--question` |  | match only questions |  | `replies edit` |
 | `--quiet` |  | diagnostics off. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
@@ -1015,7 +1067,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--skip` | `<which>` | a folder leaves out chats that are muted, read or archived |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--sms` |  | phone login: ask Telegram to send the code by SMS, not to the app; Telegram may still refuse |  | `session start` (tg-only) |
 | `--solution` | `<text>` | with --quiz: what people see once they answered |  | `polls create` (tg-only) |
-| `--source` | `<accounts>` | which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> — the same as in: in the query. **each search reads the accounts of its own kinds and names the rest in skipped — source-everywhere-plan.md** |  | `search all` (planned), `search conversations`, `search messages`, `search notes` (planned), `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `tags remove` |
+| `--source` | `<accounts>` | which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> — the same as in: in the query. **each search reads the accounts of its own kinds and names the rest in skipped — source-everywhere-plan.md** |  | `search all` (planned), `search conversations`, `search messages`, `search notes` (planned), `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
 | `--spoiler` |  | hide the --photo or video behind a spoiler until tapped |  | `messages send` (tg-only) |
 | `--start` | `<param>` | the start parameter the bot or app reads; for chats start, a link's own ?start= when not given |  | `chats app` (planned), `chats start` (planned) |
 | `--status` | `<status>` | filter diagnostic runs by outcome |  | `runs search` |
@@ -1026,6 +1078,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--sync-time` | `<duration>` | stop fetching after this long (default: 30s) |  | `search conversations` (max, tg only), `search messages` (max, tg only), `stats contacts top` (max, tg only), `stats messages counters refresh`, `stats messages show` (max, tg only), `stats messages top` (max, tg only) |
 | `--task` | `<id>` | a task, by its id or key as tasks list shows it |  | `tags add`, `tags remove` |
 | `--template` | `<text>` | the reply template |  | `replies edit` |
+| `--template-mode` | `<mode>` | legacy template mode: fill-only or may-reword; use ai blocks instead |  | `replies edit` |
 | `--text` | `<text>` | the message's new text; - reads stdin |  | `bot callbacks answer` (planned) |
 | `--text-file` | `<path>` | read the text from this file; - or none reads stdin |  | `attachments text set`, `contacts notes add`, `contacts notes edit` |
 | `--thread` |  | the stored reply chain and replies instead of time neighbours; falls back when no graph exists |  | `messages context`, `search messages` |

@@ -5,6 +5,20 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Flags have one meaning.** Use `--analysis-provider` for analysis, `--embedding-provider` for vector computation, `--consent-provider` for revoking a recorded provider identity, `--claim` for tag ownership, `--answer-model` for removing stored answers and `--template-mode` for reply templates. `inbox` and `review` take `kind:group,channel` in their query. Group message lifetime is `--disappear-after`, a duration or `off`. Legacy CLI spellings remain hidden for one release and cannot be combined with their replacements. MCP callers use the canonical argument names and `query` for chat kinds; update saved MCP requests.
+
+- cli-core requires cli-base 0.50.2 or newer within the 0.50 line for the approved option roles and messenger vocabulary.
+
+- **Private contact notes use `--text-file`.** `--file` continues to work as a hidden compatibility alias; giving both is refused before any note is changed. New help and discovery reserve `--file` for message attachments.
+
+### Fixed
+
+- **Count and grouping placeholders match the shared vocabulary.** Processing limits use `<n>` and statistics grouping uses `<group>` across supported fields and calendar units; accepted values and defaults stay the same.
+
 ## 0.398.0 — 23.10.2026
 
 ### Added
@@ -52,8 +66,6 @@ shape of this file.
 
 - MCP argument names follow singular CLI placeholders: `messages delete` takes `message`, chat export takes `chat`, and duplicate-task operations take `task` (with `other_task` for a pair). Update saved MCP requests using `messages`, `chats` or `dup`. CLI positional values and their order are unchanged.
 
-- **Private contact notes use `--text-file`.** `--file` continues to work as a hidden compatibility alias; giving both is refused before any note is changed. New help and discovery reserve `--file` for message attachments.
-
 ### Fixed
 
 - The option catalogue records WhatsApp's JPEG-only profile photos. Wording differences can be justified for one command without exempting that option everywhere or hiding a missing option.
@@ -63,8 +75,6 @@ shape of this file.
 - Message deletion, chat export and duplicate-task commands use singular argument names in help and discovery. Variadic arguments still accept several values, and task argument help identifies each side of a pair.
 
 - Contact profiles, phone lookups and address-book sync summaries declare their existing answer fields. Profile schemas retain masked phones, incomplete activity counts, partial provider flags and the source and precision of account-age estimates.
-
-- **Count and grouping placeholders match the shared vocabulary.** Processing limits use `<n>` and statistics grouping uses `<group>` across supported fields and calendar units; accepted values and defaults stay the same.
 
 ### Added
 

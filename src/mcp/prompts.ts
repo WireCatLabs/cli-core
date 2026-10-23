@@ -77,9 +77,15 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
         ?.split(",")
         .map((one) => one.trim())
         .filter((one) => one.length > 0)
+      const query = [
+        kinds?.length ? `kind:${JSON.stringify(kinds.join(","))}` : "",
+        mode === undefined || mode === "unread" || mode === "new" ? "" : after(mode),
+      ]
+        .filter(Boolean)
+        .join(" ")
       const args = {
-        ...(kinds?.length ? { kind: kinds.join(",") } : {}),
-        ...(mode === undefined || mode === "unread" ? {} : mode === "new" ? { new: true } : { query: after(mode) }),
+        ...(query ? { query } : {}),
+        ...(mode === "new" ? { new: true } : {}),
       }
       return asked(
         [

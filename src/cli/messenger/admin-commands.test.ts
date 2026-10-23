@@ -388,9 +388,9 @@ describe("chats create, join and leave", () => {
     const whatsapp = { groupSettings: ["onlyAdminsSend", "onlyAdminsEditInfo", "disappearingSeconds"] as const }
     const argv = ["chats", "update", "Book club", "--only-admins-send", "on", "--only-admins-edit-info", "off"]
 
-    const set = await call([...argv, "--disappear-time", "7d", "--json"], adapter, env, whatsapp)
+    const set = await call([...argv, "--disappear-after", "7d", "--json"], adapter, env, whatsapp)
     await call(["chats", "update", "Book club", "--disappear-time", "off"], adapter, env, whatsapp)
-    const bad = await call(["chats", "update", "Book club", "--disappear-time", "7"], adapter, env, whatsapp)
+    const bad = await call(["chats", "update", "Book club", "--disappear-after", "7"], adapter, env, whatsapp)
     const elsewhere = await call(["chats", "update", "Book club", "--only-admins-send", "on"], adapter, env)
 
     expect(set.code).toBe(0)
@@ -403,8 +403,16 @@ describe("chats create, join and leave", () => {
       { settings: { onlyAdminsSend: true, onlyAdminsEditInfo: false, disappearingSeconds: 604_800 } },
       { settings: { disappearingSeconds: 0 } },
     ])
+    const conflict = await call(
+      ["chats", "update", "Book club", "--disappear-after", "7d", "--disappear-time", "off"],
+      adapter,
+      env,
+      whatsapp,
+    )
+    expect(conflict.code).toBe(2)
+    expect(changes).toHaveLength(2)
     expect(bad.code).toBe(2)
-    expect(bad.stderr.join("\n")).toContain("--disappear-time takes a duration")
+    expect(bad.stderr.join("\n")).toContain("--disappear-after takes a duration")
     expect(elsewhere.stderr.join("\n")).toContain("unknown option '--only-admins-send'")
   })
 

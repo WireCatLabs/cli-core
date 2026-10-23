@@ -140,7 +140,17 @@ describe("analysis CLI consent and configuration", () => {
     const { call, add, calls, baseUrl } = await setup()
     expect((await call("conversations", "build", "--analyze", "--chat", "9", "--json")).code).not.toBe(0)
     expect(calls()).toBe(0)
-    const first = await call("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")
+    const first = await call(
+      "conversations",
+      "build",
+      "--analyze",
+      "--analysis-provider",
+      "openai",
+      "--chat",
+      "9",
+      "--yes",
+      "--json",
+    )
     expect(first.code, JSON.stringify(first)).toBe(0)
     expect(json(first)).toMatchObject({ stored: 1, stopped: "complete" })
     expect(calls()).toBe(1)
@@ -170,7 +180,20 @@ describe("analysis CLI consent and configuration", () => {
       ).code,
     ).not.toBe(0)
     expect(calls()).toBe(2)
-    expect((await call("conversations", "consents", "revoke", "--chat", "9", "--json")).code).toBe(0)
+    expect(
+      (
+        await call(
+          "conversations",
+          "consents",
+          "revoke",
+          "--chat",
+          "9",
+          "--consent-provider",
+          `openai:${baseUrl}`,
+          "--json",
+        )
+      ).code,
+    ).toBe(0)
     expect((await call("conversations", "build", "--analyze", "--chat", "9", "--json")).code).not.toBe(0)
     expect(calls()).toBe(2)
     expect(json(await call("conversations", "consents", "list", "--json")).items).toEqual([])

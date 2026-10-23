@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { analysisConsents } from "../../analysis/consents.js"
 import { openAnalysis, providerIdentity } from "../../analysis/provider.js"
 import { runAnalysis } from "../../analysis/runner.js"
@@ -65,7 +65,14 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         "--analyze",
         "link batches using the configured analysis provider; requires --chat and remembers consent for this chat/provider",
       )
-      .option("--provider <provider>", "analysis: agent, openai or anthropic")
+      .addOption(
+        new Option("--analysis-provider <provider>", "analysis: agent, openai or anthropic").conflicts("provider"),
+      )
+      .addOption(
+        new Option("--provider <provider>", "compatibility alias for --analysis-provider")
+          .hideHelp()
+          .conflicts("analysisProvider"),
+      )
       .option("--model <model>", "analysis model; overrides analysis_model")
       .option("--base-url <url>", "analysis API endpoint; overrides analysis_base_url")
       .option("--size <n>", "analysis answer messages per batch, 10–200; default 50", positiveCount("--size"))
@@ -138,6 +145,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       return
     }
     if (
+      options.analysisProvider !== undefined ||
       options.provider !== undefined ||
       options.model !== undefined ||
       options.baseUrl !== undefined ||
@@ -368,12 +376,17 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     .summary("remove an agent's saved conversation-link answers")
     .description("drop your agent's answers for a chat, or only one model's; messages are never touched")
     .requiredOption("--chat <chat>", messenger.chatArgument)
-    .option("--model <model>", "only the answers this model gave")
+    .addOption(new Option("--answer-model <model>", "only the stored answers this model gave").conflicts("model"))
+    .addOption(
+      new Option("--model <model>", "compatibility alias for --answer-model").hideHelp().conflicts("answerModel"),
+    )
     .action(async function (this: Command) {
-      const { chat, model } = this.opts<{ chat: string; model?: string }>()
+      const { chat, model, answerModel } = this.opts<{ chat: string; model?: string; answerModel?: string }>()
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
-      const cleared = await context.withServices((services) => services.conversations.clearAnswers(chat, model))
+      const cleared = await context.withServices((services) =>
+        services.conversations.clearAnswers(chat, answerModel ?? model),
+      )
       renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} answers dropped\n`)
     })
 
@@ -382,7 +395,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       .summary("prepare conversation vectors for meaning search")
       .description(
         "compute a vector for each chunk of a chat's conversations for search by meaning — on this machine, or " +
-          "with --provider through a service and your key; resumes where it stopped; without --chat, every " +
+          "with --embedding-provider through a service and your key; resumes where it stopped; without --chat, every " +
           "built chat with chunks left, on this machine only",
       )
       .option("--chat <chat>", messenger.chatArgument),
@@ -483,7 +496,11 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const chat = chatOf(options)
     const context = messengerContext(this, messenger)
     refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
-    const given = options.model !== undefined || options.provider !== undefined || options.baseUrl !== undefined
+    const given =
+      options.model !== undefined ||
+      options.embeddingProvider !== undefined ||
+      options.provider !== undefined ||
+      options.baseUrl !== undefined
     const model = given ? choiceOf(options, messenger, context, { needKey: false }) : undefined
     const cleared = await context.withServices((services) => services.embeddings.clear(chat, model))
     renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} vectors dropped\n`)
@@ -538,9 +555,23 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   annotate(consents.command("revoke"), { effects: LOCAL_WRITE })
     .description("forget analysis permissions so the next analysis asks again")
     .option("--chat <chat>", "revoke only this chat's consents; defaults to every chat")
-    .option("--provider <identity>", "exact provider identity from consents list; defaults to every provider")
+    .addOption(
+      new Option(
+        "--consent-provider <identity>",
+        "exact provider identity from consents list; defaults to every provider",
+      ).conflicts("provider"),
+    )
+    .addOption(
+      new Option("--provider <identity>", "compatibility alias for --consent-provider")
+        .hideHelp()
+        .conflicts("consentProvider"),
+    )
     .action(async function (this: Command) {
-      const { chat, provider } = this.opts<{ chat?: string; provider?: string }>()
+      const { chat, provider, consentProvider } = this.opts<{
+        chat?: string
+        provider?: string
+        consentProvider?: string
+      }>()
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
       await context.withStore(async (store, account) => {
@@ -553,7 +584,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
                   BATCH_SIZE.default,
                 )
               ).chat
-        await analysisConsents(store, account).revoke(chatId, provider)
+        await analysisConsents(store, account).revoke(chatId, consentProvider ?? provider)
       })
       renderAnswer(this, context, itemOf({ revoked: true }))
     })
@@ -579,7 +610,17 @@ const withModelOptions = (command: Command): Command =>
       "--model <model>",
       "local: a model id from `models text list` (default: e5-small); remote: the provider's model",
     )
-    .option("--provider <provider>", "embedding provider: local or openai; flags override profile settings")
+    .addOption(
+      new Option(
+        "--embedding-provider <provider>",
+        "embedding provider: local or openai; flags override profile settings",
+      ).conflicts("provider"),
+    )
+    .addOption(
+      new Option("--provider <provider>", "compatibility alias for --embedding-provider")
+        .hideHelp()
+        .conflicts("embeddingProvider"),
+    )
     .option(
       "--base-url <url>",
       "a server with OpenAI's /v1/embeddings: Gemini, Jina, or Ollama and LM Studio on this machine",
@@ -626,7 +667,7 @@ const localOnly = (model: ModelChoice, what: string) => {
   if (typeof model !== "string") {
     throw new CliError(
       "validation_error",
-      `${what} uses the model on this machine only — drop --provider and --base-url, or embed one chat with --chat`,
+      `${what} uses the model on this machine only — drop --embedding-provider and --base-url, or embed one chat with --chat`,
     )
   }
 }

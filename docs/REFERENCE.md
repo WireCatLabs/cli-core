@@ -535,7 +535,7 @@ an explicit id. Stored direct-chat resolution supports aliases; it never invents
 an identity id. `contacts show --with-notes` includes private notes explicitly; the notes read permission still applies. Local metadata survives profile refresh and stays on its original identity/account
 when identities are linked or unlinked.
 
-`contacts notes add <person> --file <path>` (or stdin) creates a stable note id. Use `list`,
+`contacts notes add <person> --text-file <path>` (or stdin) creates a stable note id. Use `list`,
 `show`, `edit --revision <number>` and `remove` for that person's notes. Notes are independent of
 public bios, imported documents and source messages. They are rows of the store's `notes` table (version
 25), linked to the contact, so `search notes` and `search all` find them too. `contacts list --search-notes
@@ -552,7 +552,7 @@ fields and a rule score, not a topic probability. No model or message text is us
 
 Automatic tag claims are distinct from manual labels. Rerunning removes obsolete automatic tags
 and preserves manual tags. Adding a label already generated promotes it to manual ownership;
-listing generated tags includes `sources`. Use `tags list|remove --source manual|auto` to select one ownership source. Removing a tag without a source removes its claims; a later explicit
+listing generated tags includes `sources`. Use `tags list sources:manual` to select an ownership source and `tags remove --claim manual|auto` to remove only one claim. Removing a tag without a source removes its claims; a later explicit
 automatic run can regenerate it. Upgrade consumers together before relying on manual promotion:
 older builds cannot record manual ownership of an already generated label.
 

@@ -1,5 +1,5 @@
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { type AudienceEdits, addRule, editAudience, editRule, type RuleEdits, switchRule } from "../../replies/edit.js"
 import { audienceWarnings, repliesPathFor } from "../../replies/rules.js"
 import type { Warn } from "../../runs/events.js"
@@ -22,7 +22,7 @@ export const REPLY_EDIT_OPTIONS = [
   ["--contacts-only", "match only contacts"],
   ["--no-contacts-only", "do not require a contact"],
   ["--template <text>", "the reply template"],
-  ["--model <mode>", "legacy template mode: fill-only or may-reword; use ai blocks instead"],
+  ["--template-mode <mode>", "legacy template mode: fill-only or may-reword; use ai blocks instead"],
   ["--as-reply", "send as a reply to the matched message"],
   ["--no-as-reply", "send without linking to the matched message"],
   ["--per-chat <limit>", "at most this many per chat, such as 1/12h"],
@@ -71,17 +71,27 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
   const edit = grantsAuthority(annotate(new Command("edit"), { effects: LOCAL_WRITE }))
     .description("change only the named fields of a reply rule; lists replace the whole list")
     .argument("<id>", "the rule's id")
-  for (const [flag, help] of REPLY_EDIT_OPTIONS) edit.option(flag, help)
+  for (const [flag, help] of REPLY_EDIT_OPTIONS) {
+    const option = new Option(flag, help)
+    if (flag === "--template-mode <mode>") option.conflicts("model")
+    edit.addOption(option)
+  }
+  edit.addOption(
+    new Option("--model <mode>", "compatibility alias for --template-mode").hideHelp().conflicts("templateMode"),
+  )
   // Commander gives negated-only flags a true default; omission must preserve the saved field.
   edit.action(function (this: Command, id: string) {
-    const options = this.opts<RuleEdits>()
+    const options = this.opts<RuleEdits & { templateMode?: string }>()
     if (this.getOptionValueSource("hours") === "default") delete options.hours
     const context = messengerContext(this, messenger)
     const { settings, env } = context
     renderItem(
       this,
       context,
-      editRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id, options),
+      editRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id, {
+        ...options,
+        model: options.templateMode ?? options.model,
+      }),
     )
   })
   replies.addCommand(edit)
