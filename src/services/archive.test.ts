@@ -286,11 +286,16 @@ describe("what a search says about the archive", () => {
 })
 
 describe("the inbox service", () => {
-  it("refuses offline, before anything is opened", async () => {
+  it("refuses inbox offline, before anything is opened", async () => {
     const service = inboxService(storedDeps(messenger, await emptyStore(), account, guard))
 
     await expect(service.read({ limit: 20 })).rejects.toThrow(/`inbox` asks the messenger/)
-    await expect(service.review({ since: 0 })).rejects.toThrow(/`review` asks the messenger/)
+  })
+
+  it("reviews offline from the store, marked offline and never complete", async () => {
+    const service = inboxService(storedDeps(messenger, await emptyStore(), account, guard))
+
+    expect(await service.review({ since: 0 })).toMatchObject({ offline: true, complete: false, chats: [] })
   })
 })
 
