@@ -9,6 +9,7 @@ import { renderAnswer, snakeKeys } from "../envelope.js"
 import { rightsOf } from "../messenger/admin-commands.js"
 import { renderItem, wholeList } from "../messenger/chat-answers.js"
 import { botContext, online } from "./context.js"
+import { botExamples } from "./examples.js"
 import { botCan } from "./messages.js"
 import type { BotMessenger } from "./port.js"
 
@@ -27,7 +28,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
   const offered = bot.adminRights ?? ADMIN_RIGHTS
   const command = new Command("admins").description("the admins of a chat the bot is an admin in")
 
-  annotate(command.command("list"), { effects: REMOTE_READ })
+  annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "chats admins list Team") })
     .description("the chat's admins and what each may do")
     .argument("<chat>", CHAT)
     .action(async function (this: Command, chat: string) {
@@ -40,7 +41,10 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("add"), { effects: REMOTE_WRITE })
+  annotate(command.command("add"), {
+    effects: REMOTE_WRITE,
+    examples: botExamples(bot, "chats admins add Team 42 --title Helper"),
+  })
     .description("make a member an admin with these rights")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)
@@ -71,7 +75,10 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("remove"), { effects: REMOTE_WRITE })
+  annotate(command.command("remove"), {
+    effects: REMOTE_WRITE,
+    examples: botExamples(bot, "chats admins remove Team 42"),
+  })
     .description("take an admin's rights back; they stay a member")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)
@@ -102,7 +109,10 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
 export const botMembersCommand = (bot: BotMessenger): Command => {
   const command = new Command("members").description("the people in a chat the bot is an admin in")
 
-  annotate(command.command("remove"), { effects: REMOTE_WRITE })
+  annotate(command.command("remove"), {
+    effects: REMOTE_WRITE,
+    examples: botExamples(bot, "chats members remove Team 42 --block"),
+  })
     .description("take a person out of a chat; their messages stay")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)
