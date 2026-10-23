@@ -82,9 +82,13 @@ export const accountsOfKind = (
     )
   const mail = (listed ? chosen : held).filter(({ provider }) => kindOf(provider) === "mail")
   if (mail.length === 0)
-    throw new CliError("not_found", "no mail in the store yet — `memo sync --mail --since-time <time>` imports it", {
-      reason: NO_MAIL,
-    })
+    throw new CliError(
+      "not_found",
+      "no mail in the store yet — `memo sync --only mail --since-time <time>` imports it",
+      {
+        reason: NO_MAIL,
+      },
+    )
   const address = mailAccount?.trim().toLowerCase()
   const chosenMail = address === undefined ? mail : mail.filter(({ account }) => account === address)
   if (chosenMail.length === 0)

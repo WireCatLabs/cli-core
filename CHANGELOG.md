@@ -11,6 +11,18 @@ shape of this file.
 
 - Clearing a remembered flood hold includes an example in help and command discovery.
 
+### Security
+
+- `@modelcontextprotocol/server` 2.3.0 clears the three high-severity advisories `npm audit` reported for every
+  WireCat CLI.
+
+### Fixed
+
+- **A pasted help example runs.** The `Example:` line of an account command's `--help`, generated or written, names
+  the profile `personal` (`tg personal messages list Team`), so it no longer fails with "name a profile".
+
+- `search mail` with no mail in the store points at `memo sync --only mail`; it named a `--mail` option memo does not have.
+
 ## 0.397.0 — 23.10.2026
 
 ### Changed — may break callers

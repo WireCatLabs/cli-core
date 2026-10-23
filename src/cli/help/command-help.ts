@@ -2,6 +2,7 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import type { Argument, Command } from "commander"
 import { commandPathOf, outputOf } from "../command-contract.js"
+import { PROFILE_FREE } from "../profile.js"
 import { commandAt } from "../steps.js"
 import { short } from "./commands-text.js"
 
@@ -187,8 +188,22 @@ const generatedExample = (command: Command): string => {
       if (!(option.required || option.optional)) return [flag]
       return [flag, option.argChoices?.[0] ?? sample(placeholder ?? option.attributeName())]
     })
-  // No profile word, as on the first screen and in written examples: the Usage line already shows `<profile>`.
   return [rootOf(command).name(), ...commandPathOf(command), ...words, ...options].join(" ")
+}
+
+const profiled = new WeakSet<Command>()
+
+/** The profile an example names, so a pasted one runs; the name the first screen's "Start here" uses. */
+export const EXAMPLE_PROFILE = "personal"
+
+const withProfile = (command: Command, example: string): string => {
+  const root = rootOf(command)
+  const top = commandPathOf(command)[0]
+  if (!profiled.has(root) || top === undefined || PROFILE_FREE.has(top)) return example
+  const prefix = `${root.name()} ${top}`
+  return example === prefix || example.startsWith(`${prefix} `)
+    ? `${root.name()} ${EXAMPLE_PROFILE} ${example.slice(root.name().length + 1)}`
+    : example
 }
 
 export interface CommandHelp {
@@ -205,7 +220,7 @@ export const commandHelp = (command: Command): CommandHelp => {
   return {
     returns: returnsOf(command),
     next: nextOf(command).map(call),
-    examples: written.length > 0 ? written : [generatedExample(command)],
+    examples: (written.length > 0 ? written : [generatedExample(command)]).map((one) => withProfile(command, one)),
     origin: written.length > 0 ? "written" : "generated",
   }
 }
@@ -235,8 +250,12 @@ export const commandHelpMarkdown = (root: Command, path: readonly string[]): str
   ]
 }
 
-/** Puts Returns, Next usually and Example on every leaf command's `--help`, worked out when the help is shown. */
-export const installCommandHelp = (program: Command): void => {
+/**
+ * Puts Returns, Next usually and Example on every leaf command's `--help`, worked out when the help is shown.
+ * With `profile`, an example of an account command gets the profile word it would fail without.
+ */
+export const installCommandHelp = (program: Command, { profile = true }: { profile?: boolean } = {}): void => {
+  if (profile) profiled.add(program)
   for (const command of leaves(program)) command.addHelpText("after", () => commandHelpText(command))
 }
 

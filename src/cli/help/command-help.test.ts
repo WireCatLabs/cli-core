@@ -72,22 +72,42 @@ describe("generated command help", () => {
       "Returns:       message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands schema messages list
       Next usually:  tg messages link <chat> <message>
                      tg messages delete <chat> <message>
-      Example:       tg messages list Team
+      Example:       tg personal messages list Team
       "
     `)
   })
 
   it("takes the definition's example, and falls back to the description without an output schema", async () => {
     const link = (await help(["messages", "link"])).stdout
-    expect(link).toContain("Example:       tg messages link Team 1234")
+    expect(link).toContain("Example:       tg personal messages link Team 1234")
     expect(link).toContain("Returns:       a message's permalink")
 
-    expect((await help(["messages", "send"])).stdout).toContain('Example:       tg messages send Team "on my way"')
+    expect((await help(["messages", "send"])).stdout).toContain(
+      'Example:       tg personal messages send Team "on my way"',
+    )
   })
 
   it("puts search text and mandatory options into a generated example", async () => {
     expect((await help(["search", "messages"])).stdout).toContain(
-      'Example:       tg search messages "invoice" --since 1d',
+      'Example:       tg personal search messages "invoice" --since 1d',
+    )
+  })
+
+  it("names no profile in the example of a command that reads none", async () => {
+    expect((await help(["commands", "schema"])).stdout).toMatch(/Example: +tg commands schema/)
+  })
+
+  it("keeps the profile a written example already names", () => {
+    const program = createProgram({
+      ...tool,
+      configure: (root) => {
+        const link = root.commands.find((one) => one.name() === "messages")?.commands[2]
+        if (link) annotate(link, { examples: ["tg personal messages link Team 1234"] })
+      },
+    })
+
+    expect(commandHelpMarkdown(program, ["messages", "link"])).toContain(
+      "**Example:** `tg personal messages link Team 1234`",
     )
   })
 
@@ -111,7 +131,7 @@ describe("generated command help", () => {
     expect(commandHelpMarkdown(createProgram(tool), ["messages", "list"])).toEqual([
       "**Returns:** message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands schema messages list",
       "**Next usually:** `tg messages link <chat> <message>`, `tg messages delete <chat> <message>`",
-      "**Example:** `tg messages list Team`",
+      "**Example:** `tg personal messages list Team`",
     ])
     expect(commandHelpMarkdown(createProgram(tool), ["messages"])).toEqual([])
   })

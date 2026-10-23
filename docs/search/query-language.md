@@ -18,7 +18,7 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 написанные в memo, `source:file` — файлы из папок), а у файлов-страниц ещё
 `title`, `site`, `lang`, `author`, `keyword` — то, что страница сообщает о себе; у сообщений эти поля
 ничего не находят). `search all` ищет в сообщениях и заметках сразу. Почта принадлежит memo: `memo search mail`
-ищет только в почте, импортированной `memo sync --mail`, во всех почтовых аккаунтах сразу, а
+ищет только в почте, импортированной `memo sync --only mail`, во всех почтовых аккаунтах сразу, а
 `--source email:<адрес>` — в одном; `memo search all` добавляет почту к сообщениям и заметкам. В почте
 `chat:` и `--chat` — тред по id или теме, полей `kind` и `topic` нет; только у почты — `to:`, `cc:`,
 `bcc:` (человек, как в `from:`), `subject:` (слова темы) и `mailbox:` (папка или ярлык по id или имени;

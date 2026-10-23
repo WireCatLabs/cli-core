@@ -19,14 +19,9 @@ next is the [roadmap](../roadmap.md).
 
 ## Launch blockers (P1)
 
-- **CORE-1** · P1 · The MCP server library has three high-severity advisories, so a fresh install of any WireCat CLI
-  reports 8 high alerts in `npm audit`, and `npm audit fix --force` offers the deprecated `@wirecat/cli-core@0.20.0`.
-  Raise `@modelcontextprotocol/server` 2.1.0 → 2.3.0 (`package.json:168`, dependabot #1699, checks green), release,
-  then every CLI adopts it.
-- **CORE-2** · P1 · README statements that are no longer true: proximity is refused (`README.md:119`; `"a b"~N` works
-  since #1748), "seventeen" optional groups (`:90`; [ADAPTERS.md](ADAPTERS.md#required-core-and-optional-groups) lists
-  20), the tool lists leave out wa and drive (`:7`, `:74`), "the profile is the first word of every account command"
-  (`:213`; memo takes `--account`, drive `--profile`), and a dated count of breaking versions (`:255`).
+- **CORE-1** · P1 · 🟡 The MCP server library had three high-severity advisories, so a fresh install of any WireCat CLI
+  reports 8 high alerts in `npm audit`. `@modelcontextprotocol/server` 2.3.0 is merged (#1699); left: release, then
+  every CLI adopts it.
 
 ## Next (P2)
 

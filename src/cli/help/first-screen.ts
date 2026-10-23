@@ -4,7 +4,7 @@ import { Command, Help, Option } from "commander"
 import wrapAnsi from "wrap-ansi"
 import { NO_EFFECTS } from "../effects.js"
 import { commandAt } from "../steps.js"
-import { installCommandHelp } from "./command-help.js"
+import { EXAMPLE_PROFILE, installCommandHelp } from "./command-help.js"
 
 export interface FirstScreenLine {
   /** The command without the tool's name or the profile: `review --since 1d`. */
@@ -93,7 +93,7 @@ export const firstScreen = (program: Command, screen: FirstScreen = {}): string 
     ({ command, shown, does }) => [shown ?? command, does] as const,
   )
   const column = Math.max(22, widest([...can, ...works].map(([left]) => left))) + 2
-  const start = screen.start ?? (commandAt(program, "setup") ? `${cli} personal setup` : undefined)
+  const start = screen.start ?? (commandAt(program, "setup") ? `${cli} ${EXAMPLE_PROFILE} setup` : undefined)
   return [
     wrapAnsi(`${cli} — ${pitch}`, WIDTH),
     "",
@@ -135,7 +135,7 @@ export const installHelp = (program: Command, screen: FirstScreen = {}): Command
         ? firstScreen(program, screen)
         : (own.formatHelp ?? Help.prototype.formatHelp).call(helper, command, helper),
   })
-  installCommandHelp(program)
+  installCommandHelp(program, { profile: screen.profile !== false })
   program.addOption(new Option("--help-all", "the full help: every command and option").hideHelp())
   program.on("option:help-all", () => {
     full = true
