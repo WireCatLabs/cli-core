@@ -82,7 +82,8 @@ export const involvementStoreOver = ({ database, now }: Pick<StoreContext, "data
     return database
       .prepare(
         `SELECT i.*, a.provider, a.external_id AS account, c.external_id AS chat, m.external_id AS message
-          FROM involvements i LEFT JOIN accounts a ON a.id=i.account_id
+          FROM involvements i LEFT JOIN projects pr ON pr.id=i.project_id
+          LEFT JOIN accounts a ON a.id=coalesce(i.account_id,pr.account_id)
           LEFT JOIN messages m ON i.subject_type='message' AND m.id=i.subject_id
           LEFT JOIN chats c ON c.id=CASE WHEN i.subject_type='chat' THEN i.subject_id ELSE m.chat_id END
           WHERE i.person_id=? ${filters.map(([sql]) => sql).join(" ")}

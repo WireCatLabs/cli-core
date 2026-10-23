@@ -161,3 +161,63 @@ it("keeps the index current as the store writes, and ends where a full rebuild e
     await store.close()
   }
 })
+
+it("keeps a task of another account's project off a person's timeline in this account (RISK-1602)", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "involvements-")), "store.db")
+  const store = await openStore({ path, now: () => 1000 })
+  const database = await openCache(path)
+  try {
+    const account = (external: string) =>
+      Number(
+        database
+          .prepare(
+            "INSERT INTO accounts (provider, external_id, created_at, updated_at) VALUES ('synthetic', ?, 1, 1) RETURNING id",
+          )
+          .get(external)?.id,
+      )
+    const owner = account("owner")
+    const other = account("other")
+    const person = Number(
+      database
+        .prepare("INSERT INTO persons (name, created_at, updated_at) VALUES ('Alice Example', 1, 1) RETURNING id")
+        .get()?.id,
+    )
+    const task = (key: string, accountId: number | null, at: number) => {
+      const project = Number(
+        database
+          .prepare(
+            "INSERT INTO projects (key, name, type, account_id, created_at, updated_at) VALUES (?, ?, 'project', ?, 1, 1) RETURNING id",
+          )
+          .get(key, key, accountId)?.id,
+      )
+      const id = Number(
+        database
+          .prepare(
+            "INSERT INTO tasks (project_id, number, key, title, type, status, author_type, author_id, source, created_at, updated_at) VALUES (?, 1, ?, 'Synthetic task', 'task', 'open', 'owner', 0, 'manual', ?, ?) RETURNING id",
+          )
+          .get(project, `${key}-1`, at, at)?.id,
+      )
+      database
+        .prepare(
+          "INSERT INTO task_assignments (task_id, assignee_type, assignee_id, role, created_at, updated_at) VALUES (?, 'person', ?, 'assignee', 1, 1)",
+        )
+        .run(id, person)
+      return id
+    }
+    const mine = task("MINE", owner, 300)
+    const global = task("GLOBAL", null, 200)
+    task("THEIRS", other, 100)
+    store.involvements.rebuild(person)
+    expect(
+      store.involvements
+        .forPerson(person, { only: { provider: "synthetic", account: "owner" } })
+        .map((row) => [row.subjectId, row.account]),
+    ).toEqual([
+      [mine, "owner"],
+      [global, null],
+    ])
+  } finally {
+    database.close()
+    await store.close()
+  }
+})
