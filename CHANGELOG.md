@@ -23,6 +23,8 @@ shape of this file.
 
 - Recipient-list commands include concrete examples in help and command discovery.
 
+- Saved-search commands include concrete examples in help and command discovery.
+
 ## 0.396.0 — 23.10.2026
 
 ### Changed — may break callers
