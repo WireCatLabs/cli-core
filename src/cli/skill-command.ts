@@ -21,7 +21,12 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
   )
   // An installed skill is instructions every later agent follows.
   const install = command.commands.find((sub) => sub.name() === "install")
-  if (install) grantsAuthority(install)
+  if (install) {
+    grantsAuthority(install)
+    annotate(install, { examples: [`${app.command} skill install --for agents`] })
+  }
+  const show = command.commands.find((sub) => sub.name() === "show")
+  if (show) annotate(show, { examples: [`${app.command} skill show`, `${app.command} skill show follow-ups`] })
   return annotate(command, { mcp: false })
 }
 

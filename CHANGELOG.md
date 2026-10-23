@@ -32,6 +32,8 @@ shape of this file.
 
 - Configuration commands include concrete examples in help and command discovery.
 
+- Skill commands include concrete examples in help and command discovery.
+
 - Task commands include concrete examples in help and command discovery.
 
 - Poll commands include concrete examples in help and command discovery.
