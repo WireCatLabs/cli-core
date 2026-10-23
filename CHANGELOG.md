@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A voice note's transcript is found in any form of a word, and widened to the spellings speech recognition
+  garbles (store version 29).** «риелтор» finds a transcript saying «риелтору», and «реелтора»: always, not only when
+  nothing matched, by meeting search's rules — one stem edit from a word the Russian dictionary does not know, never
+  a number word, never a phrase or under `exact:`. A hit found only through a garbled spelling has `match:
+  "corrected"` and `corrections`, and the answer's `corrections` lists them. New tables `transcript_words`, its
+  vocabulary, `transcript_stems` and `transcript_index_pending`, filled before each search; existing transcripts are
+  queued on upgrade.
+
 ## 0.395.0 — 23.10.2026
 
 ### Changed — may break callers
