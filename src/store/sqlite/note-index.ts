@@ -6,6 +6,7 @@ import { normalize } from "../normalize.js"
 import { dropDocumentPicture } from "./document-pictures.js"
 import { int } from "./events.js"
 import { indexRow } from "./index-state.js"
+import { speech } from "./lucene-fields.js"
 import { savedStemmers } from "./stems.js"
 import { write } from "./transaction.js"
 
@@ -25,12 +26,14 @@ export interface NoteIndexState {
  */
 export interface Corpus {
   /** The singular table name: `indexable_type` in the queue, `chunkable_type` in chunks. */
-  type: "document" | "note" | "memory" | "email" | "task"
+  type: "document" | "note" | "memory" | "email" | "task" | "transcript"
   /** Its row in `search_index_state`. */
   index: string
   table: string
   /** Title and body as `title`/`body`, whether it is live, and its scope, for one row by `id`. */
   read: string
+  /** `indexable_type` in the queue when it is not `type`: the table a queued id points into. */
+  queued?: "attachment"
   /** False when the corpus cuts its own pieces for search by meaning, as mail does by thread. */
   pieces?: false
   /** The words and stems rows, when the corpus cleans its text its own way; `normalize` and `indexText` otherwise. */
@@ -78,16 +81,29 @@ export const CORPORA = {
     pieces: false,
     terms: (text, stemmer) => ({ words: taskWordsOf(text), stems: [...taskStemsOf(text, stemmer)].join(" ") }),
   },
+  transcript: {
+    type: "transcript",
+    queued: "attachment",
+    index: "transcript_index",
+    table: `(SELECT a.id FROM attachments a WHERE a.attachable_type = 'message' AND ${speech("a")})`,
+    read:
+      `SELECT NULL AS title, coalesce(a.text, '') AS body, a.attachable_type = 'message' AND ${speech("a")} AS live, ` +
+      "'personal' AS scope FROM attachments a WHERE a.id = ?",
+    pieces: false,
+  },
 } as const satisfies Record<string, Corpus>
 
 /** What a row is indexed as: its title, then its text. Chunk offsets point into this. */
 export const noteIndexText = (title: string | null, text: string): string => (title ? `${title}\n\n${text}` : text)
 
+const queuedAs = (corpus: Corpus) => corpus.queued ?? corpus.type
+
 export const corpusIndexState = (database: CacheDatabase, corpus: Corpus): NoteIndexState => {
   const row = indexRow(database, corpus.index) as Record<string, unknown>
   const pending = Number(
-    database.prepare(`SELECT count(*) AS n FROM ${corpus.type}_index_pending WHERE indexable_type = ?`).get(corpus.type)
-      ?.n,
+    database
+      .prepare(`SELECT count(*) AS n FROM ${corpus.type}_index_pending WHERE indexable_type = ?`)
+      .get(queuedAs(corpus))?.n,
   )
   const saved = savedStemmers(database)
   const wanted = saved === null ? null : analyzerIdentity(saved ?? DEFAULT_STEMMERS)
@@ -166,7 +182,7 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
     }
     for (const hash of before) if (!after.has(hash)) statements.purge.run(hash, hash)
     if (!live && corpus.type === "document") dropDocumentPicture(database, id)
-    statements.dequeue.run(corpus.type, id)
+    statements.dequeue.run(queuedAs(corpus), id)
   }
 }
 
@@ -203,7 +219,7 @@ export const drainCorpus = (
       if (state.built !== null)
         database
           .prepare(`INSERT OR IGNORE INTO ${queue} (indexable_type, id) SELECT ?, id FROM ${corpus.table}`)
-          .run(corpus.type)
+          .run(queuedAs(corpus))
       database.prepare("UPDATE search_index_state SET analyzer = ? WHERE name = ?").run(stemmer.identity, corpus.index)
     })
   }
@@ -214,7 +230,7 @@ export const drainCorpus = (
   for (;;) {
     if (until()) break
     const count = write(database, () => {
-      const ids = next.all(corpus.type, batch).map((row) => Number(row.id))
+      const ids = next.all(queuedAs(corpus), batch).map((row) => Number(row.id))
       for (const id of ids) index(id)
       return ids.length
     })
@@ -241,7 +257,7 @@ export const resetNoteIndex = (database: CacheDatabase): boolean => {
         .prepare(
           `INSERT OR IGNORE INTO ${corpus.type}_index_pending (indexable_type, id) SELECT ?, id FROM ${corpus.table}`,
         )
-        .run(corpus.type)
+        .run(queuedAs(corpus))
   })
   return true
 }

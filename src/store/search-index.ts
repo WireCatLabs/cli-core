@@ -1,4 +1,5 @@
 import type { Stemmers } from "../search/stem.js"
+import { CORPORA, corpusIndexState, drainCorpus } from "./sqlite/note-index.js"
 import type { StoreContext } from "./sqlite/open.js"
 import type { SearchIndexFill, SearchIndexState } from "./sqlite/search-index.js"
 import * as searchIndex from "./sqlite/search-index.js"
@@ -25,7 +26,10 @@ export interface SearchIndexStore {
   fillSearchIndex(options?: { until?: () => boolean }): Promise<SearchIndexFill>
   /** How far the stems are built, and by which stemmer choices; `undefined` on a file before they existed. */
   stemsState(): Promise<StemsState | undefined>
-  /** Builds the stems towards "ready" in short batches until done or `until` says stop; never rebuilds. */
+  /**
+   * Builds the stems towards "ready" in short batches until done or `until` says stop; never rebuilds. Then the
+   * voice-note transcripts written since, which are few, so they keep up with any stemmer choice.
+   */
   fillStems(options?: { until?: () => boolean }): Promise<StemsFill>
   /**
    * The stemmer choices saved in the store for every profile, tg and MAX; `undefined` while the defaults
@@ -38,6 +42,7 @@ export interface SearchIndexStore {
 
 export const searchIndexStoreOver = (context: StoreContext): SearchIndexStore => {
   const { database } = context
+  const stemmerFor = stems.stemmerCache()
   return {
     knownTerms: async (terms) => words.knownTerms(context, terms),
     termCandidates: async (trigrams, lengths) => words.termCandidates(context, trigrams, lengths),
@@ -45,7 +50,14 @@ export const searchIndexStoreOver = (context: StoreContext): SearchIndexStore =>
     fillSearchIndex: async ({ until } = {}) =>
       searchIndex.fillSearchIndex(database, { now: context.now, ...(until ? { until } : {}) }),
     stemsState: async () => stems.stemsState(database),
-    fillStems: async ({ until } = {}) => fillStems(database, { now: context.now, ...(until ? { until } : {}) }),
+    fillStems: async ({ until } = {}) => {
+      const filled = fillStems(database, { now: context.now, ...(until ? { until } : {}) })
+      // Read first: every search asks, and an idle drain must not take the write lock.
+      const transcripts = corpusIndexState(database, CORPORA.transcript)
+      if (transcripts.wanted !== null && (transcripts.pending > 0 || transcripts.built !== transcripts.wanted))
+        drainCorpus(database, CORPORA.transcript, stemmerFor, until ? { until } : {})
+      return filled
+    },
     stemmers: async () => stems.savedStemmers(database),
     saveStemmers: async (stemmers) => write(database, () => stems.saveStoreStemmers(database, stemmers, context.now())),
   }

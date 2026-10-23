@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-94 tables, 19 full-text indexes.
+95 tables, 21 full-text indexes.
 
 ## Conventions
 
@@ -858,6 +858,34 @@ Full-text index.
 ```sql
 CREATE VIRTUAL TABLE attachment_name_words USING fts5( name, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
 ```
+
+### `transcript_words`
+
+Word index over voice-note transcripts, rowid = attachment id: the vocabulary garbled spellings are read from.
+
+```sql
+CREATE VIRTUAL TABLE transcript_words USING fts5(normalized_text, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
+CREATE VIRTUAL TABLE transcript_words_vocab USING fts5vocab(transcript_words, 'col')
+```
+
+### `transcript_stems`
+
+Stem index, the pair of transcript_words: a transcript found in any form of a word.
+
+```sql
+CREATE VIRTUAL TABLE transcript_stems USING fts5(stems, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
+```
+
+### `transcript_index_pending`
+
+Rows of voice-note transcripts waiting to be indexed: triggers enqueue, JS normalizes, stems and writes the index.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | not null |  |  |
+| `indexable_type` | text | not null |  | which table the waiting row belongs to |
+
+*Keys and indexes:* `PRIMARY KEY (indexable_type, id)`
 
 ## Documents, notes and memories
 

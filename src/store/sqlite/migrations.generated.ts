@@ -577,5 +577,24 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `chats` ADD `marked_unread` integer;",
       "ALTER TABLE `chats` ADD `unread_counted_at` integer;"
     ]
+  },
+  {
+    "name": "20261023105057_version-29-transcript-words",
+    "statements": [
+      "CREATE TABLE `transcript_index_pending` (\n\t`id` integer NOT NULL,\n\t`indexable_type` text NOT NULL,\n\tCONSTRAINT `transcript_index_pending_pk` PRIMARY KEY(`indexable_type`, `id`)\n);"
+    ]
+  },
+  {
+    "name": "20261023105101_version-29-transcript-words-triggers",
+    "statements": [
+      "-- Words and stems of a voice note's transcript, rowid = attachment id. The words are the vocabulary garbled\n-- spellings are read from; the typed form is still found in attachment_words. Stemming needs JS, so the\n-- triggers only queue the attachment and the next search indexes it, as tasks do.\nCREATE VIRTUAL TABLE transcript_words USING fts5(\n  normalized_text, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2', prefix = '3');",
+      "CREATE VIRTUAL TABLE transcript_words_vocab USING fts5vocab(transcript_words, 'col');",
+      "CREATE VIRTUAL TABLE transcript_stems USING fts5(\n  stems, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2');",
+      "-- A transcript is the text of a message's voice attachment, whoever wrote it, as `speech()` in lucene-fields.ts.\nCREATE TRIGGER transcript_index_ai AFTER INSERT ON attachments\n  WHEN new.attachable_type = 'message' AND (coalesce(new.extractor, '') LIKE 'speech:%'\n    OR new.kind IN ('voice', 'video_note') OR coalesce(new.mime, '') = 'audio/ogg') BEGIN\n  INSERT OR IGNORE INTO transcript_index_pending (indexable_type, id) VALUES ('attachment', new.id);\nEND;",
+      "-- Queued whether it became a transcript or stopped being one: the drain drops what is no longer live.\nCREATE TRIGGER transcript_index_au AFTER UPDATE OF text, kind, mime, extractor, attachable_type ON attachments\n  WHEN (old.text IS NOT new.text OR old.kind IS NOT new.kind OR old.mime IS NOT new.mime\n    OR old.extractor IS NOT new.extractor OR old.attachable_type IS NOT new.attachable_type)\n    AND ((new.attachable_type = 'message' AND (coalesce(new.extractor, '') LIKE 'speech:%'\n      OR new.kind IN ('voice', 'video_note') OR coalesce(new.mime, '') = 'audio/ogg'))\n    OR (old.attachable_type = 'message' AND (coalesce(old.extractor, '') LIKE 'speech:%'\n      OR old.kind IN ('voice', 'video_note') OR coalesce(old.mime, '') = 'audio/ogg'))) BEGIN\n  INSERT OR IGNORE INTO transcript_index_pending (indexable_type, id) VALUES ('attachment', new.id);\nEND;",
+      "CREATE TRIGGER transcript_index_ad AFTER DELETE ON attachments BEGIN\n  DELETE FROM transcript_words WHERE rowid = old.id;\n  DELETE FROM transcript_stems WHERE rowid = old.id;\n  DELETE FROM transcript_index_pending WHERE indexable_type = 'attachment' AND id = old.id;\nEND;",
+      "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('transcript_index', 0, 0, 0, 1, NULL, NULL);",
+      "INSERT OR IGNORE INTO transcript_index_pending (indexable_type, id)\n  SELECT 'attachment', id FROM attachments WHERE attachable_type = 'message' AND coalesce(text, '') <> ''\n    AND (coalesce(extractor, '') LIKE 'speech:%' OR kind IN ('voice', 'video_note') OR coalesce(mime, '') = 'audio/ogg');"
+    ]
   }
 ]

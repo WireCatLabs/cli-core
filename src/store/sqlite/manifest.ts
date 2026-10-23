@@ -50,6 +50,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261021214318_version-26-message-reactions", version: 26, minCompatible: 1 },
   { name: "20261021221808_version-27-message-delivery", version: 27, minCompatible: 1 },
   { name: "20261021224625_version-28-chat-state", version: 28, minCompatible: 1 },
+  { name: "20261023105057_version-29-transcript-words", version: 29, minCompatible: 1 },
+  { name: "20261023105101_version-29-transcript-words-triggers", version: 29, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

@@ -9,7 +9,7 @@ import type { QueryExecution, ResolvedPredicate } from "../../search/lucene/reso
 import { isStemmed } from "../../search/lucene/resolved.js"
 import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import { inSource } from "../../search/query.js"
-import { STEM_SEPARATOR } from "../../search/stem.js"
+import { STEM_SEPARATOR, type Stemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { linkMatch } from "./mention-links.js"
@@ -110,6 +110,8 @@ export interface FieldScope {
   patternOf: (pattern: string, node: ResolvedPredicate) => Automaton
   expanded: Map<string, Fragment>
   attachmentWords: (match: string, which: "file" | "transcript" | "any") => { sql: string; params: SqlValue[] }
+  /** The items whose voice-note transcripts a leaf matches: typed, in another form, or garbled. */
+  transcripts: (node: ResolvedPredicate) => { sql: string; params: SqlValue[] }
   everywhere: (node: ResolvedPredicate, fragment: Fragment) => Fragment
   /** Counts the patterns' expanded words against the query's budget. */
   expand: (count: number) => number
@@ -132,9 +134,12 @@ const mentioned = ({ mail }: FieldScope, where: string, params: SqlValue[]) =>
         ...params,
         ...params,
       )
-const stemsOf = ({ execution: { stemmer } }: FieldScope, node: ResolvedPredicate) => {
-  if (node.slop === undefined) return stemmer?.phrases(node.value)
-  const sequences = (stemmer?.stemSequences(node.value) ?? []).filter((sequence) => sequence.length)
+const stemsOf = ({ execution: { stemmer } }: FieldScope, node: ResolvedPredicate) =>
+  stemmer ? stemMatch(stemmer, node) : undefined
+/** A leaf as an FTS5 match over a stem index: phrases of stems, or with `~N` their `NEAR`. */
+export const stemMatch = (stemmer: Stemmer, node: ResolvedPredicate): string | undefined => {
+  if (node.slop === undefined) return stemmer.phrases(node.value)
+  const sequences = stemmer.stemSequences(node.value).filter((sequence) => sequence.length)
   return sequences.length
     ? sequences
         .map((sequence) => (sequence.length > 1 ? nearMatch(sequence, node.slop as number) : quoted(sequence.join(""))))
@@ -346,7 +351,7 @@ const attachmentText =
   (node, scope) => {
     const text = normalize(node.value)
     // Never `fts`: the ranking ANDs every required word into message_words, where a file's words are not.
-    const set = scope.attachmentWords(ftsMatch(node), which)
+    const set = which === "transcript" ? scope.transcripts(node) : scope.attachmentWords(ftsMatch(node), which)
     return always(/[\p{L}\p{N}]/u.test(text) ? bound(`m.id IN (${set.sql})`, ...set.params) : bound("0"))
   }
 
