@@ -35,6 +35,7 @@ export const PARTIAL_NOTE =
  */
 export const inboxCommand = (messenger: Messenger): Command =>
   annotate(new Command("inbox"), {
+    examples: [`${messenger.app.command} personal inbox --limit 10`],
     effects: REMOTE_READ,
     output: { entity: "message", view: "summary" },
     query: INBOX_QUERY,

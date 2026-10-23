@@ -40,9 +40,7 @@
   "bot webhooks list",
   "bot webhooks set",
   "commands schema",
-  "complete",
   "doctor report create",
-  "inbox",
   "replies add",
   "replies audience",
   "replies consents allow",
@@ -57,7 +55,6 @@
   "replies resume",
   "replies status",
   "replies test",
-  "review",
   "schedule agent",
   "schedule command",
   "schedule exec",
@@ -65,12 +62,10 @@
   "schedule remove",
   "schedule run",
   "sends list",
-  "serve",
   "topics create",
   "topics delete",
   "topics edit",
   "topics enable",
   "topics list",
-  "topics order",
-  "watch"
+  "topics order"
 ]

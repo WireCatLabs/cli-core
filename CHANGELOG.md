@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- Top-level summaries, listeners and shell completion include examples in help and command discovery.
+
 - Clearing a remembered flood hold includes an example in help and command discovery.
 
 ## 0.397.0 — 23.10.2026
