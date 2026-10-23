@@ -6,6 +6,7 @@ import * as identities from "./sqlite/identities.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
 import * as personLinks from "./sqlite/person-links.js"
+import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 import * as privatePeople from "./sqlite/private-people.js"
@@ -48,6 +49,8 @@ export interface PeopleStore extends AccountPeople {
   /** The person a `person:<uid>` reference names. */
   personSeenInAccounts(uid: string, accountIds: readonly number[]): Promise<boolean>
   personByUid(uid: string): Promise<PersonRecord | undefined>
+  /** Accepted facts, the owner's notes and open tasks about them; tasks of an account only if `accounts` holds it. */
+  preparation(uid: string, options: { accounts: readonly AccountKey[]; limit: number }): Promise<PersonPreparationRead>
   /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
   linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>
   unlinkIdentity(identity: IdentityRef, options: LinkOptions): Promise<PersonRecord>
@@ -109,6 +112,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     personOf: async (identity) => personLinks.personOf(context, identity),
     personSeenInAccounts: async (uid, accountIds) => personSeenInAccounts(context, uid, accountIds),
     personByUid: async (uid) => personLinks.personByUid(context, uid),
+    preparation: async (uid, options) => personPreparation(context, uid, options),
     linkIdentities: async (person, other, options) => {
       return write(database, () => personLinks.linkIdentities(context, person, other, options))
     },

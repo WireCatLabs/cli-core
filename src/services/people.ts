@@ -21,6 +21,7 @@ import {
   personContext,
   personMessages,
 } from "./person-context.js"
+import { type PersonPreparation, personPreparation } from "./person-preparation.js"
 import { personProfile } from "./person-profile.js"
 import { type PersonTimeline, personTimeline, type TimelineOptions } from "./person-timeline.js"
 
@@ -55,6 +56,8 @@ export interface PeopleService {
   rename(person: string, firstName: string, lastName?: string): Promise<Operated<{ person: Member }>>
   /** What the store holds about them, across every messenger linked to them; never connects. */
   context(person: string, options?: ContextOptions): Promise<PersonContext>
+  /** `context` and what to know before talking to them: chats waiting on you, tasks, facts, notes, meetings. */
+  prepare(person: string, options?: ContextOptions & { notes?: boolean }): Promise<PersonPreparation>
   /** Everything they took part in, from the store's involvement index; never connects. */
   timeline(person: string, options?: TimelineOptions): Promise<PersonTimeline>
   /**
@@ -162,6 +165,8 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
     profile: (person) => personProfile(deps, person),
 
     context: async (person, options) => personContext(await deps.store(), await deps.account(), person, options),
+
+    prepare: async (person, options) => personPreparation(await deps.store(), await deps.account(), person, options),
 
     timeline: async (person, options) => personTimeline(await deps.store(), await deps.account(), person, options),
 

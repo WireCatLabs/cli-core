@@ -735,6 +735,7 @@ describe("the MCP server", () => {
       "contacts lookup",
       "contacts notes list",
       "contacts notes show",
+      "contacts prepare",
       "contacts profile",
       "contacts show",
       "contacts timeline",

@@ -2816,6 +2816,13 @@
     "contacts notes show": {
       "in": "all"
     },
+    "contacts prepare": {
+      "in": "all",
+      "options": {
+        "--limit": "all",
+        "--since-time": "all"
+      }
+    },
     "contacts profile": {
       "in": "all",
       "options": {

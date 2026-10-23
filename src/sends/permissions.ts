@@ -478,7 +478,11 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
     return next === "rebuild" || next === "confirm" || next === "reject" ? `mentions.${next}` : "messages"
   if (top === "store" && (next === "gaps" || next === "jobs")) return path.join(".")
   if (top === "messages" && next === "sync") return "messages"
-  if (SHOW_MESSAGES.has(top) || (top === "contacts" && (next === "context" || next === "timeline"))) return "messages"
+  if (
+    SHOW_MESSAGES.has(top) ||
+    (top === "contacts" && (next === "context" || next === "prepare" || next === "timeline"))
+  )
+    return "messages"
   if ((RESOURCES as readonly string[]).includes(top)) return path.join(".")
   return undefined
 }

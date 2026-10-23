@@ -197,6 +197,48 @@ export const contactsCommand = (messenger: Messenger): Command => {
     if (hasMore) context.renderer.note("cut at --limit; a larger one shows more")
   })
 
+  annotate(contacts.command("prepare"), {
+    effects: REMOTE_READ,
+    examples: [`${messenger.app.command} contacts prepare Ana`],
+  })
+    .summary("what to know before you talk to someone, each item with its reference")
+    .description(
+      "before you talk to someone: what contacts context gives, plus the one-to-one chats where they wrote last, " +
+        "open tasks, accepted facts, your notes and their recent meetings, each with its reference; never connects",
+    )
+    .argument("<person>", "their id, @username, or part of their name")
+    .option(
+      "--limit <n>",
+      `at most this many messages, and items in each section; ${CONTEXT_MESSAGES} if not given`,
+      positiveCount("--limit"),
+    )
+    .option("--since-time <time>", "no message or meeting older than this ISO 8601 time, or 2h / 1d ago")
+    .action(async function (this: Command, person: string) {
+      const { limit, sinceTime } = this.opts<{ limit?: number; sinceTime?: string }>()
+      const context = messengerContext(this, messenger)
+      const window = dateWindow(sinceTime === undefined ? {} : { sinceTime })
+      const found = await context.withServices((services) =>
+        services.people.prepare(person, {
+          messages: limit ?? CONTEXT_MESSAGES,
+          notes: levelFor(context.settings.permissions, "contacts.notes.list").level !== "deny",
+          ...(window.since === undefined ? {} : { since: window.since }),
+        }),
+      )
+      const { hasMore, ...rest } = found
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(rest), {
+          next: syncsFirst(messenger)
+            ? found.notRead
+                .filter((chat) => chat.provider === messenger.provider)
+                .map((chat) => nextStep("messages.sync", { args: { chat: chat.chatId } }))
+            : [],
+          meta: { ...window.meta, ...(hasMore ? { truncated: true } : {}) },
+        }),
+      )
+    })
+
   annotate(contacts.command("timeline"), { effects: REMOTE_READ })
     .description(
       "everything one person took part in, in every messenger linked to them — messages they wrote or were " +

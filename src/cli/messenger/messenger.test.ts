@@ -2930,6 +2930,19 @@ describe("the shared read commands", () => {
     expect(answer.person.identities.map((one: { provider: string }) => one.provider)).toEqual(["max", "telegram"])
     expect(answer.recent.direct).toHaveLength(2)
 
+    const prepared = await call(
+      ["contacts", "prepare", "11", "--offline", "--json"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(prepared.code).toBe(0)
+    const brief = JSON.parse(prepared.stdout[0] ?? "null").item
+    expect(brief.recent.direct).toHaveLength(2)
+    expect(brief.prepare.waiting.map((one: { provider: string }) => one.provider).sort()).toEqual(["max", "telegram"])
+    expect(brief.prepare.coverage.notes).not.toHaveProperty("withheld")
+
     const inChat = await call(
       ["contacts", "context", "11", "--chat", "11", "--offline", "--json"],
       never,

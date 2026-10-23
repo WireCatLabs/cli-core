@@ -28,6 +28,7 @@ read  contacts list
 read  contacts lookup
 read  contacts notes list
 read  contacts notes show
+read  contacts prepare
 read  contacts profile
 read  contacts show
 read  contacts timeline

@@ -52,6 +52,12 @@ export {
 } from "./sqlite/mentions.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
+export type {
+  PersonPreparationRead,
+  PreparationFact,
+  PreparationNote,
+  PreparationTask,
+} from "./sqlite/person-preparation.js"
 export { savedPhoneCountries, saveStorePhoneCountries } from "./sqlite/phone-countries.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export type { ProposedAction } from "./sqlite/proposed-actions.js"

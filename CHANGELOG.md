@@ -13,6 +13,14 @@ shape of this file.
 
 - Store commands include concrete examples in help and command discovery.
 
+- **`contacts prepare <person>`: what to know before talking to someone.** What `contacts context` gives, plus the
+  one-to-one chats where their message is the newest the store holds, open tasks assigned to them, accepted facts
+  about them and their projects, your notes about them (withheld when the profile denies `contacts.notes.list`), and
+  their recent meetings — each with its reference, under one byte budget, with `prepare.coverage` saying what each
+  section left out and why. Tasks of another account of the same messenger, and facts on a project bound to one, stay
+  out. It reads messages, so `messages: deny` refuses it, as it does `contacts context`. `personPreparation` in
+  services and `people.preparation` on the store.
+
 ## 0.393.0 — 23.10.2026
 
 ### Added
