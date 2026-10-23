@@ -54,7 +54,10 @@ export const pollsCommand = (messenger: Messenger): Command => {
     polls.addCommand(
       withQuery(
         annotate(
-          annotate(new Command("voters"), { effects: REMOTE_READ })
+          annotate(new Command("voters"), {
+            effects: REMOTE_READ,
+            examples: [`${messenger.app.command} personal polls voters "Book club" 101 answers:0 --limit 10`],
+          })
             .description(
               messenger.pollAnonymous === false
                 ? "who voted for what, newest first"

@@ -40,6 +40,8 @@ shape of this file.
 
 - Poll commands include concrete examples in help and command discovery.
 
+- Listing poll voters includes an example in help and command discovery.
+
 - Model commands include concrete examples in help and command discovery.
 
 - Recorded-run commands include concrete examples in help and command discovery.
