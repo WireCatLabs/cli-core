@@ -20,15 +20,25 @@ const AUTHORITY = new WeakMap<Command, string | undefined>()
 /**
  * Marks a local write that changes what a later run may do: a schedule, a setting, the recipient list, an
  * auto-reply, an agent's setup. `<PREFIX>_READ_ONLY` refuses it, or an agent under the lock could hand an
- * unlocked run the send it may not make itself (SEC-47). For the same reason no MCP server offers it (`mcp: false`).
+ * unlocked run the send it may not make itself (SEC-47). For the same reason an MCP server offers it only where the
+ * profile allows `mcp.authority`, which is off until the owner turns it on (NEED-1662).
  * `unless` names a flag that makes the run only look (`upgrade --check`), which the lock lets through.
  */
 export const grantsAuthority = <T extends Command>(command: T, { unless }: { unless?: string } = {}): T => {
   AUTHORITY.set(command, unless)
-  return annotate(command, { mcp: false })
+  return command
 }
 
 export const changesAuthority = (command: Command): boolean => AUTHORITY.has(command)
+
+/** `changesAuthority` by command path under `root`, as an MCP catalogue asks it; an unknown path is not one. */
+export const changesAuthorityAt =
+  (root: Command) =>
+  (path: readonly string[]): boolean => {
+    let at: Command | undefined = root
+    for (const word of path) at = at?.commands.find((one) => one.name() === word)
+    return at !== undefined && changesAuthority(at)
+  }
 
 export const changesAuthorityNow = (command: Command): boolean => {
   if (!AUTHORITY.has(command)) return false

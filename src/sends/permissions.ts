@@ -92,6 +92,17 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "chats.clear": "ask",
   // NEED-568: a rule writes to people with nobody typing a command; it waits for the owner's own allow.
   "replies.send": "deny",
+  // NEED-1662: an agent that changes settings, schedules or recipients could lift its own limits; the owner opts in.
+  "mcp.authority": "deny",
+}
+
+/** Lets an MCP server offer the commands that change what a later run may do (`grantsAuthority`). */
+export const AUTHORITY_KEY: PermissionKey = "mcp.authority"
+
+/** Whether these levels let an agent run a command that changes what a later run may do; `ask` does, as for any write. */
+export const authorityAllowed = (levels: Readonly<Record<PermissionKey, Level>>): boolean => {
+  const { level } = levelFor(levels, AUTHORITY_KEY)
+  return level === "allow" || level === "ask"
 }
 
 /** The resources at the top of the command tree, which `readOnly` and `allow` turn read-only as a whole. */
@@ -115,6 +126,7 @@ export const RESOURCES = [
   "stats",
   "store",
   "metadata",
+  "mcp",
 ] as const
 
 const OLD_WORDS: Record<Permission, PermissionKey[]> = {

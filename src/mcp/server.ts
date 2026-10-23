@@ -9,7 +9,7 @@ import * as v from "valibot"
 import { findCommand } from "../cli/command-contract.js"
 import { environmentOf } from "../cli/context.js"
 import { refuseWriteBeforeConnecting } from "../cli/early-refusal.js"
-import { judgedTargets } from "../cli/effects.js"
+import { changesAuthorityAt, judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
@@ -125,6 +125,7 @@ export const createServer = (
       return undefined
     }
   }
+  const authority = changesAuthorityAt(root)
   const stdin = (path: readonly string[]) => {
     try {
       return stdinFieldOf(findCommand(root, path))
@@ -142,6 +143,7 @@ export const createServer = (
     levels: settings.permissions,
     readOnly: readOnlyLockOf(app, context.env) !== undefined,
     keyOf,
+    authority,
     offline: true,
     stdin,
   }).map((one) =>

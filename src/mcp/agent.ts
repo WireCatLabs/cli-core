@@ -15,7 +15,15 @@ import { lentConnection } from "../cli/messenger/serve-relay.js"
 import type { RunOptions } from "../cli/program.js"
 import type { StdinField } from "../cli/stdin-field.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
-import { keyForCommand, type Level, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
+import {
+  AUTHORITY_KEY,
+  authorityAllowed,
+  keyForCommand,
+  type Level,
+  levelFor,
+  type PermissionKey,
+  readKeysForCommand,
+} from "../sends/permissions.js"
 
 /** The CLI's own `run` — a fresh program on every call — and its command tree as `commands --json` describes it. */
 export interface AgentProgram {
@@ -65,6 +73,8 @@ export interface CatalogueOptions {
   /** Under `<PREFIX>_READ_ONLY`: a change on the messenger is not offered either. */
   readOnly?: boolean
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
+  /** Whether a command changes what a later run may do (`grantsAuthority`): offered only under `mcp.authority`. */
+  authority?: (path: readonly string[]) => boolean
   /** Arguments left out of every tool, by name. */
   omit?: readonly string[]
   /** Offer `offline` on commands that read the messenger: answer from the copy on this machine. */
@@ -210,7 +220,9 @@ const refusal = (
   info: CommandInfo,
   levels: Readonly<Record<PermissionKey, Level>>,
   keyOf: CatalogueOptions["keyOf"],
+  authority?: CatalogueOptions["authority"],
 ): string | undefined => {
+  if (authority?.(info.path) && !authorityAllowed(levels)) return `the profile keeps ${AUTHORITY_KEY} off`
   const key = keyOf?.(info.path) ?? keyForCommand(info.path)
   const level = key ? levelFor(levels, key).level : "allow"
   if (level === "deny") return `the profile denies ${key}`
@@ -223,11 +235,11 @@ const refusal = (
  * One tool per command an agent may run under `root` (NEED-1411): every leaf command and every group that runs on
  * its own, except one marked
  * `mcp: false` (on itself or a group above it), one with a `lifetime` — an agent call must return — and one the
- * profile's levels refuse. Its input is the command's arguments and options in snake_case, typed as far as the
+ * profile's levels refuse, which include `mcp.authority` for what `authority` names. Its input is the command's arguments and options in snake_case, typed as far as the
  * command tree and the shared flag vocabulary say; an option marked `mcp: false` is left out.
  */
 export const toolsFromCommands = (commands: readonly CommandInfo[], options: CatalogueOptions = {}): AgentTool[] => {
-  const { root = [], exclude = [], levels, keyOf, readOnly = false } = options
+  const { root = [], exclude = [], levels, keyOf, authority, readOnly = false } = options
   return flatten(commands)
     .filter(
       (info) =>
@@ -238,8 +250,8 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
         !exclude.some((skipped) => startsWith(info.path.slice(root.length), skipped)) &&
         info.mcp !== false &&
         info.lifetime === undefined &&
-        !(readOnly && changesMessenger(info)) &&
-        (levels === undefined || refusal(info, levels, keyOf) === undefined),
+        !(readOnly && (changesMessenger(info) || authority?.(info.path))) &&
+        (levels === undefined || refusal(info, levels, keyOf, authority) === undefined),
     )
     .map((info) => ({
       command: info.path.slice(root.length).join(" "),
@@ -327,6 +339,7 @@ export const runCommandForAgent = async (
           failure = object
         },
         ...(ctx.overrides?.length ? { overrides: ctx.overrides } : {}),
+        authority: levels !== undefined && authorityAllowed(levels),
       },
       // Opened only when the command asks: a read the store answers never connects.
       ...(lend

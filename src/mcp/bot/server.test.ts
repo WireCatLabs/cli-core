@@ -11,6 +11,7 @@ import { botCommand } from "../../cli/bot/command.js"
 import type { BotAdapter, BotMessenger } from "../../cli/bot/port.js"
 import { ChatRegistry } from "../../cli/bot/registry.js"
 import { BotTokenStore } from "../../cli/bot/token.js"
+import { changesAuthorityAt } from "../../cli/effects.js"
 import { createProgram, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
 import type { Message } from "../../domain/models.js"
@@ -93,12 +94,14 @@ afterEach(async () => {
 })
 
 const commands = () => describeProgram(createProgram(definition))
+const authority = changesAuthorityAt(createProgram(definition))
 
 const connect = async (options: Partial<BotServerOptions> = {}) => {
   const settings = config.resolveSettings({ profile: "sales" }, { env, kind: "bot" })
   const { build, offered, tools } = createBotServer({
     bot,
     program: { run: runBot, commands: commands() },
+    authority,
     settings,
     levels: () => config.resolveSettings({ profile: "sales" }, { env, kind: "bot" }).permissions,
     env,

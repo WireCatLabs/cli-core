@@ -119,6 +119,10 @@ write account privacy set
 write account update
 write attachments download
 write attachments extract
+write attachments jobs install
+write attachments jobs start
+write attachments jobs stop
+write attachments jobs uninstall
 write attachments move
 write attachments text set
 write chats admins add
@@ -145,12 +149,16 @@ write chats mute
 write chats pin
 write chats requests accept
 write chats requests decline
+write chats rules set
+write chats rules unset
 write chats tracking add
 write chats tracking remove
 write chats unarchive
 write chats unmute
 write chats unpin
 write chats update
+write config set
+write config unset
 write contacts add
 write contacts alias rm
 write contacts alias set
@@ -172,6 +180,7 @@ write conversations embed clear
 write conversations links add
 write conversations links clear
 write conversations rebuild
+write flood clear
 write images embed
 write mentions confirm
 write mentions rebuild
@@ -187,14 +196,36 @@ write messages sync
 write messages unpin
 write messages unstar
 write metadata refresh
+write models text key remove
+write models text key set
 write polls close
 write polls create
 write polls vote
 write reactions add
 write reactions remove
+write recipients add
+write recipients clear
+write recipients remove
+write replies add
+write replies audience
+write replies consents allow
+write replies consents deny
+write replies consents grant
+write replies consents revoke
+write replies edit
+write replies off
+write replies on
+write replies pause
+write replies resume
+write schedule agent
+write schedule command
+write schedule remove
 write searches clear
 write searches create
 write searches delete
+write server install
+write server uninstall
+write skill install
 write stats charts
 write stats messages counters refresh
 write store export

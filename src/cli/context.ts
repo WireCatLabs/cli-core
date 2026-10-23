@@ -84,6 +84,8 @@ export interface AgentRun {
   failure: (error: ErrorObject) => void
   /** The server's own stricter levels, `key=level`, as `mcp --permission` takes them; they never loosen. */
   overrides?: readonly string[]
+  /** The server's levels allow `mcp.authority`: a command that changes what a later run may do may run. */
+  authority?: boolean
 }
 
 export interface RelayedRun {

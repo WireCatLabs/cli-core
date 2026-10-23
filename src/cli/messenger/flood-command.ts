@@ -7,13 +7,13 @@ import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /**
- * The owner's way out of a remembered wait or a hold on writes, once they know it is over. No MCP
- * tool on purpose: an agent that could lift a hold would send straight into a spam limit again.
+ * The owner's way out of a remembered wait or a hold on writes, once they know it is over. An agent gets it only
+ * under `mcp.authority`: one that could lift a hold would send straight into a spam limit again.
  */
 export const floodCommand = (messenger: Messenger): Command => {
   const { app } = messenger
   const name = messenger.name ?? app.command
-  return annotate(new Command("flood"), { mcp: false })
+  return new Command("flood")
     .description(`the waits ${name} asked this profile to keep, and a hold on its writes`)
     .addCommand(
       grantsAuthority(

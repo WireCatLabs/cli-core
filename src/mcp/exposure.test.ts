@@ -1,8 +1,10 @@
 import { describeProgram, flatten, metaOf } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
+import { changesAuthorityAt } from "../cli/effects.js"
 import { chatsCommand } from "../cli/messenger/chats-command.js"
 import { createProgram } from "../cli/program.js"
 import { upgradeCommand } from "../cli/upgrade-command.js"
+import type { Level } from "../sends/permissions.js"
 import { app, messenger, sharedProgram } from "../testing/shared-program.js"
 import { toolsFromCommands } from "./agent.js"
 
@@ -20,23 +22,16 @@ const withChatDeletion = () =>
   )
 
 describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-10-23)", () => {
-  it.each([
-    "mcp",
-    "flood",
-    "complete",
-    "account sessions end",
-    "chats delete",
-    "chats clear",
-    "bot auth",
-    "bot recipients add",
-    "bot mcp",
-  ])("%s", (path) => {
-    const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
+  it.each(["mcp", "complete", "account sessions end", "chats delete", "chats clear", "bot auth", "bot mcp"])(
+    "%s",
+    (path) => {
+      const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
 
-    expect(found, path).toBeDefined()
-    expect(found?.mcp).toBe(false)
-    for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
-  })
+      expect(found, path).toBeDefined()
+      expect(found?.mcp).toBe(false)
+      for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
+    },
+  )
 
   it.each([
     "attachments jobs status",
@@ -61,21 +56,38 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
   })
 
   it.each([
-    "attachments jobs install",
-    "config set",
     "doctor report create",
     "models audio download",
-    "replies add",
-    "schedule command",
     "schedule run",
     "server start",
-    "skill install",
     "store backup",
     "store clear",
     "store reset",
     "store restore",
-  ])("**keeps off %s**: it changes what a later run may do, or no permission key limits it", (path) => {
+  ])("**keeps off %s**: no permission key limits it", (path) => {
     expect(toolsFromCommands(commands(), { exclude: [["bot"]] }).map((tool) => tool.command)).not.toContain(path)
+  })
+
+  it.each([
+    "attachments jobs install",
+    "config set",
+    "flood clear",
+    "recipients add",
+    "replies add",
+    "schedule command",
+    "skill install",
+  ])("**offers %s only under mcp.authority**, which is off by default (NEED-1662)", (path) => {
+    const program = createProgram(sharedProgram)
+    const offered = (levels: Record<string, Level>) =>
+      toolsFromCommands(describeProgram(program), {
+        exclude: [["bot"]],
+        levels,
+        authority: changesAuthorityAt(program),
+      }).map((tool) => tool.command)
+
+    expect(offered({})).not.toContain(path)
+    expect(offered({ mcp: "allow" })).not.toContain(path)
+    expect(offered({ "mcp.authority": "allow" })).toContain(path)
   })
 
   it("project candidates require a separately granted MCP tool", () => {
