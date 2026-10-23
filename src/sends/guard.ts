@@ -12,7 +12,7 @@ import {
   type SendKind,
   sendsPathFor,
 } from "./journal.js"
-import { keyForWrite, type Level, levelFor, type PermissionKey, skipFlagFor } from "./permissions.js"
+import { CEILING_KEY, keyForWrite, type Level, levelFor, type PermissionKey, skipFlagFor } from "./permissions.js"
 import { RecipientList, recipientsPathFor } from "./recipients.js"
 
 const HOUR_MS = 60 * 60 * 1000
@@ -147,12 +147,19 @@ export const levelRefusal = (
   },
   fix = `${refused.command} ${refused.profile} config set permissions.${refused.key} allow`,
 ): CliError =>
-  new CliError(
-    "permission_error",
-    `profile ${refused.profile} does not let ${refused.key} write (permissions.${refused.named} is ${refused.level}, ` +
-      `from the ${refused.permissionSources[refused.named ?? ""] ?? "default"}); to allow it: ${fix}`,
-    { permission: refused.key },
-  )
+  refused.named === CEILING_KEY
+    ? new CliError(
+        "permission_error",
+        `${refused.key} is not allowed: setup's answer keeps every WireCat tool read-only; ` +
+          `the owner changes it at a terminal with \`${refused.command} setup\``,
+        { permission: refused.key },
+      )
+    : new CliError(
+        "permission_error",
+        `profile ${refused.profile} does not let ${refused.key} write (permissions.${refused.named} is ${refused.level}, ` +
+          `from the ${refused.permissionSources[refused.named ?? ""] ?? "default"}); to allow it: ${fix}`,
+        { permission: refused.key },
+      )
 
 /**
  * These stop a model that was talked into sending by a message it read. They do **not** stop an

@@ -6,6 +6,7 @@ import { parseDuration } from "../domain/duration.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import {
   assertOverridesTighten,
+  CEILING_KEY,
   LEVELS,
   type Level,
   layerPermissions,
@@ -13,15 +14,32 @@ import {
   permissionOverrides,
   RESOURCES,
 } from "../sends/permissions.js"
+import { storePath } from "../store/path.js"
+import { sharedConfigPath } from "../store/shared-config.js"
 import { loadSnakeCaseConfig } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
 import { usableProfileName } from "./profile.js"
+import { permissionCeiling } from "./setup-answers.js"
 
 const DEFAULT_LIMIT = DEFAULT_CONFIG.defaults.limit
 const DEFAULT_KEEP_RUNS_FOR_DAYS = DEFAULT_CONFIG.defaults.keep_runs_for_days
 /** On by default: a limit that is off protects nobody from a loop. */
 const DEFAULT_SENDS_PER_HOUR = DEFAULT_CONFIG.defaults.sends_per_hour
+
+/** The first-run answer caps every profile; a config file cannot name its key, so only `setup` writes it. */
+const withCeiling = (
+  permissions: { levels: Record<PermissionKey, Level>; sources: Record<PermissionKey, Source> },
+  env: NodeJS.ProcessEnv,
+) => {
+  const ceiling = permissionCeiling(sharedConfigPath(storePath(env), env))
+  return ceiling
+    ? {
+        levels: { ...permissions.levels, [CEILING_KEY]: ceiling },
+        sources: { ...permissions.sources, [CEILING_KEY]: "setup answer" },
+      }
+    : permissions
+}
 
 export const plain =
   (rule: string) =>
@@ -447,7 +465,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     ])
     const overrides = permissionOverrides(flags.permission)
     assertOverridesTighten(overrides, layerPermissions(fileLayers).levels)
-    const permissions = layerPermissions([["flag", overrides], ...fileLayers])
+    const permissions = withCeiling(layerPermissions([["flag", overrides], ...fileLayers]), env)
     const updateCheck = first(
       [
         [

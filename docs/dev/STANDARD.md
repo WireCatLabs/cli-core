@@ -1288,6 +1288,15 @@ The three tools, their arguments and what each permission shows are on the handb
   set|unset` run over MCP refuses `permissions.bot.api` and a whole `permissions` that names it. Each operation is a
   tool with the operation's effect (a read or a write), so `<PREFIX>_READ_ONLY` hides the writes. The command line's
   `bot api` is not held back by the key; the CLI keeps checking `bot.api.<operation>` as before.
+- **The first-run answer caps every profile of every WireCat tool** (TASK-757, NEED-1676). Before the first command
+  at a terminal, a tool asks what no WireCat tool has asked yet — languages (written to the store's
+  `search_stemmers`), other tools to install, and what commands and agents may do — and keeps the answers in the
+  `setup` section of the shared `~/.config/WireCat/config.json`. "Read only" puts the `*` key at `readonly` among a
+  profile's levels: `levelFor` never returns a level above it, so it holds over a profile's own `allow`, over MCP
+  and over `--permission`. A config file cannot name `*`; only the question at a terminal writes it. A run that is
+  not a person at a terminal (machine output, `--no-input`, `CI`, a pipe), and `setup`, `help`, `guide`,
+  `completion`, `mcp`, `serve`, `server` and `update`, never ask. `<PREFIX>_READ_ONLY` stays stricter, and while
+  it is set the permission question is not asked.
 
 `stats charts --output` selects SVG or PNG by the file extension; images never go to stdout.
 The stored-only `stats_charts` tool accepts optional `format: json|png` (default `json`).

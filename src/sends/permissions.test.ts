@@ -31,6 +31,14 @@ describe("the level of a command path", () => {
     expect(keyForCommand(["guide"])).toBeNull()
   })
 
+  it("**holds every key under setup's ceiling**, and never lifts a stricter level", () => {
+    const levels = { "*": "readonly", "messages.send": "allow", contacts: "deny" } as const
+    expect(levelFor(levels, "messages.send")).toEqual({ level: "readonly", key: "*" })
+    expect(levelFor(levels, "chats.archive")).toEqual({ level: "readonly", key: "*" })
+    expect(levelFor(levels, "contacts.add")).toEqual({ level: "deny", key: "contacts" })
+    expect(levelFor({ "*": "ask" }, "messages.delete")).toEqual({ level: "ask", key: "messages.delete" })
+  })
+
   it("**lets a built-in default only tighten** a broader key of the owner's", () => {
     expect(levelFor({ messages: "readonly" }, "messages.delete").level).toBe("readonly")
     expect(levelFor({ messages: "allow" }, "messages.delete").level).toBe("ask")

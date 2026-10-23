@@ -233,6 +233,12 @@ export const layerPermissions = (layers: readonly [string, Readonly<Record<Permi
   return { levels, sources }
 }
 
+/**
+ * The owner's first-run answer, held among a profile's levels: no key of any profile goes above it. Only `setup`
+ * at a terminal writes it, so an agent cannot lift it with `config set`.
+ */
+export const CEILING_KEY = "*"
+
 const ALLOWED = { level: "allow", key: null } as const
 
 const ORDER: Record<Level, number> = { deny: 0, readonly: 1, ask: 2, allow: 3 }
@@ -263,8 +269,18 @@ export const levelFor = (
   key: PermissionKey,
   defaults: Readonly<Record<PermissionKey, Level>> = DEFAULT_PERMISSIONS,
 ): { level: Level; key: PermissionKey | null } => {
+  const found = profileLevel(permissions, key, defaults)
+  const ceiling = permissions[CEILING_KEY]
+  return ceiling && ORDER[ceiling] < ORDER[found.level] ? { level: ceiling, key: CEILING_KEY } : found
+}
+
+const profileLevel = (
+  permissions: Readonly<Record<PermissionKey, Level>>,
+  key: PermissionKey,
+  defaults: Readonly<Record<PermissionKey, Level>>,
+): { level: Level; key: PermissionKey | null } => {
   const former = FORMER_KEYS[key]
-  if (former !== undefined && permissions[key] === undefined) return levelFor(permissions, former, defaults)
+  if (former !== undefined && permissions[key] === undefined) return profileLevel(permissions, former, defaults)
   const own = nearest(permissions, key)
   const builtIn = nearest(defaults, key)
   if (!builtIn || (own && own.depth >= builtIn.depth)) return own ? { level: own.level, key: own.key } : ALLOWED

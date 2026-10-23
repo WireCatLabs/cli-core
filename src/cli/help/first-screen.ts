@@ -26,18 +26,45 @@ export interface FirstScreen {
 
 interface Tool {
   command: string
+  /** The npm package `setup` installs it from. */
+  package: string
   shown?: string
   does: string
 }
 
 /** Every WireCat tool, as "Works with" names it; a tool's own entry is left out of its screen. */
 export const WIRECAT_TOOLS: readonly Tool[] = [
-  { command: "tg", does: "Telegram in the same local store: search, review and tasks offline" },
-  { command: "max", does: "MAX in the same local store: search, review and tasks offline" },
-  { command: "wa", does: "WhatsApp in the same local store: search, review and tasks offline" },
-  { command: "zm", does: "Zoom meetings: transcripts and summaries, searchable with your messages" },
-  { command: "drive", does: "Google Drive and Docs as local text, searchable with your messages" },
-  { command: "memo", shown: "memo context <person>", does: "one person across messengers, mail, notes and meetings" },
+  {
+    command: "tg",
+    package: "@wirecat/tg-cli",
+    does: "Telegram in the same local store: search, review and tasks offline",
+  },
+  {
+    command: "max",
+    package: "@wirecat/max-cli",
+    does: "MAX in the same local store: search, review and tasks offline",
+  },
+  {
+    command: "wa",
+    package: "@wirecat/whatsapp-cli",
+    does: "WhatsApp in the same local store: search, review and tasks offline",
+  },
+  {
+    command: "zm",
+    package: "@wirecat/zoom-cli",
+    does: "Zoom meetings: transcripts and summaries, searchable with your messages",
+  },
+  {
+    command: "drive",
+    package: "@wirecat/drive-cli",
+    does: "Google Drive and Docs as local text, searchable with your messages",
+  },
+  {
+    command: "memo",
+    package: "@wirecat/cli-memo",
+    shown: "memo context <person>",
+    does: "one person across messengers, mail, notes and meetings",
+  },
 ]
 
 const WIDTH = 100
