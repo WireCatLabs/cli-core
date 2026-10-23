@@ -14,6 +14,7 @@ shape of this file.
   interruption. `attachments check <dir>` verifies copies offline. `attachments jobs` installs and manages
   opt-in Linux daily timers. Archive files stay independent of message-store deletion; interrupted streams
   restart from byte zero because messenger downloads expose no range validators.
+  Download help clarifies that receiving messages saves no media copies and names the command to stop a daily timer.
 
 ### Changed — may break callers
 

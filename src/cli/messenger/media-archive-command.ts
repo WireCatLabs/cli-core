@@ -18,6 +18,10 @@ export const addMediaArchiveCommands = (archive: Command, messenger: Messenger):
     examples: [`${messenger.app.command} attachments download ./media-archive`],
   })
     .description("archive media from selected chats; verify and keep existing copies")
+    .addHelpText(
+      "after",
+      `\nMedia is saved only when you request a download; serve does not save these copies.\nTo disable an installed daily backup: ${messenger.app.command} <profile> attachments jobs stop <dir>.`,
+    )
     .argument("<dir>", "archive directory; created if missing")
     .option(
       "--chat <chat>",
