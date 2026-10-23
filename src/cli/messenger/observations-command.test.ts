@@ -90,10 +90,10 @@ const setup = async (permissions?: object) => {
 describe("observation CLI", () => {
   it("declares counter refresh as a remote read kept in the store, in command discovery", async () => {
     const { call } = await setup()
-    const discovery = await call("commands", "stats", "messages", "counters", "refresh", "--json")
+    const discovery = await call("commands", "stats", "messages", "counters", "sync", "--json")
     expect(discovery.code, discovery.stderr).toBe(0)
     const commands = JSON.parse(discovery.stdout).commands as { path: string[]; effects?: unknown }[]
-    expect(commands.find((command) => command.path.join(" ") === "stats messages counters refresh")).toMatchObject({
+    expect(commands.find((command) => command.path.join(" ") === "stats messages counters sync")).toMatchObject({
       effects: { remote: "read", local: "write" },
     })
     const shown = await call("commands", "stats", "messages", "counters", "show", "--json")
@@ -113,7 +113,7 @@ describe("observation CLI", () => {
       "stats",
       "messages",
       "counters",
-      "refresh",
+      "sync",
       "--selection",
       JSON.stringify(found.selection),
       "--dry-run",
@@ -193,7 +193,7 @@ describe("observation CLI", () => {
     const shown = await call("stats", "messages", "counters", "show", "--chat", "7", "--json")
     expect(shown.code, shown.stderr).toBe(0)
     expect(JSON.parse(shown.stdout).item).toMatchObject({ rows: [{ ref: "msg:chat/500/7/1" }] })
-    const refused = await call("stats", "messages", "counters", "refresh", "--json")
+    const refused = await call("stats", "messages", "counters", "sync", "--json")
     expect(refused.code).not.toBe(0)
     expect(refused.stderr).toContain("explicit")
     expect(connect).not.toHaveBeenCalled()

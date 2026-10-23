@@ -35,7 +35,7 @@ is supplied. Rebuild after a sync or after linking identities. It runs atomicall
 previous timeline. `forPerson(personId, { scope?, since?, until?, before?, limit? })` reads the derived index,
 newest first, in one query; `since` and `until` are inclusive milliseconds, and a message or chat row carries its
 provider, account, chat and message ids. `before: { at, id }` returns the rows after that one in the order, so
-equal times neither repeat nor skip. `contacts timeline` rebuilds one person's rows, then reads them, and pages with
+equal times neither repeat nor skip. `contacts events` rebuilds one person's rows, then reads them, and pages with
 `--cursor` (`before:<ms>:<row id>`, from `page.next`; the filters are repeated).
 The default limit is 100 and the maximum is 1000.
 

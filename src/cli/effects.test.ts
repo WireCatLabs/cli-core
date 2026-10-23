@@ -29,6 +29,7 @@ const program = createProgram(sharedProgram)
 const runnable = (root: Command): { path: string; command: Command }[] => {
   const found: { path: string; command: Command }[] = []
   const visit = (command: Command, parents: string[]) => {
+    if ((command as unknown as { _hidden?: boolean })._hidden) return
     const path = [...parents, command.name()]
     if ((command as unknown as { _actionHandler?: unknown })._actionHandler)
       found.push({ path: path.join(" "), command })
@@ -52,9 +53,9 @@ describe("command effects", () => {
       const effects = metaOf(command).effects
       return key && WRITE_KEYS.includes(key) && effects && !writes(effects)
     })
-    // Reads behind a key a profile must allow: the session list is private, and `conversations embed status`
-    // shares the whole `conversations.embed` group's key (FIND-1262).
-    expect(wrong.map(({ path }) => path)).toEqual(["account sessions list", "conversations embed status"])
+    // Reads behind a key a profile must allow: the session list is private, and `conversations embeddings status`
+    // shares the whole `conversations.embeddings` group's key (FIND-1262).
+    expect(wrong.map(({ path }) => path)).toEqual(["account sessions list", "conversations embeddings status"])
   })
 
   it("mark the local writes the read-only lock refuses: what changes a later run's authority, and no read", () => {
@@ -78,9 +79,9 @@ describe("command effects", () => {
         "config set",
         "config unset",
         "flood clear",
-        "mcp setup",
-        "models text key remove",
-        "models text key set",
+        "mcp add",
+        "models keys remove",
+        "models keys set",
         "recipients add",
         "recipients clear",
         "recipients remove",
@@ -119,9 +120,9 @@ describe("command effects", () => {
 
     expect(kept.sort()).toEqual(
       [
-        "conversations embed clear",
+        "conversations embeddings clear",
         "conversations rebuild",
-        "doctor report create",
+        "doctor reports create",
         "mentions rebuild",
         "server restart",
         "server start",
@@ -132,7 +133,7 @@ describe("command effects", () => {
         "store jobs cancel",
         "store jobs clear",
         "store jobs retry",
-        "store reindex",
+        "store rebuild",
         "tasks add",
         "tasks claim",
         "tasks close",
@@ -140,7 +141,7 @@ describe("command effects", () => {
         "tasks duplicates reject",
         "tasks link",
         "tasks merge",
-        "tasks plan",
+        "tasks update",
         "tasks release",
         "tasks scan",
         "tasks unmerge",
@@ -149,17 +150,17 @@ describe("command effects", () => {
     expect(refused.sort()).toEqual(
       [
         "attachments move",
-        "attachments text set",
+        "attachments update",
         "chats tracking add",
         "chats tracking remove",
-        "contacts alias rm",
-        "contacts alias set",
+        "contacts aliases remove",
+        "contacts aliases set",
         "contacts link",
         "contacts notes add",
         "contacts notes edit",
         "contacts notes remove",
         "contacts unlink",
-        "conversations consents revoke",
+        "conversations consents remove",
         "conversations links add",
         "conversations links clear",
         "mentions confirm",
@@ -175,7 +176,7 @@ describe("command effects", () => {
         "store reset",
         "store restore",
         "tags add",
-        "tags auto",
+        "tags rebuild",
         "tags remove",
         "tasks reject",
       ].sort(),
@@ -184,7 +185,7 @@ describe("command effects", () => {
       commands
         .filter(({ command }) => isStoreChange(command) && metaOf(command).effects?.remote !== "none")
         .map(({ path }) => path),
-    ).toEqual(["tags auto"])
+    ).toEqual(["tags rebuild"])
   })
 
   it("let through every task write the follow-ups skill makes on a timer, but the owner's tasks reject", () => {
@@ -209,11 +210,10 @@ describe("command effects", () => {
     const marked = commands.filter(({ command }) => isOtherServiceCall(command)).map(({ path }) => path)
     expect(marked.sort()).toEqual(
       [
-        "conversations build",
+        "conversations links rebuild",
         "conversations embed",
         "images models download",
-        "models audio download",
-        "models text download",
+        "models download",
         "search conversations",
       ].sort(),
     )
@@ -242,7 +242,7 @@ describe("command effects", () => {
     expect(targets("messages sync")?.effects).toEqual({ remote: "read", local: "none" })
     expect(targets("messages send")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("conversations embed")?.effects).toEqual({ remote: "write", local: "none" })
-    expect(targets("conversations build")?.effects).toEqual({ remote: "write", local: "none" })
+    expect(targets("conversations links rebuild")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("server restart")?.effects).toEqual({ remote: "none", local: "write" })
   })
 })
@@ -358,20 +358,20 @@ describe("the read-only lock on the message store", () => {
     ["searches delete", ["searches", "delete", "daily"]],
     ["searches clear", ["searches", "clear"]],
     ["contacts notes remove", ["contacts", "notes", "remove", "Alice", "1"]],
-    ["contacts alias rm", ["contacts", "alias", "rm", "Alice"]],
+    ["contacts aliases remove", ["contacts", "aliases", "remove", "Alice"]],
     ["contacts notes edit", ["contacts", "notes", "edit", "Alice", "1", "--revision", "1"]],
     ["tags remove", ["tags", "remove", "work", "--chat", "7"]],
     ["searches create", ["searches", "create", "daily", "cat"]],
-    ["contacts alias set", ["contacts", "alias", "set", "Alice", "Al"]],
+    ["contacts aliases set", ["contacts", "aliases", "set", "Alice", "Al"]],
     ["tags add", ["tags", "add", "work", "--chat", "7"]],
-    ["tags auto", ["tags", "auto"]],
+    ["tags rebuild", ["tags", "rebuild"]],
     ["mentions confirm", ["mentions", "confirm", "1"]],
-    ["contacts notes add", ["contacts", "notes", "add", "Alice", "--file", "/dev/null"]],
+    ["contacts notes add", ["contacts", "notes", "add", "Alice", "--text-file", "/dev/null"]],
     ["contacts link", ["contacts", "link", "Alice", "Bob"]],
-    ["attachments text set", ["attachments", "text", "set", "7", "1", "--text-file", "/dev/null"]],
+    ["attachments update", ["attachments", "update", "7", "1", "--text-file", "/dev/null"]],
     ["chats tracking add", ["chats", "tracking", "add", "7"]],
     ["conversations links add", ["conversations", "links", "add", "--batch", "1"]],
-    ["conversations consents revoke", ["conversations", "consents", "revoke"]],
+    ["conversations consents remove", ["conversations", "consents", "remove"]],
   ])("refuses %s, which writes what the owner keeps", async (name, argv) => {
     const store = kept(`${name}.db`)
 

@@ -171,11 +171,11 @@ describe("embeddings", () => {
 
   it("refuses a chat with no conversations, and a model that is not downloaded, naming what to run", async () => {
     const { store, embeddings } = await setUp({ build: false })
-    await expect(embeddings.embed("9", { model: "tiny" })).rejects.toThrow("chat conversations build --chat 9")
+    await expect(embeddings.embed("9", { model: "tiny" })).rejects.toThrow("chat conversations links rebuild --chat 9")
     await conversationsService(
       storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard),
     ).build("9")
-    await expect(embeddings.embed("9", { model: "e5-small" })).rejects.toThrow("chat models text download e5-small")
+    await expect(embeddings.embed("9", { model: "e5-small" })).rejects.toThrow("chat models download e5-small")
     await store.close()
   })
 })
@@ -610,7 +610,7 @@ describe("catching up without --chat", () => {
       { chat: "9", needs: "embed" },
       { chat: "10", needs: "embed" },
     ])
-    await expect(embeddings.refresh({ build: false })).rejects.toThrow("models text download e5-small")
+    await expect(embeddings.refresh({ build: false })).rejects.toThrow("models download e5-small")
     await store.close()
   })
 
@@ -642,7 +642,7 @@ describe("related conversations", () => {
   it("refuses with the command to run: never built, never embedded, its message changed since", async () => {
     const unbuilt = await setUp({ build: false })
     await expect(unbuilt.embeddings.related("9", "80", { model: "tiny", limit: 5 })).rejects.toThrow(
-      "conversations build --chat 9",
+      "conversations links rebuild --chat 9",
     )
     await unbuilt.store.close()
 
@@ -663,7 +663,7 @@ describe("related conversations", () => {
       },
     )
     await expect(embeddings.related("9", "80", { model: "tiny", limit: 5 })).rejects.toThrow(
-      "conversations build --chat 9",
+      "conversations links rebuild --chat 9",
     )
     await conversations.build("9")
     await embeddings.embed("9", { model: "tiny", threads: 1 })

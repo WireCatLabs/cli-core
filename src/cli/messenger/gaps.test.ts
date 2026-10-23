@@ -76,7 +76,7 @@ const fixture = async () => {
     if (code === 0 && answer?.item) {
       const schema =
         argv[1] === "gaps"
-          ? argv[2] === "plan"
+          ? argv[2] === "show"
             ? ENTITIES.store_gap_plan
             : ENTITIES.store_gap_repair
           : argv[1] === "jobs" && argv[2] === "show"
@@ -93,7 +93,7 @@ const fixture = async () => {
 describe("gap plan and repair commands", () => {
   it("plans locally then repairs with explicit limits and rechecked coverage", async () => {
     const { call, connect } = await fixture()
-    const plan = await call(["store", "gaps", "plan", "7", "--json"])
+    const plan = await call(["store", "gaps", "show", "7", "--json"])
     expect(plan).toMatchObject({ code: 0, body: { gaps: [{ from: 4, to: 6 }] } })
     expect(connect).not.toHaveBeenCalled()
     const repaired = await call([

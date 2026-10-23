@@ -1,8 +1,9 @@
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import { defineQuery } from "@wirecat/cli-base/query"
 import type { NextStep } from "@wirecat/cli-base/standards"
-import { Command, Option } from "commander"
+import { Command } from "commander"
 import type * as v from "valibot"
 import { isTextModelInstalled, textModelsDirectory } from "../../embeddings/embed.js"
 import { embeddingKeys } from "../../embeddings/keys.js"
@@ -31,7 +32,7 @@ import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, reachesOtherService } from "../effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
-import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
+import { listQuery, nativeTerms, termField, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { nextStep } from "../steps.js"
 import type { Messenger } from "./context.js"
 
@@ -44,6 +45,15 @@ type ModelItem = v.InferOutput<typeof modelEntity>
 
 /** A model list is the catalog this version ships. */
 const MODELS_QUERY = unfilteredQuery("model", modelEntity)
+const ROOT_MODELS_QUERY = defineQuery({
+  entity: "model",
+  backend: "native",
+  fields: [
+    termField("kind", "enum", "kind:audio", { values: ["audio", "text"] }),
+    termField("id", "kw", "id:e5-small"),
+    termField("downloaded", "bool", "downloaded:true"),
+  ],
+})
 
 /** Every model this version knows: a short, fixed list, never paged. */
 const everyModel = (command: string, items: ModelItem[], next: NextStep[] = []) =>
@@ -91,131 +101,63 @@ const modelLine = (item: ModelItem, width: number) =>
   `${item.default ? "*" : " "} ${item.id.padEnd(width)} ${megabytes(item.size_bytes).padStart(7)}  ` +
   (item.downloaded ? "downloaded" : "—".padEnd(10))
 
-export const modelsCommand = (messenger: Messenger): Command => {
-  const tool = `${messenger.app.command} personal`
-  const models = new Command("models").description("models that run on this machine")
-  const audio = models.command("audio").description("speech models for transcribing voice messages")
-
-  withQuery(
-    annotate(audio.command("list"), { effects: LOCAL_READ, examples: [`${tool} models audio list`] }),
-    MODELS_QUERY,
-  )
-    .summary("speech models and their download status")
-    .description("the speech models, most suitable first, which are downloaded, and which one is the default")
-    .action(async function (this: Command, words: string[]) {
-      const context = baseContext(this, messenger.resolveSettings)
-      await context.run(async () => {
-        listQuery(typedQuery(words), MODELS_QUERY, "models audio list")
-        const directory = modelsDirectory(context.env)
-        const chosen = choose(messenger, context.settings, {}, context.env).model.id
-        const items = orderedModels(messenger.speechModels).map((model) => audioItem(model, directory, chosen))
-        renderAnswer(this, context, everyModel("models audio list", items), () =>
-          items.map((item) => `${modelLine(item, 14)}  ${item.languages}\n`).join(""),
+const downloadAudioModel = async (command: Command, messenger: Messenger, id: string): Promise<void> => {
+  const context = baseContext(command, messenger.resolveSettings)
+  await context.run(
+    async () => {
+      const model = speechModel(id)
+      const directory = modelsDirectory(context.env)
+      if (!isInstalled(model, directory)) {
+        context.renderer.note(
+          `${model.id}: ${megabytes(installedBytes(model) + VAD.bytes)} from Hugging Face and GitHub`,
         )
-        if (context.format === "pretty") context.renderer.note(`kept in ${directory}`)
+        await install(model, directory, { progress: (line) => context.renderer.note(line) })
+      }
+      // Loading is the test — the files, the WebAssembly engine and the memory it needs — on a
+      // second of silence, since no recording ships with the package.
+      context.renderer.note(`${model.id}: loading it once to check it works`)
+      const { openRecognizer, SAMPLE_RATE } = await import("../../speech/recognize.js")
+      const recognizer = openRecognizer(model, modelPath(directory, model), vadPath(directory))
+      try {
+        recognizer.recognize(new Float32Array(SAMPLE_RATE))
+      } finally {
+        recognizer.free()
+      }
+      const chosen = choose(messenger, context.settings, {}, context.env).model.id
+      renderAnswer(command, context, itemOf(audioItem(model, directory, chosen)), downloaded)
+    },
+    { unbounded: true },
+  )
+}
+
+const downloadEmbeddingModel = async (
+  command: Command,
+  messenger: Messenger,
+  id: string,
+  options: { acceptTerms?: boolean },
+): Promise<void> => {
+  const context = baseContext(command, messenger.resolveSettings)
+  await context.run(
+    async () => {
+      const { model, directory } = await downloadTextModel(id, {
+        env: context.env,
+        acceptTerms: options.acceptTerms === true,
+        progress: (line) => context.renderer.note(line),
       })
-    })
-
-  reachesOtherService(
-    annotate(audio.command("download"), {
-      effects: FETCH,
-      output: { entity: "model" },
-      examples: [`${tool} models audio download parakeet-v3`],
-    }),
+      renderAnswer(command, context, itemOf(textItem(model, directory)), downloaded)
+    },
+    { unbounded: true },
   )
-    .argument("<model>", "a model id from `models audio list`")
-    .description("download a speech model once, checked against the sha256 this version expects")
-    .action(async function (this: Command, id: string) {
-      const context = baseContext(this, messenger.resolveSettings)
-      await context.run(
-        async () => {
-          const model = speechModel(id)
-          const directory = modelsDirectory(context.env)
-          if (!isInstalled(model, directory)) {
-            context.renderer.note(
-              `${model.id}: ${megabytes(installedBytes(model) + VAD.bytes)} from Hugging Face and GitHub`,
-            )
-            await install(model, directory, { progress: (line) => context.renderer.note(line) })
-          }
-          // Loading is the test — the files, the WebAssembly engine and the memory it needs — on a
-          // second of silence, since no recording ships with the package.
-          context.renderer.note(`${model.id}: loading it once to check it works`)
-          const { openRecognizer, SAMPLE_RATE } = await import("../../speech/recognize.js")
-          const recognizer = openRecognizer(model, modelPath(directory, model), vadPath(directory))
-          try {
-            recognizer.recognize(new Float32Array(SAMPLE_RATE))
-          } finally {
-            recognizer.free()
-          }
-          const chosen = choose(messenger, context.settings, {}, context.env).model.id
-          renderAnswer(this, context, itemOf(audioItem(model, directory, chosen)), downloaded)
-        },
-        { unbounded: true },
-      )
-    })
+}
 
-  const text = models.command("text").description("embedding models for searching conversations by meaning")
-
-  withQuery(
-    annotate(text.command("list"), { effects: LOCAL_READ, examples: [`${tool} models text list`] }),
-    MODELS_QUERY,
-  )
-    .summary("embedding models and their download status")
-    .description("the embedding models, most suitable first, which are downloaded, and which one is the default")
-    .action(async function (this: Command, words: string[]) {
-      const context = baseContext(this, messenger.resolveSettings)
-      await context.run(async () => {
-        listQuery(typedQuery(words), MODELS_QUERY, "models text list")
-        const directory = textModelsDirectory(context.env)
-        const items = TEXT_MODELS.map((model) => textItem(model, directory))
-        const missing = items.find((item) => item.default && !item.downloaded)
-        renderAnswer(
-          this,
-          context,
-          everyModel(
-            "models text list",
-            items,
-            missing ? [nextStep("models.download", { args: { model: missing.id } })] : [],
-          ),
-          () => items.map((item) => `${modelLine(item, 16)}  ${item.licence}\n`).join(""),
-        )
-        if (context.format === "pretty") context.renderer.note(`kept in ${directory}`)
-      })
-    })
-
-  reachesOtherService(
-    annotate(text.command("download"), {
-      effects: FETCH,
-      output: { entity: "model" },
-      examples: [`${tool} models text download ${DEFAULT_TEXT_MODEL}`],
-    }),
-  )
-    .argument("<model>", "a model id from `models text list`")
-    .addOption(new Option("--accept-terms", "accept the model's licence terms, for a model that has its own"))
-    .summary("download and verify an embedding model")
-    .description("download an embedding model once, checked against the sha256 this version expects")
-    .action(async function (this: Command, id: string, options: { acceptTerms?: boolean }) {
-      const context = baseContext(this, messenger.resolveSettings)
-      await context.run(
-        async () => {
-          const { model, directory } = await downloadTextModel(id, {
-            env: context.env,
-            acceptTerms: options.acceptTerms === true,
-            progress: (line) => context.renderer.note(line),
-          })
-          renderAnswer(this, context, itemOf(textItem(model, directory)), downloaded)
-        },
-        { unbounded: true },
-      )
-    })
-
-  const key = text.command("key").description("API keys for embedding and analysis providers")
+const modelKeysCommand = (messenger: Messenger, tool: string): Command => {
+  const key = new Command("keys").description("API keys for embedding and analysis providers")
 
   grantsAuthority(
     annotate(key.command("set"), {
       effects: LOCAL_WRITE,
       output: { entity: "model_key", view: "stored" },
-      examples: [`${tool} models text key set openai`],
+      examples: [`${tool} models keys set openai`],
     }),
   )
     .argument("<provider>", "openai, anthropic, or the host of a --base-url server that wants a key")
@@ -235,7 +177,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
     annotate(key.command("remove"), {
       effects: LOCAL_WRITE,
       output: { entity: "model_key", view: "removed" },
-      examples: [`${tool} models text key remove openai`],
+      examples: [`${tool} models keys remove openai`],
     }),
   )
     .argument("<provider>", "openai, anthropic, or a server's host")
@@ -250,7 +192,65 @@ export const modelsCommand = (messenger: Messenger): Command => {
         )
       })
     })
+  return key
+}
 
+export const modelsCommand = (messenger: Messenger): Command => {
+  const tool = `${messenger.app.command} personal`
+  const models = new Command("models").description("models that run on this machine")
+  models.addCommand(modelKeysCommand(messenger, tool))
+  withQuery(
+    annotate(models.command("list"), {
+      effects: LOCAL_READ,
+      examples: [`${tool} models list`, `${tool} models list kind:audio`],
+    }),
+    ROOT_MODELS_QUERY,
+  )
+    .description("speech and embedding models, their download status and the default of each kind")
+    .action(async function (this: Command, words: string[]) {
+      const terms = nativeTerms(listQuery(typedQuery(words), ROOT_MODELS_QUERY, "models list"), "models list")
+      const context = baseContext(this, messenger.resolveSettings)
+      await context.run(async () => {
+        const kinds = terms.get("kind")?.value
+        const id = terms.get("id")?.value
+        const kept = terms.get("downloaded")?.value
+        const audioModels =
+          kinds === undefined || kinds === "audio"
+            ? orderedModels(messenger.speechModels).filter((model) => id === undefined || model.id === id)
+            : []
+        const textModels =
+          kinds === undefined || kinds === "text"
+            ? TEXT_MODELS.filter((model) => id === undefined || model.id === id)
+            : []
+        const chosen = audioModels.length > 0 ? choose(messenger, context.settings, {}, context.env).model.id : ""
+        const catalogue = [
+          ...audioModels.map((model) => audioItem(model, modelsDirectory(context.env), chosen)),
+          ...textModels.map((model) => textItem(model, textModelsDirectory(context.env))),
+        ]
+        const items = catalogue.filter((item) => kept === undefined || item.downloaded === (kept === "true"))
+        const next = items
+          .filter((item) => item.default && !item.downloaded)
+          .map((item) => nextStep("models.download", { args: { model: item.id } }))
+        renderAnswer(this, context, everyModel("models list", items, next), () =>
+          items.map((item) => `${item.kind.padEnd(5)} ${modelLine(item, 18)}  ${item.languages}\n`).join(""),
+        )
+      })
+    })
+  reachesOtherService(
+    annotate(models.command("download"), {
+      effects: FETCH,
+      output: { entity: "model" },
+      examples: [`${tool} models download parakeet-v3`, `${tool} models download ${DEFAULT_TEXT_MODEL}`],
+    }),
+  )
+    .description("download and verify one speech or embedding model")
+    .argument("<model>", "a model id from models list")
+    .option("--accept-terms", "accept the model's licence terms, for a model that has its own")
+    .action(async function (this: Command, id: string, options: { acceptTerms?: boolean }) {
+      if (orderedModels().some((model) => model.id === id)) return downloadAudioModel(this, messenger, id)
+      if (TEXT_MODELS.some((model) => model.id === id)) return downloadEmbeddingModel(this, messenger, id, options)
+      throw new CliError("validation_error", "unknown model; choose an id from models list")
+    })
   return models
 }
 

@@ -99,7 +99,7 @@ describe("notes by meaning", () => {
     const store = await open()
     await store.notes.addNote({ text: "fish" })
     await expect(embedNotes(store, { model: "e5-small", command: "memo" })).rejects.toThrow(
-      "memo models text download e5-small",
+      "memo models download e5-small",
     )
   })
 })

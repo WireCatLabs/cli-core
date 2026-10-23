@@ -288,7 +288,7 @@ const checkCommand = (messenger: Messenger): Command =>
       const older = answer.conversations.filter((chat) => chat.provider === messenger.provider && !chat.current).length
       if (older > 0) {
         renderer.note(
-          `${older} chats' conversations were built by older rules — \`${command} conversations build --chat <chat>\``,
+          `${older} chats' conversations were built by older rules — \`${command} conversations links rebuild --chat <chat>\``,
         )
       }
     })
@@ -475,7 +475,7 @@ const buildWordIndex = (database: CacheDatabase, note: (text: string) => void) =
 
 /**
  * Stems what is left, after rebuilding stems made by other stemmer choices than the store's setting —
- * only here and in `store reindex`, never in a search's quick fill.
+ * only here and in `store rebuild`, never in a search's quick fill.
  */
 const buildStems = (database: CacheDatabase, note: (text: string) => void, { force = false } = {}) => {
   const before = stemsState(database)
@@ -489,7 +489,7 @@ const buildStems = (database: CacheDatabase, note: (text: string) => void, { for
   return { stemmed: stemmed + drained }
 }
 
-/** Indexes the notes written since — all of them after `store reindex` queued them again. */
+/** Indexes the notes written since — all of them after `store rebuild` queued them again. */
 const buildNoteIndex = (database: CacheDatabase, note: (text: string) => void, { reset = false } = {}) => {
   if (reset) resetNoteIndex(database)
   const pending = noteIndexState(database)?.pending ?? 0
@@ -498,7 +498,8 @@ const buildNoteIndex = (database: CacheDatabase, note: (text: string) => void, {
 }
 
 const reindexCommand = (messenger: Messenger): Command =>
-  destroysNothing(annotate(new Command("reindex"), { output: { entity: "store_reindex" }, effects: LOCAL_WRITE }))
+  destroysNothing(annotate(new Command("rebuild"), { output: { entity: "store_reindex" }, effects: LOCAL_WRITE }))
+
     .summary("rebuild the local archive's search indexes")
     .description(
       "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored; loses nothing",

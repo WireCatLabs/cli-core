@@ -191,7 +191,7 @@ A message's sending date and the time it was saved do not establish when its cou
 
 ```sh
 tg stats messages counters show --chat Club --counters views,reactions --max-age 24h --limit 20 --json
-tg stats messages counters refresh --chat Club --counters views,reactions --max-messages 20 --sync-time 30s --dry-run --json
+tg stats messages counters sync --chat Club --counters views,reactions --max-messages 20 --sync-time 30s --dry-run --json
 ```
 
 `show` reads locally and returns each field's value, `observedAt`, source, age and `freshness`:

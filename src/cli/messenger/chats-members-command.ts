@@ -46,7 +46,7 @@ export const membersCommand = (messenger: Messenger): Command => {
   members.addCommand(
     withQuery(
       annotate(
-        annotate(new Command("audit"), { effects: REMOTE_READ, offline: false })
+        annotate(new Command("check"), { effects: REMOTE_READ, offline: false })
           .summary("members that look like bots, with reasons")
           .description(
             "members that look like bots, each with its reasons — read from the member list and the local store; " +

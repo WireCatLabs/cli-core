@@ -117,7 +117,8 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
     "contacts evidence": '101 --selection "$selection" --component messages',
     "contacts responses": 'chat:"Project room"',
     "contacts top": 'chat:"Book club" --limit 10',
-    "messages counters refresh": '--chat "Book club" --dry-run',
+    "messages counters sync": '--chat "Book club" --dry-run',
+
     "messages counters show": '--chat "Book club" --limit 10',
     "messages discussion": 'chat:"Book club"',
     "messages evidence": '"$message" --selection "$selection" --component reactions',

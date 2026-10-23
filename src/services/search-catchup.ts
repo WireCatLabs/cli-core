@@ -27,7 +27,7 @@ export const validateCatchUpBounds = (options: CatchUpOptions) => {
 
 export const validateCatchUp = (deps: ServiceDeps, options: CatchUpOptions) => {
   validateCatchUpBounds(options)
-  for (const key of ["conversations.links", "conversations.embed"] as const)
+  for (const key of ["conversations.links", "conversations.embeddings"] as const)
     deps.guard.check({ chatId: null, key }, { reserve: false })
 }
 

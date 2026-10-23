@@ -286,7 +286,7 @@ describe("hearing a voice message", () => {
   it("**names the download command instead of downloading** a missing model", async () => {
     await expect(
       hearOnline(messenger, adapter(refusing), "7", "5", choice({ directory: directoryWithVad() })),
-    ).rejects.toThrow(/chat models audio download parakeet-v3/)
+    ).rejects.toThrow(/chat models download parakeet-v3/)
   })
 })
 

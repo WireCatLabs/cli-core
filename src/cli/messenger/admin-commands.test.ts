@@ -94,13 +94,13 @@ const call = async (
       "chats join": "chat_group_change",
       "chats leave": "chat_removal",
       "chats update": "chat_group_change",
-      "chats link show": "chat_invite",
-      "chats link create": "chat_invite_change",
-      "chats link revoke": "chat_invite_change",
-      "chats link update": "chat_invite_change",
-      "chats link reset": "chat_group_change",
-      "chats requests accept": "chat_request_change",
-      "chats requests decline": "chat_request_change",
+      "chats links show": "chat_invite",
+      "chats links create": "chat_invite_change",
+      "chats links remove": "chat_invite_change",
+      "chats links update": "chat_invite_change",
+      "chats links reset": "chat_group_change",
+      "chats requests confirm": "chat_request_change",
+      "chats requests reject": "chat_request_change",
       "chats admins add": "chat_admin_change",
       "chats admins remove": "chat_admin_change",
       "chats folders create": "chat_folder_change",
@@ -147,16 +147,16 @@ const base: MessengerAdapter = {
 
 it("omits unsupported invite link list/revoke", () => {
   const messenger = { inviteLinkList: false, inviteLinkRevoke: false, chatArgument: "stored chat" } as Messenger
-  const link = groupCommands(messenger).find((command) => command.name() === "link")
+  const link = groupCommands(messenger).find((command) => command.name() === "links")
   expect(link?.commands.map((command) => command.name())).not.toContain("list")
-  expect(link?.commands.map((command) => command.name())).not.toContain("revoke")
+  expect(link?.commands.map((command) => command.name())).not.toContain("remove")
   expect(link?.commands.map((command) => command.name())).toContain("reset")
 })
 
-it("lists chats link update only for a messenger that says it can", () => {
+it("lists chats links update only for a messenger that says it can", () => {
   const names = (messenger: Messenger) =>
     groupCommands(messenger)
-      .find((command) => command.name() === "link")
+      .find((command) => command.name() === "links")
       ?.commands.map((command) => command.name())
   const unset = { chatArgument: "stored chat" } as Messenger
   const able = { ...unset, inviteLinkUpdate: true } as Messenger
@@ -429,7 +429,7 @@ describe("chats create, join and leave", () => {
     const argv = ["chats", "update", "Book club", "--only-admins-send", "on", "--only-admins-edit-info", "off"]
 
     const set = await call([...argv, "--disappear-after", "7d", "--json"], adapter, env, whatsapp)
-    await call(["chats", "update", "Book club", "--disappear-time", "off"], adapter, env, whatsapp)
+    await call(["chats", "update", "Book club", "--disappear-after", "off"], adapter, env, whatsapp)
     const bad = await call(["chats", "update", "Book club", "--disappear-after", "7"], adapter, env, whatsapp)
     const elsewhere = await call(["chats", "update", "Book club", "--only-admins-send", "on"], adapter, env)
 
@@ -578,12 +578,12 @@ describe("chats create, join and leave", () => {
     }
 
     const made = await call(
-      ["chats", "link", "create", "Book club", "--approval", "--expire-time", "7d", "--json"],
+      ["chats", "links", "create", "Book club", "--approval", "--expire-time", "7d", "--json"],
       adapter,
       env,
     )
-    const plain = await call(["chats", "link", "create", "Book club", "--max-uses", "5", "--json"], adapter, env)
-    const both = await call(["chats", "link", "create", "Book club", "--approval", "--max-uses", "5"], adapter, env)
+    const plain = await call(["chats", "links", "create", "Book club", "--max-uses", "5", "--json"], adapter, env)
+    const both = await call(["chats", "links", "create", "Book club", "--approval", "--max-uses", "5"], adapter, env)
 
     expect(answer(made)).toMatchObject({
       chat_id: "7",
@@ -611,10 +611,10 @@ describe("chats create, join and leave", () => {
       resetInviteLink: async (chatId) => ({ ...card(chatId, "Book club"), link: "https://t.me/+new" }),
     }
 
-    const hidden = await call(["chats", "link", "show", "Book club"], adapter, env)
+    const hidden = await call(["chats", "links", "show", "Book club"], adapter, env)
     link = "https://t.me/+old"
-    const shown = await call(["chats", "link", "show", "Book club", "--json"], adapter, env)
-    const reset = await call(["chats", "link", "reset", "Book club", "--json"], adapter, env)
+    const shown = await call(["chats", "links", "show", "Book club", "--json"], adapter, env)
+    const reset = await call(["chats", "links", "reset", "Book club", "--json"], adapter, env)
     const card7 = await call(["chats", "show", "Book club", "--json"], adapter, env)
 
     expect(hidden.code).toBe(6)
@@ -647,8 +647,8 @@ describe("chats create, join and leave", () => {
     }
 
     const listed = await call(["chats", "requests", "list", "Book club", "--limit", "1", "--json"], adapter, env)
-    const accepted = await call(["chats", "requests", "accept", "Book club", "91", "--json"], adapter, env)
-    const declined = await call(["chats", "requests", "decline", "Book club", "92", "--json"], adapter, env)
+    const accepted = await call(["chats", "requests", "confirm", "Book club", "91", "--json"], adapter, env)
+    const declined = await call(["chats", "requests", "reject", "Book club", "92", "--json"], adapter, env)
 
     expect(answer(listed)).toMatchObject({
       items: [{ person_id: "91", name: "Synthetic Person", username: null, requested_at: request.requestedAt }],
@@ -683,20 +683,20 @@ describe("chats create, join and leave", () => {
     }
 
     const all = await call(
-      ["chats", "requests", "decline", "Book club", "--all", "--link", "https://t.me/+synthetic", "--json"],
+      ["chats", "requests", "reject", "Book club", "--all", "--link", "https://t.me/+synthetic", "--json"],
       adapter,
       env,
     )
-    const neither = await call(["chats", "requests", "accept", "Book club"], adapter, env)
-    const both = await call(["chats", "requests", "accept", "Book club", "91", "--all"], adapter, env)
-    const stray = await call(["chats", "requests", "accept", "Book club", "91", "--link", "x"], adapter, env)
+    const neither = await call(["chats", "requests", "confirm", "Book club"], adapter, env)
+    const both = await call(["chats", "requests", "confirm", "Book club", "91", "--all"], adapter, env)
+    const stray = await call(["chats", "requests", "confirm", "Book club", "91", "--link", "x"], adapter, env)
     const listed = await call(
-      ["chats", "link", "list", "Book club", "revoked:true", "--limit", "5", "--json"],
+      ["chats", "links", "list", "Book club", "revoked:true", "--limit", "5", "--json"],
       adapter,
       env,
     )
     const revoked = await call(
-      ["chats", "link", "revoke", "Book club", "https://t.me/+synthetic", "--json"],
+      ["chats", "links", "remove", "Book club", "https://t.me/+synthetic", "--json"],
       adapter,
       env,
     )
@@ -723,7 +723,7 @@ describe("chats create, join and leave", () => {
       },
     }
     const update = (...options: string[]) =>
-      call(["chats", "link", "update", "Book club", "https://t.me/+synthetic", ...options, "--json"], adapter, env, {
+      call(["chats", "links", "update", "Book club", "https://t.me/+synthetic", ...options, "--json"], adapter, env, {
         inviteLinkUpdate: true,
       })
 

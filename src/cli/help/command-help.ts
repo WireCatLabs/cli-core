@@ -135,8 +135,8 @@ const returnsOf = (command: Command): string => {
   const noun = (output.view ? `${output.entity} ${output.view}` : output.entity).replaceAll("_", " ")
   const more = fields.length > 8 ? `, and ${fields.length - 8} more` : ""
   const root = rootOf(command)
-  const schema = commandAt(root, "commands schema")
-    ? `; every field: ${root.name()} commands schema ${commandPathOf(command).join(" ")}`
+  const schema = commandAt(root, "commands info")
+    ? `; every field: ${root.name()} commands info ${commandPathOf(command).join(" ")}`
     : ""
   return `${noun} — ${fields.slice(0, 8).join(", ")}${more}${schema}`
 }

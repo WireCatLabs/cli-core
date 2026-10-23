@@ -142,11 +142,12 @@ const json = (result: { stdout: string[] }) => {
 describe("analysis CLI consent and configuration", () => {
   it("asks once per chat/provider, remembers explicit yes, and asks again after revocation", async () => {
     const { call, add, calls, baseUrl } = await setup()
-    expect((await call("conversations", "build", "--analyze", "--chat", "9", "--json")).code).not.toBe(0)
+    expect((await call("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--json")).code).not.toBe(0)
     expect(calls()).toBe(0)
     const first = await call(
       "conversations",
-      "build",
+      "links",
+      "rebuild",
       "--analyze",
       "--analysis-provider",
       "openai",
@@ -159,7 +160,7 @@ describe("analysis CLI consent and configuration", () => {
     expect(json(first)).toMatchObject({ stored: 1, stopped: "complete" })
     expect(calls()).toBe(1)
     await add("9", "2")
-    expect((await call("conversations", "build", "--analyze", "--chat", "9", "--json")).code).toBe(0)
+    expect((await call("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--json")).code).toBe(0)
     expect(calls()).toBe(2)
     expect(json(await call("conversations", "consents", "list", "--json")).items).toMatchObject([
       { chat: "9", provider: `openai:${baseUrl}` },
@@ -182,13 +183,14 @@ describe("analysis CLI consent and configuration", () => {
     expect(unsupported.stderr).toContain("query.unsupported-field")
     expect(calls()).toBe(2)
     await add("10")
-    expect((await call("conversations", "build", "--analyze", "--chat", "10", "--json")).code).not.toBe(0)
+    expect((await call("conversations", "links", "rebuild", "--analyze", "--chat", "10", "--json")).code).not.toBe(0)
     await add("9", "3")
     expect(
       (
         await call(
           "conversations",
-          "build",
+          "links",
+          "rebuild",
           "--analyze",
           "--chat",
           "9",
@@ -206,7 +208,7 @@ describe("analysis CLI consent and configuration", () => {
         await call(
           "conversations",
           "consents",
-          "revoke",
+          "remove",
           "--chat",
           "9",
           "--consent-provider",
@@ -215,23 +217,30 @@ describe("analysis CLI consent and configuration", () => {
         )
       ).code,
     ).toBe(0)
-    expect((await call("conversations", "build", "--analyze", "--chat", "9", "--json")).code).not.toBe(0)
+    expect((await call("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--json")).code).not.toBe(0)
     expect(calls()).toBe(2)
     expect(json(await call("conversations", "consents", "list", "--json")).items).toEqual([])
   })
   it("defaults to owner-agent analysis, requires a chat, enforces write permission and token budget", async () => {
     const { call, configure, calls } = await setup()
-    expect((await call("conversations", "build", "--analyze", "--yes", "--json")).code).not.toBe(0)
-    expect((await call("conversations", "build", "--chat", "9", "--model", "test-model", "--json")).code).not.toBe(0)
+    expect((await call("conversations", "links", "rebuild", "--analyze", "--yes", "--json")).code).not.toBe(0)
+    expect(
+      (await call("conversations", "links", "rebuild", "--chat", "9", "--model", "test-model", "--json")).code,
+    ).not.toBe(0)
     configure({ analysis_provider: "agent" })
-    expect((await call("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")).code).not.toBe(0)
+    expect(
+      (await call("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")).code,
+    ).not.toBe(0)
     configure({ permissions: { "conversations.links": "readonly" } })
-    expect((await call("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")).code).not.toBe(0)
-    expect((await call("conversations", "consents", "revoke", "--json")).code).not.toBe(0)
+    expect(
+      (await call("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")).code,
+    ).not.toBe(0)
+    expect((await call("conversations", "consents", "remove", "--json")).code).not.toBe(0)
     configure()
     const capped = await call(
       "conversations",
-      "build",
+      "links",
+      "rebuild",
       "--analyze",
       "--chat",
       "9",
@@ -249,14 +258,16 @@ describe("analysis CLI consent and configuration", () => {
   it("under the read-only lock sends nothing to a remote provider, and still analyzes on a local server", async () => {
     const { call, locked, configure, calls } = await setup()
     configure({ analysis_base_url: "https://analysis.example.com/v1" })
-    const refused = await locked("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")
+    const refused = await locked("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")
     expect(refused.code).toBe(5)
     expect(JSON.parse(refused.stderr).error.message).toBe(
       "this process is read-only (CHAT_READ_ONLY) — it cannot send chat text to analysis.example.com",
     )
     expect(json(await call("conversations", "consents", "list", "--json")).items).toEqual([])
     configure()
-    expect((await locked("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")).code).toBe(0)
+    expect(
+      (await locked("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")).code,
+    ).toBe(0)
     expect(calls()).toBe(1)
   })
 })

@@ -27,6 +27,7 @@ describe("the level of a command path", () => {
   })
 
   it("**leaves help and scenarios to every level**: `help options` and `guide` read no account", () => {
+    expect(keyForCommand([])).toBeNull()
     expect(keyForCommand(["help"])).toBeNull()
     expect(keyForCommand(["guide"])).toBeNull()
   })

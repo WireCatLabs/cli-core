@@ -42,7 +42,7 @@ describe("skill show", () => {
 
     expect(code).toBe(0)
     expect(out).toMatch(/^---\nname: link-conversations\n/)
-    expect(out).toContain("chat conversations batches next")
+    expect(out).toContain("chat conversations batches show")
     expect(out).not.toContain("{{command}}")
   })
 

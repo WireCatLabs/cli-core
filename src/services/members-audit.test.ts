@@ -74,7 +74,7 @@ afterEach(async () => {
   for (const store of opened.splice(0)) await store.close()
 })
 
-describe("chats members audit", () => {
+describe("chats members check", () => {
   it("lists bot-like members with reasons, leaving out the owner, admins and people who look real", async () => {
     const burst = ["31", "32", "33", "34", "35"].map((id, minute) =>
       member(id, { joinedAt: `2026-09-01T12:0${minute}:00.000Z`, invitedBy: "99" }),
