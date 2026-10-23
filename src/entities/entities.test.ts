@@ -604,6 +604,7 @@ const samples: Record<EntityName, unknown> = {
     sources: ["manual"],
     created_at: at,
   },
+  reaction_change: { operation_id: "op-1", chat_id: "7", message_id: "3", reaction: null },
   chat_event: {
     chat_id: "2",
     time: at,

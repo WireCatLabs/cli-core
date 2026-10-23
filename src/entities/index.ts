@@ -55,6 +55,7 @@ import { poll, pollChange } from "./poll.js"
 import { pollVote } from "./poll-vote.js"
 import { contactAlias, contactNoteRemoval } from "./private-contact.js"
 import { ranking } from "./ranking.js"
+import { reactionChange } from "./reaction-change.js"
 import { recipient, recipientAdded, recipientChange, recipientOff, recipientRemoved } from "./recipient.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
@@ -128,6 +129,7 @@ export {
   pollChange,
   pollVote,
   ranking,
+  reactionChange,
   recipient,
   recipientAdded,
   recipientChange,
@@ -250,6 +252,7 @@ export const ENTITIES = {
   poll: poll,
   poll_change: pollChange,
   poll_vote: pollVote,
+  reaction_change: reactionChange,
   topic,
   folder,
   message_counts: messageCounts,

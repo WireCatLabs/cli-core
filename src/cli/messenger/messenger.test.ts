@@ -1104,9 +1104,16 @@ describe("the shared read commands", () => {
       message_id: "3",
       reaction: null,
     })
+    expect(v.safeParse(ENTITIES.reaction_change, JSON.parse(added.stdout[0] ?? "").item).success).toBe(true)
+    expect(v.safeParse(ENTITIES.reaction_change, JSON.parse(removed.stdout[0] ?? "").item).success).toBe(true)
+    const projected = await call(["reactions", "add", "Book", "3", "👍", "--json=reaction"], async () => reacting, env)
+    expect(JSON.parse(projected.stdout[0] ?? "").item).toEqual({ operation_id: expect.any(String), reaction: "👍" })
+    const invalid = await call(["reactions", "remove", "Book", "3", "--json=missing"], async () => reacting, env)
+    expect(invalid.code).toBe(2)
     expect(reactions).toEqual([
       ["7", "3", "👍"],
       ["7", "3", null],
+      ["7", "3", "👍"],
     ])
   })
 

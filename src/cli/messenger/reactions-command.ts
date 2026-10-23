@@ -10,6 +10,7 @@ export const reactionsCommand = (messenger: Messenger): Command => {
 
   annotate(reactions.command("add"), {
     effects: REMOTE_WRITE,
+    output: { entity: "reaction_change" },
     examples: [`${messenger.app.command} personal reactions add "Book club" 101 👍`],
   })
     .description("put your reaction on a message; it replaces the one you had")
@@ -26,6 +27,7 @@ export const reactionsCommand = (messenger: Messenger): Command => {
 
   annotate(reactions.command("remove"), {
     effects: REMOTE_WRITE,
+    output: { entity: "reaction_change" },
     examples: [`${messenger.app.command} personal reactions remove "Book club" 101`],
   })
     .description("take your reaction off a message")
