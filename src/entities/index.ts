@@ -12,6 +12,7 @@ import { chart } from "./chart.js"
 import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
 import { chatStats, taskStats } from "./chat-stats.js"
+import { chatTracking, trackedChat, trackedChatHistory } from "./chat-tracking.js"
 import { contact } from "./contact.js"
 import { contactActivity, contactCheck, linkedPerson } from "./contact-activity.js"
 import { contactContext, contactPreparation } from "./contact-context.js"
@@ -92,6 +93,7 @@ export {
   chat,
   chatEvent,
   chatStats,
+  chatTracking,
   contact,
   contactActivity,
   contactAlias,
@@ -164,6 +166,8 @@ export {
   task,
   taskStats,
   topic,
+  trackedChat,
+  trackedChatHistory,
 }
 
 export const ENTITIES = {
@@ -301,6 +305,9 @@ export const ENTITIES = {
   official_stats: officialStats,
   chart,
   chat_stats: chatStats,
+  tracked_chat: trackedChat,
+  tracked_chat_history: trackedChatHistory,
+  chat_tracking: chatTracking,
   task_stats: taskStats,
 } as const
 

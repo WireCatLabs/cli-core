@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Predicate, type QueryRegistry, queryError, queryFieldsOf } from "@wirecat/cli-base/query"
-import { chat, chatEvent, inviteLink, joinRequest, member } from "../../entities/index.js"
+import { chat, chatEvent, ENTITIES, inviteLink, joinRequest, member } from "../../entities/index.js"
 import { AUDIT_MIN_SCORE } from "../../services/members-audit.js"
-import { CHAT_COLUMNS, titlePart } from "../../store/store.js"
+import { CHAT_COLUMNS, TRACKED_CHAT_COLUMNS, titlePart } from "../../store/store.js"
 import { unfilteredQuery } from "../list-query.js"
 
 const titleWords = (node: Predicate) => {
@@ -24,6 +24,17 @@ export const CHATS_QUERY: QueryRegistry = {
     exclude: Object.keys(chat.entries).filter((name) => !(name in CHAT_COLUMNS)),
     text: ["title"],
     examples: { title: "title:book", unread_count: "unread_count>0", last_message_at: "last_message_at>=7d" },
+    validate: { title: titleWords },
+  }),
+}
+
+export const TRACKING_QUERY: QueryRegistry = {
+  entity: "tracked_chat",
+  backend: "sql",
+  fields: queryFieldsOf(ENTITIES.tracked_chat, {
+    exclude: Object.keys(ENTITIES.tracked_chat.entries).filter((name) => !(name in TRACKED_CHAT_COLUMNS)),
+    text: ["title"],
+    examples: { chat_id: "chat_id:7", title: "title:book" },
     validate: { title: titleWords },
   }),
 }

@@ -37,6 +37,8 @@ shape of this file.
 
 - Analysis-consent lists accept chat and provider-identity queries, and consent commands declare their answer fields. Reading a filtered list leaves remembered permissions unchanged.
 
+- Tracked-chat lists accept a query over chat IDs and titles, filtered in the store. Tracking commands declare their answer schemas for field projection and discovery.
+
 ### Changed — may break callers
 
 - **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.

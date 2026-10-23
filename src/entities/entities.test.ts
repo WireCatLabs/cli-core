@@ -818,6 +818,9 @@ const samples: Record<EntityName, unknown> = {
     partial: false,
     reasons: [],
   },
+  tracked_chat: { chat_id: "7", title: "Book club", tracked_at: at, last_count: null },
+  tracked_chat_history: { chat_id: "7", tracked_at: null, counts: [] },
+  chat_tracking: { chat_id: "7", tracked: true },
   chat_stats: {
     chat: "chat:synthetic/1/2",
     since: at,
