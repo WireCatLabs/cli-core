@@ -325,6 +325,7 @@ const requestsCommand = (messenger: Messenger): Command => {
     }),
   )
   const everyone = messenger.joinRequestsAll !== false
+  const byLink = everyone && messenger.joinRequestsByLink !== false
   for (const [verb, accept, help] of [
     ["accept", true, "let them in; the group sees them join"],
     ["decline", false, "turn the request away"],
@@ -333,10 +334,8 @@ const requestsCommand = (messenger: Messenger): Command => {
       .description(help)
       .argument("<chat>", messenger.chatArgument)
       .argument(everyone ? "[person]" : "<person>", "who asked: an id from `chats requests list`")
-    if (everyone)
-      answer
-        .option("--all", "every pending request, counted against the hourly limit first")
-        .option("--link <link>", "with --all: only the requests made by this invite link")
+    if (everyone) answer.option("--all", "every pending request, counted against the hourly limit first")
+    if (byLink) answer.option("--link <link>", "with --all: only the requests made by this invite link")
     requests.addCommand(
       answer.action(async function (this: Command, chat: string, person: string | undefined) {
         const context = messengerContext(this, messenger)

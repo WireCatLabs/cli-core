@@ -25,7 +25,7 @@
     },
     "--all": {
       "meaning": "every row, no paging",
-      "note": "chats requests accept and decline take every pending request instead — Telegram counts them against its hourly limit first; MAX has no way to answer them all at once and refuses it, naming chats requests list — so it differs on purpose (Help text rule 4)"
+      "note": "chats requests accept and decline take every pending request instead — counted against the hourly limit first — so it differs on purpose (Help text rule 4)"
     },
     "--all-bots": {
       "meaning": "also read every other bot's copy on this machine that read_other_bots allows"
@@ -2591,11 +2591,14 @@
       "options": {
         "--all": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
+          "planned": {
+            "max": "max-cli#771: one request answers them all (opcode 77)"
+          },
+          "reason": "WhatsApp answers one join request at a time"
         },
         "--link": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
+          "reason": "MAX does not say which invite link a request came by; WhatsApp answers one join request at a time"
         }
       }
     },
@@ -2604,11 +2607,14 @@
       "options": {
         "--all": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
+          "planned": {
+            "max": "max-cli#771: one request answers them all (opcode 77)"
+          },
+          "reason": "WhatsApp answers one join request at a time"
         },
         "--link": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
+          "reason": "MAX does not say which invite link a request came by; WhatsApp answers one join request at a time"
         }
       }
     },

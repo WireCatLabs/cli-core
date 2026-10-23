@@ -19,6 +19,12 @@ shape of this file.
 
 - **Count and grouping placeholders match the shared vocabulary.** Processing limits use `<n>` and statistics grouping uses `<group>` across supported fields and calendar units; accepted values and defaults stay the same.
 
+### Added
+
+- **`Messenger.joinRequestsByLink`**: whether `chats requests accept|decline --all` can be narrowed with `--link`;
+  yes when unset. `joinRequestsAll` now turns on `--all` alone, so a messenger that answers every request at once
+  but does not say which invite link each came by (MAX) offers `--all` without `--link`.
+
 ## 0.398.0 — 23.10.2026
 
 ### Added

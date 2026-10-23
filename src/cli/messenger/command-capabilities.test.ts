@@ -57,4 +57,10 @@ describe("shared commands build only what the messenger has", () => {
     expect(sub(limited, "requests", "accept").registeredArguments[1]?.required).toBe(true)
     expect(flags(sub(chatsCommand(messenger), "requests", "decline"))).toEqual(["--all", "--link"])
   })
+
+  it("answers every join request without --link where the messenger does not say which link a request came by", () => {
+    const noLink = chatsCommand({ ...messenger, joinRequestsByLink: false })
+    expect(flags(sub(noLink, "requests", "accept"))).toEqual(["--all"])
+    expect(flags(sub(noLink, "requests", "decline"))).toEqual(["--all"])
+  })
 })
