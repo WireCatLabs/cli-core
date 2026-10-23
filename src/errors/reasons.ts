@@ -58,6 +58,7 @@ const OTHERS: Entry[] = [
   validation("ranking.invalid", "the ranking is not valid"),
   validation("selection.changed", "the stored selection changed meanwhile"),
   validation("selection.invalid", "the selection is not valid"),
+  validation("search.kind", "the saved search belongs to another kind of search: messages or meetings"),
   ["selection.out-of-scope", "permission_error", "the selection reaches outside what this profile may read"],
   validation("stemmer.invalid", "the stemmer is not valid for that script"),
   validation("stemmer.newer", "the stems were built by a newer tool"),

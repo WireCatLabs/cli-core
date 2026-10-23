@@ -7,7 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- `searches list`, `searches history` and `searches clear` cover only message searches. The table is shared by
+  every CLI on the store; a saved meeting search shown, run or deleted from a messenger is refused with
+  `details.reason: "search.kind"`. `SearchesStore.savedSearches`, `searchHistory` and `clearSearchHistory` take an
+  optional list of kinds.
+
 ### Added
+
+- `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
+  same table: create, list, show, delete and `run`, which counts the run.
 
 - Account commands include concrete examples in help and command discovery.
 

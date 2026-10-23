@@ -120,6 +120,12 @@ export { type MeetingLink, type MeetingLinksRequest, readMeetingLinks } from "./
 export { createMeetingProjectCandidateReader } from "./meeting-project-candidates.js"
 export { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
 export { type MeetingReviewRequest, readMeetingReview } from "./meeting-review.js"
+export {
+  type MeetingSearchesService,
+  type MeetingSearchParams,
+  meetingSearchesService,
+  type SavedMeetingSearch,
+} from "./meeting-searches.js"
 export { type MeetingStatsRequest, readMeetingStats } from "./meeting-stats.js"
 export { chatIdIn, storedChatId } from "./message-resolution.js"
 export type {
