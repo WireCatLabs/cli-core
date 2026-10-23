@@ -260,6 +260,14 @@ const call = async (
       for (const item of answer.items ?? [answer.item]) v.parse(schema, item)
     }
   }
+  if (code === 0 && argv[0] === "store" && argv.includes("--json")) {
+    const names = { status: "store_chat_status", clear: "store_clear", export: "store_export" } as const
+    const entity = names[argv[1] as keyof typeof names]
+    if (entity) {
+      const answer = JSON.parse(streams.stdout[0] ?? "null")
+      for (const item of answer.items ?? [answer.item]) v.parse(ENTITIES[entity] as v.GenericSchema, item)
+    }
+  }
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 

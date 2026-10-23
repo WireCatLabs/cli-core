@@ -7,6 +7,7 @@ import { listEnvelopeSchema, logRecordSchema } from "@wirecat/cli-base/standards
 import * as v from "valibot"
 import { describe, expect, it, onTestFinished } from "vitest"
 import type { Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import { job as jobEntity } from "../../entities/job.js"
 import { messageSync } from "../../entities/message-transfer.js"
 import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
@@ -100,6 +101,17 @@ const call = async (
     },
   )
   const body = streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined
+  if (code === 0 && argv[0] === "store" && argv[1] === "jobs" && body) {
+    const names = {
+      show: "store_job_details",
+      cancel: "store_job_cancel",
+      retry: "store_job_retry",
+      clear: "store_job_clear",
+    } as const
+    const entity = names[argv[2] as keyof typeof names]
+    if (entity) for (const item of body.items ?? [body.item]) v.parse(ENTITIES[entity] as v.GenericSchema, item)
+  }
+
   if (code === 0 && argv[0] === "messages" && argv[1] === "sync" && body?.item) v.parse(messageSync, body.item)
   return {
     code,
