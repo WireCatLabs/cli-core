@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.391.0 — 23.10.2026
+
 ### Changed — may break callers
 
 - Reads never mark chats read: `messages list`, `inbox` and `review` no longer take `--mark-read` or
