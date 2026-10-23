@@ -240,7 +240,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(command.command("run"), { effects: REMOTE_WRITE, mcp: false })
+  annotate(command.command("run"), { effects: REMOTE_WRITE })
     .description("run a schedule now, as its timer would, and wait for it")
     .argument("<name>")
     .action(async function (this: Command, name: string) {
@@ -265,7 +265,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       say({ name, removed: true }, [`Removed ${name}.`])
     })
 
-  annotate(command.command("exec"), { effects: REMOTE_WRITE, mcp: false })
+  annotate(command.command("exec"), { effects: REMOTE_WRITE })
     .description("what a timer runs, given the schedule's file; to run one by hand, use run")
     .argument("<file>")
     .action(async function (this: Command, file: string) {

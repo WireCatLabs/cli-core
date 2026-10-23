@@ -2146,14 +2146,18 @@ describe("the MCP server", () => {
     }
   })
 
-  it("offers the store and runs commands a permission key limits, and none that resets or restores the store", async () => {
+  it("offers the store and runs commands, each limited by a permission key (NEED-1663)", async () => {
     const commands = await (await connect(scripted())).client.commands()
 
     expect(commands.filter((one) => one.startsWith("store ") || one.startsWith("runs ")).sort()).toEqual([
       "runs list",
       "runs path",
       "runs show",
+      "store backup",
       "store check",
+      "store clear",
+      "store copies delete",
+      "store decrypt",
       "store export",
       "store gaps plan",
       "store gaps repair",
@@ -2163,9 +2167,32 @@ describe("the MCP server", () => {
       "store jobs list",
       "store jobs retry",
       "store jobs show",
+      "store migrate",
       "store reindex",
+      "store repair",
+      "store reset",
+      "store restore",
       "store status",
     ])
+  })
+
+  it("**runs a store backup at its default ask**, as any ask write over MCP", async () => {
+    const root = mkdtempSync(join(tmpdir(), "mcp-"))
+    const { call } = await connect(scripted(), { root })
+    await call("messages list", { chat: "7" })
+
+    const backup = await call("store backup", { file: join(root, "copy.db") })
+
+    expect(backup.isError).toBe(false)
+    expect(readFileSync(join(root, "copy.db")).length).toBeGreaterThan(0)
+  })
+
+  it("**keeps a store reset off** where the profile denies store.reset, and off under `deny messages`", async () => {
+    const cases: Record<string, string>[] = [{ "store.reset": "deny" }, { store: "readonly" }, { messages: "deny" }]
+    for (const permissions of cases) {
+      const commands = await (await connect(scripted(), { config: levels(permissions) })).client.commands()
+      expect(commands, JSON.stringify(permissions)).not.toContain("store reset")
+    }
   })
 
   it("searches diagnostic runs through MCP without opening a messenger or its message store", async () => {
@@ -3821,7 +3848,7 @@ describe("sending over MCP", () => {
     ])
   })
 
-  it("**changes the profile, and never offers ending other sessions**", async () => {
+  it("**changes the profile, and offers ending other sessions until account.sessions.end is denied**", async () => {
     const changes: unknown[] = []
     const telegram = scripted({
       updateProfile: async (change) => {
@@ -3835,8 +3862,10 @@ describe("sending over MCP", () => {
     const tools = await client.commands()
     await call("account update", { first_name: "New", description: "hi" })
 
-    expect(tools).not.toContain("account sessions end")
+    expect(tools).toContain("account sessions end")
     expect(changes).toEqual([{ firstName: "New", description: "hi" }])
+    const denied = await connect(telegram, { config: levels({ "account.sessions.end": "deny" }) })
+    expect(await denied.client.commands()).not.toContain("account sessions end")
   })
 
   it("**shows a group's rules and moderates it** over MCP, planning what asks", async () => {

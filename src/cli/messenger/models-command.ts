@@ -118,7 +118,6 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   reachesOtherService(
     annotate(audio.command("download"), {
-      mcp: false,
       effects: FETCH,
       output: { entity: "model" },
       examples: [`${tool} models audio download parakeet-v3`],
@@ -186,7 +185,6 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   reachesOtherService(
     annotate(text.command("download"), {
-      mcp: false,
       effects: FETCH,
       output: { entity: "model" },
       examples: [`${tool} models text download ${DEFAULT_TEXT_MODEL}`],
@@ -289,7 +287,6 @@ export const imageModelsCommand = (messenger: Messenger): Command => {
 
   reachesOtherService(
     annotate(image.command("download"), {
-      mcp: false,
       effects: FETCH,
       output: { entity: "model" },
       examples: [`${tool} images models download ${DEFAULT_IMAGE_MODEL}`],

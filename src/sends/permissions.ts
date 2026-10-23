@@ -94,7 +94,30 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "replies.send": "deny",
   // NEED-1662: an agent that changes settings, schedules or recipients could lift its own limits; the owner opts in.
   "mcp.authority": "deny",
+  // NEED-1663: writes no level stopped before, so MCP could not offer them; over MCP `ask` goes ahead.
+  "store.backup": "ask",
+  "store.restore": "ask",
+  "store.migrate": "ask",
+  "store.repair": "ask",
+  "store.reset": "ask",
+  "store.clear": "ask",
+  "store.decrypt": "ask",
+  "store.copies.delete": "ask",
+  "server.start": "ask",
+  "server.stop": "ask",
+  "server.restart": "ask",
+  "models.audio.download": "ask",
+  "models.text.download": "ask",
+  "images.models.download": "ask",
+  "schedule.run": "ask",
+  "schedule.exec": "ask",
+  "doctor.report.create": "ask",
 }
+
+/** Commands under a housekeeping word, or store maintenance, that still have a key of their own: their path. */
+const KEYED_UNDER_HOUSEKEEPING = new Set(
+  Object.keys(DEFAULT_PERMISSIONS).filter((key) => /^(store|server|models|images|schedule|doctor)\./.test(key)),
+)
 
 /** Lets an MCP server offer the commands that change what a later run may do (`grantsAuthority`). */
 export const AUTHORITY_KEY: PermissionKey = "mcp.authority"
@@ -127,6 +150,11 @@ export const RESOURCES = [
   "store",
   "metadata",
   "mcp",
+  "server",
+  "models",
+  "schedule",
+  "doctor",
+  "images",
 ] as const
 
 const OLD_WORDS: Record<Permission, PermissionKey[]> = {
@@ -404,7 +432,7 @@ const HOUSEKEEPING = new Set([
 /** Under `bot`: its token, its names, its lists and its MCP server. */
 const BOT_HOUSEKEEPING = new Set(["auth", "list", "sends", "recipients", "mcp"])
 
-const STORE_MAINTENANCE = new Set(["info", "check", "migrate", "backup", "restore", "repair", "copies"])
+const STORE_MAINTENANCE = new Set(["info", "check", "copies"])
 
 /** Commands outside `messages` that print what people wrote, so `deny messages` reaches them too. */
 const SHOW_MESSAGES = new Set(["inbox", "review", "watch", "serve", "store", "conversations"])
@@ -443,6 +471,8 @@ export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => 
   if (path[0] === "attachments" && path[1] === "download") return [key, "messages", "chats"]
   if (path[0] === "attachments" && (path[1] === "extract" || path[1] === "show")) return [key, "messages"]
   if (path[0] === "store" && path[1] === "gaps" && path[2] === "repair") return [key, "messages"]
+  // Checked as `messages` before they had keys of their own: `deny messages` keeps stopping them.
+  if (path[0] === "store" && ["reset", "clear", "decrypt"].includes(path[1] ?? "")) return [key, "messages"]
   // A search shows what people wrote, so `deny messages` reaches every leaf that reads messages.
   if (path[0] === "search") {
     if (path[1] === "notes") return [key]
@@ -472,6 +502,7 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
     const inner = keyForCommand(path.slice(1))
     return `bot.${inner ?? path.slice(1).join(".")}`
   }
+  if (KEYED_UNDER_HOUSEKEEPING.has(path.join("."))) return path.join(".")
   if (top === undefined || HOUSEKEEPING.has(top) || (top === "search" && next === "runs")) return null
   // Picture models moved from `models image` (0.270.0); a model is housekeeping wherever it is listed.
   if (top === "images" && next === "models") return null

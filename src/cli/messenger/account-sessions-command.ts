@@ -34,12 +34,10 @@ export const accountSessionsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, wholeList("account sessions list", found.map(sessionAnswer)))
     })
 
-  // No MCP tool, at any permission level: it logs the owner out of the phone.
   sessions.addCommand(
     annotate(new Command("end"), {
       effects: REMOTE_WRITE,
       output: { entity: "ended_account_sessions" },
-      mcp: false,
       examples: [`${tool} account sessions end --others`],
     })
       .description("log out every other device, your phone included; this one stays")

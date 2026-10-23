@@ -107,7 +107,7 @@ const leftLines = (left: LeftChat[]): string[] => {
  * which a scheduled run's `last.json` keeps.
  */
 const clearCommand = (messenger: Messenger): Command =>
-  annotate(new Command("clear"), { output: { entity: "store_clear" }, effects: LOCAL_WRITE, mcp: false })
+  annotate(new Command("clear"), { output: { entity: "store_clear" }, effects: LOCAL_WRITE })
     .description("delete from the store the chats this account has left, with their messages")
     .option("--left", "the chats this account has left — the only thing this clears")
     .option("--allow-dangerous", "yes, delete — it cannot be undone, and a chat you left cannot be fetched again")
