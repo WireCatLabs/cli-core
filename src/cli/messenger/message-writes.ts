@@ -9,19 +9,24 @@ interface Written {
   operationId: string
   sendId?: string
   message: Message
+  messages?: Message[]
   scheduledFor?: string
 }
 
 /**
  * A send, forward or edit: the message as it now stands, with its `operation_id` — for a send, the id a repeat
- * passes as `--operation-id` so it cannot make a second copy. A scheduled message gets a new id when it goes out,
+ * passes as `--operation-id` so it cannot make a second copy. An album adds `messages`, every one it made, in order;
+ * `message` stays its first, so a reader of one message reads an album as before. A scheduled message gets a new id when it goes out,
  * so its next step is the list that shows it, never a retry.
  */
-export const writtenAnswer = ({ operationId, sendId, message, scheduledFor }: Written, reader: AccountKey) =>
+export const writtenAnswer = ({ operationId, sendId, message, messages, scheduledFor }: Written, reader: AccountKey) =>
   itemOf(
     {
       operation_id: sendId ?? operationId,
       message: messageItem(message, reader),
+      ...(messages === undefined || messages.length < 2
+        ? {}
+        : { messages: messages.map((one) => messageItem(one, reader)) }),
       ...(scheduledFor === undefined ? {} : { scheduled_for: scheduledFor }),
     },
     scheduledFor === undefined ? {} : { next: [nextStep("messages.scheduled", { args: { chat: message.chatId } })] },

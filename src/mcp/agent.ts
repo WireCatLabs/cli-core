@@ -99,7 +99,7 @@ const text = (description: string) =>
     v.description(description),
   )
 
-type ValueKind = "switch" | "count" | "number" | "list" | "variadic" | "json" | "text"
+type ValueKind = "switch" | "count" | "number" | "list" | "variadic" | "repeat" | "json" | "text"
 
 interface Field {
   name: string
@@ -117,6 +117,7 @@ const optionKind = (option: OptionInfo, long: string): ValueKind => {
   const type = TYPES.get(long)
   if (type === "count" || type === "number" || type === "list") return type
   if (/<json>/.test(option.flags)) return "json"
+  if (Array.isArray(option.default)) return "repeat"
   return /\.\.\.[>\]]/.test(option.flags) ? "variadic" : "text"
 }
 
@@ -133,8 +134,8 @@ const optionField = (option: OptionInfo, long: string, negatable = false): Field
             v.pipe(v.number(), v.integer(), v.minValue(0), v.description(about))
           : kind === "number"
             ? v.pipe(v.number(), v.description(about))
-            : kind === "list"
-              ? // The command line takes `a,b`; an agent may write it so, or as a list.
+            : kind === "list" || kind === "repeat"
+              ? // The command line takes `a,b` or the flag repeated; an agent may write one value, or a list.
                 v.pipe(v.union([v.pipe(v.array(text("one value")), v.minLength(1)), text(about)]), v.description(about))
               : kind === "variadic"
                 ? v.pipe(v.array(text("one value")), v.minLength(1), v.description(about))
@@ -151,6 +152,7 @@ const optionField = (option: OptionInfo, long: string, negatable = false): Field
       // `approval: false` where the command has `--no-approval` says so; elsewhere false is leaving the switch off.
       if (kind === "switch") return value === true ? [long] : negatable ? [`--no-${long.slice(2)}`] : []
       if (kind === "variadic") return (value as unknown[]).map((one) => `${long}=${String(one)}`)
+      if (kind === "repeat") return (Array.isArray(value) ? value : [value]).map((one) => `${long}=${String(one)}`)
       if (kind === "list") return [`${long}=${Array.isArray(value) ? value.map(String).join(",") : String(value)}`]
       if (kind === "json") return [`${long}=${typeof value === "string" ? value : JSON.stringify(value)}`]
       return [`${long}=${String(value)}`]

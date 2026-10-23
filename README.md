@@ -178,7 +178,7 @@ or a launchd agent.
 - **A permission level per command path:** deny, readonly, ask or allow. The most specific key wins, and a built-in
   default can only tighten what the owner set. No level lets an agent delete for everyone.
 - **A recipient list and an hourly limit** for sends, and a journal of every attempt that records the length of the
-  text, never the text.
+  text, never the text. Each photo or file of an album counts as one send.
 - **A send id across retries.** A write whose outcome is unknown is never retried automatically; a retry under the
   same send id cannot send twice.
 - **Deletion asks first,** at most ten messages at a time.

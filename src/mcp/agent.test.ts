@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { toJsonSchema } from "@valibot/to-json-schema"
@@ -95,6 +95,42 @@ describe("runCommandForAgent", () => {
     const answer = await runCommandForAgent(program, ["messages", "send"], { chat: "Book", text: "hello" }, ctx)
 
     expect(answer).toMatchObject({ result: { item: { message: { text: "hello", chat_id: "7" } }, meta: {} } })
+  })
+
+  it("**takes a list of photos as one album**, and answers with every message it made", async () => {
+    const { program, ctx, connection } = setup()
+    const root = mkdtempSync(join(tmpdir(), "agent-album-"))
+    const photos = ["a.png", "b.png"].map((name) => {
+      writeFileSync(join(root, name), "12345")
+      return join(root, name)
+    })
+    const asked: SendOptions[] = []
+    connection.adapter.send = async (_chat, text, options) => {
+      asked.push(options)
+      const messages = (options.attachments ?? []).map((_, at) => ({ ...message, id: String(20 + at), text }))
+      return { message: messages[0] ?? message, messages, sendId: options.sendId }
+    }
+    const send = toolsFromCommands(program.commands).find((tool) => tool.command === "messages send")
+
+    const answer = await runCommandForAgent(
+      program,
+      ["messages", "send"],
+      { chat: "Book", text: "look", photo: photos },
+      ctx,
+    )
+    const one = await runCommandForAgent(program, ["messages", "send"], { chat: "Book", photo: photos[0] }, ctx)
+
+    expect(toJsonSchema(send?.input ?? ({} as never))).toMatchObject({
+      properties: { photo: { anyOf: [{ type: "array", minItems: 1 }, { type: "string" }] } },
+    })
+    expect(asked.map((options) => options.attachments?.map(({ name }) => name))).toEqual([
+      ["a.png", "b.png"],
+      ["a.png"],
+    ])
+    expect(answer).toMatchObject({
+      result: { item: { message: { id: "20" }, messages: [{ id: "20" }, { id: "21" }] } },
+    })
+    expect(one).toMatchObject({ result: { item: { message: { id: "20" } } } })
   })
 
   it("**borrows the server's connection on every call, and never opens or closes one**", async () => {

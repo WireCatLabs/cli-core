@@ -811,6 +811,106 @@ describe("the shared read commands", () => {
     expect(JSON.stringify(journal)).not.toContain("cat")
   })
 
+  it("**an album counts each photo and file toward the hourly limit** (NEED-1660) and answers with every message", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 3 } } }),
+    )
+    for (const name of ["a.png", "b.png", "c.pdf", "d.pdf"]) writeFileSync(join(root, name), "12345")
+    const sent: SendOptions[] = []
+    const albums: MessengerAdapter = {
+      ...fake,
+      send: async (_chatId, text, options) => {
+        sent.push(options)
+        const messages = (options.attachments ?? [{}]).map((_, at) => ({
+          ...message,
+          id: String(20 + at),
+          text: at === 0 ? text : "",
+        }))
+        return {
+          message: messages[0] ?? message,
+          ...(messages.length > 1 ? { messages } : {}),
+          sendId: options.sendId,
+        }
+      },
+    }
+    const send = (...argv: string[]) => call(["messages", "send", "Book", ...argv], async () => albums, env)
+
+    const tooMany = await send(
+      "look",
+      ...["a.png", "b.png", "a.png", "b.png"].flatMap((name) => ["--photo", join(root, name)]),
+    )
+    const named = await send("--file", join(root, "c.pdf"), "--file", join(root, "d.pdf"), "--filename", "x.pdf")
+    const album = await send(
+      "look",
+      "--file",
+      join(root, "c.pdf"),
+      "--photo",
+      join(root, "a.png"),
+      "--photo",
+      join(root, "b.png"),
+      "--json",
+    )
+    const after = await send("one more")
+
+    expect(tooMany.code).toBe(8)
+    expect(tooMany.stderr.join("")).toContain("4 at once")
+    expect(named.code).toBe(2)
+    expect([album.code, after.code]).toEqual([0, 8])
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.attachments?.map(({ kind, name }) => `${kind}:${name}`)).toEqual([
+      "photo:a.png",
+      "photo:b.png",
+      "file:c.pdf",
+    ])
+    const item = JSON.parse(album.stdout[0] ?? "").item
+    expect(item.message).toMatchObject({ id: "20", text: "look" })
+    expect(item.messages.map((one: { id: string }) => one.id)).toEqual(["20", "21", "22"])
+    expect(v.safeParse(ENTITIES.message_write, item).success).toBe(true)
+    expect(new SendJournal(sendsPathFor(app, "default", env)).entries()).toMatchObject([
+      { outcome: "refused", count: 4 },
+      { outcome: "sent", count: 3, messageId: "20" },
+      { outcome: "refused" },
+    ])
+  })
+
+  it("**a messenger that cannot send an album refuses it**, and the refused album does not count", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    for (const name of ["a.png", "b.png"]) writeFileSync(join(root, name), "12345")
+    const single: MessengerAdapter = {
+      ...fake,
+      send: async (_chatId, text, options) => {
+        if ((options.attachments ?? []).length > 1)
+          throw new CliError("validation_error", "this messenger sends one file per message")
+        return { message: { ...message, text }, sendId: options.sendId }
+      },
+    }
+
+    const album = await call(
+      ["messages", "send", "Book", "--photo", join(root, "a.png"), "--photo", join(root, "b.png")],
+      async () => single,
+      env,
+    )
+    const one = await call(
+      ["messages", "send", "Book", "--photo", join(root, "a.png"), "--json"],
+      async () => single,
+      env,
+    )
+
+    expect(album.code).toBe(2)
+    expect(album.stderr.join("")).toContain("one file per message")
+    expect(one.code).toBe(0)
+    expect(JSON.parse(one.stdout[0] ?? "").item).not.toHaveProperty("messages")
+    expect(new SendJournal(sendsPathFor(app, "default", env)).entries()).toMatchObject([
+      { outcome: "failed", errorCode: "validation_error", count: 2 },
+      { outcome: "sent" },
+    ])
+  })
+
   it("**send a voice message alone, and a video as a file only with --as-file**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
