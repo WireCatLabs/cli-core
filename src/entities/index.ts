@@ -6,6 +6,7 @@ import { accountProfile } from "./account-profile.js"
 import { accountSession } from "./account-session.js"
 import { adminReport } from "./admin-report.js"
 import { agenda } from "./agenda.js"
+import { analysisConsent, analysisConsentRevocation } from "./analysis-consent.js"
 import { attachment } from "./attachment.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
@@ -84,6 +85,8 @@ export {
   accountSession,
   adminReport,
   agenda,
+  analysisConsent,
+  analysisConsentRevocation,
   attachment,
   chart,
   chat,
@@ -289,6 +292,8 @@ export const ENTITIES = {
   message_counts: messageCounts,
   ranking,
   admin_report: adminReport,
+  analysis_consent: analysisConsent,
+  analysis_consent_revocation: analysisConsentRevocation,
   retention,
   evidence,
   counters,

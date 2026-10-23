@@ -35,6 +35,8 @@ shape of this file.
 
 - **Message context, downloads and sync have declared answers.** Context describes both message windows and bounded thread reports. Downloads retain file paths and partial extraction results; sync describes estimates, chat and all-chat progress, preparation and background jobs. General chat evidence packets and exact statistics evidence now explain their separate purposes in help and the guide.
 
+- Analysis-consent lists accept chat and provider-identity queries, and consent commands declare their answer fields. Reading a filtered list leaves remembered permissions unchanged.
+
 ### Changed — may break callers
 
 - **Diagnostic search is `search runs`.** Replace `runs search`; saved MCP requests use the new command path. Filters are query terms: `status:failed`, `error_code:timeout`, `operation:messages.download` and `profile:work`, alongside literal diagnostic words. Unsupported operators are refused; time bounds and paging remain options. The local search still needs no linked messenger profile, filters before pagination and returns diagnostic fields without message contents. No alias remains for the retired path.

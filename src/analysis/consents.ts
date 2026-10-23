@@ -7,8 +7,20 @@ export interface AnalysisConsent {
   provider: string
   at: string
 }
-export const analysisConsents = (store: MessageStore, account: AccountKey) => {
-  const list = async (): Promise<AnalysisConsent[]> => {
+export interface AnalysisConsentFilter {
+  chat?: string
+  provider?: string
+}
+
+export interface AnalysisConsents {
+  list(filter?: AnalysisConsentFilter): Promise<AnalysisConsent[]>
+  has(chat: string, provider: string): Promise<boolean>
+  remember(chat: string, provider: string): Promise<void>
+  revoke(chat?: string, provider?: string): Promise<void>
+}
+
+export const analysisConsents = (store: MessageStore, account: AccountKey): AnalysisConsents => {
+  const list = async (filter?: AnalysisConsentFilter): Promise<AnalysisConsent[]> => {
     const state = await store.sync.syncState(account, KEY)
     if (!state) return []
     try {
@@ -21,7 +33,13 @@ export const analysisConsents = (store: MessageStore, account: AccountKey) => {
         )
       )
         throw new Error("invalid")
-      return items
+      return filter === undefined
+        ? items
+        : items.filter(
+            (item) =>
+              (filter.chat === undefined || item.chat === filter.chat) &&
+              (filter.provider === undefined || item.provider === filter.provider),
+          )
     } catch {
       throw new CliError("configuration_error", "stored analysis consent is invalid; revoke it before running analysis")
     }
