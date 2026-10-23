@@ -75,7 +75,7 @@ export const readProfilePhoto = (messenger: Messenger, path: string, env: NodeJS
 
 const updateCommand = (messenger: Messenger): Command => {
   const keys = messenger.groupSettings ?? GROUP_SETTINGS
-  const update = annotate(new Command("update"), { effects: REMOTE_WRITE })
+  const update = annotate(new Command("update"), { output: { entity: "chat_group_change" }, effects: REMOTE_WRITE })
     .summary("change a group or channel's profile and settings")
     .description("rename a group or channel, change its description, or turn one of its settings on or off")
     .argument("<chat>", messenger.chatArgument)
@@ -122,7 +122,7 @@ const updateCommand = (messenger: Messenger): Command => {
 
 const linkCommand = (messenger: Messenger): Command => {
   const link = new Command("link").description("a group's invite link")
-  annotate(link.command("show"), { effects: REMOTE_READ })
+  annotate(link.command("show"), { output: { entity: "chat_invite" }, effects: REMOTE_READ })
     .description("the invite link, if you may see it")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -131,7 +131,7 @@ const linkCommand = (messenger: Messenger): Command => {
     })
   if (messenger.inviteLinkCreate !== false)
     link.addCommand(
-      annotate(new Command("create"), { effects: REMOTE_WRITE })
+      annotate(new Command("create"), { output: { entity: "chat_invite_change" }, effects: REMOTE_WRITE })
         .description("make another invite link; nobody is told until you share it")
         .argument("<chat>", messenger.chatArgument)
         .option("--approval", "who joins by it asks first, and an admin lets them in; it then has no use limit")
@@ -191,7 +191,7 @@ const linkCommand = (messenger: Messenger): Command => {
     )
   if (messenger.inviteLinkRevoke !== false)
     link.addCommand(
-      annotate(new Command("revoke"), { effects: REMOTE_WRITE })
+      annotate(new Command("revoke"), { output: { entity: "chat_invite_change" }, effects: REMOTE_WRITE })
         .description("stop one link; for the group's own link, the answer is the new one")
         .argument("<chat>", messenger.chatArgument)
         .argument("<link>", "the link, as `chats link list` shows it")
@@ -202,7 +202,7 @@ const linkCommand = (messenger: Messenger): Command => {
     )
   if (messenger.inviteLinkUpdate === true)
     link.addCommand(
-      annotate(new Command("update"), { effects: REMOTE_WRITE })
+      annotate(new Command("update"), { output: { entity: "chat_invite_change" }, effects: REMOTE_WRITE })
         .description("change one of your invite links, the group's own one too")
         .argument("<chat>", messenger.chatArgument)
         .argument("<link>", "the link, as `chats link list` shows it")
@@ -234,7 +234,7 @@ const linkCommand = (messenger: Messenger): Command => {
         }),
     )
   link.addCommand(
-    annotate(new Command("reset"), { effects: REMOTE_WRITE })
+    annotate(new Command("reset"), { output: { entity: "chat_group_change" }, effects: REMOTE_WRITE })
       .description("replace the invite link; the old one stops working")
       .argument("<chat>", messenger.chatArgument)
       .action(async function (this: Command, chat: string) {
@@ -249,7 +249,7 @@ const adminsCommand = (messenger: Messenger): Command => {
   const offered = messenger.adminRights ?? ADMIN_RIGHTS
   const admins = new Command("admins").description("give or take back a member's admin rights")
   const picks = messenger.pickAdminRights !== false
-  const add = annotate(new Command("add"), { effects: REMOTE_WRITE })
+  const add = annotate(new Command("add"), { output: { entity: "chat_admin_change" }, effects: REMOTE_WRITE })
     .summary(picks ? "make a member an admin with these rights" : "make a member an admin, with every right")
     .description(
       picks
@@ -267,7 +267,7 @@ const adminsCommand = (messenger: Messenger): Command => {
     }),
   )
   admins.addCommand(
-    annotate(new Command("remove"), { effects: REMOTE_WRITE })
+    annotate(new Command("remove"), { output: { entity: "chat_admin_change" }, effects: REMOTE_WRITE })
       .description("take an admin's rights back; they stay a member")
       .argument("<chat>", messenger.chatArgument)
       .argument("<person>", "an id, or part of a name")
@@ -330,7 +330,7 @@ const requestsCommand = (messenger: Messenger): Command => {
     ["accept", true, "let them in; the group sees them join"],
     ["decline", false, "turn the request away"],
   ] as const) {
-    const answer = annotate(new Command(verb), { effects: REMOTE_WRITE })
+    const answer = annotate(new Command(verb), { output: { entity: "chat_request_change" }, effects: REMOTE_WRITE })
       .description(help)
       .argument("<chat>", messenger.chatArgument)
       .argument(everyone ? "[person]" : "<person>", "who asked: an id from `chats requests list`")
@@ -361,7 +361,7 @@ const requestsCommand = (messenger: Messenger): Command => {
 
 /** `chats create`, `join`, `leave`, `update` and `link`: the help text is max-cli's, the one both tools say (standard, help rule 2). */
 export const groupCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("create"), { effects: REMOTE_WRITE })
+  annotate(new Command("create"), { output: { entity: "chat_group_change" }, effects: REMOTE_WRITE })
     .description("create a group or a channel; the people added are told")
     .argument("<title>", "the group's name")
     .argument("[person...]", "people to add: an id, or part of a name")
@@ -376,7 +376,7 @@ export const groupCommands = (messenger: Messenger): Command[] => [
       )
     }),
 
-  annotate(new Command("join"), { effects: REMOTE_WRITE })
+  annotate(new Command("join"), { output: { entity: "chat_group_change" }, effects: REMOTE_WRITE })
     .description("join a group or channel by its link; the others in it see that you joined")
     .argument("<link>", `an invite link, or a public one`)
     .action(async function (this: Command, link: string) {
@@ -384,7 +384,7 @@ export const groupCommands = (messenger: Messenger): Command[] => [
       renderItem(this, context, await context.withServices((services) => services.admin.join(link)))
     }),
 
-  annotate(new Command("leave"), { effects: REMOTE_WRITE })
+  annotate(new Command("leave"), { output: { entity: "chat_removal" }, effects: REMOTE_WRITE })
     .description("leave a group or channel; the others in it see that you left")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {

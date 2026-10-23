@@ -139,7 +139,11 @@ export const membersCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  const fetch = annotate(new Command("fetch"), { effects: FETCH, offline: false })
+  const fetch = annotate(new Command("fetch"), {
+    output: { entity: "chat_members_fetch" },
+    effects: FETCH,
+    offline: false,
+  })
     .summary("save the group's current membership")
     .description(
       "read a group's whole member list into the local store's member history: who joined, who left, daily " +
@@ -184,7 +188,7 @@ export const membersCommand = (messenger: Messenger): Command => {
       }),
   )
 
-  const add = annotate(new Command("add"), { effects: REMOTE_WRITE })
+  const add = annotate(new Command("add"), { output: { entity: "chat_members_change" }, effects: REMOTE_WRITE })
     .description("add people; they are told")
     .argument("<chat>", messenger.chatArgument)
     .argument("<person...>", "an id, or part of a name")
@@ -203,7 +207,7 @@ export const membersCommand = (messenger: Messenger): Command => {
   )
 
   members.addCommand(
-    annotate(new Command("remove"), { effects: REMOTE_WRITE })
+    annotate(new Command("remove"), { output: { entity: "chat_members_change" }, effects: REMOTE_WRITE })
       .description("remove people; their messages stay")
       .argument("<chat>", messenger.chatArgument)
       .argument("<person...>", "an id, or part of a name")

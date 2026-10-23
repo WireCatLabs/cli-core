@@ -171,6 +171,8 @@ describe("reads only the server answers", () => {
       chatMute: true,
     })
 
+    for (const result of [forever, timed, lifted])
+      expect(v.safeParse(ENTITIES.chat_muting, JSON.parse(result.stdout).item).success).toBe(true)
     expect(JSON.parse(forever.stdout).item).toMatchObject({ chat_id: "7", muted_until: "forever" })
     expect(JSON.parse(lifted.stdout).item).toMatchObject({ chat_id: "7", muted_until: null })
     expect(muted[0]).toEqual(["7", "forever"])
@@ -243,6 +245,14 @@ describe("reads only the server answers", () => {
     })
     const offline = await invoke(["chats", "pin", "Book club", "--offline"], adapter, on)
 
+    const schemas = [
+      ENTITIES.chat_archive,
+      ENTITIES.chat_archive,
+      ENTITIES.chat_pin,
+      ENTITIES.chat_pin,
+      ENTITIES.chat_unread,
+    ]
+    for (const [index, schema] of schemas.entries()) expect(v.safeParse(schema, answers[index]).success).toBe(true)
     expect(answers).toMatchObject([
       { chat_id: "7", archived: true },
       { chat_id: "7", archived: false },
@@ -440,6 +450,8 @@ describe("reads only the server answers", () => {
       defaults: { permissions: { chats: "readonly" } },
       profiles: {},
     })
+    for (const result of [deleted, cleared])
+      expect(v.safeParse(ENTITIES.chat_removal, JSON.parse(result.stdout).item).success).toBe(true)
     const elsewhere = await invoke(["chats", "delete", "Book club", "--allow-dangerous"], adapter)
 
     expect(unasked.stderr).toContain("--allow-dangerous")

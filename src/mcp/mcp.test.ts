@@ -3454,6 +3454,7 @@ describe("sending over MCP", () => {
 
     const tools = await client.commands()
     const { body } = await call("chats mark-read", { chat: "Book", until_id: "1" })
+    v.parse(ENTITIES.chat_read, body.item)
 
     expect(denied).not.toContain("chats mark-read")
     expect(denied).toContain("messages send")
@@ -3570,6 +3571,7 @@ describe("sending over MCP", () => {
     const { call } = await connect(telegram, {})
 
     const created = await call("chats create", { title: "Plans", person: ["Ivan"] })
+    v.parse(ENTITIES.chat_group_change, created.body.item)
     await call("chats join", { link: "https://t.me/+abc" })
     const left = await call("chats leave", { chat: "7" })
 
@@ -3617,6 +3619,8 @@ describe("sending over MCP", () => {
     await call("chats update", { chat: "7", title: "Books", all_can_pin: "on" })
     const shown = await call("chats link show", { chat: "7" })
     const reset = await call("chats link reset", { chat: "7" })
+    v.parse(ENTITIES.chat_invite, shown.body.item)
+    v.parse(ENTITIES.chat_group_change, reset.body.item)
 
     expect(shown.body.item).toEqual({ chat_id: "7", title: "Book club", link: "https://t.me/+old" })
     expect(reset.body.item).toMatchObject({ chat: { link: "https://t.me/+new" } })
@@ -3706,6 +3710,7 @@ describe("sending over MCP", () => {
     await call("chats folders create", { title: "Home", chat: "7" })
     await call("chats folders update", { folder: "Work", title: "Job", add: "7", remove: "7" })
     const deleted = await call("chats folders delete", { folder: "4" })
+    v.parse(ENTITIES.chat_folder_removal, deleted.body.item)
 
     expect(listed.body).toMatchObject({
       items: [{ id: "4", title: "Work", chat_ids: ["7"] }],
@@ -3789,6 +3794,8 @@ describe("sending over MCP", () => {
 
     const rules = await call("chats rules show", { chat: "7" })
     const moderated = await call("chats moderate", { chat: "7", since_time: "2h", dry_run: true })
+    v.parse(ENTITIES.chat_rules, rules.body.item)
+    v.parse(ENTITIES.chat_moderation, moderated.body.item)
 
     expect(rules.body.item).toMatchObject({ saved: false, rules: { consent: { delete: "ask" } } })
     expect(moderated.body.item).toMatchObject({ rows: [] })
