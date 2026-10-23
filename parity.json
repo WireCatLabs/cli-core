@@ -557,10 +557,6 @@
       "value": "<pages>",
       "meaning": "at most this many pages of a list, with a pause between them"
     },
-    "--max-replies": {
-      "value": "<n>",
-      "meaning": "maximum observed discussion replies"
-    },
     "--max-subscriber-buffer-bytes": {
       "value": "<bytes>",
       "meaning": "buffer per watcher before disconnecting it; 0 is unlimited"
@@ -595,23 +591,9 @@
       "value": "<message>",
       "meaning": "the message to tag or untag: its id in --chat, or a msg: locator alone"
     },
-    "--message-kind": {
-      "value": "<all|posts|comments>",
-      "meaning": "the proven kind of messages selected before ranking",
-      "default": "all"
-    },
     "--method": {
       "value": "<method>",
       "meaning": "how to log in when there is no session"
-    },
-    "--min-messages": {
-      "value": "<n>",
-      "meaning": "minimum selected messages for a ranked author",
-      "default": "1; 5 for engaging unless explicitly set"
-    },
-    "--min-views": {
-      "value": "<n>",
-      "meaning": "minimum known cumulative views"
     },
     "--model": {
       "value": "<model>",
@@ -687,10 +669,6 @@
       "value": "<n>",
       "meaning": "start byte offset in a retained attachment",
       "default": "0"
-    },
-    "--older-than": {
-      "value": "<duration>",
-      "meaning": "minimum age of a question without an observed qualifying answer"
     },
     "--online": {
       "meaning": "also log in once, read one chat and start the MCP server; sends nothing",
@@ -4329,8 +4307,6 @@
       "in": "all",
       "options": {
         "--answerer": "all",
-        "--chat": "all",
-        "--exact": "all",
         "--limit": "all",
         "--saved": "all",
         "--source": "all",
@@ -4340,8 +4316,6 @@
     "stats contacts top": {
       "in": "all",
       "options": {
-        "--chat": "all",
-        "--exact": "all",
         "--limit": "all",
         "--max-chats": {
           "in": ["max", "tg"],
@@ -4352,8 +4326,6 @@
           "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--measure": "all",
-        "--message-kind": "all",
-        "--min-messages": "all",
         "--saved": "all",
         "--score": "all",
         "--source": "all",
@@ -4406,11 +4378,7 @@
     "stats messages discussion": {
       "in": "all",
       "options": {
-        "--chat": "all",
-        "--exact": "all",
         "--limit": "all",
-        "--max-replies": "all",
-        "--min-views": "all",
         "--saved": "all",
         "--source": "all",
         "--timezone": "all"
@@ -4468,8 +4436,6 @@
     "stats messages top": {
       "in": "all",
       "options": {
-        "--chat": "all",
-        "--exact": "all",
         "--limit": "all",
         "--max-chats": {
           "in": ["max", "tg"],
@@ -4480,7 +4446,6 @@
           "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--measure": "all",
-        "--message-kind": "all",
         "--saved": "all",
         "--score": "all",
         "--source": "all",
@@ -4500,10 +4465,7 @@
       "in": "all",
       "options": {
         "--answerer": "all",
-        "--chat": "all",
-        "--exact": "all",
         "--limit": "all",
-        "--older-than": "all",
         "--saved": "all",
         "--source": "all",
         "--timezone": "all"

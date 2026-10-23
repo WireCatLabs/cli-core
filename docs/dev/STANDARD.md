@@ -871,7 +871,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--certainty` | `<n>` | how sure an agent is, 0 to 1, that a task needs nothing more; below the owner's threshold its close waits on the owner |  | `tasks close` (planned) |
 | `--channel` |  | a private channel instead of a group; people join it by its link |  | `chats create` |
 | `--chart-kind` | `<messages\|active\|membership>` | what to draw: messages, active authors, or joins and leaves | `messages` | `stats charts` |
-| `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)** |  | `attachments download`, `attachments extract`, `attachments jobs install`, `chats folders create`, `contacts context`, `conversations batches next`, `conversations batches status`, `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations rebuild`, `conversations status`, `images embed`, `metadata get` (planned), `metadata refresh` (planned), `search conversations`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `stats tasks show`, `tags add`, `tags auto`, `tags remove`, `tasks link` |
+| `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)** |  | `attachments download`, `attachments extract`, `attachments jobs install`, `chats folders create`, `contacts context`, `conversations batches next`, `conversations batches status`, `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations rebuild`, `conversations status`, `images embed`, `metadata get` (planned), `metadata refresh` (planned), `search conversations`, `searches create`, `stats messages counters refresh`, `stats messages counters show`, `stats messages show`, `stats tasks show`, `tags add`, `tags auto`, `tags remove`, `tasks link` |
 | `--chat-invites` | `<who>` | who may add the account to groups and channels: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--check` |  | say whether a newer version exists, and install nothing |  | `bot list` (planned), `upgrade` |
 | `--checkpoints` | `<durations>` | elapsed joining ages to inspect, such as 1d,7d,30d |  | `stats chats retention` |
@@ -909,7 +909,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--encrypt` |  | compress and encrypt with a password, typed at a hidden prompt or piped on stdin; never kept |  | `store backup`, `store export` |
 | `--events` |  | also print edits, deletions and reactions; every line then names its event. **watch updates use this flag independently of the group event --type filter** |  | `bot watch` (planned), `watch` |
 | `--every` | `<duration>` | repeat at this interval: 30m, 2h, 1d |  | `schedule agent` (planned), `schedule command` (planned) |
-| `--exact` |  | bare words and quotes match their exact form only, as exact:word does; text: still matches every form |  | `search all`, `search messages`, `search notes`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
+| `--exact` |  | bare words and quotes match their exact form only, as exact:word does; text: still matches every form |  | `search all`, `search messages`, `search notes`, `searches create`, `stats messages counters refresh`, `stats messages counters show`, `stats messages show` |
 | `--exclude-chat` | `<chat>` | never show this chat in the folder; repeat it for more |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--expected-fingerprint` | `<hash>` | require the whole retained file to match this previous SHA256 |  | `attachments show` |
 | `--expire-time` | `<time>` | it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now. **messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it — so it differs on purpose (Help text rule 4)** |  | `chats link create` (tg-only), `chats link update` (tg-only), `messages pin` (wa-only) |
@@ -961,7 +961,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-messages` | `<n>` | fetch at most this many messages total (default: 500) |  | `search conversations` (max, tg only), `search messages` (max, tg only), `stats contacts top` (max, tg only), `stats messages counters refresh`, `stats messages show` (max, tg only), `stats messages top` (max, tg only) |
 | `--max-output-bytes` | `<bytes>` | at most this many serialized bytes of machine data; 0 disables the bound | `4194304` | every command |
 | `--max-pages` | `<pages>` | at most this many pages of a list, with a pause between them |  | `chats members audit`, `chats members fetch` |
-| `--max-replies` | `<n>` | maximum observed discussion replies |  | `stats messages discussion` |
 | `--max-subscriber-buffer-bytes` | `<bytes>` | buffer per watcher before disconnecting it; 0 is unlimited |  | `serve` (max-only) |
 | `--max-subscriber-total-buffer-bytes` | `<bytes>` | combined watcher buffer budget; 0 is unlimited |  | `serve` (max-only) |
 | `--max-tokens` | `<n>` | remote embeddings: bound input tokens; analysis: reserve input and output tokens across this run |  | `conversations build`, `conversations embed` |
@@ -971,10 +970,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--members-see-link` | `<on\|off>` | members may see the invite link |  | `chats update` (max-only) |
 | `--mentions-me` |  | require a mention of you or a reply to you |  | `replies edit` |
 | `--message` | `<message>` | the message to tag or untag: its id in --chat, or a msg: locator alone |  | `tags add`, `tags remove` |
-| `--message-kind` | `<all\|posts\|comments>` | the proven kind of messages selected before ranking | `all` | `stats contacts top`, `stats messages top` |
 | `--method` | `<method>` | how to log in when there is no session |  | `setup` |
-| `--min-messages` | `<n>` | minimum selected messages for a ranked author | `1; 5 for engaging unless explicitly set` | `stats contacts top` |
-| `--min-views` | `<n>` | minimum known cumulative views |  | `stats messages discussion` |
 | `--model` | `<model>` | which model runs analysis, embedding or local speech recognition; the command identifies the applicable model family |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `inbox`, `messages list`, `messages transcribe` — MAX retains its own transcriber and names its model-list command; the shared TG/WA transcriber explains that choosing a model implies local recognition. Both select a downloaded speech model. Align the remaining MAX command when it adopts the shared transcriber., `review`, `search conversations` |
 | `--multiple` |  | people may pick several answers |  | `polls create` |
 | `--new` |  | what arrived since the last check, each message once — for scheduled runs. **tasks add instead opens the task although tasks that may be the same job were listed** |  | `inbox`, `mentions list`, `review`, `tasks add` |
@@ -998,7 +994,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--ocr` |  | explicitly call models.ocr for bulk image and scanned-PDF text extraction; agents normally transcribe files themselves |  | `attachments extract` |
 | `--offline` |  | answer from what was recorded and never connect; fails if nothing was |  | every command |
 | `--offset-bytes` | `<n>` | start byte offset in a retained attachment | `0` | `attachments show` |
-| `--older-than` | `<duration>` | minimum age of a question without an observed qualifying answer |  | `stats messages unanswered` |
 | `--online` |  | also log in once, read one chat and start the MCP server; sends nothing. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `doctor` |
 | `--only` | `<resources>` | only these resources, separated by commas: messages, notes; meetings when --source names a meeting account |  | `search all` |
 | `--only-admins-add` | `<on\|off>` | only admins may add members |  | `chats update` |

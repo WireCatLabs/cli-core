@@ -18,10 +18,5 @@
   "replies edit --template",
   "replies edit --words",
   "replies test --ai",
-  "stats contacts top --message-kind",
-  "stats contacts top --min-messages",
-  "stats messages discussion --min-views",
-  "stats messages top --message-kind",
-  "stats messages unanswered --older-than",
   "topics enable --upgrade"
 ]

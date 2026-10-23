@@ -34,6 +34,10 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 `<cli> messages sync --all --background`, а запись `missing` с полем `coverage` и шаг `messages.sync` в `next` называют, что скачать. Пустой ответ означает «не найдено в выбранном архиве». Проверяйте `missing` и готовность индекса.
 Если word index не готов, выполните `store migrate`: строгий поиск не переходит на substring.
 
+Statistics reports also accept report predicates such as `message_kind:posts`, `min_messages:3` and
+`older_than:24h` in their message query. These narrow source or aggregate selections before row limits;
+[ranking and administrator reports](../rankings.md) lists the fields each report accepts.
+
 ## Если формулировка неизвестна
 
 Для вопроса обычными словами попробуйте `search messages --discover`. Этот режим ищет частичные

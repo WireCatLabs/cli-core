@@ -1,14 +1,30 @@
 # Ranking stored messages and authors
 
-Statistics use `stats → resource → view`. Replace `app` below with `max` or `tg`.
+Use these reports to rank stored messages and authors or inspect unanswered questions and discussion.
+Replace `app` below with your messenger CLI.
 The commands read the local store and do not connect by default. Fetch the relevant history
 first; a ranking describes held data, not all activity in the messenger.
 
 ```sh
-app stats messages top 'chat:room date:2026-10-01 TO 2026-10-08}' --measure reactions --limit 10 --json
-app stats contacts top 'chat:room date:[2026-10-01 TO 2026-10-08}' --score helpful --min-messages 3 --json
+app stats messages top 'chat:room date:[2026-10-01 TO 2026-10-08}' --measure reactions --limit 10 --json
+app stats contacts top 'chat:room date:[2026-10-01 TO 2026-10-08}' --score helpful min_messages:3 --json
 app stats contacts top --weights '{"messages":0.4,"active-days":0.6}' --timezone Europe/Madrid --json
 ```
+
+Report predicates are positive AND terms in the same query. They reach the existing source or aggregate
+selection before ranking and row limits; an unsupported OR/NOT placement is refused.
+
+| Report | Predicate | Meaning |
+|---|---|---|
+| Message or author ranking | `message_kind:posts` or `message_kind:comments` | Proven message kinds before aggregation; `all` keeps both |
+| Author ranking | `min_messages:3` | Minimum selected messages per author |
+| Discussion | `min_views:100` | Minimum known cumulative views |
+| Discussion | `max_replies:0` | Maximum observed discussion replies |
+| Unanswered questions | `older_than:24h` | Minimum question age; does not discard newer replies |
+
+Use message fields alongside these predicates, for example `chat:Club min_messages:3 (text:help OR text:answer)`.
+Stored selections retain their original scope; additional message terms narrow it, and typed report predicates
+replace the saved report thresholds.
 
 ## Measures and scores
 
@@ -18,14 +34,14 @@ app stats contacts top --weights '{"messages":0.4,"active-days":0.6}' --timezone
 | Human authors | messages, words, reactions, replies, answers, answer-time, threads, active-days | messages |
 
 `answer-time` sorts ascending by median milliseconds; the other measures sort descending.
-`--message-kind posts` or `comments` selects proven kinds before aggregation.
+`message_kind:posts` or `message_kind:comments` selects proven kinds before aggregation.
 Unknown old linkage is reported rather than guessed. Linked channel comments may live in a
 stored discussion group; the answer lists expanded discussion chats and their coverage.
 
 `--score helpful` weights answers 0.5, replies from others 0.25 and reactions 0.25.
 `--score active` weights active days 0.6 and messages 0.4. Both apply to authors.
 `--score engaging` weights reactions and nonself replies equally; author scores use per-message
-rates and require five selected messages unless `--min-messages` overrides that threshold.
+rates and require five selected messages unless a `min_messages:` predicate overrides that threshold.
 `--weights` replaces every preset weight. Names must be supported components for the target,
 weights finite and nonnegative, and at least one positive. `--measure` conflicts with scores.
 
@@ -36,7 +52,8 @@ The response includes maxima, component values, contributions and exclusion coun
 
 ## Scope and quality
 
-Queries use strict Lucene with `--chat`, `--source`, `--exact` and `--timezone` as in message search.
+Queries use strict Lucene. Select chats with `chat:` and exact word forms with `exact:`; `--source` chooses
+accounts and `--timezone` interprets dates as in message search.
 A top page contains 1–100 rows. Text and author predicates select ranked messages; reply context
 uses authorized stored messages in the same query period without those text or author filters.
 Graph metrics reject ambiguous date branches: use a common positive date range.
@@ -81,10 +98,10 @@ waited more than a day, and open the original messages.” These reports read th
 an empty report cannot prove that nobody asked a question when history is missing.
 
 ```sh
-app stats messages unanswered --chat Club --older-than 24h --json
-app stats contacts responses --chat Club --answerer 42 --answerer 73 --json
+app stats messages unanswered chat:Club older_than:24h --json
+app stats contacts responses chat:Club --answerer 42 --answerer 73 --json
 app stats chats newcomers Club --since-time 2026-10-01T00:00:00Z --within 7d --json
-app stats messages discussion --chat News --min-views 100 --max-replies 0 --json
+app stats messages discussion chat:News min_views:100 max_replies:0 --json
 ```
 
 `unanswered` orders detected questions by age. A question contains `?` outside URLs; this is a

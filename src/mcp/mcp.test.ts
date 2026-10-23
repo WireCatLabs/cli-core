@@ -464,10 +464,10 @@ describe("the MCP server", () => {
     })
     const { call, raw } = await connect(scripted(), { root, connect: connectSpy })
     for (const [name, args] of [
-      ["stats messages unanswered", { chat: "7", older_than: "1h" }],
-      ["stats contacts responses", { chat: "7", answerer: "9" }],
+      ["stats messages unanswered", { query: "chat:7 older_than:1h" }],
+      ["stats contacts responses", { query: "chat:7", answerer: "9" }],
       ["stats chats newcomers", { chat: "7", within: "3d" }],
-      ["stats messages discussion", { chat: "7", max_replies: 2 }],
+      ["stats messages discussion", { query: "chat:7 max_replies:2" }],
     ] as const) {
       const found = await call(name, args)
       expect(found.isError, JSON.stringify(found.body)).toBe(false)

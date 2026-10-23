@@ -20,6 +20,7 @@ import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
+import { statisticsQuery, withStatisticsQuery } from "./statistics-query.js"
 import { evidenceAnswer, rankingAnswer, refuseJsonl } from "./stats-answers.js"
 
 const selectionOf = (value: string): unknown => {
@@ -54,26 +55,14 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
       ]),
     )
     .option("--weights <json>", "the complete component weights; replaces preset weights")
-    .addOption(
-      new Option("--message-kind <kind>", "select proven all, posts or comments before ranking").choices([
-        "all",
-        "posts",
-        "comments",
-      ]),
-    )
-    .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
     .option("--source <accounts>", "every held account of this messenger; personal, bots or all")
     .option("--timezone <zone>", "the IANA timezone for dates and active days")
-    .option("--exact", "bare words match exact forms rather than stems")
     .option("--limit <n>", "ranked rows, 1–100", positiveCount("--limit"))
     .option("--saved <name|id>", "run a saved query or ranking run; typed options replace stored options")
-  if (target === "contacts")
-    command.option(
-      "--min-messages <n>",
-      "minimum selected messages per author; 1, or 5 for engaging",
-      positiveCount("--min-messages"),
-    )
+  const report = target === "contacts" ? "contacts-top" : "messages-top"
+  withStatisticsQuery(command, report)
   command.action(async function (this: Command, words: string[]) {
+    const filters = statisticsQuery(words, report)
     const context = messengerContext(this, messenger)
     refuseJsonl(context.format)
     const options = this.opts<
@@ -88,10 +77,10 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
       }
     >()
     const { saved, ...typed } = options
-    let params: SearchParams = { ...typed, ...(words.length ? { text: words.join(" ") } : {}) }
+    let params: SearchParams = { ...typed, ...filters }
     const found = await context.withServices(async (services) => {
       if (saved !== undefined)
-        params = (await services.searches.resolve(saved, { ...params, text: words.join(" ") })).params
+        params = (await services.searches.resolve(saved, { ...params, text: filters.text ?? "" })).params
       if (params.target !== undefined && params.target !== target)
         throw new CliError("validation_error", "saved ranking belongs to a different target")
       if (params.newest || params.context)

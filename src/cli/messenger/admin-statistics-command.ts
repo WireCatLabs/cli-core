@@ -7,6 +7,7 @@ import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { statisticsQuery, withStatisticsQuery } from "./statistics-query.js"
 import { adminAnswer, refuseJsonl } from "./stats-answers.js"
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
@@ -30,9 +31,8 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
   else
     command
       .argument("[query...]", "a strict Lucene query; none selects every stored message")
-      .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
       .option("--source <accounts>", "every held account of this messenger; personal, bots or all")
-      .option("--exact", "bare words match exact forms rather than stems")
+
   command.option("--saved <name|id>", "run a saved report of this kind; typed report options replace stored options")
   command
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
@@ -43,13 +43,9 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
       "stored name, alias, @username, ID or person:provider/account/id; ambiguous names require a choice; repeat for more",
       collect,
     )
-  if (report === "unanswered")
-    command.option("--older-than <duration>", "minimum age of a question without an observed qualifying answer")
-  if (report === "discussion")
-    command
-      .option("--min-views <n>", "minimum known cumulative views", Number)
-      .option("--max-replies <n>", "maximum observed discussion replies", Number)
+  if (report !== "newcomers") withStatisticsQuery(command, report)
   command.action(async function (this: Command, argument: string | string[]) {
+    const filters = report === "newcomers" ? {} : statisticsQuery(argument as string[], report)
     const context = messengerContext(this, messenger)
     refuseJsonl(context.format)
     const { answerer, ...options } = this.opts<Omit<AdminQuery, "answerers"> & { answerer?: string[] }>()
@@ -58,11 +54,7 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
         ...options,
         limit: options.limit ?? 20,
         ...(answerer ? { answerers: answerer } : {}),
-        ...(report === "newcomers"
-          ? { chat: argument as string }
-          : (argument as string[]).length
-            ? { text: (argument as string[]).join(" ") }
-            : {}),
+        ...(report === "newcomers" ? { chat: argument as string } : filters),
         signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
       }),
     )

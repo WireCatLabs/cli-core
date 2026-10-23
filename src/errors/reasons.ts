@@ -14,6 +14,7 @@ const QUERY: Entry[] = [
   ["query.invalid-context", "the context size is out of range"],
   ["query.invalid-limit", "the limit is out of range"],
   ["query.invalid-scope", "the query selects no account"],
+  ["query.invalid-duration", "a duration in the query cannot be read"],
   ["query.invalid-size", "a size in the query cannot be read"],
   ["query.invalid-reference", "a reference in the query is not valid"],
   ["query.invalid-tag", "a tag in the query is not valid"],

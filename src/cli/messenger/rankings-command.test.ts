@@ -82,7 +82,7 @@ const setup = async (permissions?: object) => {
 describe("ranking command views", () => {
   it("splits the top messages' reactions by emoji: five in the table, all in JSON", async () => {
     const { call } = await setup()
-    const args = ["stats", "messages", "top", "--measure", "reactions", "--chat", "7", "--timezone", "UTC"]
+    const args = ["stats", "messages", "top", "--measure", "reactions", "chat:7", "--timezone", "UTC"]
     const table = await call(args, true)
     expect(table.code, table.stderr).toBe(0)
     expect(table.stdout).toContain("1. Bob  3  👍 9 · ❤ 1 · 🎉 1 · 👏 1 · 🔥 1 · +1\n2. Alice  2\n")
@@ -100,8 +100,7 @@ describe("ranking command views", () => {
       "top",
       "--measure",
       "views",
-      "--chat",
-      "7",
+      "chat:7",
       "--timezone",
       "UTC",
       "--limit",
@@ -126,11 +125,9 @@ describe("ranking command views", () => {
       "active",
       "--weights",
       '{"messages":1}',
-      "--min-messages",
-      "2",
-      "--message-kind",
-      "all",
-      "--exact",
+      "min_messages:2",
+      "message_kind:all",
+      "exact:words",
       "--source",
       "personal",
       "--json",
@@ -193,6 +190,30 @@ describe("ranking command views", () => {
     expect(replay.code, replay.stderr).toBe(0)
     expect(JSON.parse(replay.stdout).item.weights).toEqual({ words: 1 })
     expect(JSON.parse(replay.stdout).item.rows[0].id).toBe("11")
+    const filtered = await call([
+      "stats",
+      "contacts",
+      "top",
+      "--saved",
+      "ranking-fixture",
+      "min_messages:1 from:12",
+      "--json",
+    ])
+    expect(filtered.code, filtered.stderr).toBe(0)
+    expect(JSON.parse(filtered.stdout).item.rows.map((row: { id: string }) => row.id)).toEqual(["12"])
+    const excluded = await call([
+      "stats",
+      "contacts",
+      "top",
+      "--saved",
+      "ranking-fixture",
+      "min_messages:3",
+      "--limit",
+      "1",
+      "--json",
+    ])
+    expect(excluded.code, excluded.stderr).toBe(0)
+    expect(JSON.parse(excluded.stdout).item.rows).toEqual([])
   })
   it("honors source-resource denials and validates incompatible choices", async () => {
     const { call, connect } = await setup({ messages: "deny", stats: "allow" })
