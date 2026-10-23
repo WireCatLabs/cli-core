@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.400.0 — 24.10.2026
+
 ### Fixed
 
 - **Downloads skip service events and keyboards.** A message whose only attachment is a group event (`control`) or an inline keyboard no longer makes a media archive or `attachments download` fail with `provider.invalid-response`; both count as non-files like polls and links.
