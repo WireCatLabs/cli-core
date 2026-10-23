@@ -16,13 +16,10 @@ shape of this file.
 
 ### Added
 
-- **A voice note's transcript is found in any form of a word, and widened to the spellings speech recognition
-  garbles (store version 29).** «риелтор» finds a transcript saying «риелтору», and «реелтора»: always, not only when
-  nothing matched, by meeting search's rules — one stem edit from a word the Russian dictionary does not know, never
-  a number word, never a phrase or under `exact:`. A hit found only through a garbled spelling has `match:
-  "corrected"` and `corrections`, and the answer's `corrections` lists them. New tables `transcript_words`, its
-  vocabulary, `transcript_stems` and `transcript_index_pending`, filled before each search; existing transcripts are
-  queued on upgrade.
+- `search meetings` takes `date:`, `project:`, `tag:` and `topic:` in the query: `budget project:RES date>=30d`. They
+  choose meetings as `--since-time`/`--until-time`, `--project`, `--tag` and `--topic` do, join the words with AND,
+  and are refused inside OR, NOT and groups (`query.unsupported-field`) or when the same filter is also an option.
+  Search by meaning embeds only the words. `liftMeetingFields` (`@wirecat/cli-core/meetings`) does the split.
 
 - `meetingSearchesService` (`@wirecat/cli-core/services`): saved meeting searches, kind `meetings-search`, in the
   same table: create, list, show, delete and `run`, which counts the run.
