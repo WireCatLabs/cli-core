@@ -289,6 +289,7 @@ export const privacyCommand = (messenger: Messenger): Command => {
   const keys = messenger.privacySettings ?? PRIVACY_SETTINGS
   const privacy = new Command("privacy").description("who may find, call or add the account")
   annotate(privacy.command("show"), {
+    output: { entity: "account_privacy" },
     effects: REMOTE_READ,
     examples: [`${tool} account privacy show`, `${tool} account privacy show --json`],
   })
@@ -303,6 +304,7 @@ export const privacyCommand = (messenger: Messenger): Command => {
   const audience = keys.find((key) => !SWITCHES.has(key))
   const toggle = keys.find((key) => SWITCHES.has(key))
   const set = annotate(new Command("set"), {
+    output: { entity: "account_privacy_change" },
     effects: REMOTE_WRITE,
     examples: [audience, toggle].flatMap((key) => (key === undefined ? [] : [exampleOf(tool, key)])),
   }).description("change who may find, call or add the account; the settings not named stay")

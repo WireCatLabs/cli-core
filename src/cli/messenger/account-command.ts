@@ -81,7 +81,11 @@ export const accountCommand = (messenger: Messenger): Command => {
         }),
     )
     .addCommand(
-      annotate(new Command("update"), { effects: REMOTE_WRITE, examples: [`${tool} account update --first-name Alex`] })
+      annotate(new Command("update"), {
+        effects: REMOTE_WRITE,
+        output: { entity: "account_change" },
+        examples: [`${tool} account update --first-name Alex`],
+      })
         .description("change the name, the description or the photo everyone sees on your profile")
         .option("--first-name <name>", "your first name")
         .option("--last-name <name>", "your last name")

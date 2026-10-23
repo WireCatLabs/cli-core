@@ -70,6 +70,10 @@ const samples: Record<EntityName, unknown> = {
     chats: [{ id: "7", title: null, kind: "group", their_messages: 1, first_at: at, last_at: at, complete: false }],
     aliases: [{ username: "old", first_seen_at: at, last_seen_at: at, source: "messages" }],
   },
+  account_change: { operation_id: "op-1", account: { id: "500", name: null, username: null } },
+  ended_account_sessions: { operation_id: "op-1", sessions: [] },
+  account_privacy: { read_receipts: false, profile_photo: "contacts_except" },
+  account_privacy_change: { operation_id: "op-1", privacy: { hide_online: true } },
   message,
   "message.hit": {
     ref: message.ref,
