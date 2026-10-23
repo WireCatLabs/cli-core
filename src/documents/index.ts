@@ -9,6 +9,15 @@ export { type Complete, extractMemories } from "../services/documents/extraction
 export { documentIngestion, type IngestionOptions } from "../services/documents/ingestion.js"
 export { type DocumentKnowledge, documentKnowledge } from "../services/documents/knowledge.js"
 export { blocksMarkdown, inlineMarkdown, spliceMarkdown } from "../services/documents/markdown-splice.js"
+export {
+  conflictReport,
+  fileMirrorState,
+  type Mirror,
+  type MirrorSyncOptions,
+  mirrorId,
+  mirrorStatus,
+  syncMirrors,
+} from "../services/documents/mirrors.js"
 export type { SyncOptions } from "../services/documents/ports.js"
 export { extractDocumentMemories, type ImportedSource, type ProposalOptions } from "../services/documents/proposals.js"
 export {

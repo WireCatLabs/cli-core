@@ -21,6 +21,11 @@ shape of this file.
 
 ### Added
 
+- **Mirror runner for folder sync.** `syncMirrors` syncs each of a CLI's mirrors both ways under one lock and reports
+  a partly failed mirror as a `mirror.partial` issue; `fileMirrorState`, `mirrorId`, `mirrorStatus` and
+  `conflictReport` are the state file, id, local plan and conflict report drive-cli's `mirrors` used, moved here so
+  other CLIs can mirror folders and a watcher can reuse the same run.
+
 - **Meeting answer schemas.** `review`, `mentions list`, `stats meetings show` and `top`, `meetings people`, `meetings passage` and `meetings task-proposal` declare their answer entities (`meeting_review`, `meeting_link`, `meeting_stats`, `meeting_speaker`, `meeting_participants`, `meeting_passage`, `meeting_task_proposal`) for field discovery and projection. `meetings/` exports the item builders the meeting CLIs share: `meetingReviewItem`, `meetingLinkItem`, `meetingStatsItem`, `meetingSpeakerItem`.
 
 - **Listener answers declare their fields.** Live messages and events, and the final serve summary, expose exact schemas for discovery and cross-CLI output contracts. Provider-only attachment references stay private.

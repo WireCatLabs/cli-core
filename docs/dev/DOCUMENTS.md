@@ -82,6 +82,14 @@ candidate. Tests do not contact a real provider or measure model accuracy.
 5. Nothing is deleted remotely. A file deleted locally is an orphan; a file deleted remotely is missing and is
    created again only with `recreate`.
 
+A CLI that mirrors folders does not need to write the loop itself. `syncMirrors` runs `pushDocuments` for each
+`Mirror` (`id`, local `path`, remote `folder`) under one lock and returns the items plus one `mirror.partial`
+issue per mirror with conflicts, missing files or errors, so the command can answer `complete: false` and then
+fail. Conflicts come back through `conflictReport`, with the remote side named as the app names it (`google`).
+`fileMirrorState(dir, mirror, principal, kinds)` keeps each mirror's state in `<dir>/<id>.json` (0600) and refuses
+an invalid file instead of resetting it; `mirrorId(root, folder)` is the id; `mirrorStatus` is the local plan of
+each mirror. The CLI keeps its commands, its config and its target.
+
 For documents with structure, `markdownBlocks` (async; the parser loads on first use) parses Markdown into `Block`s
 (headings, paragraphs, bullet, numbered and checklist items, code, quotes, tables, images, rules) with inline marks.
 The provider maps its own document into the same blocks and writes only `diffBlocks(current, next)`, so unchanged
