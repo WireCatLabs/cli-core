@@ -54,8 +54,7 @@ from this plan. Slices 3, 5, 6, 7 and 8 have no other owner.
   (`src/cli/messenger/permission-keys.test.ts`). Anything that cannot be undone defaults to `ask`
   (`permissions.ts:66-71`). The send guard is `src/sends/guard.ts`.
 - Per CLI: `pnpm generate` (commands.md), test matrix, skill (`skills/<tool>-cli/SKILL.md`),
-  `pnpm parity:check`, `pnpm docs:check`; the MCP tool ships in the same PR as the command
-  (tg-cli `HANDOFF.md` §3b.5).
+  `pnpm parity:check`, `pnpm docs:check`; the MCP tool ships in the same PR as the command.
 - MAX: each new opcode gets a row in max-cli `docs/dev/protocol.md` saying what it rests on
   (claim, source or capture). A MAX write is measured in Saved Messages first and needs the
   owner's yes (max-cli `docs/dev/BACKLOG.md`, "From the PyMax comparison").
