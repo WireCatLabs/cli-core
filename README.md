@@ -36,6 +36,7 @@ write. A messenger plugs in as one adapter and gets all of it.
 | [Testing](docs/dev/TESTING.md) · [Parity audit](docs/dev/PARITY-AUDIT.md) | The sandbox, the coverage floor, the checks across tg and max |
 | [Tool boundaries](docs/dev/TOOL-BOUNDARIES.md) | Which tool owns which command |
 | [API reference](docs/REFERENCE.md) | Every entry point and the detailed contract of each feature |
+| [Roadmap](docs/roadmap.md) | What is being built next for developers on this package |
 | [Changelog](CHANGELOG.md) | What each version changed, and what may break callers |
 
 ## What it is
