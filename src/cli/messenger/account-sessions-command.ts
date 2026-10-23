@@ -13,11 +13,15 @@ const SESSIONS_QUERY = unfilteredQuery("account_session", accountSession)
 
 /** `account sessions …` — where else the account is logged in, not this tool's own `session`. */
 export const accountSessionsCommand = (messenger: Messenger): Command => {
+  const tool = `${messenger.app.command} personal`
   const sessions = new Command("sessions").description(
     `where else this account is logged in — not \`${messenger.app.command} session\`, which is this tool's own login`,
   )
 
-  withQuery(annotate(sessions.command("list"), { effects: REMOTE_READ }), SESSIONS_QUERY)
+  withQuery(
+    annotate(sessions.command("list"), { effects: REMOTE_READ, examples: [`${tool} account sessions list`] }),
+    SESSIONS_QUERY,
+  )
     .description("every device and app logged in to this account; nothing is ended")
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
@@ -30,7 +34,11 @@ export const accountSessionsCommand = (messenger: Messenger): Command => {
 
   // No MCP tool, at any permission level: it logs the owner out of the phone.
   sessions.addCommand(
-    annotate(new Command("end"), { effects: REMOTE_WRITE, mcp: false })
+    annotate(new Command("end"), {
+      effects: REMOTE_WRITE,
+      mcp: false,
+      examples: [`${tool} account sessions end --others`],
+    })
       .description("log out every other device, your phone included; this one stays")
       .option("--others", "every session but this one")
       .action(async function (this: Command) {
