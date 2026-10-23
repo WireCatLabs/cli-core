@@ -5,7 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
-import { tagging } from "../../entities/index.js"
+import { ENTITIES, tagging } from "../../entities/index.js"
 import { openStore, type TagTarget, type TaskTagTarget } from "../../store/store.js"
 import { seedSearchRecipes } from "../../testing/search-recipes.js"
 import { run } from "../program.js"
@@ -74,12 +74,32 @@ const setup = async (config?: object) => {
         },
         { streams, tty, env: { ...env, NO_COLOR: "1" } },
       )
+      if (code === 0 && argv[0] === "tags" && argv.includes("--json") && ["add", "remove"].includes(argv[1] ?? "")) {
+        v.parse(ENTITIES.tag_change, JSON.parse(streams.stdout.join("")).item)
+      }
       return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
     }
   return Object.assign(runs(false), { pretty: runs(true), root })
 }
 
 const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "null")
+
+it("declares automatic tag previews and applied receipts, including failed chats", async () => {
+  const chat = await setup()
+  const preview = await chat("tags", "auto", "--chat", "7", "--chat", "missing", "--dry-run", "--json")
+  expect(preview.code, preview.stderr).toBe(0)
+  const body = JSON.parse(preview.stdout.join(""))
+  const parsed = v.parse(ENTITIES.automatic_tags, body.item)
+  expect(parsed.dry_run).toBe(true)
+  expect(parsed.items).toHaveLength(2)
+  expect(parsed.items[1]).toMatchObject({ chat_id: "missing", error: { code: "not_found" } })
+  const applied = await chat("tags", "auto", "--chat", "7", "--json")
+  expect(applied.code, applied.stderr).toBe(0)
+  expect(v.parse(ENTITIES.automatic_tags, JSON.parse(applied.stdout.join("")).item).dry_run).toBe(false)
+  const projected = await chat("tags", "add", "reading", "--chat", "7", "--json=target.chat_id,added")
+  expect(projected.code, projected.stderr).toBe(0)
+  expect(JSON.parse(projected.stdout.join("")).item).toEqual({ target: { chat_id: "7" }, added: ["reading"] })
+})
 
 describe("tags", () => {
   it("**tags a chat, a person and a message, and tag: finds what they label**", async () => {

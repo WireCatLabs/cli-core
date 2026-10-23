@@ -640,6 +640,20 @@ const samples: Record<EntityName, unknown> = {
     confidence_category: "weak",
     created_at: at,
   },
+  tag_change: { target: { type: "chat", chat_id: "7" }, added: ["reading"], unchanged: [] },
+  automatic_tags: {
+    items: [
+      {
+        chat_id: "7",
+        tags: [{ tag: "reading", score: 1 / 3, fields: ["title"] }],
+        algorithm: "keywords-v1",
+        fetched_at: null,
+        source: "stored-chat",
+      },
+    ],
+    has_more: false,
+    dry_run: true,
+  },
   tagging: {
     tag: "work",
     type: "chat",

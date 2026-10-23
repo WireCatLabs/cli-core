@@ -42,7 +42,11 @@ export const tagsCommand = (messenger: Messenger): Command => {
     )
 
   changesStore(
-    annotate(tags.command("auto"), { effects: FETCH, examples: [`${tool} tags auto --chat "Book club" --dry-run`] }),
+    annotate(tags.command("auto"), {
+      output: { entity: "automatic_tags" },
+      effects: FETCH,
+      examples: [`${tool} tags auto --chat "Book club" --dry-run`],
+    }),
   )
     .description("derive local group/channel tags from cached metadata using keyword rules")
     .option(
@@ -71,6 +75,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
 
   targetOptions(
     annotate(tags.command("add"), {
+      output: { entity: "tag_change" },
       effects: LOCAL_WRITE,
       examples: [`${tool} tags add reading --chat "Book club"`],
     }).description("put tags on one chat, person, message or task"),
@@ -90,6 +95,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
 
   targetOptions(
     annotate(tags.command("remove"), {
+      output: { entity: "tag_change" },
       effects: LOCAL_WRITE,
       examples: [`${tool} tags remove reading --chat "Book club"`],
     }).description("take tags off one chat, person, message or task"),

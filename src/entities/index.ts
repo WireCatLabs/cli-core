@@ -66,6 +66,7 @@ import { recordedRun, runDetails, runHit, runLocation } from "./recorded-run.js"
 import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
 import { savedSearch } from "./saved-search.js"
+import { automaticTags, tagChange } from "./tag-change.js"
 import { tagging } from "./tagging.js"
 import { task } from "./task.js"
 import { topic } from "./topic.js"
@@ -88,6 +89,7 @@ export {
   analysisConsent,
   analysisConsentRevocation,
   attachment,
+  automaticTags,
   chart,
   chat,
   chatEvent,
@@ -160,6 +162,7 @@ export {
   runHit,
   runLocation,
   savedSearch,
+  tagChange,
   tagging,
   task,
   taskStats,
@@ -273,6 +276,8 @@ export const ENTITIES = {
   "run.details": runDetails,
   "run.hit": runHit,
   run_location: runLocation,
+  tag_change: tagChange,
+  automatic_tags: automaticTags,
   tagging,
   conversation,
   saved_search: savedSearch,
