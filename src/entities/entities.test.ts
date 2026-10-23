@@ -35,6 +35,16 @@ const contactContextSample = {
   not_read: [],
 }
 const sectionCoverage = { included: 0, has_more: false, cut_by: null }
+const poll = {
+  chat_id: "7",
+  message_id: "3",
+  question: "Friday?",
+  answers: [],
+  closed: false,
+  multiple: false,
+  anonymous: false,
+  voters: null,
+}
 
 const samples: Record<EntityName, unknown> = {
   contact_context: contactContextSample,
@@ -605,6 +615,9 @@ const samples: Record<EntityName, unknown> = {
   invite_link: { link: "https://example.test/join/x", approval: false, expires_at: null, max_uses: null },
   join_request: { person_id: "9", name: "Synthetic", username: null, requested_at: at },
   member: { id: "9", name: "Synthetic", username: null, role: "member", score: 2, reasons: ["no_photo"] },
+  poll,
+  poll_change: { operation_id: "op-1", poll },
+  message_write: { operation_id: "op-1", message },
   poll_vote: { person_id: "9", name: null, username: null, answers: ["0"], voted_at: at },
   topic: {
     id: "3",

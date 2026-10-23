@@ -35,6 +35,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
   )
 
   annotate(polls.command("show"), {
+    output: { entity: "poll" },
     effects: REMOTE_READ,
     examples: [`${messenger.app.command} personal polls show "Book club" 101`],
   })
@@ -102,6 +103,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
     )
 
   annotate(polls.command("vote"), {
+    output: { entity: "poll_change" },
     effects: REMOTE_WRITE,
     examples: [`${messenger.app.command} personal polls vote "Book club" 101 0`],
   })
@@ -138,6 +140,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
 
   if (messenger.pollClose !== false)
     annotate(polls.command("close"), {
+      output: { entity: "poll_change" },
       effects: REMOTE_WRITE,
       examples: [`${messenger.app.command} personal polls close "Book club" 101`],
     })
@@ -153,6 +156,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       })
 
   const create = annotate(polls.command("create"), {
+    output: { entity: "message_write" },
     effects: REMOTE_WRITE,
     examples: [`${messenger.app.command} personal polls create "Book club" "Which day?" Monday Tuesday`],
   })
