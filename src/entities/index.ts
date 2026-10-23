@@ -11,6 +11,7 @@ import { chatEvent } from "./chat-event.js"
 import { chatStats, taskStats } from "./chat-stats.js"
 import { contact } from "./contact.js"
 import { contactNote } from "./contact-note.js"
+import { contactLookup, contactProfile, contactSync } from "./contact-read.js"
 import { conversation } from "./conversation.js"
 import { counterRefresh, counters } from "./counters.js"
 import { document } from "./document.js"
@@ -70,7 +71,10 @@ export {
   chatEvent,
   chatStats,
   contact,
+  contactLookup,
   contactNote,
+  contactProfile,
+  contactSync,
   conversation,
   counterRefresh,
   counters,
@@ -141,6 +145,9 @@ export const ENTITIES = {
   identity,
   contact,
   contact_note: contactNote,
+  contact_lookup: contactLookup,
+  contact_profile: contactProfile,
+  contact_sync: contactSync,
   account,
   account_session: accountSession,
   note,

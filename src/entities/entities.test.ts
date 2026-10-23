@@ -25,6 +25,20 @@ const message = {
 const author = { type: "person", id: "1", name: null }
 
 const samples: Record<EntityName, unknown> = {
+  contact_lookup: { id: "10", name: null, username: null },
+  contact_sync: { added: 1, changed: 0, known: 2 },
+  contact_profile: {
+    id: "10",
+    name: "Synthetic",
+    usernames: [],
+    bio: null,
+    phone: "***0123",
+    flags: { verified: false },
+    seen: "recently",
+    registered: { at: "2020-01", source: "estimate", precision: "month" },
+    chats: [{ id: "7", title: null, kind: "group", their_messages: 1, first_at: at, last_at: at, complete: false }],
+    aliases: [{ username: "old", first_seen_at: at, last_seen_at: at, source: "messages" }],
+  },
   message,
   "message.hit": {
     ref: message.ref,
