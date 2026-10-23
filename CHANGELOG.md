@@ -37,6 +37,8 @@ shape of this file.
 
 - **Message read schemas.** Evidence packets, voice transcripts and conversation links declare separate answer entities for field discovery and projection, preserving existing response keys.
 
+- **Conversation results have declared schemas.** Builds, analysis, message batches, link changes, embedding progress, readiness, related conversations and search hits describe their existing answer fields for discovery and projection, including bounded preparation and empty batches.
+
 - **Message context, downloads and sync have declared answers.** Context describes both message windows and bounded thread reports. Downloads retain file paths and partial extraction results; sync describes estimates, chat and all-chat progress, preparation and background jobs. General chat evidence packets and exact statistics evidence now explain their separate purposes in help and the guide.
 
 - Analysis-consent lists accept chat and provider-identity queries, and consent commands declare their answer fields. Reading a filtered list leaves remembered permissions unchanged.

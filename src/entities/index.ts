@@ -20,6 +20,18 @@ import { contactNote } from "./contact-note.js"
 import { contactLookup, contactProfile, contactSync } from "./contact-read.js"
 import { contactImport, contactStateChange, contactUpdate } from "./contact-write.js"
 import { conversation } from "./conversation.js"
+import { conversationPreparation } from "./conversation-preparation.js"
+import {
+  conversationBatch,
+  conversationBatchStatus,
+  conversationBuildResult,
+  conversationChange,
+  conversationDetails,
+  conversationEmbedding,
+  conversationEmbeddingStatus,
+  conversationHit,
+  conversationReadiness,
+} from "./conversation-results.js"
 import { counterRefresh, counters } from "./counters.js"
 import { document } from "./document.js"
 import { evidence } from "./evidence.js"
@@ -112,6 +124,16 @@ export {
   contactSync,
   contactUpdate,
   conversation,
+  conversationBatch,
+  conversationBatchStatus,
+  conversationBuildResult,
+  conversationChange,
+  conversationDetails,
+  conversationEmbedding,
+  conversationEmbeddingStatus,
+  conversationHit,
+  conversationPreparation,
+  conversationReadiness,
   counterRefresh,
   counters,
   document,
@@ -296,6 +318,16 @@ export const ENTITIES = {
   tag_change: tagChange,
   automatic_tags: automaticTags,
   tagging,
+  "conversation.details": conversationDetails,
+  conversation_build: conversationBuildResult,
+  conversation_batch_status: conversationBatchStatus,
+  conversation_batch: conversationBatch,
+  conversation_change: conversationChange,
+  conversation_readiness: conversationReadiness,
+  conversation_embedding: conversationEmbedding,
+  conversation_embedding_status: conversationEmbeddingStatus,
+  conversation_preparation: conversationPreparation,
+  conversation_hit: conversationHit,
   conversation,
   saved_search: savedSearch,
   job,

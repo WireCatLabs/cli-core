@@ -1292,9 +1292,13 @@ describe("the MCP server", () => {
     expect(body.items).toMatchObject([{ first_message: "msg:chat/500/7/1", messages_count: 1 }])
     expect((await call("conversations list", { chat: "7", query: "messages_count>1" })).body.items).toEqual([])
     const shown = await call("conversations show", { conversation: body.items[0].id })
+    for (const item of body.items) v.parse(ENTITIES.conversation, item)
+    v.parse(ENTITIES["conversation.details"], shown.body.item)
     expect(shown.body.item.messages.map((one: { id: string }) => one.id)).toEqual(["1"])
     expect((await call("conversations show", { conversation: "7" })).isError).toBe(true)
-    expect((await call("conversations status", {})).body).toMatchObject({
+    const readiness = (await call("conversations status", {})).body
+    for (const item of readiness.items) v.parse(ENTITIES.conversation_readiness, item)
+    expect(readiness).toMatchObject({
       items: [{ chat: "7", state: "words-only", pending: { new: 0 } }],
       page: { has_more: false },
     })

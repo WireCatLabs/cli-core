@@ -208,6 +208,32 @@ const call = async (
       for (const item of answer.items ?? [answer.item]) v.parse(entity, item)
     }
   }
+  if (code === 0 && argv.includes("--json")) {
+    const names = {
+      "conversations build": "conversation_build",
+      "conversations show": "conversation.details",
+      "conversations list": "conversation",
+      "conversations related": "conversation_hit",
+      "conversations status": "conversation_readiness",
+      "conversations batches status": "conversation_batch_status",
+      "conversations batches next": "conversation_batch",
+      "conversations links add": "conversation_change",
+      "conversations links clear": "conversation_change",
+      "conversations embed": "conversation_embedding",
+      "conversations embed status": "conversation_embedding_status",
+      "conversations embed clear": "conversation_change",
+      "conversations rebuild": "conversation_preparation",
+      "search conversations": "conversation_hit",
+    } as const
+    const path = Object.keys(names)
+      .sort((a, b) => b.length - a.length)
+      .find((key) => argv.slice(0, key.split(" ").length).join(" ") === key)
+    if (path) {
+      const schema = ENTITIES[names[path as keyof typeof names]] as v.GenericSchema
+      const answer = JSON.parse(streams.stdout[0] ?? "null")
+      for (const item of answer.items ?? [answer.item]) v.parse(schema, item)
+    }
+  }
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 
