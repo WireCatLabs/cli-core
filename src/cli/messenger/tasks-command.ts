@@ -47,7 +47,7 @@ const line = ({ id, key, state, kind, group, createdAt, message, note }: TaskVie
 const when = (at: string | null) => (at === null ? "—" : at.slice(0, 16).replace("T", " "))
 
 const toReview = (count: number | undefined) =>
-  count ? `; ${count} possible duplicate pair(s) went to tasks duplicates` : ""
+  count ? `; ${count} possible duplicate pair(s) went to tasks duplicates list` : ""
 
 const suggestionLine = ({ as, by, certainty, reason }: CloseSuggestion) =>
   `close suggested: ${as} by ${by} at certainty ${certainty}${reason === null ? "" : ` — ${reason}`}; waits on the owner`
@@ -68,7 +68,7 @@ const card = (task: TaskCard) =>
 const applyText = (pass: ChatRulePass, yes: boolean, tool: string) =>
   yes
     ? `${pass.chat}: ${pass.messages} messages read; ${pass.added} opened, ${pass.closed} closed` +
-      (pass.review ? `; ${pass.review} may be the same job as another — ${tool} tasks duplicates` : "")
+      (pass.review ? `; ${pass.review} may be the same job as another — ${tool} tasks duplicates list` : "")
     : [
         `${pass.chat}: ${pass.messages} messages read; would open ${pass.tasks.length}, close ${pass.closed}`,
         ...pass.tasks.map((task) => `  ${task.kind.padEnd(8)} ${(task.category ?? "—").padEnd(13)} ${task.source}`),
@@ -361,7 +361,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
           : `${card(linked)}\n`,
       )
       if (!("relations" in linked) && linked.review && context.format === "pretty")
-        context.renderer.note(`${linked.review} possible duplicate pair(s) went to tasks duplicates`)
+        context.renderer.note(`${linked.review} possible duplicate pair(s) went to tasks duplicates list`)
     })
 
   annotate(tasks.command("show"), {
@@ -415,8 +415,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
       if (found.length === 0 && context.format === "pretty") context.renderer.note("no open or recent task looks alike")
     })
 
-  const duplicates = withQuery(
-    annotate(tasks.command("duplicates"), { effects: LOCAL_READ })
+  const duplicates = tasks.command("duplicates").description("pairs of tasks that may be one job")
+  withQuery(
+    annotate(duplicates.command("list"), {
+      effects: LOCAL_READ,
+      examples: [`${tool} tasks duplicates list --limit 10`, `${tool} tasks duplicates list decision:unsure`],
+    })
       .summary("pairs of tasks a rule opened that may be one job, newest first")
       .description(
         "pairs of tasks a rule opened that may be one job, newest first, with score and reasons: merge, reject or " +
@@ -428,7 +432,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
       const { limit, offset } = pageOf(context.settings)
-      const decision = queryTerms(words, TASK_PAIR_QUERY, "tasks duplicates").get("decision") as PairDecision
+      const decision = queryTerms(words, TASK_PAIR_QUERY, "tasks duplicates list").get("decision") as PairDecision
       const rows = await context.withServices((services) =>
         services.tasks.duplicates({ decision, limit: limit + 1, offset }),
       )
@@ -436,7 +440,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(
         this,
         context,
-        pagedList("tasks duplicates", context.settings, {
+        pagedList("tasks duplicates list", context.settings, {
           items: shown.map(snakeKeys),
           has_more: rows.length > limit,
         }),

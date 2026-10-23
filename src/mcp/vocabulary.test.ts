@@ -15,7 +15,7 @@ interface Listed {
   effects?: object
   commands: readonly Listed[]
 }
-/** A group that only holds subcommands declares no effects: `chats members` is not a command, `tasks duplicates` is. */
+/** A group that only holds subcommands declares no effects of its own. */
 const runnable = (commands: readonly Listed[]): string[] =>
   commands.flatMap((one) => [
     ...(one.commands.length === 0 || one.effects ? [one.path.join(" ")] : []),

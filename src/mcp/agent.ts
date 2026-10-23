@@ -243,7 +243,7 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
   return flatten(commands)
     .filter(
       (info) =>
-        // A group that also runs on its own declares effects: `tasks duplicates` lists, its subcommands decide.
+        // Only a group that declares effects can run without a leaf.
         (info.commands.length === 0 || info.effects !== undefined) &&
         info.path.length > root.length &&
         startsWith(info.path, root) &&
@@ -307,7 +307,7 @@ export const runCommandForAgent = async (
 ): Promise<AgentAnswer> => {
   try {
     const info = flatten(program.commands).find((one) => one.path.length === path.length && startsWith(one.path, path))
-    // A group runs when it declares effects of its own, as `toolsFromCommands` offers it: `tasks duplicates` lists.
+    // Runnable groups declare effects, as `toolsFromCommands` offers them.
     if (!info || (info.commands.length > 0 && info.effects === undefined))
       throw new CliError("validation_error", `no command "${path.join(" ")}" to run`)
     if (info.lifetime)
