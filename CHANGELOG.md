@@ -37,6 +37,8 @@ shape of this file.
 
 - Doctor reports include a concrete creation example in help and command discovery.
 
+- Send-attempt lists accept queries over their stored metadata before pagination. Continuation steps keep the query, and discovery declares the answer fields.
+
 - Recorded-run lists accept metadata queries before pagination, and recorded-run commands declare their answer schemas. Continuation steps keep the query.
 
 - **Message read and write schemas.** Showing a message, sending, editing, forwarding, pinning, starring and deleting declare their existing answer entities for field discovery and projection. Write receipts retain their operation id.

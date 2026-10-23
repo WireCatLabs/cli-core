@@ -4818,6 +4818,22 @@ describe("the guard, account and mcp config commands", () => {
     const page = json(listed.stdout)
     expect(page.items.map((entry: { reply_to?: string }) => entry.reply_to)).toEqual(["1"])
     expect(page.page.has_more).toBe(true)
+    expect(v.safeParse(ENTITIES.send_attempt, page.items[0]).success).toBe(true)
+    const query = "outcome:sent chat_id:7"
+    const filtered = await call(["sends", "list", query, "--limit", "1", "--json"], async () => fake, env)
+    expect(filtered.code).toBe(0)
+    expect(json(filtered.stdout).next[0]).toMatchObject({ args: { query, page: 2, limit: 1 } })
+    const second = await call(
+      ["sends", "list", query, "--limit", "1", "--page", "2", "--json=chat_id,outcome"],
+      async () => fake,
+      env,
+    )
+    expect(json(second.stdout).items).toEqual([{ chat_id: "7", outcome: "sent", operation_id: expect.any(String) }])
+    expect(json(second.stdout).page.has_more).toBe(false)
+    const noMatch = await call(["sends", "list", "outcome:failed", "--json"], async () => fake, env)
+    expect(json(noMatch.stdout).items).toEqual([])
+    expect(noMatch.stderr.join("\n")).toContain("no send attempts match")
+    expect(noMatch.stderr.join("\n")).not.toContain("has not tried")
   })
 
   it("show who the profile is logged in as", async () => {

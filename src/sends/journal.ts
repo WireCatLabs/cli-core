@@ -121,6 +121,14 @@ export interface SendEntry {
   errorCode?: string
 }
 
+export interface SendFilter {
+  outcome?: SendOutcome
+  chatId?: Id
+  operationId?: string
+  errorCode?: string
+  key?: string
+}
+
 /**
  * `<state dir>/sends/<profile>.jsonl` — beside `runs`, never in the cache directory, so that
  * clearing a cache cannot erase what was sent in the owner's name.
@@ -173,13 +181,23 @@ export class SendJournal {
    * Oldest first, each reservation folded into its outcome; one with no outcome yet is in flight,
    * or its process died. A line that does not parse is skipped: a torn last write must not block sending.
    */
-  entries(): SendEntry[] {
+  entries(filter?: SendFilter): SendEntry[] {
     const lines = this.#lines()
     const settled = new Set(lines.filter((entry) => entry.outcome !== "reserved").map((entry) => entry.reservation))
-    return lines
+    const entries = lines
       .filter((entry) => entry.outcome !== "reserved" || !settled.has(entry.reservation))
       .map(({ reservation, ...entry }) => (entry.outcome === "reserved" ? { ...entry, reservation } : entry))
       .map(withSendId)
+    return filter === undefined
+      ? entries
+      : entries.filter(
+          (entry) =>
+            (filter.outcome === undefined || entry.outcome === filter.outcome) &&
+            (filter.chatId === undefined || entry.chatId === filter.chatId) &&
+            (filter.operationId === undefined || entry.operationId === filter.operationId) &&
+            (filter.errorCode === undefined || entry.errorCode === filter.errorCode) &&
+            (filter.key === undefined || entry.key === filter.key),
+        )
   }
 
   #lines(): SendEntry[] {
