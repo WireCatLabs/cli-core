@@ -47,6 +47,7 @@ import { message } from "./message.js"
 import { messageDeletion, messagePin, messageStar } from "./message-change.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
+import { evidencePacket, messageLinks, messageTranscript } from "./message-read.js"
 import { messageWrite } from "./message-write.js"
 import { model } from "./model.js"
 import { note } from "./note.js"
@@ -106,6 +107,7 @@ export {
   document,
   endedAccountSessions,
   evidence,
+  evidencePacket,
   fact,
   folder,
   hit,
@@ -123,8 +125,10 @@ export {
   messageCounts,
   messageDeletion,
   messageLink,
+  messageLinks,
   messagePin,
   messageStar,
+  messageTranscript,
   messageWrite,
   model,
   note,
@@ -187,6 +191,9 @@ export const ENTITIES = {
   message_pin: messagePin,
   message_star: messageStar,
   message_deletion: messageDeletion,
+  message_transcript: messageTranscript,
+  message_links: messageLinks,
+  evidence_packet: evidencePacket,
   chat,
   person,
   identity,

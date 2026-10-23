@@ -3408,6 +3408,7 @@ describe("the shared read commands", () => {
     const shown = await call(["conversations", "show", listed.items[0]?.id ?? "", "--jsonl"], never, env)
     expect(shown.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2", "3"])
     const links = JSON.parse((await call(["messages", "links", "7", "3", "--json"], never, env)).stdout[0] ?? "")
+    expect(v.safeParse(ENTITIES.message_links, links.item).success).toBe(true)
     expect(links.item).toMatchObject({
       links: [{ parent_id: "2", kind: "same_sender", chosen: true }],
       chain: ["2", "1"],
@@ -4498,6 +4499,8 @@ describe("messages transcribe", () => {
     )
 
     const answer = JSON.parse(done.stdout[0] ?? "")
+    expect(v.safeParse(ENTITIES.message_transcript, answer.item).success).toBe(true)
+    expect(v.safeParse(ENTITIES.message_transcript, JSON.parse(pending.stdout[0] ?? "").item).success).toBe(true)
     expect(answer.item).toEqual({ message_id: "5", text: "hello", pending: false, via: "chat" })
     expect(answer.next).toBeUndefined()
     expect(done.stderr).toEqual([])
