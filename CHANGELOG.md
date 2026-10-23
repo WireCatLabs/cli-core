@@ -19,6 +19,8 @@ shape of this file.
 
 - **Contact answers have declared fields.** Address-book writes, private aliases and note removal, activity, bot checks, identity links, context and preparation expose their exact answer schemas. Context describes both the cross-account report and selected-chat message windows at every detail level. Field projection recognizes both shapes and refuses unknown fields before reading contact data. CLI, SDK and MCP receipts keep their existing shapes.
 
+- **Reaction answer schemas.** Add and remove declare the same reaction-change entity, including the operation id and a null reaction when removed. Field discovery and projection now describe these write receipts.
+
 - Send history includes a concrete example in help and command discovery.
 
 - Doctor reports include a concrete creation example in help and command discovery.
