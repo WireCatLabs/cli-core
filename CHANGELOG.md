@@ -15,6 +15,8 @@ shape of this file.
 
 ### Added
 
+- **Poll answer schemas.** Poll reads, vote and close receipts, and newly sent poll messages declare their answer entities for field discovery and projection.
+
 - Recipient lists accept ID and title queries without changing the allowlist state. Recipient commands declare their answer schemas for discovery and field projection.
 
 - **Contact answers have declared fields.** Address-book writes, private aliases and note removal, activity, bot checks, identity links, context and preparation expose their exact answer schemas. Context describes both the cross-account report and selected-chat message windows at every detail level. Field projection recognizes both shapes and refuses unknown fields before reading contact data. CLI, SDK and MCP receipts keep their existing shapes.

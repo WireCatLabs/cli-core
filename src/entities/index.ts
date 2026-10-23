@@ -46,10 +46,12 @@ import { memory } from "./memory.js"
 import { message } from "./message.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
+import { messageWrite } from "./message-write.js"
 import { model } from "./model.js"
 import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
+import { poll, pollChange } from "./poll.js"
 import { pollVote } from "./poll-vote.js"
 import { contactAlias, contactNoteRemoval } from "./private-contact.js"
 import { ranking } from "./ranking.js"
@@ -117,10 +119,13 @@ export {
   message,
   messageCounts,
   messageLink,
+  messageWrite,
   model,
   note,
   officialStats,
   person,
+  poll,
+  pollChange,
   pollVote,
   ranking,
   recipient,
@@ -167,6 +172,7 @@ export const ENTITIES = {
     "attachments",
   ]),
   message_link: messageLink,
+  message_write: messageWrite,
   chat,
   person,
   identity,
@@ -241,6 +247,8 @@ export const ENTITIES = {
   invite_link: inviteLink,
   join_request: joinRequest,
   member,
+  poll: poll,
+  poll_change: pollChange,
   poll_vote: pollVote,
   topic,
   folder,
