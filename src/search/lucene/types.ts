@@ -16,6 +16,10 @@ export const SEARCH_QUERY: QueryContext = {
   command: "search",
   guide: "https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md",
 }
+/** How message search parses typed text: `"a b"~N` is words at most N apart; notes still refuse `~`. */
+export const MESSAGE_PARSING = { ...SEARCH_QUERY, proximity: true }
+/** Further apart than this, two words are rarely about one thing, even in a long message. */
+export const MOST_WORDS_APART = 50
 export function searchError(reason: string, span: Span, alternative?: string): never {
   queryError(reason, span, alternative, SEARCH_QUERY)
 }

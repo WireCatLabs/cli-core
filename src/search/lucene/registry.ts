@@ -11,7 +11,7 @@ import {
 } from "@wirecat/cli-base/query"
 import * as v from "valibot"
 import { tagOf } from "../../domain/tags.js"
-import { QUERY_LIMITS, SEARCH_QUERY, searchError } from "./types.js"
+import { MOST_WORDS_APART, QUERY_LIMITS, SEARCH_QUERY, searchError } from "./types.js"
 
 export const FIELD_VERSION = 2
 
@@ -426,6 +426,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
 
 const MESSAGES: QueryRegistry = { entity: "message", backend: "sql", fields: QUERY_FIELDS }
 
+const NEAR_FIELDS = new Set(["text", "exact", "transcript", "content"])
 /** Field, operator and value of every term, against the message fields. */
 export const validateFields = (ast: QueryAst): QueryAst => {
   for (const node of walkQuery(ast.root)) {
@@ -438,6 +439,14 @@ export const validateFields = (ast: QueryAst): QueryAst => {
         plain ? `use date${node.field === "after" ? ">=" : "<"}${node.value}` : "use date>=YYYY-MM-DD or date:[a TO b]",
       )
     }
+    if (node.slop !== undefined && !NEAR_FIELDS.has(node.field))
+      searchError("query.unsupported-operator", node.span, `"a b"~N takes words: ${[...NEAR_FIELDS].join(", ")}`)
+    if (node.slop !== undefined && node.slop > MOST_WORDS_APART)
+      searchError(
+        "query.invalid-number",
+        node.span,
+        `words at most ${MOST_WORDS_APART} apart: "a b"~${MOST_WORDS_APART}`,
+      )
     // The message compilers read `field:*` as a pattern, never as "has a value".
     if (field && node.operator === "wildcard" && !field.operators.includes("wildcard"))
       searchError("query.unsupported-operator", node.span, `${field.name} takes ${field.operators.join(", ")}`)
@@ -530,9 +539,10 @@ export const QUERY_OPERATORS = [
     semantics: "Полный term; bounded subset Lucene RegExp; буквы text приводятся как в индексе",
   },
   {
-    name: "fuzzy / proximity",
-    example: "invoice~1",
-    semantics: "unsupported_operator; формы слова ловит prefix `word*`",
+    name: "proximity",
+    example: '"invoice paid"~3',
+    semantics: "Слова одного сообщения, между ними не больше N других слов, в любом порядке; N до 50",
   },
+  { name: "fuzzy", example: "invoice~1", semantics: "unsupported_operator; формы слова ловит prefix `word*`" },
   { name: "boost / minimum / intervals", example: "invoice^2", semantics: "query.unsupported-operator" },
 ] as const

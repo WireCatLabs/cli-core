@@ -76,7 +76,7 @@ const comparable = reference.filter(
   (row) =>
     row.parsed &&
     row.ids &&
-    !/[~^@]/u.test(row.query) &&
+    !/[^"]~|[\^@]/u.test(row.query) &&
     !row.query.startsWith("fn:") &&
     !/date|size|emoji|hello|foo|O'Brien|A B|a\\|a\\\/|\[TO TO TO\]/u.test(row.query),
 )

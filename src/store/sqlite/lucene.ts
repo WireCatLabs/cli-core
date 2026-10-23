@@ -13,8 +13,8 @@ import {
   FIELD_COMPILERS,
   type FieldScope,
   type Fragment,
+  ftsMatch,
   type Leaf,
-  quoted,
   SPEECH,
 } from "./lucene-fields.js"
 import type { StoreContext } from "./open.js"
@@ -115,10 +115,11 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     params: [match] as SqlValue[],
   })
   /** A bare word also matches a transcript, a file's text and a word of a file's name. */
-  const everywhere = (node: ResolvedPredicate, text: string, fragment: Fragment): Fragment => {
+  const everywhere = (node: ResolvedPredicate, fragment: Fragment): Fragment => {
     if (!node.implicit || fragment.sql === "0") return fragment
-    const files = attachmentWords(quoted(text), "any")
-    const elsewhere = { sql: `${files.sql} UNION ${namedSql}`, params: [...files.params, quoted(text)] }
+    const match = ftsMatch(node)
+    const files = attachmentWords(match, "any")
+    const elsewhere = { sql: `${files.sql} UNION ${namedSql}`, params: [...files.params, match] }
     return {
       ...fragment,
       sql: `(${fragment.sql} OR m.id IN (${elsewhere.sql}))`,
@@ -338,13 +339,13 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   // Among hits the message text does not hold: a transcript, then a file's name, then a file's text. bm25 scores
   // of different indexes do not compare, and a long spreadsheet must not crowd out what was said.
   const places = [...fragments.values()].flatMap(({ node, fragment }) =>
-    fragment.elsewhere && fragment.fts ? [normalize(node.value)] : [],
+    fragment.elsewhere && fragment.fts ? [ftsMatch(node)] : [],
   )
   if (places.length && !execution.newest) {
     ranked.sql.push(
       `s(id, tier) AS MATERIALIZED (SELECT att.attachable_id, min(CASE WHEN ${SPEECH} THEN 1 ELSE 3 END) FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) GROUP BY att.attachable_id UNION ALL SELECT attachable_id, 2 FROM (${namedSql}))`,
     )
-    ranked.params.push(places.map((text) => quoted(text)).join(" OR "), places.map((text) => quoted(text)).join(" OR "))
+    ranked.params.push(places.join(" OR "), places.join(" OR "))
   }
   const placeTier = places.length && !execution.newest ? "coalesce((SELECT min(tier) FROM s WHERE s.id=m.id), 4)," : ""
   if (exactTier) {
@@ -402,9 +403,9 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   const placed = (found: ReturnType<typeof hitsByPk>, pks: number[]) => {
     if (!placeLeaves.length || !pks.length || found.length !== pks.length) return found
     const keys = JSON.stringify(pks)
-    const texts = placeLeaves.map(({ node }) => normalize(node.value)).filter((text) => /[\p{L}\p{N}]/u.test(text))
-    if (!texts.length) return found
-    const match = texts.map((text) => quoted(text)).join(" OR ")
+    const wordy = placeLeaves.filter(({ node }) => /[\p{L}\p{N}]/u.test(normalize(node.value)))
+    if (!wordy.length) return found
+    const match = wordy.map(({ node }) => ftsMatch(node)).join(" OR ")
     const implicit = placeLeaves.some(({ node }) => node.implicit)
     const inText = new Set(
       implicit
@@ -444,7 +445,6 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
           )
           .all(keys)
       : []
-    const wanted = texts.map((text) => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean))
     return found.map((hit, index) => {
       const pk = pks[index] as number
       const transcript = files.find((row) => Number(row.id) === pk && Number(row.speech) === 1)
@@ -452,9 +452,11 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       const name = allNames.find((row) => {
         if (Number(row.id) !== pk) return false
         const words = normalize(String(row.name)).split(/[^\p{L}\p{N}]+/u)
-        return wanted.some((phrase) =>
-          words.some((_, at) => phrase.every((word, offset) => words[at + offset] === word)),
-        )
+        return wordy.some(({ node }) => {
+          const phrase = normalize(node.value).match(/[\p{L}\p{N}]+/gu) ?? []
+          if (node.slop !== undefined) return phrase.every((word) => words.includes(word))
+          return words.some((_, at) => phrase.every((word, offset) => words[at + offset] === word))
+        })
       })
       const place: [MatchPlace, string] | undefined = inText.has(pk)
         ? ["text", hit.text]
