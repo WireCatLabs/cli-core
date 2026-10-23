@@ -3,6 +3,7 @@ read  account privacy show
 read  account sessions list
 read  account show
 read  attachments check
+read  attachments jobs status
 read  attachments list
 read  attachments show
 read  chats documents list
@@ -23,6 +24,8 @@ read  chats show
 read  chats tracking list
 read  chats tracking show
 read  commands
+read  commands schema
+read  config show
 read  contacts check
 read  contacts context
 read  contacts list
@@ -42,6 +45,9 @@ read  conversations related
 read  conversations show
 read  conversations status
 read  doctor
+read  doctor report
+read  guide
+read  images models list
 read  inbox
 read  mentions domains
 read  mentions list
@@ -57,10 +63,19 @@ read  messages scheduled
 read  messages show
 read  messages transcribe
 read  metadata get
+read  models audio list
+read  models text list
 read  polls show
 read  recipients list
+read  replies consents show
+read  replies status
+read  replies test
 read  review
+read  runs list
+read  runs path
 read  runs search
+read  runs show
+read  schedule list
 read  search all
 read  search conversations
 read  search messages
@@ -70,6 +85,9 @@ read  searches history
 read  searches list
 read  searches show
 read  sends list
+read  server logs
+read  server status
+read  skill show
 read  stats chats newcomers
 read  stats chats retention
 read  stats chats show
@@ -83,9 +101,12 @@ read  stats messages show
 read  stats messages top
 read  stats messages unanswered
 read  stats tasks show
+read  store check
 read  store gaps plan
+read  store info
 read  store jobs list
 read  store jobs show
+read  store status
 read  tags list
 read  tasks agenda
 read  tasks categories
@@ -98,6 +119,7 @@ write account privacy set
 write account update
 write attachments download
 write attachments extract
+write attachments move
 write attachments text set
 write chats admins add
 write chats admins remove
@@ -175,7 +197,12 @@ write searches create
 write searches delete
 write stats charts
 write stats messages counters refresh
+write store export
 write store gaps repair
+write store jobs cancel
+write store jobs clear
+write store jobs retry
+write store reindex
 write tags add
 write tags auto
 write tags remove

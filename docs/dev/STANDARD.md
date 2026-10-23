@@ -1207,6 +1207,13 @@ The three tools, their arguments and what each permission shows are on the handb
 
 - `status` answers what the server is. `conversations refresh` runs what `search conversations --refresh` runs before
   it searches (NEED-551 A).
+- **Every command is a tool, writes included; the profile's permissions limit it** (owner, 2026-10-23). Left out:
+  `mcp` and `complete`, which an agent call cannot use; `upgrade` and the login; a command that changes what a later
+  run may do (`config set`, `schedule`, `replies` rules and consents, `recipients`, `chats rules`, `server install`,
+  `skill install`, model keys, `flood clear`), which a read-only lock could otherwise hand to an unlocked run
+  (SEC-47); and the writes no permission key limits yet — `store backup|restore|migrate|repair|reset|clear|decrypt`,
+  `server start|stop|restart`, model downloads, `schedule run|exec`, `doctor report create`, `account sessions end`,
+  `chats delete|clear`, `bot auth`, `bot recipients`, `bot store`, `bot api`.
 
 `stats charts --output` selects SVG or PNG by the file extension; images never go to stdout.
 The stored-only `stats_charts` tool accepts optional `format: json|png` (default `json`).

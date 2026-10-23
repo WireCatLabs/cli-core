@@ -22,6 +22,12 @@ shape of this file.
   already synced and says so (`missing` in JSON, a warning on the terminal); its next step starts from the same
   point, and `--new` keeps its saved point, so an online review still sees what was never synced.
 
+- **MCP offers more commands**, each limited by the profile's permissions: `runs list|show|path`, `store status|info|check|export|reindex`,
+  `store jobs cancel|retry|clear`, `attachments move`, `attachments jobs status`, `config show`, `commands schema`, `guide`,
+  `skill show`, `doctor report`, the `models` lists, `replies status|test|consents show`, `schedule list`,
+  `server status|logs`, and on the bot server `list`, `chats leave`, `chats admins add|remove`, `commands set|clear` and
+  `webhooks list|set|delete`. What stays off and why is in [the messenger rules](docs/dev/STANDARD.md#mcp).
+
 ### Security
 
 - `@modelcontextprotocol/server` 2.3.0 clears the three high-severity advisories `npm audit` reported for every

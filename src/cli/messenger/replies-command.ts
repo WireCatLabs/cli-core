@@ -16,7 +16,7 @@ import { addReplyEditors } from "./replies-edit-command.js"
 
 /** `replies`: rules that answer messages for the owner, from `serve`, and only to the people and chats the audience allows. */
 export const repliesCommand = (messenger: Messenger): Command => {
-  const replies = annotate(new Command("replies"), { mcp: false }).description(
+  const replies = new Command("replies").description(
     "rules that answer messages for you, kept in a file of this profile",
   )
   if (messenger.autoReplies === false)

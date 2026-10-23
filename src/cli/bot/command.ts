@@ -133,7 +133,7 @@ const meCommand = (bot: BotMessenger): Command =>
     })
 
 const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
-  annotate(new Command("list"), { effects: LOCAL_READ, mcp: false })
+  annotate(new Command("list"), { effects: LOCAL_READ })
     .description(
       `every name on this machine that has a bot token; --check asks ${bot.name ?? "the messenger"} which bot each is`,
     )
@@ -264,7 +264,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("leave"), { effects: REMOTE_WRITE, mcp: false })
+  annotate(command.command("leave"), { effects: REMOTE_WRITE })
     .description("take the bot out of a chat; only an admin of the chat can bring it back")
     .argument("<chat>", "a chat id, or the title of a chat this bot has seen")
     .action(async function (this: Command, chat: string) {

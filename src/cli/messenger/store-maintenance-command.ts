@@ -202,7 +202,7 @@ const copiesCommand = (): Command =>
   )
 
 const infoCommand = (): Command =>
-  annotate(new Command("info"), { effects: LOCAL_READ, mcp: false })
+  annotate(new Command("info"), { effects: LOCAL_READ })
     .summary("the local archive's format, size and contents")
     .description("the store file: where it is, its size, its schema and how many rows it holds; changes nothing")
     .action(async function (this: Command) {
@@ -234,7 +234,7 @@ const infoCommand = (): Command =>
  * newest message held, not `sync_ranges`: those are in message ids, which a chat list does not give.
  */
 const checkCommand = (messenger: Messenger): Command =>
-  annotate(new Command("check"), { effects: LOCAL_READ, mcp: false })
+  annotate(new Command("check"), { effects: LOCAL_READ })
     .summary("check the local archive for problems")
     .description("whether the store is healthy — integrity, search indexes, disk, and which chats are behind")
     .action(async function (this: Command) {
@@ -498,7 +498,7 @@ const buildNoteIndex = (database: CacheDatabase, note: (text: string) => void, {
 }
 
 const reindexCommand = (messenger: Messenger): Command =>
-  destroysNothing(annotate(new Command("reindex"), { effects: LOCAL_WRITE, mcp: false }))
+  destroysNothing(annotate(new Command("reindex"), { effects: LOCAL_WRITE }))
     .summary("rebuild the local archive's search indexes")
     .description(
       "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored; loses nothing",

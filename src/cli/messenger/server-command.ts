@@ -113,7 +113,7 @@ const lockProcess =
  */
 export const serverCommand = (messenger: Messenger, options: ServerOptions = {}): Command => {
   const { app } = messenger
-  const command = annotate(new Command("server"), { mcp: false })
+  const command = new Command("server")
     .summary("manage this profile's background server")
     .description(
       `\`${app.command} serve\` in the background: start, stop, restart, status, logs; install adds a systemd or launchd unit`,
@@ -255,7 +255,11 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
 
   withIdle(
     destroysNothing(
-      annotate(command.command("start"), { effects: LOCAL_WRITE, examples: [`${app.command} personal server start`] }),
+      annotate(command.command("start"), {
+        effects: LOCAL_WRITE,
+        mcp: false,
+        examples: [`${app.command} personal server start`],
+      }),
     )
       .summary("start this profile's background server")
       .description(
@@ -266,7 +270,11 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
   })
 
   destroysNothing(
-    annotate(command.command("stop"), { effects: LOCAL_WRITE, examples: [`${app.command} personal server stop`] }),
+    annotate(command.command("stop"), {
+      effects: LOCAL_WRITE,
+      mcp: false,
+      examples: [`${app.command} personal server stop`],
+    }),
   )
     .description("stop this profile's serve — through the unit if it runs under one")
     .action(async function (this: Command) {
@@ -276,6 +284,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
   withIdle(
     destroysNothing(
       annotate(command.command("restart"), {
+        mcp: false,
         effects: LOCAL_WRITE,
         examples: [`${app.command} personal server restart`],
       }),
