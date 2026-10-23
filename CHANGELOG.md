@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.394.0 — 23.10.2026
+
 ### Added
 
 - Statistics commands include examples in help and command discovery, with guidance for reusing an exact evidence selection.
