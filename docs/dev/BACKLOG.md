@@ -1,73 +1,55 @@
 # Backlog
 
-Open work only. A finished item is deleted; its record is the merged pull request.
+Open work for this cycle only, most important first. Someday work is in [BACKLOG_LATER.md](BACKLOG_LATER.md); the
+research behind an item is in [BACKLOG-NOTES.md](BACKLOG-NOTES.md). What developers can build on today and what comes
+next is the [roadmap](../roadmap.md).
 
-- **Serve relay, what v1 leaves out** ([the serve relay](ARCHITECTURE.md#the-serve-relay)): a Windows named pipe
-  with an owner-only access list (NEED-1405; off on Windows now); forwarding an `ask` question to the client's
-  terminal instead of requiring `--yes`; waiting for a serve that is still starting instead of failing on the
-  messenger's own lock; per-watcher buffer budgets for a relayed `watch` (max-cli's `server/subscribers.ts`);
-  `mcp --http` through serve; a path type on options instead of the placeholder naming rule (DEBT-124).
+## Rules
 
-- **One message search without a language switch** — Lucene syntax with legacy's forgiving matching,
-  matchers run in parallel, merged and ranked against the query, each hit labelled with how it matched
-  (the legacy search and `--language` are already gone). Ranking test set and an owner-approved plan come first. Approved plan for the narrow first step (B):
-  [typo-search-default-plan.md](typo-search-default-plan.md).
-- **One Markdown parser in the messengers** — `parseMarkdownSpans` (`.`) is the shared parser; tg-cli and
-  whatsapp-cli switch to it and keep only their renderers. max-cli's dialect differs (`*` italic, `__` bold, `++`
-  underline, `^^` highlight, newlines in inline code become spaces) and waits for the owner's call. The legacy
-  `parseMarkdown` (`{ text, markup }`, one level deep, used by nobody) goes in the next breaking release.
-- **Messenger feature gaps** — albums, typing and location, MAX cloud password and video
-  notes. Proposed, not claimed: [messenger-feature-gaps.md](messenger-feature-gaps.md).
-- **Chat briefs and news digests** — decisions, requests and open questions per chat for a time window,
-  and a cited digest of selected news feeds, prepared for the owner's agent. Not designed beyond a
-  proposal; needs the owner's scope before a plan.
-- **Mail embedding: what is not measured yet** — a model-based line classifier for cleaning, and a run of
-  [bench/mail-quality](../../bench/mail-quality/README.md) on the owner's own mailbox, which would stay in
-  cli-private.
-- **A reranker for note and document search, opt-in** — memo and drive only fuse a word list and a meaning
-  list, and miss paraphrases (2 of 5 in the top 3 against qmd's 4 of 5:
-  [local-documents](https://github.com/WireCatLabs/cli-testing/blob/docs/search-everywhere-and-qmd/performance/search/local-documents/README.md)).
-  A query-passage model as a separate download, like `embeddinggemma`, run only in a long-lived process
-  (MCP server); never on by default. The message-search rerankers did not ship — the rule one changed
-  nothing in the dev sweep, e5 cosine lowered recall, the cross-encoder missed held-out gates at 3–4 s
-  ([combined-search.md](combined-search.md)). Measured on the local-documents queries: mmarco (130 MB) lifts
-  memo's notes from 0.72 to 0.84 first place and every paraphrase into the top 3, ~2 s a query warm; on Drive
-  documents the gain is within noise; qmd's Qwen3 is no better and three times slower
-  ([rerankers](https://github.com/WireCatLabs/cli-testing/blob/docs/search-everywhere-and-qmd/performance/search/local-documents/README.md#rerankers-on-these-queries)).
-  One run of 25 queries per corpus, no held-out set — the message cross-encoder also looked good on dev and
-  failed held-out. Before building: a fresh query set, partly the owner's, run once with the setup frozen.
-  Owner (NEED-1004): behind its own flag, off by default; score alone or qmd's blend is decided after the
-  second, frozen run.
-- **No query-expansion model** — qmd rewrites each query with a 1.7B model. Our callers are agents that can
-  search again in other words; the skills say so. A model for this stays optional and off by default, if ever.
-- **EmbeddingGemma for documents** — ours already ships it as an option; on documents it was not compared
-  with e5-small. Measured together with the reranker; the default for notes changes only on that result.
-- **Generated tags for notes, documents and messages, searchable at once** — claims kept apart from the owner's
-  tags, below them in `tag:`, kept as a status on `taggings`; tags in any language with a transliterated form for
-  the duplicate check; a model or an agent may set them. Owner: do it all, vectors too (NEED-1005 A).
-  Proposal: [generated-tags-plan.md](generated-tags-plan.md).
-- **One registry for what gets a vector** — short fields (tag names, titles) and long texts each embedded one
-  way; only registry fields get vectors; a test fails on writes around it. Owner direction 2026-10-13.
-  Proposal: [embedding-registry-plan.md](embedding-registry-plan.md).
-- **Mentions: phones, e-mail, links grouped by site, documents, names and places found in text** — one entity
-  with a kind, reviewed by an agent and the owner, linked to people, organizations, documents and places; rules,
-  no model, by default. Owner direction NEED-1006 A. Proposal: [mentions-plan.md](mentions-plan.md).
-- **Embedding throughput** — notes, mail and documents embed in one session on `min(8, cores)` threads
-  (`src/services/notes-search.ts`), 8 of 24 cores here; one text per `session.run` (`src/embeddings/embed.ts`).
-  The worker benchmark split the same 8 threads between workers (1.04–1.1×); more sessions with 8 threads each
-  were not measured (two Gemma runs side by side here: roughly 1.3× together, one batch, not a measurement). On
-  1,200-character document passages e5-small embedded 11–15 a second and EmbeddingGemma ~1.6, not the 31 and 2
-  in the model table. Measure, in order: more sessions over all cores (~700 MB each), batched inputs, a native
-  ONNX Runtime (larger install).
-- **Search start-up** — memo and drive take 1.2–2.4 s a search from the CLI; the same vector search in a warm
-  process takes 7 ms, so most of the CLI time is probably start-up and model loading. Measure where the CLI time goes (process start, store open, model load) before tuning search.
-- **Speech throughput** — voice messages are heard one after another, the recognizer is opened and freed for
-  each (`src/speech/transcribe.ts` `hearLocally`), on one thread (`src/speech/recognize.ts`). Measure one
-  recognizer per pass, then several workers over files (each holds its own model).
-- **Shared command-lint debt the CLIs baseline** (WC-CMD-1/10/13/19/22/24, WC-ACCT-8): measured on wa (2026-10-17),
-  all on shared commands — 195 leaves without examples, 88 summaries over 80 characters, 13 arguments without help,
-  no declared `output.entity` outside tests, and 7 flags with two meanings (`--by`, `--file`, `--kind`, `--limit`,
-  `--model`, `--provider`, `--source`). `--provider` names an AI model provider on `conversations build/embed/
-  related/status` and `search conversations` but a messenger elsewhere, and `tags remove --source` means
-  manual/auto; renaming them (`--model-provider`, `--origin`) breaks tg's and max's scripts, so it waits for a
-  breaking release, with the old names as aliases (decided 2026-10-17).
+- **An id is permanent** and never reused. Take one with `bin/next-id CORE`: one counter for every worktree on the
+  machine, under a lock, and never below the highest number on any branch.
+- **One item:** id · priority · title · where the work starts (`path:line`, a plan or a pull request) · details.
+  One to three lines; longer analysis goes to [BACKLOG-NOTES.md](BACKLOG-NOTES.md) or a plan beside this page.
+- **Priority:** **P1** broken, untrue to users, an install failure or a security problem: done before WireCat is
+  advertised · **P2** this cycle · **P3** someday, in [BACKLOG_LATER.md](BACKLOG_LATER.md).
+- **Mark:** none — not started · 🚧 `<branch>` — taken · 🟡 — half done, the rest named · ⏸️ — deferred by the owner ·
+  🚩 — waits on an owner decision.
+- **Claim before code:** put `🚧 <branch>` on the line in the first push of the branch.
+- **Close in the pull request that ships the work:** delete the line (and its note). The changelog keeps history.
+
+## Launch blockers (P1)
+
+- **CORE-1** · P1 · The MCP server library has three high-severity advisories, so a fresh install of any WireCat CLI
+  reports 8 high alerts in `npm audit`, and `npm audit fix --force` offers the deprecated `@wirecat/cli-core@0.20.0`.
+  Raise `@modelcontextprotocol/server` 2.1.0 → 2.3.0 (`package.json:168`, dependabot #1699, checks green), release,
+  then every CLI adopts it.
+- **CORE-2** · P1 · README statements that are no longer true: proximity is refused (`README.md:119`; `"a b"~N` works
+  since #1748), "seventeen" optional groups (`:90`; [ADAPTERS.md](ADAPTERS.md#required-core-and-optional-groups) lists
+  20), the tool lists leave out wa and drive (`:7`, `:74`), "the profile is the first word of every account command"
+  (`:213`; memo takes `--account`, drive `--profile`), and a dated count of breaking versions (`:255`).
+
+## Next (P2)
+
+- **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
+  owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
+- **CORE-4** · P2 · 🟡 Shared command-lint debt the CLIs baseline: examples and summaries are in open `docs/standards-*`
+  and `fix/standards-*` pull requests (#1774–#1814); the flag renames wait for a breaking release.
+  [Notes](BACKLOG-NOTES.md#core-4).
+- **CORE-5** · P2 · Let a new source join without editing this package: the provider registry is a fixed list
+  (`src/domain/providers.ts:14`) and there is no single `/sdk` entry point (`docs/dev/ADAPTERS.md:23`). Needed before
+  the Slack, Google Meet and Notion CLIs, and it is the "SDK for new integrations" on the public roadmap. Plan first.
+- **CORE-6** · P2 · Search start-up: memo and drive take 1.2–2.4 s a search; measure process start, store open and
+  model load first. [Notes](BACKLOG-NOTES.md#core-6).
+- **CORE-7** · P2 · 🟡 One `--source` for every search: left are document-only selection, provider and kind coverage in
+  answers, and memo's work item 5. [source-everywhere-plan.md](source-everywhere-plan.md).
+- **CORE-8** · P2 · Typo-tolerant search by default (approved option B); waits on plain search covering transcripts,
+  file names and file text. [typo-search-default-plan.md](typo-search-default-plan.md) ·
+  [notes](BACKLOG-NOTES.md#core-8).
+- **CORE-9** · P2 · Generated tags for notes, documents and messages (approved, not built: `taggings` has no status
+  column, `src/store/sqlite/schema.ts:1689`). [generated-tags-plan.md](generated-tags-plan.md) ·
+  [notes](BACKLOG-NOTES.md#core-9).
+- **CORE-10** · P2 · 🚧 `feat/reviewed-tag-apply` Reviewed tag consolidation (draft #1577, store version 30 reserved in
+  [COORDINATION.md](COORDINATION.md#store-migrations)). Foundation: [TAG-CONSOLIDATION.md](TAG-CONSOLIDATION.md).
+- **CORE-11** · P2 · 🚧 `feat/transcript-index` Voice-note transcripts searchable in any word form (#1761, store
+  version 29).
+- **CORE-12** · P2 · 🚧 `feat/media-archive` Verified media archives and daily timers (draft #1758).
