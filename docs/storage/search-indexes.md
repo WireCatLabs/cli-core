@@ -231,7 +231,7 @@ most `--max-chats` chats (20) and embeds at most `--max-chunks` chunks (2,000, a
 the next run goes on from there, and `left` in the JSON names what is still to do. `conversations search
 --catch-up` runs both, for its scope, before it searches; MCP `conversations_refresh` does the same, at most 500
 chunks a call so a client does not give up on it. Only the model on this machine embeds this way:
-`--provider` and `--base-url` are refused, a model is never downloaded, and with none downloaded the build
+`--embedding-provider` and `--base-url` are refused, a model is never downloaded, and with none downloaded the build
 still runs and nothing is embedded. Dialogs, channels and chats of unknown kind (a chat seen only through its
 messages, never listed) are built only when named with `--chat`.
 

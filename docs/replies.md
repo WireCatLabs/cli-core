@@ -28,7 +28,7 @@ and an empty string clears them. Chat and person ids remain strings.
 | Chats | `--kinds dialog,group`, `--allow-chats`, `--deny-chats` |
 | Conditions | `--words`, `--question` / `--no-question`, `--mentions-me` / `--no-mentions-me` |
 | Senders | `--allow-people`, `--deny-people`, `--contacts-only` / `--no-contacts-only` |
-| Reply | `--template`, `--model fill-only`, `--as-reply` / `--no-as-reply` |
+| Reply | `--template`, `--template-mode fill-only`, `--as-reply` / `--no-as-reply` |
 | Limits | `--per-chat 1/12h`, `--per-person 1/1d` |
 | Hours | `--outside`, `--days`, `--timezone`, `--no-hours` |
 

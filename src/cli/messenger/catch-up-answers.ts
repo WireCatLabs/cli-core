@@ -1,6 +1,7 @@
 import { defineQuery, queryError } from "@wirecat/cli-base/query"
 import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
-import type { Inbox, Message, Review } from "../../domain/models.js"
+import type { ChatKind, Inbox, Message, Review } from "../../domain/models.js"
+import { kindsOf } from "../../services/inbox.js"
 import { type Hearing, heard, hearingMissing } from "../../speech/hearing.js"
 import type { AccountKey } from "../../store/store.js"
 import { listOf } from "../envelope.js"
@@ -10,14 +11,16 @@ import { messageItem } from "./message-items.js"
 
 const date = nativeField({ name: "date", type: "time", operators: ["range"], example: "date>2h" })
 
+const kind = nativeField({ name: "kind", type: "kw", operators: ["term", "phrase"], example: "kind:group,channel" })
+
 /** Where `inbox` starts reading: everything after a time. */
-export const INBOX_QUERY = defineQuery({ entity: "message", backend: "native", fields: [date] })
+export const INBOX_QUERY = defineQuery({ entity: "message", backend: "native", fields: [date, kind] })
 
 /** Where `review` starts, and the one chat it reads. */
 export const REVIEW_QUERY = defineQuery({
   entity: "message",
   backend: "native",
-  fields: [date, nativeField({ name: "chat", type: "kw", operators: ["term", "phrase"], example: "chat:7" })],
+  fields: [date, kind, nativeField({ name: "chat", type: "kw", operators: ["term", "phrase"], example: "chat:7" })],
 })
 
 /** The query's start and chat. A catch-up reads forward from one point, so an end is refused. */
@@ -25,7 +28,7 @@ export const catchUpQuery = (
   words: QueryWords,
   registry: typeof INBOX_QUERY,
   command: string,
-): { since?: number; chat?: string; meta?: Partial<Meta> } => {
+): { since?: number; chat?: string; kinds?: ChatKind[]; meta?: Partial<Meta> } => {
   const terms = nativeTerms(listQuery(typedQuery(words), registry, command), command)
   const term = terms.get("date")
   const { since, until, meta } = timeBounds(term)
@@ -34,9 +37,11 @@ export const catchUpQuery = (
       command,
     })
   const chat = terms.get("chat")?.value
+  const kinds = terms.get("kind")?.value
   return {
     ...(since === undefined ? {} : { since }),
     ...(chat === undefined ? {} : { chat }),
+    ...(kinds === undefined ? {} : { kinds: kindsOf(kinds, "kind:") }),
     ...(meta === undefined ? {} : { meta }),
   }
 }

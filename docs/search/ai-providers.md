@@ -46,7 +46,7 @@ requests on shutdown, so a timed-out one-shot does not leave an HTTP request hol
 | `analysis_model` | Explicit model ID from your provider; required for configured analysis |
 | `analysis_base_url` | OpenAI-compatible API base, or Anthropic API root (without `/v1`) |
 
-`config set` validates values, and `config show` reports their source. Profile and kind-specific configuration use the existing settings layers. Prefixed environment variables such as `MAX_EMBEDDING_PROVIDER`, `MAX_EMBEDDING_MODEL`, `MAX_ANALYSIS_PROVIDER`, `MAX_ANALYSIS_MODEL` and corresponding `_BASE_URL` / `_DIMS` override files. Command options override settings. Changing `--provider` or `--base-url` to a different provider/endpoint starts a new provider choice; give that provider's model/dimensions rather than inheriting another provider's settings. `--provider local --model e5-small` selects local embeddings for one command.
+`config set` validates values, and `config show` reports their source. Profile and kind-specific configuration use the existing settings layers. Prefixed environment variables such as `MAX_EMBEDDING_PROVIDER`, `MAX_EMBEDDING_MODEL`, `MAX_ANALYSIS_PROVIDER`, `MAX_ANALYSIS_MODEL` and corresponding `_BASE_URL` / `_DIMS` override files. Command options override settings. Changing `--analysis-provider`, `--embedding-provider` or `--base-url` to a different provider/endpoint starts a new provider choice; give that provider's model/dimensions rather than inheriting another provider's settings. `--embedding-provider local --model e5-small` selects local embeddings for one command.
 
 ```sh
 max config set embedding_provider openai
@@ -77,7 +77,7 @@ Before analysis sends its first batch, the CLI explains the endpoint/model, mess
 ```sh
 max conversations consents list --json
 max conversations consents revoke --chat '<chat>'
-max conversations consents revoke --provider '<exact identity from the list>'
+max conversations consents revoke --consent-provider '<exact identity from the list>'
 max conversations consents revoke                     # every remembered analysis consent in this account
 ```
 

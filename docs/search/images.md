@@ -145,7 +145,7 @@ the counts of pictures not readable and failed when there are any. In machine mo
   messenger's connection, the command runs inside `serve`, which does the downloads.
 - The only network use of level 3 is the one time model download from Hugging Face.
 - Level 1 uses whatever text model `conversations embed` is told to use. The default is local. With
-  `--provider`, the chunk texts, which include the image context texts, go to that service. Keep the default
+  `--embedding-provider`, the chunk texts, which include the image context texts, go to that service. Keep the default
   when the chats are private.
 
 ## Quality and cost

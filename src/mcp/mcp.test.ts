@@ -1408,8 +1408,10 @@ describe("the MCP server", () => {
       const shown = (await call("conversations show", { conversation: "7", message: root })).body.item
       expect(shown.messages.map((one: Message) => one.id)).toEqual(members)
     }
-    expect((await call("conversations links clear", { chat: "7", model: "other" })).body.item.cleared).toBe(0)
-    expect((await call("conversations links clear", { chat: "7", model: "synthetic-agent" })).body.item.cleared).toBe(4)
+    expect((await call("conversations links clear", { chat: "7", answer_model: "other" })).body.item.cleared).toBe(0)
+    expect(
+      (await call("conversations links clear", { chat: "7", answer_model: "synthetic-agent" })).body.item.cleared,
+    ).toBe(4)
     expect((await call("conversations build", { chat: "7" })).body.item.conversations).toBe(4)
     expect(telegram.opened()).toBe(opened)
     expect(models.opened).toBe(inferred)
@@ -3951,7 +3953,9 @@ describe("MCP prompts and resources", () => {
 
     expect(plain).toContain('Call chat_read with {"command":"inbox"} once.')
     expect(plain).toContain('chat_write with {"command":"chats mark-read"')
-    expect(channels).toContain('{"command":"inbox","arguments":{"kind":"channel,group","new":true}}')
+    expect(channels).toContain(
+      JSON.stringify({ command: "inbox", arguments: { query: 'kind:"channel,group"', new: true } }),
+    )
     expect(since).toContain('"arguments":{"query":"date>2h"}')
   })
 
@@ -4063,9 +4067,9 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
     const { call } = await connect(scripted(), { history: "store", root: await filledRoot() })
     const since = 'date>"2026-09-27T00:00:00.000Z"'
 
-    const groups = await call("review", { query: since, kind: "group" })
-    const dialogs = await call("review", { query: since, kind: "dialog" })
-    const unread = await call("inbox", { kind: "dialog,channel" })
+    const groups = await call("review", { query: `${since} kind:group` })
+    const dialogs = await call("review", { query: `${since} kind:dialog` })
+    const unread = await call("inbox", { query: "kind:dialog,channel" })
 
     expect([...new Set(groups.body.items.map((one: { chat_id: string }) => one.chat_id))]).toEqual(["7"])
     expect(dialogs.body.items).toEqual([])

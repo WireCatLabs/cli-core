@@ -54,11 +54,19 @@
     "--allow-writes": {
       "meaning": "acknowledge that the profile offers writing tools when installing local MCP"
     },
+    "--analysis-provider": {
+      "value": "<provider>",
+      "meaning": "analysis: agent, openai or anthropic"
+    },
     "--analyze": {
       "meaning": "link conversation batches using the configured analysis provider, with remembered chat/provider consent"
     },
     "--anonymous": {
       "meaning": "nobody sees who voted for what"
+    },
+    "--answer-model": {
+      "value": "<model>",
+      "meaning": "only the stored answers this model gave"
     },
     "--answerer": {
       "value": "<person>",
@@ -208,6 +216,10 @@
       "meaning": "maximum source bytes returned from a retained attachment; 1–1048576",
       "default": "524288"
     },
+    "--claim": {
+      "value": "<claim>",
+      "meaning": "remove only this ownership claim: manual or auto"
+    },
     "--close-time": {
       "value": "<delay>",
       "meaning": "it closes by itself this long after sending, like 90s or 5m"
@@ -227,6 +239,10 @@
     "--concurrency": {
       "value": "<n>",
       "meaning": "remote: requests at once (default: 4)"
+    },
+    "--consent-provider": {
+      "value": "<identity>",
+      "meaning": "exact provider identity from consents list; defaults to every provider"
     },
     "--contact": {
       "value": "<person>",
@@ -283,7 +299,7 @@
       "value": "<n>",
       "meaning": "remote: the vector size — needed with --base-url; shortens an OpenAI model's"
     },
-    "--disappear-time": {
+    "--disappear-after": {
       "value": "<duration|off>",
       "meaning": "new messages disappear this long after sending: 24h, 7d, 90d; off keeps them"
     },
@@ -309,6 +325,10 @@
       "value": "<duration>",
       "meaning": "list tasks due within this: 30m, 2h, 1d",
       "default": "1d"
+    },
+    "--embedding-provider": {
+      "value": "<provider>",
+      "meaning": "embedding provider: local or openai; flags override profile settings"
     },
     "--emoji": {
       "value": "<emoji>",
@@ -447,7 +467,7 @@
     },
     "--kind": {
       "value": "<kind>",
-      "meaning": "only chats of this kind: dialog, group, channel or saved"
+      "meaning": "the kind of link to record; the command lists the supported task and evidence relations"
     },
     "--kinds": {
       "meaning": "chat kinds: dialog, group; comma-separated, empty for any",
@@ -598,9 +618,8 @@
       "meaning": "minimum known cumulative views"
     },
     "--model": {
-      "value": "<id>",
-      "meaning": "which downloaded speech model hears them; `models audio list` shows them",
-      "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13); replies edit uses this option for legacy template mode: fill-only or may-reword; use ai blocks instead"
+      "value": "<model>",
+      "meaning": "which model runs analysis, embedding or local speech recognition; the command identifies the applicable model family"
     },
     "--multiple": {
       "meaning": "people may pick several answers"
@@ -800,10 +819,6 @@
       "value": "<who>",
       "meaning": "who sees the profile photo: everyone, contacts or nobody"
     },
-    "--provider": {
-      "value": "<provider>",
-      "meaning": "embedding provider: local or openai; analysis: agent, openai or anthropic; consents revoke: exact provider identity from the list"
-    },
     "--public-url": {
       "value": "<url>",
       "meaning": "the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch"
@@ -983,6 +998,10 @@
     "--template": {
       "meaning": "the reply template",
       "value": "<text>"
+    },
+    "--template-mode": {
+      "value": "<mode>",
+      "meaning": "legacy template mode: fill-only or may-reword; use ai blocks instead"
     },
     "--text": {
       "value": "<text>",
@@ -2681,7 +2700,7 @@
           "reason": "WhatsApp has no pin switch of its own: who may pin follows who may edit the group's info"
         },
         "--description": "all",
-        "--disappear-time": {
+        "--disappear-after": {
           "in": [],
           "planned": {
             "tg": "tg-cli TG-21: Telegram's default banned rights (send, change info) and auto-delete timer",
@@ -2834,14 +2853,14 @@
     "contacts notes add": {
       "in": "all",
       "options": {
-        "--file": "all"
+        "--text-file": "all"
       }
     },
     "contacts notes edit": {
       "in": "all",
       "options": {
-        "--file": "all",
-        "--revision": "all"
+        "--revision": "all",
+        "--text-file": "all"
       }
     },
     "contacts notes list": {
@@ -2922,6 +2941,9 @@
     "conversations build": {
       "in": "all",
       "options": {
+        "--analysis-provider": {
+          "in": "all"
+        },
         "--analyze": {
           "in": "all"
         },
@@ -2936,9 +2958,6 @@
           "in": "all"
         },
         "--model": {
-          "in": "all"
-        },
-        "--provider": {
           "in": "all"
         },
         "--size": {
@@ -2958,7 +2977,7 @@
         "--chat": {
           "in": "all"
         },
-        "--provider": {
+        "--consent-provider": {
           "in": "all"
         }
       }
@@ -2970,6 +2989,7 @@
         "--chat": "all",
         "--concurrency": "all",
         "--dims": "all",
+        "--embedding-provider": "all",
         "--max-chats": {
           "in": "all"
         },
@@ -2978,7 +2998,6 @@
         },
         "--max-tokens": "all",
         "--model": "all",
-        "--provider": "all",
         "--threads": "all"
       }
     },
@@ -2988,8 +3007,8 @@
         "--base-url": "all",
         "--chat": "all",
         "--dims": "all",
-        "--model": "all",
-        "--provider": "all"
+        "--embedding-provider": "all",
+        "--model": "all"
       }
     },
     "conversations embed status": {
@@ -2998,8 +3017,8 @@
         "--base-url": "all",
         "--chat": "all",
         "--dims": "all",
-        "--model": "all",
-        "--provider": "all"
+        "--embedding-provider": "all",
+        "--model": "all"
       }
     },
     "conversations links": {
@@ -3016,10 +3035,10 @@
     "conversations links clear": {
       "in": "all",
       "options": {
-        "--chat": {
+        "--answer-model": {
           "in": "all"
         },
-        "--model": {
+        "--chat": {
           "in": "all"
         }
       }
@@ -3051,13 +3070,13 @@
         "--dims": {
           "in": "all"
         },
+        "--embedding-provider": {
+          "in": "all"
+        },
         "--limit": {
           "in": "all"
         },
         "--model": {
-          "in": "all"
-        },
-        "--provider": {
           "in": "all"
         }
       }
@@ -3077,10 +3096,10 @@
         "--dims": {
           "in": "all"
         },
-        "--model": {
+        "--embedding-provider": {
           "in": "all"
         },
-        "--provider": {
+        "--model": {
           "in": "all"
         }
       }
@@ -3142,7 +3161,6 @@
       "in": "all",
       "options": {
         "--all": "all",
-        "--kind": "all",
         "--limit": "all",
         "--model": "all",
         "--new": "all",
@@ -3483,7 +3501,10 @@
           "in": ["tg", "wa"],
           "reason": "Telegram can transcribe on its side; MAX cannot, so max always uses the local model"
         },
-        "--model": "all"
+        "--model": {
+          "in": "all",
+          "wording": "MAX retains its own transcriber and names its model-list command; the shared TG/WA transcriber explains that choosing a model implies local recognition. Both select a downloaded speech model. Align the remaining MAX command when it adopts the shared transcriber."
+        }
       }
     },
     "messages unpin": {
@@ -3729,7 +3750,6 @@
         "--do": "all",
         "--kinds": "all",
         "--mentions-me": "all",
-        "--model": "all",
         "--no-as-reply": "all",
         "--no-contacts-only": "all",
         "--no-hours": "all",
@@ -3740,6 +3760,7 @@
         "--per-person": "all",
         "--question": "all",
         "--template": "all",
+        "--template-mode": "all",
         "--timezone": "all",
         "--words": "all"
       }
@@ -3776,7 +3797,6 @@
       "in": "all",
       "options": {
         "--all": "all",
-        "--kind": "all",
         "--model": "all",
         "--new": "all",
         "--since": {
@@ -3961,6 +3981,7 @@
         },
         "--chat": "all",
         "--dims": "all",
+        "--embedding-provider": "all",
         "--filter": {
           "in": "all"
         },
@@ -3976,7 +3997,6 @@
           "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--model": "all",
-        "--provider": "all",
         "--since-time": "all",
         "--source": {
           "in": "all"
@@ -4698,13 +4718,13 @@
         "--chat": {
           "in": "all"
         },
+        "--claim": {
+          "in": "all"
+        },
         "--contact": {
           "in": "all"
         },
         "--message": {
-          "in": "all"
-        },
-        "--source": {
           "in": "all"
         },
         "--task": {

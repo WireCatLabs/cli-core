@@ -21,7 +21,7 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
       "[query...]",
       "a strict Lucene query, as for search messages; none counts every stored message; with --saved, more words AND-ed to it",
     )
-    .option("--by <chat|sender|day|hour>", "what to count by (default: chat)", groupingOf)
+    .option("--by <group>", "count by chat, sender, day or hour (default: chat)", groupingOf)
     .option("--chat <chat>", `only this chat — the same as chat: in the query; ${messenger.chatArgument}`)
     .option(
       "--source <accounts>",

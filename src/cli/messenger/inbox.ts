@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import type { MessageHit } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
 import { CHAT_KINDS } from "../../services/chats.js"
@@ -47,7 +47,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
     .option("--new", "what arrived since the last check, each message once — for scheduled runs")
     .option("--limit <n>", "at most this many per chat, the newest", positiveCount("--limit"))
     .option("--all", "muted and archived chats too — left out unless they mention you or reply to you")
-    .option("--kind <kinds>", `only chats of these kinds, comma-separated: ${CHAT_KINDS.join(", ")}`)
+    .addOption(new Option("--kind <kinds>", `compatibility spelling for kind:; ${CHAT_KINDS.join(", ")}`).hideHelp())
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
     .addHelpText("after", "To mark a chat read, use `chats mark-read <chat>`. The other side sees it.")
@@ -69,8 +69,10 @@ export const inboxCommand = (messenger: Messenger): Command =>
       const context = messengerContext(this, messenger)
       const { app } = messenger
       const { settings, renderer, format, env } = context
-      const kinds = kind === undefined ? undefined : kindsOf(kind)
-      const { since, meta } = catchUpQuery(query, INBOX_QUERY, "inbox")
+      const { since, meta, kinds: queriedKinds } = catchUpQuery(query, INBOX_QUERY, "inbox")
+      if (kind !== undefined && queriedKinds !== undefined)
+        throw new CliError("validation_error", "give kind: or its legacy --kind spelling, not both")
+      const kinds = queriedKinds ?? (kind === undefined ? undefined : kindsOf(kind))
       if (fresh && since !== undefined)
         throw new CliError("validation_error", "--new keeps its own point — not with a date in the query")
       const saved =

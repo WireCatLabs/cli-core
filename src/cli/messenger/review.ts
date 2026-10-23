@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import type { Review } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
@@ -42,7 +42,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
       "[query...]",
       `where the last review ended and which chat: date>2h, chat:"Book club"; ${REVIEW_DAYS} days ago if no date`,
     )
-    .option("--kind <kinds>", `only chats of these kinds, comma-separated: ${CHAT_KINDS.join(", ")}`)
+    .addOption(new Option("--kind <kinds>", `compatibility spelling for kind:; ${CHAT_KINDS.join(", ")}`).hideHelp())
     .option(
       "--unanswered [duration]",
       `only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d; ${UNANSWERED_HOURS}h if not given`,
@@ -68,7 +68,9 @@ export const reviewCommand = (messenger: Messenger): Command =>
       const hearWith = modelWith(options.transcribe, options.model)
       const context = messengerContext(this, messenger)
       const { settings, renderer, format, env } = context
-      const { since: from, chat, meta } = catchUpQuery(query, REVIEW_QUERY, "review")
+      const { since: from, chat, meta, kinds: queriedKinds } = catchUpQuery(query, REVIEW_QUERY, "review")
+      if (options.kind !== undefined && queriedKinds !== undefined)
+        throw new CliError("validation_error", "give kind: or its legacy --kind spelling, not both")
       if (options.new && (from !== undefined || options.unanswered !== undefined)) {
         // An open question stays open: moving past it would drop it from the next review.
         throw new CliError("validation_error", "--new keeps its own point — not with a date or --unanswered")
@@ -83,7 +85,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
         : undefined
       const since = from ?? saved?.first ?? reviewStart()
       const hours = options.unanswered === undefined ? undefined : unansweredHours(options.unanswered)
-      const kinds = options.kind === undefined ? undefined : kindsOf(options.kind)
+      const kinds = queriedKinds ?? (options.kind === undefined ? undefined : kindsOf(options.kind))
       let hearing: Hearing | undefined
       const transcribe = options.transcribe === true
       const { found, reader } = await context.withServices(async (services, connect) => {

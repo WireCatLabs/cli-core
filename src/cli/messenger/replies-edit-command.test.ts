@@ -43,6 +43,15 @@ const setup = () => {
 }
 
 describe("reply editors", () => {
+  it("keeps the legacy template mode and refuses both spellings without changing the rule", async () => {
+    const { path, invoke } = setup()
+    expect((await invoke("add", "away")).code).toBe(0)
+    expect((await invoke("edit", "away", "--model", "may-reword")).code).toBe(0)
+    const before = readFileSync(path, "utf8")
+    expect((await invoke("edit", "away", "--model", "fill-only", "--template-mode", "may-reword")).code).toBe(2)
+    expect(readFileSync(path, "utf8")).toBe(before)
+  })
+
   it("creates every default without a pre-existing directory, requires a template before enabling, and preserves state", async () => {
     const { env, path, invoke } = setup()
     expect(existsSync(env.CHAT_CONFIG_DIR)).toBe(false)
@@ -101,7 +110,7 @@ describe("reply editors", () => {
       "--contacts-only",
       "--template",
       "Hi {name}",
-      "--model",
+      "--template-mode",
       "may-reword",
       "--no-as-reply",
       "--per-chat",

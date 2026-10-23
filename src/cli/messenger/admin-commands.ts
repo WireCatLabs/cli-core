@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import {
   ADMIN_RIGHTS,
@@ -29,14 +29,14 @@ const SETTING_FLAGS: Record<GroupSettingKey, [flag: string, help: string]> = {
   onlyAdminsSend: ["only-admins-send <on|off>", "only admins may send messages"],
   onlyAdminsEditInfo: ["only-admins-edit-info <on|off>", "only admins may change the name, photo and description"],
   disappearingSeconds: [
-    "disappear-time <duration|off>",
+    "disappear-after <duration|off>",
     "new messages disappear this long after sending: 24h, 7d, 90d; off keeps them",
   ],
 }
 
 const flagOf = (key: GroupSettingKey) => `--${SETTING_FLAGS[key][0].split(" ")[0]}`
 
-/** Where commander puts the flag's value: `--disappear-time` is `disappearTime`, not the setting's own name. */
+/** Where commander puts the flag's value: `--disappear-after` is `disappearAfter`, not the setting's own name. */
 const optionKey = (key: GroupSettingKey) =>
   flagOf(key)
     .slice(2)
@@ -48,7 +48,7 @@ const settingsOf = (
 ): NonNullable<GroupChange["settings"]> => {
   const changes: NonNullable<GroupChange["settings"]> = {}
   for (const key of keys) {
-    const value = options[optionKey(key)]
+    const value = options[optionKey(key)] ?? (key === "disappearingSeconds" ? options.disappearTime : undefined)
     if (value === undefined) continue
     if (key === "disappearingSeconds") {
       changes[key] = value === "off" ? 0 : Math.round(parseDuration(String(value), flagOf(key)) / 1000)
@@ -83,7 +83,17 @@ const updateCommand = (messenger: Messenger): Command => {
     .option("--description <text>", "the new description")
   if (messenger.groupPhoto === true) update.option("--photo <file>", `a new photo for it — ${photoHelp(messenger)}`)
   if (messenger.groupPhotoRemoval === true) update.option("--remove-photo", "take its photo away; not with --photo")
-  for (const key of keys) update.option(`--${SETTING_FLAGS[key][0]}`, SETTING_FLAGS[key][1])
+  for (const key of keys) {
+    const option = new Option(`--${SETTING_FLAGS[key][0]}`, SETTING_FLAGS[key][1])
+    if (key === "disappearingSeconds") option.conflicts("disappearTime")
+    update.addOption(option)
+  }
+  if (keys.includes("disappearingSeconds"))
+    update.addOption(
+      new Option("--disappear-time <duration|off>", "compatibility alias for --disappear-after")
+        .hideHelp()
+        .conflicts("disappearAfter"),
+    )
   return update.action(async function (this: Command, chat: string) {
     const context = messengerContext(this, messenger)
     const { title, description, photo, removePhoto, ...rest } = this.opts<{

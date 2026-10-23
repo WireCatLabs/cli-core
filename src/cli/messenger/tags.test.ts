@@ -125,7 +125,9 @@ describe("tags", () => {
       "108",
     ])
 
-    expect(json(await call("tags", "remove", "vip", "gone", "--contact", "11", "--json")).item).toMatchObject({
+    expect(
+      json(await call("tags", "remove", "vip", "gone", "--contact", "11", "--claim", "manual", "--json")).item,
+    ).toMatchObject({
       removed: ["vip"],
       unchanged: ["gone"],
     })

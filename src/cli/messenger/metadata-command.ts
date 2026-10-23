@@ -33,7 +33,7 @@ export const metadataCommand = (messenger: Messenger): Command => {
       [],
     )
     .option("--only-missing", "only chats with no metadata yet; without --chat, every stored group/channel")
-    .option("--limit <number>", "process at most 1–500 chats", positiveCount("--limit"), 50)
+    .option("--limit <n>", "process at most 1–500 chats", positiveCount("--limit"), 50)
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "metadata.refresh")

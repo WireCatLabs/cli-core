@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest"
 import { catchUpQuery, INBOX_QUERY, REVIEW_QUERY } from "./catch-up-answers.js"
 
 describe("catchUpQuery", () => {
+  it("takes comma-separated chat kinds in the native query", () => {
+    for (const registry of [INBOX_QUERY, REVIEW_QUERY]) {
+      expect(catchUpQuery(["kind:group,channel"], registry, "review").kinds).toEqual(["group", "channel"])
+      expect(() => catchUpQuery(["kind:groups"], registry, "review")).toThrow(/kind:/)
+    }
+  })
+
   it("reads a start and a quoted chat, as review.next writes them", () => {
     expect(catchUpQuery('date>"2026-10-01T09:00:00.000Z" chat:"Book club"', REVIEW_QUERY, "review")).toEqual({
       since: Date.parse("2026-10-01T09:00:00.000Z"),

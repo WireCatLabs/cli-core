@@ -448,8 +448,8 @@ describe("inbox --new", () => {
     const chats = [recentChat("g", 2), recentChat("c", 1, "channel")]
     const { inbox } = setup({ g: [recentMessage("g", 2)], c: [recentMessage("c", 1)] }, chats)
 
-    const channels = await inbox(["--new", "--kind", "channel"])
-    const groups = await inbox(["--new", "--kind", "group"])
+    const channels = await inbox(["--new", "kind:channel"])
+    const groups = await inbox(["--new", "kind:group"])
 
     expect(chatIds(channels.answer)).toEqual(["c"])
     expect(chatIds(groups.answer)).toEqual(["g"])
