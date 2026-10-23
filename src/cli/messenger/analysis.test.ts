@@ -126,6 +126,8 @@ const setup = async () => {
       { app, commands: () => [conversationsCommand(messenger), configCommand(app, config)] },
       { streams, tty: false, env: { ...env, ...extra }, keyring },
     )
+    if (code === 0 && argv[0] === "conversations" && argv[1] === "build" && argv.includes("--json"))
+      v.parse(ENTITIES.conversation_build, JSON.parse(streams.stdout[0] ?? "null").item)
     return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
   }
   const call = (...argv: string[]) => callWith({}, argv)
