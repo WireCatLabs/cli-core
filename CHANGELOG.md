@@ -181,6 +181,8 @@ shape of this file.
 - `search all --help` says the messenger's server is asked by default and names `--backend archive` and `--offline`
   to keep it to the local store.
 
+- Command-schema discovery includes an example in help and command discovery.
+
 ## 0.397.0 — 23.10.2026
 
 ### Changed — may break callers
