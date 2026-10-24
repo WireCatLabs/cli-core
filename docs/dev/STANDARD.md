@@ -1029,6 +1029,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--outside` | `<hours>` | answer outside this 24-hour window, such as 09:00-19:00 |  | `replies edit` |
 | `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `bot search messages` (planned), `chats documents list`, `chats list`, `chats members list`, `chats requests list`, `contacts list`, `mentions domains`, `mentions list`, `mentions places`, `polls voters` (tg, wa only), `runs list`, `search all`, `search messages`, `search notes`, `search runs`, `searches history`, `sends list`, `store jobs list` |
 | `--page-size` | `<n>` | how many items one request to the messenger asks for; the messenger's own if not given. **the default is each messenger's own page: 30 on MAX, 100 on Telegram** |  | `bot store fetch` (max, tg only), `messages sync`, `store gaps repair` |
+| `--parent` | `<id>` | parent task in the same project; none clears it |  | `tasks update` |
 | `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `attachments download`, `bot store fetch` (max, tg only), `messages download`, `messages sync`, `store gaps repair` |
 | `--per-chat` | `<limit>` | at most this many per chat, such as 1/12h |  | `replies edit` |
 | `--per-person` | `<limit>` | at most this many per person, such as 1/1d |  | `replies edit` |
@@ -1039,6 +1040,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--pin` | `<chat>` | pin this chat at the top of the folder; repeat it for more |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--pinned` | `<on\|off>` | on pins a forum topic at the top of the list, off unpins it |  | `topics edit` (tg-only) |
 | `--port` | `<port>` | the local port behind the tunnel, for mcp --http or bot watch --public-url |  | `bot watch`, `mcp` |
+| `--priority` | `<n>` | task priority from 0 (urgent) through 4 (low) |  | `tasks update` |
 | `--problems` |  | only failed responses, warnings and crashes |  | `runs show` |
 | `--profile-photo` | `<who>` | who sees the profile photo: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp` |
@@ -1061,7 +1063,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--revote` |  | people may change their vote |  | `polls create` (max, tg only) |
 | `--run` | `<id>` | the run the report is about; the newest failed one if not given |  | `doctor reports create` |
 | `--saved` | `<name\|id>` | run a saved search, or an earlier run by its id; options typed with it replace its own, more words are AND-ed |  | `search messages`, `stats chats newcomers`, `stats contacts responses`, `stats contacts top`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
-| `--scope` | `<scope>` | only what belongs to personal or to work accounts: personal or work |  | `contacts events` |
 | `--score` | `<helpful\|active\|engaging>` | the named ranking score preset; not with an explicit --measure |  | `stats contacts top`, `stats messages top` |
 | `--secret` | `<name>` | keep this secret beside the bot token instead of the token, at a hidden prompt; never from the command line |  | `bot auth set` (planned) |
 | `--secret-stdin` |  | a secret MAX sends back in X-Max-Bot-Api-Secret — asked for, or read from a pipe |  | `bot webhooks set` (planned) |
@@ -1073,7 +1074,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--show-phone` |  | print the whole phone number |  | `account show`, `contacts info` |
 | `--silent` |  | deliver without a notification |  | `bot messages send` (planned), `messages forward` (max, tg only), `messages send` (max, tg only), `polls create` (max, tg only) |
 | `--since` | `<id-or-time>` | from this message id, an ISO 8601 time, or 2h / 1d ago; each command says its default. **becomes `--since-time` everywhere — NEED-485** |  | `inbox` (planned), `review` (planned) |
-| `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `attachments download`, `attachments jobs install`, `bot chats moderate` (planned), `bot store fetch` (max, tg only), `chats moderate`, `contacts context`, `contacts events`, `contacts prepare`, `messages sync`, `replies test`, `search conversations`, `search runs`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export` |
+| `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `attachments download`, `attachments jobs install`, `bot chats moderate` (planned), `bot store fetch` (max, tg only), `chats moderate`, `contacts context`, `contacts prepare`, `messages sync`, `replies test`, `search conversations`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export` |
 | `--size` | `<n>` | messages to answer per batch, 10–200; 50 by default |  | `conversations batches show`, `conversations batches status`, `conversations links rebuild` |
 | `--skip` | `<which>` | a folder leaves out chats that are muted, read or archived |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--sms` |  | phone login: ask Telegram to send the code by SMS, not to the app; Telegram may still refuse |  | `session start` (tg-only) |
@@ -1110,7 +1111,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--unanswered` | `[duration]` | only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d. **max's own `review` still takes bare hours until T6 moves it (e2)** | `24h` | `review`, `tasks agenda` |
 | `--until` | `<time>` | only until then: a local time, or a duration from now |  | `chats mute` (planned) |
 | `--until-id` | `<id>` | only up to this message id, inclusive; the newest by default. **tg's `bot store fetch` takes a message link here, the message the fetch starts at, inclusive** |  | `bot store fetch` (tg-only), `chats mark-read` |
-| `--until-time` | `<time>` | through this ISO 8601 time, or 2h / 1d ago |  | `contacts events`, `stats chats newcomers`, `stats chats retention` |
+| `--until-time` | `<time>` | through this ISO 8601 time, or 2h / 1d ago |  | `stats chats newcomers`, `stats chats retention` |
 | `--upgrade` |  | explicitly upgrade a basic group to a supergroup before enabling topics; its chat id changes |  | `topics enable` (tg-only) |
 | `--verbose` |  | more detail in what is shown: -v ids, -vv everything known | `0` | every command |
 | `--version` |  | print the version number |  | every command |
