@@ -14,6 +14,19 @@ export { parseMarkdownSpans } from "./domain/markdown-spans.js"
 export type { MessageLink, MessagePermalink } from "./domain/message-link.js"
 export type * from "./domain/models.js"
 export { countedPoll } from "./domain/polls.js"
+export {
+  isKind,
+  KINDS,
+  type Kind,
+  kindIn,
+  kindOf,
+  PROVIDERS,
+  type ProviderEntry,
+  providerNamed,
+  providers,
+  UNKNOWN_PROVIDER,
+  useProviders,
+} from "./domain/providers.js"
 export type { RankingGraphEvidence, RankingGraphLink } from "./domain/rankings-graph.js"
 export type {
   RankingComponent,

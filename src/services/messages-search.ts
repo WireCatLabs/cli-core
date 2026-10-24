@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { calendarKey } from "../domain/calendar.js"
 import { parseLocator } from "../domain/locator.js"
+import { kindIn, UNKNOWN_PROVIDER } from "../domain/providers.js"
 import { type MessengerTraits, syncsOneChat } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
@@ -151,15 +152,30 @@ export const prepareLucene = async (
   if (request.accounts?.length === 0) throw new CliError("validation_error", "a search names at least one account")
   if (request.senders !== undefined && leaves.some(({ field }) => field === "from"))
     throw new CliError("validation_error", "--from and from: together — name the people once")
+  const chosen =
+    request.accounts ??
+    listed?.accounts ??
+    (source !== undefined
+      ? held.filter(({ provider }) => inSource(source, provider))
+      : sources.length
+        ? held.filter(({ provider }) => sources.some((source) => inSource(source, provider)))
+        : [account])
+  // The account running is the app's own: its provider is a messenger whether or not an entry names it.
+  const unknown = chosen.filter(({ provider }) => provider !== account.provider && kindIn(provider) === undefined)
+  const unknownSkipped: SkippedSource[] = unknown.map(({ provider, account }) => ({
+    source: `${provider}:${account}`,
+    code: "not_found",
+    reason: UNKNOWN_PROVIDER,
+  }))
+  if (unknown.length > 0 && unknown.length === chosen.length)
+    throw new CliError(
+      "not_found",
+      `this search reads nothing: ${unknownSkipped.map(({ source }) => source).join(", ")} (${UNKNOWN_PROVIDER})`,
+    )
+  const skipped = [...(listed?.skipped ?? []), ...unknownSkipped]
   const accounts = accountsOfKind(
     request.kind,
-    request.accounts ??
-      listed?.accounts ??
-      (source !== undefined
-        ? held.filter(({ provider }) => inSource(source, provider))
-        : sources.length
-          ? held.filter(({ provider }) => sources.some((source) => inSource(source, provider)))
-          : [account]),
+    chosen.filter((one) => !unknown.includes(one)),
     held,
     source ?? (sources.includes("email") ? "email" : sources[0]),
     messenger.app?.command,
@@ -246,7 +262,7 @@ export const prepareLucene = async (
     stemsReady,
     ...(stemmer ? { stemming: stemmingOf(ast.root, stemmer) } : unstemmed ? { stemming: unstemmed } : {}),
     scopeAccounts,
-    ...(listed?.skipped.length ? { skipped: listed.skipped } : {}),
+    ...(skipped.length ? { skipped } : {}),
     ...(selectedChat ? { selectedChat } : {}),
   }
 }

@@ -1,7 +1,7 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
-import { INTERNAL_NOTES, kindOf } from "../domain/providers.js"
+import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
@@ -149,7 +149,8 @@ export const searchAll = async (
     const read =
       found.coverage?.accounts ??
       given ??
-      (await store.accounts.accounts()).filter(({ provider }) => kindOf(provider) === kind)
+      (await store.accounts.accounts()).filter(({ provider }) => kindIn(provider) === kind)
+    for (const one of found.skipped ?? []) if (!skipped.some(({ source }) => source === one.source)) skipped.push(one)
     accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
     return found.items.map((hit): SearchAllItem => {
       const at = parseLocator(hit.locator)
