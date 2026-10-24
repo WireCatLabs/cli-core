@@ -43,6 +43,10 @@ shape of this file.
   specific reason and a callback before modifying an inherited definition. Exact before/after values remain visible
   in contract discovery. Independent shell replacements pin static, reviewed declarations, so new Core defaults cannot be silently omitted. Provider-only commands may extend groups; inherited leaves retain their contracts.
 
+### Fixed
+
+- **`config set` and `config unset` work while a moved permission key is saved.** Every other command still refuses the old key and names its replacement; `config unset permissions.<old>` and `config set permissions.<new>` now fix it instead of failing with the same error.
+
 ## 0.410.0 — 24.10.2026
 
 ### Added
