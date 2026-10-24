@@ -22,6 +22,22 @@ const QUERY: Entry[] = [
   ["query.topic-scope", "a topic needs its chat in the query"],
 ].map(([reason, message]) => validation(reason as string, message as string))
 
+const SIGN_IN: Entry[] = [
+  ["oauth.declined", "authentication_error", "the provider's consent was declined"],
+  ["oauth.timeout", "timeout", "the sign-in was not finished in time"],
+  ["oauth.mismatch", "authentication_error", "the pasted sign-in result belongs to another sign-in"],
+  ["oauth.missing", "authentication_error", "this profile is not signed in"],
+  ["oauth.locked", "provider_unavailable", "another process holds this sign-in's lock"],
+  ["oauth.no-response", "outcome_unknown", "the token request did not finish"],
+  ["oauth.unavailable", "provider_unavailable", "the provider's token endpoint is unavailable"],
+  ["oauth.expired", "authentication_error", "the provider refused the saved sign-in; sign in again"],
+  ["oauth.invalid-response", "invalid_response", "the provider's token response could not be used"],
+  ["oauth.failed", "authentication_error", "the provider returned no offline refresh token"],
+  ["oauth.revoke-failed", "outcome_unknown", "the provider did not confirm the revoke"],
+  ["oauth.invalid", "authentication_error", "the saved sign-in cannot be read"],
+  ["oauth.not-saved", "configuration_error", "the sign-in cannot be saved or read where it is kept"],
+]
+
 const OTHERS: Entry[] = [
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
   [
@@ -114,7 +130,7 @@ export const INPUT_FIELD_REASONS: ErrorReason[] = defineReasons([
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
   ...INPUT_FIELD_REASONS,
-  ...[...QUERY, ...OTHERS].map(([reason, code, message]) => ({
+  ...[...QUERY, ...SIGN_IN, ...OTHERS].map(([reason, code, message]) => ({
     reason,
     code,
     message,

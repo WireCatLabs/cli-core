@@ -5,6 +5,11 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Sign-in module `@wirecat/cli-core/oauth`** (available from cli-core 0.413.0). A CLI declares its provider (URLs, client, loopback or relay redirect) and gets authorization code with PKCE S256 (state check, timeout, cancel, paste fallback), refresh and revoke over plain `fetch`, and a `tokenKeeper` whose refresh takes a lock per keyring entry shared by every process, so two processes refreshing at once send one request. `credentialStorage` sits on cli-base's `Credentials`; `standardCodec` writes new entries as `oauth:<provider>:<profile>`, and `driveSessionCodec` and `zoomTokenCodec` read and write drive's and zm's existing entries unchanged, so nobody signs in again.
 
 ## 0.412.0 — 24.10.2026
 
