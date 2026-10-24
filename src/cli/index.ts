@@ -233,7 +233,15 @@ export {
   snakeKeysKeeping,
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
-export { askSetupQuestions, type FirstRun, type FirstRunIo, LANGUAGES, systemLanguage } from "./first-run.js"
+export {
+  askSetupQuestions,
+  asksAtStart,
+  type FirstRun,
+  type FirstRunIo,
+  LANGUAGES,
+  setupAtStart,
+  systemLanguage,
+} from "./first-run.js"
 export {
   checkGuide,
   checkStep,
