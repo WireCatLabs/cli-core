@@ -319,9 +319,11 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       })
     )
       // The command the person typed runs whatever happens to the questions.
+      // `setup` asks all three again: it is where a refusal sends the owner to change the answer.
       await askSetupQuestions({
         command,
         env: commandEnv,
+        all: path[0] === "setup",
         io: {
           ask: (prompt) => readSecret(prompt, { input, echo: true }),
           say: (text) => process.stderr.write(`${text}\n`),

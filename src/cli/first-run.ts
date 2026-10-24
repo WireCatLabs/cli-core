@@ -44,8 +44,8 @@ export interface FirstRun {
   install?: (argv: string[]) => boolean
 }
 
-/** Commands that run without first-run questions: setup asks them itself, the rest serve agents, help or the store. */
-const SKIPPED = new Set(["setup", "help", "guide", "completion", "mcp", "serve", "server", "update", "store"])
+/** Commands that run without first-run questions: they serve agents, help, or open the store themselves. */
+const SKIPPED = new Set(["help", "guide", "completion", "mcp", "serve", "server", "update", "store"])
 
 /**
  * Only a person at a terminal is asked. An agent in a real terminal passes every terminal check and would wait on

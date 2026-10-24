@@ -1296,8 +1296,8 @@ The three tools, their arguments and what each permission shows are on the handb
   and over `--permission`. A config file cannot name `*`; only the question at a terminal writes it, and an
   unreadable `setup` section counts as read-only. Nothing is asked of a run that is not a person at a terminal
   (machine output, `--no-input`, `CI`, a pipe, `AI_AGENT` or `CLAUDECODE` set), of a process under
-  `<PREFIX>_READ_ONLY`, or before `setup`, `help`, `guide`, `completion`, `mcp`, `serve`, `server`, `update` and
-  `store`. A failed question never stops the command typed. Changing the languages of a store in use rebuilds its
+  `<PREFIX>_READ_ONLY`, or before `help`, `guide`, `completion`, `mcp`, `serve`, `server`, `update` and `store`;
+  `setup` asks all three again, so the owner changes an answer there. A failed question never stops the command typed. Changing the languages of a store in use rebuilds its
   word forms at once, after the owner agrees, since word search refuses until they are rebuilt.
 
 `stats charts --output` selects SVG or PNG by the file extension; images never go to stdout.

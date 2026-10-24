@@ -114,9 +114,10 @@ describe("the questions every WireCat tool shares", () => {
 describe("asksAtStart", () => {
   const start = { headless: false, terminal: true, env: {}, readOnlyLock: undefined, path: ["chats", "list"] }
 
-  it("asks a person at a terminal, before any command but setup, help, the store and the servers", () => {
+  it("asks a person at a terminal, before any command but help, the store and the servers", () => {
     expect(asksAtStart(start)).toBe(true)
-    for (const path of [["setup"], ["store", "restore"], ["mcp"], ["serve"], ["help"]])
+    expect(asksAtStart({ ...start, path: ["setup"] })).toBe(true)
+    for (const path of [["store", "restore"], ["mcp"], ["serve"], ["help"]])
       expect(asksAtStart({ ...start, path })).toBe(false)
   })
 
