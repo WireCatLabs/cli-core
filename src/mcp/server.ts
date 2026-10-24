@@ -137,10 +137,14 @@ export const createServer = (
     syncsFirst(messenger) &&
     levelOf("messages.sync-first") === "allow" &&
     (path[0] !== "stats" || levelOf(`${path.join(".")}.sync-first`) === "allow")
-  // A command the level refuses is not offered: an agent is not handed a tool that cannot work.
+  // Discovery stays complete while availability follows changes to the profile.
   const generated = toolsFromCommands(program.commands, {
     exclude: [["bot"]],
     levels: settings.permissions,
+    currentLevels: () => {
+      refreshPermissions()
+      return settings.permissions
+    },
     readOnly: readOnlyLockOf(app, context.env) !== undefined,
     keyOf,
     authority,
@@ -172,18 +176,15 @@ export const createServer = (
     Object.entries(pictureTools(messenger)).filter(([key, one]) => {
       const path = commandOf(key, one).split(" ")
       if (!one.agentOnly && (!mounted.has(path.join(" ")) || lackedNeed(messenger, path.join(" ")))) return false
-      const level = levelOf(toolKey(key, one))
-      return (
-        level !== "deny" &&
-        !(one.annotations.readOnlyHint !== true && level === "readonly") &&
-        readKeysForCommand(path).every((data) => levelOf(data) !== "deny")
-      )
+      return true
     }),
   )
   const pictured = new Set(Object.entries(pictures).map(([key, one]) => commandOf(key, one)))
   // A command whose one adapter method the messenger lacks only refuses: an agent is not handed it.
   const commands = generated.filter((one) => !pictured.has(one.command) && !lackedNeed(messenger, one.command))
-  const writes = commands.filter((one) => one.writes).map((one) => one.command)
+  const writes = commands
+    .filter((one) => one.writes && one.availability?.().available !== false)
+    .map((one) => one.command)
   // No one is at a terminal to answer the guard's question: over MCP a write at level `ask` goes ahead.
   const goAhead = async () => {}
   const guard =
@@ -248,6 +249,7 @@ export const createServer = (
         })
       void runCommandForAgent(program, one.path, input, {
         profile: settings.profile,
+        readOnly: readOnlyLockOf(app, env) !== undefined,
         env,
         levels: () => {
           refreshPermissions()
@@ -255,6 +257,7 @@ export const createServer = (
         },
         overrides,
         keyOf,
+        authority,
         stdin,
         connection,
         environment: agentEnvironment,
@@ -275,6 +278,7 @@ export const createServer = (
     title: one.title,
     description: one.description,
     writes: one.writes,
+    availability: one.availability,
     input: one.input,
     ...(one.output ? { output: outputOf(one.output) } : {}),
     run: async (args, ctx) => {
@@ -356,7 +360,28 @@ export const createServer = (
       app.command,
       {
         ...Object.fromEntries(commands.map((one) => [one.command, asCommand(one)])),
-        ...surfaceCommands({ ...pictures, status }, registration),
+        ...Object.fromEntries(
+          Object.entries(surfaceCommands({ ...pictures, status }, registration)).map(([name, one]) => [
+            name,
+            {
+              ...one,
+              availability: () => {
+                refreshPermissions()
+                const picture = Object.entries(pictures).find(
+                  ([key, definition]) => commandOf(key, definition) === name,
+                )
+                if (!picture) return { available: true }
+                const key = toolKey(picture[0], picture[1])
+                const level = levelOf(key)
+                const denied = readKeysForCommand(name.split(" ")).find((read) => levelOf(read) === "deny")
+                const permission = level === "deny" || (one.writes && level === "readonly") ? key : denied
+                return permission
+                  ? { available: false, reason: `the profile does not allow ${permission}`, permission }
+                  : { available: true }
+              },
+            },
+          ]),
+        ),
       },
       app.errors,
       withheld,

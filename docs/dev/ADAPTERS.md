@@ -383,6 +383,20 @@ await run(argv, definition, {
 
 A listen that hangs still warns `store_not_written`, only sooner. No flag, variable or MCP call sets them.
 
+### MCP discovery and permissions
+
+A permission changes what an agent may execute, not whether the command exists. CLI help and
+`commands --json` retain the command catalogue. MCP `tools_search` returns denied commands with
+`availability: { available: false, reason, permission }`; permitted commands have
+`availability: { available: true }`. Both complete listings and search results include this field.
+Availability is read from current settings, and execution checks permissions again before opening a
+connection or changing anything. A command being listed grants no permission to run it.
+
+Bot MCP includes `config show|set|unset` in the bot's scope. It omits the arguments that could select
+personal or default settings, and supplies `--bot` internally. Changing limits requires
+`mcp.authority`; the agent still cannot turn that key or `bot.api` on for itself. Commands requiring
+an interactive terminal or an unbounded process keep their transport exclusions.
+
 ### Testing `mcp` over stdin and stdout
 
 `mcpOverStdio(start)` drives your CLI's `mcp` the way an agent's client does, through your own

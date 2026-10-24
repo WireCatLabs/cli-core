@@ -18,6 +18,7 @@ import type { MessengerAdapter } from "../ports/messenger.js"
 import {
   AUTHORITY_KEY,
   authorityAllowed,
+  BOT_API_KEY,
   botApiAllowed,
   isBotApi,
   keyForCommand,
@@ -35,6 +36,7 @@ export interface AgentProgram {
 
 export interface AgentContext {
   profile: string
+  readOnly?: boolean
   env?: NodeJS.ProcessEnv
   /** The levels in force now, this server's stricter ones included; read on every call. */
   levels?: () => Readonly<Record<PermissionKey, Level>>
@@ -53,8 +55,14 @@ export interface AgentContext {
 
 export type AgentAnswer = { result: unknown } | { error: ErrorObject }
 
-/** One command an agent may run: its path under the server's root, and its arguments as a schema. */
+export interface CommandAvailability {
+  available: boolean
+  reason?: string
+  permission?: string
+}
+
 export interface AgentTool {
+  availability?: () => CommandAvailability
   command: string
   /** From the program's root: `["bot", "messages", "send"]`. */
   path: readonly string[]
@@ -71,12 +79,13 @@ export interface CatalogueOptions {
   root?: readonly string[]
   /** Subtrees under the root left out: the personal server leaves out `["bot"]`. */
   exclude?: readonly (readonly string[])[]
-  /** The profile's levels when the server starts: what they refuse is not offered. */
+  /** Current levels annotate availability without removing commands from discovery. */
+  currentLevels?: () => Readonly<Record<PermissionKey, Level>>
   levels?: Readonly<Record<PermissionKey, Level>>
-  /** Under `<PREFIX>_READ_ONLY`: a change on the messenger is not offered either. */
+  /** Whether a read-only lock currently blocks messenger changes. */
   readOnly?: boolean
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
-  /** Whether a command changes what a later run may do (`grantsAuthority`): offered only under `mcp.authority`. */
+  /** Whether a command changes what a later run may do (`grantsAuthority`): execution requires `mcp.authority`. */
   authority?: (path: readonly string[]) => boolean
   /** Arguments left out of every tool, by name. */
   omit?: readonly string[]
@@ -220,29 +229,35 @@ const schemaOf = (fields: readonly Field[]) =>
 
 const startsWith = (path: readonly string[], prefix: readonly string[]) => prefix.every((word, at) => path[at] === word)
 
-/** Why the profile refuses this command now, or nothing. */
-const refusal = (
+/** Discovery and execution use the same permission decision. */
+export const commandAvailability = (
   info: CommandInfo,
   levels: Readonly<Record<PermissionKey, Level>>,
-  keyOf: CatalogueOptions["keyOf"],
+  keyOf?: CatalogueOptions["keyOf"],
   authority?: CatalogueOptions["authority"],
-): string | undefined => {
-  if (authority?.(info.path) && !authorityAllowed(levels)) return `the profile keeps ${AUTHORITY_KEY} off`
+  readOnly = false,
+): CommandAvailability => {
+  const blocked = (reason: string, permission?: string): CommandAvailability => ({
+    available: false,
+    reason,
+    ...(permission ? { permission } : {}),
+  })
+  if (readOnly && (changesMessenger(info) || authority?.(info.path)))
+    return blocked("the read-only lock blocks this change")
+  if (authority?.(info.path) && !authorityAllowed(levels))
+    return blocked(`the profile keeps ${AUTHORITY_KEY} off`, AUTHORITY_KEY)
+  if (isBotApi(info.path) && !botApiAllowed(levels))
+    return blocked(`the profile requires ${BOT_API_KEY}: allow`, BOT_API_KEY)
   const key = keyOf?.(info.path) ?? keyForCommand(info.path)
   const level = key ? levelFor(levels, key).level : "allow"
-  if (level === "deny") return `the profile denies ${key}`
-  if (level === "readonly" && writes(info.effects)) return `${key} is readonly in this profile`
+  if (level === "deny") return blocked(`the profile denies ${key}`, key ?? undefined)
+  if (level === "readonly" && writes(info.effects))
+    return blocked(`${key} is readonly in this profile`, key ?? undefined)
   const denied = readKeysForCommand(info.path).find((read) => levelFor(levels, read).level === "deny")
-  return denied ? `the profile denies ${denied}` : undefined
+  return denied ? blocked(`the profile denies ${denied}`, denied) : { available: true }
 }
 
-/**
- * One tool per command an agent may run under `root` (NEED-1411): every leaf command and every group that runs on
- * its own, except one marked
- * `mcp: false` (on itself or a group above it), one with a `lifetime` — an agent call must return — and one the
- * profile's levels refuse, which include `mcp.authority` for what `authority` names. Its input is the command's arguments and options in snake_case, typed as far as the
- * command tree and the shared flag vocabulary say; an option marked `mcp: false` is left out.
- */
+/** Build the discoverable command catalogue; profile permissions annotate availability. */
 export const toolsFromCommands = (commands: readonly CommandInfo[], options: CatalogueOptions = {}): AgentTool[] => {
   const { root = [], exclude = [], levels, keyOf, authority, readOnly = false } = options
   return flatten(commands)
@@ -254,12 +269,11 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
         startsWith(info.path, root) &&
         !exclude.some((skipped) => startsWith(info.path.slice(root.length), skipped)) &&
         info.mcp !== false &&
-        info.lifetime === undefined &&
-        !(readOnly && (changesMessenger(info) || authority?.(info.path))) &&
-        (levels === undefined ||
-          (refusal(info, levels, keyOf, authority) === undefined && (!isBotApi(info.path) || botApiAllowed(levels)))),
+        info.lifetime === undefined,
     )
     .map((info) => ({
+      availability: () =>
+        commandAvailability(info, options.currentLevels?.() ?? levels ?? {}, keyOf, authority, readOnly),
       command: info.path.slice(root.length).join(" "),
       path: info.path,
       title: info.summary ?? info.description,
@@ -319,8 +333,13 @@ export const runCommandForAgent = async (
     if (info.lifetime)
       throw new CliError("validation_error", `"${path.join(" ")}" runs until it is stopped; an agent call must return`)
     const levels = ctx.levels?.()
-    const refused = levels && refusal(info, levels, ctx.keyOf, ctx.authority)
-    if (refused) throw new CliError("permission_error", `${path.join(" ")}: ${refused}`, { sent: false })
+    const availability =
+      (levels || ctx.readOnly) && commandAvailability(info, levels ?? {}, ctx.keyOf, ctx.authority, ctx.readOnly)
+    if (availability && !availability.available)
+      throw new CliError("permission_error", `${path.join(" ")}: ${availability.reason}`, {
+        sent: false,
+        ...(availability.permission ? { permission: availability.permission } : {}),
+      })
     const { argv, stdin } = argvOf(info, input, ctx.profile, ctx.stdin)
     const lend = ctx.connection
     let borrowed: Promise<MessengerAdapter> | undefined

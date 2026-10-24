@@ -214,6 +214,57 @@
     ],
     "$schema": "http://json-schema.org/draft-07/schema#"
   },
+  "chats rules set": {
+    "type": "object",
+    "properties": {
+      "chat": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "a group's id, or the title of a group this bot has seen"
+      },
+      "key": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "the rule"
+      },
+      "value": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "its new value"
+      }
+    },
+    "required": [
+      "chat",
+      "key",
+      "value"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "chats rules unset": {
+    "type": "object",
+    "properties": {
+      "chat": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "a group's id, or the title of a group this bot has seen"
+      },
+      "key": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "the rule"
+      }
+    },
+    "required": [
+      "chat",
+      "key"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
   "chats moderate": {
     "type": "object",
     "properties": {
@@ -548,6 +599,42 @@
     "required": [],
     "$schema": "http://json-schema.org/draft-07/schema#"
   },
+  "recipients add": {
+    "type": "object",
+    "properties": {
+      "chat": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "a chat id, `user:<id>`, or the title of a chat this bot has seen"
+      }
+    },
+    "required": [
+      "chat"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "recipients remove": {
+    "type": "object",
+    "properties": {
+      "chat": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "the chat id, or the title as the list shows it"
+      }
+    },
+    "required": [
+      "chat"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "recipients clear": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
   "sends list": {
     "type": "object",
     "properties": {},
@@ -730,6 +817,49 @@
       }
     },
     "required": [],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "config show": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "config set": {
+    "type": "object",
+    "properties": {
+      "setting": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "one of: limit, timeout_ms, color, sender_colors, record, keep_runs_for_days, permissions, sends_per_hour, requests_per_minute, transcribe_with, speech_model, search_catch_up, picture_search, embedding_provider, embedding_model, embedding_base_url, embedding_dims, analysis_provider, analysis_model, analysis_base_url, models, read_other_bots, update_check, skill_hint, search_stemmers.cyrillic, search_stemmers.latin, phone_countries, task_categories.<name>, task_agent_close, task_agent_close_min, task_first_pass_per_chat, account_groups.<name>"
+      },
+      "value": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "a number, true or false, or for allow a list like send,reaction; for a group tg:work,max:Alice,email:me@x"
+      }
+    },
+    "required": [
+      "setting",
+      "value"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "config unset": {
+    "type": "object",
+    "properties": {
+      "setting": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!-$)[\\s\\S]+$",
+        "description": "one of: limit, timeout_ms, color, sender_colors, record, keep_runs_for_days, permissions, sends_per_hour, requests_per_minute, transcribe_with, speech_model, search_catch_up, picture_search, embedding_provider, embedding_model, embedding_base_url, embedding_dims, analysis_provider, analysis_model, analysis_base_url, models, read_other_bots, update_check, skill_hint, default_profile, search_stemmers.cyrillic, search_stemmers.latin, phone_countries, task_categories.<name>, task_agent_close, task_agent_close_min, task_first_pass_per_chat, account_groups.<name>"
+      }
+    },
+    "required": [
+      "setting"
+    ],
     "$schema": "http://json-schema.org/draft-07/schema#"
   }
 }
