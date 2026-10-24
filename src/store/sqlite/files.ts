@@ -217,7 +217,45 @@ export const fillFiles = (database: CacheDatabase, now: () => number, { batch = 
   }
 }
 
+/** A source record of a document: one item in one place (`files` row). Times are ISO 8601. */
+export interface StoredFile {
+  id: string
+  accountId: string
+  externalId: string
+  kind: "file" | "folder" | "page"
+  name: string
+  path: string
+  parentId: string | null
+  /** `document:<id>`, or `null` for a local folder. */
+  document: string | null
+  mime: string | null
+  size: number | null
+  contentHash: string | null
+  url: string | null
+  externalCreatedAt: string | null
+  externalUpdatedAt: string | null
+  metadata: Record<string, unknown> | null
+  seenAt: string | null
+  deletedAt: string | null
+}
+
+export interface FileListQuery {
+  /** Everything at and below this folder path, from the account root. */
+  under?: string
+  /** Paths holding this text, in any case and accent. */
+  pathContains?: string
+  kind?: StoredFile["kind"]
+  includeDeleted?: boolean
+  limit?: number
+  offset?: number
+}
+
 export interface FilesStore {
+  /** The files of one account, by path. The account is always named: there is no default place. */
+  list(accountId: string, query?: FileListQuery): Promise<{ items: StoredFile[]; hasMore: boolean }>
+  byPath(accountId: string, path: string): Promise<StoredFile | undefined>
+  /** Every place a document is kept, the one it shows first: the owner's pin, else the most recently changed. */
+  ofDocument(reference: string): Promise<StoredFile[]>
   /** The owner's choice of the file a document shows (`document:<id>`, a file id of that document). */
   pin(document: string, fileId: string): Promise<void>
   /** The document shows its most recently changed file again. */
@@ -230,23 +268,99 @@ const documentIdOf = (reference: string): number => {
   return Number(id)
 }
 
-export const filesStoreOver = ({ database, now }: { database: CacheDatabase; now: () => number }): FilesStore => ({
-  pin: async (document, fileId) =>
-    write(database, () => {
-      const id = documentIdOf(document)
-      const file = /^\d+$/u.test(fileId)
-        ? database.prepare("SELECT id FROM files WHERE id = ? AND document_id = ?").get(Number(fileId), id)
-        : undefined
-      if (!file) throw new CliError("not_found", `file ${fileId} is not a file of ${document}`)
-      database
-        .prepare("UPDATE documents SET pinned_file_id = ?, updated_at = ? WHERE id = ?")
-        .run(Number(fileId), now(), id)
-    }),
-  unpin: async (document) =>
-    write(database, () => {
-      const id = documentIdOf(document)
-      if (!database.prepare("SELECT 1 FROM documents WHERE id = ?").get(id))
-        throw new CliError("not_found", `no ${document} in the local store`)
-      database.prepare("UPDATE documents SET pinned_file_id = NULL, updated_at = ? WHERE id = ?").run(now(), id)
-    }),
+const isoOrNull = (value: unknown) => (value == null ? null : new Date(Number(value)).toISOString())
+const idOrNull = (value: unknown) => (value == null ? null : String(value))
+
+export const fileOf = (row: Row): StoredFile => ({
+  id: String(row.id),
+  accountId: String(row.account_id),
+  externalId: String(row.external_id),
+  kind: row.kind as StoredFile["kind"],
+  name: String(row.name),
+  path: String(row.path),
+  parentId: idOrNull(row.parent_id),
+  document: row.document_id == null ? null : `document:${row.document_id}`,
+  mime: idOrNull(row.mime),
+  size: row.size == null ? null : Number(row.size),
+  contentHash: idOrNull(row.content_hash),
+  url: idOrNull(row.url),
+  externalCreatedAt: isoOrNull(row.external_created_at),
+  externalUpdatedAt: isoOrNull(row.external_updated_at),
+  metadata: objectOf(row.metadata) ?? null,
+  seenAt: isoOrNull(row.seen_at),
+  deletedAt: isoOrNull(row.deleted_at),
 })
+
+/**
+ * The file a document shows (requirements 3.3): live ones first, then the owner's pin, then the most recently changed.
+ * Read with the document's row joined as `d`.
+ */
+export const PREFERRED_FILE =
+  "f.deleted_at IS NOT NULL, f.id IS NOT d.pinned_file_id, coalesce(f.external_updated_at, f.updated_at) DESC, f.id DESC"
+
+export const filesStoreOver = ({ database, now }: { database: CacheDatabase; now: () => number }): FilesStore => {
+  const account = (id: string) => {
+    if (!/^\d+$/.test(id) || !database.prepare("SELECT 1 FROM accounts WHERE id = ?").get(Number(id)))
+      throw new CliError("not_found", `no account ${id} in the local store`)
+    return Number(id)
+  }
+  return {
+    list: async (accountId, query = {}) => {
+      const { limit = 100, offset = 0 } = query
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000 || !Number.isInteger(offset) || offset < 0)
+        throw new CliError("validation_error", "limit takes 1–1000 and offset 0 or more")
+      const clauses = ["f.account_id = ?"]
+      const params: (string | number)[] = [account(accountId)]
+      if (!query.includeDeleted) clauses.push("f.deleted_at IS NULL")
+      if (query.kind !== undefined) {
+        clauses.push("f.kind = ?")
+        params.push(query.kind)
+      }
+      if (query.under !== undefined) {
+        const prefix = fold(query.under.replace(/\/+$/u, ""))
+        // `/` sorts just before `0`, so the subtree is one range over the index.
+        clauses.push("(f.path_folded = ? OR (f.path_folded >= ? AND f.path_folded < ?))")
+        params.push(prefix, `${prefix}/`, `${prefix}0`)
+      }
+      if (query.pathContains !== undefined) {
+        clauses.push("instr(f.path_folded, ?) > 0")
+        params.push(fold(query.pathContains))
+      }
+      const rows = database
+        .prepare(`SELECT f.* FROM files f WHERE ${clauses.join(" AND ")} ORDER BY f.path_folded, f.id LIMIT ? OFFSET ?`)
+        .all(...params, limit + 1, offset)
+      return { items: rows.slice(0, limit).map(fileOf), hasMore: rows.length > limit }
+    },
+    byPath: async (accountId, path) => {
+      const row = database
+        .prepare("SELECT * FROM files WHERE account_id = ? AND path = ? ORDER BY deleted_at IS NOT NULL, id LIMIT 1")
+        .get(account(accountId), path)
+      return row ? fileOf(row) : undefined
+    },
+    ofDocument: async (reference) =>
+      database
+        .prepare(
+          `SELECT f.* FROM files f JOIN documents d ON d.id = f.document_id WHERE f.document_id = ? ORDER BY ${PREFERRED_FILE}`,
+        )
+        .all(documentIdOf(reference))
+        .map(fileOf),
+    pin: async (document, fileId) =>
+      write(database, () => {
+        const id = documentIdOf(document)
+        const file = /^\d+$/u.test(fileId)
+          ? database.prepare("SELECT id FROM files WHERE id = ? AND document_id = ?").get(Number(fileId), id)
+          : undefined
+        if (!file) throw new CliError("not_found", `file ${fileId} is not a file of ${document}`)
+        database
+          .prepare("UPDATE documents SET pinned_file_id = ?, updated_at = ? WHERE id = ?")
+          .run(Number(fileId), now(), id)
+      }),
+    unpin: async (document) =>
+      write(database, () => {
+        const id = documentIdOf(document)
+        if (!database.prepare("SELECT 1 FROM documents WHERE id = ?").get(id))
+          throw new CliError("not_found", `no ${document} in the local store`)
+        database.prepare("UPDATE documents SET pinned_file_id = NULL, updated_at = ? WHERE id = ?").run(now(), id)
+      }),
+  }
+}

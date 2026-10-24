@@ -266,7 +266,7 @@ not recorded.
 **Where the queries live.** `src/store/store.ts` holds the `MessageStore` interface and `storeOver`. The
 store is a set of areas, each a getter built on first use by its own file under `src/store/` —
 `accounts`, `chats`, `sync`, `messages`, `attachments`, `roster`, `people`, `conversations`, `vectors`,
-`counters`, `tags`, `mentions`, `searches`, `queries`, `searchIndex`, beside `mail`, `notes`, `tasks`,
+`counters`, `tags`, `mentions`, `searches`, `queries`, `searchIndex`, beside `mail`, `notes`, `files` (where each document is kept), `tasks`,
 `meetings` and the rest: `store.chats.saveChats(key, …)`, `store.messages.find(…)`. An area that takes the
 account first keeps that part apart where it also has store-wide methods (`AccountMessages`, `AccountPeople` …), and `forAccount` binds it whole, so
 the bound store has the same areas without the account argument. The row-id helpers they share are
