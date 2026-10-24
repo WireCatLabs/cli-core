@@ -205,7 +205,9 @@ const fieldsOf = (
   for (const option of info.options) {
     const long = longOf(option)
     if (!long || option.mcp === false) continue
-    fields.push(optionField(option, long, longs.has(`--no-${long.slice(2)}`)))
+    const field = optionField(option, long, longs.has(`--no-${long.slice(2)}`))
+    // A positional and its flag alternative share one MCP input; emitting both supplies the value twice.
+    if (!fields.some((existing) => existing.name === field.name)) fields.push(field)
   }
   if (offline && info.effects?.remote === "read" && info.offline !== false) fields.push(OFFLINE)
   return fields.filter((field) => !omit.includes(field.name))

@@ -40,6 +40,10 @@ shape of this file.
 
 ## 0.411.0 — 24.10.2026
 
+### Fixed
+
+- Generated MCP commands accept a positional argument or its same-named flag alternative once. A single `text` input no longer emits both the argument and `--text`, which made Memo note creation fail. Positional requiredness is retained.
+
 ### Added
 
 - Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
