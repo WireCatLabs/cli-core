@@ -3,7 +3,7 @@ import { describeOptions, metaOf } from "@wirecat/cli-base/commands"
 import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { keyForCommand } from "../sends/permissions.js"
-import { answerEntitySchema } from "./answer-entity.js"
+import { answerEntitySchema, answerProjectionSchema } from "./answer-entity.js"
 import { answerSchema } from "./envelope.js"
 
 export type JsonSchema = Record<string, unknown>
@@ -113,8 +113,9 @@ export const commandContract = (command: Command) => {
     outputSchemaCoverage: output.coverage,
     jsonlSchema: { $schema: SCHEMA_DIALECT, ...output.item },
     jsonlSchemaCoverage: output.coverage,
-    projection:
-      "--json=<fields> may omit item/object members; present members retain their types and envelopes are preserved",
+    projection: answerProjectionSchema(command)
+      ? "--json=<fields> selects inside each nested answer; correlation and envelopes are preserved"
+      : "--json=<fields> may omit item/object members; present members retain their types and envelopes are preserved",
     validation: {
       syntax: "declared",
       semantic: "command-and-provider-validation",

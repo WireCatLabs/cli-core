@@ -113,7 +113,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     print(await meetingSummaryAnswer(deps.store, id, deps.accountId), command)
   })
   output(
-    annotate(group.command("export"), { effects: LOCAL_WRITE })
+    annotate(group.command("export"), { effects: LOCAL_WRITE, output: { entity: "meeting_export" } })
       .description("export a meeting as Markdown or one transcript as WebVTT")
       .argument("<meeting>", "stored meeting id", integer)
       .addOption(new Option("--format <format>", "export format").choices(["markdown", "vtt"]).default("markdown"))
@@ -161,9 +161,11 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     })
   output(
-    annotate(group.command("sync"), { effects: FETCH, offline: false }).description(
-      "bring the stored meetings up to date from the connected account",
-    ),
+    annotate(group.command("sync"), {
+      effects: FETCH,
+      offline: false,
+      output: { entity: "meeting_ingestion" },
+    }).description("bring the stored meetings up to date from the connected account"),
   )
     .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
     .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)
@@ -179,7 +181,10 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
         command,
       )
     })
-  const importCommand = annotate(group.command("import"), { effects: LOCAL_WRITE })
+  const importCommand = annotate(group.command("import"), {
+    effects: LOCAL_WRITE,
+    output: { entity: "meeting_ingestion" },
+  })
     .description("import downloaded meeting transcripts")
     .argument("<folder>", "folder of transcripts downloaded from the provider")
   if (deps.importHelp) importCommand.addHelpText("after", `\n${deps.importHelp}`)

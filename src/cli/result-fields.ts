@@ -1,4 +1,5 @@
 import { CliError, fieldsOf as coreFieldsOf, projectFields as coreProjectFields } from "@wirecat/cli-base"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 
 const named = <T>(work: () => T): T => {
   try {
@@ -14,5 +15,27 @@ const named = <T>(work: () => T): T => {
 
 export const fieldsOf = (value: string): string[] => named(() => coreFieldsOf(value))
 
+const projectCommands = (commands: readonly CommandInfo[], fields: readonly string[]): unknown[] =>
+  commands.map((command) => ({
+    ...(coreProjectFields(command, fields) as Record<string, unknown>),
+    path: command.path,
+    name: command.name,
+    origin: command.origin,
+    effects: command.effects,
+    commands: projectCommands(command.commands, fields),
+  }))
+
 export const projectFields = (value: unknown, fields: readonly string[]): unknown =>
-  named(() => coreProjectFields(value, fields))
+  named(() => {
+    if (
+      value &&
+      typeof value === "object" &&
+      "cli" in value &&
+      typeof value.cli === "string" &&
+      "contract" in value &&
+      "commands" in value &&
+      Array.isArray(value.commands)
+    )
+      return { ...value, commands: projectCommands(value.commands as CommandInfo[], fields) }
+    return coreProjectFields(value, fields)
+  })

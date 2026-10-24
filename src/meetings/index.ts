@@ -267,6 +267,7 @@ export {
   type MeetingRelatedHistoryStore,
   validateMeetingRelatedHistory,
 } from "./related-history.js"
+export { MEETING_RESULT_ENTITIES } from "./result-items.js"
 export {
   type MeetingReview,
   type MeetingReviewInput,
