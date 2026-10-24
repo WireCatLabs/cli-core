@@ -6,14 +6,23 @@ import type { SendEntry } from "../../sends/journal.js"
 
 const RECENT_SENDS = 20
 
-export interface Report {
+export interface Report<Doctor extends object = Record<string, unknown>> {
   createdAt: string
   /** What `doctor --json` answers — versions, paths, counts and the messenger's own checks. */
-  doctor: Record<string, unknown>
+  doctor: Doctor
   /** The run the report is about: the one asked for, or the newest that failed. */
   run: { metadata: RunMetadata; events: Record<string, unknown>[] } | null
   /** The newest write attempts — outcomes and ids, never text (`src/sends/journal.ts`). */
   sends: SendEntry[]
+}
+
+/** Optional technical context supplied by a consumer; it is redacted with the rest of the report. */
+export interface ReportContext {
+  version?: string
+  runtime?: string
+  platform?: string
+  arch?: string
+  profile?: string | null
 }
 
 /** Only these fields of a run event travel; a field added later is left out until it is named here. */
@@ -32,9 +41,9 @@ const EVENT_FIELDS = [
 /**
  * **Everything a report holds is already free of content** — the doctor, the run log and the send
  * journal are built that way. Two things are added: every id becomes a label, and the home
- * directory is hidden, since paths name the person's account on this machine. Copied from max-cli.
+ * directory is hidden, since paths name the person's account on this machine.
  */
-export const buildReport = ({
+export const buildReport = <Doctor extends object, Context extends ReportContext = Record<never, never>>({
   doctor,
   runsDir,
   runId,
@@ -42,8 +51,9 @@ export const buildReport = ({
   sends,
   now = new Date(),
   home,
+  context,
 }: {
-  doctor: Record<string, unknown>
+  doctor: Doctor
   runsDir: string
   runId?: string
   /** What to type to list runs, for the error when `runId` names none. */
@@ -51,14 +61,16 @@ export const buildReport = ({
   sends: SendEntry[]
   now?: Date
   home: string | undefined
-}): Report => {
+  context?: Context
+}): Report<Doctor> & Context => {
   const chosen = runId === undefined ? newestFailed(runsDir) : findRun(runsDir, runId)
   if (runId !== undefined && !chosen)
     throw new CliError("not_found", `no run ${runId} — \`${command} runs list\` names them`)
 
   const label = labeller()
-  const account = doctor.account as { remembered?: string | null } | undefined
-  const report: Report = {
+  const account = (doctor as Record<string, unknown>).account as { remembered?: string | null } | undefined
+  const report = {
+    ...context,
     createdAt: now.toISOString(),
     doctor: {
       ...doctor,
@@ -67,7 +79,7 @@ export const buildReport = ({
     run: chosen ? { metadata: chosen.metadata, events: readEvents(chosen.dir).map(eventOf(label)) } : null,
     sends: sends.slice(-RECENT_SENDS).map((entry) => labelled(entry, label)),
   }
-  return JSON.parse(hideHome(JSON.stringify(report), home)) as Report
+  return JSON.parse(hideHome(JSON.stringify(report), home)) as Report<Doctor> & Context
 }
 
 /**
