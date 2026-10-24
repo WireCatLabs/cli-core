@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **MCP discovery retains permission-denied commands.** Full listings and searches return each command's
+  current `availability`, including a reason and permission key when blocked. Read-only profiles and process
+  locks keep writing commands discoverable. Calls still recheck permissions and refuse before execution;
+  seeing a command does not grant access. Bot MCP also lists bot-scoped `config show|set|unset` behind the
+  existing authority rules, without exposing options that could select personal-account settings. Consumers
+  that pin MCP catalogues should refresh them and use availability rather than absence to determine access.
+
 ## 0.407.0 — 24.10.2026
 
 ### Added
@@ -16,16 +27,6 @@ shape of this file.
 - Portable ingestion, export, association, transcription and embedding receipts have shared entities and `meetingResultItem` serializers. Public IDs are strings; stored numeric IDs remain internal.
 
 - Meeting batch results declare their correlated success/error schemas. `answerEntity` can name a separate typed projection payload, preserving batch field selection inside each answer without weakening its outer result contract.
-
-### Fixed
-
-- **MCP discovery retains permission-denied commands.** Full listings and searches return each command's
-  current `availability`, including a reason and permission key when blocked. Read-only profiles and process
-  locks keep writing commands discoverable. Calls still recheck permissions and refuse before execution;
-  seeing a command does not grant access. Bot MCP also lists bot-scoped `config show|set|unset` behind the
-  existing authority rules, without exposing options that could select personal-account settings. Consumers
-  that pin MCP catalogues should refresh them and use availability rather than absence to determine access.
-
 
 ## 0.406.0 — 24.10.2026
 
