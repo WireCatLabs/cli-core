@@ -5,6 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- Meeting batch results declare their correlated success/error schemas. `answerEntity` can name a separate typed projection payload, preserving batch field selection inside each answer without weakening its outer result contract.
+
 ## 0.406.0 — 24.10.2026
 
 ### Added

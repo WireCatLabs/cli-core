@@ -8,8 +8,10 @@ import {
   runBatch,
 } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import type { Meta } from "@wirecat/cli-base/standards"
+import { errorObjectSchema, type Meta } from "@wirecat/cli-base/standards"
 import { Command, Option } from "commander"
+import * as v from "valibot"
+import { ENTITIES } from "../entities/index.js"
 import { failureContext } from "../errors/reasons.js"
 import {
   createMeetingPassageCommand,
@@ -30,7 +32,8 @@ import {
   parseMeetingReference,
 } from "../meetings/index.js"
 import { formatMeetingEvidenceText, formatMeetingPassage } from "../services/meeting-passage-format.js"
-import { type Body, itemOf, listOf } from "./envelope.js"
+import { answerEntity } from "./answer-entity.js"
+import { answerSchema, type Body, itemOf, listOf } from "./envelope.js"
 
 const INDEX_BYTES = 4194304
 const parse = (command: Command, args: readonly string[]) => {
@@ -221,10 +224,23 @@ export const addMeetingBatchCommand = (
         format as MeetingPassageOutputFormat,
       )
     })
-  return annotate(command, {
+  annotate(command, {
     origin: "handwritten",
     partial: true,
     effects: { remote: "none", local: "write" },
     examples: [`${program.name()} batch requests.json --json`],
   })
+  return answerEntity(command, "meeting_batch_result", batchResult, { project: batchPayload })
 }
+
+const batchPayload = v.union([ENTITIES.meeting_hit, ENTITIES.meeting_passage])
+const correlated = { id: v.string(), command: v.array(v.string()) }
+const batchResult = v.union([
+  v.strictObject({ ...correlated, status: v.literal("ok"), answer: answerSchema(batchPayload), complete: v.boolean() }),
+  v.strictObject({
+    ...correlated,
+    status: v.picklist(["error", "not_run"]),
+    error: errorObjectSchema.entries.error,
+    complete: v.literal(false),
+  }),
+])

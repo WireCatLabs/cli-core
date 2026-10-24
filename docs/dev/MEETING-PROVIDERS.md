@@ -458,3 +458,7 @@ call `answerEntity(command, "provider_recording", schema)` from `@wirecat/cli-co
 schema. The shared command contract, help field reference and `--json` projection all use that schema.
 The binding belongs to that command instance; it cannot replace a shared entity or alter another program.
 Validate real synthetic command answers against the advertised contract, including preview and applied variants.
+
+For a correlated batch whose `--json` fields belong to each nested answer, pass `{ project: payloadSchema }`
+as the fourth `answerEntity` argument. The result contract still describes the complete correlated wrapper;
+field validation uses the payload schema. The shared meeting batch command declares this itself.

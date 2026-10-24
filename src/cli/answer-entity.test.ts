@@ -31,3 +31,22 @@ it("shared entities cannot be replaced and unregistered commands retain no schem
   expect(answerEntitySchema(new Command("list"))).toBeUndefined()
   expect(answerFields(annotate(new Command("list"), { output: { entity: "meeting" } }))).toContain("id")
 })
+
+it("nested answer projection uses its payload schema while the result contract keeps correlation", () => {
+  const command = answerEntity(
+    new Command("batch"),
+    "fixture_batch",
+    v.strictObject({
+      request: v.string(),
+      answer: v.strictObject({ ref: v.string() }),
+    }),
+    { project: v.strictObject({ ref: v.string() }) },
+  )
+  expect(answerFields(command)).toEqual(["ref"])
+  expect(() => checkJson(command, { json: true, fields: "ref" }, false)).not.toThrow()
+  expect(() => checkJson(command, { json: true, fields: "request" }, false)).toThrow()
+  expect(commandContract(command)).toMatchObject({ jsonlSchema: { properties: { request: { type: "string" } } } })
+  expect(() => answerEntity(new Command("invalid"), "invalid", v.strictObject({}), { project: v.unknown() })).toThrow(
+    "projection",
+  )
+})
