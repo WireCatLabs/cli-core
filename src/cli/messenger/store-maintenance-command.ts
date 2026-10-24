@@ -477,7 +477,7 @@ const buildWordIndex = (database: CacheDatabase, note: (text: string) => void) =
  * Stems what is left, after rebuilding stems made by other stemmer choices than the store's setting —
  * only here and in `store reindex`, never in a search's quick fill.
  */
-const buildStems = (database: CacheDatabase, note: (text: string) => void, { force = false } = {}) => {
+export const buildStems = (database: CacheDatabase, note: (text: string) => void, { force = false } = {}) => {
   const before = stemsState(database)
   if (!before) return { stemmed: 0 }
   if (resetStems(database, { force }) && before.built !== null) {

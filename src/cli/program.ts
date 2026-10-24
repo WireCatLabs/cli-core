@@ -22,6 +22,7 @@ import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../p
 import { recorded, wasSettled } from "../runs/recording.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
+import { readSecret } from "../terminal/prompt.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
@@ -36,6 +37,7 @@ import {
 } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
+import { askSetupQuestions, asksAtStart } from "./first-run.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -306,6 +308,31 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
+    const input = options.stdin ?? process.stdin
+    if (
+      asksAtStart({
+        headless,
+        terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
+        env: commandEnv,
+        readOnlyLock: lock,
+        path,
+      })
+    )
+      // The command the person typed runs whatever happens to the questions.
+      // `setup` asks all three again: it is where a refusal sends the owner to change the answer.
+      await askSetupQuestions({
+        command,
+        env: commandEnv,
+        all: path[0] === "setup",
+        io: {
+          ask: (prompt) => readSecret(prompt, { input, echo: true }),
+          say: (text) => process.stderr.write(`${text}\n`),
+        },
+      }).catch((error: unknown) => {
+        process.stderr.write(
+          `setup questions skipped: ${error instanceof Error ? error.message : String(error)} — \`${command} setup\` asks them again\n`,
+        )
+      })
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
     refuseWriteBeforeConnecting(action, {

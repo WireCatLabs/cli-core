@@ -1288,6 +1288,17 @@ The three tools, their arguments and what each permission shows are on the handb
   set|unset` run over MCP refuses `permissions.bot.api` and a whole `permissions` that names it. Each operation is a
   tool with the operation's effect (a read or a write), so `<PREFIX>_READ_ONLY` hides the writes. The command line's
   `bot api` is not held back by the key; the CLI keeps checking `bot.api.<operation>` as before.
+- **The first-run answer caps every profile of every WireCat tool** (TASK-757, NEED-1676). Before the first command
+  at a terminal, a tool asks what no WireCat tool has asked yet — languages (written to the store's
+  `search_stemmers`), other tools to install, and what commands and agents may do — and keeps the answers in the
+  `setup` section of the shared `~/.config/WireCat/config.json`. "Read only" puts the `*` key at `readonly` among a
+  profile's levels: `levelFor` never returns a level above it, so it holds over a profile's own `allow`, over MCP
+  and over `--permission`. A config file cannot name `*`; only the question at a terminal writes it, and an
+  unreadable `setup` section counts as read-only. Nothing is asked of a run that is not a person at a terminal
+  (machine output, `--no-input`, `CI`, a pipe, `AI_AGENT` or `CLAUDECODE` set), of a process under
+  `<PREFIX>_READ_ONLY`, or before `help`, `guide`, `completion`, `mcp`, `serve`, `server`, `update` and `store`;
+  `setup` asks all three again, so the owner changes an answer there. A failed question never stops the command typed. Changing the languages of a store in use rebuilds its
+  word forms at once, after the owner agrees, since word search refuses until they are rebuilt.
 
 `stats charts --output` selects SVG or PNG by the file extension; images never go to stdout.
 The stored-only `stats_charts` tool accepts optional `format: json|png` (default `json`).

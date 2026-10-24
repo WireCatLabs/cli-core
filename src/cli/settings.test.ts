@@ -203,6 +203,35 @@ describe("the order a setting is decided in", () => {
   })
 })
 
+describe("setup's permission answer", () => {
+  const answered = (setup: object) => {
+    const shared = mkdtempSync(join(tmpdir(), "wirecat-config-"))
+    writeFileSync(join(shared, "config.json"), JSON.stringify({ setup }))
+    return { WIRECAT_CONFIG_DIR: shared }
+  }
+
+  it("**caps every profile**, even a key the profile allows, and names where it came from", () => {
+    withConfig(JSON.stringify({ profiles: { agent: { permissions: { "messages.send": "allow" } } } }))
+    const { permissions, permissionSources } = resolveSettings(
+      { profile: "agent" },
+      { env: answered({ permissions: "readonly" }), configDir },
+    )
+    expect(levelFor(permissions, "messages.send").level).toBe("readonly")
+    expect(permissionSources["*"]).toBe("setup answer")
+  })
+
+  it('leaves profiles as they are for "allow"; a config file cannot write the ceiling', () => {
+    withConfig(JSON.stringify({ profiles: { agent: {} } }))
+    const { permissions } = resolveSettings(
+      { profile: "agent" },
+      { env: answered({ permissions: "allow" }), configDir },
+    )
+    expect(levelFor(permissions, "messages.send").level).toBe("allow")
+    withConfig(JSON.stringify({ profiles: { agent: { permissions: { "*": "allow" } } } }))
+    expect(() => resolveSettings({ profile: "agent" }, { env: {}, configDir })).toThrow(/permissions\.\*/)
+  })
+})
+
 describe("permissions across sections", () => {
   const levelsOf = (file: object, keys: string[], kind?: "bot") => {
     withConfig(JSON.stringify(file))

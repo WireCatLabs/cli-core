@@ -1,5 +1,5 @@
 import type { Command } from "commander"
-import { keyForCommand, type PermissionKey, WRITE_KEYS } from "../sends/permissions.js"
+import { CEILING_KEY, keyForCommand, type PermissionKey, WRITE_KEYS } from "../sends/permissions.js"
 
 export type PermissionKeyOf = (command: Command) => PermissionKey | null | undefined
 
@@ -50,4 +50,4 @@ export const knownBeside = (key: PermissionKey, known: ReadonlySet<PermissionKey
 export const unknownPermissionKeys = (
   levels: Readonly<Record<PermissionKey, unknown>>,
   known: ReadonlySet<PermissionKey>,
-): PermissionKey[] => Object.keys(levels).filter((key) => !known.has(key))
+): PermissionKey[] => Object.keys(levels).filter((key) => key !== CEILING_KEY && !known.has(key))

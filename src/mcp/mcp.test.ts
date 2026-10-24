@@ -1506,6 +1506,16 @@ describe("the MCP server", () => {
     expect((await call("conversations batches next", { chat: "7" })).body.item).toEqual({ batch: null })
   })
 
+  it("**hides every write under setup's read-only answer**, even one the profile allows", async () => {
+    const root = mkdtempSync(join(tmpdir(), "mcp-"))
+    writeFileSync(join(root, "config.json"), JSON.stringify({ setup: { permissions: "readonly" } }))
+    const { client } = await connect(scripted(), { root, config: levels({ messages: "allow" }) })
+    const names = await client.commands()
+    expect(names).toContain("search messages")
+    expect(names).not.toContain("messages send")
+    expect(names).not.toContain("conversations links add")
+  })
+
   it("hides local graph writes on readonly, goes ahead at ask, and keeps batches readable", async () => {
     for (const level of ["readonly", "deny", "ask", "allow"]) {
       const { client, call } = await connect(scripted(), { config: levels({ "conversations.links": level }) })

@@ -48,7 +48,7 @@ const readJson = (path: string): Record<string, unknown> | undefined => {
 
 /** The `task_categories` section, or `undefined` when the file or the section is missing. */
 export const readTaskCategoryEdits = (path: string): TaskCategoryEdits | undefined => {
-  const section = readJson(path)?.[SECTION]
+  const section = readSharedSection(path, SECTION)
   if (section === undefined) return undefined
   if (section === null || typeof section !== "object" || Array.isArray(section))
     throw new CliError(
@@ -94,16 +94,23 @@ export const editsFrom = (list: readonly TaskCategory[]): TaskCategoryEdits => {
   return edits
 }
 
-/** Writes the section (or drops it, with `undefined`), keeping every other key of the file. */
-export const writeTaskCategoryEdits = (path: string, edits: TaskCategoryEdits | undefined): void => {
+/** One section of the file, or `undefined` when the file or the section is missing. */
+export const readSharedSection = (path: string, section: string): unknown => readJson(path)?.[section]
+
+/** Writes one section (or drops it, with `undefined`), keeping every other key of the file. */
+export const writeSharedSection = (path: string, section: string, value: unknown): void => {
   const file = readJson(path) ?? {}
-  if (edits === undefined || Object.keys(edits).length === 0) delete file[SECTION]
-  else file[SECTION] = edits
+  if (value === undefined) delete file[section]
+  else file[section] = value
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
   const temporary = `${path}.${process.pid}.tmp`
   writeFileSync(temporary, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
   renameSync(temporary, path)
 }
+
+/** Writes the section (or drops it, with `undefined`), keeping every other key of the file. */
+export const writeTaskCategoryEdits = (path: string, edits: TaskCategoryEdits | undefined): void =>
+  writeSharedSection(path, SECTION, edits === undefined || Object.keys(edits).length === 0 ? undefined : edits)
 
 /** Read again only when the file changed: a sync asks for the list once per message. */
 export const taskCategoriesReader = (path: string) => {
