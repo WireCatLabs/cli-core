@@ -88,15 +88,18 @@ export const installFiles = async (
     verifyExisting,
   }: { fetch?: Fetch; progress?: (line: string) => void; verifyExisting?: boolean } = {},
 ): Promise<void> => {
-  for (const [file, path] of files) {
-    if (verifyExisting && sizeOf(path) !== undefined) {
-      const hash = createHash("sha256")
-      for await (const chunk of createReadStream(path)) hash.update(chunk)
-      if (hash.digest("hex") !== file.sha256) {
-        progress?.(`${path}: not the file this version expects, downloading it again`)
-        await rm(path, { force: true })
+  if (verifyExisting)
+    for (const [file, path] of files) {
+      if (sizeOf(path) !== undefined) {
+        const hash = createHash("sha256")
+        for await (const chunk of createReadStream(path)) hash.update(chunk)
+        if (hash.digest("hex") !== file.sha256) {
+          progress?.(`${path}: not the file this version expects, downloading it again`)
+          await rm(path, { force: true })
+        }
       }
     }
+  for (const [file, path] of files) {
     if (sizeOf(path) === file.bytes) continue
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     progress?.(`downloading ${file.name} (${megabytes(file.bytes)})`)
