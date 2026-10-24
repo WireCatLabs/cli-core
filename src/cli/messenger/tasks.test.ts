@@ -752,3 +752,23 @@ it("**takes the account from the command** where the program has no messenger pr
   expect((await call("tasks", "list", "--provider", "chat", "--account", "500", "--json")).body.items).toHaveLength(1)
   expect((await call("tasks", "list", "--json")).code).not.toBe(0)
 })
+
+it("clears a project task parent through the canonical none value", async () => {
+  const cli = await setup()
+  const store = await openStore({ path: cli.env.MESSAGING_STORE })
+  let id: string
+  try {
+    const project = await store.knowledge.addProject({ name: "Synthetic Parent Clear", key: "SPC", type: "work" })
+    const parent = await store.tasks.create({ project: project.ref, title: "Parent", type: "chore" }, "owner")
+    const child = await store.tasks.create(
+      { project: project.ref, title: "Child", type: "chore", parent: parent.ref },
+      "owner",
+    )
+    id = child.id
+  } finally {
+    await store.close()
+  }
+  const cleared = await cli("tasks", "update", id, "--parent", "none", "--json")
+  expect(cleared.code, JSON.stringify(cleared)).toBe(0)
+  expect(item(cleared)).toMatchObject({ id, parent: null })
+})

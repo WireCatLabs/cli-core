@@ -6,6 +6,13 @@ minor version may break callers, and says how under "Changed — may break calle
 shape of this file.
 
 
+## Unreleased
+
+### Fixed
+
+- **`tasks update <task> --parent none` clears the parent.** The CLI keeps the sentinel through option parsing and converts it to null when building the plan, so Commander cannot turn it into an empty task id.
+
+
 ## 0.411.0 — 24.10.2026
 
 ### Added
