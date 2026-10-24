@@ -119,11 +119,11 @@ export const meetingSearchArguments = (query: string, options: MeetingSearchFlag
   Object.fromEntries(
     Object.entries({
       query,
-      meeting_id: options.meetingId,
-      identity_id: options.identityId,
-      person_id: options.personId,
-      event_id: options.eventId,
-      series_id: options.seriesId,
+      meeting_id: options.meetingId?.toString(),
+      identity_id: options.identityId?.toString(),
+      person_id: options.personId?.toString(),
+      event_id: options.eventId?.toString(),
+      series_id: options.seriesId?.toString(),
       project: options.project,
       tag: options.tag,
       topic: options.topic,
