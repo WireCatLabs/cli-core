@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { type SendEntry, SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -118,7 +118,7 @@ export const sendsCommand = (messenger: Messenger): Command =>
         this,
         context,
         pagedList("sends list", settings, {
-          items: shown.map(snakeKeys),
+          items: shown.map(sendAttemptItem),
           args: words.length ? { query: typedQuery(words) } : {},
           has_more: from + shown.length < entries.length,
         }),
@@ -129,3 +129,6 @@ export const sendsCommand = (messenger: Messenger): Command =>
         )
     }),
   )
+
+export const sendAttemptItem = ({ sendId, operationId, ...entry }: SendEntry) =>
+  snakeKeys({ ...entry, ...((operationId ?? sendId) === undefined ? {} : { operationId: operationId ?? sendId }) })

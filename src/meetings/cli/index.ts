@@ -1,7 +1,8 @@
-import { annotate } from "@wirecat/cli-base/commands"
-import { defineQuery, fieldsHelp, timezoneOf, zonedMoment } from "@wirecat/cli-base/query"
+import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
+import { defineQuery, fieldsHelp, parseLucene, timezoneOf, validateQuery, zonedMoment } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
+import { EVENT_QUERY } from "../event-query.js"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
 import { MEETING_QUERY } from "../item.js"
@@ -56,8 +57,10 @@ const LOCAL_READ: Effects = { remote: "none", local: "read" }
 const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 const FETCH: Effects = { remote: "read", local: "write" }
 
-export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): void => {
-  const group = program.command("meetings").description("stored meetings and their records")
+const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps): void => {
+  const group = annotate(program.command("meetings").description("stored meetings and their records"), {
+    effects: { remote: "none", local: "none" },
+  })
   const output = (command: Command) =>
     command
       .option("--json", "one JSON value")
@@ -195,13 +198,23 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       throw new MeetingError("validation_error", "file account differs from selected account")
     print(await importFiles(files, deps.store, deps.now?.()), command)
   })
-  output(
-    annotate(program.command("events").description("the owner's stored events").command("list"), {
-      effects: LOCAL_READ,
-      output: { entity: "event" },
-    }).description("list stored events"),
-  ).action(async (_opts: unknown, command: Command) => {
-    print(listed((await deps.store.events()).map(eventItem)), command)
+  const eventList = queryWordsAfterOptions(
+    annotate(program.command("events").description("the owner's stored events"), {
+      effects: { remote: "none", local: "none" },
+    }).command("list"),
+  )
+    .description("list stored events")
+    .argument("[query...]", "event id, origin or time fields that narrow the list")
+    .addHelpText("after", `\n${fieldsHelp(EVENT_QUERY, MEETING_QUERY_GUIDE)}`)
+  annotate(eventList, { effects: LOCAL_READ, output: { entity: "event" }, query: EVENT_QUERY })
+  output(eventList).action(async (words: string[], _opts: unknown, command: Command) => {
+    const query = words.length
+      ? parseLucene(words.join(" "), { defaultField: "none", command: "events list" })
+      : undefined
+    if (query) validateQuery(query, EVENT_QUERY, { command: "events list" })
+    if (query && !deps.store.queryEvents) throw new MeetingError("validation_error", "this store cannot filter events")
+    const events = query ? await deps.store.queryEvents?.(query) : await deps.store.events()
+    print(listed((events ?? []).map(eventItem)), command)
   })
 }
 
@@ -224,3 +237,5 @@ export {
   meetingSearchMeta,
   validateMeetingHitSearch,
 } from "./search.js"
+
+export const addMeetingCommands = sharedCommand(addMeetingCommandsDefinition)

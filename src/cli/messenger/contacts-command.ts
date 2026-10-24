@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import { defineQuery } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { levelFor } from "../../sends/permissions.js"
@@ -12,7 +13,7 @@ import { readSecret } from "../../terminal/prompt.js"
 import { secretInputOf } from "../context.js"
 import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
+import { listQuery, nativeField, nativeTerms, termField, timeBounds, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, window, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
 import { commandAt, nextStep } from "../steps.js"
@@ -23,6 +24,20 @@ import { hideNever } from "./lacks.js"
 import { CONTACTS_QUERY, notesAllowed } from "./people-queries.js"
 import { privatePeopleCommands } from "./private-people-command.js"
 import { syncsFirst } from "./search-sync-options.js"
+
+const CONTACT_ACTIVITY_QUERY = defineQuery({
+  entity: "contact_activity",
+  backend: "native",
+  fields: [
+    termField("scope", "enum", "scope:work", { values: SCOPES }),
+    nativeField({
+      name: "at",
+      type: "time",
+      operators: ["term", "phrase", "range"],
+      example: "at:[2026-10-01 TO 2026-10-31]",
+    }),
+  ],
+})
 
 /** People this account has a one-to-one chat with, as the people service counts them. */
 const collect = (value: string, previous: string[] = []) => [...previous, value]
@@ -246,24 +261,29 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(contacts.command("events"), {
-    effects: REMOTE_READ,
-    output: { entity: "contact_activity" },
-  })
+  withQuery(
+    annotate(contacts.command("events"), {
+      effects: REMOTE_READ,
+      output: { entity: "contact_activity" },
+    })
 
-    .summary("one person's activity across their linked identities")
-    .description(
-      "everything one person took part in, in every messenger linked to them — messages they wrote or were " +
-        "mentioned in, chats, mail, meetings, tasks — newest first, from the store; never connects",
-    )
-    .argument("<person>", "their id, @username, or part of their name")
-    .option("--scope <scope>", "only what belongs to personal or to work accounts: personal or work")
-    .option("--since-time <time>", "nothing older than this ISO 8601 time, or 2h / 1d ago")
-    .option("--until-time <time>", "through this ISO 8601 time, or 2h / 1d ago")
+      .summary("one person's activity across their linked identities")
+      .description(
+        "everything one person took part in, in every messenger linked to them — messages they wrote or were " +
+          "mentioned in, chats, mail, meetings, tasks — newest first, from the store; never connects",
+      )
+      .argument("<person>", "their id, @username, or part of their name"),
+    CONTACT_ACTIVITY_QUERY,
+  )
     .option("--limit <n>", `at most this many; ${TIMELINE_ITEMS} if not given`, positiveCount("--limit"))
     .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it, with the same filters")
-    .action(async function (this: Command, person: string) {
-      const { scope, sinceTime, untilTime, limit, cursor } = this.opts<{
+    .action(async function (this: Command, person: string, words: string[]) {
+      const terms = nativeTerms(
+        listQuery(typedQuery(words), CONTACT_ACTIVITY_QUERY, "contacts events"),
+        "contacts events",
+      )
+      const scope = terms.get("scope")?.value.toLowerCase()
+      const { limit, cursor } = this.opts<{
         scope?: string
         sinceTime?: string
         untilTime?: string
@@ -273,10 +293,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       if (scope !== undefined && !(SCOPES as readonly string[]).includes(scope))
         throw new CliError("validation_error", `--scope is personal or work, not "${scope}"`)
       const context = messengerContext(this, messenger)
-      const window = dateWindow({
-        ...(sinceTime === undefined ? {} : { sinceTime }),
-        ...(untilTime === undefined ? {} : { untilTime }),
-      })
+      const window = timeBounds(terms.get("at"))
       const found = await context.withServices((services) =>
         services.people.timeline(person, {
           ...(scope === undefined ? {} : { scope: scope as Scope }),
@@ -298,9 +315,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
           ...(found.cursor === undefined ? {} : { cursor: found.cursor }),
           args: {
             person,
-            ...(scope === undefined ? {} : { scope }),
-            ...(sinceTime === undefined ? {} : { since_time: sinceTime }),
-            ...(untilTime === undefined ? {} : { until_time: untilTime }),
+            ...(words.length ? { query: typedQuery(words) } : {}),
           },
           meta: { ...window.meta, ...(pending > 0 ? { truncated: true } : {}) },
         }),

@@ -171,8 +171,8 @@ describe("commands as text", () => {
         app schedule add <when>                               run a command on a timer (writes)
 
       Set up
-        app commands [path]                                   every command by section, one line each; --json: the contract, one path per call
-        app commands info <path>                              one command's argv and result schemas, effects, permissions and retry guidance
+        app commands [path]                                   every command by section; --json prints its contract, one path per call
+        app commands info [path]                              one command contract, or all schemas, error reasons and explicit overrides
         app session start                                     log in (writes)
 
       Other

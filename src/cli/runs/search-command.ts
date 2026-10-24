@@ -19,7 +19,6 @@ export const runsSearchCommand = (app: AppIdentity): Command =>
         .description(
           "search recorded diagnostic metadata and events; literal words and field:value terms joined by AND; no message contents",
         )
-        .option("--since-time <time>", "runs starting on or after an ISO time or 2h / 1d ago")
         .option("--limit <n>", "matches per page, at most 100", positiveCount("--limit"), 20)
         .option("--page <n>", "result page", positiveCount("--page"), 1),
       RUN_SEARCH_QUERY,
@@ -31,8 +30,8 @@ export const runsSearchCommand = (app: AppIdentity): Command =>
     },
   ).action(function (this: Command, words: string[]) {
     const filter = runSearchFilter(words)
-    const options = this.opts<{ sinceTime?: string; limit: number; page: number }>()
+    const options = this.opts<{ limit: number; page: number }>()
     const dir = runsDirFor(app, environmentOf(this).env ?? process.env)
-    const found = searchRuns(dir, { ...filter, ...options, since: options.sinceTime })
-    renderAnswer(this, outputFor(this), runsFound(found, { query: typedQuery(words), since_time: options.sinceTime }))
+    const found = searchRuns(dir, { ...filter, ...options })
+    renderAnswer(this, outputFor(this), runsFound(found, { query: typedQuery(words) }))
   })

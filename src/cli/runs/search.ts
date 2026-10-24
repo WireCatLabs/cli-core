@@ -11,6 +11,7 @@ export interface RunSearch {
   operation?: string
   profile?: string
   since?: string
+  until?: string
   limit?: number
   page?: number
 }
@@ -53,11 +54,11 @@ const safeEvent = (event: Record<string, unknown>) =>
 
 export const searchRuns = (
   dir: string,
-  { query = "", terms = [], status, errorCode, operation, profile, since, limit = 20, page = 1 }: RunSearch = {},
+  { query = "", terms = [], status, errorCode, operation, profile, since, until, limit = 20, page = 1 }: RunSearch = {},
 ) => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(page) || page < 1)
     throw new CliError("validation_error", "run search uses a limit from 1 to 100 and a positive page")
-  const window = dateWindow(since === undefined ? {} : { sinceTime: since })
+  const window = dateWindow({ sinceTime: since, untilTime: until })
   const from = window.since
   if (from !== undefined && !Number.isFinite(from))
     throw new CliError("validation_error", "--since-time must be a valid date or ISO timestamp")
@@ -68,7 +69,8 @@ export const searchRuns = (
     if (
       (profile !== undefined && run.profile !== profile) ||
       (status !== undefined && run.status !== status) ||
-      (from !== undefined && Date.parse(run.startedAt) < from)
+      (from !== undefined && Date.parse(run.startedAt) < from) ||
+      (window.until !== undefined && Date.parse(run.startedAt) > window.until)
     )
       continue
     const metadataMatch =

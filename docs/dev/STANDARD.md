@@ -450,6 +450,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--pause` | `<duration>` | duration | wait this long between requests to the source, to stay under its limits |  |
 | `--permission` | `<key=level>` | string | override one permission for this run; repeat it for more |  |
 | `--read-only` |  | switch | refuse every write, local and remote |  |
+| `--append` |  | switch | keep existing entries and add the explicitly named one beside them |  |
 | `--replace` |  | switch | overwrite an existing one of the same name |  |
 | `--rescan` |  | switch | list everything again, not only what changed since the last run |  |
 | `--resume` |  | switch | continue verified partial work from the last run |  |
@@ -608,6 +609,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--store-token` | `<profile>` | string | keep a token an operation returns only in this bot profile's keyring; never print it |  |
 | `--task` | `<id>` | id | a task, by id |  |
 | `--to` | `<chat>` | id | the chat it goes to |  |
+| `--topic-name` | `<name>` | string | a stored meeting topic label, by name or alias |  |
 | `--topic` | `<id>` | id | the forum topic, in a chat that has topics |  |
 | `--transcript-id` | `<id>` | id | one transcript version, by id |  |
 | `--until-id` | `<id>` | id | up to and including this message id |  |
@@ -836,7 +838,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 |---|---|---|---|---|
 | `--about-text` | `<who>` | who sees the about text: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--accept-terms` |  | accept the model's licence terms, for a model that has its own |  | `models download` |
-| `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `bot webhooks set` (max-only), `chats folders update` |
+| `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `chats folders update` |
 | `--after-n` | `<n>` | how many messages after it |  | `messages context` |
 | `--agent` | `<agent>` | install the skill for this agent; asks at a terminal, otherwise none |  | `setup` |
 | `--ai` |  | call the configured reply model with stored message data; requires reply consent, otherwise uses fallback |  | `replies test` |
@@ -855,6 +857,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--answer-model` | `<model>` | only the stored answers this model gave |  | `conversations links clear` |
 | `--answerer` | `<person>` | stored name, alias, @username, ID or scoped person locator; ambiguous names require a choice; repeat it for more |  | `stats chats newcomers`, `stats contacts responses`, `stats messages unanswered` |
 | `--app` | `<how>` | the first time only: how to get this profile's app from my.telegram.org | `browser` | `session start` (tg-only), `setup` (tg-only) |
+| `--append` |  | keep existing entries and add the explicitly named one beside them |  | `bot webhooks set` (max-only) |
 | `--approval` |  | who joins by it asks first, and an admin lets them in |  | `chats links create` (tg-only), `chats links update` (tg-only) |
 | `--as` | `<state>` | how a task is closed: done, or dismissed — it needs no answer |  | `tasks close` |
 | `--as-file` |  | send every --file as a plain file to download, a video included |  | `bot messages send` (planned), `messages send` |

@@ -825,6 +825,9 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     async events() {
       return eventQueries.events(database)
     },
+    async queryEvents(query) {
+      return eventQueries.events(database, query)
+    },
     async eventCandidates(filter) {
       return eventQueries.eventCandidates(database, filter)
     },

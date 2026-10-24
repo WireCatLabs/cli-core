@@ -23,6 +23,12 @@ const QUERY: Entry[] = [
 ].map(([reason, message]) => validation(reason as string, message as string))
 
 const OTHERS: Entry[] = [
+  ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
+  [
+    "contract.unacknowledged-override",
+    "configuration_error",
+    "a shared command contract changed without an explicit override",
+  ],
   validation("context.read-budget", "the selected context reads exceed their text or request allowance"),
   validation("meeting-findings.stale", "meeting findings changed since they were read; stage a new batch"),
   validation("meeting-findings.dedicated-review", "review meeting findings through the dedicated findings command"),
@@ -121,6 +127,7 @@ export const REASONS: ErrorReason[] = defineReasons([
  * that can hold a provider's or SQLite's raw text.
  */
 export const DETAILS = [
+  "contracts",
   "allowed",
   "alternative",
   "arguments",

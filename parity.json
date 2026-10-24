@@ -77,6 +77,9 @@
       "meaning": "the first time only: how to get this profile's app from my.telegram.org",
       "default": "browser"
     },
+    "--append": {
+      "meaning": "keep existing entries and add the explicitly named one beside them"
+    },
     "--approval": {
       "meaning": "who joins by it asks first, and an admin lets them in"
     },
@@ -2097,7 +2100,7 @@
     "bot webhooks set": {
       "in": ["max", "tg"],
       "options": {
-        "--add": {
+        "--append": {
           "in": ["max"],
           "reason": "a Telegram bot holds one webhook address; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         },
@@ -2178,11 +2181,7 @@
       }
     },
     "chats archive": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats clear": {
@@ -2438,11 +2437,7 @@
       }
     },
     "chats mark-unread": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats media": {
@@ -2541,11 +2536,7 @@
       }
     },
     "chats pin": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats requests": {
@@ -2641,11 +2632,7 @@
       "in": "all"
     },
     "chats unarchive": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats unmute": {
@@ -2656,11 +2643,7 @@
       }
     },
     "chats unpin": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats update": {

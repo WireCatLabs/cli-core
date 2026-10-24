@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { annotate } from "@wirecat/cli-base/commands"
+import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { fieldsHelp } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
 import type { MeetingProjectDiscoveryReader } from "../project-discovery.js"
@@ -13,7 +13,7 @@ const integer = (value: string) => {
     throw new CliError("validation_error", "expected a positive safe integer")
   return Number(value)
 }
-export const addMeetingProjectEvidenceCommand = (
+const addMeetingProjectEvidenceCommandDefinition = (
   program: Command,
   deps: {
     read: MeetingProjectDiscoveryReader
@@ -61,3 +61,5 @@ export const addMeetingProjectEvidenceCommand = (
     },
   )
 }
+
+export const addMeetingProjectEvidenceCommand = sharedCommand(addMeetingProjectEvidenceCommandDefinition)

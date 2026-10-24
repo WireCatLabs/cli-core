@@ -167,6 +167,8 @@ export interface TaskList {
  * from a message: the message stays a link, so deleting it leaves no copy here.
  */
 export interface TaskPlan {
+  priority?: number | null
+  parent?: string | null
   title?: string
   description?: string | null
   dueAt?: Date | null
@@ -367,7 +369,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
   }
   const planOf = async (store: MessageStore, id: string, plan: TaskPlan, by: TaskOrigin) => {
     if (plan.category !== undefined) plan = { ...plan, category: await categoryOf(store, plan.category) }
-    const open = (await store.tasks.get(id))?.state === "open"
+    const open = (await store.tasks.details(id)).status === "open"
     if (!open && (plan.dueAt != null || plan.nextCheckAt != null))
       throw new CliError("validation_error", "a closed task takes no due date or next check; it stays closed")
     const { assignees, ...fields } = plan
@@ -630,11 +632,11 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         return cardOf(store, id)
       }),
 
-    plan: (id, plan, by) =>
-      inStore(async (store, account) => {
-        await owned(store, account, id)
-        return planOf(store, id, plan, by)
-      }),
+    plan: async (id, plan, by) => {
+      const store = await deps.store()
+      if (!(await store.tasks.projectTask(id))) await owned(store, await deps.account(), id)
+      return planOf(store, id, plan, by)
+    },
 
     link: async (id, { references = [], chats = [] }, { kind, by }) => {
       const written = references.map((one) => one.trim()).filter(Boolean)

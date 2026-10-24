@@ -1,6 +1,8 @@
 import { evaluate } from "@wirecat/cli-base/query"
+import { EVENT_QUERY } from "../event-query.js"
 import { MEETING_QUERY, meetingItem } from "../item.js"
 import type { Event, EventSeries, MeetingSeries } from "../model.js"
+import { eventItem } from "../read-answers.js"
 import { MeetingError, positiveInteger } from "../reads.js"
 import type { MeetingDetails, MeetingFilter, MeetingSave, MeetingStore, SearchHit } from "../store.js"
 import type { MeetingTranscriptStore, TranscriptAppend } from "../transcript-store.js"
@@ -164,6 +166,14 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
     },
     async events() {
       return structuredClone(state.events.filter((e) => e.deletedAt === null))
+    },
+    async queryEvents(query) {
+      return structuredClone(
+        state.events.filter(
+          (event) =>
+            event.deletedAt === null && evaluate(query, EVENT_QUERY.fields, { ...eventItem(event), id: event.id }),
+        ),
+      )
     },
     async eventCandidates(filter) {
       const series = state.series.find((s) => s.id === filter.meetingSeriesId)

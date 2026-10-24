@@ -160,7 +160,10 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
           context,
           wholeList(
             "bot webhooks list",
-            (await botCan(adapter, "webhooks", bot, "list its webhooks")()).map(snakeKeys),
+            (await botCan(adapter, "webhooks", bot, "list its webhooks")()).map(({ url, types }) => ({
+              url,
+              ...(types == null ? {} : { types }),
+            })),
           ),
         )
       })
@@ -174,20 +177,20 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
     .argument("<url>", "the HTTPS address")
     .option("--types <types>", "only these update types, comma-separated, in the messenger's words")
     .option("--secret-stdin", "a secret the messenger sends back with each update — asked for, or read from a pipe")
-  if (bot.manyWebhooks) set.option("--add", "keep the webhooks already set and add this one beside them")
+  if (bot.manyWebhooks) set.option("--append", "keep the webhooks already set and add this one beside them")
   set.action(async function (this: Command, url: string) {
     const context = online(botContext(this, bot), this)
-    const options = this.opts<{ types?: string; secretStdin?: boolean; add?: boolean }>()
+    const options = this.opts<{ types?: string; secretStdin?: boolean; append?: boolean }>()
     await context.run(async (events) => {
       const adapter = await context.authenticated({ events })
       const list = botCan(adapter, "webhooks", bot, "list its webhooks")
       const others = (await list()).filter((one) => one.url !== url)
-      if (others.length > 0 && !options.add) {
+      if (others.length > 0 && !options.append) {
         throw new CliError(
           "confirmation_required",
           `this bot already sends its updates to ${others.map((one) => one.url).join(", ")} — ` +
             `remove it first with \`${context.words} webhooks delete <url>\`` +
-            (bot.manyWebhooks ? ", or give --add to get every update at both" : ""),
+            (bot.manyWebhooks ? ", or give --append to get every update at both" : ""),
         )
       }
       const types = typesOf(options.types)
@@ -219,7 +222,10 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
           context,
           wholeList(
             "bot webhooks list",
-            (await botCan(adapter, "webhooks", bot, "list its webhooks")()).map(snakeKeys),
+            (await botCan(adapter, "webhooks", bot, "list its webhooks")()).map(({ url, types }) => ({
+              url,
+              ...(types == null ? {} : { types }),
+            })),
           ),
         )
       })

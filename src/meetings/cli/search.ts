@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { annotate } from "@wirecat/cli-base/commands"
+import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf, zonedMoment } from "@wirecat/cli-base/query"
 import type { Meta } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
@@ -35,6 +35,7 @@ export interface MeetingSearchFlags {
   project?: string
   tag?: string
   topic?: string
+  topicName?: string
   sinceTime?: number
   untilTime?: number
   /** The zone a date or time without one was read in; the parser sets it, since the typed text is gone after. */
@@ -44,7 +45,7 @@ export interface MeetingSearchFlags {
   maxReadBytes?: number
 }
 /** Shared grammar without an action: a host with other source reports supplies their transport routing. */
-export const createMeetingSearchCommand = (program: Command): Command => {
+const createMeetingSearchCommandDefinition = (program: Command): Command => {
   let search = program.commands.find((command) => command.name() === "search")
   if (!search) {
     search = new Command("search").description("search the stored resources")
@@ -63,9 +64,9 @@ export const createMeetingSearchCommand = (program: Command): Command => {
     .option("--person-id <id>", "meetings with a participant linked to this person", integer)
     .option("--event-id <id>", "only meetings linked to this stored event", integer)
     .option("--series-id <id>", "only meetings in this stored series", integer)
-    .option("--project <name>", "meetings confirmed in this project, by name, key or alias")
+    .option("--project <project>", "meetings confirmed in this project, by name, key or alias")
     .option("--tag <name>", "meetings with this tag, by name or alias")
-    .option("--topic <name>", "meetings with this topic, by name or alias")
+    .option("--topic-name <name>", "meetings with this topic, by name or alias")
     .option(
       "--since-time <time>",
       "meetings starting at or after this ISO 8601 date or time",
@@ -101,7 +102,7 @@ export const meetingHitSearchRequest = (
     meetingSeriesId: options.seriesId,
     project: options.project,
     tag: options.tag,
-    topic: options.topic,
+    topic: options.topicName ?? options.topic,
     since: options.sinceTime,
     until: options.untilTime,
     limit: options.limit,
@@ -126,7 +127,7 @@ export const meetingSearchArguments = (query: string, options: MeetingSearchFlag
       series_id: options.seriesId?.toString(),
       project: options.project,
       tag: options.tag,
-      topic: options.topic,
+      topic_name: options.topicName ?? options.topic,
       since_time: options.sinceTime === undefined ? undefined : new Date(options.sinceTime).toISOString(),
       until_time: options.untilTime === undefined ? undefined : new Date(options.untilTime).toISOString(),
       max_read_bytes: options.maxReadBytes ?? 4194304,
@@ -145,7 +146,7 @@ export const meetingSearchMeta = (options: MeetingSearchFlags): Pick<Meta, "time
   }
 }
 
-export const addMeetingSearchCommand = (
+const addMeetingSearchCommandDefinition = (
   program: Command,
   deps: {
     search: (
@@ -171,3 +172,7 @@ export const addMeetingSearchCommand = (
       )
     },
   )
+
+export const createMeetingSearchCommand = sharedCommand(createMeetingSearchCommandDefinition)
+
+export const addMeetingSearchCommand = sharedCommand(addMeetingSearchCommandDefinition)

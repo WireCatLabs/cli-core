@@ -1,3 +1,4 @@
+import { overrideSharedContract } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import {
@@ -57,7 +58,7 @@ it("forwards combined context, dates and continuation to an injected provider-ne
       "78",
       "--project",
       "RES",
-      "--topic",
+      "--topic-name",
       "costs",
       "--since-time",
       "2026-09-12",
@@ -113,7 +114,7 @@ it("forwards combined context, dates and continuation to an injected provider-ne
           event_id: "56",
           series_id: "78",
           project: "RES",
-          topic: "costs",
+          topic_name: "costs",
           since_time: "2026-09-11T22:00:00.000Z",
           until_time: "2026-10-12T21:59:59.999Z",
           max_read_bytes: 4194304,
@@ -154,7 +155,7 @@ it("rejects impossible dates and invalid selectors before opening a store", asyn
     ["--person-id", "1.5"],
     ["--event-id", "0"],
     ["--series-id", "x"],
-    ["--tag", "plan", "--topic", "plan"],
+    ["--tag", "plan", "--topic-name", "plan"],
     ["--since-time", "2026-10-12", "--until-time", "2026-09-12"],
     ["--limit", "1001"],
     ["--cursor", "!"],
@@ -184,12 +185,16 @@ it("joins a search group the host already has", () => {
 it("shares grammar and validation without interpreting a host's alternate source report as word hits", async () => {
   const program = new Command("example")
   const output = vi.fn()
-  createMeetingSearchCommand(program)
-    .option("--archive <directory>")
-    .action((query, flags) => {
-      const request = meetingHitSearchRequest(query, flags)
-      output({ folder: flags.archive, requested: request.limit, matches: [] })
-    })
+  overrideSharedContract(
+    createMeetingSearchCommand(program),
+    "The synthetic host reads its own local archive directory.",
+    (command) => {
+      command.option("--archive <directory>")
+    },
+  ).action((query, flags) => {
+    const request = meetingHitSearchRequest(query, flags)
+    output({ folder: flags.archive, requested: request.limit, matches: [] })
+  })
   await program.parseAsync(["search", "meetings", "plan", "--archive", "./invented", "--limit", "2"], { from: "user" })
   expect(output).toHaveBeenCalledWith({ folder: "./invented", requested: 2, matches: [] })
   const aborted = new AbortController()

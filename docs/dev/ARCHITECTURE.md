@@ -475,6 +475,10 @@ change of status, due date, priority or assignee is a `task_events` row.
 
 ## The command skeleton
 
+Public command factories protect their contracts through the shared base registry. Provider
+edits use [explicit contract overrides](SHARED-CONTRACTS.md); schema and reason evidence is
+available through `commands info --json`.
+
 `run()` (`src/cli/program.ts`) never throws; it returns an exit code. It lifts a profile given as
 the first word, resolves settings (flag → environment → file → default, `src/cli/settings.ts`),
 records runs (`src/runs/`; the `runs` command is `src/cli/runs/`) and closes what a command holds when `--timeout` ends it

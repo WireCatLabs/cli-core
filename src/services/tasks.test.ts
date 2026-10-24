@@ -399,3 +399,26 @@ it("shows an owner project's task with its evidence and no account, and refuses 
     await store.close()
   }
 })
+
+it("updates a project task's plan, priority and parent without choosing a messenger account", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "project-task-plan-")), "fixture.db") })
+  try {
+    const project = await store.knowledge.addProject({ name: "Synthetic Planning", key: "SYN", scope: "work" })
+    const parent = await store.tasks.create({ project: project.ref, title: "Parent", type: "chore" }, "owner")
+    const child = await store.tasks.create({ project: project.ref, title: "Child", type: "chore" }, "owner")
+    const noAccount = vi.fn(async (): Promise<never> => {
+      throw new CliError("validation_error", "no account")
+    })
+    const service = tasksService({ ...storeOnlyDeps(store, account, { app }), account: noAccount })
+    const due = new Date("2026-11-01T12:00:00Z")
+    const result = await service.plan(
+      child.key,
+      { title: "Planned child", priority: 1, parent: parent.ref, dueAt: due },
+      "owner",
+    )
+    expect(result).toMatchObject({ title: "Planned child", priority: 1, parent: parent.ref, dueAt: due.toISOString() })
+    expect(noAccount).not.toHaveBeenCalled()
+  } finally {
+    await store.close()
+  }
+})

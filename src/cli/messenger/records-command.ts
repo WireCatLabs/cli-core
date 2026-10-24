@@ -32,7 +32,7 @@ export const mediaCommand = (messenger: Messenger): Command =>
   annotate(new Command("media"), { effects: REMOTE_READ })
     .description("a chat's photos, videos, files, audio and links, from the messenger's server; reading marks nothing")
     .argument("<chat>", messenger.chatArgument)
-    .option("--type <names>", `only these kinds, comma-separated: ${MEDIA_KINDS.join(", ")}`)
+    .option("--type <type>", `only these kinds, comma-separated: ${MEDIA_KINDS.join(", ")}`)
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
     .option("--cursor <cursor>", "go on from where page.next says the last page stopped")
     .action(async function (this: Command, chat: string) {

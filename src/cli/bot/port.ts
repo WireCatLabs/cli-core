@@ -282,7 +282,7 @@ export interface BotMessenger {
   name?: string
   /** The admin rights `--can` offers; every shared one when unset. */
   adminRights?: readonly AdminRight[]
-  /** Whether `bot webhooks set --add` keeps the other addresses; a messenger with one address has no `--add`. */
+  /** Whether `bot webhooks set --append` keeps the other addresses; a messenger with one address has no `--add`. */
   manyWebhooks?: boolean
   /** Secrets beside the token, each set with `bot auth set --secret <name>`; none when unset. */
   secrets?: readonly BotSecret[]

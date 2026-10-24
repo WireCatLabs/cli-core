@@ -13,7 +13,6 @@ export const sendAttempt = v.strictObject({
   key: v.optional(text),
   count: v.optional(count),
   for_everyone: v.optional(v.boolean()),
-  send_id: v.optional(id),
   operation_id: v.optional(id),
   parent_operation_id: v.optional(id),
   reply_to: v.optional(id),

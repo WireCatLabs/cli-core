@@ -166,6 +166,8 @@ const HOLDER_HELP =
   "who you are for claims: a session id or a chat id; default WIRECAT_HOLDER, else Claude Code's session, else the agent's name"
 
 const planFrom = (options: {
+  priority?: number
+  parent?: string | null
   title?: string
   description?: string
   due?: Date | "none"
@@ -174,6 +176,8 @@ const planFrom = (options: {
   assignee?: string[]
 }) => {
   const plan: TaskPlan = {}
+  if (options.priority !== undefined) plan.priority = options.priority
+  if (options.parent !== undefined) plan.parent = options.parent
   if (options.category !== undefined) plan.category = options.category
   if (options.title !== undefined) plan.title = options.title
   if (options.description !== undefined) plan.description = options.description
@@ -304,12 +308,19 @@ export const tasksCommand = (messenger: Messenger): Command => {
         examples: [`${tool} personal tasks update DOC-12 --title "Review draft"`],
       }),
     )
-      .summary("set a task's title, description, due date, next check, category and assignee")
+      .summary("update a task's text, schedule, category, assignees, priority or parent")
       .description(
-        "set a task's title, description, due date, next check, category and assignee; nothing reaches the messenger",
+        "update a task's text, schedule, category, assignees, priority or parent; nothing reaches the messenger",
       )
       .argument("<task>", "the task's id or key, as tasks list shows it")
-      .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`),
+      .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`)
+      .option("--priority <n>", "priority from 0 (urgent) through 4 (low)", (value) => {
+        if (!/^[0-4]$/.test(value)) throw new CliError("validation_error", "--priority takes 0 through 4")
+        return Number(value)
+      })
+      .option("--parent <id>", "parent task in the same project; none clears it", (value) =>
+        value === "none" ? null : value,
+      ),
     "send Alex the API token",
   ).action(async function (this: Command, id: string) {
     const context = messengerContext(this, messenger)
@@ -318,7 +329,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     if (Object.keys(plan).length === 0)
       throw new CliError(
         "validation_error",
-        "give at least one of --title, --description, --due, --remind-time, --category",
+        "give at least one of --title, --description, --due, --remind-time, --category, --priority, --parent",
       )
     const planned = await context.withServices((services) => services.tasks.plan(id, plan, writerOf(this)))
     renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
