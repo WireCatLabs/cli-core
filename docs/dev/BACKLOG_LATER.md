@@ -32,8 +32,8 @@ Someday work: P3 items, nice-to-haves and research. Same ids, marks and one-line
 - **CORE-25** · P3 · Finish the rename: the `@wirecat/cli-tasks` and `@wirecat/cli-meetings` deprecation notices
   still point at the deprecated `@wirecat/cli-messaging`, and the parity build keeps its old-name fallback
   (`scripts/parity/build-app.sh:25`). [merge-shared-packages-plan.md](merge-shared-packages-plan.md).
-- **CORE-30** · P3 · 🚩 One command that collects a chat completely: sync history, download files, read their text,
-  transcribe, reindex, and report coverage at the end. Found in the 2026-10-12 field test (#1019); the name waits for
-  the owner (not `archive`, which reads as archiving the chat; `messages sync <chat> --files` was proposed).
+- **CORE-30** · P3 · `messages sync <chat> --files` collects a chat completely: sync history, download files, read
+  their text, transcribe, reindex, and report coverage at the end (owner's name, 2026-10-24). Found in the
+  2026-10-12 field test (#1019).
 - **CORE-31** · P3 · `attachments list is:needs_text` lists files with no text but not why: say per file what would
   give it text (a reader, OCR, transcription) and the command that does it. `src/store/sqlite/attachment-texts.ts:198`.
