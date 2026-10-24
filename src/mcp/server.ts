@@ -65,6 +65,7 @@ const PER_RUN = new Set([
   "trackCloseable",
   "exit",
   "runCommand",
+  "discoveryAvailability",
   "app",
   "relayed",
   "agent",

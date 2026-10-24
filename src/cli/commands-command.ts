@@ -1,9 +1,10 @@
 import { CliError, EXIT_CODES, GENERIC_FAILURE } from "@wirecat/cli-base"
-import { annotate, type CommandInfo, describeOptions, describeProgram } from "@wirecat/cli-base/commands"
+import { annotate, type CommandInfo, describeOptions, describeProgram, metaOf } from "@wirecat/cli-base/commands"
 import { CRASH_CODE } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
-import { commandContract, findCommand } from "./command-contract.js"
+import type { DiscoveredCommand } from "./command-availability.js"
+import { commandContract, commandPathOf, findCommand } from "./command-contract.js"
 import { environmentOf, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
 import { renderDocument } from "./envelope.js"
@@ -18,7 +19,7 @@ export const CONTRACT = 3
 
 /**
  * The discovery surface an agent reads instead of `--help`. It opens no store, no session and no
- * settings file: which commands exist does not depend on whether this machine has logged in.
+ * settings file without a named profile. A named profile adds availability without hiding commands.
  */
 export const commandsCommand = (app: AppIdentity): Command => {
   const command = annotate(new Command("commands"), { effects: NO_EFFECTS })
@@ -33,7 +34,13 @@ export const commandsCommand = (app: AppIdentity): Command => {
     .action(function (this: Command, path: string[]) {
       const root = rootOf(this)
       const output = outputFor(this)
-      const all = describeProgram(root)
+      const available = environmentOf(this).discoveryAvailability
+      const annotateAvailability = (infos: readonly CommandInfo[]): DiscoveredCommand[] =>
+        infos.map((info) => {
+          const availability = available?.(info)
+          return { ...info, ...(availability ? { availability } : {}), commands: annotateAvailability(info.commands) }
+        })
+      const all = annotateAvailability(describeProgram(root))
       const scoped = path.length > 0 ? scopeOf(root, all, path) : undefined
       const commands = scoped ? [scoped.command] : all
       const { json, jsonl } = this.optsWithGlobals<{ json?: unknown; jsonl?: boolean }>()
@@ -68,6 +75,14 @@ export const commandsCommand = (app: AppIdentity): Command => {
           version: app.version,
           contract: CONTRACT,
           ...commandContract(findCommand(rootOf(this), path)),
+          ...(() => {
+            const found = findCommand(rootOf(this), path)
+            const availability = environmentOf(this).discoveryAvailability?.({
+              ...metaOf(found),
+              path: commandPathOf(found),
+            })
+            return availability ? { availability } : {}
+          })(),
         })
       }),
   )

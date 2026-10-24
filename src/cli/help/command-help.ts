@@ -2,6 +2,7 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import type { Argument, Command } from "commander"
 import { commandPathOf, outputOf } from "../command-contract.js"
+import { environmentOf } from "../context.js"
 import { PROFILE_FREE } from "../profile.js"
 import { commandAt } from "../steps.js"
 import { short } from "./commands-text.js"
@@ -232,9 +233,23 @@ export const commandHelpText = (command: Command): string => {
   const { returns, next, examples } = commandHelp(command)
   const rows = (label: string, values: readonly string[]) =>
     values.map((value, at) => `${(at === 0 ? label : "").padEnd(LABEL)}${value}`)
-  return ["", ...rows("Returns:", [returns]), ...rows("Next usually:", next), ...rows("Example:", examples), ""].join(
-    "\n",
-  )
+  const availability = environmentOf(command).discoveryAvailability?.({
+    ...metaOf(command),
+    path: commandPathOf(command),
+  })
+  const access = availability
+    ? rows("Availability:", [
+        availability.available ? "available for this profile" : `unavailable — ${availability.reason}`,
+      ])
+    : []
+  return [
+    "",
+    ...access,
+    ...rows("Returns:", [returns]),
+    ...rows("Next usually:", next),
+    ...rows("Example:", examples),
+    "",
+  ].join("\n")
 }
 
 /** The same, as Markdown lines for `docs/commands.md`: hand it to cli-base's `commandsPage` per command. */

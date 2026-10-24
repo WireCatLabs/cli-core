@@ -10,23 +10,15 @@ import {
 import { type ErrorObject, writes } from "@wirecat/cli-base/standards"
 import { VOCABULARY } from "@wirecat/cli-base/standards/tables"
 import * as v from "valibot"
-import { changesMessenger } from "../cli/effects.js"
+import { type CommandAvailability, commandAvailability } from "../cli/command-availability.js"
+
+export type { CommandAvailability } from "../cli/command-availability.js"
+
 import { lentConnection } from "../cli/messenger/serve-relay.js"
 import type { RunOptions } from "../cli/program.js"
 import type { StdinField } from "../cli/stdin-field.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
-import {
-  AUTHORITY_KEY,
-  authorityAllowed,
-  BOT_API_KEY,
-  botApiAllowed,
-  isBotApi,
-  keyForCommand,
-  type Level,
-  levelFor,
-  type PermissionKey,
-  readKeysForCommand,
-} from "../sends/permissions.js"
+import { authorityAllowed, botApiAllowed, type Level, type PermissionKey } from "../sends/permissions.js"
 
 /** The CLI's own `run` — a fresh program on every call — and its command tree as `commands --json` describes it. */
 export interface AgentProgram {
@@ -54,12 +46,6 @@ export interface AgentContext {
 }
 
 export type AgentAnswer = { result: unknown } | { error: ErrorObject }
-
-export interface CommandAvailability {
-  available: boolean
-  reason?: string
-  permission?: string
-}
 
 export interface AgentTool {
   availability?: () => CommandAvailability
@@ -228,34 +214,6 @@ const schemaOf = (fields: readonly Field[]) =>
   )
 
 const startsWith = (path: readonly string[], prefix: readonly string[]) => prefix.every((word, at) => path[at] === word)
-
-/** Discovery and execution use the same permission decision. */
-export const commandAvailability = (
-  info: CommandInfo,
-  levels: Readonly<Record<PermissionKey, Level>>,
-  keyOf?: CatalogueOptions["keyOf"],
-  authority?: CatalogueOptions["authority"],
-  readOnly = false,
-): CommandAvailability => {
-  const blocked = (reason: string, permission?: string): CommandAvailability => ({
-    available: false,
-    reason,
-    ...(permission ? { permission } : {}),
-  })
-  if (readOnly && (changesMessenger(info) || authority?.(info.path)))
-    return blocked("the read-only lock blocks this change")
-  if (authority?.(info.path) && !authorityAllowed(levels))
-    return blocked(`the profile keeps ${AUTHORITY_KEY} off`, AUTHORITY_KEY)
-  if (isBotApi(info.path) && !botApiAllowed(levels))
-    return blocked(`the profile requires ${BOT_API_KEY}: allow`, BOT_API_KEY)
-  const key = keyOf?.(info.path) ?? keyForCommand(info.path)
-  const level = key ? levelFor(levels, key).level : "allow"
-  if (level === "deny") return blocked(`the profile denies ${key}`, key ?? undefined)
-  if (level === "readonly" && writes(info.effects))
-    return blocked(`${key} is readonly in this profile`, key ?? undefined)
-  const denied = readKeysForCommand(info.path).find((read) => levelFor(levels, read).level === "deny")
-  return denied ? blocked(`the profile denies ${denied}`, denied) : { available: true }
-}
 
 /** Build the discoverable command catalogue; profile permissions annotate availability. */
 export const toolsFromCommands = (commands: readonly CommandInfo[], options: CatalogueOptions = {}): AgentTool[] => {

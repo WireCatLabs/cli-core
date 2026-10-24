@@ -386,7 +386,9 @@ A listen that hangs still warns `store_not_written`, only sooner. No flag, varia
 ### MCP discovery and permissions
 
 A permission changes what an agent may execute, not whether the command exists. CLI help and
-`commands --json` retain the command catalogue. MCP `tools_search` returns denied commands with
+`commands --json` retain the command catalogue. With a named profile, CLI help, text discovery,
+`commands --json` and `commands info` also show current availability. Without a named profile,
+discovery stays independent of account settings; help still works if settings need repair. MCP `tools_search` returns denied commands with
 `availability: { available: false, reason, permission }`; permitted commands have
 `availability: { available: true }`. Both complete listings and search results include this field.
 Availability is read from current settings, and execution checks permissions again before opening a

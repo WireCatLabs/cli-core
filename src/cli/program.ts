@@ -23,10 +23,12 @@ import { recorded, wasSettled } from "../runs/recording.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
+import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
+  changesAuthorityAt,
   changesAuthorityNow,
   isLogin,
   isStoreChange,
@@ -249,6 +251,34 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     platform: options.platform ?? process.platform,
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
+    discoveryAvailability: (info) => {
+      const flags = program.optsWithGlobals<GlobalFlags>()
+      const env = options.env ?? process.env
+      if (!flags.profile && !env[envName(definition.app, "PROFILE")]) return undefined
+      try {
+        const overrides = options.agent?.overrides ?? []
+        const settings = (definition.configuration ?? settingsFor(definition.app)).resolveSettings(
+          overrides.length ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
+          {
+            env,
+            needsProfile: false,
+            kind: info.path[0] === "bot" ? "bot" : "personal",
+          },
+        )
+        if (!("permissions" in settings) || !settings.permissions) return undefined
+        return commandAvailability(
+          info,
+          settings.permissions as Record<string, import("../sends/permissions.js").Level>,
+          undefined,
+          changesAuthorityAt(program),
+          readOnlyLockOf(definition.app, env) !== undefined,
+          options.agent !== undefined,
+        )
+      } catch {
+        // Help must still work when the configuration needs repair.
+        return undefined
+      }
+    },
     untilStopped: () => {
       if (phased || finished) return phase.signal
       phased = true

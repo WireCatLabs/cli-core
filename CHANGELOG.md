@@ -10,7 +10,8 @@ shape of this file.
 ### Fixed
 
 - **MCP discovery retains permission-denied commands.** Full listings and searches return each command's
-  current `availability`, including a reason and permission key when blocked. Read-only profiles and process
+  current `availability`, including a reason and permission key when blocked. With a named profile,
+  CLI help and command discovery also show current availability without hiding commands. Read-only profiles and process
   locks keep writing commands discoverable. Calls still recheck permissions and refuse before execution;
   seeing a command does not grant access. Bot MCP also lists bot-scoped `config show|set|unset` behind the
   existing authority rules, without exposing options that could select personal-account settings. Consumers
