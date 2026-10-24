@@ -11,8 +11,6 @@ shape of this file.
 
 - **`setupAtStart` runs the shared first-run questions for a tool with its own program** (zm, memo, drive): it asks only a person at a terminal, and the command runs whatever happens to the questions.
 
-### Added
-
 - **The first command at a terminal asks three questions once for every WireCat tool.** Which languages you write and speak (English and the system's language ticked on a new store; a store in use keeps its own, so Enter changes nothing), which other WireCat tools to install (installed ones are marked), and whether commands and agents may only read. The answers sit in the `setup` section of `~/.config/WireCat/config.json`; "read only" caps every profile of every tool, over MCP too. Agents, pipes, `--json`, `--no-input` and `CI` are never asked. `askSetupQuestions` lets a tool's `setup` ask them again.
 
 ## 0.402.0 — 24.10.2026
