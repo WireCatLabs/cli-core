@@ -13,6 +13,11 @@ shape of this file.
 - **Knowledge lists filter at their native readers.** Organizations, projects, reminders and mail rules accept optional queries before SQL list bounds. Document tags and links accept native selectors, and meeting-link reads can select one URL before aggregation. Existing unfiltered calls keep their behavior.
 
 
+### Fixed
+
+- **`tasks update <task> --parent none` clears the parent.** The CLI keeps the sentinel through option parsing and converts it to null when building the plan, so Commander cannot turn it into an empty task id.
+
+
 ## 0.411.0 — 24.10.2026
 
 ### Added
