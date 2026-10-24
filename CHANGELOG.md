@@ -17,6 +17,12 @@ shape of this file.
 
 - **Voice-note search no longer turns an English word into another real English word.** A word in a transcript widens to the spellings speech recognition garbles only past a dictionary of its language: Russian as before, and now English and Spanish, following the store's word-form languages (`search_stemmers`). Before, «cost» also found «cast». A Latin word with no dictionary for its language, and English and Spanish number words, no longer widen.
 
+### Added
+
+- **`watchMirrors` keeps folder mirrors in step.** One cycle per local save (after a quiet period, and only when the
+  files differ from the last sync), per remote change the CLI reports, per periodic local check and per full run;
+  each cycle syncs only the mirrors that need it, and a failed one is retried at the next poll.
+
 ## 0.401.0 — 24.10.2026
 
 ### Changed — may break callers

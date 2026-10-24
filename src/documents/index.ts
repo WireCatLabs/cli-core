@@ -10,6 +10,12 @@ export { documentIngestion, type IngestionOptions } from "../services/documents/
 export { type DocumentKnowledge, documentKnowledge } from "../services/documents/knowledge.js"
 export { blocksMarkdown, inlineMarkdown, spliceMarkdown } from "../services/documents/markdown-splice.js"
 export {
+  type MirrorTrigger,
+  type MirrorWatchEvent,
+  type MirrorWatchOptions,
+  watchMirrors,
+} from "../services/documents/mirror-watch.js"
+export {
   conflictReport,
   fileMirrorState,
   type Mirror,

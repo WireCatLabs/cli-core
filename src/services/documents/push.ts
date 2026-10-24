@@ -65,6 +65,9 @@ export interface PushResult {
 
 const SKIPPED = /^(\.|node_modules$|~\$)|(~|\.swp|\.tmp)$/
 
+/** Hidden files, `node_modules` and editor leftovers: never mirrored, and never a reason to sync. */
+export const skippedName = (name: string): boolean => SKIPPED.test(name)
+
 const hashFile = (path: string): Promise<string> =>
   new Promise((done, fail) => {
     const hash = createHash("sha256")
