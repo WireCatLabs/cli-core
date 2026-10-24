@@ -9,7 +9,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { downloadTextModel } from "../services/model-downloads.js"
 import { install, installedBytes, isInstalled, modelsDirectory } from "../speech/install.js"
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
-import { FETCH, LOCAL_READ } from "./effects.js"
+import { FETCH, LOCAL_READ, NO_EFFECTS } from "./effects.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
 
@@ -66,7 +66,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
       path: join(directory, id),
     }
   }
-  const models = new Command("models").description("models that run on this machine")
+  const models = annotate(new Command("models"), { effects: NO_EFFECTS }).description("models that run on this machine")
   withQuery(
     annotate(models.command("list"), {
       effects: LOCAL_READ,
