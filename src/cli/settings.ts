@@ -4,6 +4,7 @@ import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
 import { parseDuration } from "../domain/duration.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
+import { canonicalPermissionKey } from "../sends/permission-aliases.js"
 import {
   assertOverridesTighten,
   CEILING_KEY,
@@ -255,7 +256,12 @@ export interface ResolveOptions {
   needsProfile?: boolean
   /** Read the config file without writing it: no default file. For a dry run. */
   readOnly?: boolean
+  /** Skip moved permission keys instead of refusing them, so `config set` and `unset` can fix one. */
+  skipMovedPermissions?: boolean
 }
+
+const withoutMoved = (levels: Record<PermissionKey, Level> | undefined) =>
+  levels && Object.fromEntries(Object.entries(levels).filter(([key]) => canonicalPermissionKey(key) === key))
 
 /** Where `profile` came from when none was named and the command needs none. */
 export const NONE_NAMED = "none named"
@@ -461,7 +467,9 @@ export const settingsFor = <T extends object = Record<never, never>>(
         : { value: false, from: "default" }
     const fileLayers = layers.map(([from, scope]): [Source, Record<PermissionKey, Level> | undefined] => [
       from,
-      scope?.permissions as Record<PermissionKey, Level> | undefined,
+      options.skipMovedPermissions
+        ? withoutMoved(scope?.permissions as Record<PermissionKey, Level> | undefined)
+        : (scope?.permissions as Record<PermissionKey, Level> | undefined),
     ])
     const overrides = permissionOverrides(flags.permission)
     assertOverridesTighten(overrides, layerPermissions(fileLayers).levels)

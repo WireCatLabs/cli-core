@@ -15,6 +15,7 @@ shape of this file.
 
 ### Fixed
 
+- **`config set` and `config unset` work while a moved permission key is saved.** Every other command still refuses the old key and names its replacement; `config unset permissions.<old>` and `config set permissions.<new>` now fix it instead of failing with the same error.
 - **`tasks update <task> --parent none` clears the parent.** The CLI keeps the sentinel through option parsing and converts it to null when building the plan, so Commander cannot turn it into an empty task id.
 
 
