@@ -19,12 +19,11 @@ const wholeNumber = (value: string): number => {
 }
 
 /**
- * `bot store fetch`: a chat's history into the bot's local copy, newest to oldest and resumable, as the
+ * `bot messages sync`: a chat's history into the bot's local copy, newest to oldest and resumable, as the
  * personal `messages sync` does. Mounted for a messenger whose Bot API pages back through a chat.
  */
-export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMessenger["fetching"]>): Command => {
-  const command = new Command("store").description("the bot's local copy on this machine")
-  const fetch = annotate(command.command("fetch"), { effects: FETCH })
+export const botMessagesSyncCommand = (bot: BotMessenger, fetching: NonNullable<BotMessenger["fetching"]>): Command => {
+  const fetch = annotate(new Command("sync"), { effects: FETCH })
     .description("fetch a chat's history into the bot's local copy, newest first; run it again to continue")
     .argument("<chat>", "a chat id, or the title of a chat this bot has seen")
     .option(
@@ -97,5 +96,5 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
       stop.release()
     }
   })
-  return command
+  return fetch
 }

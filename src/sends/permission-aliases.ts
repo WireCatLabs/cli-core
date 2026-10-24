@@ -30,6 +30,7 @@ const RENAMED = [
   ["conversations.batches.next", "conversations.batches.show"],
   ["conversations.consents.revoke", "conversations.consents.remove"],
   ["stats.messages.counters.refresh", "stats.messages.counters.sync"],
+  ["store.fetch", "messages.sync"],
   ["store.gaps.plan", "store.gaps.show"],
   ["store.reindex", "store.rebuild"],
 ] as const

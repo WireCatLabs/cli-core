@@ -32,7 +32,7 @@ another meaning.
 | `update` | change a thing's fields | all | `plan`, `edit` for fields | tg/max `tasks update` (sets title, due date) |
 | `set` / `unset` | one named key | all | `configure` | drive `models configure` |
 | `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; `--all` for every chat or source (owner, 2026-10-12); a mirror syncs both ways, as drive's `mirrors sync` (owner, 2026-10-24) | all | `import` for a catch-up, `refresh`, `store fetch` | memo `import` and `notes import` (to become `memo sync`), memo `mail <account> import`, tg/max `metadata sync`, `stats messages counters sync`; tg/max `contacts sync` help says "forget where the last sync left off and take the whole list again" — its help still describes a full re-read of the list, not only what changed |
-| `fetch` | one bounded pull of one named thing from the messenger, not a catch-up | tg, max | `refresh`, `get` | `bot store fetch` ([STANDARD.md, Bot](STANDARD.md#bot) wants the personal name, `bot messages sync`); `--refresh` options (`contacts context`, `search conversations`) |
+| `fetch` | one bounded pull of one named thing from the messenger, not a catch-up | tg, max | `refresh`, `get` | `--refresh` options (`contacts context`, `search conversations`) |
 | `import` | bring a file or list the user gives into the store or the messenger, once | all | — | memo `import`, `notes import` (a repeatable catch-up: `sync`) |
 | `export` | write from the store to a file | all | — | none |
 | `extract` | read the text inside files already on this machine into the store | tg, max | — | drive `memories extract` (sends text to a model and proposes memories: another meaning) |
