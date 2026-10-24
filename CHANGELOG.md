@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **Meeting search continuation arguments match the generated MCP schema.** Stored numeric selector IDs are
+  serialized as strings in replay arguments, so an agent can pass the returned next step to the shared read tool
+  without converting IDs. Validated search requests still use numeric store IDs.
+
 ## 0.409.0 — 24.10.2026
 
 ### Added
