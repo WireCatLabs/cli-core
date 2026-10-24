@@ -1,5 +1,6 @@
 import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
+import { MEETING_RESULT_ENTITIES } from "../meetings/index.js"
 import { account } from "./account.js"
 import { accountChange, accountPrivacy, accountPrivacyChange, endedAccountSessions } from "./account-change.js"
 import { accountProfile } from "./account-profile.js"
@@ -136,6 +137,7 @@ import {
   storeJobClear,
   storeJobDetails,
   storeJobRetry,
+  syncProgress,
 } from "./store-records.js"
 import { automaticTags, tagChange } from "./tag-change.js"
 import { tagging } from "./tagging.js"
@@ -342,6 +344,8 @@ export {
 }
 
 export const ENTITIES = {
+  sync_progress: syncProgress,
+  ...MEETING_RESULT_ENTITIES,
   message,
   message_context: messageContext,
   message_download: messageDownload,

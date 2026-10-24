@@ -103,3 +103,5 @@ export const storeJobRetry = v.union([
   v.strictObject({ retried: id, chat: text, error: v.strictObject({ code: text, message: text }) }),
 ])
 export const storeJobClear = v.strictObject({ cleared: v.array(id) })
+
+export { progress as syncProgress }

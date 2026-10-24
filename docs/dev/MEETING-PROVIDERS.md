@@ -419,7 +419,7 @@ grant remain required; the SDK does not widen an existing server's tools.
 `addMeetingSeriesInventoryCommand`, `readMeetingSeriesInventory`, `meetingSeriesInventoryTool`
 and `callMeetingSeriesInventoryTool` from `/cli` take an injected provider/account-bound reader.
 The command mounts `meetings scheduled` under an existing meetings group. It is a remote read,
-marked `offline: false` and `mcp: false`; generic command routers must not grant inventory access.
+marked `offline: false`. Generic command routers offer it under the selected profile's permissions.
 A host explicitly mounts the raw `meeting_series_inventory` tool and owns any credential, request
 and resource lifetime. No provider or default server tool is mounted by Core.
 
@@ -462,3 +462,8 @@ Validate real synthetic command answers against the advertised contract, includi
 For a correlated batch whose `--json` fields belong to each nested answer, pass `{ project: payloadSchema }`
 as the fourth `answerEntity` argument. The result contract still describes the complete correlated wrapper;
 field validation uses the payload schema. The shared meeting batch command declares this itself.
+
+Portable ingestion, export, association, transcription and embedding receipt schemas live in
+`MEETING_RESULT_ENTITIES`. A host adapts the SDK's numeric IDs and camelCase records through
+`meetingResultItem(entity, value)` before rendering the public answer. The SDK's internal types
+remain unchanged; the host output boundary owns that conversion.

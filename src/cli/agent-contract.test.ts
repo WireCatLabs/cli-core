@@ -204,6 +204,16 @@ describe("agent CLI contract", () => {
     })
   })
 
+  it("projects command descriptions while preserving the discovery document and command identities", async () => {
+    const result = await invoke(["commands", "messages", "send", "--json=usage"])
+    expect(result.result).toBe(0)
+    const document = JSON.parse(result.stdout[0] ?? "{}")
+    expect(document).toMatchObject({ cli: app.command, contract: 3, scope: ["messages", "send"] })
+    expect(document.commands[0]).toMatchObject({ name: "send", path: ["messages", "send"] })
+    expect(document.commands[0]).toHaveProperty("usage")
+    expect(document.commands[0]).not.toHaveProperty("description")
+  })
+
   it("publishes a separately versioned schema without changing the application version", async () => {
     const result = await invoke(["commands", "info", "messages", "send", "--json"])
     expect(result.result).toBe(0)

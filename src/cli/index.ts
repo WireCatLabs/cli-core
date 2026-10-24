@@ -1,5 +1,6 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
 export { parseDuration } from "../domain/duration.js"
+export { syncProgress } from "../entities/store-records.js"
 export { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 export { type AppErrors, failureContext } from "../errors/reasons.js"
 export { botInstructions } from "../mcp/bot/instructions.js"
@@ -10,6 +11,7 @@ export { callMeetingProjectCandidatesTool, meetingProjectCandidatesTool } from "
 export { callMeetingSeriesInventoryTool, meetingSeriesInventoryTool } from "../mcp/meeting-series-inventory.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
 export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
+export { MEETING_RESULT_ENTITIES } from "../meetings/index.js"
 export { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 export type {
   AccountEditing,
@@ -196,6 +198,7 @@ export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export {
   changesAuthority,
   changesAuthorityAt,
+  changesAuthorityNow,
   destroysNothing,
   FETCH,
   grantsAuthority,
@@ -219,6 +222,7 @@ export {
   answerSchema,
   type Body,
   type ItemBody,
+  isBody,
   itemAnswer,
   itemOf,
   jsonlRecords,
@@ -321,6 +325,7 @@ export {
 } from "./meeting-preparation-read.js"
 export { addMeetingProjectCandidatesCommand } from "./meeting-project-candidates-command.js"
 export { readMeetingProjectCandidates } from "./meeting-project-candidates-read.js"
+export { meetingResultItem } from "./meeting-results.js"
 export { addMeetingSeriesInventoryCommand } from "./meeting-series-inventory-command.js"
 export { type MeetingSeriesInventoryReader, readMeetingSeriesInventory } from "./meeting-series-inventory-read.js"
 export { accountCommand } from "./messenger/account-command.js"

@@ -33,6 +33,7 @@ import {
 } from "../meetings/index.js"
 import { formatMeetingEvidenceText, formatMeetingPassage } from "../services/meeting-passage-format.js"
 import { answerEntity } from "./answer-entity.js"
+import { destroysNothing } from "./effects.js"
 import { answerSchema, type Body, itemOf, listOf } from "./envelope.js"
 
 const INDEX_BYTES = 4194304
@@ -224,6 +225,7 @@ export const addMeetingBatchCommand = (
         format as MeetingPassageOutputFormat,
       )
     })
+  destroysNothing(command)
   annotate(command, {
     origin: "handwritten",
     partial: true,
