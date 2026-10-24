@@ -15,6 +15,12 @@ shape of this file.
 
 - **The 0.412.0 notes for the provider registry say "available from cli-core 0.413.0"; it shipped in 0.412.0.** `registerProvider`, `useProviders`, `kindIn`, skipped unknown providers and kind `events` are all in 0.412.0.
 
+## Unreleased
+
+### Fixed
+
+- **The 0.412.0 notes for the provider registry, unknown providers and the `events` kind say "available from cli-core 0.413.0"; they shipped in 0.412.0.** The release folded them in from `main`'s head. Nothing else in those entries changes.
+
 ## 0.412.0 — 24.10.2026
 
 ### Added
