@@ -568,15 +568,12 @@ unless the caller explicitly sets `registries: true`.
 
 ## How often, and what may break
 
-**Release when a consumer needs it.** Changes wait under `## Unreleased` until then. Apart from the weekly
-limit below, there is no gap to keep between releases.
+**Release when a consumer needs it, at any time** ([WC-REL-8](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-8--any-package-may-release-at-any-time)). Changes wait under `## Unreleased`
+until then; there is no gap to keep between releases and no weekly limit on breaking changes.
 
-**A change to a stable export that makes a CLI change its code ships at most once a week**
-([WC-REL-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-9--a-change-to-a-stable-shared-library-export-that-makes-a-cli-change-its-code-ships-at-most-once-a-week)). The parity jobs build tg-cli, max-cli and whatsapp-cli from their `main`
-against every pull request. A change to an export in the table below counts unless all three jobs pass with
-each CLI's `main` unchanged, so it also counts when it passes only against a CLI branch made for it. It counts
-when it compiles but changes behaviour a CLI must adapt to, which parity cannot see, so when in doubt it counts. The changes that count go into one release a week, and every
-CLI that uses cli-core moves to that release on the same day.
+**A release that makes a CLI change its code moves every CLI that uses cli-core on the same day.** The parity
+jobs build tg-cli, max-cli and whatsapp-cli from their `main` against every pull request; a change that fails
+there, or passes only against a CLI branch made for it, needs those CLI branches ready before it is released.
 
 **Before 1.0, any release may break a caller.** A change that does is listed in the changelog under
 "Changed — may break callers", with what to change in a consumer.

@@ -29,9 +29,8 @@ nothing now.
 
 ## Releases
 
-- **Hold breaking work to the weekly window (WC-REL-9).** The owner released #1837 on 2026-10-24,
-  ahead of its window; the next window opens a week after that release. Hold every other breaking PR
-  until then; release only with the owner’s explicit yes, and coordinate all six CLI bumps for the same day.
+- **Release at any time (WC-REL-8).** There is no weekly window for breaking work; when a release makes the
+  CLIs change their code, bump all six CLIs the same day.
 
 - **Announce before you merge into `main` or start a release** — in
   [issue #849](https://github.com/WireCatLabs/cli-core/issues/849), one line, after reading its latest
@@ -49,8 +48,7 @@ nothing now.
 - Each session releases its own merged work: `git fetch`, `npm view`, a `chore: release` pull request
   that raises the version from what npm really has, then `bin/release`.
 - `bin/release` in every repository takes one machine-wide lock (`$XDG_RUNTIME_DIR/leemour-release.lock`),
-  so only one release of any package runs at a time on this machine. tg-cli and max-cli also refuse a
-  release within two hours of their last one; cli-core has no such gap.
+  so only one release of any package runs at a time on this machine. No package waits between releases.
 - To try an unreleased cli-core in tg-cli first, use `bin/try-messaging` in the tg worktree, never a
   committed `file:` path.
 
