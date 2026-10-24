@@ -15,6 +15,7 @@ shape of this file.
 
 ### Fixed
 
+- **`config set` and `config unset` work while a moved permission key is saved.** Every other command still refuses the old key and names its replacement; `config unset permissions.<old>` and `config set permissions.<new>` now fix it instead of failing with the same error.
 - **`tasks update <task> --parent none` clears the parent.** The CLI keeps the sentinel through option parsing and converts it to null when building the plan, so Commander cannot turn it into an empty task id.
 
 
@@ -42,10 +43,6 @@ shape of this file.
 - **Core-owned command contracts reject silent edits after construction.** Use `overrideSharedContract` with a
   specific reason and a callback before modifying an inherited definition. Exact before/after values remain visible
   in contract discovery. Independent shell replacements pin static, reviewed declarations, so new Core defaults cannot be silently omitted. Provider-only commands may extend groups; inherited leaves retain their contracts.
-
-### Fixed
-
-- **`config set` and `config unset` work while a moved permission key is saved.** Every other command still refuses the old key and names its replacement; `config unset permissions.<old>` and `config set permissions.<new>` now fix it instead of failing with the same error.
 
 ## 0.410.0 — 24.10.2026
 

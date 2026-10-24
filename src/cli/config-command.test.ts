@@ -88,6 +88,7 @@ describe("config", () => {
     writeFileSync(file, JSON.stringify(saved))
 
     expect((await call(["work", "config", "show", "--json"], env)).code).toBe(3)
+    expect((await call(["work", "config", "set", "permissions.models.text", "deny"], env)).code).toBe(2)
     expect((await call(["work", "config", "set", "permissions.models", "deny"], env)).code).toBe(0)
     expect((await call(["work", "config", "unset", "permissions.models.audio"], env)).code).toBe(0)
     expect(JSON.parse(readFileSync(file, "utf8")).profiles.work.permissions).toEqual({ models: "deny" })
