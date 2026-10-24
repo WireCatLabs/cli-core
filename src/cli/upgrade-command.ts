@@ -51,7 +51,6 @@ export const upgradeCommand = (
   grantsAuthority(
     annotate(new Command("upgrade"), {
       effects: LOCAL_WRITE,
-      mcp: false,
       offline: false,
       examples: [`${app.command} upgrade --check`, `${app.command} upgrade`],
     }),

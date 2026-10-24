@@ -51,7 +51,6 @@ export const addMeetingSeriesInventoryCommand = (
       origin: "handwritten",
       effects: REMOTE_READ,
       offline: false,
-      mcp: false,
       output: { entity: "meeting_series_inventory" },
       examples: [`${program.name()} meetings scheduled --json`],
     },

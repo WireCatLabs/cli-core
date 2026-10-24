@@ -82,7 +82,7 @@ it.each(["example-calendar", "example-conference"])(
     })
     expect(f.port.read).toHaveBeenCalledTimes(3)
     const command = flatten(describeProgram(program)).find((row) => row.path.join(" ") === "meetings scheduled")
-    expect(command).toMatchObject({ mcp: false, offline: false, effects: { remote: "read", local: "read" } })
+    expect(command).toMatchObject({ offline: false, effects: { remote: "read", local: "read" } })
   },
 )
 

@@ -20,6 +20,7 @@ import {
   VAD,
   vadPath,
 } from "./index.js"
+import { installFiles } from "./install.js"
 import { decodeOgg, detector, loadSherpa, SAMPLE_RATE, toModelRate } from "./recognize.js"
 import { type Choice, choose, hearLocally, hearOnline } from "./transcribe.js"
 
@@ -294,4 +295,18 @@ it("the public speech directory respects an explicit WireCat folder without crea
   const cache = join(mkdtempSync(join(tmpdir(), "speech-export-")), "absent")
   expect(modelsDirectory({ WIRECAT_STATE_DIR: cache })).toBe(join(cache, "models", "audio"))
   expect(isInstalled(speechModel("gigaam-v3"), modelsDirectory({ WIRECAT_STATE_DIR: cache }))).toBe(false)
+})
+
+it("repair verifies existing bytes, replaces a corrupt same-size file and reuses verified files", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "speech-repair-"))
+  const path = join(directory, "fixture.bin")
+  const file = { name: "fixture.bin", bytes: 7, sha256: sha("weights"), url: "https://example.test/fixture.bin" }
+  writeFileSync(path, "Weights")
+  const fetch = vi.fn(serving("weights"))
+  const progress = vi.fn()
+  await installFiles([[file, path]], { verifyExisting: true, fetch, progress })
+  expect(readFileSync(path, "utf8")).toBe("weights")
+  expect(progress).toHaveBeenCalledWith(expect.stringContaining("not the file this version expects"))
+  await installFiles([[file, path]], { verifyExisting: true, fetch })
+  expect(fetch).toHaveBeenCalledTimes(1)
 })

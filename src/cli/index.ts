@@ -123,6 +123,7 @@ export {
   evaluateAgent,
   type Observation,
 } from "./agent-evaluation.js"
+export { answerEntity } from "./answer-entity.js"
 export { botAdminsCommand, botMembersCommand } from "./bot/admins.js"
 export { type ApiCommandInput, type ApiCommands, generatedApiCommand } from "./bot/api.js"
 export {

@@ -5,7 +5,7 @@ import { toJsonSchema } from "@valibot/to-json-schema"
 import { annotate, annotateOption, describeProgram } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
 import { describe, expect, it, vi } from "vitest"
-import { REMOTE_READ, REMOTE_WRITE } from "../cli/effects.js"
+import { changesAuthorityAt, grantsAuthority, LOCAL_WRITE, REMOTE_READ, REMOTE_WRITE } from "../cli/effects.js"
 import { rememberAccount } from "../cli/messenger/accounts.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import { messagesCommand } from "../cli/messenger/messages-command.js"
@@ -347,4 +347,22 @@ describe("toolsFromCommands", () => {
 
     expect(offered).toEqual({ "chats list": true, "chats inspect": false, "chats folders list": false })
   })
+})
+
+it("rechecks a provider command's authority grant before invoking its runner", async () => {
+  const root = new Command("fixture")
+  grantsAuthority(annotate(root.command("configure"), { effects: LOCAL_WRITE }))
+  const run = vi.fn(async () => 0)
+  const answer = await runCommandForAgent(
+    { run, commands: describeProgram(root) },
+    ["configure"],
+    {},
+    {
+      profile: "invented",
+      levels: () => ({ "mcp.authority": "deny" }),
+      authority: changesAuthorityAt(root),
+    },
+  )
+  expect(answer).toMatchObject({ error: { error: { code: "permission_error" } } })
+  expect(run).not.toHaveBeenCalled()
 })

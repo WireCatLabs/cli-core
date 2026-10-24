@@ -450,3 +450,11 @@ The shared command is included in command lint and the unchanged generic persona
 proof. Synthetic CLI/MCP tests exercise two invented providers, identical wire items, strict raw
 arguments, frozen continuations, unknown coverage, cancellation, invalid provider dates and budgets.
 Native providers must separately prove bounded HTTP and selected-credential behavior.
+
+## Provider answer contracts
+
+Prefer an existing shared entity for a command's answer. When a provider must retain its own public wire fields,
+call `answerEntity(command, "provider_recording", schema)` from `@wirecat/cli-core/cli` with a Valibot object
+schema. The shared command contract, help field reference and `--json` projection all use that schema.
+The binding belongs to that command instance; it cannot replace a shared entity or alter another program.
+Validate real synthetic command answers against the advertised contract, including preview and applied variants.

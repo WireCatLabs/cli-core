@@ -59,5 +59,3 @@ None open.
   tg and max parity and docs. After #1837.
 - **CORE-33** · P2 · `stats messages counters refresh` becomes `stats messages counters sync`: `refresh` is the
   word the vocabulary rules out. tg, max and wa. After #1837.
-
-- **CORE-34** · P2 · 🚧 `fix/zoom-command-contracts-1024` · Zoom alignment: offer finite shared MCP commands (#1877) and support typed provider answer entities through the shared contract resolver.

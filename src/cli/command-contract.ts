@@ -2,9 +2,8 @@ import { CliError } from "@wirecat/cli-base"
 import { describeOptions, metaOf } from "@wirecat/cli-base/commands"
 import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
-import type * as v from "valibot"
-import { ENTITIES, type EntityName } from "../entities/index.js"
 import { keyForCommand } from "../sends/permissions.js"
+import { answerEntitySchema } from "./answer-entity.js"
 import { answerSchema } from "./envelope.js"
 
 export type JsonSchema = Record<string, unknown>
@@ -15,12 +14,7 @@ export const SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
  * A command that declares none answers the same envelopes with items of any shape; `--jsonl` streams the items.
  */
 export const outputOf = (command: Command) => {
-  const output = metaOf(command).output
-  const entity = output
-    ? (ENTITIES[(output.view ? `${output.entity}.${output.view}` : output.entity) as EntityName] as
-        | v.GenericSchema
-        | undefined)
-    : undefined
+  const entity = answerEntitySchema(command)
   const { $schema: _, ...schema } = jsonSchemaOf(answerSchema(entity)) as JsonSchema
   const { $schema: __, ...item } = (entity ? jsonSchemaOf(entity) : {}) as JsonSchema
   const coverage = entity ? "declared-entity" : "envelope-with-open-items"
