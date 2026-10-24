@@ -6,6 +6,12 @@ minor version may break callers, and says how under "Changed — may break calle
 shape of this file.
 
 
+## Unreleased
+
+### Changed — may break callers
+
+- **`bot store fetch` is now `bot messages sync`, and the `bot store` group is gone** (tg and max). It does what the personal `messages sync` does, so it carries the same name; `store` is for the local database. The old path answers with a pointer to the new one, and a saved `permissions.bot.store.fetch` is refused until it is renamed to `permissions.bot.messages.sync`. A CLI that customizes the command must move its override to the new path.
+
 ## 0.412.0 — 24.10.2026
 
 ### Added
@@ -18,9 +24,6 @@ shape of this file.
 - **`config set` and `config unset` work while a moved permission key is saved.** Every other command still refuses the old key and names its replacement; `config unset permissions.<old>` and `config set permissions.<new>` now fix it instead of failing with the same error.
 - **`tasks update <task> --parent none` clears the parent.** The CLI keeps the sentinel through option parsing and converts it to null when building the plan, so Commander cannot turn it into an empty task id.
 
-### Changed — may break callers
-
-- **`bot store fetch` is now `bot messages sync`, and the `bot store` group is gone** (tg and max). It does what the personal `messages sync` does, so it carries the same name; `store` is for the local database. The old path answers with a pointer to the new one, and a saved `permissions.bot.store.fetch` is refused until it is renamed to `permissions.bot.messages.sync`. A CLI that customizes the command must move its override to the new path.
 
 ## 0.411.0 — 24.10.2026
 
