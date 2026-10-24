@@ -21,6 +21,7 @@ export type {
 } from "../domain/tag-consolidation.js"
 export type { TagRedirectIndex, TagRedirectResolution, TagRedirectSnapshot } from "../domain/tag-redirects.js"
 export { createTagRedirectIndex } from "../domain/tag-redirects.js"
+export { note } from "../entities/note.js"
 export type {
   FindingEvidence,
   FindingOutcome,
@@ -47,6 +48,14 @@ export {
   type EvidenceFindingsStore,
   validateEvidenceFindings,
 } from "./evidence-findings.js"
+export {
+  ORGANIZATIONS_QUERY,
+  organization,
+  PROJECTS_QUERY,
+  project,
+  REMINDERS_QUERY,
+  reminder,
+} from "./knowledge-query.js"
 export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"
 export { openCache } from "./open.js"
@@ -152,6 +161,7 @@ export type {
   FileNoteInput,
   Link,
   LinkInput,
+  LinkListFilter,
   Note,
   NoteFolder,
   NotesStore,

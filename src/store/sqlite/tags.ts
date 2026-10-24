@@ -257,12 +257,12 @@ export interface Label {
 }
 
 /** A thing's tags by name, with whether only a file states each. */
-export const labelsOf = (database: CacheDatabase, thing: Thing): Label[] =>
+export const labelsOf = (database: CacheDatabase, thing: Thing, tag?: string): Label[] =>
   database
     .prepare(
-      "SELECT t.name, g.source FROM taggings g JOIN tags t ON t.id = g.tag_id WHERE g.taggable_type=? AND g.taggable_id=? ORDER BY t.name",
+      `SELECT t.name, g.source FROM taggings g JOIN tags t ON t.id = g.tag_id WHERE g.taggable_type=? AND g.taggable_id=?${tag === undefined ? "" : " AND t.name = ?"} ORDER BY t.name`,
     )
-    .all(thing.type, thing.id)
+    .all(thing.type, thing.id, ...(tag === undefined ? [] : [tag]))
     .map((row) => ({ tag: String(row.name), origin: row.source === "file" ? "file" : "owner" }))
 
 /**
