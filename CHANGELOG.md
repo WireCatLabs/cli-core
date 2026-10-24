@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.403.0 — 24.10.2026
+
 ### Added
 
 - **`setupAtStart` runs the shared first-run questions for a tool with its own program** (zm, memo, drive): it asks only a person at a terminal, and the command runs whatever happens to the questions.
