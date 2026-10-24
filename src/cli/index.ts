@@ -369,6 +369,12 @@ export { type ModeProblem, type PrivateFiles, privateFiles, withSqliteSidecars }
 export { reactionsCommand } from "./messenger/reactions-command.js"
 export { callsCommand, stickersCommand } from "./messenger/records-command.js"
 export { repliesCommand } from "./messenger/replies-command.js"
+export {
+  buildReport as buildDoctorReport,
+  type Report as DoctorReport,
+  type ReportContext as DoctorReportContext,
+  reportFileName as doctorReportFileName,
+} from "./messenger/report.js"
 export { reviewCommand } from "./messenger/review.js"
 export { scheduleCommand } from "./messenger/schedule-command.js"
 export {
