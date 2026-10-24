@@ -16,12 +16,12 @@ import { botExamples } from "./examples.js"
 import { BOT_CHATS_QUERY, BOT_PROFILES_QUERY, botChatFilter, botProfileName } from "./list-queries.js"
 import { botMcpCommand } from "./mcp.js"
 import { botCan, botIdOf, botMessagesCommand } from "./messages.js"
+import { botMessagesSyncCommand } from "./messages-sync.js"
 import { botModerateCommand, botRulesCommand } from "./moderation.js"
 import { addBotCopyReads, botContactsCommand, botSearchCommand } from "./people.js"
 import { BOT_ACTIONS, type BotAction, type BotMessenger } from "./port.js"
 import { registryProfiles } from "./registry.js"
 import { botCallbacksCommand, botMenuCommand, botWebhooksCommand } from "./setup.js"
-import { botStoreCommand } from "./store.js"
 import { BotTokenStore } from "./token.js"
 import { botWatchCommand } from "./watch.js"
 
@@ -362,6 +362,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
  */
 const withCopyReads = (messages: Command, bot: BotMessenger): Command => {
   addBotCopyReads(messages, bot)
+  if (bot.fetching) messages.addCommand(botMessagesSyncCommand(bot, bot.fetching))
   return messages
 }
 
@@ -385,6 +386,5 @@ export const botCommand = (bot: BotMessenger): Command => {
     .addCommand(botWebhooksCommand(bot))
     .addCommand(botContactsCommand(bot))
   if (bot.identity) command.addCommand(meCommand(bot))
-  if (bot.fetching) command.addCommand(botStoreCommand(bot, bot.fetching))
   return bot.mcp ? command.addCommand(botMcpCommand(bot)) : command
 }

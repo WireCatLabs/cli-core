@@ -53,8 +53,5 @@ None open.
 - **CORE-11** · P2 · 🚧 `feat/transcript-index` Voice-note transcripts searchable in any word form (#1761, store
   version 29).
 - **CORE-12** · P2 · 🚧 `feat/media-archive` Verified media archives and daily timers (draft #1758).
-- **CORE-32** · P2 · `bot store fetch` becomes `bot messages sync`, and the `bot store` group goes: it holds only
-  that command, and `store` is for the database itself (owner, 2026-10-24). Start: `src/cli/bot/store.ts`, then
-  tg and max parity and docs. After #1837.
 - **CORE-33** · P2 · `stats messages counters refresh` becomes `stats messages counters sync`: `refresh` is the
   word the vocabulary rules out. tg, max and wa. After #1837.

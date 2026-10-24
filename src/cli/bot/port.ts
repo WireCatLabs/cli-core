@@ -63,7 +63,7 @@ export interface BotHistory {
   message(chat: BotChatRef, messageId: Id): Promise<Message>
   /** Everything sent at `since` (ms) or later, oldest first, up to `limit`; `more` when there was more. */
   historySince(chat: BotChatRef, since: number, limit: number): Promise<{ messages: Message[]; more: boolean }>
-  /** One page back from `before` (or from now), newest first: what `bot store fetch` walks. */
+  /** One page back from `before` (or from now), newest first: what `bot messages sync` walks. */
   historyBefore(
     chat: BotChatRef,
     window: { limit: number; before?: string },
@@ -267,7 +267,7 @@ export interface BotNativeApi {
 export interface BotConnectOptions {
   stop?: AbortSignal
   events?: EventSink
-  /** Only `bot store fetch` asks for a history reader; other commands stay on the Bot API. */
+  /** Only `bot messages sync` asks for a history reader; other commands stay on the Bot API. */
   history?: { from?: string; pauseMs: number }
   /** Register a connection before its login can block, so the command deadline can close it. */
   track?: (client: Pick<BotAdapter, "close">) => void
@@ -310,7 +310,7 @@ export interface BotMessenger {
   readSecret?: (command: Command, prompt: string) => Promise<string>
   /** What kind of chat a stored message came from; without it a positive id is a dialog, a negative one a group. */
   chatKindOf?: (hit: StoredHit) => ChatKind
-  /** How its history pages, for `bot store fetch`, which is mounted only when this is set. */
+  /** How its history pages, for `bot messages sync`, which is mounted only when this is set. */
   /** `from`: the help of `--until-id`, the message the fetch starts at; the option is mounted only when set. */
   fetching?: Fetching & { from?: string }
   permissionFix?: (settings: Settings, request: GuardRequest) => string

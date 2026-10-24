@@ -33,6 +33,7 @@ export const RENAMED_COMMANDS: Readonly<Record<string, string>> = {
   "mcp setup": "mcp add",
   "mcp doctor": "mcp check",
   "commands schema": "commands info",
+  "bot store fetch": "bot messages sync",
   "store gaps plan": "store gaps show",
   "store reindex": "store rebuild",
   "stats messages counters refresh": "stats messages counters sync",
