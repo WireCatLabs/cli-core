@@ -1,4 +1,4 @@
-import type { SharedContractOverride } from "./shared-contracts.js"
+import type { SharedContractOverride } from "../src/cli/shared-contracts.js"
 export const SEARCH_SHELL: readonly SharedContractOverride[] = [
   {
     command: ["search"],

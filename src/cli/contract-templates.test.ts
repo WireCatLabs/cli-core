@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { expect, it } from "vitest"
-import { SEARCH_SHELL } from "./contract-templates.fixture.js"
+import { SEARCH_SHELL } from "../../test/cli-contract-templates.fixture.js"
 import { sharedCommandTemplate } from "./contract-templates.js"
 import { assertSharedContracts, customizeSharedCommand, sharedContractOverrides } from "./shared-contracts.js"
 
