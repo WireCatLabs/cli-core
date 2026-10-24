@@ -23,6 +23,8 @@ None open.
 
 ## Next (P2)
 
+- **CORE-36** · P2 · 🚧 `fix/shared-contract-audit` Enforce shared command contracts by default; exact, reasoned overrides only. Export actual schemas/reasons for complete cross-CLI audits.
+
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
 - **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,
