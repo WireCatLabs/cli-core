@@ -56,10 +56,12 @@ export interface ProgramDefinition {
   commands: () => Command[]
   /** The CLI's own settings, for keeping a failure that happened before its command could; plain ones without. */
   configuration?: {
+    permissionKey?: (path: readonly string[]) => string | null | undefined
     resolveSettings: (
       flags?: GlobalFlags,
       options?: ResolveOptions,
-    ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint">
+    ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint"> &
+      Partial<Pick<Settings, "permissions">>
   }
   configure?: (program: Command) => void
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
@@ -269,11 +271,11 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
             kind: info.path[0] === "bot" || flags.bot ? "bot" : "personal",
           },
         )
-        if (!("permissions" in settings) || !settings.permissions) return undefined
+        if (!settings.permissions) return undefined
         return commandAvailability(
           info,
-          settings.permissions as Record<string, import("../sends/permissions.js").Level>,
-          undefined,
+          settings.permissions,
+          definition.configuration?.permissionKey,
           changesAuthorityAt(program),
           readOnlyLockOf(definition.app, env) !== undefined,
           options.agent !== undefined,
