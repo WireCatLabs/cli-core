@@ -65,7 +65,11 @@ export const accountPeopleOver = (context: StoreContext): AccountPeople => {
     savePeople: async (key, people) =>
       write(database, () => {
         const accountKey = accountPk(key)
-        for (const person of people) identityPk(accountKey, key.provider, person.id, person.name, person)
+        for (const person of people) {
+          identityPk(accountKey, key.provider, person.id, person.name, person)
+          if (person.email)
+            personLinks.joinByAddress(context, { provider: key.provider, id: person.id }, person.email, key.provider)
+        }
       }),
 
     contacts: async (key, options) => {

@@ -6,6 +6,14 @@ minor version may break callers, and says how under "Changed — may break calle
 shape of this file.
 
 
+## Unreleased
+
+### Added
+
+- **A contact saved with an address joins the mail contact of that exact address.** `savePeople` takes an optional
+  `email`; the provider's contact and the mail contact become one person (`same-email`), whichever is saved first.
+  A name never joins anyone, and two identities the owner unlinked stay apart.
+
 ## 0.411.0 — 24.10.2026
 
 ### Added
