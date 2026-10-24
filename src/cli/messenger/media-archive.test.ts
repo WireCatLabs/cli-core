@@ -79,6 +79,35 @@ describe("independent media archive", () => {
     expect(await f.run()).toMatchObject({ saved: 0 })
     expect(f.download).not.toHaveBeenCalled()
   })
+  it("archives files beside call events and skips call-only messages without downloading", async () => {
+    const f = await fixture()
+    const base = message()
+    const { position: _placed, ...unplaced } = remote()
+    f.download.mockResolvedValue({ files: [unplaced], skipped: ["call"] })
+    f.list.mockResolvedValue({
+      items: [{ ...base, attachments: [{ kind: "call" }, ...base.attachments, { kind: "call" }] }],
+      hasMore: false,
+    })
+    expect(await f.run()).toMatchObject({ saved: 1, complete: true })
+    const [entry] = await readMediaManifests(f.directory)
+    expect(entry?.position).toBe(1)
+    expect(await readFile(join(f.directory, entry?.path ?? "missing"), "utf8")).toBe("example bytes")
+    expect(await checkMediaArchive(f.directory)).toMatchObject({ valid: true, checked: 1 })
+    f.list.mockResolvedValue({ items: [{ ...base, attachments: [{ kind: "call" }] }], hasMore: false })
+    f.download.mockClear()
+    expect(await f.run()).toMatchObject({ saved: 0 })
+    expect(f.download).not.toHaveBeenCalled()
+  })
+  it("still refuses unknown attachment kinds instead of discarding them", async () => {
+    const f = await fixture()
+    f.list.mockResolvedValue({
+      items: [{ ...message(), attachments: [{ kind: "future_attachment" }] }],
+      hasMore: false,
+    })
+    f.download.mockResolvedValue({ files: [], skipped: ["future_attachment"] })
+    await expect(f.run()).rejects.toThrow("identifiable attachment")
+    expect(await readMediaManifests(f.directory)).toEqual([])
+  })
   it("recovers a completed publication before and after its final link without downloading again", async () => {
     for (const linked of [false, true]) {
       const f = await fixture()
