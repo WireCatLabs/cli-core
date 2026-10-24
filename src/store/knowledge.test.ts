@@ -1,9 +1,11 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { parseLucene, validateQuery } from "@wirecat/cli-base/query"
 import { afterEach, describe, expect, it } from "vitest"
 import { formatLocator } from "../domain/locator.js"
 import { createTaskService } from "../tasks/index.js"
+import { ORGANIZATIONS_QUERY, PROJECTS_QUERY, REMINDERS_QUERY } from "./knowledge-query.js"
 import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
 
@@ -222,4 +224,43 @@ describe("cross-source knowledge metadata", () => {
     expect((await f.store.knowledge.reminders(key))[0]).toMatchObject({ state: "cancelled" })
     expect(await f.store.knowledge.claimReminders(key)).toEqual([])
   })
+})
+
+it("filters knowledge lists in SQL before their 500-row bound", async () => {
+  const f = await fixture()
+  const db = await openCache(f.path)
+  try {
+    for (let i = 0; i < 501; i++) {
+      db.prepare(
+        "INSERT INTO organizations (kind,name,scope,created_at,updated_at) VALUES ('team',?,'personal',0,0)",
+      ).run(`A${i}`)
+      db.prepare(
+        "INSERT INTO projects (key,name,type,scope,created_at,updated_at) VALUES (?,?,'other','personal',0,0)",
+      ).run(`sample${i}`, `A${i}`)
+    }
+  } finally {
+    db.close()
+  }
+  const org = await f.store.knowledge.addOrganization({ kind: "company", name: "Z selected", scope: "work" })
+  const project = await f.store.knowledge.addProject({
+    key: "TGT",
+    name: "Z selected",
+    type: "client",
+    organization: org.ref,
+    scope: "work",
+  })
+  const orgQuery = parseLucene(`kind:company AND scope:work AND id:${org.id}`)
+  validateQuery(orgQuery, ORGANIZATIONS_QUERY)
+  expect(await f.store.knowledge.organizations(orgQuery)).toEqual([org])
+  const projectQuery = parseLucene(`key:TGT AND type:client AND organization_id:${org.id}`)
+  validateQuery(projectQuery, PROJECTS_QUERY)
+  expect(await f.store.knowledge.projects(projectQuery)).toEqual([project])
+  const due = "2026-10-08T11:00:00.000Z"
+  const reminder = await f.store.knowledge.schedule(key, f.task.id, due, "UTC")
+  const reminderQuery = parseLucene(`state:pending AND due_at>=2026-10-08 AND revision:1`)
+  validateQuery(reminderQuery, REMINDERS_QUERY)
+  expect(await f.store.knowledge.reminders(key, reminderQuery)).toEqual([reminder])
+  expect(await f.store.knowledge.reminders(other, reminderQuery)).toEqual([])
+  await f.store.knowledge.cancelReminder(key, reminder.id)
+  expect(await f.store.knowledge.reminders(key, reminderQuery)).toEqual([])
 })

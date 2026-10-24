@@ -167,7 +167,7 @@ const HOLDER_HELP =
 
 const planFrom = (options: {
   priority?: number
-  parent?: string | null
+  parent?: string
   title?: string
   description?: string
   due?: Date | "none"
@@ -177,7 +177,7 @@ const planFrom = (options: {
 }) => {
   const plan: TaskPlan = {}
   if (options.priority !== undefined) plan.priority = options.priority
-  if (options.parent !== undefined) plan.parent = options.parent
+  if (options.parent !== undefined) plan.parent = options.parent === "none" ? null : options.parent
   if (options.category !== undefined) plan.category = options.category
   if (options.title !== undefined) plan.title = options.title
   if (options.description !== undefined) plan.description = options.description
@@ -318,9 +318,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         if (!/^[0-4]$/.test(value)) throw new CliError("validation_error", "--priority takes 0 through 4")
         return Number(value)
       })
-      .option("--parent <id>", "parent task in the same project; none clears it", (value) =>
-        value === "none" ? null : value,
-      ),
+      .option("--parent <id>", "parent task in the same project; none clears it"),
     "send Alex the API token",
   ).action(async function (this: Command, id: string) {
     const context = messengerContext(this, messenger)
