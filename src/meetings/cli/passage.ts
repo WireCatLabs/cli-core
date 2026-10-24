@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { annotate } from "@wirecat/cli-base/commands"
+import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { type Command, Option } from "commander"
 import {
   type MeetingPassageOutputFormat,
@@ -42,7 +42,7 @@ export const meetingPassageRequest = (
   return input
 }
 
-export const createMeetingPassageCommand = (program: Command): Command => {
+const createMeetingPassageCommandDefinition = (program: Command): Command => {
   const meetings = program.commands.find((command) => command.name() === "meetings")
   if (!meetings) throw new CliError("configuration_error", "meeting command group is unavailable")
   return annotate(
@@ -74,7 +74,7 @@ export const createMeetingPassageCommand = (program: Command): Command => {
 }
 
 /** The host fixes account scope, connection lifetime and final rendering/output limits. */
-export const addMeetingPassageCommand = (
+const addMeetingPassageCommandDefinition = (
   program: Command,
   deps: {
     read: MeetingPassageReader
@@ -92,3 +92,7 @@ export const addMeetingPassageCommand = (
       deps.output(result, format)
     },
   )
+
+export const createMeetingPassageCommand = sharedCommand(createMeetingPassageCommandDefinition)
+
+export const addMeetingPassageCommand = sharedCommand(addMeetingPassageCommandDefinition)

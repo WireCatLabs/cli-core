@@ -166,7 +166,7 @@ Search diagnostic records without exposing message contents:
 
 ```sh
 chat search runs status:partial --json
-chat search runs error_code:rate_limited --since-time 2026-10-01 --json
+chat search runs error_code:rate_limited 'started_at>=2026-10-01' --json
 ```
 
 Call MCP `chat_read` with `command: "search runs"` and `arguments` containing `query`, `since_time`, `limit`

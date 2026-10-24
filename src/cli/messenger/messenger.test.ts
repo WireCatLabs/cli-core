@@ -500,7 +500,8 @@ describe("the shared read commands", () => {
 
     await call(["chats", "list", "--json"], async () => fake, env)
     const stored = await call(["chats", "show", "Book", "--offline", "--json"], async () => fake, env)
-    expect(JSON.parse(stored.stdout[0] ?? "").item).toMatchObject({ id: "7", members: null })
+    expect(JSON.parse(stored.stdout[0] ?? "").item).toMatchObject({ id: "7" })
+    expect(JSON.parse(stored.stdout[0] ?? "").item).not.toHaveProperty("members")
   })
 
   it.each([
@@ -3424,7 +3425,7 @@ describe("the shared read commands", () => {
       chat_id: "31",
       locator: "msg:telegram/500/31/2",
     })
-    const ranged = await timeline("--since-time", "2026-09-02T00:00:00Z", "--until-time", "2026-09-30T00:00:00Z")
+    const ranged = await timeline("at:[2026-09-02T00:00:00Z TO 2026-09-30T00:00:00Z]")
     expect(ranged.items.map((item: { locator: string }) => item.locator)).toEqual(["msg:telegram/500/31/2"])
     const cut = await timeline("--limit", "1")
     expect(cut).toMatchObject({
@@ -3435,7 +3436,7 @@ describe("the shared read commands", () => {
     const rest = await timeline("--limit", "1", "--cursor", cut.page.next_cursor)
     expect(rest.items.map((item: { locator: string }) => item.locator)).toEqual(["msg:telegram/500/31/1"])
     expect(rest.page.has_more).toBe(false)
-    expect((await timeline("--scope", "work")).items).toEqual([])
+    expect((await timeline("scope:work")).items).toEqual([])
   })
 
   it("contacts info adds their stored activity per shared chat, and shows a phone's last four digits", async () => {

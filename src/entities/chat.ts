@@ -41,6 +41,6 @@ export const chat = v.strictObject({
       disappearing_seconds: v.optional(v.nullable(count)),
     }),
   ),
-  /** `chats show`: who is in it, as far as anyone recorded; `null` when nobody did — a channel, always. */
-  members: v.optional(v.nullable(v.array(member))),
+  /** `chats show`: absent when no roster is known; an empty list is a known empty roster. */
+  members: v.optional(v.array(member)),
 })

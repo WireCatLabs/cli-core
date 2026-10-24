@@ -33,7 +33,7 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
   return { store, d, outputs, run }
 }
 describe("meeting commands", () => {
-  it("declares effects on every command it registers, and none on a group that only holds commands", () => {
+  it("declares effects on every command and no effects for groups that only hold commands", () => {
     const program = new Command("meet")
     addMeetingCommands(program, { store: memoryMeetingStore(), accountId: 1, write() {} })
     addMeetingProjectEvidenceCommand(program, { read: async () => ({}) as never, signal: () => undefined, output() {} })
@@ -42,7 +42,7 @@ describe("meeting commands", () => {
     )
 
     expect(effects).toEqual({
-      meetings: null,
+      meetings: { remote: "none", local: "none" },
       "meetings list": { remote: "none", local: "read" },
       "meetings show": { remote: "none", local: "read" },
       "meetings transcript": { remote: "none", local: "read" },
@@ -53,7 +53,7 @@ describe("meeting commands", () => {
       "meetings import": { remote: "none", local: "write" },
       "meetings projects": null,
       "meetings projects evidence": { remote: "none", local: "read" },
-      events: null,
+      events: { remote: "none", local: "none" },
       "events list": { remote: "none", local: "read" },
     })
   })

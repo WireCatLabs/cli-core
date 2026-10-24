@@ -121,6 +121,8 @@ export interface MeetingStore {
   participants(query: string, accountId?: number): Promise<Participant[]>
   search(query: string, filter?: MeetingFilter): Promise<SearchHit[]>
   events(): Promise<Event[]>
+  /** Filters at the store; adapters without this method refuse nonempty event queries. */
+  queryEvents?(query: QueryAst): Promise<Event[]>
   /** Inclusive overlap; an event with a start but no end occupies its start instant. */
   eventCandidates(filter: EventCandidateFilter): Promise<Event[]>
   createEvent(input: NewRecord<Event>, now: number): Promise<Event>

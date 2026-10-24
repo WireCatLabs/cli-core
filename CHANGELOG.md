@@ -5,6 +5,32 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+
+## Unreleased
+
+### Added
+
+- **Stored events accept native queries on id, origin and timestamps.** SQLite applies filters before returning rows; stores without query support refuse a filtered request.
+- **Shared task updates include project priority and parent.** Project tasks can be updated without choosing a messenger account.
+
+- **`commands info --json` exports schemas, declared error reasons and explicit contract overrides.** Providers with
+  their own program shell use `addContractInfo`; field-only declarations are labelled separately from typed schemas.
+- **Provider model catalogues share `modelCatalogueCommand`.** Providers choose supported kinds and bind output,
+  environment and offline policy; native query filtering, model receipts and verified downloads stay in core.
+
+
+### Changed — may break callers
+
+- **Contact activity and diagnostic run times filter through native queries.** Use `contacts events <person> scope:work 'at:[2026-10-01 TO 2026-10-31]'` and `search runs 'started_at>=7d'` instead of their time/scope flags. Time bounds reach the native readers before pagination, and continuations preserve the query.
+- **Webhook setup adds another address with `--append`.** `--add <chat>` keeps its folder-edit meaning. Webhook answers omit an unrestricted or unknown type list instead of emitting `types: null`.
+
+- **Unknown chat rosters are omitted instead of returned as `members: null`.** An empty array means a known empty roster. Send-attempt output exposes only `operation_id`; legacy journal entries remain readable.
+- **Stored meeting topic labels use `--topic-name`.** `--topic` remains the messenger forum-topic id. Update meeting-search invocations and continuations to the unambiguous name.
+
+- **Core-owned command contracts reject silent edits after construction.** Use `overrideSharedContract` with a
+  specific reason and a callback before modifying an inherited definition. Exact before/after values remain visible
+  in contract discovery. Independent shell replacements pin static, reviewed declarations, so new Core defaults cannot be silently omitted. Provider-only commands may extend groups; inherited leaves retain their contracts.
+
 ## 0.410.0 — 24.10.2026
 
 ### Added

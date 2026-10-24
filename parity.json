@@ -77,12 +77,15 @@
       "meaning": "the first time only: how to get this profile's app from my.telegram.org",
       "default": "browser"
     },
+    "--append": {
+      "meaning": "keep existing entries and add the explicitly named one beside them"
+    },
     "--approval": {
       "meaning": "who joins by it asks first, and an admin lets them in"
     },
     "--as": {
       "value": "<state>",
-      "meaning": "how a task is closed: done, or dismissed \u2014 it needs no answer"
+      "meaning": "how a task is closed: done, or dismissed — it needs no answer"
     },
     "--as-file": {
       "meaning": "send every --file as a plain file to download, a video included"
@@ -142,7 +145,7 @@
     },
     "--bots": {
       "value": "<profiles>",
-      "meaning": "also read these bots' copies, comma separated \u2014 each allowed by read_other_bots"
+      "meaning": "also read these bots' copies, comma separated — each allowed by read_other_bots"
     },
     "--brief": {
       "meaning": "found messages as reference, title, time, sender and excerpt only"
@@ -150,7 +153,7 @@
     "--by": {
       "value": "<grouping>",
       "meaning": "what to count by",
-      "note": "each command names its own groupings \u2014 stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals \u2014 so it differs on purpose (Help text rule 4)"
+      "note": "each command names its own groupings — stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals — so it differs on purpose (Help text rule 4)"
     },
     "--calls": {
       "value": "<who>",
@@ -159,7 +162,7 @@
     "--can": {
       "value": "<rights>",
       "meaning": "what they may do, comma-separated: read, members, admins, info, pin, link, post, edit, delete",
-      "note": "lists the rights each messenger has \u2014 MAX has `read`, Telegram does not \u2014 so it differs on purpose (Help text rule 4)"
+      "note": "lists the rights each messenger has — MAX has `read`, Telegram does not — so it differs on purpose (Help text rule 4)"
     },
     "--caption-above": {
       "meaning": "show the text above the --photo or --file, not below it"
@@ -213,7 +216,7 @@
     },
     "--chunk-bytes": {
       "value": "<n>",
-      "meaning": "maximum source bytes returned from a retained attachment; 1\u20131048576",
+      "meaning": "maximum source bytes returned from a retained attachment; 1–1048576",
       "default": "524288"
     },
     "--claim": {
@@ -272,11 +275,11 @@
       "value": "<days>"
     },
     "--debug": {
-      "meaning": "on a failure, its whole record \u2014 cause and stack \u2014 in place of the short line"
+      "meaning": "on a failure, its whole record — cause and stack — in place of the short line"
     },
     "--deep": {
       "value": "<n>",
-      "meaning": "also check the top n in full \u2014 profile, photos, everything they wrote, and the public ban lists, which are sent their ids \u2014 one person a second",
+      "meaning": "also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second",
       "note": "TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference."
     },
     "--defaults": {
@@ -297,7 +300,7 @@
     },
     "--dims": {
       "value": "<n>",
-      "meaning": "remote: the vector size \u2014 needed with --base-url; shortens an OpenAI model's"
+      "meaning": "remote: the vector size — needed with --base-url; shortens an OpenAI model's"
     },
     "--disappear-after": {
       "value": "<duration|off>",
@@ -362,7 +365,7 @@
     "--expire-time": {
       "value": "<time>",
       "meaning": "it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now",
-      "note": "messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it \u2014 so it differs on purpose (Help text rule 4)"
+      "note": "messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it — so it differs on purpose (Help text rule 4)"
     },
     "--extract": {
       "meaning": "extract text from files mapped by this download"
@@ -401,7 +404,7 @@
       "default": "all"
     },
     "--for-everyone": {
-      "meaning": "delete for everyone in the chat, not only for you \u2014 they cannot get it back"
+      "meaning": "delete for everyone in the chat, not only for you — they cannot get it back"
     },
     "--format": {
       "value": "<format>",
@@ -443,7 +446,7 @@
     },
     "--idle": {
       "value": "<duration>",
-      "meaning": "stop after this long with nobody using it \u2014 15m, 1h"
+      "meaning": "stop after this long with nobody using it — 15m, 1h"
     },
     "--include": {
       "value": "<kinds>",
@@ -501,7 +504,7 @@
     "--link": {
       "value": "<link>",
       "meaning": "an invite link: only the requests made through it",
-      "note": "accept and decline take it with --all \u2014 one link, worded for each command (Help text rule 4)"
+      "note": "accept and decline take it with --all — one link, worded for each command (Help text rule 4)"
     },
     "--local": {
       "meaning": "use the model on this machine, never the messenger"
@@ -606,7 +609,7 @@
       "meaning": "people may pick several answers"
     },
     "--new": {
-      "meaning": "what arrived since the last check, each message once \u2014 for scheduled runs",
+      "meaning": "what arrived since the last check, each message once — for scheduled runs",
       "note": "tasks add instead opens the task although tasks that may be the same job were listed"
     },
     "--newest": {
@@ -719,7 +722,7 @@
     "--output": {
       "meaning": "where to write: a directory for `messages download`, a file for `store export`",
       "default": ".",
-      "note": "`store export` and other commands use --output for a file; `messages download` takes --output-dir \u2014 e10"
+      "note": "`store export` and other commands use --output for a file; `messages download` takes --output-dir — e10"
     },
     "--output-dir": {
       "value": "<dir>",
@@ -739,6 +742,10 @@
       "value": "<n>",
       "meaning": "how many items one request to the messenger asks for; the messenger's own if not given",
       "note": "the default is each messenger's own page: 30 on MAX, 100 on Telegram"
+    },
+    "--parent": {
+      "value": "<id>",
+      "meaning": "parent task in the same project; none clears it"
     },
     "--pause": {
       "value": "<duration>",
@@ -767,7 +774,7 @@
     },
     "--photo": {
       "value": "<file>",
-      "meaning": "an image file \u2014 a profile photo in `account update`, a group's photo in `chats update`, a photo to send in `messages send`"
+      "meaning": "an image file — a profile photo in `account update`, a group's photo in `chats update`, a photo to send in `messages send`"
     },
     "--pin": {
       "value": "<chat>",
@@ -780,6 +787,10 @@
     "--port": {
       "value": "<port>",
       "meaning": "the local port behind the tunnel, for mcp --http or bot watch --public-url"
+    },
+    "--priority": {
+      "value": "<n>",
+      "meaning": "task priority from 0 (urgent) through 4 (low)"
     },
     "--problems": {
       "meaning": "only failed responses, warnings and crashes"
@@ -808,10 +819,10 @@
     },
     "--reason": {
       "value": "<text>",
-      "meaning": "why a task was closed, kept with it \u2014 no-reply-needed, for example"
+      "meaning": "why a task was closed, kept with it — no-reply-needed, for example"
     },
     "--record": {
-      "meaning": "keep this run under `runs` \u2014 ids and timings, never message content",
+      "meaning": "keep this run under `runs` — ids and timings, never message content",
       "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
     },
     "--remind-time": {
@@ -861,10 +872,6 @@
       "value": "<name|id>",
       "meaning": "run a saved search, or an earlier run by its id; options typed with it replace its own, more words are AND-ed"
     },
-    "--scope": {
-      "value": "<scope>",
-      "meaning": "only what belongs to personal or to work accounts: personal or work"
-    },
     "--score": {
       "value": "<helpful|active|engaging>",
       "meaning": "the named ranking score preset; not with an explicit --measure"
@@ -874,7 +881,7 @@
       "meaning": "keep this secret beside the bot token instead of the token, at a hidden prompt; never from the command line"
     },
     "--secret-stdin": {
-      "meaning": "a secret MAX sends back in X-Max-Bot-Api-Secret \u2014 asked for, or read from a pipe"
+      "meaning": "a secret MAX sends back in X-Max-Bot-Api-Secret — asked for, or read from a pipe"
     },
     "--selection": {
       "value": "<json>",
@@ -904,7 +911,7 @@
     "--since": {
       "value": "<id-or-time>",
       "meaning": "from this message id, an ISO 8601 time, or 2h / 1d ago; each command says its default",
-      "note": "becomes `--since-time` everywhere \u2014 NEED-485"
+      "note": "becomes `--since-time` everywhere — NEED-485"
     },
     "--since-time": {
       "value": "<time>",
@@ -912,7 +919,7 @@
     },
     "--size": {
       "value": "<n>",
-      "meaning": "messages to answer per batch, 10\u2013200; 50 by default"
+      "meaning": "messages to answer per batch, 10–200; 50 by default"
     },
     "--skip": {
       "value": "<which>",
@@ -927,8 +934,8 @@
     },
     "--source": {
       "value": "<accounts>",
-      "meaning": "which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> \u2014 the same as in: in the query",
-      "note": "each search reads the accounts of its own kinds and names the rest in skipped \u2014 source-everywhere-plan.md"
+      "meaning": "which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> — the same as in: in the query",
+      "note": "each search reads the accounts of its own kinds and names the rest in skipped — source-everywhere-plan.md"
     },
     "--spoiler": {
       "meaning": "hide the --photo or video behind a spoiler until tapped"
@@ -1002,7 +1009,7 @@
     },
     "--timeout": {
       "value": "<duration>",
-      "meaning": "give up on the whole command after this \u2014 30s, 2m, 500ms"
+      "meaning": "give up on the whole command after this — 30s, 2m, 500ms"
     },
     "--timezone": {
       "value": "<zone>",
@@ -1039,7 +1046,7 @@
     "--type": {
       "value": "<names>",
       "meaning": "only these types",
-      "note": "each command names its own types \u2014 tasks add gives the new task question, request, mention or promise \u2014 so it differs on purpose (Help text rule 4)"
+      "note": "each command names its own types — tasks add gives the new task question, request, mention or promise — so it differs on purpose (Help text rule 4)"
     },
     "--types": {
       "value": "<value>",
@@ -1047,7 +1054,7 @@
     },
     "--unanswered": {
       "value": "[duration]",
-      "meaning": "only questions to you or a group's admins that nobody answered, asked at least this long ago \u2014 4h, 1d",
+      "meaning": "only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d",
       "note": "max's own `review` still takes bare hours until T6 moves it (e2)",
       "default": "24h"
     },
@@ -2097,7 +2104,7 @@
     "bot webhooks set": {
       "in": ["max", "tg"],
       "options": {
-        "--add": {
+        "--append": {
           "in": ["max"],
           "reason": "a Telegram bot holds one webhook address; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         },
@@ -2178,11 +2185,7 @@
       }
     },
     "chats archive": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats clear": {
@@ -2299,7 +2302,7 @@
     },
     "chats folders order": {
       "in": ["max", "tg"],
-      "reason": "wa declares folderOrder: false \u2014 WhatsApp's chat lists have no order a linked device sets"
+      "reason": "wa declares folderOrder: false — WhatsApp's chat lists have no order a linked device sets"
     },
     "chats folders show": {
       "in": "all"
@@ -2438,11 +2441,7 @@
       }
     },
     "chats mark-unread": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats media": {
@@ -2541,11 +2540,7 @@
       }
     },
     "chats pin": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats requests": {
@@ -2641,11 +2636,7 @@
       "in": "all"
     },
     "chats unarchive": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats unmute": {
@@ -2656,11 +2647,7 @@
       }
     },
     "chats unpin": {
-      "in": [],
-      "planned": {
-        "tg": "tg-cli TG-5: chat archive, pin and unread",
-        "wa": "wa stream S1: chat archive, pin and unread"
-      },
+      "in": ["tg", "wa"],
       "reason": "MAX: no measured request archives, pins or marks a chat unread"
     },
     "chats update": {
@@ -2804,10 +2791,7 @@
       "in": "all",
       "options": {
         "--cursor": "all",
-        "--limit": "all",
-        "--scope": "all",
-        "--since-time": "all",
-        "--until-time": "all"
+        "--limit": "all"
       }
     },
     "contacts import": {
@@ -3901,8 +3885,8 @@
         "--backend": {
           "in": [],
           "planned": {
-            "max": "each CLI\u2019s next cli-core bump",
-            "tg": "each CLI\u2019s next cli-core bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           },
           "reason": "WhatsApp has no server search; wa reads its history from the local store"
         },
@@ -3911,8 +3895,8 @@
         "--max-meetings": {
           "in": ["wa"],
           "planned": {
-            "max": "each CLI\u2019s next cli-core bump",
-            "tg": "each CLI\u2019s next cli-core bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--only": "all",
@@ -3920,16 +3904,16 @@
         "--server-time": {
           "in": [],
           "planned": {
-            "max": "each CLI\u2019s next cli-core bump",
-            "tg": "each CLI\u2019s next cli-core bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           },
           "reason": "WhatsApp has no server search; wa reads its history from the local store"
         },
         "--source": {
           "in": ["wa"],
           "planned": {
-            "max": "each CLI\u2019s next cli-core bump",
-            "tg": "each CLI\u2019s next cli-core bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--timezone": "all"
@@ -4042,8 +4026,8 @@
         "--source": {
           "in": ["wa"],
           "planned": {
-            "max": "each CLI\u2019s next cli-core bump",
-            "tg": "each CLI\u2019s next cli-core bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--timezone": "all"
@@ -4053,8 +4037,7 @@
       "in": "all",
       "options": {
         "--limit": "all",
-        "--page": "all",
-        "--since-time": "all"
+        "--page": "all"
       }
     },
     "search topics": {
@@ -4735,15 +4718,15 @@
         "--as-owner": {
           "in": ["wa"],
           "planned": {
-            "max": "each CLI\u2019s next cli-core bump",
-            "tg": "each CLI\u2019s next cli-core bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--certainty": {
           "in": ["wa"],
           "planned": {
-            "max": "each CLI\u2019s next cli-core bump",
-            "tg": "each CLI\u2019s next cli-core bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--reason": {
@@ -4824,6 +4807,8 @@
         "--category": "all",
         "--description": "all",
         "--due": "all",
+        "--parent": "all",
+        "--priority": "all",
         "--remind-time": "all",
         "--title": "all"
       }

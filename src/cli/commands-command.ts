@@ -6,6 +6,8 @@ import type { AppIdentity } from "../ports/app.js"
 import type { DiscoveredCommand } from "./command-availability.js"
 import { commandContract, commandPathOf, findCommand } from "./command-contract.js"
 import { environmentOf, outputFor } from "./context.js"
+import { contractEvidence } from "./contract-evidence.js"
+import { DISCOVERY_DESCRIPTIONS } from "./discovery-descriptions.js"
 import { NO_EFFECTS } from "./effects.js"
 import { renderDocument } from "./envelope.js"
 import { commandsText } from "./help/commands-text.js"
@@ -23,7 +25,7 @@ export const CONTRACT = 3
  */
 export const commandsCommand = (app: AppIdentity): Command => {
   const command = annotate(new Command("commands"), { effects: NO_EFFECTS })
-    .description("every command by section, one line each; --json: the contract, one path per call")
+    .description(DISCOVERY_DESCRIPTIONS.commands)
     .hook("preAction", (_command, action) => {
       if (action.optsWithGlobals<{ jsonl?: boolean }>().jsonl)
         throw new CliError("validation_error", "command discovery is one JSON object — use --json", {
@@ -67,22 +69,26 @@ export const commandsCommand = (app: AppIdentity): Command => {
       effects: NO_EFFECTS,
       examples: [`${app.command} commands info messages list`],
     })
-      .description("one command's argv and result schemas, effects, permissions and retry guidance")
-      .argument("<path...>", "one command path, for example: stats messages show")
+      .description(DISCOVERY_DESCRIPTIONS.info)
+      .argument("[path...]", "one command path; without one, export schemas, error reasons and explicit overrides")
       .action(function (this: Command, path: string[]) {
         renderDocument(outputFor(this), {
           cli: app.command,
           version: app.version,
           contract: CONTRACT,
-          ...commandContract(findCommand(rootOf(this), path)),
-          ...(() => {
-            const found = findCommand(rootOf(this), path)
-            const availability = environmentOf(this).discoveryAvailability?.({
-              ...metaOf(found),
-              path: commandPathOf(found),
-            })
-            return availability ? { availability } : {}
-          })(),
+          ...(path.length
+            ? {
+                ...commandContract(findCommand(rootOf(this), path)),
+                ...(() => {
+                  const found = findCommand(rootOf(this), path)
+                  const availability = environmentOf(this).discoveryAvailability?.({
+                    ...metaOf(found),
+                    path: commandPathOf(found),
+                  })
+                  return availability ? { availability } : {}
+                })(),
+              }
+            : contractEvidence(rootOf(this), app.errors ? { errors: app.errors } : {})),
         })
       }),
   )

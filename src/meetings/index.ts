@@ -23,6 +23,7 @@ export type {
   ParticipantPersonLinkReceipt,
 } from "./context-store.js"
 export { type MeetingCueIdentity, meetingCueFingerprint } from "./cue-fingerprint.js"
+export { EVENT_QUERY } from "./event-query.js"
 export { linkEvent } from "./events.js"
 export {
   exportMeeting,

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { type SendEntry, SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -16,7 +16,7 @@ import { SENDS_QUERY, sendFilter } from "./sends-query.js"
  * The chats this profile may send to. Off until the first `add`; `clear` deletes it, which turns it off again. It stops
  * a model that a message talked into writing somewhere, not an agent set on getting around it.
  */
-export const recipientsCommand = (messenger: Messenger): Command => {
+export const recipientsCommand = (messenger: Messenger, options: { resolve?: "chat-card" } = {}): Command => {
   const tool = `${messenger.app.command} personal`
   const listFor = (profile: string, env: NodeJS.ProcessEnv) =>
     new RecipientList(recipientsPathFor(messenger.app, profile, env), messenger.app.command)
@@ -51,7 +51,10 @@ export const recipientsCommand = (messenger: Messenger): Command => {
     .description("allow sending to this chat; the first add turns the list on")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      const found = await context.withMessenger((connection) => connection.resolve(chat))
+      // Some transports resolve an id without reading its title or dialog partner.
+      const found = await context.withMessenger((connection) =>
+        options.resolve === "chat-card" ? connection.chat(chat) : connection.resolve(chat),
+      )
       const partnerId = messenger.partnerOf?.(found)
       const added = await listFor(context.settings.profile, context.env).addAsync({
         id: found.id,
@@ -118,7 +121,7 @@ export const sendsCommand = (messenger: Messenger): Command =>
         this,
         context,
         pagedList("sends list", settings, {
-          items: shown.map(snakeKeys),
+          items: shown.map(sendAttemptItem),
           args: words.length ? { query: typedQuery(words) } : {},
           has_more: from + shown.length < entries.length,
         }),
@@ -129,3 +132,6 @@ export const sendsCommand = (messenger: Messenger): Command =>
         )
     }),
   )
+
+export const sendAttemptItem = ({ sendId, operationId, ...entry }: SendEntry) =>
+  snakeKeys({ ...entry, ...((operationId ?? sendId) === undefined ? {} : { operationId: operationId ?? sendId }) })

@@ -91,7 +91,7 @@ export const chatAnswer = (account: AccountKey, chat: ShownChat): Out<typeof cha
     description: chat.description,
     invite_link: chat.link,
     settings: chat.settings ? settingsOf(chat.settings) : undefined,
-    members: chat.members === undefined ? undefined : (chat.members?.map(memberAnswer) ?? null),
+    members: chat.members?.map(memberAnswer),
   })
 
 export const memberAnswer = (member: Member | GroupMember | AuditedMember): Out<typeof memberSchema> => {

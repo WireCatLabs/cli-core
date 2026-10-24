@@ -1,7 +1,6 @@
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { defineQuery } from "@wirecat/cli-base/query"
 import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import type * as v from "valibot"
@@ -32,7 +31,8 @@ import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, reachesOtherService } from "../effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
-import { listQuery, nativeTerms, termField, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
+import { listQuery, nativeTerms, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
+import { MODEL_CATALOGUE_QUERY } from "../model-catalogue-command.js"
 import { nextStep } from "../steps.js"
 import type { Messenger } from "./context.js"
 
@@ -45,15 +45,7 @@ type ModelItem = v.InferOutput<typeof modelEntity>
 
 /** A model list is the catalog this version ships. */
 const MODELS_QUERY = unfilteredQuery("model", modelEntity)
-const ROOT_MODELS_QUERY = defineQuery({
-  entity: "model",
-  backend: "native",
-  fields: [
-    termField("kind", "enum", "kind:audio", { values: ["audio", "text"] }),
-    termField("id", "kw", "id:e5-small"),
-    termField("downloaded", "bool", "downloaded:true"),
-  ],
-})
+const ROOT_MODELS_QUERY = MODEL_CATALOGUE_QUERY
 
 /** Every model this version knows: a short, fixed list, never paged. */
 const everyModel = (command: string, items: ModelItem[], next: NextStep[] = []) =>

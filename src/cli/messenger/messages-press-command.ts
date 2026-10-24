@@ -7,7 +7,10 @@ import { type Messenger, messengerContext } from "./context.js"
 
 /** `messages press` — one of a bot's callback buttons; the bot sees who pressed it. */
 export const pressCommand = (messenger: Messenger): Command =>
-  annotate(new Command("press"), { effects: REMOTE_WRITE })
+  annotate(new Command("press"), {
+    effects: REMOTE_WRITE,
+    examples: [`${messenger.app.command} personal messages press "Example Bot" 101 1`],
+  })
     .description("press a bot's button under a message; the bot sees that you pressed it")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of the message with the buttons")

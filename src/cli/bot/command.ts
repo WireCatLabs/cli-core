@@ -128,6 +128,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
 
 const meCommand = (bot: BotMessenger): Command =>
   annotate(new Command("me"), { effects: REMOTE_READ, examples: botExamples(bot, "me") })
+    .summary("the bot this profile's token belongs to")
     .description("the bot this profile's token belongs to: id, name and username")
     .action(async function (this: Command) {
       const context = online(botContext(this, bot), this)

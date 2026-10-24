@@ -1,5 +1,7 @@
+import type { QueryAst } from "@wirecat/cli-base/query"
 import type { Event, EventCandidateFilter, EventSeries, NewRecord } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
+import { queryFilter } from "./query-filter.js"
 
 /** JSON columns keep a missing value as SQL NULL, never the text `null`, so a read gives back what was saved. */
 export const toJson = (value: unknown): string | null =>
@@ -49,8 +51,22 @@ const seriesOf = (row: Record<string, unknown>): EventSeries => ({
 const exists = (database: CacheDatabase, table: string, id: number) =>
   database.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id) !== undefined
 
-export const events = (database: CacheDatabase): Event[] =>
-  database.prepare("SELECT * FROM events WHERE deleted_at IS NULL ORDER BY id").all().map(eventOf)
+export const events = (database: CacheDatabase, query?: QueryAst): Event[] => {
+  const where =
+    query &&
+    queryFilter(query, {
+      id: { type: "num", sql: "id" },
+      origin: { type: "enum", sql: "origin" },
+      starts_at: { type: "time", sql: "starts_at" },
+      ends_at: { type: "time", sql: "ends_at" },
+      created_at: { type: "time", sql: "created_at" },
+      updated_at: { type: "time", sql: "updated_at" },
+    })
+  return database
+    .prepare(`SELECT * FROM events WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""} ORDER BY id`)
+    .all(...(where?.params ?? []))
+    .map(eventOf)
+}
 
 /** An event without an end occupies its start instant. */
 export const eventCandidates = (database: CacheDatabase, filter: EventCandidateFilter): Event[] =>

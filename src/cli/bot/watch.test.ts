@@ -137,18 +137,18 @@ describe("bot commands", () => {
 })
 
 describe("bot webhooks", () => {
-  it("**refuses a second address**, unless the messenger keeps many and --add says so", async () => {
+  it("**refuses a second address**, unless the messenger keeps many and --append says so", async () => {
     await call(["sales", "bot", "webhooks", "set", "https://a.example/hook", "--types", "message_created, bot_started"])
     expect(webhooks).toEqual([{ url: "https://a.example/hook", types: ["message_created", "bot_started"] }])
 
     const refused = await call(["sales", "bot", "webhooks", "set", "https://b.example/hook"])
     expect(refused.code).toBe(7)
     expect(refused.stderr).toContain("chat sales bot webhooks delete")
-    expect((await call(["sales", "bot", "webhooks", "set", "https://b.example/hook", "--add"])).code).not.toBe(0)
+    expect((await call(["sales", "bot", "webhooks", "set", "https://b.example/hook", "--append"])).code).not.toBe(0)
     expect(webhooks).toHaveLength(1)
 
     const many = botWith({ manyWebhooks: true })
-    expect((await call(["sales", "bot", "webhooks", "set", "https://b.example/hook", "--add"], many)).code).toBe(0)
+    expect((await call(["sales", "bot", "webhooks", "set", "https://b.example/hook", "--append"], many)).code).toBe(0)
     expect(webhooks).toHaveLength(2)
     await call(["sales", "bot", "webhooks", "delete", "https://a.example/hook"])
     expect(webhooks.map((one) => one.url)).toEqual(["https://b.example/hook"])

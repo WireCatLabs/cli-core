@@ -48,6 +48,7 @@ import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
+import { assertSharedContracts } from "./shared-contracts.js"
 import { commandAt, lineOf, withLines } from "./steps.js"
 
 export interface ProgramDefinition {
@@ -122,6 +123,7 @@ export const createProgram = (
 
   for (const command of commands()) program.addCommand(command)
   configure?.(program)
+  assertSharedContracts(program)
   installHelp(program, { pitch: app.description, ...firstScreen })
 
   // Commander builds a usage line from the command tree, where the profile is not a word.
