@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Flag renames first shipped in 0.399.0 also affect callers upgrading directly from 0.398.0 or earlier.** Use
+  `--analysis-provider`, `--embedding-provider`, `--consent-provider`, `--claim`, `--answer-model`, `--template-mode`,
+  `--disappear-after` and `--text-file`; see the 0.399.0 notes for the retired spellings and query replacements.
+
 ## 0.404.0 — 24.10.2026
 
 ### Added
