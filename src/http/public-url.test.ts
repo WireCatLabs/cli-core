@@ -13,6 +13,8 @@ describe("public MCP listener options", () => {
   it.each([
     undefined,
     "no address",
+    "https://user@device.example",
+    "https://user:synthetic-password@device.example",
     "http://device.example",
     "https://device.example/mcp",
     "https://device.example/?q=x",

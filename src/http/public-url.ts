@@ -17,6 +17,8 @@ export const publicUrlOf = (
   } catch {
     throw new CliError("validation_error", `--public-url is not an address: ${EXAMPLE}`)
   }
+  if (url.username || url.password)
+    throw new CliError("validation_error", "--public-url must not contain login credentials")
   const local = url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)
   if (url.protocol !== "https:" && !local)
     throw new CliError("validation_error", `--public-url must be https — ${reaches} through it`)

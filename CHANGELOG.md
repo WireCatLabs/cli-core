@@ -42,6 +42,8 @@ shape of this file.
 
 ### Fixed
 
+- Public listener origins refuse embedded credentials before startup diagnostics can expose them.
+
 - Generated MCP commands accept a positional argument or its same-named flag alternative once. A single `text` input no longer emits both the argument and `--text`, which made Memo note creation fail. Positional requiredness is retained.
 
 ### Added
