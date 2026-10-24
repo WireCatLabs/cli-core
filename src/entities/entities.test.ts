@@ -122,6 +122,18 @@ const meetingCueSample = {
 }
 
 const samples: Record<EntityName, unknown> = {
+  organization: { id: "1", ref: "organization:1", kind: "company", name: "Sample", scope: "work", created_at: at },
+  project: {
+    id: "1",
+    ref: "project:1",
+    key: "sample",
+    name: "Sample",
+    type: "work",
+    organization_id: null,
+    scope: "work",
+    created_at: at,
+  },
+  reminder: { id: "1", task: "task:1", due_at: at, timezone: "UTC", state: "pending", revision: 1, receipt: null },
   call_record: {
     id: "1",
     chat_id: null,

@@ -65,6 +65,7 @@ import { imageEmbedding } from "./image-embedding.js"
 import { inviteLink } from "./invite-link.js"
 import { job } from "./job.js"
 import { joinRequest } from "./join-request.js"
+import { organization, project, reminder } from "./knowledge-lists.js"
 import {
   botAdmin,
   botMenuEntry,
@@ -296,11 +297,13 @@ export {
   modelKey,
   note,
   officialStats,
+  organization,
   person,
   place,
   poll,
   pollChange,
   pollVote,
+  project,
   ranking,
   reactionChange,
   recipient,
@@ -311,6 +314,7 @@ export {
   recordedRun,
   reference,
   relationship,
+  reminder,
   removedModelKey,
   retention,
   runDetails,
@@ -438,6 +442,9 @@ export const ENTITIES = {
   account_privacy: accountPrivacy,
   account_privacy_change: accountPrivacyChange,
   account_profile: accountProfile,
+  organization,
+  project,
+  reminder,
   bot_profile: botProfile,
   bot_template: botTemplate,
   bot_seen_chat: botSeenChat,

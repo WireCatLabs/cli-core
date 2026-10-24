@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { parseLucene } from "@wirecat/cli-base/query"
 import { afterEach, describe, expect, it } from "vitest"
 import { migrate } from "./migrations.js"
 import { type EmailInput, mailStoreOver } from "./sqlite/emails.js"
@@ -126,4 +127,16 @@ describe("mail rules", () => {
     await save(envelope("<a@shop>", 10, null, { bodyText: "The whole text" }))
     expect((await mail.email(1, "<a@shop>"))?.mailRuleId).toBeNull()
   })
+})
+
+it("filters mail rules without crossing account scope", async () => {
+  const { mail } = await seeded()
+  const selected = await mail.rules.upsert(1, rule({ protected: true }), 1)
+  await mail.rules.upsert(1, rule({ conditions: { domain: "other.example" }, source: "probe" }), 1)
+  await mail.rules.upsert(2, rule({ protected: true }), 1)
+  expect(await mail.rules.list(1, parseLucene(`protected:true AND source:owner AND id:${selected.id}`))).toEqual([
+    selected,
+  ])
+  expect(await mail.rules.list(2, parseLucene(`id:${selected.id}`))).toEqual([])
+  expect(await mail.rules.list(1)).toHaveLength(2)
 })

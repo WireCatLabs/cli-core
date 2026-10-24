@@ -6,6 +6,13 @@ minor version may break callers, and says how under "Changed — may break calle
 shape of this file.
 
 
+## Unreleased
+
+### Added
+
+- **Knowledge lists filter at their native readers.** Organizations, projects, reminders and mail rules accept optional queries before SQL list bounds. Document tags and links accept native selectors, and meeting-link reads can select one URL before aggregation. Existing unfiltered calls keep their behavior.
+
+
 ## 0.411.0 — 24.10.2026
 
 ### Added

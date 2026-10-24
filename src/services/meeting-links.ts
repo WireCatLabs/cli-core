@@ -7,14 +7,14 @@ import { resolveMeetingSelection } from "./meeting-hit-search.js"
 export type { MeetingLink }
 
 export type MeetingLinksRequest = Omit<MeetingHitSearchRequest, "limit" | "after" | "maxReadBytes"> &
-  Pick<MeetingChatLinesInput, "maxMessages">
+  Pick<MeetingChatLinesInput, "maxMessages"> & { url?: string }
 
 /** Links shared in the chat of the selected meetings, most shared first; found when read, not stored. */
 export const readMeetingLinks = async (
   store: Pick<MessageStore, "meetings"> & { knowledge?: MessageStore["knowledge"] },
   request: MeetingLinksRequest,
 ) => {
-  const { maxMessages, ...selecting } = request
+  const { maxMessages, url, ...selecting } = request
   const { input, selection } = await resolveMeetingSelection(store, selecting)
   const lines = await store.meetings.meetingChatLines({
     ...input,
@@ -23,7 +23,7 @@ export const readMeetingLinks = async (
   const links = new Map<string, MeetingLink>()
   for (const line of lines)
     for (const found of findMentions(line.text)) {
-      if (found.kind !== "url") continue
+      if (found.kind !== "url" || (url !== undefined && found.value !== url)) continue
       const link = links.get(found.value) ?? {
         url: found.value,
         domain: found.domain,

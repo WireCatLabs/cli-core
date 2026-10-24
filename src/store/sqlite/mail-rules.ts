@@ -1,5 +1,7 @@
+import type { QueryAst } from "@wirecat/cli-base/query"
 import type { JsonValue } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import { queryFilter } from "./query-filter.js"
 import { write } from "./transaction.js"
 
 type Row = Record<string, unknown>
@@ -41,7 +43,7 @@ export interface MailRuleCount {
 
 export interface MailRulesStore {
   /** Oldest first. */
-  list(accountId: number): Promise<MailRule[]>
+  list(accountId: number, query?: QueryAst): Promise<MailRule[]>
   /** A rule with the same conditions is replaced, and keeps its id and the emails it decided. */
   upsert(accountId: number, rule: MailRuleInput, now: number): Promise<MailRule>
   /** Clears the rule from the emails it decided. Answers false when no rule has these conditions. */
@@ -83,8 +85,18 @@ const ruleOf = (row: Row): MailRule => ({
 const CHUNK = 30_000
 
 export const mailRulesOver = (database: CacheDatabase): MailRulesStore => ({
-  async list(accountId) {
-    return database.prepare("SELECT * FROM mail_rules WHERE account_id = ? ORDER BY id").all(accountId).map(ruleOf)
+  async list(accountId, query) {
+    const where =
+      query &&
+      queryFilter(query, {
+        id: { type: "num", sql: "id" },
+        protected: { type: "bool", sql: "protected" },
+        source: { type: "kw", sql: "source" },
+      })
+    return database
+      .prepare(`SELECT * FROM mail_rules WHERE account_id = ?${where ? ` AND (${where.sql})` : ""} ORDER BY id`)
+      .all(accountId, ...(where?.params ?? []))
+      .map(ruleOf)
   },
   async upsert(accountId, rule, now) {
     const row = database

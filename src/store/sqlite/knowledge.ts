@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { QueryAst } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
@@ -11,6 +12,7 @@ import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { queryFilter } from "./query-filter.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -127,7 +129,7 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
   annotation(key: KnowledgeScope, id: string): Promise<Annotation>
   editAnnotation(key: KnowledgeScope, id: string, text: string, revision: number): Promise<Annotation>
   removeAnnotation(key: KnowledgeScope, id: string): Promise<{ id: string; removed: true }>
-  tags(key: KnowledgeScope, target: KnowledgeTarget): Promise<string[]>
+  tags(key: KnowledgeScope, target: KnowledgeTarget, tag?: string): Promise<string[]>
   addTags(key: KnowledgeScope, target: KnowledgeTarget, tags: string[]): Promise<string[]>
   removeTags(key: KnowledgeScope, target: KnowledgeTarget, tags: string[]): Promise<string[]>
   /**
@@ -150,7 +152,7 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
     name: string
     scope?: Organization["scope"]
   }): Promise<Organization>
-  organizations(): Promise<Organization[]>
+  organizations(query?: QueryAst): Promise<Organization[]>
   /** A project; its key is made from the name when none is given. */
   addProject(input: {
     name: string
@@ -160,7 +162,7 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
     scope?: Project["scope"]
     description?: string
   }): Promise<Project>
-  projects(): Promise<Project[]>
+  projects(query?: QueryAst): Promise<Project[]>
   relate(
     key: KnowledgeScope,
     input: {
@@ -177,7 +179,7 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
   removeRelation(key: KnowledgeScope, id: string): Promise<{ id: string; removed: true }>
   confirmRelation(key: KnowledgeScope, id: string): Promise<KnowledgeRelation>
   schedule(key: AccountKey, task: string, dueAt: string, timezone: string): Promise<Reminder>
-  reminders(key: AccountKey): Promise<Reminder[]>
+  reminders(key: AccountKey, query?: QueryAst): Promise<Reminder[]>
   cancelReminder(key: AccountKey, id: string): Promise<Reminder>
   snoozeReminder(key: AccountKey, id: string, dueAt: string, revision: number): Promise<Reminder>
   claimReminders(key: AccountKey, options?: { limit?: number; leaseMs?: number }): Promise<Reminder[]>
@@ -319,13 +321,13 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       : null
 
   /** A subfolder's labels: `labelled` links from the folder, anchored at the path, to each tag. */
-  const subfolderLabels = (folder: number, path: string) =>
+  const subfolderLabels = (folder: number, path: string, tag?: string) =>
     database
       .prepare(
         "SELECT t.name FROM links l JOIN tags t ON t.id = l.to_id WHERE l.from_type = 'account' AND l.from_id = ? " +
-          `AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND l.anchor = ? ORDER BY t.name`,
+          `AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND l.anchor = ?${tag === undefined ? "" : " AND t.name = ?"} ORDER BY t.name`,
       )
-      .all(folder, path)
+      .all(folder, path, ...(tag === undefined ? [] : [tag]))
       .map((row) => String(row.name))
 
   const annotationOf = (row: Row): Annotation | undefined => {
@@ -530,11 +532,14 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       database.prepare("DELETE FROM notes WHERE id=?").run(Number(id))
       return { id, removed: true }
     },
-    tags: async (key, target) => {
+    tags: async (key, target, tag) => {
       const { thing, state } = resolve(key, target)
       if (!thing || state !== "available") return []
       const path = subfolder(target)
-      return path === null ? labelsOf(database, thing).map(({ tag }) => tag) : subfolderLabels(thing.id, path)
+      const name = tag === undefined ? undefined : canonicalTagName(tag)
+      return path === null
+        ? labelsOf(database, thing, name).map(({ tag }) => tag)
+        : subfolderLabels(thing.id, path, name)
     },
     addTags: async (key, target, tags) => {
       const thing = available(key, target)
@@ -628,11 +633,22 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         )
       return organizationOf(row as Row)
     },
-    organizations: async () =>
-      database
-        .prepare("SELECT * FROM organizations WHERE deleted_at IS NULL ORDER BY name, id LIMIT 500")
-        .all()
-        .map(organizationOf),
+    organizations: async (query) => {
+      const where =
+        query &&
+        queryFilter(query, {
+          id: { type: "kw", sql: "CAST(id AS TEXT)" },
+          kind: { type: "enum", sql: "kind" },
+          scope: { type: "enum", sql: "scope" },
+          created_at: { type: "time", sql: "created_at" },
+        })
+      return database
+        .prepare(
+          `SELECT * FROM organizations WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""} ORDER BY name, id LIMIT 500`,
+        )
+        .all(...(where?.params ?? []))
+        .map(organizationOf)
+    },
     addProject: async ({ name, key, type = "other", organization, scope = "personal", description }) =>
       write(database, () => {
         const title = textOf(name, 200)
@@ -707,11 +723,24 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           )
         return projectOf(row as Row)
       }),
-    projects: async () =>
-      database
-        .prepare("SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY name, id LIMIT 500")
-        .all()
-        .map(projectOf),
+    projects: async (query) => {
+      const where =
+        query &&
+        queryFilter(query, {
+          id: { type: "kw", sql: "CAST(id AS TEXT)" },
+          key: { type: "kw", sql: "key" },
+          type: { type: "enum", sql: "type" },
+          organization_id: { type: "kw", sql: "CAST(organization_id AS TEXT)" },
+          scope: { type: "enum", sql: "scope" },
+          created_at: { type: "time", sql: "created_at" },
+        })
+      return database
+        .prepare(
+          `SELECT * FROM projects WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""} ORDER BY name, id LIMIT 500`,
+        )
+        .all(...(where?.params ?? []))
+        .map(projectOf)
+    },
     relate: async (key, input) => {
       const from = related(key, input.from, true)
       const to = related(key, input.to)
@@ -794,11 +823,22 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         .get(row, accountId, timestamp, timezone, at, at)
       return reminder(key, String(made?.id))
     },
-    reminders: async (key) =>
-      database
-        .prepare("SELECT * FROM reminders WHERE account_id=? ORDER BY due_at, id LIMIT 500")
-        .all(account(key))
-        .map(reminderOf),
+    reminders: async (key, query) => {
+      const where =
+        query &&
+        queryFilter(query, {
+          id: { type: "kw", sql: "CAST(id AS TEXT)" },
+          state: { type: "enum", sql: "state" },
+          due_at: { type: "time", sql: "due_at" },
+          revision: { type: "num", sql: "revision" },
+        })
+      return database
+        .prepare(
+          `SELECT * FROM reminders WHERE account_id=?${where ? ` AND (${where.sql})` : ""} ORDER BY due_at, id LIMIT 500`,
+        )
+        .all(account(key), ...(where?.params ?? []))
+        .map(reminderOf)
+    },
     cancelReminder: async (key, id) => {
       reminder(key, id)
       database

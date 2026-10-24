@@ -65,6 +65,17 @@ export interface Link {
   createdAt: string
 }
 
+export interface LinkListFilter {
+  from?: string
+  to?: string
+  unresolved?: boolean
+  id?: string
+  kind?: Link["kind"]
+  role?: string
+  origin?: Link["origin"]
+  confirmed?: boolean
+}
+
 export interface LinkInput {
   from: string
   to?: string
@@ -125,7 +136,7 @@ export interface NotesStore extends NoteSearch, ImportedDocuments {
   editNote(id: string, text: string, revision: number): Promise<Note>
   removeNote(id: string): Promise<{ id: string; removed: true }>
   addLink(input: LinkInput): Promise<Link>
-  links(options?: { from?: string; to?: string; unresolved?: boolean }): Promise<Link[]>
+  links(options?: LinkListFilter): Promise<Link[]>
   removeLink(id: string): Promise<{ id: string; removed: true }>
   /** The links a file states, replacing what its last import stated; links the owner added stay. */
   replaceFileLinks(documentId: string, links: Omit<LinkInput, "from" | "origin">[]): Promise<Link[]>
@@ -628,12 +639,28 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       const from = pair(options.from)
       const to = pair(options.to)
       if (!from.known || !to.known) return []
+      const filters = [
+        ...(options.id === undefined ? [] : [{ sql: "CAST(id AS TEXT) = ?", value: options.id }]),
+        ...(options.kind === undefined ? [] : [{ sql: "kind = ?", value: options.kind }]),
+        ...(options.role === undefined ? [] : [{ sql: "role = ?", value: options.role }]),
+        ...(options.origin === undefined ? [] : [{ sql: "source = ?", value: options.origin }]),
+        ...(options.confirmed === undefined ? [] : [{ sql: "confirmed = ?", value: options.confirmed ? 1 : 0 }]),
+      ]
       return database
         .prepare(
           "SELECT * FROM links WHERE (? IS NULL OR (from_type = ? AND from_id = ?)) AND (? IS NULL OR (to_type = ? AND to_id = ?)) " +
-            "AND (? = 0 OR to_id IS NULL) ORDER BY created_at, id LIMIT 5000",
+            `AND (? = 0 OR to_id IS NULL)${filters.map(({ sql }) => ` AND (${sql})`).join("")} ORDER BY created_at, id LIMIT 5000`,
         )
-        .all(from.type, from.type, from.id, to.type, to.type, to.id, options.unresolved ? 1 : 0)
+        .all(
+          from.type,
+          from.type,
+          from.id,
+          to.type,
+          to.type,
+          to.id,
+          options.unresolved ? 1 : 0,
+          ...filters.map(({ value }) => value),
+        )
         .map((row) => linkOf(database, row))
     },
     removeLink: async (id) =>

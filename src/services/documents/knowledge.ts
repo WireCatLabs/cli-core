@@ -1,6 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
-import type { Author, Fact, Link, LinkInput, Memory, MemoryInput, MessageStore, Note } from "../../store/index.js"
+import type {
+  Author,
+  Fact,
+  Link,
+  LinkInput,
+  LinkListFilter,
+  Memory,
+  MemoryInput,
+  MessageStore,
+  Note,
+} from "../../store/index.js"
 
 export interface DocumentKnowledge {
   documents(
@@ -9,8 +19,14 @@ export interface DocumentKnowledge {
     page: { limit: number; offset: number },
   ): Promise<{ items: Note[]; hasMore: boolean }>
   document(principal: string, ref: string): Promise<Note>
-  tags(principal: string, ref: string, action: "list" | "add" | "remove", tags?: string[]): Promise<string[]>
-  links(principal: string, ref: string): Promise<Link[]>
+  tags(
+    principal: string,
+    ref: string,
+    action: "list" | "add" | "remove",
+    tags?: string[],
+    filter?: { tag?: string },
+  ): Promise<string[]>
+  links(principal: string, ref: string, filter?: Omit<LinkListFilter, "from" | "to">): Promise<Link[]>
   addLink(principal: string, ref: string, input: Omit<LinkInput, "from" | "origin">): Promise<Link>
   removeLink(principal: string, ref: string, id: string): Promise<unknown>
   notes(
@@ -106,16 +122,16 @@ export const documentKnowledge = (
       return folderId ? store.notes.importedDocuments(folderId, query, page) : { items: [], hasMore: false }
     },
     document,
-    tags: async (principal, ref, action, tags = []) => {
+    tags: async (principal, ref, action, tags = [], filter) => {
       const note = await document(principal, ref)
       const target = { type: "document" as const, id: note.id }
       if (action === "add") return store.knowledge.addTags(null, target, tags)
       if (action === "remove") return store.knowledge.removeTags(null, target, tags)
-      return store.knowledge.tags(null, target)
+      return store.knowledge.tags(null, target, filter?.tag)
     },
-    links: async (principal, ref) => {
+    links: async (principal, ref, filter) => {
       await document(principal, ref)
-      return store.notes.links({ from: ref })
+      return store.notes.links({ ...filter, from: ref })
     },
     addLink: async (principal, ref, input) => {
       await document(principal, ref)
