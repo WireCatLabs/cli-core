@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { openStore } from "../store/store.js"
 import { askSetupQuestions, asksAtStart, type FirstRun, systemLanguage } from "./first-run.js"
-import { permissionCeiling, readSetupAnswers, writeSetupAnswers } from "./setup-answers.js"
+import { permissionCeiling, readSetupAnswers, setupPermissionCeiling, writeSetupAnswers } from "./setup-answers.js"
 
 const place = () => {
   const folder = mkdtempSync(join(tmpdir(), "first-run-"))
@@ -81,6 +81,7 @@ describe("the questions every WireCat tool shares", () => {
     const path = join(env.WIRECAT_CONFIG_DIR, "config.json")
     expect(readSetupAnswers(path).permissions).toBe("readonly")
     expect(permissionCeiling(path)).toBe("readonly")
+    expect(setupPermissionCeiling(env)).toBe("readonly")
   })
 
   it("asks a wrong number again, then keeps what was ticked", async () => {

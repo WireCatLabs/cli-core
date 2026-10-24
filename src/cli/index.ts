@@ -427,7 +427,7 @@ export {
   type Source,
   settingsFor,
 } from "./settings.js"
-export { type PermissionAnswer, readSetupAnswers, type SetupAnswers } from "./setup-answers.js"
+export { type PermissionAnswer, readSetupAnswers, type SetupAnswers, setupPermissionCeiling } from "./setup-answers.js"
 export { AGENTS, type Agent, agentFor, screenFor } from "./setup-screen.js"
 export { skillCommand } from "./skill-command.js"
 export { runnable, withSafety } from "./steps.js"
