@@ -63,6 +63,7 @@ export type ProjectEvidenceContext = "project" | "linked-chat" | "sender" | "per
 export type ProjectGatheringStop = "reads" | "read-bytes" | "elapsed" | "items" | null
 
 const terminal = new Set(["done", "unavailable", "failed"])
+const PAGE = 20
 const CONTEXTS: ProjectEvidenceContext[] = ["person-only", "sender", "linked-chat", "project"]
 const contextOf = (lane: ProjectLane): ProjectEvidenceContext =>
   lane.kinds.includes("linked-chat")
@@ -144,6 +145,12 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   const oversized = new Map<string, { ref: string; lanes: string[]; source: number; bytes: number }>()
   let stopped: ProjectGatheringStop = null
   const open = (u: ProjectUnitProgress) => !terminal.has(u.state) && u.state !== "read-limited"
+  const linkedLanes = new Set(plan.linkedChats.flatMap((c) => (c.lane === null ? [] : [c.lane])))
+  // One even share per linked chat plus one for the word and sender lanes, so one busy chat cannot fill a run; never
+  // below a page, so every chat still gets its whole first page.
+  const linkedLimit = Math.max(PAGE, Math.floor(plan.budgets.maxItems / (linkedLanes.size + 1)))
+  const linkedTaken = new Map<string, number>()
+  const capped = new Set<string>()
 
   /** Records another lane finding a reference this run already returned; true when it had. */
   const again = (ref: string, lane: ProjectLane) => {
@@ -191,18 +198,26 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     byRef.set(item.ref, entry)
     items.push(entry)
     usage.items++
+    if (linkedLanes.has(lane.id)) linkedTaken.set(lane.id, (linkedTaken.get(lane.id) ?? 0) + 1)
   }
 
   // A resumed run starts at its shallowest open unit: below it no unit is due, and an empty round would end the run.
   const shallowest = progress.reduce((low, u) => (open(u) ? Math.min(low, u.pages) : low), Number.POSITIVE_INFINITY)
   for (let round = shallowest; !stopped; round++) {
-    const due = progress.flatMap((u, index) => (open(u) && u.pages <= round ? [index] : []))
+    const due = progress.flatMap((u, index) =>
+      open(u) && u.pages <= round && !capped.has(units[index]?.lane.id ?? "") ? [index] : [],
+    )
     if (!due.length) break
     for (const index of due) {
       const unit = units[index],
         state = progress[index]
       if (!unit || !state) continue
       signal?.throwIfAborted()
+      const room = linkedLanes.has(unit.lane.id) ? linkedLimit - (linkedTaken.get(unit.lane.id) ?? 0) : PAGE
+      if (room <= 0) {
+        capped.add(unit.lane.id)
+        continue
+      }
       stopped =
         usage.reads >= plan.budgets.maxReads
           ? "reads"
@@ -243,7 +258,10 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
         }
       }
       try {
-        let page = await readPage(Math.min(plan.budgets.maxPageBytes, plan.budgets.maxReadBytes - usage.readBytes), 20)
+        let page = await readPage(
+          Math.min(plan.budgets.maxPageBytes, plan.budgets.maxReadBytes - usage.readBytes),
+          Math.min(PAGE, room),
+        )
         // A large record another lane already returned is not read again; its page already moves past it.
         const big = page.oversized && !again(page.oversized.ref, unit.lane) ? page.oversized : undefined
         if (big && big.bytes <= CONTEXT_MAX_READ_BYTES) {
@@ -345,6 +363,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
           : units.every((unit, index) => unit.lane.id !== lane || progress[index]?.state === "unavailable")
             ? ("unavailable" as const)
             : ("in-scope" as const),
+      items: lane === null ? 0 : (linkedTaken.get(lane) ?? 0),
+      capped: lane !== null && capped.has(lane),
     })),
     fetch: fetched.map((f, index) => ({ source: index, ...f })),
     index: indexed,

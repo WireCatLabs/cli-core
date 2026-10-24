@@ -482,12 +482,12 @@ it("centres a document hit on its first paragraph that names any lane, not the l
   expect([none.usage.reads, none.usage.readBytes]).toEqual([result.usage.reads, result.usage.readBytes])
 })
 
-const linkedChat = (f: Awaited<ReturnType<typeof fixture>>, accountId: number, texts: string[]) => {
+const linkedChat = (f: Awaited<ReturnType<typeof fixture>>, accountId: number, texts: string[], name = "crew") => {
   const chat = f.db
     .prepare(
-      "INSERT INTO chats(account_id,external_id,kind,title,created_at,updated_at,searchable) VALUES(?,'crew','group','Crew',0,0,0) RETURNING id",
+      "INSERT INTO chats(account_id,external_id,kind,title,created_at,updated_at,searchable) VALUES(?,?,'group','Crew',0,0,0) RETURNING id",
     )
-    .get(accountId)
+    .get(accountId, name)
   for (const [n, text] of texts.entries())
     f.db
       .prepare(
@@ -495,7 +495,7 @@ const linkedChat = (f: Awaited<ReturnType<typeof fixture>>, accountId: number, t
       )
       .run(Number(chat?.id), accountId, `c${n}`, 400 + n, text)
   const account = present(f.db.prepare("SELECT provider,external_id FROM accounts WHERE id=?").get(accountId))
-  return { provider: String(account.provider), account: String(account.external_id), chat: "crew" }
+  return { provider: String(account.provider), account: String(account.external_id), chat: name }
 }
 
 it("reads a confirmed linked chat whose messages name nothing and labels them linked-chat", async () => {
@@ -562,6 +562,57 @@ it("resumes a linked chat across pages and refuses a checkpoint whose linked cha
     await expect(gatherProjectEvidence({ evidence: f.port }, { ...request, linkedChats, checkpoint })).rejects.toThrow(
       "the project's linked chats changed; start again without --cursor",
     )
+})
+
+it("caps each linked chat at its share of a run's items and leaves the rest of a busy chat to the cursor", async () => {
+  const f = await fixture()
+  const busy = linkedChat(
+    f,
+    f.accountId,
+    Array.from({ length: 60 }, (_, n) => `Busy ${n}`),
+    "busy",
+  )
+  const quiet = [
+    linkedChat(f, f.accountId, ["Quiet a", "Quiet b"], "quiet"),
+    linkedChat(f, f.accountId, ["Calm"], "calm"),
+  ]
+  const request = { ...f.request, sources: [present(f.sources[0])], linkedChats: [busy, ...quiet] }
+  const read = vi.spyOn(f.port, "read")
+  const runs = [await gatherProjectEvidence({ evidence: f.port }, request)]
+  const chatsRead = read.mock.calls.flatMap(([r]) => (r.chat ? [r.chat] : []))
+  expect(chatsRead.slice(0, 3)).toEqual(["busy", "quiet", "calm"])
+  while (runs.at(-1)?.checkpoint)
+    runs.push(
+      await gatherProjectEvidence({ evidence: f.port }, { ...request, checkpoint: present(runs.at(-1)?.checkpoint) }),
+    )
+
+  const linkedCounts = (run: (typeof runs)[number]) => run.linkedChats.map((c) => [c.chat, c.items, c.capped])
+  expect(runs.map(linkedCounts)).toEqual([
+    [
+      ["busy", 25, true],
+      ["quiet", 2, false],
+      ["calm", 1, false],
+    ],
+    [
+      ["busy", 25, true],
+      ["quiet", 0, false],
+      ["calm", 0, false],
+    ],
+    [
+      ["busy", 10, false],
+      ["quiet", 0, false],
+      ["calm", 0, false],
+    ],
+  ])
+  expect(runs.map((r) => [r.complete, r.stopped])).toEqual([
+    [false, null],
+    [false, null],
+    [true, null],
+  ])
+  const busyRefs = runs.flatMap((r) => r.items.filter((i) => i.ref.includes("/busy/")).map((i) => i.ref))
+  expect(busyRefs).toHaveLength(60)
+  expect(new Set(busyRefs).size).toBe(60)
+  expect(present(runs[0]).items.filter((i) => i.context === "project").length).toBeGreaterThan(0)
 })
 
 it("keeps the fingerprint and checkpoint of a run without linked chats", async () => {
