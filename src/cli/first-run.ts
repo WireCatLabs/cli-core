@@ -1,15 +1,17 @@
 import { spawnSync } from "node:child_process"
 import { accessSync, constants, realpathSync } from "node:fs"
 import { delimiter, join } from "node:path"
-import { CliError } from "@wirecat/cli-base"
 import { type Installer, installerOf, updateCommand } from "@wirecat/cli-base/update"
 import { DEFAULT_STEMMERS, type Stemmers } from "../search/stem.js"
+import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
 import { sharedConfigPath } from "../store/shared-config.js"
 import { openStore } from "../store/store.js"
 import { WIRECAT_TOOLS } from "./help/first-screen.js"
+import { buildStems } from "./messenger/store-maintenance-command.js"
 import {
   type PermissionAnswer,
+  QUESTIONS,
   type Question,
   readSetupAnswers,
   type SetupAnswers,
@@ -36,13 +38,32 @@ export interface FirstRun {
   io: FirstRunIo
   /** Every question, as `setup` asks them; otherwise only those no WireCat tool asked yet. */
   all?: boolean
-  /** Set when `<PREFIX>_READ_ONLY` locks this process: it is stricter than any answer, so permissions are not asked. */
-  readOnlyLock?: string
   /** Where tools are looked for and how one is installed; injected by tests. */
   installed?: (command: string) => boolean
   installer?: Installer
   install?: (argv: string[]) => boolean
 }
+
+/** Commands that run without first-run questions: setup asks them itself, the rest serve agents, help or the store. */
+const SKIPPED = new Set(["setup", "help", "guide", "completion", "mcp", "serve", "server", "update", "store"])
+
+/**
+ * Only a person at a terminal is asked. An agent in a real terminal passes every terminal check and would wait on
+ * the question forever; a process locked read-only must write nothing, and every answer writes something.
+ */
+export const asksAtStart = (start: {
+  headless: boolean
+  terminal: boolean
+  env: NodeJS.ProcessEnv
+  readOnlyLock: string | undefined
+  path: readonly string[]
+}): boolean =>
+  !start.headless &&
+  start.terminal &&
+  !start.env.AI_AGENT &&
+  !start.env.CLAUDECODE &&
+  start.readOnlyLock === undefined &&
+  !SKIPPED.has(start.path[0] ?? "")
 
 /** The system's language, as the first locale variable set names it: `LC_ALL`, `LC_MESSAGES`, `LANG`, `LANGUAGE`. */
 export const systemLanguage = (env: NodeJS.ProcessEnv): string | undefined => {
@@ -65,28 +86,38 @@ const languagesOf = (stemmers: Stemmers): Language[] =>
     ({ name }) => name,
   )
 
-/** Numbers from a list, as `1,3` or `1 3`; Enter keeps `chosen`. */
-const picked = (answer: string, count: number, chosen: number[]): number[] => {
-  if (!answer.trim()) return chosen
-  if (/^(none|-)$/i.test(answer.trim())) return []
-  const numbers = answer
-    .split(/[\s,]+/)
-    .filter(Boolean)
-    .map(Number)
-  if (numbers.some((number) => !Number.isInteger(number) || number < 1 || number > count))
-    throw new CliError("validation_error", `choose numbers from 1 to ${count}, separated by commas`)
-  return [...new Set(numbers)].sort((a, b) => a - b)
+/** Numbers from a list, as `1,3` or `1 3`; Enter keeps `chosen`. A wrong answer is asked again, then left as it was. */
+const choose = async (io: FirstRunIo, prompt: string, count: number, chosen: number[]): Promise<number[]> => {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const answer = (await io.ask(prompt)).trim()
+    if (!answer) return chosen
+    if (/^(none|-)$/i.test(answer)) return []
+    const numbers = answer
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map(Number)
+    if (numbers.every((number) => Number.isInteger(number) && number >= 1 && number <= count))
+      return [...new Set(numbers)].sort((a, b) => a - b)
+    io.say(`Choose numbers from 1 to ${count}, separated by commas.`)
+  }
+  return chosen
 }
 
-const onPath = (command: string, env: NodeJS.ProcessEnv): boolean =>
-  (env.PATH ?? "").split(delimiter).some((folder) => {
-    try {
-      accessSync(join(folder, command), constants.X_OK)
-      return true
-    } catch {
-      return false
-    }
-  })
+const yes = async (io: FirstRunIo, prompt: string) => /^y(es)?$/i.test((await io.ask(prompt)).trim())
+
+const onPath = (command: string, env: NodeJS.ProcessEnv): boolean => {
+  const names = process.platform === "win32" ? [".cmd", ".exe", ""].map((ending) => command + ending) : [command]
+  return (env.PATH ?? env.Path ?? "").split(delimiter).some((folder) =>
+    names.some((name) => {
+      try {
+        accessSync(join(folder, name), process.platform === "win32" ? constants.F_OK : constants.X_OK)
+        return true
+      } catch {
+        return false
+      }
+    }),
+  )
+}
 
 /** With the installer that installed this tool, its output on stderr so stdout stays data. */
 const installWith = (argv: string[]): boolean =>
@@ -102,6 +133,7 @@ const installerHere = () => {
 
 const askLanguages = async ({ command, env, io }: FirstRun) => {
   const store = await openStore({ env })
+  let rebuild = false
   try {
     const saved = (await store.searchIndex.stemmers()) ?? undefined
     // A store already in use keeps the languages it was built with, so Enter changes nothing (RISK-1612).
@@ -115,14 +147,32 @@ const askLanguages = async ({ command, env, io }: FirstRun) => {
     LANGUAGES.forEach(({ name, label }, at) => {
       io.say(`  ${at + 1}. ${label}${ticked.includes(name) ? " ✓" : ""}`)
     })
-    const chosen = picked(await io.ask(`Numbers (${numbers.join(",")}): `), LANGUAGES.length, numbers)
+    const chosen = await choose(io, `Numbers (${numbers.join(",")}): `, LANGUAGES.length, numbers)
     const next = stemmersOf(chosen.map((number) => (LANGUAGES[number - 1] as (typeof LANGUAGES)[number]).name))
     const before = saved ?? DEFAULT_STEMMERS
     if (inUse && before.cyrillic === next.cyrillic && before.latin === next.latin) return
+    // Word search refuses until stems built by the old choice are rebuilt, so the change and the rebuild go together.
+    if (
+      inUse &&
+      !(await yes(
+        io,
+        "Rebuild the word forms of every stored message now? Word search waits for it; a large store takes minutes. [y/N] ",
+      ))
+    ) {
+      io.say(`Languages kept as they were; \`${command} setup\` asks again.`)
+      return
+    }
     await store.searchIndex.saveStemmers(next)
-    if (inUse) io.say(`Messages already stored keep their old word forms until \`${command} store reindex\`.`)
+    rebuild = inUse
   } finally {
     await store.close()
+  }
+  if (!rebuild) return
+  const database = await openCache(storePath(env))
+  try {
+    buildStems(database, (note) => io.say(`  ${note}`), { force: true })
+  } finally {
+    database.close()
   }
 }
 
@@ -137,7 +187,7 @@ const askTools = async (run: FirstRun) => {
   missing.forEach((tool, at) => {
     io.say(`  ${at + 1}. install ${tool.command}`)
   })
-  const chosen = picked(await io.ask("Numbers to install (none): "), missing.length, [])
+  const chosen = await choose(io, "Numbers to install (none): ", missing.length, [])
   const installer = run.installer ?? installerHere()
   for (const number of chosen) {
     const tool = missing[number - 1] as (typeof missing)[number]
@@ -152,19 +202,28 @@ const askTools = async (run: FirstRun) => {
 }
 
 const PERMISSION_CHOICES: { answer: PermissionAnswer; text: string }[] = [
-  { answer: "readonly", text: "read only — search and read, never send or change anything" },
+  { answer: "readonly", text: "read only — search and read; nothing sends or changes, bots and agents included" },
   { answer: "allow", text: "as now — each profile's own permissions" },
 ]
 
 const askPermissions = async ({ io }: FirstRun, answers: SetupAnswers): Promise<PermissionAnswer> => {
   const now = answers.permissions ?? "allow"
+  const current = Math.max(1, PERMISSION_CHOICES.findIndex(({ answer }) => answer === now) + 1)
   io.say("What may commands and agents do, in every WireCat tool?")
   PERMISSION_CHOICES.forEach(({ text }, at) => {
     io.say(`  ${at + 1}. ${text}`)
   })
-  const current = Math.max(1, PERMISSION_CHOICES.findIndex(({ answer }) => answer === now) + 1)
-  const [chosen] = picked(await io.ask(`Number (${current}): `), PERMISSION_CHOICES.length, [current])
-  return (PERMISSION_CHOICES[(chosen ?? current) - 1] as (typeof PERMISSION_CHOICES)[number]).answer
+  const [chosen = current] = await choose(io, `Number (${current}): `, PERMISSION_CHOICES.length, [current])
+  return (PERMISSION_CHOICES[chosen - 1] as (typeof PERMISSION_CHOICES)[number]).answer
+}
+
+/** A section another tool wrote wrongly is asked again and written over, rather than stopping the command. */
+const answersAt = (path: string): SetupAnswers => {
+  try {
+    return readSetupAnswers(path)
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -173,10 +232,8 @@ const askPermissions = async ({ io }: FirstRun, answers: SetupAnswers): Promise<
  */
 export const askSetupQuestions = async (run: FirstRun): Promise<Question[]> => {
   const path = sharedConfigPath(storePath(run.env), run.env)
-  const answers = readSetupAnswers(path)
-  const asking = (run.all ? (["languages", "tools", "permissions"] as Question[]) : unanswered(answers)).filter(
-    (question) => question !== "permissions" || run.readOnlyLock === undefined,
-  )
+  const answers = answersAt(path)
+  const asking = run.all ? [...QUESTIONS] : unanswered(answers)
   for (const question of asking) {
     run.io.say("")
     if (question === "languages") {

@@ -6,10 +6,11 @@ import type { WarmEmbedders } from "../../embeddings/embed.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
-import { type Asker, guardFor, type SendGuard } from "../../sends/guard.js"
+import { type Asker, ceilingRefusal, guardFor, type SendGuard } from "../../sends/guard.js"
 import { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "../../sends/pace.js"
 import {
   assertStatsPermissionsCurrent,
+  CEILING_KEY,
   levelFor,
   type PermissionKey,
   readKeysForCommand,
@@ -680,6 +681,7 @@ export const refuseLocalWrite = (context: MessengerContext, command: string, per
   const { settings } = context
   const { level, key } = levelFor(settings.permissions, permission)
   if (level === "allow" || (level === "ask" && context.agent)) return
+  if (key === CEILING_KEY) throw ceilingRefusal(permission, command)
   throw new CliError(
     level === "ask" ? "confirmation_required" : "permission_error",
     `profile ${settings.profile} does not let ${permission} write (permissions.${key} is ${level}, from the ` +

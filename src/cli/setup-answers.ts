@@ -42,11 +42,27 @@ export const readSetupAnswers = (path: string): SetupAnswers => {
 export const unanswered = (answers: SetupAnswers): Question[] =>
   QUESTIONS.filter((question) => answers[question] === undefined)
 
-export const writeSetupAnswers = (path: string, answers: SetupAnswers): void =>
-  writeSharedSection(path, SECTION, { ...readSetupAnswers(path), ...answers })
+/** A section written wrongly is replaced; a file that is not JSON at all still refuses, naming itself. */
+export const writeSetupAnswers = (path: string, answers: SetupAnswers): void => {
+  let kept: SetupAnswers = {}
+  try {
+    kept = readSetupAnswers(path)
+  } catch (error) {
+    if (!(error instanceof CliError) || !error.message.includes(`${SECTION} holds`)) throw error
+  }
+  writeSharedSection(path, SECTION, { ...kept, ...answers })
+}
 
-/** The level no command of any WireCat CLI goes above, or `undefined` when the owner chose to leave them as they are. */
+/**
+ * The level no command of any WireCat tool goes above, or `undefined` when the owner chose to leave them as they
+ * are. A file that cannot be read keeps everything read-only: reads still work, and `setup` writes it again.
+ */
 export const permissionCeiling = (path: string): Level | undefined => {
-  const answer = readSetupAnswers(path).permissions
+  let answer: PermissionAnswer | undefined
+  try {
+    answer = readSetupAnswers(path).permissions
+  } catch {
+    return "readonly"
+  }
   return answer === "allow" ? undefined : answer
 }

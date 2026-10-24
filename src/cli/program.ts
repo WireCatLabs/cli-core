@@ -37,7 +37,7 @@ import {
 } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
-import { askSetupQuestions } from "./first-run.js"
+import { askSetupQuestions, asksAtStart } from "./first-run.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -160,9 +160,6 @@ class Relayed extends Error {
  * An interactive command run without a terminal — an agent's `session start qr` — waits on a person scanning a
  * code somewhere else, which 30 s does not cover.
  */
-/** Commands that run without a person's first-run answers: setup asks them itself, the rest serve agents or help. */
-const FIRST_RUN_SKIPS = new Set(["setup", "help", "guide", "completion", "mcp", "serve", "server", "update"])
-
 export const HEADLESS_INTERACTIVE_MS = 5 * 60_000
 
 /** How much longer than the command's own deadline a client waits for serve to say how it ended. */
@@ -312,15 +309,27 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
     const input = options.stdin ?? process.stdin
-    if (!headless && !options.streams && input.isTTY && process.stderr.isTTY && !FIRST_RUN_SKIPS.has(path[0] ?? ""))
+    if (
+      asksAtStart({
+        headless,
+        terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
+        env: commandEnv,
+        readOnlyLock: lock,
+        path,
+      })
+    )
+      // The command the person typed runs whatever happens to the questions.
       await askSetupQuestions({
         command,
         env: commandEnv,
-        ...(lock ? { readOnlyLock: lock } : {}),
         io: {
           ask: (prompt) => readSecret(prompt, { input, echo: true }),
           say: (text) => process.stderr.write(`${text}\n`),
         },
+      }).catch((error: unknown) => {
+        process.stderr.write(
+          `setup questions skipped: ${error instanceof Error ? error.message : String(error)} — \`${command} setup\` asks them again\n`,
+        )
       })
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)

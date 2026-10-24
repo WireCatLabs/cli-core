@@ -136,6 +136,15 @@ const weightOf = ({ kind = "message", action, count, people }: Counted): number 
 const timeOf = (entry: Pick<SendEntry, "at" | "scheduledFor">): number => Date.parse(entry.scheduledFor ?? entry.at)
 
 /** A write the profile's level refuses, worded alike by the guard and by the check before connecting. */
+/** A write the first-run answer stops, whatever the profile allows. */
+export const ceilingRefusal = (key: PermissionKey, command: string): CliError =>
+  new CliError(
+    "permission_error",
+    `${key} is not allowed: setup's answer keeps every WireCat tool read-only; ` +
+      `the owner changes it at a terminal with \`${command} setup\``,
+    { permission: key },
+  )
+
 export const levelRefusal = (
   refused: {
     profile: string
@@ -148,12 +157,7 @@ export const levelRefusal = (
   fix = `${refused.command} ${refused.profile} config set permissions.${refused.key} allow`,
 ): CliError =>
   refused.named === CEILING_KEY
-    ? new CliError(
-        "permission_error",
-        `${refused.key} is not allowed: setup's answer keeps every WireCat tool read-only; ` +
-          `the owner changes it at a terminal with \`${refused.command} setup\``,
-        { permission: refused.key },
-      )
+    ? ceilingRefusal(refused.key, refused.command)
     : new CliError(
         "permission_error",
         `profile ${refused.profile} does not let ${refused.key} write (permissions.${refused.named} is ${refused.level}, ` +

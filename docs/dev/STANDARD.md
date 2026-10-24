@@ -1293,10 +1293,12 @@ The three tools, their arguments and what each permission shows are on the handb
   `search_stemmers`), other tools to install, and what commands and agents may do — and keeps the answers in the
   `setup` section of the shared `~/.config/WireCat/config.json`. "Read only" puts the `*` key at `readonly` among a
   profile's levels: `levelFor` never returns a level above it, so it holds over a profile's own `allow`, over MCP
-  and over `--permission`. A config file cannot name `*`; only the question at a terminal writes it. A run that is
-  not a person at a terminal (machine output, `--no-input`, `CI`, a pipe), and `setup`, `help`, `guide`,
-  `completion`, `mcp`, `serve`, `server` and `update`, never ask. `<PREFIX>_READ_ONLY` stays stricter, and while
-  it is set the permission question is not asked.
+  and over `--permission`. A config file cannot name `*`; only the question at a terminal writes it, and an
+  unreadable `setup` section counts as read-only. Nothing is asked of a run that is not a person at a terminal
+  (machine output, `--no-input`, `CI`, a pipe, `AI_AGENT` or `CLAUDECODE` set), of a process under
+  `<PREFIX>_READ_ONLY`, or before `setup`, `help`, `guide`, `completion`, `mcp`, `serve`, `server`, `update` and
+  `store`. A failed question never stops the command typed. Changing the languages of a store in use rebuilds its
+  word forms at once, after the owner agrees, since word search refuses until they are rebuilt.
 
 `stats charts --output` selects SVG or PNG by the file extension; images never go to stdout.
 The stored-only `stats_charts` tool accepts optional `format: json|png` (default `json`).
