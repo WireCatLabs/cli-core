@@ -23,14 +23,14 @@ export type RunBotCommand = AgentProgram["run"]
 
 export interface BotServerOptions {
   bot: BotMessenger
-  /** The CLI's `run` and its whole command tree; the tools are the commands under `bot`. */
+  /** The CLI's `run` and whole command tree; bot commands and bot-scoped configuration are discoverable. */
   program: AgentProgram
   settings: Pick<Settings, "profile" | "permissions" | "readOtherBots">
   /** The levels in force now, read before every call; `settings.permissions` when unset. */
   levels?: () => Readonly<Record<PermissionKey, Level>>
   /** The key a CLI's own bot command is guarded by, from its full path, when `keyForCommand` does not know it. */
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
-  /** Whether a command changes what a later run may do; such a command is offered only under `mcp.authority`. */
+  /** Whether a command changes what a later run may do; such a command requires `mcp.authority` to execute. */
   authority?: (path: readonly string[]) => boolean
   env: NodeJS.ProcessEnv
   skill?: URL
@@ -48,28 +48,45 @@ export const createBotServer = (options: BotServerOptions) => {
   const { bot, program, settings, env } = options
   const command = bot.app.command
   const levels = options.levels ?? (() => settings.permissions)
-  const tools = toolsFromCommands(program.commands, {
-    root: ["bot"],
+  const authority = (path: readonly string[]) =>
+    options.authority?.(path) === true || (path[0] === "config" && (path[1] === "set" || path[1] === "unset"))
+  const catalogue = {
+    includeUnavailable: true,
     levels: settings.permissions,
+    currentLevels: levels,
     readOnly: readOnlyLockOf(bot.app, env) !== undefined,
     ...(options.keyOf ? { keyOf: options.keyOf } : {}),
-    ...(options.authority ? { authority: options.authority } : {}),
+    authority,
     offline: true,
     // Another bot's copy is this bot's to read only where `read_other_bots` says so.
     ...(settings.readOtherBots ? {} : { omit: ["all_bots", "bots"] }),
-  })
-  const writes = tools.filter((tool) => tool.writes).map((tool) => tool.command)
+  }
+  const tools = [
+    ...toolsFromCommands(program.commands, { ...catalogue, root: ["bot"] }),
+    ...toolsFromCommands(
+      program.commands.filter((one) => one.path[0] === "config"),
+      {
+        ...catalogue,
+        omit: ["bot", "personal", "defaults"],
+      },
+    ),
+  ]
+  const writes = tools
+    .filter((tool) => tool.writes && tool.availability?.().available !== false)
+    .map((tool) => tool.command)
   const skill = options.skill ? skillResource(bot.app, options.skill) : undefined
 
   // One at a time: the commands share the journal, the registry and the local copy.
   let queue: Promise<unknown> = Promise.resolve()
   const invoke = (path: readonly string[], input: Record<string, unknown>): Promise<AgentAnswer> => {
     const next = queue.then(() =>
-      runCommandForAgent(program, path, input, {
+      runCommandForAgent(program, path, path[0] === "config" ? { ...input, bot: true } : input, {
         profile: settings.profile,
+        readOnly: readOnlyLockOf(bot.app, env) !== undefined,
         env,
         levels,
         ...(options.keyOf ? { keyOf: options.keyOf } : {}),
+        authority,
       }),
     )
     queue = next.catch(() => undefined)
@@ -101,6 +118,7 @@ export const createBotServer = (options: BotServerOptions) => {
           title: tool.title,
           description: tool.description,
           writes: tool.writes,
+          availability: tool.availability,
           input: tool.input,
           run: async (args) => {
             const answer = await invoke(tool.path, args)
@@ -122,7 +140,15 @@ export const createBotServer = (options: BotServerOptions) => {
         const auth = await invoke(["bot", "auth", "show"], {})
         const shown = "error" in auth ? auth.error : ((auth.result as { item?: unknown } | null)?.item ?? auth.result)
         return answered(
-          itemOf({ profile: settings.profile, kind: "bot", auth: shown, writes, permissions: settings.permissions }),
+          itemOf({
+            profile: settings.profile,
+            kind: "bot",
+            auth: shown,
+            writes: tools
+              .filter((tool) => tool.writes && tool.availability?.().available !== false)
+              .map((tool) => tool.command),
+            permissions: levels(),
+          }),
         )
       },
     }

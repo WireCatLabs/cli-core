@@ -16,6 +16,9 @@ import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
 
 /** What every CLI's commands write to, when it is not the real terminal. A CLI adds its own fields. */
 export interface BaseEnvironment {
+  discoveryAvailability?: (
+    command: import("./command-availability.js").AvailabilityCommand,
+  ) => import("./command-availability.js").CommandAvailability | undefined
   streams?: Streams
   /** Whether a person is looking. Defaults to whether stdout is a terminal. */
   tty?: boolean

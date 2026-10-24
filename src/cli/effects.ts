@@ -20,7 +20,7 @@ const AUTHORITY = new WeakMap<Command, string | undefined>()
 /**
  * Marks a local write that changes what a later run may do: a schedule, a setting, the recipient list, an
  * auto-reply, an agent's setup. `<PREFIX>_READ_ONLY` refuses it, or an agent under the lock could hand an
- * unlocked run the send it may not make itself (SEC-47). For the same reason an MCP server offers it only where the
+ * unlocked run the send it may not make itself (SEC-47). For the same reason an MCP server permits execution only where the
  * profile allows `mcp.authority`, which is off until the owner turns it on (NEED-1662).
  * `unless` names a flag that makes the run only look (`upgrade --check`), which the lock lets through.
  */

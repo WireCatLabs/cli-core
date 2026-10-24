@@ -62,12 +62,13 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     ["server start", "server.start"],
     ["store reset", "store.reset"],
     ["store restore", "store.restore"],
-  ])("**offers %s at its default ask, and not where %s is denied** (NEED-1663)", (path, key) => {
-    const offered = (levels: Record<string, Level>) =>
-      toolsFromCommands(withChatDeletion(), { exclude: [["bot"]], levels }).map((tool) => tool.command)
-
-    expect(offered({})).toContain(path)
-    expect(offered({ [key]: "deny" })).not.toContain(path)
+  ])("keeps %s discoverable when %s is denied", (path, key) => {
+    const catalogue = (levels: Record<string, Level>) =>
+      toolsFromCommands(withChatDeletion(), { exclude: [["bot"]], includeUnavailable: true, levels })
+    const allowed = catalogue({}).find((tool) => tool.command === path)
+    const denied = catalogue({ [key]: "deny" }).find((tool) => tool.command === path)
+    expect(allowed?.availability?.()).toEqual({ available: true })
+    expect(denied?.availability?.()).toMatchObject({ available: false, permission: key })
   })
 
   it.each([
@@ -79,21 +80,22 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     "replies add",
     "schedule command",
     "skill install",
-  ])("**offers %s only under mcp.authority**, which is off by default (NEED-1662)", (path) => {
+  ])("lists %s with its authority requirement", (path) => {
     const program = createProgram(sharedProgram)
-    const offered = (levels: Record<string, Level>) =>
+    const listed = (levels: Record<string, Level>) =>
       toolsFromCommands(describeProgram(program), {
         exclude: [["bot"]],
+        includeUnavailable: true,
         levels,
         authority: changesAuthorityAt(program),
-      }).map((tool) => tool.command)
-
-    expect(offered({})).not.toContain(path)
-    expect(offered({ mcp: "allow" })).not.toContain(path)
-    expect(offered({ "mcp.authority": "allow" })).toContain(path)
+      }).find((tool) => tool.command === path)
+    const variants: Record<string, Level>[] = [{}, { mcp: "allow" }]
+    for (const levels of variants)
+      expect(listed(levels)?.availability?.()).toMatchObject({ available: false, permission: "mcp.authority" })
+    expect(listed({ "mcp.authority": "allow" })?.availability?.()).toEqual({ available: true })
   })
 
-  it("finite project scanning is offered through the same permission-filtered catalogue", () => {
+  it("finite project scanning is offered through the same discoverable catalogue", () => {
     const document = commands()
     const scan = flatten(document).find((one) => one.path.join(" ") === "meetings projects scan")
     expect(scan?.mcp).not.toBe(false)

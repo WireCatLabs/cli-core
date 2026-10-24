@@ -7,6 +7,7 @@ import { answerSchema, listOf } from "../cli/envelope.js"
 import { movedPath, movedPointer } from "../cli/moved.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
 import type { AppErrors } from "../errors/reasons.js"
+import type { CommandAvailability } from "./agent.js"
 import { agentArguments } from "./text.js"
 import {
   type AnyTool,
@@ -30,6 +31,7 @@ type Input = v.ObjectSchema<v.ObjectEntries, undefined> | v.StrictObjectSchema<v
 
 /** One command an agent can find and run: its arguments are checked against `input` before `run`. */
 export interface McpCommand {
+  availability?: () => CommandAvailability
   title: string
   description: string
   writes: boolean
@@ -96,7 +98,7 @@ const runnableOnly = (result: CallToolResult, offered: (command: string) => bool
 /**
  * **Three tools in place of one per command** (CLI-74, NEED-766): search the commands, then run one
  * with `read` or `write`. A command keeps its CLI path and its arguments, and runs as its own tool
- * did. The list never changes during a connection; what a profile may not use is not in `commands`.
+ * did. The catalogue stays discoverable; current permissions annotate availability and are checked before execution.
  */
 export const registerCommands = (
   server: McpServer,
@@ -130,10 +132,16 @@ export const registerCommands = (
             title: one.title,
             description: one.description,
             writes: one.writes,
+            availability: one.availability?.() ?? { available: true },
             arguments: toJsonSchema(one.input),
             output: toJsonSchema(one.output ?? ANSWER),
           }))
-        : found.map(([command, one]) => ({ command, title: one.title, writes: one.writes }))
+        : found.map(([command, one]) => ({
+            command,
+            title: one.title,
+            writes: one.writes,
+            availability: one.availability?.() ?? { available: true },
+          }))
       // The tool takes no page: more matches mean narrower words, so the list carries no page.next to rerun.
       const { next: _paging, ...list } = listOf(`${prefix}_tools_search`, {
         items,

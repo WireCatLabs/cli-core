@@ -703,11 +703,39 @@ describe("the MCP server", () => {
     })
   })
 
-  it("offers only reading on a read-only profile, named after the command, each marked read-only", async () => {
+  it("keeps discovery stable across permission levels and read-only locks", async () => {
+    const baseline = await (await connect(scripted())).client.commands()
+    for (const options of [
+      { config: READ_ONLY },
+      { config: levels({ messages: "deny" }) },
+      { extraEnv: { CHAT_READ_ONLY: "1" } },
+    ]) {
+      const backend = scripted()
+      const { client, call } = await connect(backend, options)
+      expect(await client.commands()).toEqual(baseline)
+      const found = await client.describe("messages send")
+      expect(found?.availability).toMatchObject({ available: false, reason: expect.any(String) })
+      expect(found?.arguments.properties).toHaveProperty("text")
+      expect((await call("messages send", { chat: "7", text: "blocked" })).body.error.code).toBe("permission_error")
+      expect(backend.opened()).toBe(0)
+    }
+  })
+
+  it("keeps writes discoverable but unavailable on a read-only profile", async () => {
     const { client } = await connect(scripted(), { config: READ_ONLY })
     const tools = await client.listed()
+    expect(tools.find((one) => one.command === "messages send")?.availability).toMatchObject({
+      available: false,
+      permission: "messages.send",
+    })
+    expect((await client.describe("messages send"))?.arguments.properties).toHaveProperty("text")
 
-    expect(tools.map((one) => one.command).sort()).toEqual([
+    expect(
+      tools
+        .filter((one) => one.availability?.available !== false)
+        .map((one) => one.command)
+        .sort(),
+    ).toEqual([
       "account list",
       "account sessions list",
       "account show",
@@ -827,7 +855,7 @@ describe("the MCP server", () => {
       "tasks show",
       "topics list",
     ])
-    expect(tools.every((one) => !one.writes)).toBe(true)
+    expect(tools.filter((one) => one.availability?.available !== false).every((one) => !one.writes)).toBe(true)
   })
 
   it("answers chat_status without connecting", async () => {
@@ -1198,18 +1226,18 @@ describe("the MCP server", () => {
   it("removes the evidence tool when the messages permission is denied", async () => {
     const telegram = scripted()
     const { client } = await connect(telegram, { config: levels({ messages: "deny" }) })
-    expect(await client.commands()).not.toContain("messages evidence")
-    expect(await client.commands()).not.toContain("stats charts")
-    expect(await client.commands()).not.toContain("chats documents list")
+    expect(await client.availableCommands()).not.toContain("messages evidence")
+    expect(await client.availableCommands()).not.toContain("stats charts")
+    expect(await client.availableCommands()).not.toContain("chats documents list")
     expect(telegram.opened()).toBe(0)
   })
 
   describe("commands that change what a later run may do (NEED-1662)", () => {
     const AUTHORITY = ["config set", "recipients add", "replies add", "schedule command", "server install"]
 
-    it("**are not offered by default**, nor under a broader allow of `mcp`", async () => {
+    it("**are unavailable by default**, nor under a broader allow of `mcp`", async () => {
       for (const config of [undefined, levels({ mcp: "allow" })]) {
-        const offered = await (await connect(scripted(), config ? { config } : {})).client.commands()
+        const offered = await (await connect(scripted(), config ? { config } : {})).client.availableCommands()
         expect(offered.filter((one) => AUTHORITY.includes(one))).toEqual([])
       }
     })
@@ -1217,7 +1245,7 @@ describe("the MCP server", () => {
     it("**are offered and run once the owner allows mcp.authority**", async () => {
       const { client, call } = await connect(scripted(), { config: levels({ "mcp.authority": "allow" }) })
 
-      expect((await client.commands()).filter((one) => AUTHORITY.includes(one)).sort()).toEqual(AUTHORITY)
+      expect((await client.availableCommands()).filter((one) => AUTHORITY.includes(one)).sort()).toEqual(AUTHORITY)
       expect((await call("config set", { setting: "limit", value: "20" })).body.item).toMatchObject({ value: 20 })
     })
 
@@ -1509,16 +1537,16 @@ describe("the MCP server", () => {
     const root = mkdtempSync(join(tmpdir(), "mcp-"))
     writeFileSync(join(root, "config.json"), JSON.stringify({ setup: { permissions: "readonly" } }))
     const { client } = await connect(scripted(), { root, config: levels({ messages: "allow" }) })
-    const names = await client.commands()
+    const names = await client.availableCommands()
     expect(names).toContain("search messages")
     expect(names).not.toContain("messages send")
     expect(names).not.toContain("conversations links add")
   })
 
-  it("hides local graph writes on readonly, goes ahead at ask, and keeps batches readable", async () => {
+  it("marks local graph writes unavailable on readonly, goes ahead at ask, and keeps batches readable", async () => {
     for (const level of ["readonly", "deny", "ask", "allow"]) {
       const { client, call } = await connect(scripted(), { config: levels({ "conversations.links": level }) })
-      const names = await client.commands()
+      const names = await client.availableCommands()
       expect(names).toContain("conversations batches status")
       expect(names).toContain("conversations batches show")
       for (const tool of ["links add", "links clear"]) {
@@ -1742,7 +1770,7 @@ describe("the MCP server", () => {
     expect([foreign.isError, foreign.body.error.code]).toEqual([true, "validation_error"])
 
     const readOnly = await connect(scripted(), { config: levels({ tasks: "readonly" }) })
-    const names = await readOnly.client.commands()
+    const names = await readOnly.client.availableCommands()
     expect(names).toEqual(expect.arrayContaining(["tasks list", "stats tasks show"]))
     expect(names).not.toContain("tasks add")
     expect(names).not.toContain("tasks close")
@@ -1859,7 +1887,7 @@ describe("the MCP server", () => {
     const readonly = await connect(scripted(), {
       config: levels({ contacts: "readonly", metadata: "readonly", tags: "readonly" }),
     })
-    const names = await readonly.client.commands()
+    const names = await readonly.client.availableCommands()
     expect(names).toContain("contacts notes list")
     expect(names).not.toContain("contacts aliases set")
     expect(names).not.toContain("contacts notes add")
@@ -1897,7 +1925,7 @@ describe("the MCP server", () => {
     expect([twoTargets.isError, twoTargets.body.error.code]).toEqual([true, "validation_error"])
 
     const readOnly = await connect(scripted(), { config: levels({ tags: "readonly" }) })
-    const names = await readOnly.client.commands()
+    const names = await readOnly.client.availableCommands()
     expect(names).toContain("tags list")
     expect(names).not.toContain("tags add")
     expect(names).not.toContain("tags remove")
@@ -1944,7 +1972,7 @@ describe("the MCP server", () => {
     expect((await call("attachments list", { query: "is:needs_text" })).body.items).toEqual([])
 
     const readOnly = await connect(scripted(), { config: levels({ attachments: "readonly" }) })
-    const names = await readOnly.client.commands()
+    const names = await readOnly.client.availableCommands()
     expect(names).toContain("attachments list")
     expect(names).not.toContain("attachments update")
   })
@@ -2020,7 +2048,7 @@ describe("the MCP server", () => {
       "chat_write",
     ])
     const denied = await connect(scripted(), { root, config: levels({ messages: "deny" }) })
-    expect(await denied.client.commands()).not.toContain("attachments show")
+    expect(await denied.client.availableCommands()).not.toContain("attachments show")
   })
 
   it("refuses protected attachment locations before downloading, indexing or transferring bytes", async () => {
@@ -2111,7 +2139,7 @@ describe("the MCP server", () => {
     expect(refused.isError).toBe(true)
     expect(backend.opened()).toBe(0)
     const readonly = await connect(scripted(), { root, config: levels({ attachments: "readonly" }) })
-    expect(await readonly.client.commands()).not.toContain("attachments extract")
+    expect(await readonly.client.availableCommands()).not.toContain("attachments extract")
   })
 
   it("explicitly OCRs a local image through the shared gateway and indexes it through MCP", async () => {
@@ -2160,7 +2188,7 @@ describe("the MCP server", () => {
   })
 
   it("offers the store and runs commands, each limited by a permission key (NEED-1663)", async () => {
-    const commands = await (await connect(scripted())).client.commands()
+    const commands = await (await connect(scripted())).client.availableCommands()
 
     expect(commands.filter((one) => one.startsWith("store ") || one.startsWith("runs ")).sort()).toEqual([
       "runs list",
@@ -2204,7 +2232,7 @@ describe("the MCP server", () => {
   it("**keeps a store reset off** where the profile denies store.reset, and off under `deny messages`", async () => {
     const cases: Record<string, string>[] = [{ "store.reset": "deny" }, { store: "readonly" }, { messages: "deny" }]
     for (const permissions of cases) {
-      const commands = await (await connect(scripted(), { config: levels(permissions) })).client.commands()
+      const commands = await (await connect(scripted(), { config: levels(permissions) })).client.availableCommands()
       expect(commands, JSON.stringify(permissions)).not.toContain("store reset")
     }
   })
@@ -2228,7 +2256,7 @@ describe("the MCP server", () => {
     })
     await diagnostic.finish("failed", { errorCode: "timeout" })
     const before = listRuns(dir).map(({ runId }) => runId)
-    expect(await client.commands()).toContain("search runs")
+    expect(await client.availableCommands()).toContain("search runs")
     const found = await call("search runs", {
       query: "status:failed error_code:timeout operation:messages.download",
       limit: 1,
@@ -2268,7 +2296,7 @@ describe("the MCP server", () => {
     expect((await call("store jobs list", {})).body).toMatchObject({ items: [], page: { has_more: false } })
     expect((await call("store jobs show", { job: "missing" })).isError).toBe(true)
     const readonly = await connect(scripted(), { root, config: READ_ONLY })
-    expect(await readonly.client.commands()).not.toContain("store gaps repair")
+    expect(await readonly.client.availableCommands()).not.toContain("store gaps repair")
   })
 
   it("refuses secondary search preparation permission before repairing through MCP", async () => {
@@ -2343,7 +2371,7 @@ describe("the MCP server", () => {
 
   it("hides contact context when message reading is denied", async () => {
     const { client } = await connect(scripted(), { config: levels({ messages: "deny" }) })
-    expect(await client.commands()).not.toContain("contacts context")
+    expect(await client.availableCommands()).not.toContain("contacts context")
   })
 
   it.each([false, true])("MCP search history follows explicit recording %s", async (record) => {
@@ -2389,7 +2417,7 @@ describe("the MCP server", () => {
     expect((await call("searches delete", { name_or_id: "invoices" })).body.item).toMatchObject({ name: "invoices" })
 
     const readOnly = await connect(scripted(), { config: levels({ searches: "readonly" }) })
-    const names = await readOnly.client.commands()
+    const names = await readOnly.client.availableCommands()
     expect(names).toEqual(expect.arrayContaining(["searches list", "searches history"]))
     for (const write of ["searches create", "searches delete", "searches clear"]) expect(names).not.toContain(write)
   })
@@ -2400,7 +2428,7 @@ describe("the MCP server", () => {
     expect((await asked.call("conversations rebuild")).body?.error?.code).not.toBe("confirmation_required")
 
     const { client } = await connect(scripted(), { config: levels({ "conversations.embeddings": "readonly" }) })
-    const names = await client.commands()
+    const names = await client.availableCommands()
     expect(names).toContain("search conversations")
     expect(names).not.toContain("conversations rebuild")
   })
@@ -2642,7 +2670,7 @@ describe("the transcribe tool", () => {
 
 describe("the catalogue follows each CLI's own command tree", () => {
   it("offers what a CLI with every shared command mounts, agent-only tools included", async () => {
-    const commands = await (await connect(scripted())).client.commands()
+    const commands = await (await connect(scripted())).client.availableCommands()
 
     expect(commands).toEqual(
       expect.arrayContaining(["chats links create", "metadata show", "metadata sync", "messages photo"]),
@@ -2651,7 +2679,7 @@ describe("the catalogue follows each CLI's own command tree", () => {
 
   it("drops the commands a CLI's switches or its own mounts leave out, as wa's do", async () => {
     const { client } = await connect(scripted(), { own: { inviteLinkCreate: false }, unmounted: ["metadata"] })
-    const commands = await client.commands()
+    const commands = await client.availableCommands()
 
     expect(commands.filter((one) => one === "chats links create" || one.startsWith("metadata "))).toEqual([])
     expect(commands).toEqual(expect.arrayContaining(["chats links show", "messages photo", "conversations rebuild"]))
@@ -2748,23 +2776,28 @@ describe("three tools in place of one per command", () => {
     expect(v.safeParse(inputOf(tool, true), { since_time: "2026-10-01" }).success).toBe(false)
   })
 
-  it("has no write tool on a read-only profile, and finds no writing command there", async () => {
+  it("keeps the write runner and describes unavailable writes on a read-only profile", async () => {
     const { raw } = await connect(scripted(), { config: READ_ONLY })
 
     const result = await raw.callTool({ name: "chat_tools_search", arguments: {} })
     const { items } = JSON.parse((result.content as { text: string }[])[0]?.text ?? "null")
-    expect(items.filter(({ writes }: { writes: boolean }) => writes)).toEqual([])
-    expect((await raw.listTools()).tools.map(({ name }) => name)).not.toContain("chat_write")
-    const send = await raw.callTool({ name: "chat_read", arguments: { command: "messages send" } })
+    const writes = items.filter((one: { writes: boolean }) => one.writes)
+    expect(writes.length).toBeGreaterThan(0)
+    expect(writes.every((one: { availability: { available: boolean } }) => !one.availability.available)).toBe(true)
+    expect((await raw.listTools()).tools.map(({ name }) => name)).toContain("chat_write")
+    const send = await raw.callTool({
+      name: "chat_write",
+      arguments: { command: "messages send", arguments: { chat: "7", text: "blocked" } },
+    })
     expect(JSON.parse((send.content as { text: string }[])[0]?.text ?? "null").error.message).toContain(
-      "permissions.messages is readonly",
+      "messages.send is readonly",
     )
   })
 })
 
 describe("sending over MCP", () => {
   it("offers the send command unless the profile is read-only, marked as a write", async () => {
-    const reading = await (await connect(scripted(), { config: READ_ONLY })).client.commands()
+    const reading = await (await connect(scripted(), { config: READ_ONLY })).client.availableCommands()
     const send = await (await connect(scripted(), {})).client.describe("messages send")
 
     expect(reading).not.toContain("messages send")
@@ -2774,7 +2807,7 @@ describe("sending over MCP", () => {
   it("offers no change on the messenger under the read-only lock, and a call to one gets the lock's refusal", async () => {
     const { telegram, sent } = sending()
     const { client, raw, call } = await connect(telegram, { extraEnv: { CHAT_READ_ONLY: "1" } })
-    const commands = await client.commands()
+    const commands = await client.availableCommands()
 
     const refused = await call("messages send", { chat: "7", text: "hi" })
 
@@ -2783,7 +2816,7 @@ describe("sending over MCP", () => {
     expect((await raw.listTools()).tools.map(({ name }) => name)).toContain("chat_write")
     expect(refused.body.error).toMatchObject({
       code: "permission_error",
-      message: "this process is read-only (CHAT_READ_ONLY) — it cannot send, react, change chats or change the account",
+      message: expect.stringContaining("read-only lock"),
     })
     expect(sent).toEqual([])
   })
@@ -3007,7 +3040,7 @@ describe("sending over MCP", () => {
         throw new Error("must not connect")
       },
     })
-    expect(await client.commands()).not.toContain("messages comments")
+    expect(await client.availableCommands()).not.toContain("messages comments")
     expect((await call("messages comments", { chat: "7", post: "1" })).isError).toBe(true)
   })
 
@@ -3023,8 +3056,8 @@ describe("sending over MCP", () => {
 
     const refused = await call("messages pin", { chat: "7", message: "1" })
 
-    expect(await client.commands()).not.toContain("messages pin")
-    expect(await client.commands()).toContain("messages unpin")
+    expect(await client.availableCommands()).not.toContain("messages pin")
+    expect(await client.availableCommands()).toContain("messages unpin")
     expect(refused.isError).toBe(true)
     expect(refused.body.error).toMatchObject({ code: "validation_error" })
     expect(connects).toEqual([])
@@ -3076,8 +3109,8 @@ describe("sending over MCP", () => {
     const pinArguments = (await client.describe("messages pin"))?.arguments.properties
     expect(pinArguments).not.toHaveProperty("notify")
     expect(JSON.stringify(pinArguments?.expire_time)).toContain("24h or 7d; 7d by default")
-    expect(await client.commands()).toContain("messages star")
-    expect(await plain.client.commands()).not.toContain("messages star")
+    expect(await client.availableCommands()).toContain("messages star")
+    expect(await plain.client.availableCommands()).not.toContain("messages star")
   })
 
   it("offers topic: on messages list only where the messenger has forum topics", async () => {
@@ -3125,7 +3158,9 @@ describe("sending over MCP", () => {
         },
       })
     const offered = async (options: Parameters<typeof connect>[1]) =>
-      (await (await connect(owning([]), options)).client.commands()).filter((one) => COMMANDS.includes(one)).sort()
+      (await (await connect(owning([]), options)).client.availableCommands())
+        .filter((one) => COMMANDS.includes(one))
+        .sort()
 
     it("runs each command through the write guard, as an account change in the named chat", async () => {
       const writes: unknown[] = []
@@ -3209,7 +3244,7 @@ describe("sending over MCP", () => {
 
       const refused = await Promise.all(COMMANDS.map((command) => call(command, { chat: "7" })))
 
-      expect((await client.commands()).filter((one) => COMMANDS.includes(one))).toEqual([])
+      expect((await client.availableCommands()).filter((one) => COMMANDS.includes(one))).toEqual([])
       expect(refused.map((one) => one.body.error?.code)).toEqual(Array(7).fill("permission_error"))
       expect(writes).toEqual([])
     })
@@ -3373,7 +3408,7 @@ describe("sending over MCP", () => {
     expect(await call("messages send", { chat: "7", text: "hi" })).toMatchObject({
       isError: true,
       body: {
-        error: { code: "permission_error", message: expect.stringContaining("permissions.messages is readonly") },
+        error: { code: "permission_error", message: expect.stringContaining("messages.send is readonly") },
       },
     })
     expect(sent).toEqual([])
@@ -3481,7 +3516,7 @@ describe("sending over MCP", () => {
     const plain = await connect(telegram, {})
 
     const shown = await reading.call("topics show", { chat: "Book club", topic: "5" })
-    const plainTools = await plain.client.commands()
+    const plainTools = await plain.client.availableCommands()
 
     expect(shown.body.item).toMatchObject({ id: topic.id, title: topic.title, unread_count: 0, created_at: null })
     expect(asked).toEqual([["Book club", "5"]])
@@ -3546,10 +3581,12 @@ describe("sending over MCP", () => {
         marks.push([chatId, until])
       },
     })
-    const denied = await (await connect(telegram, { config: levels({ "chats.mark-read": "deny" }) })).client.commands()
+    const denied = await (
+      await connect(telegram, { config: levels({ "chats.mark-read": "deny" }) })
+    ).client.availableCommands()
     const { client, call } = await connect(telegram, {})
 
-    const tools = await client.commands()
+    const tools = await client.availableCommands()
     const { body } = await call("chats mark-read", { chat: "Book", until_id: "1" })
     v.parse(ENTITIES.chat_read, body.item)
 
@@ -3568,7 +3605,9 @@ describe("sending over MCP", () => {
       },
     })
     const { call } = await connect(telegram, {})
-    const readonly = await (await connect(telegram, { config: levels({ messages: "readonly" }) })).client.commands()
+    const readonly = await (
+      await connect(telegram, { config: levels({ messages: "readonly" }) })
+    ).client.availableCommands()
 
     const { body } = await call("messages delete", { chat: "7", message: ["1", "2"] })
     const everyone = await call("messages delete", { chat: "7", message: ["3"], for_everyone: true })
@@ -3874,13 +3913,13 @@ describe("sending over MCP", () => {
     })
     const { client, call } = await connect(telegram, {})
 
-    const tools = await client.commands()
+    const tools = await client.availableCommands()
     await call("account update", { first_name: "New", description: "hi" })
 
     expect(tools).toContain("account sessions end")
     expect(changes).toEqual([{ firstName: "New", description: "hi" }])
     const denied = await connect(telegram, { config: levels({ "account.sessions.end": "deny" }) })
-    expect(await denied.client.commands()).not.toContain("account sessions end")
+    expect(await denied.client.availableCommands()).not.toContain("account sessions end")
   })
 
   it("**shows a group's rules and moderates it** over MCP, planning what asks", async () => {
@@ -3943,7 +3982,7 @@ describe("sending over MCP", () => {
     const plain = await connect(telegram, {})
 
     const listed = await reading.call("polls voters", { chat: "7", message: "1", query: "answers:MA" })
-    const plainTools = await plain.client.commands()
+    const plainTools = await plain.client.availableCommands()
 
     expect(listed.body).toMatchObject({
       items: [{ person_id: "91", name: "Ana", username: null, answers: ["MA"], voted_at: vote.votedAt }],
@@ -3975,7 +4014,7 @@ describe("sending over MCP", () => {
     const writing = await connect(telegram, {})
 
     const shown = await reading.call("polls show", { chat: "7", message: "1" })
-    const readingTools = await reading.client.commands()
+    const readingTools = await reading.client.availableCommands()
     await writing.call("polls vote", { chat: "7", message: "1", answers: ["MA"] })
 
     expect(shown.body.item.answers[0].id).toBe("MA")
@@ -3986,7 +4025,7 @@ describe("sending over MCP", () => {
     it("logs in with the owner's terminal code, lists tools and reads, and never prints a token", async () => {
       const { client, call, streams, tokens } = await connect(scripted(), { http: true, era })
 
-      expect(await client.commands()).toContain("chats list")
+      expect(await client.availableCommands()).toContain("chats list")
       expect((await call("chats list")).isError).toBe(false)
       const printed = [...streams.stdout, ...streams.stderr].join("\n")
       const issued = tokens?.()
@@ -4003,7 +4042,7 @@ describe("sending over MCP", () => {
         permission: ["messages.delete=deny"],
         config: { defaults: { permissions: { messages: "allow" } } },
       })
-      expect(await client.commands()).toContain("messages send")
+      expect(await client.availableCommands()).toContain("messages send")
       expect((await call("chats list")).isError).toBe(false)
       expect((await call("messages send", { chat: "7", text: "synthetic send" })).isError).toBe(false)
       expect(sent).toHaveLength(1)
@@ -4017,7 +4056,7 @@ describe("sending over MCP", () => {
         era,
         permission: [`messages.send=${level}`],
       })
-      expect(await client.commands()).not.toContain("messages send")
+      expect(await client.availableCommands()).not.toContain("messages send")
       await client
         .run({ command: "messages send", arguments: { chat: "7", text: "synthetic send" } })
         .catch(() => undefined)

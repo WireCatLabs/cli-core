@@ -316,13 +316,25 @@ describe("toolsFromCommands", () => {
     expect(list?.writes).toBe(false)
   })
 
-  it("**the profile's levels decide what is listed**", () => {
-    const names = (levels: Record<string, "deny" | "readonly">) =>
-      toolsFromCommands(tree(), { exclude: [["bot"]], levels }).map((tool) => tool.command)
+  it("preserves the legacy executable-only helper projection for existing callers", () => {
+    expect(toolsFromCommands(tree(), { exclude: [["bot"]], levels: { messages: "deny" } })).toEqual([])
+  })
 
-    expect(names({ "messages.delete": "deny" })).toEqual(["messages list"])
-    expect(names({ messages: "readonly" })).toEqual(["messages list"])
-    expect(names({ messages: "deny" })).toEqual([])
+  it("keeps denied commands discoverable and marks their current availability", () => {
+    const cases: Record<string, "deny" | "readonly">[] = [
+      { "messages.delete": "deny" },
+      { messages: "readonly" },
+      { messages: "deny" },
+    ]
+    for (const levels of cases) {
+      const tools = toolsFromCommands(tree(), { exclude: [["bot"]], levels, includeUnavailable: true })
+      expect(tools.map((tool) => tool.command)).toEqual(["messages list", "messages delete"])
+      expect(tools.find((tool) => tool.command === "messages delete")?.availability?.()).toMatchObject({
+        available: false,
+        reason: expect.any(String),
+        permission: expect.any(String),
+      })
+    }
   })
 
   it("offers offline on a command that reads the messenger, and drops the arguments it is told to", () => {

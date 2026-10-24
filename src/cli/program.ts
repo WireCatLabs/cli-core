@@ -23,10 +23,12 @@ import { recorded, wasSettled } from "../runs/recording.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
+import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
+  changesAuthorityAt,
   changesAuthorityNow,
   isLogin,
   isStoreChange,
@@ -54,10 +56,12 @@ export interface ProgramDefinition {
   commands: () => Command[]
   /** The CLI's own settings, for keeping a failure that happened before its command could; plain ones without. */
   configuration?: {
+    permissionKey?: (path: readonly string[]) => string | null | undefined
     resolveSettings: (
       flags?: GlobalFlags,
       options?: ResolveOptions,
-    ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint">
+    ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint"> &
+      Partial<Pick<Settings, "permissions">>
   }
   configure?: (program: Command) => void
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
@@ -249,6 +253,38 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     platform: options.platform ?? process.platform,
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
+    discoveryAvailability: (info) => {
+      const inspected = info.path.reduce<Command | undefined>(
+        (parent, word) => parent?.commands.find((one) => one.name() === word),
+        program,
+      )
+      const flags = (inspected ?? program).optsWithGlobals<GlobalFlags & { bot?: boolean }>()
+      const env = options.env ?? process.env
+      if (!flags.profile && !env[envName(definition.app, "PROFILE")]) return undefined
+      try {
+        const overrides = options.agent?.overrides ?? []
+        const settings = (definition.configuration ?? settingsFor(definition.app)).resolveSettings(
+          overrides.length ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
+          {
+            env,
+            needsProfile: false,
+            kind: info.path[0] === "bot" || flags.bot ? "bot" : "personal",
+          },
+        )
+        if (!settings.permissions) return undefined
+        return commandAvailability(
+          info,
+          settings.permissions,
+          definition.configuration?.permissionKey,
+          changesAuthorityAt(program),
+          readOnlyLockOf(definition.app, env) !== undefined,
+          options.agent !== undefined,
+        )
+      } catch {
+        // Help must still work when the configuration needs repair.
+        return undefined
+      }
+    },
     untilStopped: () => {
       if (phased || finished) return phase.signal
       phased = true

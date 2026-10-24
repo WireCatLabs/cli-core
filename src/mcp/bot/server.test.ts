@@ -13,6 +13,7 @@ import { botCommand } from "../../cli/bot/command.js"
 import type { BotAdapter, BotMessenger } from "../../cli/bot/port.js"
 import { ChatRegistry } from "../../cli/bot/registry.js"
 import { BotTokenStore } from "../../cli/bot/token.js"
+import { configCommand } from "../../cli/config-command.js"
 import { changesAuthorityAt } from "../../cli/effects.js"
 import { createProgram, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
@@ -73,7 +74,7 @@ const bot: BotMessenger = {
   mcp: { program: async () => runBot },
 }
 
-const definition = { app, commands: () => [botCommand(bot)] }
+const definition = { app, commands: () => [botCommand(bot), configCommand(app, config)] }
 const runBot: RunBotCommand = (argv, environment) => run(argv, definition, environment)
 
 const configure = (contents: object) => {
@@ -118,7 +119,13 @@ const connect = async (options: Partial<BotServerOptions> = {}) => {
     await client.close()
     await server.close()
   })
-  return { client: surfaceOf(client, "chat_bot"), raw: client, offered, tools }
+  return {
+    client: surfaceOf(client, "chat_bot"),
+    raw: client,
+    offered,
+    tools,
+    available: tools.filter((tool) => tool.availability?.().available !== false).map((tool) => tool.command),
+  }
 }
 
 const call = async (client: ReturnType<typeof surfaceOf>, command: string, args: Record<string, unknown> = {}) => {
@@ -128,6 +135,7 @@ const call = async (client: ReturnType<typeof surfaceOf>, command: string, args:
 }
 
 const READS = [
+  "config show",
   "me",
   "chats list",
   "chats show",
@@ -165,29 +173,29 @@ const WRITES = [
 
 describe("bot mcp tools by permission level", () => {
   it("**offers every read and write the default levels allow**, and nothing marked mcp: false or long-running", async () => {
-    const { offered } = await connect()
+    const { available } = await connect()
 
-    expect(offered.sort()).toEqual([...READS, ...WRITES].sort())
+    expect(available.sort()).toEqual([...READS, ...WRITES].sort())
   })
 
   it.each([
-    ["bot: readonly hides the writes", { bot: "readonly" }, READS],
-    ["bot: deny leaves what no level stops", { bot: "deny" }, ["sends list", "recipients list", "list"]],
+    ["bot: readonly marks writes unavailable", { bot: "readonly" }, READS],
+    ["bot: deny leaves what no level stops", { bot: "deny" }, ["sends list", "recipients list", "list", "config show"]],
     [
       "a key opened under a read-only bot offers that write alone",
       { bot: "readonly", "bot.messages.send": "allow" },
       [...READS, "messages send"],
     ],
-    ["deny on one key hides that tool", { "bot.messages": "deny" }, null],
+    ["deny on one key marks that command unavailable", { "bot.messages": "deny" }, null],
   ])("%s", async (_name, permissions, expected) => {
     configure({ bot: { profiles: { sales: { permissions } } } })
-    const { offered } = await connect()
+    const { available } = await connect()
 
-    if (expected) expect(offered.sort()).toEqual([...expected].sort())
-    else expect(offered.some((name) => name.startsWith("messages "))).toBe(false)
+    if (expected) expect(available.sort()).toEqual([...expected].sort())
+    else expect(available.some((name) => name.startsWith("messages "))).toBe(false)
   })
 
-  it("**lists three tools**: search, read and write, and no write tool on a read-only profile", async () => {
+  it("**lists three tools**: search, read and write, including the write runner on a read-only profile", async () => {
     expect((await (await connect()).raw.listTools()).tools.map(({ name }) => name).sort()).toEqual([
       "chat_bot_read",
       "chat_bot_tools_search",
@@ -197,6 +205,7 @@ describe("bot mcp tools by permission level", () => {
     expect((await (await connect()).raw.listTools()).tools.map(({ name }) => name).sort()).toEqual([
       "chat_bot_read",
       "chat_bot_tools_search",
+      "chat_bot_write",
     ])
   })
 
@@ -206,6 +215,40 @@ describe("bot mcp tools by permission level", () => {
     const { items } = JSON.parse((result.content as { text: string }[])[0]?.text ?? "null")
 
     expect(items[0]).toMatchObject({ command: "me" })
+  })
+
+  it("keeps the complete catalogue while availability changes, and never executes denied writes", async () => {
+    const { client } = await connect()
+    const names = await client.commands()
+    expect(names).toEqual(expect.arrayContaining(["messages send", "recipients add", "config set"]))
+    expect((await client.describe("recipients add"))?.availability).toMatchObject({
+      available: false,
+      permission: "mcp.authority",
+    })
+    expect((await call(client, "recipients add", { chat: "-100" })).error?.code).toBe("permission_error")
+    configure({ bot: { profiles: { sales: { permissions: { "mcp.authority": "allow" } } } } })
+    expect(await client.commands()).toEqual(names)
+    expect((await client.describe("recipients add"))?.availability).toEqual({ available: true })
+    expect((await client.describe("config set"))?.availability).toEqual({ available: true })
+    expect((await call(client, "config set", { setting: "sends_per_hour", value: "17" })).isError).toBe(false)
+    const loaded = config.resolveSettings({ profile: "sales" }, { env, kind: "bot" })
+    const personal = config.resolveSettings({ profile: "sales" }, { env, kind: "personal" })
+    expect(loaded.sendsPerHour).toBe(17)
+    expect(personal.sendsPerHour).not.toBe(17)
+    expect(
+      (await call(client, "config set", { setting: "permissions.mcp.authority", value: "deny" })).error?.code,
+    ).toBe("permission_error")
+    expect((await client.describe("config set"))?.arguments.properties).not.toHaveProperty("personal")
+    configure({ bot: { profiles: { sales: { permissions: { "mcp.authority": "deny", bot: "readonly" } } } } })
+    expect(await client.commands()).toEqual(names)
+    expect((await client.describe("config set"))?.availability).toMatchObject({
+      available: false,
+      permission: "mcp.authority",
+    })
+    expect((await call(client, "messages send", { chat: "-100", text: "blocked" })).error?.code).toBe(
+      "permission_error",
+    )
+    expect(calls).toEqual([])
   })
 
   it("**a level made stricter after start-up refuses the next call**", async () => {
@@ -218,14 +261,14 @@ describe("bot mcp tools by permission level", () => {
     expect(calls).toEqual([])
   })
 
-  it("**a CLI's own key decides**: a command guarded by another key is hidden and refused with it", async () => {
+  it("**a CLI's own key decides**: a command guarded by another key remains visible and is refused with it", async () => {
     configure({ bot: { profiles: { sales: { permissions: { "bot.messages.send": "deny" } } } } })
     const keyOf = (path: readonly string[]) => (path.join(" ") === "bot chats action" ? "bot.messages.send" : undefined)
     const { offered, client } = await connect({ keyOf })
 
-    expect(offered).not.toContain("chats action")
+    expect(offered).toContain("chats action")
     expect((await call(client, "chats action", { chat: "-100", action: "typing" })).error?.code).toBe(
-      "validation_error",
+      "permission_error",
     )
   })
 
@@ -291,10 +334,17 @@ describe("bot api over MCP, behind bot.api (NEED-1679)", () => {
     ["under a broader bot: allow", { bot: "allow" }],
     ["at bot.api: deny", { "bot.api": "deny" }],
     ["at bot.api: readonly", { "bot.api": "readonly" }],
-  ])("**hides it** %s", async (_name, permissions) => {
+  ])("**lists it as unavailable** %s", async (_name, permissions) => {
     if (permissions) configure({ bot: { profiles: { sales: { permissions } } } })
 
-    expect((await connectApi()).offered.filter((name) => name.startsWith("api "))).toEqual([])
+    const { offered, client } = await connectApi()
+    expect(offered.filter((name) => name.startsWith("api "))).toEqual(API)
+    expect((await client.describe("api send-message"))?.availability).toMatchObject({
+      available: false,
+      permission: "bot.api",
+    })
+    expect((await call(client, "api send-message")).error?.code).toBe("permission_error")
+    expect(calls).toEqual([])
   })
 
   it("**offers it once the owner allows bot.api**, and runs a call", async () => {
@@ -307,7 +357,7 @@ describe("bot api over MCP, behind bot.api (NEED-1679)", () => {
     expect(calls).toEqual(["api send-message"])
   })
 
-  it("**refuses, naming the key and the terminal command, once the owner turns it off** while the server runs", async () => {
+  it("**refuses and names the key once the owner turns it off** while the server runs", async () => {
     allow("allow")
     const { client } = await connectApi()
     configure({})
@@ -316,7 +366,6 @@ describe("bot api over MCP, behind bot.api (NEED-1679)", () => {
 
     expect(refused.error?.code).toBe("permission_error")
     expect(JSON.stringify(refused.body)).toContain("bot.api")
-    expect(JSON.stringify(refused.body)).toContain("config set --bot permissions.bot.api allow")
     expect(calls).toEqual([])
   })
 })
@@ -526,6 +575,14 @@ describe("the generated bot catalogue", () => {
     expect(added).toEqual({
       ...ADDED,
       "chats rules show": ["chat"],
+      "chats rules set": ["chat", "key", "value"],
+      "chats rules unset": ["chat", "key"],
+      "recipients add": ["chat"],
+      "recipients clear": [],
+      "recipients remove": ["chat"],
+      "config show": [],
+      "config set": ["setting", "value"],
+      "config unset": ["setting"],
       "chats admins add": ["can", "chat", "person", "title"],
       "chats admins remove": ["chat", "person"],
       "chats leave": ["chat"],

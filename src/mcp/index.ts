@@ -5,6 +5,7 @@ export {
   type AgentProgram,
   type AgentTool,
   type CatalogueOptions,
+  type CommandAvailability,
   runCommandForAgent,
   toolsFromCommands,
 } from "./agent.js"

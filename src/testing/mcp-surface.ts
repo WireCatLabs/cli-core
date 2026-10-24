@@ -1,6 +1,7 @@
 import type { Client } from "@modelcontextprotocol/client"
 
 export interface ListedCommand {
+  availability?: { available: boolean; reason?: string; permission?: string }
   command: string
   title: string
   writes: boolean
@@ -20,6 +21,8 @@ export const surfaceOf = (client: Pick<Client, "callTool">, app: string) => {
     listed: () => listed(),
     describe,
     commands: async () => (await listed()).map(({ command }) => command),
+    availableCommands: async () =>
+      (await listed()).filter((one) => one.availability?.available !== false).map(({ command }) => command),
     run: async ({ command, arguments: args = {} }: { command: string; arguments?: Record<string, unknown> }) =>
       client.callTool({
         name: `${app}_${(await describe(command))?.writes ? "write" : "read"}`,

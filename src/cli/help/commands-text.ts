@@ -1,6 +1,6 @@
-import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import type { DiscoveredCommand as CommandInfo } from "../command-availability.js"
 import { findCommand } from "../command-contract.js"
 import { SECTIONS, sectionOf } from "./sections.js"
 
@@ -37,10 +37,11 @@ export const commandsText = (root: Command, commands: readonly CommandInfo[], sc
   for (const [section, infos] of bySection) {
     if (infos.length === 0) continue
     lines.push("", SECTIONS[section])
-    for (const { usage, summary, description, effects } of infos) {
+    for (const { usage, summary, description, effects, availability } of infos) {
       const what = short(summary ?? description)
       const mark = effects === undefined || writes(effects) ? " (writes)" : ""
-      lines.push(`  ${usage.padEnd(COLUMN)}  ${what}${mark}`.trimEnd())
+      const access = availability?.available === false ? ` [unavailable: ${availability.reason}]` : ""
+      lines.push(`  ${usage.padEnd(COLUMN)}  ${what}${mark}${access}`.trimEnd())
     }
   }
   return `${lines.join("\n")}\n`
