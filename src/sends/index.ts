@@ -29,6 +29,7 @@ export {
 } from "./journal.js"
 export {
   assertStatsPermissionsCurrent,
+  CEILING_KEY,
   DEFAULT_PERMISSIONS,
   keyForCommand,
   keyForWrite,

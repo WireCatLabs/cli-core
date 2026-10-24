@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Level } from "../sends/permissions.js"
-import { readSharedSection, writeSharedSection } from "../store/shared-config.js"
+import { storePath } from "../store/path.js"
+import { readSharedSection, sharedConfigPath, writeSharedSection } from "../store/shared-config.js"
 
 /** "allow" leaves every profile as its own configuration says. */
 export const PERMISSION_ANSWERS = ["readonly", "ask", "allow"] as const
@@ -66,3 +67,7 @@ export const permissionCeiling = (path: string): Level | undefined => {
   }
   return answer === "allow" ? undefined : answer
 }
+
+/** `permissionCeiling` of this machine's shared config, for a tool that keeps its own levels: add it as `CEILING_KEY`. */
+export const setupPermissionCeiling = (env: NodeJS.ProcessEnv = process.env): Level | undefined =>
+  permissionCeiling(sharedConfigPath(storePath(env), env))

@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`setupPermissionCeiling(env)` and `CEILING_KEY`** let a tool that keeps its own permission levels (zm, drive, memo) honour the shared first-run "read only" answer: add the ceiling to its levels under `CEILING_KEY`, and `levelFor` caps every key.
+
 ## 0.403.0 — 24.10.2026
 
 ### Added
