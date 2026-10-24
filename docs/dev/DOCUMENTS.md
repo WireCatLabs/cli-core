@@ -90,6 +90,14 @@ fail. Conflicts come back through `conflictReport`, with the remote side named a
 an invalid file instead of resetting it; `mirrorId(root, folder)` is the id; `mirrorStatus` is the local plan of
 each mirror. The CLI keeps its commands, its config and its target.
 
+`watchMirrors(sync, options)` keeps mirrors in step until its signal aborts, calling `sync` (usually `syncMirrors`)
+with only the mirrors that need it: all at start; one whose files were saved, after `quietMs` (2 s) without another
+save, and only if its files differ from the state, so the files a pull writes start no cycle; the ones
+`remoteChanges` names at each poll (`pollMs`, 60 s); any whose files differ at the periodic check (`checkMs`, 5 min),
+for file events the system dropped; and all of them at the full run (`fullMs`, 30 min), for remote changes listed
+late. It yields one event per cycle with its triggers and mirrors, and a failed cycle as an error whose mirrors are
+tried again at the next poll. The CLI takes the lock inside `sync`, so a manual sync can run between cycles.
+
 For documents with structure, `markdownBlocks` (async; the parser loads on first use) parses Markdown into `Block`s
 (headings, paragraphs, bullet, numbered and checklist items, code, quotes, tables, images, rules) with inline marks.
 The provider maps its own document into the same blocks and writes only `diffBlocks(current, next)`, so unchanged
