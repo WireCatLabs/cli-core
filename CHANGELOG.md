@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
+
+### Fixed
+
+- Generated MCP commands accept a positional argument or its same-named flag alternative once. A single `text` input no longer emits both the argument and `--text`, which made Memo note creation fail. Positional requiredness is retained.
+- Public listener origins refuse embedded credentials before startup diagnostics can expose them.
+
 ## 0.413.0 — 25.10.2026
 
 ### Added
@@ -40,15 +49,7 @@ shape of this file.
 
 ## 0.411.0 — 24.10.2026
 
-### Fixed
-
-- Public listener origins refuse embedded credentials before startup diagnostics can expose them.
-
-- Generated MCP commands accept a positional argument or its same-named flag alternative once. A single `text` input no longer emits both the argument and `--text`, which made Memo note creation fail. Positional requiredness is retained.
-
 ### Added
-
-- Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
 
 - **Stored events accept native queries on id, origin and timestamps.** SQLite applies filters before returning rows; stores without query support refuse a filtered request.
 - **Shared task updates include project priority and parent.** Project tasks can be updated without choosing a messenger account.
