@@ -16,8 +16,13 @@ canonical argument names. CORE-28 tracks alias removal.
 
 ## CORE-6
 
-- **Search start-up** — memo and drive take 1.2–2.4 s a search from the CLI; the same vector search in a warm
-  process takes 7 ms, so most of the CLI time is probably start-up and model loading. Measure where the CLI time goes (process start, store open, model load) before tuning search.
+- **Search start-up** — memo and drive were reported to take 1.2–2.4 s per CLI search. The synthetic component
+  benchmark measured median model open at 1.44 s, empty-store reopen at 8.4 ms, bare Node startup through exit
+  at 31.7 ms and store-module import at 251 ms. A second query embedding took 13 ms. Eight new-process samples
+  per scenario, e5-small, four threads; filesystem caches were not cleared. This is not an end-to-end CLI search.
+  [Runner, raw samples and limits](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/startup).
+  Next compare memo/drive through one-shot CLI and long-lived MCP against the same synthetic corpus; check which
+  paths already use `warmEmbedders` before changing lifecycle or store opening.
 
 ## CORE-8
 
