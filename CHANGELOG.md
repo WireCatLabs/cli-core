@@ -6,7 +6,7 @@ minor version may break callers, and says how under "Changed — may break calle
 shape of this file.
 
 
-## Unreleased
+## 0.411.0 — 24.10.2026
 
 ### Added
 
