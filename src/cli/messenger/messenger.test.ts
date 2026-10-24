@@ -27,7 +27,7 @@ import { MEETINGS_UNNAMED } from "../../services/search-all-meetings.js"
 import { modelPath, modelsDirectory, vadPath } from "../../speech/install.js"
 import { speechModel, VAD } from "../../speech/models.js"
 import { openCache } from "../../store/open.js"
-import { openStore } from "../../store/store.js"
+import { openStore, registerProvider } from "../../store/store.js"
 import { searchRecipes, seedSearchRecipes } from "../../testing/search-recipes.js"
 import { commandsCommand } from "../commands-command.js"
 import { type RunOptions, run } from "../program.js"
@@ -2912,6 +2912,7 @@ describe("the shared read commands", () => {
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const other = await openStore({ path: join(root, "m.db") })
+    await registerProvider(other, { name: "other", kind: "messages", aliases: [], command: "other" })
     const elsewhere = { provider: "other", account: "600" }
     await other.chats.saveChats(elsewhere, [{ ...chat, title: "Reading circle" }])
     await other.messages.saveMessages(

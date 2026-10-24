@@ -1,16 +1,19 @@
+import { CliError } from "@wirecat/cli-base"
 import type { Provider } from "./models.js"
 
 /** What a search reads; the same names `--only`, `searched` and `skipped` use. */
-export const KINDS = ["messages", "mail", "notes", "documents", "meetings"] as const
+export const KINDS = ["messages", "mail", "notes", "documents", "meetings", "events"] as const
 export type Kind = (typeof KINDS)[number]
 
 export interface ProviderEntry {
   name: Provider
   kind: Kind
   aliases: readonly string[]
+  /** The CLI that wrote the entry (`zm`, `drive`). One CLI may write several providers, so it is not an alias. */
+  command?: string
 }
 
-/** Adding a provider is one entry here; `--source` and every search read it. */
+/** The seed: what cli-core knows before any CLI has written its entry into the store. */
 export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "telegram", kind: "messages", aliases: ["tg"] },
   { name: "telegram-bot", kind: "messages", aliases: ["tg-bot"] },
@@ -28,14 +31,108 @@ export const FOLDER_PROVIDER = "folder"
 /** Notes written in memo have no account row; this is their account. */
 export const INTERNAL_NOTES = "internal"
 
+/** The reason a search gives for an account whose provider no entry names. */
+export const UNKNOWN_PROVIDER = "unknown provider — run its CLI once"
+
+const WORD = /^[a-z0-9][a-z0-9_-]*$/
+
+const invalid = (message: string): never => {
+  throw new CliError("validation_error", message)
+}
+
+const wordOf = (value: unknown, what: string): string =>
+  typeof value === "string" && WORD.test(value)
+    ? value
+    : invalid(`${what} is lowercase letters, digits, - and _ — not ${JSON.stringify(value)}`)
+
+/** An entry as a CLI or the store gives it, checked: anything else is a `validation_error`. */
+export const providerEntryOf = (value: unknown): ProviderEntry => {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return invalid("a provider entry is an object")
+  const { name, kind, aliases = [], command } = value as Record<string, unknown>
+  const named = wordOf(name, "a provider's name")
+  if (typeof kind !== "string" || !(KINDS as readonly string[]).includes(kind))
+    invalid(`provider ${named}'s kind is one of ${KINDS.join(", ")} — not ${JSON.stringify(kind)}`)
+  if (!Array.isArray(aliases)) invalid(`provider ${named}'s aliases are a list`)
+  return {
+    name: named,
+    kind: kind as Kind,
+    aliases: [...new Set((aliases as unknown[]).map((alias) => wordOf(alias, `an alias of ${named}`)))],
+    ...(command === undefined ? {} : { command: wordOf(command, `the command of ${named}`) }),
+  }
+}
+
+const describe = ({ name, kind, command }: ProviderEntry) => `${name} (${kind}${command ? `, from ${command}` : ""})`
+
+const wordsOf = ({ name, aliases }: ProviderEntry) => [name, ...aliases]
+
+/** `entry` joined to `known`: the same name keeps one entry with both entries' aliases; a clash is an error. */
+const joined = (known: readonly ProviderEntry[], entry: ProviderEntry): ProviderEntry[] => {
+  const same = known.find(({ name }) => name === entry.name)
+  if (same && same.kind !== entry.kind)
+    invalid(`two provider entries disagree on the kind: ${describe(same)} and ${describe(entry)}`)
+  const merged: ProviderEntry = same
+    ? {
+        ...same,
+        aliases: [...new Set([...same.aliases, ...entry.aliases])],
+        ...(entry.command ? { command: entry.command } : {}),
+      }
+    : entry
+  const others = known.filter((one) => one !== same)
+  for (const word of wordsOf(merged)) {
+    const owner = others.find((one) => wordsOf(one).includes(word))
+    if (owner) invalid(`"${word}" names two providers: ${describe(owner)} and ${describe(merged)}`)
+  }
+  return same ? known.map((one) => (one === same ? merged : one)) : [...known, merged]
+}
+
+let registry: readonly ProviderEntry[] = PROVIDERS
+
+/** The built-ins and the entries the store or the CLI running gave; what `kindOf` and `providerNamed` read. */
+export const providers = (): readonly ProviderEntry[] => registry
+
+/**
+ * Replaces the entries beyond the built-ins. Opening the store calls it with the stored entries; a test or a CLI
+ * with no store may call it too. Two entries that disagree on a kind, or one word naming two providers, throw.
+ */
+export const useProviders = (entries: readonly ProviderEntry[]): void => {
+  registry = entries.map(providerEntryOf).reduce(joined, PROVIDERS)
+}
+
+/**
+ * Like `useProviders`, but an entry that clashes is left out instead of failing: what the store holds was written
+ * by CLIs of other versions, and one stale entry must not stop the store opening. Answers the entries left out.
+ */
+export const useStoredProviders = (entries: readonly unknown[]): unknown[] => {
+  const left: unknown[] = []
+  registry = entries.reduce<readonly ProviderEntry[]>((known, entry) => {
+    try {
+      return joined(known, providerEntryOf(entry))
+    } catch (error) {
+      if (!(error instanceof CliError)) throw error
+      left.push(entry)
+      return known
+    }
+  }, PROVIDERS)
+  return left
+}
+
+/** Adds one entry to those in use, strictly: a clash throws and leaves the registry as it was. */
+export const addProvider = (entry: ProviderEntry): void => {
+  registry = joined(registry, providerEntryOf(entry))
+}
+
 export const isKind = (word: string): word is Kind => (KINDS as readonly string[]).includes(word.toLowerCase())
 
 /** The registry's provider a name or alias stands for. */
 export const providerNamed = (word: string): ProviderEntry | undefined => {
   const wanted = word.toLowerCase()
-  return PROVIDERS.find(({ name, aliases }) => name === wanted || aliases.includes(wanted))
+  return registry.find((entry) => wordsOf(entry).includes(wanted))
 }
 
-/** A provider the registry does not list is a messenger: consumers define their own and tests use made-up ones. */
-export const kindOf = (provider: Provider): Kind =>
-  provider === FOLDER_PROVIDER ? "notes" : (providerNamed(provider)?.kind ?? "messages")
+/** The kind of a provider the registry knows; `undefined` for one no entry names, which a search skips. */
+export const kindIn = (provider: Provider): Kind | undefined =>
+  provider === FOLDER_PROVIDER ? "notes" : registry.find(({ name }) => name === provider)?.kind
+
+/** A provider the registry does not list counts as a messenger here; a search asks `kindIn` and skips it. */
+export const kindOf = (provider: Provider): Kind => kindIn(provider) ?? "messages"

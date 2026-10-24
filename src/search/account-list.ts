@@ -5,9 +5,11 @@ import {
   INTERNAL_NOTES,
   isKind,
   type Kind,
+  kindIn,
   kindOf,
-  PROVIDERS,
   providerNamed,
+  providers as registered,
+  UNKNOWN_PROVIDER,
 } from "../domain/providers.js"
 import type { AccountKey, StoredAccount } from "../store/store.js"
 import { isBotProvider } from "./query.js"
@@ -62,9 +64,12 @@ export interface ListContext {
   running: { provider: Provider; command?: string }
 }
 
-/** An account as `--source` and a hit name it: a notes folder is `notes:<its id>`, never the store's ulid. */
+/**
+ * An account as `--source` and a hit name it: a notes folder is `notes:<its id>`, never the store's ulid. The kind is
+ * `undefined` for a provider no registry entry names: no search reads it, and `fitting` reports it.
+ */
 export interface ListedAccount extends AccountKey {
-  kind: Kind
+  kind: Kind | undefined
 }
 
 /** One entry of the list as written, a group's member included, and the accounts it named. */
@@ -75,10 +80,14 @@ export interface ListedEntry {
 
 type Held = ListedAccount & { name: string | null }
 
-const heldOf = (stored: readonly StoredAccount[]): Held[] => [
+/** The app running knows its own provider is a messenger, entry or not. */
+const kindHere = (provider: Provider, running: ListContext["running"]): Kind | undefined =>
+  provider === running.provider ? kindOf(provider) : kindIn(provider)
+
+const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"]): Held[] => [
   ...stored
-    .filter(({ provider }) => kindOf(provider) !== "notes")
-    .map(({ provider, account, name }) => ({ provider, account, name, kind: kindOf(provider) })),
+    .filter(({ provider }) => kindIn(provider) !== "notes")
+    .map(({ provider, account, name }) => ({ provider, account, name, kind: kindHere(provider, running) })),
   { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes" },
   ...stored
     .filter(({ provider }) => provider === FOLDER_PROVIDER)
@@ -86,7 +95,9 @@ const heldOf = (stored: readonly StoredAccount[]): Held[] => [
 ]
 
 const registry = () =>
-  PROVIDERS.map(({ name, aliases }) => (aliases.length ? `${name} (${aliases.join(", ")})` : name)).join(", ")
+  registered()
+    .map(({ name, aliases }) => (aliases.length ? `${name} (${aliases.join(", ")})` : name))
+    .join(", ")
 
 const providerOf = (prefix: string, held: readonly Held[], { running, profiles }: ListContext): Provider => {
   const wanted = prefix.toLowerCase()
@@ -109,7 +120,11 @@ const accountOf = (prefix: string, ref: string, held: readonly Held[], context: 
   const byId = ofProvider.find(({ account }) => account === ref || account === ref.toLowerCase())
   if (byId) return byId
   const keyed = (key: AccountKey): Held =>
-    ofProvider.find(({ account }) => account === key.account) ?? { ...key, name: null, kind: kindOf(key.provider) }
+    ofProvider.find(({ account }) => account === key.account) ?? {
+      ...key,
+      name: null,
+      kind: kindHere(key.provider, context.running),
+    }
   const recorded = context.profiles[prefix.toLowerCase()]?.[ref]
   if (recorded?.provider === FOLDER_PROVIDER) {
     const folder = held.find((one) => one.provider === "notes" && one.name === recorded.account)
@@ -158,7 +173,7 @@ const keyOf = ({ provider, account }: AccountKey) => `${provider}\u0000${account
  * the account's name — a bare provider for all its accounts, or a bare kind for every provider of it.
  */
 export const entriesOfList = (value: string, context: ListContext): ListedEntry[] => {
-  const held = heldOf(context.held)
+  const held = heldOf(context.held, context.running)
   const entries: ListedEntry[] = []
   const entry = (item: string, group?: string) => {
     const colon = item.indexOf(":")
@@ -217,6 +232,7 @@ const READS: Record<Kind, string> = {
   notes: "notes — search notes reads them",
   documents: "documents — search notes reads them",
   meetings: "meetings — search all reads them",
+  events: "calendar events — no search reads them yet",
 }
 
 /**
@@ -232,15 +248,22 @@ export const fitting = (
   const chosen = new Map<string, AccountKey>()
   const skipped: SkippedSource[] = []
   for (const { entry, accounts } of entries) {
-    const fits = accounts.filter(({ kind }) => kinds.includes(kind))
+    const fits = accounts.filter(({ kind }) => kind !== undefined && kinds.includes(kind))
     for (const { provider, account } of fits)
       if (!chosen.has(keyOf({ provider, account }))) chosen.set(keyOf({ provider, account }), { provider, account })
+    const known = accounts.filter(({ kind }) => kind !== undefined)
+    const unknown = accounts.filter(({ kind }) => kind === undefined)
+    if (known.length)
+      for (const { provider, account } of unknown)
+        skipped.push({ source: `${provider}:${account}`, code: "not_found", reason: UNKNOWN_PROVIDER })
     if (fits.length) continue
-    const other = accounts[0]
+    const other = known[0]
     skipped.push(
-      other
+      other?.kind
         ? { source: entry, code: "validation_error", reason: reasonOf(other.kind) }
-        : { source: entry, code: "not_found", reason: "no account in the store" },
+        : unknown.length
+          ? { source: entry, code: "not_found", reason: UNKNOWN_PROVIDER }
+          : { source: entry, code: "not_found", reason: "no account in the store" },
     )
   }
   if (chosen.size === 0)

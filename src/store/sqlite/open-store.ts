@@ -9,6 +9,7 @@ import { backfillNormalized, pendingNormalization } from "./backfill.js"
 import { fillFolded } from "./folded.js"
 import { logPruner } from "./log-pruning.js"
 import { openSqlite, type StoreContext } from "./open.js"
+import { loadProviders } from "./providers.js"
 import { assertReadCompatible } from "./read-compatibility.js"
 import { stemsState } from "./stems.js"
 import { fillStems, followDefaultStemmers } from "./stems-fill.js"
@@ -74,6 +75,7 @@ export const openStoreContext = async ({
         fillStems(database, { now })
       logPruner(database, now)()
     }
+    loadProviders(database)
     return { ...opened, now, sharedConfig: sharedConfigPath(file, env ?? process.env) }
   } catch (error) {
     database.close()

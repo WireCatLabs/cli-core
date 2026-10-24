@@ -6,16 +6,18 @@ import { botCopy } from "../cli/bot/copy.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
+import { UNKNOWN_PROVIDER, useProviders } from "../domain/providers.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { GuardRequest, SendGuard } from "../sends/guard.js"
 import { sendGuard } from "../sends/guard.js"
 import type { SendEntry } from "../sends/journal.js"
 import { SendJournal } from "../sends/journal.js"
 import { RecipientList } from "../sends/recipients.js"
-import { type MessageStore, openStore } from "../store/store.js"
+import { type MessageStore, openStore, registerProvider } from "../store/store.js"
 import { onlineDeps, storedDeps } from "./deps.js"
 import { messagesService } from "./messages.js"
 import { searchStore } from "./messages-archive-search.js"
+import { searchAll } from "./search-all.js"
 
 const account = { provider: "test", account: "500" }
 const messenger = { provider: "test", chatArgument: "a chat" } as Messenger
@@ -67,6 +69,7 @@ const keptStore = async () => {
 afterEach(async () => {
   asked.length = 0
   for (const store of opened.splice(0)) await store.close()
+  useProviders([])
 })
 
 describe("the messages service", () => {
@@ -218,8 +221,9 @@ describe("searchStore", () => {
   const said = (id: string, senderId: string, text: string): Message =>
     ({ ...thread[0], id, senderId, senderName: `Person ${senderId}`, text }) as Message
 
-  const shared = async () => {
+  const shared = async ({ registered = true } = {}) => {
     const store = await keptStore()
+    if (registered) await registerProvider(store, { name: "test-bot", kind: "messages", aliases: [], command: "test" })
     for (const [key, id] of [
       [bot("1"), "11"],
       [bot("2"), "21"],
@@ -273,6 +277,37 @@ describe("searchStore", () => {
     expect(() => botCopy("test")).toThrow(
       "a bot's provider ends in -bot, so a search can tell it from a person's account — not \"test\"",
     )
+  })
+
+  it("**skips a provider no entry names** and says so, never searching it as messages", async () => {
+    const store = await shared({ registered: false })
+    const unknown = (source: string) => ({ source, code: "not_found", reason: UNKNOWN_PROVIDER })
+
+    const all = await searchStore(store, account, { text: "chapter", source: "all", limit: 10 })
+    expect(locators(all)).toEqual(["msg:test/500/7/1", "msg:test/500/7/2", "msg:test/500/7/3"])
+    expect(all.skipped).toEqual([unknown("test-bot:1"), unknown("test-bot:2")])
+    const listed = await searchStore(store, account, { text: "chapter", source: "test,test-bot:1", limit: 10 })
+    expect(locators(listed)).toHaveLength(3)
+    expect(listed.skipped).toEqual([unknown("test-bot:1")])
+    const everything = await searchAll(store, account, { text: "chapter", limit: 10, only: ["messages"] })
+    expect(everything.items.map(({ ref }) => ref)).not.toContain("msg:test-bot/1/7/11")
+    expect(everything.skipped).toEqual([unknown("test-bot:1"), unknown("test-bot:2")])
+  })
+
+  it("**--source takes a registered alias**, bare or with an account", async () => {
+    const store = await shared({ registered: false })
+    await registerProvider(store, { name: "test-bot", kind: "messages", aliases: ["tb"], command: "test" })
+
+    expect(locators(await searchStore(store, account, { text: "chapter", source: "tb", limit: 10 }))).toEqual([
+      "msg:test-bot/1/7/11",
+      "msg:test-bot/1/7/110",
+      "msg:test-bot/2/7/21",
+      "msg:test-bot/2/7/210",
+    ])
+    expect(locators(await searchStore(store, account, { text: "chapter", source: "tb:2", limit: 10 }))).toEqual([
+      "msg:test-bot/2/7/21",
+      "msg:test-bot/2/7/210",
+    ])
   })
 
   it("refuses to widen the accounts it is given, or to name the senders twice", async () => {
