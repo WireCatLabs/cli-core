@@ -418,6 +418,8 @@ export interface HistoryBatch {
   votes?: HistoryVote[]
   reactions?: HistoryReaction[]
   stars?: HistoryStar[]
+  /** Deletions learned from a synced snapshot, scoped to their chat and applied after the batch's messages. */
+  deletions?: { chatId: Id; messageId: Id }[]
   events?: HistoryChatEvent[]
 }
 

@@ -1,7 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
-import type { AdminRight, GroupSettingKey, Id, Message, PollVote, PrivacyKey, Provider } from "../../domain/models.js"
+import type {
+  AdminRight,
+  GroupSettingKey,
+  Id,
+  Message,
+  Page,
+  PollVote,
+  PrivacyKey,
+  Provider,
+} from "../../domain/models.js"
 import type { WarmEmbedders } from "../../embeddings/embed.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
@@ -38,6 +47,8 @@ import { stored } from "./stored.js"
  */
 export interface StoredMessages {
   message(chatId: Id, messageId: Id): Promise<Message | undefined>
+  /** Stored messages in one provider thread, oldest first within the newest page. No remote fetch. */
+  threadMessages?(chatId: Id, threadId: Id, window: { limit: number; before?: Id }): Promise<Page<Message>>
   /** The newest message from someone else in the chat, older than `before` when it is given. */
   newestIncoming(chatId: Id, before?: Id): Promise<Message | undefined>
   /** The newest message in the chat sent at `at` or earlier; without `at`, the oldest one held. */
@@ -91,6 +102,12 @@ export const storedMessages = (
     message: async (chatId, messageId) => {
       const at = key()
       return at && (await store()).messages.message(at, messageId, { chatId })
+    },
+    threadMessages: async (chatId, threadId, window) => {
+      const owner = key()
+      return owner
+        ? (await store()).messages.messages(owner, chatId, { ...window, threadId })
+        : { items: [], hasMore: false }
     },
     newestIncoming: async (chatId, before) => {
       const at = key()

@@ -14,6 +14,9 @@ shape of this file.
 - **Messengers can opt in to `messages send --draft`.** Set the optional `drafts` trait and implement the optional
   `saveDraft` port to save text for the owner to review and send. The write is guarded by `drafts`; empty drafts
   and send-only options are refused. Existing adapters and command trees stay unchanged until they opt in.
+- `StoredMessages.threadMessages` lets an adapter read a provider thread from the shared message store without
+  keeping another copy. `HistoryBatch.deletions` applies chat-scoped tombstones from synced snapshots without
+  replaying those deletions as live events.
 
 ### Changed — may break callers
 
