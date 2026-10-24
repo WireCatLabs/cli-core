@@ -29,6 +29,11 @@ nothing now.
 
 ## Releases
 
+- **Hold breaking work to the weekly window (WC-REL-9).** The first breaking release was 0.399.0 at
+  2026-10-23 19:36:27 UTC; the next window opens no earlier than 2026-10-30 19:36:27 UTC. Hold
+  #1837 and every other breaking PR until that window; release only with the owner’s explicit yes,
+  and coordinate all six CLI bumps for the same day.
+
 - **Announce before you merge into `main` or start a release** — in
   [issue #849](https://github.com/WireCatLabs/cli-core/issues/849), one line, after reading its latest
   comments and `gh run list --workflow release.yml`. Two sessions merge and release here, and on 2026-10-10

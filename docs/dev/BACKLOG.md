@@ -29,9 +29,9 @@ None open.
   in the `docs/standards-*` and `fix/standards-*` pull requests. Contact result schemas are complete; other groups
   remain. The option-meaning migration is in #1810;
   compatibility aliases remain for one release. [Notes](BACKLOG-NOTES.md#core-4).
-- **CORE-28** · P2 · Remove hidden option aliases after one compatibility release. The canonical spellings and
-  query replacements are listed in [#1810](https://github.com/WireCatLabs/cli-core/pull/1810); start at
-  `src/cli/option-meanings.test.ts` and the group-update duration options.
+- **CORE-28** · P2 · 🚧 `fix/standards-vocabulary-paths` Hidden option aliases are removed by
+  [#1837](https://github.com/WireCatLabs/cli-core/pull/1837), including the aliases from #1810. Hold merge and
+  release until the next weekly breaking window, no earlier than 2026-10-30 19:36:27 UTC (WC-REL-9).
 - **CORE-5** · P2 · Let a new source join without editing this package: the provider list is fixed
   (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
   (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No
