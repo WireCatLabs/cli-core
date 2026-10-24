@@ -482,3 +482,69 @@ describe("the link kinds", () => {
     expect(named.sort()).toEqual([...LINK_KINDS].sort())
   })
 })
+
+describe("the data-model rules (cli-base docs/standards/data-model.md)", () => {
+  const UNKEYED_EXTERNAL_ID: Record<string, string> = {
+    meeting_participants: "one row per person in a meeting, keyed by (meeting_id, identity_id); external_id is extra",
+  }
+  const ENTITIES = ["persons", "events", "event_series", "documents"]
+  const ENTITY_SOURCE_COLUMNS: Record<string, string> = {
+    documents: "keeps its source columns until nothing reads them (Wave 3 requirements, section 4)",
+  }
+  const TIME_NAME_EXCEPTIONS: Record<string, string> = {
+    "member_counts.date": "a YYYY-MM-DD day, older than the <name>_date rule",
+  }
+  const PROVIDER_ID = /^(google|drive|file|zoom|gmail|notion|telegram|tg|max|wa)_id$/
+  const TIME_LIKE = /(^|_)(time|timestamp|modified|edited|date)$/
+
+  const schema = async () => {
+    const path = fresh()
+    await (await openStore({ path })).close()
+    const database = await openCache(path)
+    opened.push(database)
+    const rows = (sql: string) => database.prepare(sql).all()
+    const tables = Object.entries(built(database))
+      .filter(([, columns]) => columns.length > 0)
+      .map(([name]) => name)
+    return tables.map((table) => ({
+      table,
+      columns: rows(`SELECT name, type FROM pragma_table_info('${table}')`).map((row) => ({
+        name: String(row.name),
+        type: String(row.type).toLowerCase(),
+      })),
+      uniqueKeys: rows(`SELECT name FROM pragma_index_list('${table}') WHERE "unique" = 1`).map((index) =>
+        rows(`SELECT name FROM pragma_index_info('${String(index.name)}')`).map((column) => String(column.name)),
+      ),
+    }))
+  }
+  const columnsWhere = async (test: (table: string, column: { name: string; type: string }) => boolean) =>
+    (await schema()).flatMap(({ table, columns }) =>
+      columns.filter((column) => test(table, column)).map((column) => `${table}.${column.name}`),
+    )
+
+  it("WC-DATA-3: every table with `external_id` has a unique key that includes it", async () => {
+    const unkeyed = (await schema())
+      .filter(({ columns }) => columns.some((column) => column.name === "external_id"))
+      .filter(({ uniqueKeys }) => !uniqueKeys.some((key) => key.includes("external_id")))
+      .map(({ table }) => table)
+
+    expect(unkeyed.sort()).toEqual(Object.keys(UNKEYED_EXTERNAL_ID).sort())
+  })
+
+  it("WC-DATA-2, WC-DATA-3: an entity carries no provider id", async () => {
+    const carrying = await columnsWhere((table, { name }) => ENTITIES.includes(table) && name === "external_id")
+
+    expect(carrying.map((column) => column.split(".")[0])).toEqual(Object.keys(ENTITY_SOURCE_COLUMNS))
+  })
+
+  it("WC-DATA-4: a time is an integer `<verb>_at`; a date is `<name>_date`", async () => {
+    expect(await columnsWhere((_, { name, type }) => name.endsWith("_at") && type !== "integer")).toEqual([])
+    const misnamed = await columnsWhere((_, { name }) => TIME_LIKE.test(name) && !/_date$/.test(name))
+    expect(misnamed).toEqual(Object.keys(TIME_NAME_EXCEPTIONS))
+  })
+
+  it("WC-DATA-3, WC-DATA-4: no column is named after a provider and none is typed boolean", async () => {
+    expect(await columnsWhere((_, { name }) => PROVIDER_ID.test(name))).toEqual([])
+    expect(await columnsWhere((_, { type }) => type.startsWith("bool"))).toEqual([])
+  })
+})
