@@ -6,10 +6,12 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { renderAnswer, snakeKeys } from "../envelope.js"
+import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { rightsOf } from "../messenger/admin-commands.js"
 import { renderItem, wholeList } from "../messenger/chat-answers.js"
 import { botContext, online } from "./context.js"
 import { botExamples } from "./examples.js"
+import { BOT_ADMINS_QUERY } from "./list-queries.js"
 import { botCan } from "./messages.js"
 import type { BotMessenger } from "./port.js"
 
@@ -28,18 +30,21 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
   const offered = bot.adminRights ?? ADMIN_RIGHTS
   const command = new Command("admins").description("the admins of a chat the bot is an admin in")
 
-  annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "chats admins list Team") })
-    .description("the chat's admins and what each may do")
-    .argument("<chat>", CHAT)
-    .action(async function (this: Command, chat: string) {
-      const context = online(botContext(this, bot), this)
-      const ref = context.chatRef(chat)
-      await context.run(async (events) => {
-        const adapter = await context.authenticated({ events })
-        const admins = await botCan(adapter, "admins", bot, "list a chat's admins")(ref)
-        renderAnswer(this, context, wholeList("bot chats admins list", admins.map(snakeKeys)))
-      })
+  withQuery(
+    annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "chats admins list Team") })
+      .description("the chat's admins and what each may do")
+      .argument("<chat>", CHAT),
+    BOT_ADMINS_QUERY,
+  ).action(async function (this: Command, chat: string, words: string[]) {
+    listQuery(typedQuery(words), BOT_ADMINS_QUERY, "bot chats admins list")
+    const context = online(botContext(this, bot), this)
+    const ref = context.chatRef(chat)
+    await context.run(async (events) => {
+      const adapter = await context.authenticated({ events })
+      const admins = await botCan(adapter, "admins", bot, "list a chat's admins")(ref)
+      renderAnswer(this, context, wholeList("bot chats admins list", admins.map(snakeKeys)))
     })
+  })
 
   annotate(command.command("add"), {
     effects: REMOTE_WRITE,

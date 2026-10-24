@@ -65,6 +65,15 @@ import { imageEmbedding } from "./image-embedding.js"
 import { inviteLink } from "./invite-link.js"
 import { job } from "./job.js"
 import { joinRequest } from "./join-request.js"
+import {
+  botAdmin,
+  botMenuEntry,
+  botProfile,
+  botSeenChat,
+  botTemplate,
+  botWebhook,
+  scheduledJob,
+} from "./list-results.js"
 import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
@@ -178,6 +187,12 @@ export {
   attachmentExtraction,
   attachmentTextChange,
   automaticTags,
+  botAdmin,
+  botMenuEntry,
+  botProfile,
+  botSeenChat,
+  botTemplate,
+  botWebhook,
   cachedChatMetadata,
   chart,
   chat,
@@ -299,6 +314,7 @@ export {
   runHit,
   runLocation,
   savedSearch,
+  scheduledJob,
   searchHistoryClear,
   sendAttempt,
   serveSummary,
@@ -418,6 +434,13 @@ export const ENTITIES = {
   account_privacy: accountPrivacy,
   account_privacy_change: accountPrivacyChange,
   account_profile: accountProfile,
+  bot_profile: botProfile,
+  bot_template: botTemplate,
+  bot_seen_chat: botSeenChat,
+  bot_admin: botAdmin,
+  bot_menu_entry: botMenuEntry,
+  bot_webhook: botWebhook,
+  scheduled_job: scheduledJob,
   note,
   "note.hit": v.pick(note, [
     "kind",

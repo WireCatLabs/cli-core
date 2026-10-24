@@ -39,9 +39,14 @@ export class ChatRegistry {
     this.#path = botFiles(app, profile, env).registry
   }
 
-  list(): SeenChat[] {
+  list(filter: Partial<Pick<SeenChat, "id" | "title" | "kind">> = {}): SeenChat[] {
     const { chats } = this.#read()
-    return Array.isArray(chats) ? chats : []
+    return (Array.isArray(chats) ? chats : []).filter(
+      (chat) =>
+        (filter.id === undefined || chat.id === filter.id) &&
+        (filter.kind === undefined || chat.kind === filter.kind) &&
+        (filter.title === undefined || chat.title?.toLocaleLowerCase() === filter.title?.toLocaleLowerCase()),
+    )
   }
 
   /** The bot's own user id, once any command has learned it — the key its messages are stored under. */

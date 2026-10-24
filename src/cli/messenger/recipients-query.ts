@@ -16,8 +16,8 @@ export const RECIPIENTS_QUERY: QueryRegistry = {
   ),
 }
 
-export const recipientFilter = (words: QueryWords): RecipientFilter => {
-  const terms = queryTerms(words, RECIPIENTS_QUERY, "recipients list")
+export const recipientFilter = (words: QueryWords, command = "recipients list"): RecipientFilter => {
+  const terms = queryTerms(words, RECIPIENTS_QUERY, command)
   const id = terms.get("id"),
     title = terms.get("title")
   return { ...(id === undefined ? {} : { id }), ...(title === undefined ? {} : { title }) }

@@ -10,12 +10,14 @@ import { readAttachments } from "../../sends/upload.js"
 import { environmentOf } from "../context.js"
 import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { typedQuery, withQuery } from "../list-query.js"
 import { wholeList } from "../messenger/chat-answers.js"
 import { messageItem } from "../messenger/message-items.js"
 import { readAll } from "../messenger/stdin.js"
 import { positiveCount } from "../paging.js"
 import { type BotContext, botContext } from "./context.js"
 import { botExamples } from "./examples.js"
+import { BOT_MESSAGES_QUERY, botMessageWindow } from "./list-queries.js"
 import type { BotAdapter, BotMessenger } from "./port.js"
 
 /** The adapter's `method`, or a refusal naming what this messenger's bot cannot do. */
@@ -48,18 +50,23 @@ const show = (
   botId: string,
   messages: Message[],
   one = false,
+  meta?: ReturnType<typeof botMessageWindow>["meta"],
 ) => {
   const reader = context.copy.accountOf(botId)
   const items = messages.map((message) => messageItem(message, reader))
-  renderAnswer(command, context, one && items[0] ? itemOf(items[0]) : wholeList("bot messages list", items), () =>
-    renderMessages(messages, {
-      color: context.color,
-      verbosity: context.settings.detail,
-      senderColors: context.settings.senderColors,
-      profile: context.profile,
-      provider: bot.provider,
-      locale: bot.app.locale,
-    }),
+  renderAnswer(
+    command,
+    context,
+    one && items[0] ? itemOf(items[0]) : { ...wholeList("bot messages list", items), ...(meta ? { meta } : {}) },
+    () =>
+      renderMessages(messages, {
+        color: context.color,
+        verbosity: context.settings.detail,
+        senderColors: context.settings.senderColors,
+        profile: context.profile,
+        provider: bot.provider,
+        locale: bot.app.locale,
+      }),
   )
 }
 
@@ -179,36 +186,46 @@ const sendCommand = (bot: BotMessenger): Command =>
     })
 
 const listCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "messages list Team --limit 20") })
-    .description(
-      `the latest messages in a chat; where ${bot.name ?? "the messenger"} gives a bot no history, and with --offline, ` +
-        "the ones this bot has seen on this machine",
+  withQuery(
+    annotate(new Command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "messages list Team --limit 20") })
+      .description(
+        `the latest messages in a chat; where ${bot.name ?? "the messenger"} gives a bot no history, and with --offline, ` +
+          "the ones this bot has seen on this machine",
+      )
+      .summary("the latest messages in a chat")
+      .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen"),
+    BOT_MESSAGES_QUERY,
+  )
+    .addHelpText(
+      "after",
+      "\nQueries filter the stored copy before limiting results; add --offline. The Bot API does not accept these filters.",
     )
-    .summary("the latest messages in a chat")
-    .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .option("--limit <n>", "how many, the newest", positiveCount("--limit"))
-    .action(async function (this: Command, chat: string) {
+    .action(async function (this: Command, chat: string, words: string[]) {
+      const narrowed = botMessageWindow(words)
       const context = botContext(this, bot)
+      if (typedQuery(words).trim() && !context.settings.offline)
+        throw new CliError("validation_error", "bot message queries filter the local copy; add --offline")
       const ref = context.chatRef(chat)
       const limit = this.opts<{ limit?: number }>().limit ?? context.settings.limit
       await context.run(async (events) => {
         const fromCopy = async (botId: string) => {
           const page = await context.copy.read((store) =>
-            store.messages.messages(context.copy.accountOf(botId), ref, { limit }),
+            store.messages.messages(context.copy.accountOf(botId), ref, { limit, ...narrowed.window }),
           )
           return page.items
         }
         if (context.settings.offline) {
           const botId = context.registry.botId()
           if (!botId) throw nothingKept(context)
-          show(this, context, bot, botId, await fromCopy(botId))
+          show(this, context, bot, botId, await fromCopy(botId), false, narrowed.meta)
           return
         }
         const adapter = await context.authenticated({ events })
         const botId = await botIdOf(context, adapter)
         if (!adapter.history) {
           context.renderer.note(`${bot.name ?? "the messenger"} gives a bot no history: these are the messages it kept`)
-          show(this, context, bot, botId, await fromCopy(botId))
+          show(this, context, bot, botId, await fromCopy(botId), false, narrowed.meta)
           return
         }
         const messages = await adapter.history(ref, { limit })

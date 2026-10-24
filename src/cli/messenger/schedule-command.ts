@@ -24,8 +24,10 @@ import { storePath } from "../../store/path.js"
 import { type BaseEnvironment, environmentOf, setExitCode } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { withQuery } from "../list-query.js"
 import { lineOf } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { SCHEDULES_QUERY, scheduleFilter } from "./list-result-queries.js"
 
 /** Each run of an agent is a paid model call that reads chats; keeping the store current is `serve`'s job. */
 const AGENT_MINIMUM_MINUTES = 60
@@ -201,11 +203,12 @@ export const scheduleCommand = (messenger: Messenger): Command => {
     })
   })
 
-  annotate(command.command("list"), { effects: LOCAL_READ })
+  withQuery(annotate(command.command("list"), { effects: LOCAL_READ }), SCHEDULES_QUERY)
     .description("the schedules, when they run and how their last run went")
-    .action(function (this: Command) {
+    .action(function (this: Command, words: string[]) {
+      const filter = scheduleFilter(words)
       const { context, state } = prepare(this)
-      const rows = listSchedules(state).map((schedule) => ({
+      const rows = listSchedules(state, filter).map((schedule) => ({
         name: schedule.name,
         kind: schedule.kind,
         when: describeWhen(schedule.when),

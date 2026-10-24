@@ -56,5 +56,3 @@ None open.
   tg and max parity and docs. After #1837.
 - **CORE-33** · P2 · `stats messages counters refresh` becomes `stats messages counters sync`: `refresh` is the
   word the vocabulary rules out. tg, max and wa. After #1837.
-
-- **CORE-37** · P2 · 🚧 `fix/bot-list-native-queries` Give remaining bot, schedule and topics lists typed native queries before stricter cli-base list lint ships (WC-CMD-20). Preserve provider limits and refuse unsupported filters before connection; no filtering of a returned page.

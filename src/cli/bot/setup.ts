@@ -5,9 +5,11 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { wholeList } from "../messenger/chat-answers.js"
 import { type BotContext, botContext, online } from "./context.js"
 import { botExamples } from "./examples.js"
+import { BOT_MENU_QUERY, BOT_WEBHOOKS_QUERY } from "./list-queries.js"
 import { botCan } from "./messages.js"
 import type { BotMenuEntry, BotMessenger } from "./port.js"
 import { botFiles } from "./registry.js"
@@ -37,9 +39,13 @@ const botWrite = (context: BotContext, key: string, write: () => Promise<void>) 
 export const botMenuCommand = (bot: BotMessenger): Command => {
   const command = new Command("commands").description("the bot's command menu — what people see after /")
 
-  annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "commands list") })
+  withQuery(
+    annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "commands list") }),
+    BOT_MENU_QUERY,
+  )
     .description("the commands in the menu now")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      listQuery(typedQuery(words), BOT_MENU_QUERY, "bot commands list")
       const context = online(botContext(this, bot), this)
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
@@ -139,9 +145,13 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
     .description("where the messenger pushes this bot's updates — while one is set, `bot watch` gets nothing")
     .summary("where the messenger pushes this bot's updates")
 
-  annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "webhooks list") })
+  withQuery(
+    annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "webhooks list") }),
+    BOT_WEBHOOKS_QUERY,
+  )
     .description("the webhooks this bot has")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      listQuery(typedQuery(words), BOT_WEBHOOKS_QUERY, "bot webhooks list")
       const context = online(botContext(this, bot), this)
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })

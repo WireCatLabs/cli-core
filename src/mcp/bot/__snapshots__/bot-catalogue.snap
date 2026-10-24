@@ -2,6 +2,26 @@
   "list": {
     "type": "object",
     "properties": {
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms that narrow the list — the fields are below"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms that narrow the list — the fields are below"
+          }
+        ]
+      },
       "check": {
         "type": "boolean",
         "description": "ask the messenger who each bot is, with its token"
@@ -13,9 +33,25 @@
   "chats list": {
     "type": "object",
     "properties": {
-      "offline": {
-        "type": "boolean",
-        "description": "answer from the copy on this machine only"
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms that narrow the list — the fields are below"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms that narrow the list — the fields are below"
+          }
+        ]
       }
     },
     "required": [],
@@ -90,6 +126,26 @@
         "minLength": 1,
         "pattern": "^(?!-$)[\\s\\S]+$",
         "description": "a chat id, or the title of a chat this bot has seen"
+      },
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms; this list filters by none yet"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms; this list filters by none yet"
+          }
+        ]
       },
       "offline": {
         "type": "boolean",
@@ -341,6 +397,26 @@
         "minLength": 1,
         "pattern": "^(?!-$)[\\s\\S]+$",
         "description": "a chat id, user:<id> for a person, or the title of a chat this bot has seen"
+      },
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms that narrow the list — the fields are below"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms that narrow the list — the fields are below"
+          }
+        ]
       },
       "limit": {
         "type": "integer",
@@ -595,7 +671,28 @@
   },
   "recipients list": {
     "type": "object",
-    "properties": {},
+    "properties": {
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms that narrow the list — the fields are below"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms that narrow the list — the fields are below"
+          }
+        ]
+      }
+    },
     "required": [],
     "$schema": "http://json-schema.org/draft-07/schema#"
   },
@@ -637,7 +734,28 @@
   },
   "sends list": {
     "type": "object",
-    "properties": {},
+    "properties": {
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms that narrow the list — the fields are below"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms that narrow the list — the fields are below"
+          }
+        ]
+      }
+    },
     "required": [],
     "$schema": "http://json-schema.org/draft-07/schema#"
   },
@@ -671,6 +789,26 @@
   "commands list": {
     "type": "object",
     "properties": {
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms; this list filters by none yet"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms; this list filters by none yet"
+          }
+        ]
+      },
       "offline": {
         "type": "boolean",
         "description": "answer from the copy on this machine only"
@@ -717,6 +855,26 @@
   "webhooks list": {
     "type": "object",
     "properties": {
+      "query": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!-$)[\\s\\S]+$",
+              "description": "field:value terms; this list filters by none yet"
+            },
+            "minItems": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!-$)[\\s\\S]+$",
+            "description": "field:value terms; this list filters by none yet"
+          }
+        ]
+      },
       "offline": {
         "type": "boolean",
         "description": "answer from the copy on this machine only"

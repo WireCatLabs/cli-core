@@ -17,6 +17,14 @@ shape of this file.
   existing authority rules, without exposing options that could select personal-account settings. Consumers
   that pin MCP catalogues should refresh them and use availability rather than absence to determine access.
 
+### Added
+
+- **Bot lists, schedules and forum topics accept typed queries.** Stored bot chats, recipients, send history,
+  profiles and schedules filter at their native readers; forum title terms go to the provider. Message predicates
+  require `--offline` and run in SQLite before the limit, reporting interpreted time bounds. Provider lists that
+  accept no filters refuse terms before connecting, instead of filtering an incomplete response. Existing empty
+  queries keep their previous behavior. Shared list-result contracts include the template schema for provider CLIs.
+
 ## 0.407.0 — 24.10.2026
 
 ### Added

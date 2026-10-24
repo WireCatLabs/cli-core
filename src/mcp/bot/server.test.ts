@@ -523,14 +523,17 @@ const RENAMED: Record<string, readonly string[]> = {
 }
 /** What the commands take that the hand-written tools did not. */
 const ADDED: Record<string, readonly string[]> = {
-  "chats list": ["offline"],
+  "chats list": ["query"],
   "chats show": ["offline"],
-  "chats admins list": ["offline"],
-  "commands list": ["offline"],
+  "chats admins list": ["offline", "query"],
+  "commands list": ["offline", "query"],
   me: ["offline"],
   "contacts show": ["offline", "sync_first"],
   "search messages": ["newest", "offline", "page"],
   "messages between": ["offline"],
+  "messages list": ["query"],
+  "sends list": ["query"],
+  "recipients list": ["query"],
   "messages pin": ["notify"],
   "chats moderate": ["no_block"],
 }
@@ -588,9 +591,9 @@ describe("the generated bot catalogue", () => {
       "chats leave": ["chat"],
       "commands clear": [],
       "commands set": ["commands"],
-      list: ["check"],
+      list: ["check", "query"],
       "webhooks delete": ["url"],
-      "webhooks list": ["offline"],
+      "webhooks list": ["offline", "query"],
       "webhooks set": ["secret_stdin", "types", "url"],
     })
   })
