@@ -137,7 +137,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `install` | install a system unit |  |
 | `uninstall` | remove a system unit |  |
 | `cancel` | stop a job or a pending thing |  |
-| `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say | `refresh` |
+| `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; a mirror syncs both ways | `refresh` |
 | `fetch` | one bounded pull of one named thing into the store, not a catch-up |  |
 | `export` | write from the store to a file |  |
 | `import` | bring a file or list the user gives into the store or the messenger, once |  |
@@ -162,6 +162,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `unstar` | take the owner's star off a message |  |
 | `vote` | answer a poll |  |
 | `answer` | reply to a button someone pressed under a bot's message |  |
+| `press` | press a button under a bot's message; the bot sees who pressed it |  |
 | `action` | show what a bot is doing in a chat, such as typing, for a few seconds |  |
 | `watch` | follow new events as they come, and keep them |  |
 | `close` | close a thing that stays: a poll, a task |  |
@@ -177,6 +178,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `unarchive` | bring an archived chat back to the main chat list |  |
 | `reset` | replace a thing; the old one stops working |  |
 | `moderate` | apply a chat's rules: delete what breaks them, act on who broke them |  |
+| `assign` | name the person responsible for work, with their task role |  |
+| `reverse` | record that an accepted decision no longer holds, without replacing it |  |
+| `invalidate` | mark a derived record whose supporting evidence no longer holds |  |
+| `acknowledge` | record successful delivery using the exact receipt issued when the item was claimed |  |
 | `confirm` | the owner accepts what an agent proposed | `accept`, `approve` |
 | `reject` | the owner refuses what an agent proposed | `decline`, `deny` |
 | `move` | move a file in the source |  |
@@ -227,6 +232,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `unanswered` | questions without an observed qualifying answer |
 | `me` | the account a profile's token belongs to |
 | `between` | the messages between two given messages of one chat |
+| `app` | a bot's mini app: the address that opens it, signed in as the owner |
 
 <!-- views: end -->
 
@@ -271,6 +277,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `recordings` | collection | the files a provider recorded of a meeting |  |
 | `jobs` | collection | work this tool runs in the background or on a timer |  |
 | `actions` | collection | what an agent proposes to do; the owner confirms or rejects each |  |
+| `agents` | collection | the agents whose actions are recorded in the shared store |  |
+| `reminders` | collection | scheduled notices about stored work, claimed and acknowledged with delivery receipts |  |
+| `key-documents` | collection | selected source documents that a project keeps as its starting references |  |
+| `answers` | collection | evidence-grounded answers assembled from selected stored sources |  |
 | `aliases` | collection | other names of one thing |  |
 | `mentions` | collection | phones, e-mail addresses, links and documents found in stored text, each where it was written |  |
 | `images` | collection | pictures in stored messages, searched by what they show |  |
@@ -294,6 +304,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `media` | collection | files people sent, held by the messenger under an id |  |
 | `session` | singular | this tool's login |  |
 | `account` | singular | the messenger or mail account behind a profile |  |
+| `mail` | singular | the local email archive and its mailbox import, rules and cleanup operations |  |
 | `config` | singular | a profile's settings |  |
 | `server` | singular | the long-running process of a profile |  |
 | `store` | singular | the local SQLite database the tools share |  |
@@ -573,6 +584,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--last` | `<n>` | count | stop once the newest n messages are held | messages |
 | `--link` | `<link>` | string | an invite link |  |
 | `--lookback-days` | `<days>` | count | look again at this many recent days, for what arrived late | days |
+| `--meeting-id` | `<id>` | id | one stored meeting selected for transcript search |  |
+| `--identity-id` | `<id>` | id | a stored participant identity whose meetings are selected; does not identify the speaker of a hit |  |
+| `--person-id` | `<id>` | id | a stored person whose linked participant identities select meetings |  |
+| `--series-id` | `<id>` | id | one stored recurring series selected for meeting search |  |
 | `--meeting` | `<id>` | id | a meeting, by its store id |  |
 | `--message` | `<message>` | id | a message: its id in --chat, or a msg: locator alone |  |
 | `--new` |  | switch | only what is new since this command last ran, each once; for scheduled runs |  |
