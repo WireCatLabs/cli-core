@@ -13,6 +13,12 @@ shape of this file.
   keeping another copy. `HistoryBatch.deletions` applies chat-scoped tombstones from synced snapshots without
   replaying those deletions as live events. `Messenger.readsComments` allows comment reads independently of
   comment sending; unset, it keeps the existing capability behavior.
+- Speech model installation can verify existing files before reusing them (`verifyExisting`), so repair uses the shared checksum and download path.
+- Provider adapters can declare a typed answer with `answerEntity`, shared by command schemas, help and JSON field validation without changing a shared entity.
+
+### Fixed
+
+- Finite meeting inventory, project scanning and upgrade commands are available to the shared MCP catalogue. Profile permissions still apply; upgrade retains its authority grant.
 
 ### Changed — may break callers
 

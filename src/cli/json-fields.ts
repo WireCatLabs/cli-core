@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
-import { ENTITIES, type EntityName } from "../entities/index.js"
+import { ENTITIES } from "../entities/index.js"
+import { answerEntitySchema } from "./answer-entity.js"
 
 /** Provider adapters may describe a result whose fields differ from the shared entity. */
 export type JsonFieldsResolver = (command: Command | undefined) => readonly string[] | undefined
@@ -48,8 +49,7 @@ const schemaFields = (schema: unknown): string[] | undefined => {
 export const answerFields = (command: Command | undefined, resolve?: JsonFieldsResolver): string[] | undefined => {
   const own = resolve?.(command)
   if (own !== undefined) return [...own]
-  const name = declaredEntity(command)
-  const schema = name === undefined ? undefined : ENTITIES[name as EntityName]
+  const schema = answerEntitySchema(command)
   return schemaFields(schema)
 }
 

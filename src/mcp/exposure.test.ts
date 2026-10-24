@@ -93,15 +93,15 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     expect(offered({ "mcp.authority": "allow" })).toContain(path)
   })
 
-  it("project candidates require a separately granted MCP tool", () => {
+  it("finite project scanning is offered through the same permission-filtered catalogue", () => {
     const document = commands()
     const scan = flatten(document).find((one) => one.path.join(" ") === "meetings projects scan")
-    expect(scan?.mcp).toBe(false)
-    expect(toolsFromCommands(document).some((tool) => tool.command === "meetings projects scan")).toBe(false)
+    expect(scan?.mcp).not.toBe(false)
+    expect(toolsFromCommands(document).some((tool) => tool.command === "meetings projects scan")).toBe(true)
   })
 
   it("upgrade", () => {
-    expect(metaOf(upgradeCommand(app, "chat-cli", () => ({}) as never)).mcp).toBe(false)
+    expect(metaOf(upgradeCommand(app, "chat-cli", () => ({}) as never)).mcp).not.toBe(false)
   })
 
   it("**an agent never deletes for everyone**: `messages delete` is offered without --for-everyone", () => {

@@ -42,6 +42,7 @@ export interface AgentContext {
   overrides?: readonly string[]
   /** The key a CLI's own command is checked against, when `keyForCommand` does not know it. */
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
+  authority?: CatalogueOptions["authority"]
   /** The server's one open connection. The command borrows it: it cannot close it, and never opens its own. */
   connection?: () => Promise<MessengerAdapter>
   /** What a command reads on stdin, as the field an agent gives it in. */
@@ -318,7 +319,7 @@ export const runCommandForAgent = async (
     if (info.lifetime)
       throw new CliError("validation_error", `"${path.join(" ")}" runs until it is stopped; an agent call must return`)
     const levels = ctx.levels?.()
-    const refused = levels && refusal(info, levels, ctx.keyOf)
+    const refused = levels && refusal(info, levels, ctx.keyOf, ctx.authority)
     if (refused) throw new CliError("permission_error", `${path.join(" ")}: ${refused}`, { sent: false })
     const { argv, stdin } = argvOf(info, input, ctx.profile, ctx.stdin)
     const lend = ctx.connection

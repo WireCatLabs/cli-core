@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto"
-import { createWriteStream, mkdirSync, statSync } from "node:fs"
+import { createReadStream, createWriteStream, mkdirSync, statSync } from "node:fs"
 import { rename, rm } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { Readable, Transform } from "node:stream"
@@ -69,17 +69,36 @@ export type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Re
 export const install = async (
   model: SpeechModel,
   directory: string,
-  { fetch: get = fetch, progress }: { fetch?: Fetch; progress?: (line: string) => void } = {},
+  {
+    fetch: get = fetch,
+    progress,
+    verifyExisting,
+  }: { fetch?: Fetch; progress?: (line: string) => void; verifyExisting?: boolean } = {},
 ): Promise<void> => {
   mkdirSync(join(directory, model.id), { recursive: true, mode: 0o700 })
-  await installFiles(placed(model, directory), { fetch: get, ...(progress ? { progress } : {}) })
+  await installFiles(placed(model, directory), { fetch: get, progress, verifyExisting })
 }
 
 /** Each file not already in place, downloaded and checked against its sha256 before it takes its name. */
 export const installFiles = async (
   files: [ModelFile, string][],
-  { fetch: get = fetch, progress }: { fetch?: Fetch; progress?: (line: string) => void } = {},
+  {
+    fetch: get = fetch,
+    progress,
+    verifyExisting,
+  }: { fetch?: Fetch; progress?: (line: string) => void; verifyExisting?: boolean } = {},
 ): Promise<void> => {
+  if (verifyExisting)
+    for (const [file, path] of files) {
+      if (sizeOf(path) !== undefined) {
+        const hash = createHash("sha256")
+        for await (const chunk of createReadStream(path)) hash.update(chunk)
+        if (hash.digest("hex") !== file.sha256) {
+          progress?.(`${path}: not the file this version expects, downloading it again`)
+          await rm(path, { force: true })
+        }
+      }
+    }
   for (const [file, path] of files) {
     if (sizeOf(path) === file.bytes) continue
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
