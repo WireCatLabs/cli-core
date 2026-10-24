@@ -266,6 +266,8 @@ export interface Messenger extends ServiceMessenger {
   joinRequestsByLink?: boolean
   /** Whether a channel post can be commented on — `messages send --comment-to`; yes when unset. */
   channelComments?: boolean
+  /** Whether comments can be read independently of sending; inherits channelComments when unset. */
+  readsComments?: boolean
   /** Whether people added can be shown the messages from before they came — `members add --history`; yes when unset. */
   addsWithHistory?: boolean
   /** The admin rights this messenger has, as `admins add --can` offers them; every one when unset. */

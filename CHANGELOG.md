@@ -16,7 +16,8 @@ shape of this file.
   and send-only options are refused. Existing adapters and command trees stay unchanged until they opt in.
 - `StoredMessages.threadMessages` lets an adapter read a provider thread from the shared message store without
   keeping another copy. `HistoryBatch.deletions` applies chat-scoped tombstones from synced snapshots without
-  replaying those deletions as live events.
+  replaying those deletions as live events. `Messenger.readsComments` allows comment reads independently of
+  comment sending; unset, it keeps the existing capability behavior.
 
 ### Changed — may break callers
 

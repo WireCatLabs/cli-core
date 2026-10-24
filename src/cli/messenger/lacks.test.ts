@@ -88,6 +88,16 @@ describe("a command whose one method the messenger lacks", () => {
     })
   })
 
+  it("can read comments while comment sending remains unsupported", async () => {
+    const result = await cli("messages comments", { channelComments: false, readsComments: true }, () => ({
+      ...fakeAdapter(seed),
+      discussionOf: async (chatId, messageId) => ({ chatId, messageId }),
+      comments: async () => ({ items: [], hasMore: false }),
+    }))
+    expect(result.code, result.message).toBe(0)
+    expect(result.connects.length).toBeGreaterThan(0)
+  })
+
   for (const [path, [method, what]] of Object.entries(COMMAND_NEEDS)) {
     it(`${path} refuses before connecting, as the adapter would after`, async () => {
       const without = () => {

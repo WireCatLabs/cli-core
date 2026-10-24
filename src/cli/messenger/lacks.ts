@@ -34,6 +34,7 @@ const STORE_ANSWERS: ReadonlySet<string> = new Set(["chats events"])
 
 interface Lacking {
   channelComments?: boolean
+  readsComments?: boolean
   lacks?: readonly (keyof MessengerAdapter)[]
   never?: readonly (keyof MessengerAdapter)[]
   history?: "server" | "store"
@@ -43,7 +44,7 @@ interface Lacking {
 export const lackedNeed = (messenger: Lacking | undefined, path: string): Need | undefined => {
   const need = COMMAND_NEEDS[path]
   if (!need) return undefined
-  if (path === "messages comments" && messenger?.channelComments === false) return need
+  if (path === "messages comments" && (messenger?.readsComments ?? messenger?.channelComments) === false) return need
   if (!messenger?.lacks?.includes(need[0]) && !messenger?.never?.includes(need[0])) return undefined
   return messenger.history === "store" && STORE_ANSWERS.has(path) ? undefined : need
 }
