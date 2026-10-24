@@ -19,6 +19,10 @@ export interface Report<Doctor extends object = Record<string, unknown>> {
 
 /** Optional technical context supplied by a consumer; it is redacted with the rest of the report. */
 export interface ReportContext {
+  createdAt?: never
+  doctor?: never
+  run?: never
+  sends?: never
   version?: string
   runtime?: string
   platform?: string
@@ -66,7 +70,7 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
   context?: Context
   /** Retain allowlisted recorded fields, including time and severity, for an existing consumer contract. */
   eventFields?: "report" | "recorded"
-}): Report<Doctor> & Context => {
+}): Report<Doctor> & Omit<Context, keyof Report> => {
   const chosen = runId === undefined ? newestFailed(runsDir) : findRun(runsDir, runId)
   if (runId !== undefined && !chosen)
     throw new CliError("not_found", `no run ${runId} — \`${command} runs list\` names them`)
@@ -83,7 +87,7 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
     run: chosen ? { metadata: chosen.metadata, events: readEvents(chosen.dir).map(eventOf(label, eventFields)) } : null,
     sends: sends.slice(-RECENT_SENDS).map((entry) => labelled(entry, label)),
   }
-  return JSON.parse(hideHome(JSON.stringify(report), home)) as Report<Doctor> & Context
+  return JSON.parse(hideHome(JSON.stringify(report), home)) as Report<Doctor> & Omit<Context, keyof Report>
 }
 
 /**

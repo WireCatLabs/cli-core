@@ -12,7 +12,7 @@ shape of this file.
 - `buildDoctorReport`, `doctorReportFileName` and their report types are public through `/cli`.
   Consumers can reuse run selection, identifier labelling and home-path redaction while retaining
   typed diagnostic payloads and optional technical context. Existing reports keep their shape
-  when context is omitted. `eventFields: "recorded"` retains the run reader's allowlisted technical
+  when context is omitted. `eventFields: "recorded"` retains allowlisted recorded technical
   fields for consumers that already include them; the default report projection is unchanged.
 
 ## 0.410.0 — 24.10.2026

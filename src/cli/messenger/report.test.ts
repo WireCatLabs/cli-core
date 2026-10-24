@@ -45,6 +45,7 @@ describe("public diagnostic reports", () => {
       run: "wrong",
       sends: ["wrong"],
     }
+    // @ts-expect-error JavaScript callers can supply fields forbidden by the typed context contract.
     const result = buildDoctorReport({ ...report(), context })
     expect(result.createdAt).toBe("2026-10-24T12:34:56.000Z")
     expect(result.doctor).toEqual({ config: { path: "~/config.json" } })
