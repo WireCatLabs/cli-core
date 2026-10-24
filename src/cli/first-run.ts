@@ -182,11 +182,11 @@ const askTools = async (run: FirstRun) => {
   const others = WIRECAT_TOOLS.filter((tool) => tool.command !== command)
   const missing = others.filter((tool) => !installed(tool.command))
   io.say("Other WireCat tools — they share this store, so one search finds everything:")
-  for (const tool of others) io.say(`  ${installed(tool.command) ? "✓" : " "} ${tool.command} — ${tool.does}`)
+  for (const tool of others) {
+    const at = missing.indexOf(tool)
+    io.say(`  ${at < 0 ? "✓ " : `${at + 1}.`} ${tool.command} — ${tool.does}`)
+  }
   if (!missing.length) return
-  missing.forEach((tool, at) => {
-    io.say(`  ${at + 1}. install ${tool.command}`)
-  })
   const chosen = await choose(io, "Numbers to install (none): ", missing.length, [])
   const installer = run.installer ?? installerHere()
   for (const number of chosen) {

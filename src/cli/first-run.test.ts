@@ -67,7 +67,8 @@ describe("the questions every WireCat tool shares", () => {
     const env = place()
     const asked = run(env, ["2", "1,3", ""])
     await asked.done
-    expect(asked.said).toContain("  ✓ max — MAX in the same local store: search, review and tasks offline")
+    expect(asked.said).toContain("  ✓  max — MAX in the same local store: search, review and tasks offline")
+    expect(asked.said).toContain("  1. wa — WhatsApp in the same local store: search, review and tasks offline")
     expect(asked.installs).toEqual([
       ["npm", "install", "-g", "@wirecat/whatsapp-cli@latest"],
       ["npm", "install", "-g", "@wirecat/drive-cli@latest"],
