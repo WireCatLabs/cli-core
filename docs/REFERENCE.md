@@ -256,6 +256,39 @@ Without support, a validated target returns `url: null`, `access: unavailable`, 
 Offline validates this account's stored message and returns reason `offline`, without connecting.
 A locator for another messenger or account is refused. Singular `link` differs from graph `links`.
 
+## The entry point of a CLI with its own program
+
+A tool on `createProgram` starts through `run()`, which already handles signals and pipes. A tool that builds its own
+commander program starts through `startCli` (from `@wirecat/cli-core/cli`), so its `src/bin/<command>.ts` is a few
+lines:
+
+```ts
+#!/usr/bin/env node
+import { enableCompileCache } from "node:module"
+import { APP } from "../app.js"
+import { reportFailure } from "../failure.js"
+
+enableCompileCache()
+const { startCli } = await import("@wirecat/cli-core/cli")
+await startCli({
+  app: APP,
+  sqlite: true,
+  run: async (entry) => (await import("../program.js")).run(entry),
+  fail: (error, entry) => reportFailure(error, entry),
+})
+```
+
+`startCli` catches a crash before the program's own handler (`catchCrashes`, with `reasons` and `interactive`),
+aborts `entry.signal` on SIGINT and SIGTERM, ends with exit 0 when a reader closes the pipe (`| head`) and 3 when the
+output cannot be written, runs `ensureSqlite` first with `sqlite: true`, and gives help and the version their own
+exit code (help for a missing command exits 2). Any other failure goes to `fail` once. It sets `process.exitCode` and
+never calls `process.exit`. The program gets the rest in `entry`: `atStart(command)` from a `preAction` hook runs the
+first-run questions (`setupAtStart`, headless without a terminal, under CI, `--json`, `--jsonl` or `--no-input`, and
+locked by `<PREFIX>_READ_ONLY`); `ask(question, command?)` is the consent prompt, false without asking in the same
+cases; `openBrowser(url, browser?)` starts the system opener detached; `outputClosed()` says the pipe closed.
+What only one tool needs — zm's batch input file and keyring — the tool builds inside `run`, with `entry.signal`.
+Import the program lazily, as above: the compile cache and the SQLite swap only help what loads after them.
+
 ## Command discovery
 
 The handbook's [WC-CMD-28](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ) names

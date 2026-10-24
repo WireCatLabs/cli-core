@@ -251,7 +251,7 @@ export const askSetupQuestions = async (run: FirstRun): Promise<Question[]> => {
 /**
  * The first-run step a tool runs before each command: asks when `asksAtStart` says so, and lets the command run
  * whatever happens to the questions. `setup` asks all three again, since a refusal sends the owner there.
- * A tool that builds its own program (zm, memo, drive) calls this with its command path.
+ * A tool that builds its own program gets it from `startCli` as `entry.atStart`.
  */
 export const setupAtStart = async (start: {
   command: string
