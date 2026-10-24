@@ -70,11 +70,11 @@ it("declares actual missing, cached and partial-refresh metadata and projects it
       stderr: streams.stderr.join("\n"),
     }
   }
-  const missing = await call("get", "--chat", "7", "--json")
+  const missing = await call("show", "--chat", "7", "--json")
   expect(missing.code, missing.stderr).toBe(0)
   expect(v.parse(ENTITIES.chat_metadata, missing.body.item)).toEqual({ chat_id: "7", metadata: null })
   expect(connect).not.toHaveBeenCalled()
-  const refreshed = await call("refresh", "--chat", "7", "--chat", "missing", "--json")
+  const refreshed = await call("sync", "--chat", "7", "--chat", "missing", "--json")
   expect(refreshed.code, refreshed.stderr).toBe(0)
   v.parse(ENTITIES.chat_metadata_refresh, refreshed.body.item)
   expect(refreshed.body.item).toMatchObject({
@@ -85,16 +85,16 @@ it("declares actual missing, cached and partial-refresh metadata and projects it
     has_more: false,
   })
   expect(close).toHaveBeenCalled()
-  const cached = await call("get", "--chat", "7", "--json")
+  const cached = await call("show", "--chat", "7", "--json")
   v.parse(ENTITIES.chat_metadata, cached.body.item)
   expect(cached.body.item.metadata).toEqual(refreshed.body.item.chats[0])
-  const projected = await call("get", "--chat", "7", "--json=metadata.description")
+  const projected = await call("show", "--chat", "7", "--json=metadata.description")
   expect(projected.code, projected.stderr).toBe(0)
   expect(projected.body.item).toEqual({ metadata: { description: card.description } })
-  const limited = await call("refresh", "--chat", "7", "--chat", "missing", "--limit", "1", "--json")
+  const limited = await call("sync", "--chat", "7", "--chat", "missing", "--limit", "1", "--json")
   expect(v.parse(ENTITIES.chat_metadata_refresh, limited.body.item).has_more).toBe(true)
   const connections = connect.mock.calls.length
-  const refused = await call("get", "--chat", "7", "--json=unknown_field")
+  const refused = await call("show", "--chat", "7", "--json=unknown_field")
   expect(refused.code).not.toBe(0)
   expect(JSON.parse(refused.stderr).error.reason).toBe("output.unknown-field")
   expect(connect).toHaveBeenCalledTimes(connections)

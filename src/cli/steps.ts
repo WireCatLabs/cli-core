@@ -93,7 +93,7 @@ export const STEPS = defineSteps([
   },
   {
     id: "models.download",
-    command: "models text download",
+    command: "models download",
     args: [{ name: "model", required: true }],
     why: "{model} is not downloaded, so nothing is searched by meaning",
   },
@@ -126,7 +126,7 @@ export const STEPS = defineSteps([
   },
   {
     id: "store.reindex",
-    command: "store reindex",
+    command: "store rebuild",
     args: [],
     why: "the stems were built by another stemmer; this builds them again",
   },
@@ -144,7 +144,7 @@ export const STEPS = defineSteps([
   },
   {
     id: "conversations.build",
-    command: "conversations build",
+    command: "conversations links rebuild",
     args: [{ name: "chat", required: false }],
     why: "conversations are missing or older than the messages; this builds them",
   },
@@ -185,7 +185,7 @@ export const STEPS = defineSteps([
   },
   {
     id: "doctor.report-create",
-    command: "doctor report create",
+    command: "doctor reports create",
     args: [{ name: "run", required: false }],
     why: "writes the report to a file to read and send; it holds no message text",
   },

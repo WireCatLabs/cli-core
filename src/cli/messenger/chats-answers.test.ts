@@ -140,9 +140,9 @@ const ROWS: Row[] = [
   { argv: ["chats", "show", "7"], entity: "chat", list: false },
   { argv: ["chats", "events", "7", "time>=2d"], entity: "chat_event", list: true },
   { argv: ["chats", "members", "list", "7", "--limit", "2"], entity: "member", list: true },
-  { argv: ["chats", "members", "audit", "7", "score>=1"], entity: "member", list: true },
-  { argv: ["chats", "link", "list", "7", "--limit", "2"], entity: "invite_link", list: true },
-  { argv: ["chats", "link", "list", "7", "revoked:true"], entity: "invite_link", list: true },
+  { argv: ["chats", "members", "check", "7", "score>=1"], entity: "member", list: true },
+  { argv: ["chats", "links", "list", "7", "--limit", "2"], entity: "invite_link", list: true },
+  { argv: ["chats", "links", "list", "7", "revoked:true"], entity: "invite_link", list: true },
   { argv: ["chats", "requests", "list", "7", "--limit", "2", "name:person"], entity: "join_request", list: true },
   { argv: ["chats", "folders", "list"], entity: "folder", list: true },
 ]

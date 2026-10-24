@@ -297,10 +297,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   planOptions(
     destroysNothing(
-      annotate(tasks.command("plan"), {
+      annotate(tasks.command("update"), {
         output: { entity: "task_card" },
+
         effects: LOCAL_WRITE,
-        examples: [`${tool} personal tasks plan DOC-12 --title "Review draft"`],
+        examples: [`${tool} personal tasks update DOC-12 --title "Review draft"`],
       }),
     )
       .summary("set a task's title, description, due date, next check, category and assignee")
@@ -312,7 +313,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     "send Alex the API token",
   ).action(async function (this: Command, id: string) {
     const context = messengerContext(this, messenger)
-    refuseLocalWrite(context, messenger.app.command, "tasks.plan")
+    refuseLocalWrite(context, messenger.app.command, "tasks.update")
     const plan = planFrom(this.opts())
     if (Object.keys(plan).length === 0)
       throw new CliError(

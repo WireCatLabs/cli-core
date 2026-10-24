@@ -8,7 +8,7 @@ strict Lucene message search and optional graph/embedding conversation search ar
 |---|---|---|
 | finds | messages | conversations inside a group chat |
 | by | strict Lucene words/phrases, Boolean fields and bounded patterns | meaning, and the words it shares, merged |
-| needs | stored history and a ready word index for strict text predicates | `conversations build`, then `conversations embed` |
+| needs | stored history and a ready word index for strict text predicates | `conversations links rebuild`, then `conversations embed` |
 | runs | SQLite plus bounded validation/pattern checks; no embedding model | a model on this machine (or the user's API key), then a scan |
 | MCP tool | `<cli>_messages_search` | `<cli>_conversations_search` |
 
@@ -128,7 +128,7 @@ typos neither index finds alone; **substring** finds fragments — parts of numb
 middle of words — and brings noise.
 
 **Stems** — the store keeps the Snowball stems of every message (`message_stems`), built by
-`store migrate`, rebuilt by `store reindex`, and reported as `stemIndex` by `store info` and
+`store migrate`, rebuilt by `store rebuild`, and reported as `stemIndex` by `store info` and
 `store check`. The stemmers are chosen for the whole store, not per profile:
 `config set search_stemmers.cyrillic russian|none` and `config set search_stemmers.latin <list>|none`.
 
@@ -144,7 +144,7 @@ Phase 5. Four steps, each a command the owner runs, and nothing leaves the machi
 
 ### 1 · Conversations, then chunks
 
-`conversations build --chat <chat>` groups a group chat's messages into conversations — by replies,
+`conversations links rebuild --chat <chat>` groups a group chat's messages into conversations — by replies,
 mentions and who wrote next (phase 3). The same build cuts each conversation into
 **chunks**: consecutive messages, cut only between messages, at most 1,200 characters each (about 300
 tokens; `CHUNK_CHARS`, `src/conversations/chunks.ts`). A chunk's text is `sender: text` per line. The
@@ -187,7 +187,7 @@ keyed by **model and text hash**, not by chat or conversation:
 The run resumes where it stopped, and `embed status` says how many chunks are left and how long they
 should take. A chunk whose messages changed after the build waits for the next build.
 
-**The models** (`models text list`, downloaded once into a folder every messenger CLI shares):
+**The models** (`models list`, downloaded once into a folder every messenger CLI shares):
 
 | model | vector | size | languages | speed here |
 |---|---|---|---|---|
@@ -196,7 +196,7 @@ should take. A chunk whose messages changed after the build waits for the next b
 | an API: OpenAI `text-embedding-3-small`, or any server with OpenAI's `/v1/embeddings` (`--base-url`) | the model's | — | the model's | the API's |
 
 They run in our own WebAssembly build of ONNX Runtime (`@wirecat/cli-core-onnx`) — no native
-code, the same on Node and Bun. An API model needs the user's key (`models text key set`), says
+code, the same on Node and Bun. An API model needs the user's key (`models keys set`), says
 how many chunks, tokens and dollars at most before chat text leaves the machine, and waits for a yes.
 
 e5-small is weak across languages: an English chat did not answer the same question asked in Russian.
@@ -215,7 +215,7 @@ fast as sqlite-vec, which would need a native extension per platform
 A chat embedded only with another model cannot be searched by meaning with this one: the search names
 it on stderr and in a `missing` entry with the `conversations.embed` step, instead of leaving it out silently.
 
-**Freshness.** Both indexes change only when the owner runs `conversations build` and `conversations embed`
+**Freshness.** Both indexes change only when the owner runs `conversations links rebuild` and `conversations embed`
 — nothing runs on sync.
 `conversations status` (MCP `conversations_status`) shows, per built chat, the messages the build has not seen
 — new and deleted ones by the build's membership, edited ones by their revision's time — and the chunks whose
@@ -224,7 +224,7 @@ trace there. The search answers the same as `missing` entries — chats searched
 changed since the build or never built — each with the step that fixes it (`conversations.embed`,
 `conversations.build`), and `models.download` when the model is not downloaded.
 
-**Catching up** (NEED-551 A). Without `--chat`, `conversations build` rebuilds every built chat that changed
+**Catching up** (NEED-551 A). Without `--chat`, `conversations links rebuild` rebuilds every built chat that changed
 since its build (or whose rules are older), the oldest build first, then builds the group chats never built,
 the newest message first; `conversations embed` embeds the chunks left in every built chat. Each run does at
 most `--max-chats` chats (20) and embeds at most `--max-chunks` chunks (2,000, about a minute with e5-small);
@@ -259,7 +259,7 @@ Each result says how it was found:
 
 `score` is the meaning's cosine, `null` when only words found the conversation. A built chat that was
 never embedded can still be found by its words. When the local model is not downloaded, the search answers by
-words alone, says `meaning: "unavailable"` and names `models text download` on stderr (NEED-552 A); it never
+words alone, says `meaning: "unavailable"` and names `models download` on stderr (NEED-552 A); it never
 downloads a model or calls a remote one in its place. A remote model that fails is still an error.
 
 ### Notes and documents: a title match comes first
@@ -276,7 +276,7 @@ accents), each group in its word order. They are followed by the merged list wit
 the conversations nearest in meaning to the one the message is in, in every built chat, never that one. The
 query is the mean of that conversation's vectors, made unit length again — only the vectors of chunks whose
 messages did not change since the build, so an edit or a deletion is not searched as it was. No model runs:
-it works with none downloaded. It answers the same `readiness` as the search, and refuses with `conversations build` (the chat changed)
+it works with none downloaded. It answers the same `readiness` as the search, and refuses with `conversations links rebuild` (the chat changed)
 or `conversations embed` (no vector) when the conversation has no usable vector. It has no `--chat` scope yet:
 the source is already `<chat>`, and a second chat option needs a name of its own.
 
@@ -308,7 +308,7 @@ One group chat of 100,000 synthetic messages in three languages, 42,417 chunks, 
 
 | step | time |
 |---|---|
-| `conversations build` | 3.3 s |
+| `conversations links rebuild` | 3.3 s |
 | `conversations embed`, e5-small | ~22 min, Node or Bun; 3 worker threads gained only 1.04–1.1×, so there are none |
 | `conversations search`, one-shot | ~1.4 s (model load ~1 s, then the scan) |
 | `conversations search` in the MCP server | ~0.35 s |

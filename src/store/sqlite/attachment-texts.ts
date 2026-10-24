@@ -141,7 +141,7 @@ export const keepText = (
 }
 
 /**
- * For `store reindex`: the normalized copies follow the current normalizer, then the word index is
+ * For `store rebuild`: the normalized copies follow the current normalizer, then the word index is
  * emptied and filled from them in one transaction — the table is small next to the messages.
  */
 export const resetAttachmentWords = (database: CacheDatabase): number => {

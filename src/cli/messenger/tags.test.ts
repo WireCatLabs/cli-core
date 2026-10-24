@@ -86,14 +86,14 @@ const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "n
 
 it("declares automatic tag previews and applied receipts, including failed chats", async () => {
   const chat = await setup()
-  const preview = await chat("tags", "auto", "--chat", "7", "--chat", "missing", "--dry-run", "--json")
+  const preview = await chat("tags", "rebuild", "--chat", "7", "--chat", "missing", "--dry-run", "--json")
   expect(preview.code, preview.stderr).toBe(0)
   const body = JSON.parse(preview.stdout.join(""))
   const parsed = v.parse(ENTITIES.automatic_tags, body.item)
   expect(parsed.dry_run).toBe(true)
   expect(parsed.items).toHaveLength(2)
   expect(parsed.items[1]).toMatchObject({ chat_id: "missing", error: { code: "not_found" } })
-  const applied = await chat("tags", "auto", "--chat", "7", "--json")
+  const applied = await chat("tags", "rebuild", "--chat", "7", "--json")
   expect(applied.code, applied.stderr).toBe(0)
   expect(v.parse(ENTITIES.automatic_tags, JSON.parse(applied.stdout.join("")).item).dry_run).toBe(false)
   const projected = await chat("tags", "add", "reading", "--chat", "7", "--json=target.chat_id,added")

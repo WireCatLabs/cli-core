@@ -330,7 +330,7 @@ Ranking не меняет Boolean множество. Когда в запрос
 `<cli> config set search_stemmers.latin english,spanish|english|spanish|none`. По умолчанию латиница
 идёт через оба стеммера, английский и испанский: слово находится в любой из двух форм, и язык угадывать
 не нужно. Архиву только на английском можно оставить `english` (меньше склеек). После смены поиск по
-словам ждёт `<cli> store reindex`.
+словам ждёт `<cli> store rebuild`.
 
 Известные склейки (разные слова с одной основой): `часть`/`часто` (`част`), `потому`/`потом` (`пот`),
 `caso`/`casa` (`cas`), `partido`/`parte` (`part`), `plazo`/`plaza` (`plaz`); английский через
@@ -633,7 +633,7 @@ CLI печатает позицию с единицы. `~` после слова
 Для слов в `text` нужен ещё индекс основ: пока он не готов, ответ — `index.not-ready` с
 `index: "message_stems"`, `cause` (`building`, `stemmer_changed` после смены стеммеров,
 `stemmer_unknown` — стеммеры знает только более новая версия), `done`/`total` и командой
-(`store migrate` или `store reindex`). Подмены точным поиском нет; `exact:` и `--exact` работают и до этого.
+(`store migrate` или `store rebuild`). Подмены точным поиском нет; `exact:` и `--exact` работают и до этого.
 `query.unsupported-field` отличается от `query.unknown-field`; incomplete archive — состояние охвата, не syntax error.
 
 ## Машинный контракт и охват

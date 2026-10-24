@@ -208,7 +208,9 @@ describe("store check", () => {
       expect.objectContaining({ chat: "8", rules_version: RULES_VERSION, current: true, stale_agent_links: 0 }),
       expect.objectContaining({ chat: "7", rules_version: 1, current: false, stale_agent_links: 1 }),
     ])
-    expect(stderr.join("\n")).toContain("1 chats' conversations were built by older rules — `chat conversations build")
+    expect(stderr.join("\n")).toContain(
+      "1 chats' conversations were built by older rules — `chat conversations links rebuild",
+    )
   })
 
   it("**reports a search index that no longer matches its table**, and repairs nothing", async () => {
@@ -315,12 +317,12 @@ describe("the word index", () => {
     }
   }
 
-  it("**`store reindex` rebuilds it and its vocabulary** from the stored messages", async () => {
+  it("**`store rebuild` rebuilds it and its vocabulary** from the stored messages", async () => {
     const env = envFor()
     ;(await seeded(env)).close()
     await call(["store", "migrate", "--json"], env)
 
-    const { answer } = await call(["store", "reindex", "--json"], env)
+    const { answer } = await call(["store", "rebuild", "--json"], env)
 
     expect(answer).toEqual({
       path: env.MESSAGING_STORE,
@@ -368,14 +370,14 @@ describe("the word index", () => {
     expect((await call(["store", "check", "--json"], env)).answer.word_index).toMatchObject({ terms_ready: true })
   })
 
-  it("`store reindex` refuses a file requiring a newer build", async () => {
+  it("`store rebuild` refuses a file requiring a newer build", async () => {
     const env = envFor()
     const database = await seeded(env)
     migrate(database, {
       migrations: [...MIGRATIONS, { version: latest + 1, minCompatible: latest + 1, statements: [] }],
     })
     database.close()
-    const { code, stderr } = await call(["store", "reindex", "--json"], env)
+    const { code, stderr } = await call(["store", "rebuild", "--json"], env)
     expect(code).not.toBe(0)
     expect(stderr.join("\n")).toContain("upgrade this tool")
   })
@@ -557,7 +559,7 @@ describe("store reset", () => {
 })
 
 describe("the stems", () => {
-  it("**`config set search_stemmers.*` is store-wide**: stems wait for `store reindex`, which rebuilds them", async () => {
+  it("**`config set search_stemmers.*` is store-wide**: stems wait for `store rebuild`, which rebuilds them", async () => {
     const env = envFor()
     ;(await seeded(env)).close()
     await call(["store", "migrate", "--json"], env)
@@ -576,7 +578,7 @@ describe("the stems", () => {
       wanted: "snowball-3.1.1 cyrillic=russian latin=english",
     })
 
-    expect((await call(["store", "reindex", "--json"], env)).answer).toMatchObject({ stemmed: 2 })
+    expect((await call(["store", "rebuild", "--json"], env)).answer).toMatchObject({ stemmed: 2 })
     expect((await call(["store", "info", "--json"], env)).answer.stem_index).toMatchObject({
       ready: true,
       built: "snowball-3.1.1 cyrillic=russian latin=english",

@@ -92,7 +92,7 @@ const SHARED_PROFILE_ENTRIES = {
   sends_per_hour: v.optional(count),
   requests_per_minute: v.optional(countOrZero),
   transcribe_with: v.optional(v.picklist(["auto", "messenger", "local"], plain("has to be auto, messenger or local"))),
-  speech_model: v.optional(v.string(plain("has to be a model id from `models audio list`, in quotes"))),
+  speech_model: v.optional(v.string(plain("has to be a model id from `models list`, in quotes"))),
   search_catch_up: v.optional(flag),
   picture_search: v.optional(flag),
   ...AI_ENTRIES,

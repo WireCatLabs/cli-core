@@ -10,14 +10,14 @@ metadata:
 A busy group mixes several conversations at once. `{{command}}` already links what it can without
 you: the messenger's own replies, mentions, and one person's messages in a row. You decide the rest:
 for each message, **which earlier message it answers**, or that it starts a new conversation. You
-read the messages; `{{command}}` checks and stores your answers. By default it leaves analysis to your agent. An explicit configured analysis provider can also process these batches through `conversations build --analyze`; that path asks for consent and validates the same answers.
+read the messages; `{{command}}` checks and stores your answers. By default it leaves analysis to your agent. An explicit configured analysis provider can also process these batches through `conversations links rebuild --analyze`; that path asks for consent and validates the same answers.
 
 ## Before the first batch: say what it costs, and wait
 
 The messages you read go into your own context, and through it to your model's provider. So first:
 
 ```sh
-{{command}} conversations build --chat "<chat>"                       # the rules' links, as candidates for you
+{{command}} conversations links rebuild --chat "<chat>"                       # the rules' links, as candidates for you
 {{command}} conversations batches status --chat "<chat>" --json
 ```
 
@@ -27,7 +27,7 @@ quarter as many tokens). **Wait for a yes.** A yes for one chat is not a yes for
 ## The loop
 
 ```sh
-{{command}} conversations batches next --chat "<chat>" --json         # one batch, or null when done
+{{command}} conversations batches show --chat "<chat>" --json         # one batch, or null when done
 ```
 
 A batch is `{ "batch": "<id>", "messages": [...], "remaining": {...} }`. Each message has `id`, `at`,
@@ -53,8 +53,8 @@ Then store the answer, as JSON on stdin:
 ANSWER
 ```
 
-Repeat `batches next` until it answers `null`. Then rebuild once, so your answers shape the
-conversations: `{{command}} conversations build --chat "<chat>"`. On a long chat, rebuild every 20
+Repeat `batches show` until it answers `null`. Then rebuild once, so your answers shape the
+conversations: `{{command}} conversations links rebuild --chat "<chat>"`. On a long chat, rebuild every 20
 batches too, so the owner sees progress.
 
 ## When an answer is refused
@@ -80,9 +80,9 @@ was added or deleted inside it: ask for the next batch instead.
 ## Through MCP
 
 Follow the same cost gate and loop through MCP: each step is the same command, run with
-`{{command}}_read` (`conversations batches status`, `conversations batches next`,
-`conversations show`) or `{{command}}_write` (`conversations build`, `conversations links add`,
-`conversations links clear`), as `{ "command": "conversations build", "arguments": { … } }`.
+`{{command}}_read` (`conversations batches status`, `conversations batches show`,
+`conversations show`) or `{{command}}_write` (`conversations links rebuild`, `conversations links add`,
+`conversations links clear`), as `{ "command": "conversations links rebuild", "arguments": { … } }`.
 `{{command}}_tools_search` shows each one's arguments.
 
 Use `chat` for the chat reference, and `size` for the batch size (10–200, default 50).

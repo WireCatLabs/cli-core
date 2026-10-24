@@ -23,7 +23,7 @@ export interface Involvement {
 }
 
 export interface InvolvementStore {
-  /** Every row from scratch, or one person's; `store reindex` runs it, and it empties the queue. */
+  /** Every row from scratch, or one person's; `store rebuild` runs it, and it empties the queue. */
   rebuild(personId?: number): number
   /** Recomputes what is still queued; every write already does this before it commits. */
   drain(): { recomputed: number; pending: number }

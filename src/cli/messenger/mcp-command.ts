@@ -125,9 +125,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
   command.addCommand(
     withFlags(
       grantsAuthority(
-        annotate(new Command("setup"), {
+        annotate(new Command("add"), {
           effects: LOCAL_WRITE,
-          examples: [`${app.command} personal mcp setup codex --allow-writes`],
+          examples: [`${app.command} personal mcp add codex --allow-writes`],
         }),
       )
         .description("add this profile's local MCP server to Codex or Claude Code")
@@ -168,9 +168,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
   )
   command.addCommand(
     withFlags(
-      annotate(new Command("doctor"), {
+      annotate(new Command("check"), {
         effects: LOCAL_READ,
-        examples: [`${app.command} personal mcp doctor`],
+        examples: [`${app.command} personal mcp check`],
       }).description("check this profile's local MCP handshake and tool list"),
     ).action(async function (this: Command) {
       const context = messengerContext(this, messenger)

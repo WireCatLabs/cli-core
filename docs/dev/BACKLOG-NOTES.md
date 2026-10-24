@@ -5,14 +5,14 @@ moved here word for word so the lists stay short. A note is deleted with its ite
 
 ## CORE-4
 
-cli-core 0.397.0 supplies concise command summaries and positional argument help. Remaining examples and
-vocabulary paths are tracked in `lint/baseline/`; commands that return owner data still need precise result
-entities, completed by command group.
+cli-core 0.397.0 supplies concise command summaries and positional argument help. The vocabulary migration
+uses explicit report/list leaves without compatibility command aliases; saved permission paths must be
+renamed before use. Result schemas are declared by command group. Retired CLI paths are refused with the
+canonical replacement.
 
 The option migration in [#1810](https://github.com/WireCatLabs/cli-core/pull/1810) distinguishes analysis,
 embedding and consent providers, tag ownership, stored-answer models and reply-template policies. Catch-up
-chat kinds use query terms. Hidden CLI aliases last one compatibility release; saved MCP requests use the
-canonical argument names. CORE-28 tracks alias removal.
+chat kinds use query terms. CLI and MCP both accept only canonical argument names; the old option spellings are refused.
 
 ## CORE-6
 

@@ -220,13 +220,13 @@ const call = async (
       "chats join": "chat_group_change",
       "chats leave": "chat_removal",
       "chats update": "chat_group_change",
-      "chats link show": "chat_invite",
-      "chats link create": "chat_invite_change",
-      "chats link revoke": "chat_invite_change",
-      "chats link update": "chat_invite_change",
-      "chats link reset": "chat_group_change",
-      "chats requests accept": "chat_request_change",
-      "chats requests decline": "chat_request_change",
+      "chats links show": "chat_invite",
+      "chats links create": "chat_invite_change",
+      "chats links remove": "chat_invite_change",
+      "chats links update": "chat_invite_change",
+      "chats links reset": "chat_group_change",
+      "chats requests confirm": "chat_request_change",
+      "chats requests reject": "chat_request_change",
       "chats admins add": "chat_admin_change",
       "chats admins remove": "chat_admin_change",
       "chats folders create": "chat_folder_change",
@@ -236,18 +236,18 @@ const call = async (
       "chats folders order": "chat_folder_order",
       "chats rules": "chat_rules",
       "chats moderate": "chat_moderation",
-      "conversations build": "conversation_build",
+      "conversations links rebuild": "conversation_build",
       "conversations show": "conversation.details",
       "conversations list": "conversation",
       "conversations related": "conversation_hit",
       "conversations status": "conversation_readiness",
       "conversations batches status": "conversation_batch_status",
-      "conversations batches next": "conversation_batch",
+      "conversations batches show": "conversation_batch",
       "conversations links add": "conversation_change",
       "conversations links clear": "conversation_change",
       "conversations embed": "conversation_embedding",
-      "conversations embed status": "conversation_embedding_status",
-      "conversations embed clear": "conversation_change",
+      "conversations embeddings status": "conversation_embedding_status",
+      "conversations embeddings clear": "conversation_change",
       "conversations rebuild": "conversation_preparation",
       "search conversations": "conversation_hit",
     } as const
@@ -2275,7 +2275,7 @@ describe("the shared read commands", () => {
     }))
     const backend = { ...fake, history: async () => ({ items: records, hasMore: false }) }
     await call(["messages", "list", "7", "--json"], async () => backend, env)
-    await call(["conversations", "build", "--chat", "7", "--json"], async () => backend, env)
+    await call(["conversations", "links", "rebuild", "--chat", "7", "--json"], async () => backend, env)
     const never = vi.fn(async () => {
       throw new Error("thread must stay local")
     })
@@ -3077,7 +3077,7 @@ describe("the shared read commands", () => {
           },
           close: async () => {},
         }) as unknown as MessengerAdapter
-      const audit = await call(["chats", "members", "audit", "7", "--json"], roster, env, {}, { provider })
+      const audit = await call(["chats", "members", "check", "7", "--json"], roster, env, {}, { provider })
       expect(audit.code).toBe(0)
       expect(audit.stdout).toHaveLength(1)
       expect(JSON.parse(audit.stdout[0] ?? "null")).toMatchObject({
@@ -3351,7 +3351,7 @@ describe("the shared read commands", () => {
     expect(Object.keys(JSON.parse(projected.stdout[0] ?? "null").item)).toEqual(["uid"])
   })
 
-  it("contacts timeline lists what a person took part in, newest first, within a time range and scope", async () => {
+  it("contacts events lists what a person took part in, newest first, within a time range and scope", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-timeline-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3394,11 +3394,11 @@ describe("the shared read commands", () => {
     await store.messages.saveMessages(other, "31", [said("3", "2026-09-04T10:00:00.000Z")], { via: "test" })
     await store.close()
     const never = async (): Promise<MessengerAdapter> => {
-      throw new Error("contacts timeline must never connect")
+      throw new Error("contacts events must never connect")
     }
     const timeline = async (...flags: string[]) => {
       const result = await call(
-        ["contacts", "timeline", "21", ...flags, "--offline", "--json"],
+        ["contacts", "events", "21", ...flags, "--offline", "--json"],
         never,
         env,
         {},
@@ -3431,14 +3431,14 @@ describe("the shared read commands", () => {
       page: { mode: "cursor", limit: 1, has_more: true, next_cursor: expect.stringMatching(/^before:\d+:\d+$/) },
     })
     expect(cut.meta?.truncated).toBeUndefined()
-    expect(cut.next[0]).toMatchObject({ step: "page.next", command: "contacts timeline", args: { person: "21" } })
+    expect(cut.next[0]).toMatchObject({ step: "page.next", command: "contacts events", args: { person: "21" } })
     const rest = await timeline("--limit", "1", "--cursor", cut.page.next_cursor)
     expect(rest.items.map((item: { locator: string }) => item.locator)).toEqual(["msg:telegram/500/31/1"])
     expect(rest.page.has_more).toBe(false)
     expect((await timeline("--scope", "work")).items).toEqual([])
   })
 
-  it("contacts profile adds their stored activity per shared chat, and shows a phone's last four digits", async () => {
+  it("contacts info adds their stored activity per shared chat, and shows a phone's last four digits", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-profile-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3492,14 +3492,14 @@ describe("the shared read commands", () => {
     }
 
     const masked = await call(
-      ["contacts", "profile", "11", "--json"],
+      ["contacts", "info", "11", "--json"],
       async () => described,
       env,
       {},
       { provider: "telegram" },
     )
     const whole = await call(
-      ["contacts", "profile", "11", "--show-phone", "--json"],
+      ["contacts", "info", "11", "--show-phone", "--json"],
       async () => described,
       env,
       {},
@@ -3534,7 +3534,7 @@ describe("the shared read commands", () => {
     expect(JSON.parse(whole.stdout[0] ?? "null").item.phone).toBe("0123")
   })
 
-  it("contacts profile --offline describes them from the store and never connects", async () => {
+  it("contacts info --offline describes them from the store and never connects", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-profile-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     rememberAccount(app, "default", "500", env)
@@ -3550,7 +3550,7 @@ describe("the shared read commands", () => {
     }
 
     const found = await call(
-      ["contacts", "profile", "11", "--offline", "--json"],
+      ["contacts", "info", "11", "--offline", "--json"],
       never,
       env,
       {},
@@ -3658,7 +3658,7 @@ describe("the shared read commands", () => {
       expect(read.unknown).toEqual(expect.arrayContaining(["fake", "deleted"]))
 
       const deep = await call(
-        ["chats", "members", "audit", "7", "--deep", "1", "--json"],
+        ["chats", "members", "check", "7", "--deep", "1", "--json"],
         person,
         env,
         {},
@@ -3685,9 +3685,9 @@ describe("the shared read commands", () => {
     }
 
     expect((await call(["conversations", "list", "7"], never, env)).stderr.join("\n")).toContain(
-      "conversations build --chat 7",
+      "conversations links rebuild --chat 7",
     )
-    const built = await call(["conversations", "build", "--chat", "7", "--json"], never, env)
+    const built = await call(["conversations", "links", "rebuild", "--chat", "7", "--json"], never, env)
     expect(JSON.parse(built.stdout[0] ?? "").item).toMatchObject({ chat: "7", messages: 3, conversations: 1 })
     const listed = v.parse(
       listEnvelopeSchema(conversation),
@@ -3719,16 +3719,16 @@ describe("the shared read commands", () => {
     })
     expect((await call(["conversations", "show", "Book"], never, env)).code).toBe(2)
 
-    const status = await call(["conversations", "embed", "status", "--chat", "7", "--json"], never, env)
+    const status = await call(["conversations", "embeddings", "status", "--chat", "7", "--json"], never, env)
     expect(status.stderr.join("\n")).toBe("")
     expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ embedded: 0 })
     const cleared = await call(
-      ["conversations", "embed", "clear", "--chat", "7", "--model", "e5-small", "--json"],
+      ["conversations", "embeddings", "clear", "--chat", "7", "--model", "e5-small", "--json"],
       never,
       env,
     )
     expect(JSON.parse(cleared.stdout[0] ?? "").item).toMatchObject({ cleared: 0 })
-    expect((await call(["conversations", "embed", "status"], never, env)).code).toBe(2)
+    expect((await call(["conversations", "embeddings", "status"], never, env)).code).toBe(2)
 
     const readiness = await call(["conversations", "status", "--json"], never, env)
     expect(readiness.stderr).toEqual([])
@@ -3780,7 +3780,7 @@ describe("the shared read commands", () => {
       return new Response("{}")
     })
     try {
-      const built = await call(["conversations", "build", "--max-chats", "5", "--json"], never, env)
+      const built = await call(["conversations", "links", "rebuild", "--max-chats", "5", "--json"], never, env)
       expect(built.stdout).toHaveLength(1)
       expect(JSON.parse(built.stdout[0] ?? "").item).toMatchObject({
         built: [{ chat: "7", messages: 3 }],
@@ -3790,7 +3790,7 @@ describe("the shared read commands", () => {
       expect(built.stderr.join("\n")).toContain("chat 7: 3 messages → 1 conversations")
 
       for (const remote of [
-        ["--provider", "openai"],
+        ["--embedding-provider", "openai"],
         ["--base-url", "https://api.example.com/v1", "--dims", "8"],
       ]) {
         const embed = await call(["conversations", "embed", ...remote, "--yes", "--json"], never, env)
@@ -3803,7 +3803,7 @@ describe("the shared read commands", () => {
 
       const embed = await call(["conversations", "embed", "--json"], never, env)
       expect([embed.code, embed.stdout]).toEqual([6, []])
-      expect(embed.stderr.join("\n")).toContain("models text download e5-small")
+      expect(embed.stderr.join("\n")).toContain("models download e5-small")
 
       const found = await call(
         ["search", "conversations", "chapter", "--catch-up", "--max-chunks", "10", "--json"],
@@ -3820,7 +3820,7 @@ describe("the shared read commands", () => {
       mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
       writeFileSync(
         join(env.CHAT_CONFIG_DIR, "config.json"),
-        JSON.stringify({ profiles: { default: { permissions: { "conversations.embed": "readonly" } } } }),
+        JSON.stringify({ profiles: { default: { permissions: { "conversations.embeddings": "readonly" } } } }),
       )
       const refused = await call(["search", "conversations", "chapter", "--catch-up", "--json"], never, env)
       expect([refused.code, refused.stdout]).toEqual([5, []])
@@ -3846,7 +3846,7 @@ describe("the shared read commands", () => {
     const status = await call(["conversations", "batches", "status", "--chat", "7", "--json"], never, env)
     expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ chat: "7", messages: 3, batches: 1 })
     const next = await call(
-      ["conversations", "batches", "next", "--chat", "7", "--size", "10", "--json", "--record"],
+      ["conversations", "batches", "show", "--chat", "7", "--size", "10", "--json", "--record"],
       never,
       env,
     )
@@ -3862,16 +3862,16 @@ describe("the shared read commands", () => {
         entry.isDirectory() ? kept(join(dir, entry.name)) : [readFileSync(join(dir, entry.name), "utf8")],
       )
     const records = kept(env.CHAT_STATE_DIR)
-    expect(records.join("\n")).toContain("conversations batches next")
+    expect(records.join("\n")).toContain("conversations batches show")
     expect(records.join("\n")).not.toContain("chapter three")
-    expect((await call(["conversations", "batches", "next", "--chat", "7", "--size", "5"], never, env)).code).toBe(2)
+    expect((await call(["conversations", "batches", "show", "--chat", "7", "--size", "5"], never, env)).code).toBe(2)
 
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
       JSON.stringify({ profiles: { default: { permissions: { messages: "deny" } } } }),
     )
-    expect((await call(["conversations", "batches", "next", "--chat", "7"], never, env)).code).toBe(5)
+    expect((await call(["conversations", "batches", "show", "--chat", "7"], never, env)).code).toBe(5)
   })
 
   it("**asks before chat text leaves the machine**: --yes in machine mode, --max-tokens, never under the read-only lock, none for a local server; a query to a remote embedder is held by the lock too", async () => {
@@ -3887,7 +3887,7 @@ describe("the shared read commands", () => {
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("embedding reads the store alone")
     }
-    expect((await call(["conversations", "build", "--chat", "7"], never, env)).code).toBe(0)
+    expect((await call(["conversations", "links", "rebuild", "--chat", "7"], never, env)).code).toBe(0)
     const sent: { url: string; auth: string | undefined }[] = []
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       sent.push({ url, auth: (init.headers as Record<string, string>).authorization })
@@ -3899,7 +3899,7 @@ describe("the shared read commands", () => {
     })
     try {
       const unasked = await call(
-        ["conversations", "embed", "--chat", "7", "--provider", "openai", "--json"],
+        ["conversations", "embed", "--chat", "7", "--embedding-provider", "openai", "--json"],
         never,
         env,
       )
@@ -3908,7 +3908,18 @@ describe("the shared read commands", () => {
       expect(sent).toEqual([])
 
       const capped = await call(
-        ["conversations", "embed", "--chat", "7", "--provider", "openai", "--max-tokens", "1", "--yes", "--json"],
+        [
+          "conversations",
+          "embed",
+          "--chat",
+          "7",
+          "--embedding-provider",
+          "openai",
+          "--max-tokens",
+          "1",
+          "--yes",
+          "--json",
+        ],
         never,
         env,
       )
@@ -3927,7 +3938,7 @@ describe("the shared read commands", () => {
       expect(sent).toEqual([])
 
       const agreed = await call(
-        ["conversations", "embed", "--chat", "7", "--provider", "openai", "--yes", "--json"],
+        ["conversations", "embed", "--chat", "7", "--embedding-provider", "openai", "--yes", "--json"],
         never,
         env,
       )
@@ -3961,7 +3972,11 @@ describe("the shared read commands", () => {
         (await call(["conversations", "embed", "--chat", "7", ...local, "--json"], never, onThisMachine)).code,
       ).toBe(0)
       expect(sent[0]?.url).toBe("http://127.0.0.1:11434/v1/embeddings")
-      const status = await call(["conversations", "embed", "status", "--chat", "7", ...local, "--json"], never, env)
+      const status = await call(
+        ["conversations", "embeddings", "status", "--chat", "7", ...local, "--json"],
+        never,
+        env,
+      )
       expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ model: "url:127.0.0.1:11434:m", left: 0 })
       const found = await call(["search", "conversations", "anything", ...local, "--json"], never, onThisMachine)
       expect(JSON.parse(found.stdout[0] ?? "").items.length).toBeGreaterThan(0)
@@ -3998,7 +4013,7 @@ describe("the shared read commands", () => {
         piped(JSON.stringify({ model: "m", answers: [{ message: "2", parent: "1", confidence: 0.9 }] })),
       )
     const batch = JSON.parse(
-      (await call(["conversations", "batches", "next", "--chat", "7", "--json"], never, env)).stdout[0] ?? "",
+      (await call(["conversations", "batches", "show", "--chat", "7", "--json"], never, env)).stdout[0] ?? "",
     ).item.batch
 
     permissions({ messages: "readonly" })
@@ -4813,7 +4828,7 @@ describe("messages transcribe", () => {
     const { code, stderr } = await call(["messages", "transcribe", "Book", "5", "--local"], never, env())
 
     expect(code).not.toBe(0)
-    expect(stderr.join("")).toContain("chat models audio download parakeet-v3")
+    expect(stderr.join("")).toContain("chat models download parakeet-v3")
   })
 
   it("**saves a reference the messenger renewed while --local read the voice message**", async () => {
@@ -4931,7 +4946,7 @@ describe("messages transcribe", () => {
   })
 
   it("lists the speech models Parakeet first, none downloaded, the first the default", async () => {
-    const { stdout } = await call(["models", "audio", "list", "--json"], async () => fake, env())
+    const { stdout } = await call(["models", "list", "kind:audio", "--json"], async () => fake, env())
 
     expect(
       JSON.parse(stdout[0] ?? "").items.map((one: { id: string; downloaded: boolean; default: boolean }) => [
@@ -5552,7 +5567,7 @@ describe("every list in --json", () => {
       ["messages", "context", "7", "2"],
       ["messages", "scheduled", "7"],
       ["account", "sessions", "list"],
-      ["models", "audio", "list"],
+      ["models", "list", "kind:audio"],
       ["store", "status"],
       ["store", "jobs", "list"],
       ["sends", "list"],

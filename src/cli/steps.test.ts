@@ -129,14 +129,14 @@ describe("the next-step registry", () => {
     const download = nextStep("models.download", { args: { model: "e5-small" } }) as CommandStep
     expect(runnable(bare, [download])).toEqual([])
     expect(runnable(program, [download, download, download])).toHaveLength(2)
-    expect(stepLine(program, download)).toBe("chat models text download e5-small")
+    expect(stepLine(program, download)).toBe("chat models download e5-small")
   })
 
   it("names the profile the command ran with, so the printed step runs as pasted", () => {
     const withProfile = createProgram({ app, commands: () => [messagesCommand(messenger), modelsCommand(messenger)] })
     withProfile.setOptionValue("profile", "work")
     const line = stepLine(withProfile, nextStep("models.download", { args: { model: "e5-small" } }) as CommandStep)
-    expect(line).toBe("chat work models text download e5-small")
+    expect(line).toBe("chat work models download e5-small")
     expect(liftProfile(line.split(" ").slice(1), commandWords(withProfile))).toMatchObject({ profile: "work" })
   })
 

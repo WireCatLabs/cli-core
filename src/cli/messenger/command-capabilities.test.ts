@@ -55,15 +55,15 @@ describe("shared commands build only what the messenger has", () => {
 
   it("leaves out link create and answering every join request where the messenger cannot", () => {
     const limited = chatsCommand({ ...messenger, inviteLinkCreate: false, joinRequestsAll: false })
-    expect(names(sub(limited, "link"))).not.toContain("create")
-    expect(flags(sub(limited, "requests", "accept"))).toEqual([])
-    expect(sub(limited, "requests", "accept").registeredArguments[1]?.required).toBe(true)
-    expect(flags(sub(chatsCommand(messenger), "requests", "decline"))).toEqual(["--all", "--link"])
+    expect(names(sub(limited, "links"))).not.toContain("create")
+    expect(flags(sub(limited, "requests", "confirm"))).toEqual([])
+    expect(sub(limited, "requests", "confirm").registeredArguments[1]?.required).toBe(true)
+    expect(flags(sub(chatsCommand(messenger), "requests", "reject"))).toEqual(["--all", "--link"])
   })
 
   it("answers every join request without --link where the messenger does not say which link a request came by", () => {
     const noLink = chatsCommand({ ...messenger, joinRequestsByLink: false })
-    expect(flags(sub(noLink, "requests", "accept"))).toEqual(["--all"])
-    expect(flags(sub(noLink, "requests", "decline"))).toEqual(["--all"])
+    expect(flags(sub(noLink, "requests", "confirm"))).toEqual(["--all"])
+    expect(flags(sub(noLink, "requests", "reject"))).toEqual(["--all"])
   })
 })

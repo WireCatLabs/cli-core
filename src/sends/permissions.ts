@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { AccountAction, ChatAction, SendKind } from "./journal.js"
+import { canonicalPermissionKey, canonicalPermissions } from "./permission-aliases.js"
 
 /**
  * What a profile may be allowed to do (max-cli `CLI-37`, `NEED-251`). One name per thing the owner would
@@ -106,12 +107,11 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "server.start": "ask",
   "server.stop": "ask",
   "server.restart": "ask",
-  "models.audio.download": "ask",
-  "models.text.download": "ask",
+  "models.download": "ask",
   "images.models.download": "ask",
   "schedule.run": "ask",
   "schedule.exec": "ask",
-  "doctor.report.create": "ask",
+  "doctor.reports.create": "ask",
 }
 
 /** Commands under a housekeeping word, or store maintenance, that still have a key of their own: their path. */
@@ -188,7 +188,7 @@ const OLD_WORDS: Record<Permission, PermissionKey[]> = {
     "chats.leave",
     "chats.members",
     "chats.admins",
-    "chats.link",
+    "chats.links",
     "chats.requests",
     "chats.moderate",
     "topics.enable",
@@ -225,7 +225,7 @@ export const layerPermissions = (layers: readonly [string, Readonly<Record<Permi
   const sources: Record<PermissionKey, string> = {}
   for (const [from, layer] of layers) {
     const nearer = Object.keys(levels)
-    for (const [key, level] of Object.entries(layer ?? {})) {
+    for (const [key, level] of Object.entries(canonicalPermissions(layer ?? {}))) {
       if (nearer.some((named) => key === named || key.startsWith(`${named}.`))) continue
       levels[key] = level
       sources[key] = from
@@ -270,6 +270,8 @@ export const levelFor = (
   key: PermissionKey,
   defaults: Readonly<Record<PermissionKey, Level>> = DEFAULT_PERMISSIONS,
 ): { level: Level; key: PermissionKey | null } => {
+  permissions = canonicalPermissions(permissions)
+  key = canonicalPermissionKey(key)
   const found = profileLevel(permissions, key, defaults)
   const ceiling = permissions[CEILING_KEY]
   return ceiling && ORDER[ceiling] < ORDER[found.level] ? { level: ceiling, key: CEILING_KEY } : found
@@ -329,7 +331,7 @@ const KIND_KEYS: Record<Exclude<SendKind, "chat" | "account">, PermissionKey> = 
 
 /** The command path a guarded write belongs to, when the caller did not name it. */
 export const keyForWrite = (kind: SendKind, action?: string): PermissionKey => {
-  if (kind === "chat") return CHAT_KEYS[action ?? ""] ?? `chats.${action ?? "update"}`
+  if (kind === "chat") return canonicalPermissionKey(CHAT_KEYS[action ?? ""] ?? `chats.${action ?? "update"}`)
   if (kind === "account") {
     const key = ACCOUNT_KEYS[action as AccountAction]
     if (!key) throw new Error(`an account change without a known action: ${action}`)
@@ -340,6 +342,7 @@ export const keyForWrite = (kind: SendKind, action?: string): PermissionKey => {
 
 /** `keyForWrite` read backwards, as far as a command's key says it: an unpin is a `pin`, a chat change names its action. */
 export const writeOfKey = (key: PermissionKey): { kind?: SendKind; action?: ChatAction | AccountAction } => {
+  key = canonicalPermissionKey(key)
   const account = Object.entries(ACCOUNT_KEYS).find(([, named]) => named === key)?.[0]
   if (account) return { kind: "account", action: account as AccountAction }
   const kind = Object.entries(KIND_KEYS).find(([, named]) => named === key || key.startsWith(`${named}.`))?.[0]
@@ -361,14 +364,14 @@ const NAMED_WRITE_KEYS = [
   "messages.press",
   "chats.start",
   "chats.app",
-  "stats.messages.counters.refresh",
+  "stats.messages.counters.sync",
   "stats.messages.show.sync-first",
   "stats.messages.top.sync-first",
   "stats.contacts.top.sync-first",
   "account.sessions.list",
   "attachments.extract",
   "attachments.move",
-  "attachments.text.set",
+  "attachments.update",
   "bot.callbacks.answer",
   "bot.chats.action",
   "bot.chats.admins.add",
@@ -383,14 +386,14 @@ const NAMED_WRITE_KEYS = [
   "bot.messages.unpin",
   "chats.admins.add",
   "chats.admins.remove",
-  "chats.link.create",
-  "chats.link.reset",
-  "chats.link.revoke",
-  "chats.link.update",
+  "chats.links.create",
+  "chats.links.reset",
+  "chats.links.remove",
+  "chats.links.update",
   "chats.members.add",
   "chats.members.remove",
   "chats.moderate",
-  "conversations.embed",
+  "conversations.embeddings",
   "conversations.links",
   "polls.close",
   "polls.create",
@@ -398,13 +401,13 @@ const NAMED_WRITE_KEYS = [
   "searches.clear",
   "searches.create",
   "searches.delete",
-  "contacts.alias.set",
-  "contacts.alias.rm",
+  "contacts.aliases.set",
+  "contacts.aliases.remove",
   "contacts.notes.add",
   "contacts.notes.edit",
   "contacts.notes.remove",
-  "tags.auto",
-  "metadata.refresh",
+  "tags.rebuild",
+  "metadata.sync",
   "mentions.rebuild",
   "mentions.confirm",
   "mentions.reject",
@@ -417,7 +420,7 @@ const NAMED_WRITE_KEYS = [
   "tasks.duplicates.reject",
   "tasks.link",
   "tasks.merge",
-  "tasks.plan",
+  "tasks.update",
   "tasks.release",
   "tasks.scan",
   "tasks.unmerge",
@@ -428,14 +431,16 @@ const NAMED_WRITE_KEYS = [
 
 /** Every key a write is checked against that a command path may not spell out. */
 export const WRITE_KEYS: readonly PermissionKey[] = [
-  ...new Set([
-    ...NAMED_WRITE_KEYS,
-    ...Object.keys(DEFAULT_PERMISSIONS),
-    ...Object.values(KIND_KEYS),
-    ...Object.values(ACCOUNT_KEYS),
-    ...(Object.values(CHAT_KEYS) as PermissionKey[]),
-    ...PERMISSIONS.flatMap((word) => [...OLD_WORDS[word], ...botKeysOf(word)]),
-  ]),
+  ...new Set(
+    [
+      ...NAMED_WRITE_KEYS,
+      ...Object.keys(DEFAULT_PERMISSIONS),
+      ...Object.values(KIND_KEYS),
+      ...Object.values(ACCOUNT_KEYS),
+      ...(Object.values(CHAT_KEYS) as PermissionKey[]),
+      ...PERMISSIONS.flatMap((word) => [...OLD_WORDS[word], ...botKeysOf(word)]),
+    ].map(canonicalPermissionKey),
+  ),
 ]
 
 /** Commands that look after the tool and its files and never show a message: no level stops them. */
@@ -529,6 +534,8 @@ export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => 
  * `undefined` for a path this package does not know — a CLI's own command, which its CLI maps.
  */
 export const keyForCommand = (path: readonly string[]): PermissionKey | null | undefined => {
+  if (path.length === 0) return null
+  path = canonicalPermissionKey(path.join(".")).split(".")
   const [top, next] = path
   if (top === "bot") {
     if (next === undefined || BOT_HOUSEKEEPING.has(next)) return null
@@ -543,13 +550,15 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   if (top === "attachments" && next === "download") return "messages"
   if (top === "store" && next !== undefined && STORE_MAINTENANCE.has(next)) return null
   // The agent's answers write only to the local store: their own key, so read-only messages can still link (phase 4 A10).
-  if (top === "conversations" && next === "links") return "conversations.links"
+  if (top === "conversations" && next === "links")
+    return path[2] === "rebuild" ? "conversations.links.rebuild" : "conversations.links"
   // Vectors are written to the local store only, and the text never leaves the machine (phase 5 E10).
   if (
-    ((top === "conversations" || top === "images") && next === "embed") ||
+    (top === "conversations" && next === "embeddings") ||
+    (top === "images" && next === "embed") ||
     (top === "conversations" && next === "rebuild")
   )
-    return "conversations.embed"
+    return "conversations.embeddings"
   // Which files a message has, and where they are saved, tells as much as a message does; so does who
   // shared which document link, and when.
   if ((top === "attachments" && next === "list") || (top === "chats" && next === "documents")) return "messages"
@@ -558,10 +567,7 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
     return next === "rebuild" || next === "confirm" || next === "reject" ? `mentions.${next}` : "messages"
   if (top === "store" && (next === "gaps" || next === "jobs")) return path.join(".")
   if (top === "messages" && next === "sync") return "messages"
-  if (
-    SHOW_MESSAGES.has(top) ||
-    (top === "contacts" && (next === "context" || next === "prepare" || next === "timeline"))
-  )
+  if (SHOW_MESSAGES.has(top) || (top === "contacts" && (next === "context" || next === "prepare" || next === "events")))
     return "messages"
   if ((RESOURCES as readonly string[]).includes(top)) return path.join(".")
   return undefined
@@ -580,7 +586,7 @@ export const permissionOverrides = (entries: readonly string[] = []): Record<Per
       )
     levels[key] = level as Level
   }
-  return levels
+  return canonicalPermissions(levels)
 }
 
 /** No startup flag grants access: an override may narrow the profile's level, never lift it or a key under it. */
@@ -588,6 +594,8 @@ export const assertOverridesTighten = (
   overrides: Readonly<Record<PermissionKey, Level>>,
   profile: Readonly<Record<PermissionKey, Level>>,
 ): void => {
+  overrides = canonicalPermissions(overrides)
+  profile = canonicalPermissions(profile)
   for (const [key, level] of Object.entries(overrides)) {
     const under = Object.keys(profile).filter((named) => named.startsWith(`${key}.`))
     const lifted = [key, ...under].find((named) => ORDER[level] > ORDER[levelFor(profile, named).level])

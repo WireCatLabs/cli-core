@@ -47,17 +47,12 @@ import { readAll } from "./stdin.js"
  * `conversations`: the threads inside a group chat, found by rules over the stored messages — replies,
  * mentions, one sender's messages in a row. From the store alone; nothing is built until asked (phase 3).
  */
-export const conversationsCommand = (messenger: Messenger): Command => {
-  const conversations = new Command("conversations")
-    .summary("group stored messages into conversations")
-    .description(
-      "the conversations inside a chat, found in the stored messages by replies, mentions and who wrote next",
-    )
-
+const conversationBuildCommand = (messenger: Messenger): Command =>
   boundOptions(
     reachesOtherService(
-      annotate(conversations.command("build"), { output: { entity: "conversation_build" }, effects: REMOTE_WRITE }),
+      annotate(new Command("rebuild"), { output: { entity: "conversation_build" }, effects: REMOTE_WRITE }),
     )
+
       .summary("build conversation links from stored messages")
       .description(
         "find a chat's conversations in what the store holds, replacing the last build; without --chat, every " +
@@ -68,14 +63,8 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         "--analyze",
         "link batches using the configured analysis provider; requires --chat and remembers consent for this chat/provider",
       )
-      .addOption(
-        new Option("--analysis-provider <provider>", "analysis: agent, openai or anthropic").conflicts("provider"),
-      )
-      .addOption(
-        new Option("--provider <provider>", "compatibility alias for --analysis-provider")
-          .hideHelp()
-          .conflicts("analysisProvider"),
-      )
+      .addOption(new Option("--analysis-provider <provider>", "analysis: agent, openai or anthropic"))
+
       .option("--model <model>", "analysis model; overrides analysis_model")
       .option("--base-url <url>", "analysis API endpoint; overrides analysis_base_url")
       .option("--size <n>", "analysis answer messages per batch, 10–200; default 50", positiveCount("--size"))
@@ -101,7 +90,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     if (options.analyze) {
       if (!chat) throw new CliError("validation_error", "--analyze requires --chat")
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
-      refuseLocalWrite(context, messenger.app.command, "conversations.build")
+      refuseLocalWrite(context, messenger.app.command, "conversations.links.rebuild")
       const target = analysisChoice(options, messenger.app, context.settings, context.env, context.keyring)
       if (!isLocal(target.baseUrl)) refuseUnderReadOnly(this, `send chat text to ${new URL(target.baseUrl).host}`)
       const controller = new AbortController()
@@ -176,6 +165,58 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         `${built.messages} messages → ${built.conversations} conversations, ${built.links} links (rules v${built.rulesVersion})\n`,
     )
   })
+
+const embeddingStatusCommand = (messenger: Messenger): Command =>
+  withModelOptions(
+    annotate(new Command("status"), { output: { entity: "conversation_embedding_status" }, effects: LOCAL_READ })
+      .summary("which conversation vectors are ready or stale")
+      .description("how many chunks of a chat have a vector of the model, how many are left, and what is left costs")
+      .option("--chat <chat>", messenger.chatArgument),
+  ).action(async function (this: Command) {
+    const options = this.optsWithGlobals<ModelOptions & { chat?: string }>()
+    const chat = chatOf(options)
+    const context = messengerContext(this, messenger)
+    const model = choiceOf(options, messenger, context, { needKey: false })
+    const status = await context.withServices((services) => services.embeddings.status(chat, model))
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys(status)),
+      () =>
+        `${status.embedded} of ${status.chunks} chunks embedded with ${status.model}; ${status.left} left` +
+        (status.estimateSeconds === null ? "" : `, ${minutes(status.estimateSeconds)}`) +
+        (status.priceAtMost ? `, at most ${dollars(status.priceAtMost.usd)}` : "") +
+        "\n",
+    )
+  })
+
+const embeddingClearCommand = (messenger: Messenger): Command =>
+  withModelOptions(
+    destroysNothing(annotate(new Command("clear"), { output: { entity: "conversation_change" }, effects: LOCAL_WRITE }))
+      .summary("remove stored conversation vectors")
+      .description("drop a chat's vectors, or only one model's; messages and conversations are never touched")
+      .option("--chat <chat>", messenger.chatArgument),
+  ).action(async function (this: Command) {
+    const options = this.optsWithGlobals<ModelOptions & { chat?: string }>()
+    const chat = chatOf(options)
+    const context = messengerContext(this, messenger)
+    refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
+    const given =
+      options.model !== undefined ||
+      options.embeddingProvider !== undefined ||
+      options.provider !== undefined ||
+      options.baseUrl !== undefined
+    const model = given ? choiceOf(options, messenger, context, { needKey: false }) : undefined
+    const cleared = await context.withServices((services) => services.embeddings.clear(chat, model))
+    renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} vectors dropped\n`)
+  })
+
+export const conversationsCommand = (messenger: Messenger): Command => {
+  const conversations = new Command("conversations")
+    .summary("group stored messages into conversations")
+    .description(
+      "the conversations inside a chat, found in the stored messages by replies, mentions and who wrote next",
+    )
 
   withQuery(
     annotate(conversations.command("list"), { effects: LOCAL_READ })
@@ -283,7 +324,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       () => chats.map((one) => `${readinessLine(one, id)}\n`).join(""),
     )
     if (chats.length === 0 && !unbuiltGroups && context.format === "pretty")
-      context.renderer.note("no chat has conversations yet — `conversations build --chat <chat>`")
+      context.renderer.note("no chat has conversations yet — `conversations links rebuild --chat <chat>`")
   })
 
   const batches = conversations
@@ -317,7 +358,8 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   })
 
   sizeOption(
-    annotate(batches.command("next"), { output: { entity: "conversation_batch" }, effects: LOCAL_READ })
+    annotate(batches.command("show"), { output: { entity: "conversation_batch" }, effects: LOCAL_READ })
+
       .summary("get the next batch of messages to link")
       .description("the next window to answer, with the messages before it; message text goes to stdout only")
       .requiredOption("--chat <chat>", messenger.chatArgument),
@@ -346,9 +388,8 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     context.renderer.note(`${batch.remaining.messages} messages left after this batch`)
   })
 
-  const links = conversations
-    .command("links")
-    .description("your agent's answers: which earlier message each message of a batch answers")
+  const links = conversations.command("links").description("message links and the conversations derived from them")
+  links.addCommand(conversationBuildCommand(messenger))
 
   readsStdin(annotate(links.command("add"), { output: { entity: "conversation_change" }, effects: LOCAL_WRITE }), {
     name: "answer",
@@ -360,7 +401,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       'store your agent\'s answer to a batch, read as JSON from stdin: { "model", "answers": [{ "message", ' +
         '"parent", "confidence" }] }; all or nothing',
     )
-    .requiredOption("--batch <id>", "the batch id `conversations batches next` printed")
+    .requiredOption("--batch <id>", "the batch id `conversations batches show` printed")
     .action(async function (this: Command) {
       const { batch } = this.opts<{ batch: string }>()
       const context = messengerContext(this, messenger)
@@ -379,10 +420,8 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     .summary("remove an agent's saved conversation-link answers")
     .description("drop your agent's answers for a chat, or only one model's; messages are never touched")
     .requiredOption("--chat <chat>", messenger.chatArgument)
-    .addOption(new Option("--answer-model <model>", "only the stored answers this model gave").conflicts("model"))
-    .addOption(
-      new Option("--model <model>", "compatibility alias for --answer-model").hideHelp().conflicts("answerModel"),
-    )
+    .addOption(new Option("--answer-model <model>", "only the stored answers this model gave"))
+
     .action(async function (this: Command) {
       const { chat, model, answerModel } = this.opts<{ chat: string; model?: string; answerModel?: string }>()
       const context = messengerContext(this, messenger)
@@ -468,50 +507,9 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     )
   })
 
-  withModelOptions(
-    annotate(embed.command("status"), { output: { entity: "conversation_embedding_status" }, effects: LOCAL_READ })
-      .summary("which conversation vectors are ready or stale")
-      .description("how many chunks of a chat have a vector of the model, how many are left, and what is left costs")
-      .option("--chat <chat>", messenger.chatArgument),
-  ).action(async function (this: Command) {
-    const options = this.optsWithGlobals<ModelOptions & { chat?: string }>()
-    const chat = chatOf(options)
-    const context = messengerContext(this, messenger)
-    const model = choiceOf(options, messenger, context, { needKey: false })
-    const status = await context.withServices((services) => services.embeddings.status(chat, model))
-    renderAnswer(
-      this,
-      context,
-      itemOf(snakeKeys(status)),
-      () =>
-        `${status.embedded} of ${status.chunks} chunks embedded with ${status.model}; ${status.left} left` +
-        (status.estimateSeconds === null ? "" : `, ${minutes(status.estimateSeconds)}`) +
-        (status.priceAtMost ? `, at most ${dollars(status.priceAtMost.usd)}` : "") +
-        "\n",
-    )
-  })
-
-  withModelOptions(
-    destroysNothing(
-      annotate(embed.command("clear"), { output: { entity: "conversation_change" }, effects: LOCAL_WRITE }),
-    )
-      .summary("remove stored conversation vectors")
-      .description("drop a chat's vectors, or only one model's; messages and conversations are never touched")
-      .option("--chat <chat>", messenger.chatArgument),
-  ).action(async function (this: Command) {
-    const options = this.optsWithGlobals<ModelOptions & { chat?: string }>()
-    const chat = chatOf(options)
-    const context = messengerContext(this, messenger)
-    refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
-    const given =
-      options.model !== undefined ||
-      options.embeddingProvider !== undefined ||
-      options.provider !== undefined ||
-      options.baseUrl !== undefined
-    const model = given ? choiceOf(options, messenger, context, { needKey: false }) : undefined
-    const cleared = await context.withServices((services) => services.embeddings.clear(chat, model))
-    renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} vectors dropped\n`)
-  })
+  const embeddings = new Command("embeddings").description("stored conversation vectors")
+  embeddings.addCommand(embeddingStatusCommand(messenger)).addCommand(embeddingClearCommand(messenger))
+  conversations.addCommand(embeddings)
 
   boundOptions(
     destroysNothing(
@@ -561,20 +559,20 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         }),
       )
     })
-  annotate(consents.command("revoke"), { effects: LOCAL_WRITE, output: { entity: "analysis_consent_revocation" } })
+  annotate(consents.command("remove"), {
+    effects: LOCAL_WRITE,
+    output: { entity: "analysis_consent_revocation" },
+  })
+
     .description("forget analysis permissions so the next analysis asks again")
     .option("--chat <chat>", "revoke only this chat's consents; defaults to every chat")
     .addOption(
       new Option(
         "--consent-provider <identity>",
         "exact provider identity from consents list; defaults to every provider",
-      ).conflicts("provider"),
+      ),
     )
-    .addOption(
-      new Option("--provider <identity>", "compatibility alias for --consent-provider")
-        .hideHelp()
-        .conflicts("consentProvider"),
-    )
+
     .action(async function (this: Command) {
       const { chat, provider, consentProvider } = this.opts<{
         chat?: string
@@ -615,21 +613,14 @@ const chatOf = ({ chat }: { chat?: string }): string => {
 
 const withModelOptions = (command: Command): Command =>
   command
-    .option(
-      "--model <model>",
-      "local: a model id from `models text list` (default: e5-small); remote: the provider's model",
-    )
+    .option("--model <model>", "local: a model id from `models list` (default: e5-small); remote: the provider's model")
     .addOption(
       new Option(
         "--embedding-provider <provider>",
         "embedding provider: local or openai; flags override profile settings",
-      ).conflicts("provider"),
+      ),
     )
-    .addOption(
-      new Option("--provider <provider>", "compatibility alias for --embedding-provider")
-        .hideHelp()
-        .conflicts("embeddingProvider"),
-    )
+
     .option(
       "--base-url <url>",
       "a server with OpenAI's /v1/embeddings: Gemini, Jina, or Ollama and LM Studio on this machine",
@@ -755,7 +746,7 @@ const consent = async (
 }
 
 const LINKS_KEY = "conversations.links"
-const EMBED_KEY = "conversations.embed"
+const EMBED_KEY = "conversations.embeddings"
 
 const dollars = (usd: number) => (usd < 0.0001 ? "under $0.0001" : `$${usd.toFixed(4)}`)
 
@@ -798,7 +789,9 @@ export const linksCommand = (messenger: Messenger): Command =>
         return
       }
       if (found.links.length === 0) {
-        context.renderer.note("no links: it starts a conversation, or the chat is not built — `conversations build`")
+        context.renderer.note(
+          "no links: it starts a conversation, or the chat is not built — `conversations links rebuild`",
+        )
       }
       context.streams.data(
         found.links
@@ -825,7 +818,7 @@ const hitLine = ({ summary, chunk, score, stale, locator }: FoundConversation) =
 
 const readinessLine = ({ chat, state, graph, pending, vectors }: ChatReadiness, model: string) =>
   graph === null
-    ? `${chat}  ${state} — \`conversations build --chat ${chat}\``
+    ? `${chat}  ${state} — \`conversations links rebuild --chat ${chat}\``
     : `${chat}  ${state}  built ${graph.builtAt.slice(0, 16).replace("T", " ")}, rules v${graph.rulesVersion}` +
       `${graph.outdatedRules ? " (outdated)" : ""} · not in the build: ${pending.new} new, ${pending.edited} edited, ` +
       `${pending.deleted} deleted · ${model}: ${vectors.current} current, ${vectors.stale} stale, ` +

@@ -156,7 +156,7 @@ export const judgedEffects = (effects: Effects | undefined): Effects | undefined
 
 /**
  * An unasked step is judged stricter than a retry: only a fetch's local write is incidental. A command that reads
- * nothing remotely and writes here (`server restart`, `store reindex`) is the whole point of the step, so it waits
+ * nothing remotely and writes here (`server restart`, `store rebuild`) is the whole point of the step, so it waits
  * to be asked (RISK-1211).
  */
 const judgedStepEffects = (effects: Effects | undefined): Effects | undefined =>

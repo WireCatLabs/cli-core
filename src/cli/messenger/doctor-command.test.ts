@@ -316,7 +316,7 @@ describe("doctor --online", () => {
   })
 })
 
-describe("doctor report", () => {
+describe("doctor reports show", () => {
   const failedRun = (root: string) => {
     const dir = join(root, "state", "runs", "2026-09-29", "20260929T100000Z-chats-list-abc123")
     mkdirSync(dir, { recursive: true })
@@ -360,7 +360,7 @@ describe("doctor report", () => {
     const output = join(root, "report.json")
 
     const { code, answer } = await call(
-      ["doctor", "report", "create", "--output", output, "--json"],
+      ["doctor", "reports", "create", "--output", output, "--json"],
       { ...env, HOME: root, CHAT_CONFIG_DIR: join(home, "config") },
       refused,
     )
@@ -415,7 +415,7 @@ describe("doctor report", () => {
     writeFileSync(join(root, "state", "sends", "default.jsonl"), `${JSON.stringify(entry)}\n`)
     const output = join(root, "report.json")
 
-    await call(["doctor", "report", "create", "--output", output, "--json"], env, refused)
+    await call(["doctor", "reports", "create", "--output", output, "--json"], env, refused)
 
     const text = readFileSync(output, "utf8")
     for (const value of Object.values(raw)) expect(text).not.toContain(value)
@@ -426,14 +426,14 @@ describe("doctor report", () => {
 
   it("names a run that does not exist, and explains itself without writing", async () => {
     const { env } = setup()
-    const missing = await call(["doctor", "report", "create", "--run", "nope"], env, refused)
+    const missing = await call(["doctor", "reports", "create", "--run", "nope"], env, refused)
     expect(missing.code).not.toBe(0)
     expect(missing.stderr.join("\n")).toContain("chat runs list")
 
-    const explained = await call(["doctor", "report", "--json"], env, refused)
+    const explained = await call(["doctor", "reports", "show", "--json"], env, refused)
     expect(explained.answer).not.toHaveProperty("create")
     expect(explained.next).toEqual([
-      expect.objectContaining({ step: "doctor.report-create", command: "doctor report create" }),
+      expect.objectContaining({ step: "doctor.report-create", command: "doctor reports create" }),
     ])
   })
 })

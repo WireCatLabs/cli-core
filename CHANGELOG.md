@@ -14,6 +14,16 @@ shape of this file.
   replaying those deletions as live events. `Messenger.readsComments` allows comment reads independently of
   comment sending; unset, it keeps the existing capability behavior.
 
+### Changed — may break callers
+
+- **Only canonical option spellings are accepted.** The hidden flag aliases introduced in 0.399.0 are removed: use the analysis/embedding/consent provider flags, `--claim`, `--answer-model`, `--template-mode`, `--text-file`, `--disappear-after` and the `kind:` query term. Retired flags are refused before command work.
+
+- **Shared command paths use the vocabulary.** Contacts use `info`, `events` and `aliases remove`; chat invite links use `links remove`, member checks use `check`, and join requests use `confirm` or `reject`. Metadata uses `show` and `sync`; task edits use `update`; derived tags and search indexes use `rebuild`. Discovery uses `commands info`; MCP configuration uses `mcp add` and `mcp check`.
+
+- **Explicit model and conversation commands.** Use `models list kind:audio` or `kind:text`, `models download <model>` and `models keys set/remove`. Conversation link construction is `conversations links rebuild`; vector reports and removal are `conversations embeddings status/clear`, while `conversations embed` still computes vectors. Duplicate candidates are `tasks duplicates list`. Report information is `doctor reports show`; `doctor reports create` writes the report. Bare groups only offer help. Retired spellings are refused with guidance to the canonical path; no compatibility command aliases are mounted. CLI and MCP use the same paths.
+
+- **Rename moved permission paths.** A saved key or startup override using a renamed path now stops with `configuration_error` and its exact replacement (including bot keys), before opening the store or performing the action. Canonical commands keep the migrated denial; retired CLI spellings cannot run.
+
 ## 0.405.0 — 24.10.2026
 
 ### Added

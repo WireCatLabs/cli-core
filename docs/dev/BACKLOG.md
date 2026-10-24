@@ -25,13 +25,10 @@ None open.
 
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
-- **CORE-4** · P2 · 🟡 🚧 `fix/standards-message-results` Shared command standards: complete remaining result entities, examples and vocabulary paths
-  in the `docs/standards-*` and `fix/standards-*` pull requests. Contact result schemas are complete; other groups
-  remain. The option-meaning migration is in #1810;
-  compatibility aliases remain for one release. [Notes](BACKLOG-NOTES.md#core-4).
-- **CORE-28** · P2 · 🚧 `fix/standards-vocabulary-paths` Hidden option aliases are removed by
-  [#1837](https://github.com/WireCatLabs/cli-core/pull/1837), including the aliases from #1810. Hold merge and
-  release until the next weekly breaking window, no earlier than 2026-10-30 19:36:27 UTC (WC-REL-9).
+- **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,
+  examples and list queries are merged. Canonical command paths and removal of compatibility spellings ship in
+  #1837 (owner, 2026-10-24); every CLI adopts them in the same-day cli-core raise. New bot query/schema gaps are separate
+  from the original personal-account audit. [Notes](BACKLOG-NOTES.md#core-4).
 - **CORE-5** · P2 · Let a new source join without editing this package: the provider list is fixed
   (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
   (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No

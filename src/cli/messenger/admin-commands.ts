@@ -85,15 +85,9 @@ const updateCommand = (messenger: Messenger): Command => {
   if (messenger.groupPhotoRemoval === true) update.option("--remove-photo", "take its photo away; not with --photo")
   for (const key of keys) {
     const option = new Option(`--${SETTING_FLAGS[key][0]}`, SETTING_FLAGS[key][1])
-    if (key === "disappearingSeconds") option.conflicts("disappearTime")
     update.addOption(option)
   }
-  if (keys.includes("disappearingSeconds"))
-    update.addOption(
-      new Option("--disappear-time <duration|off>", "compatibility alias for --disappear-after")
-        .hideHelp()
-        .conflicts("disappearAfter"),
-    )
+
   return update.action(async function (this: Command, chat: string) {
     const context = messengerContext(this, messenger)
     const { title, description, photo, removePhoto, ...rest } = this.opts<{
@@ -121,8 +115,9 @@ const updateCommand = (messenger: Messenger): Command => {
 }
 
 const linkCommand = (messenger: Messenger): Command => {
-  const link = new Command("link").description("a group's invite link")
+  const link = new Command("links").description("a group's invite link")
   annotate(link.command("show"), { output: { entity: "chat_invite" }, effects: REMOTE_READ })
+
     .description("the invite link, if you may see it")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -191,10 +186,14 @@ const linkCommand = (messenger: Messenger): Command => {
     )
   if (messenger.inviteLinkRevoke !== false)
     link.addCommand(
-      annotate(new Command("revoke"), { output: { entity: "chat_invite_change" }, effects: REMOTE_WRITE })
+      annotate(new Command("remove"), {
+        output: { entity: "chat_invite_change" },
+        effects: REMOTE_WRITE,
+      })
+
         .description("stop one link; for the group's own link, the answer is the new one")
         .argument("<chat>", messenger.chatArgument)
-        .argument("<link>", "the link, as `chats link list` shows it")
+        .argument("<link>", "the link, as `chats links list` shows it")
         .action(async function (this: Command, chat: string, link: string) {
           const context = messengerContext(this, messenger)
           renderItem(this, context, await context.withServices((services) => services.admin.revokeLink(chat, link)))
@@ -205,7 +204,7 @@ const linkCommand = (messenger: Messenger): Command => {
       annotate(new Command("update"), { output: { entity: "chat_invite_change" }, effects: REMOTE_WRITE })
         .description("change one of your invite links, the group's own one too")
         .argument("<chat>", messenger.chatArgument)
-        .argument("<link>", "the link, as `chats link list` shows it")
+        .argument("<link>", "the link, as `chats links list` shows it")
         .option("--approval", "who joins by it asks first, and an admin lets them in; it then has no use limit")
         .option("--no-approval", "anyone with it joins at once")
         .option(
@@ -326,11 +325,15 @@ const requestsCommand = (messenger: Messenger): Command => {
   )
   const everyone = messenger.joinRequestsAll !== false
   const byLink = everyone && messenger.joinRequestsByLink !== false
-  for (const [verb, accept, help] of [
-    ["accept", true, "let them in; the group sees them join"],
-    ["decline", false, "turn the request away"],
+  for (const [accept, help] of [
+    [true, "let them in; the group sees them join"],
+    [false, "turn the request away"],
   ] as const) {
-    const answer = annotate(new Command(verb), { output: { entity: "chat_request_change" }, effects: REMOTE_WRITE })
+    const answer = annotate(new Command(accept ? "confirm" : "reject"), {
+      output: { entity: "chat_request_change" },
+      effects: REMOTE_WRITE,
+    })
+
       .description(help)
       .argument("<chat>", messenger.chatArgument)
       .argument(everyone ? "[person]" : "<person>", "who asked: an id from `chats requests list`")

@@ -91,18 +91,18 @@ afterEach(() => {
 })
 
 describe("a run's own keyring", () => {
-  it("holds the key models text key set stores and remove forgets, and the real one is never reached", async () => {
+  it("holds the key models keys set stores and remove forgets, and the real one is never reached", async () => {
     const notices = realKeyringNotices()
     const env = environment()
     const { keyring, entries } = counted()
 
-    const set = await call(["models", "text", "key", "set", "openai", "--json"], env, keyring, "sk-test\n")
+    const set = await call(["models", "keys", "set", "openai", "--json"], env, keyring, "sk-test\n")
     expect(set.code).toBe(0)
     expect(JSON.parse(set.stdout[0] ?? "").item).toEqual({ provider: "openai", stored: "keyring" })
     expect([...entries.values()]).toEqual(["sk-test"])
     expect(existsSync(join(env.CHAT_CONFIG_DIR, "credentials.json"))).toBe(false)
 
-    const removed = await call(["models", "text", "key", "remove", "openai", "--json"], env, keyring)
+    const removed = await call(["models", "keys", "remove", "openai", "--json"], env, keyring)
     expect(JSON.parse(removed.stdout[0] ?? "").item).toEqual({ provider: "openai", removed: ["keyring"] })
     expect(entries.size).toBe(0)
     expect(notices).toEqual([])
