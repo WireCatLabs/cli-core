@@ -48,6 +48,9 @@ describe("shared commands build only what the messenger has", () => {
   it("offers --comment-to only where channel posts take comments", () => {
     expect(flags(sendCommand(messenger))).toContain("--comment-to")
     expect(flags(sendCommand({ ...messenger, channelComments: false }))).not.toContain("--comment-to")
+    expect(flags(sendCommand({ ...messenger, channelComments: false, readsComments: true }))).not.toContain(
+      "--comment-to",
+    )
   })
 
   it("leaves out link create and answering every join request where the messenger cannot", () => {

@@ -1375,3 +1375,48 @@ describe("a stored chat id the messenger now names by another id", () => {
     expect(await chatIds(account)).toContain(PHONE)
   })
 })
+
+describe("synced snapshots and stored threads", () => {
+  it("applies snapshot deletions after messages, only within the named chat, and keeps tombstones on replay", async () => {
+    const { store } = await setUp()
+    await fed(store, {
+      messages: [message("40", "old", "7"), message("40", "other chat", "8")],
+      deletions: [{ chatId: "7", messageId: "40" }],
+    })
+    expect(await store.messages.message(account, "40", { chatId: "7" })).toBeUndefined()
+    expect((await store.messages.message(account, "40", { chatId: "8" }))?.text).toBe("other chat")
+    await fed(store, { messages: [message("40", "old", "7")] })
+    expect(await store.messages.message(account, "40", { chatId: "7" })).toBeUndefined()
+  })
+
+  it("reads stored threads within the connected account and chat, with pagination", async () => {
+    const { store } = await setUp()
+    await fed(store, {
+      messages: [
+        { ...message("40", "first"), threadId: "post" },
+        { ...message("41", "second"), threadId: "post", timestamp: "2026-09-26T10:01:00.000Z" },
+        { ...message("42", "unrelated"), threadId: "other" },
+        { ...message("43", "another chat", "8"), threadId: "post" },
+      ],
+    })
+    const lookup = storedMessages(
+      "test",
+      async () => store,
+      () => "500",
+    )
+    const page = await lookup.threadMessages?.("7", "post", { limit: 1 })
+    expect(page?.items.map((one) => one.id)).toEqual(["41"])
+    expect(page?.hasMore).toBe(true)
+    expect(
+      (await lookup.threadMessages?.("7", "post", { limit: 1, before: "41" }))?.items.map((one) => one.id),
+    ).toEqual(["40"])
+    const unconnected = storedMessages(
+      "test",
+      async () => {
+        throw new Error("no store before account")
+      },
+      () => null,
+    )
+    expect(await unconnected.threadMessages?.("7", "post", { limit: 1 })).toEqual({ items: [], hasMore: false })
+  })
+})

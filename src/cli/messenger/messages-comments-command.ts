@@ -11,15 +11,22 @@ import { COMMENTS_QUERY, cursorOf, historyWindow } from "./history-query.js"
 import { messageItems, viewOf } from "./message-items.js"
 
 export const commentsCommand = (messenger: Messenger): Command => {
+  const otherPosts = messenger.readsComments === true && messenger.channelComments === false
   const command = annotate(new Command("comments"), {
-    examples: [`${messenger.app.command} personal messages comments "News channel" 101 --limit 20`],
+    examples: [
+      `${messenger.app.command} personal messages comments "${otherPosts ? "Announcements" : "News channel"}" 101 --limit 20`,
+    ],
     effects: REMOTE_READ,
   })
-    .summary("comments on a channel post")
-    .description("the comments under a channel post, oldest to newest; they live in its discussion group")
+    .summary(otherPosts ? "comments on a post" : "comments on a channel post")
+    .description(
+      otherPosts
+        ? "the comments received under a post, oldest to newest"
+        : "the comments under a channel post, oldest to newest; they live in its discussion group",
+    )
     .addHelpText("after", queryHelp(COMMENTS_QUERY))
-    .argument("<chat>", `the channel: ${messenger.chatArgument}`)
-    .argument("<post>", "the post's message id in the channel")
+    .argument("<chat>", `the ${otherPosts ? "chat" : "channel"}: ${messenger.chatArgument}`)
+    .argument("<post>", otherPosts ? "the post's message id in the chat" : "the post's message id in the channel")
     .argument("[query...]", "where to start: id<42")
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it")

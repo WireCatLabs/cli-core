@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- `StoredMessages.threadMessages` lets an adapter read a provider thread from the shared message store without
+  keeping another copy. `HistoryBatch.deletions` applies chat-scoped tombstones from synced snapshots without
+  replaying those deletions as live events. `Messenger.readsComments` allows comment reads independently of
+  comment sending; unset, it keeps the existing capability behavior.
+
 ## 0.405.0 — 24.10.2026
 
 ### Added
