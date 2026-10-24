@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.405.0 — 24.10.2026
+
 ### Added
 
 - **Messengers can opt in to `messages send --draft`.** Set the optional `drafts` trait and implement the optional
