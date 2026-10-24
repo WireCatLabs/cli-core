@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.406.0 — 24.10.2026
+
 ### Added
 
 - `StoredMessages.threadMessages` lets an adapter read a provider thread from the shared message store without
