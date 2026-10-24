@@ -52,6 +52,10 @@
             "description": "field:value terms that narrow the list — the fields are below"
           }
         ]
+      },
+      "offline": {
+        "type": "boolean",
+        "description": "answer from the copy on this machine only"
       }
     },
     "required": [],

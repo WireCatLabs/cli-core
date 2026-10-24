@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Bot lists, schedules and forum topics accept typed queries.** Stored bot chats, recipients, send history,
+  profiles and schedules filter at their native readers; forum title terms go to the provider. Message predicates
+  require `--offline` and run in SQLite before the limit, reporting interpreted time bounds. Provider lists that
+  accept no filters refuse terms before connecting, instead of filtering an incomplete response. Existing empty
+  queries keep their previous behavior. Shared list-result contracts include the template schema for provider CLIs.
+
 ## 0.408.0 — 24.10.2026
 
 ### Fixed
@@ -16,14 +26,6 @@ shape of this file.
   seeing a command does not grant access. Bot MCP also lists bot-scoped `config show|set|unset` behind the
   existing authority rules, without exposing options that could select personal-account settings. Consumers
   that pin MCP catalogues should refresh them and use availability rather than absence to determine access.
-
-### Added
-
-- **Bot lists, schedules and forum topics accept typed queries.** Stored bot chats, recipients, send history,
-  profiles and schedules filter at their native readers; forum title terms go to the provider. Message predicates
-  require `--offline` and run in SQLite before the limit, reporting interpreted time bounds. Provider lists that
-  accept no filters refuse terms before connecting, instead of filtering an incomplete response. Existing empty
-  queries keep their previous behavior. Shared list-result contracts include the template schema for provider CLIs.
 
 ## 0.407.0 — 24.10.2026
 

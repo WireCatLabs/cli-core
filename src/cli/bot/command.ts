@@ -281,7 +281,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
     )
     .summary("the chats this bot is in, and what it does there")
   withQuery(
-    annotate(command.command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "chats list") }),
+    annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "chats list") }),
     BOT_CHATS_QUERY,
   )
     .description(`chats this bot has seen on this machine — not a complete list from ${bot.name ?? "the messenger"}`)

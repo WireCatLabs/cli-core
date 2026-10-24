@@ -523,7 +523,7 @@ const RENAMED: Record<string, readonly string[]> = {
 }
 /** What the commands take that the hand-written tools did not. */
 const ADDED: Record<string, readonly string[]> = {
-  "chats list": ["query"],
+  "chats list": ["offline", "query"],
   "chats show": ["offline"],
   "chats admins list": ["offline", "query"],
   "commands list": ["offline", "query"],
