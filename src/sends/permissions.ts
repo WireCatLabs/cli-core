@@ -146,6 +146,7 @@ export const botApiAllowed = (levels: Readonly<Record<PermissionKey, Level>>): b
 /** The resources at the top of the command tree, which `readOnly` and `allow` turn read-only as a whole. */
 export const RESOURCES = [
   "messages",
+  "drafts",
   "reactions",
   "polls",
   "topics",
@@ -353,6 +354,7 @@ export const writeOfKey = (key: PermissionKey): { kind?: SendKind; action?: Chat
 
 /** Write keys written out where a write is checked; `permission-keys.test.ts` keeps this list whole. */
 const NAMED_WRITE_KEYS = [
+  "drafts",
   "store.gaps.repair",
   "messages.sync-first",
   "messages.server-search",

@@ -176,6 +176,11 @@ export interface SendRequest {
   commentTo?: Id
 }
 
+export type DraftRequest = Pick<
+  SendRequest,
+  "chat" | "text" | "replyTo" | "threadId" | "markdown" | "html" | "noPreview"
+>
+
 /** One message in a chat, as typed. */
 export interface MessageTarget {
   chat: string
@@ -233,6 +238,7 @@ export interface MessagesService {
   searchAllWithMeetings(request: SearchAllWithMeetingsRequest): Promise<SearchAllIncludingMeetingsFound>
   /** Counts of what a strict query matches, by chat, sender, day or hour; from the local store only. */
   stats(query: SearchQuery & { by: StatsGrouping }): Promise<MessageStats>
+  saveDraft?(request: DraftRequest): Promise<Operated<{ chatId: Id; saved: true }>>
   /** A reply is a send with `replyTo`. */
   send(request: SendRequest): Promise<Operated<Sent>>
   /** With `markdown` or `html`, the marks are taken out as a send takes them. */
@@ -555,6 +561,37 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         await remember(store, "stats", query)
         return withRefresh(stats, refreshed)
       }),
+
+    saveDraft: async ({ chat, text: typed, replyTo, threadId: typedThread, markdown, html, noPreview }) => {
+      if (typed.trim() === "")
+        throw new CliError("validation_error", "a draft needs nonempty text; clearing a draft is not supported")
+      const connection = await deps.connection()
+      const save = capability(connection, "saveDraft", "save a draft")
+      const prepared = await formatted(connection, typed, { markdown, html })
+      const { text, spans } = deps.agentText ? visibleFormattedText(prepared) : prepared
+      if (text.trim() === "") throw new CliError("validation_error", "a draft needs nonempty text after formatting")
+      const threadId = threadIdOf(typedThread)
+      const validate =
+        threadId === undefined ? undefined : capability(connection, "validateThread", "save a draft in a forum topic")
+      const { id: chatId } = await connection.resolve(chat)
+      const operationId = newOperationId()
+      await guardedWrite(
+        guard,
+        { operationId, chatId, kind: "edit", key: "drafts", length: text.length },
+        () =>
+          save(chatId, text, {
+            ...(replyTo === undefined ? {} : { replyTo }),
+            ...(threadId === undefined ? {} : { threadId }),
+            ...(spans.length === 0 ? {} : { formatting: spans }),
+            ...(noPreview ? { noPreview } : {}),
+          }),
+        undefined,
+        validate === undefined || threadId === undefined
+          ? undefined
+          : () => validate(chatId, threadId, { ...(replyTo === undefined ? {} : { replyTo }) }),
+      )
+      return { operationId, chatId, saved: true }
+    },
 
     send: async ({
       chat,

@@ -27,6 +27,8 @@ export type MediaOption = "spoiler" | "captionAbove" | "fileName"
 
 /** What a messenger is and can do, as the services read it; the CLI's `Messenger` adds how its commands run. */
 export interface MessengerTraits {
+  /** Opt in to `messages send --draft` only when the adapter implements `saveDraft`. */
+  drafts?: boolean
   counterFields?: readonly CounterField[]
   app: AppIdentity
   provider: Provider

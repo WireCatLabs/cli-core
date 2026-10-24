@@ -156,6 +156,12 @@ export interface MessengerCore {
   chat(chat: string): Promise<ChatCard>
   /** An option the messenger has no way to honour is refused, never dropped. */
   send(chatId: Id, text: string, options: SendOptions): Promise<Sent>
+  /** Save a nonempty draft for the owner to review and send; never sends a message. */
+  saveDraft?(
+    chatId: Id,
+    text: string,
+    options: Pick<SendOptions, "replyTo" | "threadId" | "formatting" | "noPreview">,
+  ): Promise<void>
   logout(): Promise<void>
   close(): Promise<void>
 }

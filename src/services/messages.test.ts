@@ -325,6 +325,43 @@ describe("the messages service's writes", () => {
     writes.length = 0
   })
 
+  it("saves a formatted draft through its own guard key without sending or journaling the text", async () => {
+    const saveDraft = vi.fn(async () => {})
+    const send = vi.fn(writer.send)
+    const service = messagesService(onlineDeps(messenger, { ...writer, send, saveDraft }, guarding(false)))
+    const result = await service.saveDraft?.({
+      chat: "Book",
+      text: "**draft**",
+      markdown: true,
+      replyTo: "3",
+      noPreview: true,
+    })
+    expect(saveDraft).toHaveBeenCalledWith("7", "draft", {
+      replyTo: "3",
+      noPreview: true,
+      formatting: [{ type: "bold", from: 0, length: 5 }],
+    })
+    expect(send).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ chatId: "7", saved: true, operationId: expect.any(String) })
+    expect(journal).toMatchObject([{ key: "drafts", kind: "edit", length: 5, outcome: "sent" }])
+    expect(journal[0]).not.toHaveProperty("text")
+  })
+
+  it("refuses unsupported, empty and denied drafts before a write", async () => {
+    const resolve = vi.fn(writer.resolve)
+    const send = vi.fn(writer.send)
+    const unsupported = messagesService(onlineDeps(messenger, { ...writer, resolve, send }, guarding(false)))
+    await expect(unsupported.saveDraft?.({ chat: "Book", text: "draft" })).rejects.toThrow("save a draft")
+    expect(resolve).not.toHaveBeenCalled()
+    const saveDraft = vi.fn(async () => {})
+    const service = messagesService(onlineDeps(messenger, { ...writer, send, saveDraft }, guarding(true)))
+    await expect(service.saveDraft?.({ chat: "Book", text: " " })).rejects.toThrow("nonempty")
+    await expect(service.saveDraft?.({ chat: "Book", text: "draft" })).rejects.toThrow("allow-list")
+    expect(saveDraft).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    expect(journal).toMatchObject([{ key: "drafts", outcome: "refused" }])
+  })
+
   it.each(["bold", "underline"] as const)("delegates the same source to a provider producing %s", async (type) => {
     const formatMarkdown = vi.fn(async (source: string) => {
       expect(source).toBe("__same__")

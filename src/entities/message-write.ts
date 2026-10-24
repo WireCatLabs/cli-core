@@ -9,3 +9,11 @@ export const messageWrite = v.strictObject({
   messages: v.optional(v.array(message)),
   scheduled_for: v.optional(time),
 })
+
+export const draftWrite = v.strictObject({
+  operation_id: id,
+  chat_id: id,
+  saved: v.literal(true),
+})
+
+export const messageSend = v.union([messageWrite, draftWrite])
