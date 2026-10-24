@@ -21,6 +21,11 @@ shape of this file.
   `--analysis-provider`, `--embedding-provider`, `--consent-provider`, `--claim`, `--answer-model`, `--template-mode`,
   `--disappear-after` and `--text-file`; see the 0.399.0 notes for the retired spellings and query replacements.
 
+### Fixed
+
+- WhatsApp parity allows hiding commands to end other sessions and remove contacts while it adopts
+  the linked-device capability declarations. Telegram and MAX still require both commands.
+
 ## 0.404.0 — 24.10.2026
 
 ### Added
