@@ -51,6 +51,7 @@ export const createBotServer = (options: BotServerOptions) => {
   const authority = (path: readonly string[]) =>
     options.authority?.(path) === true || (path[0] === "config" && (path[1] === "set" || path[1] === "unset"))
   const catalogue = {
+    includeUnavailable: true,
     levels: settings.permissions,
     currentLevels: levels,
     readOnly: readOnlyLockOf(bot.app, env) !== undefined,

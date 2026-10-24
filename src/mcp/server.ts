@@ -140,6 +140,7 @@ export const createServer = (
     (path[0] !== "stats" || levelOf(`${path.join(".")}.sync-first`) === "allow")
   // Discovery stays complete while availability follows changes to the profile.
   const generated = toolsFromCommands(program.commands, {
+    includeUnavailable: true,
     exclude: [["bot"]],
     levels: settings.permissions,
     currentLevels: () => {

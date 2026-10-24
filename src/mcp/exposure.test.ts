@@ -64,7 +64,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     ["store restore", "store.restore"],
   ])("keeps %s discoverable when %s is denied", (path, key) => {
     const catalogue = (levels: Record<string, Level>) =>
-      toolsFromCommands(withChatDeletion(), { exclude: [["bot"]], levels })
+      toolsFromCommands(withChatDeletion(), { exclude: [["bot"]], includeUnavailable: true, levels })
     const allowed = catalogue({}).find((tool) => tool.command === path)
     const denied = catalogue({ [key]: "deny" }).find((tool) => tool.command === path)
     expect(allowed?.availability?.()).toEqual({ available: true })
@@ -85,6 +85,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     const listed = (levels: Record<string, Level>) =>
       toolsFromCommands(describeProgram(program), {
         exclude: [["bot"]],
+        includeUnavailable: true,
         levels,
         authority: changesAuthorityAt(program),
       }).find((tool) => tool.command === path)

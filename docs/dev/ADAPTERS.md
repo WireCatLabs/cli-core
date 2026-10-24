@@ -394,6 +394,10 @@ discovery stays independent of account settings; help still works if settings ne
 Availability is read from current settings, and execution checks permissions again before opening a
 connection or changing anything. A command being listed grants no permission to run it.
 
+The shared MCP servers request `toolsFromCommands` with `includeUnavailable: true`. Existing callers
+that use the helper as a filtered execution list can keep its default behavior; the public discovery
+surfaces always include blocked commands.
+
 Bot MCP includes `config show|set|unset` in the bot's scope. It omits the arguments that could select
 personal or default settings, and supplies `--bot` internally. Changing limits requires
 `mcp.authority`; the agent still cannot turn that key or `bot.api` on for itself. Commands requiring

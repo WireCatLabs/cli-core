@@ -316,6 +316,10 @@ describe("toolsFromCommands", () => {
     expect(list?.writes).toBe(false)
   })
 
+  it("preserves the legacy executable-only helper projection for existing callers", () => {
+    expect(toolsFromCommands(tree(), { exclude: [["bot"]], levels: { messages: "deny" } })).toEqual([])
+  })
+
   it("keeps denied commands discoverable and marks their current availability", () => {
     const cases: Record<string, "deny" | "readonly">[] = [
       { "messages.delete": "deny" },
@@ -323,7 +327,7 @@ describe("toolsFromCommands", () => {
       { messages: "deny" },
     ]
     for (const levels of cases) {
-      const tools = toolsFromCommands(tree(), { exclude: [["bot"]], levels })
+      const tools = toolsFromCommands(tree(), { exclude: [["bot"]], levels, includeUnavailable: true })
       expect(tools.map((tool) => tool.command)).toEqual(["messages list", "messages delete"])
       expect(tools.find((tool) => tool.command === "messages delete")?.availability?.()).toMatchObject({
         available: false,

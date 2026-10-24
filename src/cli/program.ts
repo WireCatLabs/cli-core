@@ -252,7 +252,11 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
     discoveryAvailability: (info) => {
-      const flags = program.optsWithGlobals<GlobalFlags>()
+      const inspected = info.path.reduce<Command | undefined>(
+        (parent, word) => parent?.commands.find((one) => one.name() === word),
+        program,
+      )
+      const flags = (inspected ?? program).optsWithGlobals<GlobalFlags & { bot?: boolean }>()
       const env = options.env ?? process.env
       if (!flags.profile && !env[envName(definition.app, "PROFILE")]) return undefined
       try {
@@ -262,7 +266,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           {
             env,
             needsProfile: false,
-            kind: info.path[0] === "bot" ? "bot" : "personal",
+            kind: info.path[0] === "bot" || flags.bot ? "bot" : "personal",
           },
         )
         if (!("permissions" in settings) || !settings.permissions) return undefined

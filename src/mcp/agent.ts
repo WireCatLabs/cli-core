@@ -11,6 +11,7 @@ import { type ErrorObject, writes } from "@wirecat/cli-base/standards"
 import { VOCABULARY } from "@wirecat/cli-base/standards/tables"
 import * as v from "valibot"
 import { type CommandAvailability, commandAvailability } from "../cli/command-availability.js"
+import { changesMessenger } from "../cli/effects.js"
 
 export type { CommandAvailability } from "../cli/command-availability.js"
 
@@ -61,6 +62,8 @@ export interface AgentTool {
 }
 
 export interface CatalogueOptions {
+  /** Complete discovery, including blocked commands. Omit to preserve the legacy executable-only projection. */
+  includeUnavailable?: boolean
   /** The subtree a server is built from: `["bot"]` for the bot server. */
   root?: readonly string[]
   /** Subtrees under the root left out: the personal server leaves out `["bot"]`. */
@@ -227,7 +230,10 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
         startsWith(info.path, root) &&
         !exclude.some((skipped) => startsWith(info.path.slice(root.length), skipped)) &&
         info.mcp !== false &&
-        info.lifetime === undefined,
+        info.lifetime === undefined &&
+        (options.includeUnavailable === true ||
+          (!(readOnly && (changesMessenger(info) || authority?.(info.path))) &&
+            (levels === undefined || commandAvailability(info, levels, keyOf, authority).available))),
     )
     .map((info) => ({
       availability: () =>
