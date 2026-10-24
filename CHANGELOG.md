@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- The `contact` entity has optional `email` and `phones` (number and label), for a source that knows them, such as zm's Zoom contacts.
+
 - Command discovery projections preserve the CLI document and command identities while selecting fields inside its command tree.
 
 - Portable ingestion, export, association, transcription and embedding receipts have shared entities and `meetingResultItem` serializers. Public IDs are strings; stored numeric IDs remain internal.
