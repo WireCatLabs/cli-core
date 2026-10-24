@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -50,5 +50,48 @@ describe("public diagnostic reports", () => {
     expect(result.doctor).toEqual({ config: { path: "~/config.json" } })
     expect(result.run).toBeNull()
     expect(result.sends).toEqual([])
+  })
+  it("optionally preserves recorded technical fields while keeping content out and labelling ids", () => {
+    const options = report()
+    const dir = join(options.runsDir, "2026-10-24", "synthetic-run")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      join(dir, "run.json"),
+      JSON.stringify({
+        runId: "synthetic-run",
+        command: "messages list",
+        status: "failed",
+        profile: "example",
+        startedAt: "2026-10-24T12:00:00.000Z",
+        cliVersion: "1",
+      }),
+    )
+    writeFileSync(
+      join(dir, "events.jsonl"),
+      JSON.stringify({
+        time: "2026-10-24T12:00:00.000Z",
+        severity: "info",
+        attributes: {
+          event: "request",
+          opcode: 7,
+          chat_id: "synthetic-chat",
+          ids: { chat: "synthetic-chat" },
+          message_text: "SYNTHETIC-CONTENT",
+        },
+      }),
+    )
+    const summary = buildDoctorReport(options).run?.events[0]
+    expect(summary).not.toHaveProperty("time")
+    expect(summary).not.toHaveProperty("opcode")
+    const recorded = buildDoctorReport({ ...options, eventFields: "recorded" }).run?.events[0]
+    expect(recorded).toMatchObject({
+      time: "2026-10-24T12:00:00.000Z",
+      severity: "info",
+      opcode: 7,
+      ids: { chat: expect.stringMatching(/^id:/) },
+    })
+    expect(recorded?.chat_id).toEqual((recorded?.ids as Record<string, string> | undefined)?.chat)
+    expect(JSON.stringify(recorded)).not.toContain("SYNTHETIC-CONTENT")
+    expect(JSON.stringify(recorded)).not.toContain("synthetic-chat")
   })
 })

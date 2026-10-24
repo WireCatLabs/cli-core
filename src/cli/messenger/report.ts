@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import { LOG_ATTRIBUTES } from "../../runs/log-attributes.js"
 import { findRun, listRuns, type RunMetadata, readEvents } from "../../runs/run.js"
 import type { SendEntry } from "../../sends/journal.js"
 
@@ -52,6 +53,7 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
   now = new Date(),
   home,
   context,
+  eventFields = "report",
 }: {
   doctor: Doctor
   runsDir: string
@@ -62,6 +64,8 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
   now?: Date
   home: string | undefined
   context?: Context
+  /** Retain allowlisted recorded fields, including time and severity, for an existing consumer contract. */
+  eventFields?: "report" | "recorded"
 }): Report<Doctor> & Context => {
   const chosen = runId === undefined ? newestFailed(runsDir) : findRun(runsDir, runId)
   if (runId !== undefined && !chosen)
@@ -76,7 +80,7 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
       ...doctor,
       ...(account?.remembered ? { account: { ...account, remembered: label(account.remembered) } } : {}),
     },
-    run: chosen ? { metadata: chosen.metadata, events: readEvents(chosen.dir).map(eventOf(label)) } : null,
+    run: chosen ? { metadata: chosen.metadata, events: readEvents(chosen.dir).map(eventOf(label, eventFields)) } : null,
     sends: sends.slice(-RECENT_SENDS).map((entry) => labelled(entry, label)),
   }
   return JSON.parse(hideHome(JSON.stringify(report), home)) as Report<Doctor> & Context
@@ -137,10 +141,26 @@ const labeller = () => {
   return (id: string): string => `id:${createHash("sha256").update(salt).update(id).digest("hex").slice(0, 12)}`
 }
 
+const RECORDED_FIELDS = new Set([...LOG_ATTRIBUTES, "time", "severity"])
+const RECORDED_ID_FIELDS = new Set([
+  ...SEND_ID_FIELDS.map((key) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)),
+  "actor_id",
+  "target_id",
+])
+
 const eventOf =
-  (label: (id: string) => string) =>
+  (label: (id: string) => string, fields: "report" | "recorded") =>
   (event: Record<string, unknown>): Record<string, unknown> => {
-    const kept = Object.fromEntries(Object.entries(event).filter(([key]) => EVENT_FIELDS.includes(key)))
+    const kept = Object.fromEntries(
+      Object.entries(event)
+        .filter(([key]) => (fields === "recorded" ? RECORDED_FIELDS.has(key) : EVENT_FIELDS.includes(key)))
+        .map(([key, value]) => [
+          key,
+          fields === "recorded" && RECORDED_ID_FIELDS.has(key) && value !== undefined && value !== null
+            ? label(String(value))
+            : value,
+        ]),
+    )
     const ids = kept.ids
     if (typeof ids !== "object" || ids === null) return kept
     return { ...kept, ids: Object.fromEntries(Object.entries(ids).map(([name, id]) => [name, label(String(id))])) }
