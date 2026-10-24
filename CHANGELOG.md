@@ -13,6 +13,12 @@ shape of this file.
   serialized as strings in replay arguments, so an agent can pass the returned next step to the shared read tool
   without converting IDs. Validated search requests still use numeric store IDs.
 
+- Media archives skip call events alongside service events and keyboards. A message containing
+  both a file and a call event now archives the file and verifies its checksum; call-only
+  messages make no download request. Unknown attachment kinds still fail rather than being
+  silently dropped.
+
+
 ## 0.409.0 — 24.10.2026
 
 ### Added

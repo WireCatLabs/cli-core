@@ -8,6 +8,7 @@ export const NOT_FILES: ReadonlySet<string> = new Set([
   "location",
   "contact",
   "control",
+  "call",
   "inline_keyboard",
 ])
 
