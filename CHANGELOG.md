@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.402.0 — 24.10.2026
+
 ### Changed — may break callers
 
 - **MCP offers `bot api`, behind `bot.api`.** The generated `bot api <operation>` commands (raw calls to Bot API methods, which skip the send guard and the bot's recipient list) are bot MCP tools again, offered only where the profile sets `permissions.bot.api` to `allow`; it is `deny` by default for an MCP server, so nothing changes until the owner turns it on, and a broader `bot: allow` does not lift it. A call made after the owner turned it off is refused naming the key and the terminal command; an agent cannot set the key through `config set` (the guard on `permissions.mcp…` covers `permissions.bot.api`). Breaking for a CLI: `generatedApiCommand` no longer marks the group `mcp: false`, and each operation now declares effects (`remote: read` or `write`), so `commands --json` shows them and a catalogue built with `toolsFromCommands` without `levels` lists the operations; update a pinned bot catalogue and a document that lists what MCP leaves out. Under `<PREFIX>_READ_ONLY` a write operation now refuses on the command line too. The command line's `bot api` is otherwise unchanged.
