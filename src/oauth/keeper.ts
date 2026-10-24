@@ -1,0 +1,184 @@
+import { createHash } from "node:crypto"
+import { join } from "node:path"
+import { setTimeout as delay } from "node:timers/promises"
+import { CliError, type CredentialSource, isCliError, type Logger } from "@wirecat/cli-base"
+import { acquireLock } from "../files/index.js"
+import { type AuthorizeOptions, authorize } from "./authorize.js"
+import type { ExchangeContext, OAuthClient, OAuthProvider, TokenSet } from "./provider.js"
+import { requestTokens, revokeToken, TOKEN_LOG_EVENT } from "./requests.js"
+import type { StoredTokens, TokenStorage } from "./storage.js"
+
+export interface TokenKeeperOptions {
+  provider: OAuthProvider
+  storage: TokenStorage
+  /** The CLI's config directory: the keyring entry varies with it, so the lock must too. */
+  lockDir: string
+  fetch: typeof fetch
+  /** `drive personal session start`: named in every failure that needs a new sign-in. */
+  signInCommand: string
+  now?: () => number
+  signal?: AbortSignal
+  log?: Logger
+  /** Longer than one token request's 30 s limit, so a live refresher finishes first. Real time, not `now`. */
+  lockWaitMs?: number
+  lockRetryMs?: number
+  /** An access token expiring later than this from now is used as is. */
+  freshForMs?: number
+}
+
+export type SignInOptions = Omit<AuthorizeOptions, "provider" | "signal"> & {
+  /** Runs before anything is saved; it may refuse the account or add fields to the entry (drive's `principal`). */
+  accept?: (tokens: TokenSet) => Promise<Record<string, unknown> | undefined> | Record<string, unknown> | undefined
+}
+
+export interface TokenKeeper {
+  accessToken(): Promise<string>
+  tokens(): Promise<TokenSet>
+  signIn(options: SignInOptions): Promise<{ scopes: string[] }>
+  /** Saves tokens a CLI got by a flow of its own, under the same lock. */
+  save(tokens: TokenSet, extra?: Record<string, unknown>): Promise<void>
+  signOut(options?: { revoke?: boolean }): Promise<{ revoked: boolean; removed: CredentialSource[] }>
+}
+
+const inFlight = new Map<string, Promise<unknown>>()
+
+export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
+  const { provider, storage, signal, log } = options
+  const now = options.now ?? Date.now
+  const fresh = (tokens: TokenSet) =>
+    Boolean(tokens.accessToken) &&
+    tokens.expiresAt !== undefined &&
+    tokens.expiresAt > now() + (options.freshForMs ?? 60_000)
+  const lockPath = join(
+    options.lockDir,
+    `oauth-${createHash("sha256").update(storage.key).digest("hex").slice(0, 16)}.lock`,
+  )
+  const clientOf = (stored?: StoredTokens): OAuthClient => {
+    const saved = stored?.client
+    if (!saved || saved.clientSecret || saved.clientId !== provider.client.clientId) return saved ?? provider.client
+    return provider.client
+  }
+  const context = (client: OAuthClient, previous?: TokenSet): ExchangeContext => ({
+    fetch: options.fetch,
+    client,
+    now,
+    signInCommand: options.signInCommand,
+    ...(signal ? { signal } : {}),
+    ...(log ? { log } : {}),
+    ...(previous ? { previous } : {}),
+  })
+  const exchange = (params: Record<string, string>, ctx: ExchangeContext) =>
+    provider.exchange ? provider.exchange(params, ctx) : requestTokens(provider, params, ctx)
+  const notSignedIn = () =>
+    new CliError("authentication_error", `not signed in to ${provider.name}; run ${options.signInCommand}`, {
+      reason: "oauth.missing",
+    })
+
+  // A releaser removes the empty marker folder, so an acquirer racing it can find the folder gone: that is "busy" too.
+  const busy = (error: unknown) =>
+    (isCliError(error) && error.details.reason === "file.locked") ||
+    (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
+  const acquire = async () => {
+    const started = performance.now()
+    let waiting = false
+    for (;;) {
+      try {
+        return await acquireLock(lockPath, signal ? { signal } : {})
+      } catch (error) {
+        if (!busy(error)) throw error
+        if (!waiting) {
+          waiting = true
+          log?.info({
+            event: TOKEN_LOG_EVENT,
+            provider: provider.id,
+            operation: "lock",
+            outcome: "waiting",
+            pid: process.pid,
+          })
+        }
+        if (performance.now() - started > (options.lockWaitMs ?? 45_000))
+          throw new CliError("provider_unavailable", `another process holds this ${provider.name} sign-in; retry`, {
+            reason: "oauth.locked",
+            retryable: true,
+          })
+        await delay(options.lockRetryMs ?? 50, undefined, signal ? { signal } : {}).catch(() => {
+          throw new CliError("cancelled", `${provider.name} sign-in was cancelled`)
+        })
+      }
+    }
+  }
+  const locked = async <T>(work: () => Promise<T>): Promise<T> => {
+    const lock = await acquire()
+    try {
+      return await work()
+    } finally {
+      await lock.release().catch(() => {})
+    }
+  }
+  const shared = <T>(work: () => Promise<T>): Promise<T> => {
+    const running = inFlight.get(lockPath) as Promise<T> | undefined
+    if (running) return running
+    const started = locked(work).finally(() => inFlight.delete(lockPath))
+    inFlight.set(lockPath, started)
+    return started
+  }
+
+  const tokens = async (): Promise<TokenSet> => {
+    const seen = storage.read()
+    if (!seen) throw notSignedIn()
+    if (fresh(seen.tokens)) return seen.tokens
+    return shared(async () => {
+      const current = storage.read()
+      if (!current) throw notSignedIn()
+      // Another process refreshed while this one waited for the lock: its result is the one to use.
+      if (fresh(current.tokens) || current.tokens.refreshToken !== seen.tokens.refreshToken) return current.tokens
+      const client = clientOf(current)
+      const refreshed = await exchange(
+        { grant_type: "refresh_token", refresh_token: current.tokens.refreshToken },
+        context(client, current.tokens),
+      )
+      storage.write({ tokens: refreshed, client })
+      return refreshed
+    })
+  }
+
+  return {
+    tokens,
+    accessToken: async () => {
+      const current = await tokens()
+      if (!current.accessToken) throw notSignedIn()
+      return current.accessToken
+    },
+    signIn: async ({ accept, ...authorizeOptions }) => {
+      storage.probe()
+      const authorization = await authorize({ ...authorizeOptions, provider, ...(signal ? { signal } : {}) })
+      const client = provider.client
+      const received = await exchange(
+        {
+          grant_type: "authorization_code",
+          code: authorization.code,
+          redirect_uri: authorization.redirectUri,
+          code_verifier: authorization.codeVerifier,
+        },
+        context(client),
+      )
+      const extra = (await accept?.(received)) ?? undefined
+      await locked(async () => storage.write({ tokens: received, client, ...(extra ? { extra } : {}) }))
+      return { scopes: received.scopes }
+    },
+    save: (saved, extra) =>
+      locked(async () =>
+        storage.write({ tokens: saved, client: clientOf(storage.read()), ...(extra ? { extra } : {}) }),
+      ),
+    signOut: ({ revoke = false } = {}) =>
+      locked(async () => {
+        const current = storage.read()
+        let revoked = false
+        if (revoke && current) {
+          await revokeToken(provider, current.tokens, context(clientOf(current)))
+          revoked = true
+        }
+        return { revoked, removed: storage.remove() }
+      }),
+  }
+}
