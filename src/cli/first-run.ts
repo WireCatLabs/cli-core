@@ -7,6 +7,7 @@ import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
 import { sharedConfigPath } from "../store/shared-config.js"
 import { openStore } from "../store/store.js"
+import { readSecret } from "../terminal/prompt.js"
 import { WIRECAT_TOOLS } from "./help/first-screen.js"
 import { buildStems } from "./messenger/store-maintenance-command.js"
 import {
@@ -245,4 +246,36 @@ export const askSetupQuestions = async (run: FirstRun): Promise<Question[]> => {
     } else writeSetupAnswers(path, { permissions: await askPermissions(run, answers) })
   }
   return asking
+}
+
+/**
+ * The first-run step a tool runs before each command: asks when `asksAtStart` says so, and lets the command run
+ * whatever happens to the questions. `setup` asks all three again, since a refusal sends the owner there.
+ * A tool that builds its own program (zm, memo, drive) calls this with its command path.
+ */
+export const setupAtStart = async (start: {
+  command: string
+  env: NodeJS.ProcessEnv
+  path: readonly string[]
+  headless: boolean
+  readOnlyLock?: string | undefined
+  input?: NodeJS.ReadableStream & { isTTY?: boolean }
+  terminal?: boolean
+}): Promise<void> => {
+  const input = start.input ?? process.stdin
+  const terminal = start.terminal ?? (input.isTTY === true && process.stderr.isTTY === true)
+  if (!asksAtStart({ ...start, terminal, readOnlyLock: start.readOnlyLock })) return
+  await askSetupQuestions({
+    command: start.command,
+    env: start.env,
+    all: start.path[0] === "setup",
+    io: {
+      ask: (prompt) => readSecret(prompt, { input, echo: true }),
+      say: (text) => process.stderr.write(`${text}\n`),
+    },
+  }).catch((error: unknown) => {
+    process.stderr.write(
+      `setup questions skipped: ${error instanceof Error ? error.message : String(error)} — \`${start.command} setup\` asks them again\n`,
+    )
+  })
 }
