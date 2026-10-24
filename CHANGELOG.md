@@ -6,6 +6,12 @@ minor version may break callers, and says how under "Changed — may break calle
 shape of this file.
 
 
+## Unreleased
+
+### Fixed
+
+- **The 0.412.0 notes for the provider registry, unknown providers and the `events` kind say "available from cli-core 0.413.0"; they shipped in 0.412.0.** The release folded them in from `main`'s head. Nothing else in those entries changes.
+
 ## 0.412.0 — 24.10.2026
 
 ### Added
