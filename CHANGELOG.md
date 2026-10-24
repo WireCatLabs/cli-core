@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.410.0 — 24.10.2026
 
 ### Added
 
@@ -14,8 +14,6 @@ shape of this file.
   typed diagnostic payloads and optional technical context. Existing reports keep their shape
   when context is omitted. `eventFields: "recorded"` retains allowlisted recorded technical
   fields for consumers that already include them; the default report projection is unchanged.
-
-## 0.410.0 — 24.10.2026
 
 ### Fixed
 
@@ -27,7 +25,6 @@ shape of this file.
   both a file and a call event now archives the file and verifies its checksum; call-only
   messages make no download request. Unknown attachment kinds still fail rather than being
   silently dropped.
-
 
 ## 0.409.0 — 24.10.2026
 
