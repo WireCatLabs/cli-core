@@ -38,8 +38,9 @@ None open.
   separate SDK: cli-core is the shared base (owner, 2026-10-23). Plan first.
 - **CORE-26** · P2 · Calendar events in the store for the new `cal` CLI (Google Calendar first): an event entity
   linked to people, meetings and chats, searchable like the rest. Nothing handles calendars today. Plan first.
-- **CORE-6** · P2 · 🚧 `perf/search-startup` Search start-up: memo and drive take 1.2–2.4 s a search; measure process start, store open and
-  model load first. [Notes](BACKLOG-NOTES.md#core-6).
+- **CORE-6** · P2 · 🟡 Search start-up measured: model open 1.44 s, empty-store reopen 8.4 ms, bare Node 31.7 ms
+  (medians). Next compare one-shot CLI and long-lived MCP on the same synthetic corpus before optimizing.
+  [Runner and limits](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/startup) · [notes](BACKLOG-NOTES.md#core-6).
 - **CORE-7** · P2 · 🟡 One `--source` for every search: left are document-only selection, provider and kind coverage in
   answers, and memo's work item 5. [source-everywhere-plan.md](source-everywhere-plan.md).
 - **CORE-8** · P2 · Typo-tolerant search by default (approved option B); waits on plain search covering transcripts,
