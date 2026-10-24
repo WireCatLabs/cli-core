@@ -14,8 +14,8 @@ shape of this file.
 
 ### Fixed
 
+- **A file lock no longer fails with "no such file" when another writer releases at the same moment** (available from cli-core 0.413.0). The releaser removes the empty marker folder; an acquirer that had just created it now creates it again instead of throwing `ENOENT`. `acquireLock`, the archive writer lease and the sign-in module's refresh lock all use it.
 - **The 0.412.0 notes for the provider registry, unknown providers and the `events` kind say "available from cli-core 0.413.0"; they shipped in 0.412.0.** The release folded them in from `main`'s head. Nothing else in those entries changes.
-- **The 0.412.0 notes for the provider registry say "available from cli-core 0.413.0"; it shipped in 0.412.0.** `registerProvider`, `useProviders`, `kindIn`, skipped unknown providers and kind `events` are all in 0.412.0.
 
 ## 0.412.0 — 24.10.2026
 
