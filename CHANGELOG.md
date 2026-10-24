@@ -21,6 +21,12 @@ shape of this file.
 
 - **The 0.412.0 notes for the provider registry, unknown providers and the `events` kind say "available from cli-core 0.413.0"; they shipped in 0.412.0.** The release folded them in from `main`'s head. Nothing else in those entries changes.
 
+## Unreleased
+
+### Added
+
+- **`startCli`, one entry-point call for a CLI that builds its own program** (from `@wirecat/cli-core/cli`). It does what drive, zm and memo wire by hand in `src/bin/`: the crash catch, cancellation on SIGINT and SIGTERM, a quiet exit 0 on a closed pipe, the SQLite swap, the first-run questions (`entry.atStart`), the consent prompt (`entry.ask`) and the browser (`entry.openBrowser`). The program and its failure report stay the CLI's own. Nothing changes for a CLI that keeps its own wiring.
+
 ## 0.412.0 — 24.10.2026
 
 ### Added

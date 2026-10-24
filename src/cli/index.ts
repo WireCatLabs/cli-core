@@ -222,6 +222,7 @@ export {
   reachesOtherService,
   refuseUnderReadOnly,
 } from "./effects.js"
+export { type CliEntry, type EntryContext, type EntryIo, startCli } from "./entry.js"
 export {
   type AnswerOutput,
   answerSchema,
