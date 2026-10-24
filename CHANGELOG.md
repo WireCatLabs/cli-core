@@ -9,23 +9,13 @@ shape of this file.
 
 ### Added
 
+- **`startCli`, one entry-point call for a CLI that builds its own program** (from `@wirecat/cli-core/cli`). It does what drive, zm and memo wire by hand in `src/bin/`: the crash catch, cancellation on SIGINT and SIGTERM, a quiet exit 0 on a closed pipe, the SQLite swap, the first-run questions (`entry.atStart`), the consent prompt (`entry.ask`) and the browser (`entry.openBrowser`). The program and its failure report stay the CLI's own. Nothing changes for a CLI that keeps its own wiring.
 - **Sign-in module `@wirecat/cli-core/oauth`** (available from cli-core 0.413.0). A CLI declares its provider (URLs, client, loopback or relay redirect) and gets authorization code with PKCE S256 (state check, timeout, cancel, paste fallback), refresh and revoke over plain `fetch`, and a `tokenKeeper` whose refresh takes a lock per keyring entry shared by every process, so two processes refreshing at once send one request. `credentialStorage` sits on cli-base's `Credentials`; `standardCodec` writes new entries as `oauth:<provider>:<profile>`, and `driveSessionCodec` and `zoomTokenCodec` read and write drive's and zm's existing entries unchanged, so nobody signs in again.
 
 ### Fixed
 
-- **The 0.412.0 notes for the provider registry say "available from cli-core 0.413.0"; it shipped in 0.412.0.** `registerProvider`, `useProviders`, `kindIn`, skipped unknown providers and kind `events` are all in 0.412.0.
-
-## Unreleased
-
-### Fixed
-
 - **The 0.412.0 notes for the provider registry, unknown providers and the `events` kind say "available from cli-core 0.413.0"; they shipped in 0.412.0.** The release folded them in from `main`'s head. Nothing else in those entries changes.
-
-## Unreleased
-
-### Added
-
-- **`startCli`, one entry-point call for a CLI that builds its own program** (from `@wirecat/cli-core/cli`). It does what drive, zm and memo wire by hand in `src/bin/`: the crash catch, cancellation on SIGINT and SIGTERM, a quiet exit 0 on a closed pipe, the SQLite swap, the first-run questions (`entry.atStart`), the consent prompt (`entry.ask`) and the browser (`entry.openBrowser`). The program and its failure report stay the CLI's own. Nothing changes for a CLI that keeps its own wiring.
+- **The 0.412.0 notes for the provider registry say "available from cli-core 0.413.0"; it shipped in 0.412.0.** `registerProvider`, `useProviders`, `kindIn`, skipped unknown providers and kind `events` are all in 0.412.0.
 
 ## 0.412.0 — 24.10.2026
 
