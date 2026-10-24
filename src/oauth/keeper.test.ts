@@ -166,11 +166,11 @@ describe("tokens", () => {
     const lockDir = folder()
     const name = `oauth-${createHash("sha256").update(storage.key).digest("hex").slice(0, 16)}.lock`
     const lock = await acquireLock(join(lockDir, name))
-    let clock = NOW
     try {
-      await expect(
-        keeper({ lockDir, now: () => (clock += 1000), lockWaitMs: 5000, lockRetryMs: 1 }).tokens(),
-      ).rejects.toMatchObject({ code: "provider_unavailable", details: { reason: "oauth.locked" } })
+      await expect(keeper({ lockDir, lockWaitMs: 20, lockRetryMs: 1 }).tokens()).rejects.toMatchObject({
+        code: "provider_unavailable",
+        details: { reason: "oauth.locked" },
+      })
     } finally {
       await lock.release()
     }

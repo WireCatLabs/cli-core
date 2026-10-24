@@ -19,7 +19,7 @@ export interface TokenKeeperOptions {
   now?: () => number
   signal?: AbortSignal
   log?: Logger
-  /** Longer than one token request's 30 s limit, so a live refresher finishes first. */
+  /** Longer than one token request's 30 s limit, so a live refresher finishes first. Real time, not `now`. */
   lockWaitMs?: number
   lockRetryMs?: number
   /** An access token expiring later than this from now is used as is. */
@@ -79,7 +79,7 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
     (isCliError(error) && error.details.reason === "file.locked") ||
     (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
   const acquire = async () => {
-    const started = now()
+    const started = performance.now()
     let waiting = false
     for (;;) {
       try {
@@ -96,7 +96,7 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
             pid: process.pid,
           })
         }
-        if (now() - started > (options.lockWaitMs ?? 45_000))
+        if (performance.now() - started > (options.lockWaitMs ?? 45_000))
           throw new CliError("provider_unavailable", `another process holds this ${provider.name} sign-in; retry`, {
             reason: "oauth.locked",
             retryable: true,

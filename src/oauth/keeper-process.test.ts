@@ -123,22 +123,31 @@ it("two processes refreshing one entry at once send one refresh, and both get it
     })
 
   const first = run()
-  const firstToken = message(first, "token")
-  await firstArrived
-  const second = run()
-  const secondToken = message(second, "token")
-  await message(second, "waiting")
-  answerFirst()
+  const exits = [once(first, "exit")]
+  let second: ChildProcess | undefined
+  try {
+    const firstToken = message(first, "token")
+    await firstArrived
+    second = run()
+    exits.push(once(second, "exit"))
+    const secondToken = message(second, "token")
+    await message(second, "waiting")
+    answerFirst()
 
-  expect(await firstToken).toEqual({ token: "synthetic-access-new" })
-  expect(await secondToken).toEqual({ token: "synthetic-access-new" })
-  await Promise.all([once(first, "exit"), once(second, "exit")])
-  expect(requests).toHaveLength(1)
-  expect(requests[0]?.get("refresh_token")).toBe("synthetic-refresh-1")
-  const saved = JSON.parse(JSON.parse(await readFile(keyringFile, "utf8"))[account])
-  expect(saved).toMatchObject({
-    accessToken: "synthetic-access-new",
-    refreshToken: "synthetic-refresh-2",
-    scopes: ["m"],
-  })
+    expect(await firstToken).toEqual({ token: "synthetic-access-new" })
+    expect(await secondToken).toEqual({ token: "synthetic-access-new" })
+    await Promise.all(exits)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.get("refresh_token")).toBe("synthetic-refresh-1")
+    const saved = JSON.parse(JSON.parse(await readFile(keyringFile, "utf8"))[account])
+    expect(saved).toMatchObject({
+      accessToken: "synthetic-access-new",
+      refreshToken: "synthetic-refresh-2",
+      scopes: ["m"],
+    })
+  } finally {
+    for (const spawned of [first, second])
+      if (spawned && spawned.exitCode === null && spawned.signalCode === null) spawned.kill()
+    server.close()
+  }
 })

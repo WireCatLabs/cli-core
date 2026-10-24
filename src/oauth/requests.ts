@@ -3,6 +3,8 @@ import type { ExchangeContext, OAuthProvider, RequestContext, TokenSet } from ".
 
 const REQUEST_LIMIT_MS = 30_000
 export const TOKEN_LOG_EVENT = "oauth.token"
+/** The keys the module's log records carry, for a run log's `allow`; names only, never a token. */
+export const TOKEN_LOG_ALLOW = ["provider", "operation", "outcome", "status", "rotated", "pid"] as const
 
 const object = (value: unknown): Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("not an object")
