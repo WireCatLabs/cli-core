@@ -313,6 +313,9 @@
     "--download": {
       "meaning": "first save, from the messenger, the files no download saved yet"
     },
+    "--draft": {
+      "meaning": "save the text as a draft for the owner to review and send"
+    },
     "--dry-run": {
       "meaning": "judge and plan; do nothing",
       "note": "A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview."
@@ -3384,6 +3387,13 @@
         "--comment-to": {
           "in": ["tg"],
           "reason": "MAX personal accounts have no channel comments; WhatsApp has no channel comments"
+        },
+        "--draft": {
+          "in": [],
+          "planned": {
+            "tg": "TG-8: implement saveDraft and enable the drafts trait"
+          },
+          "reason": "MAX draft writes lack a captured payload; WhatsApp has no draft adapter"
         },
         "--file": "all",
         "--filename": {

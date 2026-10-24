@@ -93,6 +93,9 @@ The agent writes the reply into the chat's draft; the person reads it and presse
   (`docs_ai/captures/2026-09-25-res-10.jsonl:278`), which looks like a user lookup, not a
   discard. Stays `planned` until a capture of the web client saving a draft.
 - Guard: a write the other person never sees, but still its own key (for example `drafts`).
+- Shared support: the optional `drafts` trait enables `messages send --draft`; an adapter implements optional
+  `saveDraft(chatId, text, options)`. The `drafts` guard journals the edit without its text. Empty drafts and
+  send-only options are refused; no clear operation is exposed. tg adoption remains in its adapter lane.
 - Decided 2026-10-04: the first user-facing shape is `messages send --draft` — it puts the text
   into the chat's draft instead of sending. No new verb. G4's local revisions and publish/pull can
   build on it; agree with G4 before any code so it is one design, not two.

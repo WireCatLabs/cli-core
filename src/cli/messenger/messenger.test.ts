@@ -811,6 +811,70 @@ describe("the shared read commands", () => {
     expect(JSON.stringify(journal)).not.toContain("cat")
   })
 
+  it("saves --draft only when opted in, never sends, and refuses send-only flags before connecting", async () => {
+    const root = mkdtempSync(join(tmpdir(), "draft-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const send = vi.fn(fake.send)
+    const saveDraft = vi.fn(async () => {})
+    const connect = vi.fn(async () => ({ ...fake, send, saveDraft }))
+    const saved = await call(
+      ["messages", "send", "Book", "Review this", "--draft", "--json"],
+      connect,
+      env,
+      {},
+      { drafts: true },
+    )
+    expect(saved.code).toBe(0)
+    const item = JSON.parse(saved.stdout[0] ?? "").item
+    expect(item).toMatchObject({ chat_id: "7", saved: true, operation_id: expect.any(String) })
+    expect(v.safeParse(ENTITIES.message_send, item).success).toBe(true)
+    expect(saveDraft).toHaveBeenCalledWith("7", "Review this", {})
+    expect(send).not.toHaveBeenCalled()
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { permissions: { drafts: "deny" } } } }),
+    )
+    const denied = await call(["messages", "send", "Book", "draft", "--draft"], connect, env, {}, { drafts: true })
+    expect(denied.code).not.toBe(0)
+    expect(denied.stderr.join("")).toContain("drafts")
+    expect(saveDraft).toHaveBeenCalledOnce()
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { permissions: { drafts: "readonly" } } } }),
+    )
+    const readonly = await call(["messages", "send", "Book", "draft", "--draft"], connect, env, {}, { drafts: true })
+    expect(readonly.code).not.toBe(0)
+    expect(readonly.stderr.join("")).toContain("drafts")
+    expect(saveDraft).toHaveBeenCalledOnce()
+    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ profiles: { default: {} } }))
+    connect.mockClear()
+    const incompatible = await call(
+      ["messages", "send", "Book", "draft", "--draft", "--file", "/missing"],
+      connect,
+      env,
+      {},
+      { drafts: true },
+    )
+    expect(incompatible.code).toBe(2)
+    expect(incompatible.stderr.join("")).toContain("--draft cannot be combined with --file")
+    const empty = await call(["messages", "send", "Book", " ", "--draft"], connect, env, {}, { drafts: true })
+    expect(empty.code).toBe(2)
+    expect(connect).not.toHaveBeenCalled()
+    const disabled = await call(["messages", "send", "Book", "draft", "--draft"], connect, env)
+    expect(disabled.code).toBe(2)
+    expect(connect).not.toHaveBeenCalled()
+    const missing = await call(
+      ["messages", "send", "Book", "draft", "--draft"],
+      async () => ({ ...fake, send }),
+      env,
+      {},
+      { drafts: true },
+    )
+    expect(missing.code).toBe(2)
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it("**an album counts each photo and file toward the hourly limit** (NEED-1660) and answers with every message", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

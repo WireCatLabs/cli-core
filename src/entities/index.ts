@@ -97,7 +97,7 @@ import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
 import { evidencePacket, messageLinks, messageTranscript } from "./message-read.js"
 import { messageDownload, messageSync } from "./message-transfer.js"
-import { messageWrite } from "./message-write.js"
+import { messageSend, messageWrite } from "./message-write.js"
 import { model } from "./model.js"
 import { modelKey, removedModelKey, storedModelKey } from "./model-key.js"
 import { note } from "./note.js"
@@ -374,6 +374,7 @@ export const ENTITIES = {
   ]),
   message_link: messageLink,
   message_write: messageWrite,
+  message_send: messageSend,
   message_pin: messagePin,
   message_star: messageStar,
   message_deletion: messageDeletion,

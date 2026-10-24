@@ -1223,6 +1223,7 @@ const samples: Record<EntityName, unknown> = {
   poll,
   poll_change: { operation_id: "op-1", poll },
   message_write: { operation_id: "op-1", message },
+  message_send: { operation_id: "op-1", chat_id: "7", saved: true },
   poll_vote: { person_id: "9", name: null, username: null, answers: ["0"], voted_at: at },
   topic: {
     id: "3",

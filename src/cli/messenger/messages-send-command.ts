@@ -6,7 +6,7 @@ import { threadIdOf } from "../../domain/thread.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { readAttachments, readStickerFile } from "../../sends/upload.js"
 import { ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
-import { renderAnswer } from "../envelope.js"
+import { itemOf, renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
 import { readAll } from "./stdin.js"
@@ -27,13 +27,14 @@ export const sendCommand = (messenger: Messenger): Command => {
   const send = annotate(new Command("send"), {
     examples: [`${messenger.app.command} personal messages send "Book club" "The meeting starts at 10."`],
     effects: REMOTE_WRITE,
-    output: { entity: "message_write" },
+    output: { entity: messenger.drafts === true ? "message_send" : "message_write" },
   })
     .description("send a text message; without [text], the text is read from stdin")
     .argument("<chat>", messenger.chatArgument)
     .argument("[text]", "the message")
   // Offered only where the messenger has them, so a CLI never shows a flag it would refuse.
   if (messenger.topics !== false) send.option("--topic <id>", "send to this forum topic")
+  if (messenger.drafts === true) send.option("--draft", "save the text as a draft for the owner to review and send")
   send.option("--reply-to <message>", "answer this message, by its id in the same chat")
   if (messenger.channelComments !== false)
     send.option("--comment-to <post>", "comment on this post of the channel; it goes to the post's discussion group")
@@ -84,6 +85,7 @@ export const sendCommand = (messenger: Messenger): Command => {
 const sendText = async (command: Command, messenger: Messenger, chat: string, text: string | undefined) => {
   const context = messengerContext(command, messenger)
   const {
+    draft,
     topic,
     replyTo: typedReplyTo,
     commentTo: typedCommentTo,
@@ -105,6 +107,7 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
     sticker,
     stickerFile,
   } = command.opts<{
+    draft?: boolean
     topic?: string
     replyTo?: string
     commentTo?: string
@@ -133,6 +136,49 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
   const sendAs = typedSendAs(givenSendAs)
   const commentTo = typedCommentTo?.trim()
   if (commentTo === "") throw new CliError("validation_error", "--comment-to needs the post's message id")
+  if (draft === true) {
+    const incompatible = [
+      ["--operation-id", sendId],
+      ["--at-time", at],
+      ["--send-as", givenSendAs],
+      ["--comment-to", typedCommentTo],
+      ["--silent", silent],
+      ["--file", file.length > 0],
+      ["--photo", photo.length > 0],
+      ["--voice", voice],
+      ["--as-file", asFile],
+      ["--filename", filename],
+      ["--allow-any-file", allowAnyFile],
+      ["--spoiler", spoiler],
+      ["--caption-above", captionAbove],
+      ["--sticker", sticker],
+      ["--sticker-file", stickerFile],
+    ].find(([, value]) => value !== undefined && value !== false)
+    if (incompatible) throw new CliError("validation_error", `--draft cannot be combined with ${incompatible[0]}`)
+    const body = text ?? (await readAll(context.stdin))
+    if (body.trim() === "")
+      throw new CliError("validation_error", "a draft needs nonempty text; clearing a draft is not supported")
+    const saved = await context.withServices(async ({ messages }) => {
+      if (!messages.saveDraft) throw new CliError("validation_error", "this messenger cannot save a draft")
+      return messages.saveDraft({
+        chat,
+        text: body,
+        ...(replyTo === undefined ? {} : { replyTo }),
+        ...(threadId === undefined ? {} : { threadId }),
+        ...(markdown === true ? { markdown } : {}),
+        ...(html === true ? { html } : {}),
+        ...(preview === false ? { noPreview: true } : {}),
+      })
+    })
+    await afterWrite(saved, () =>
+      renderAnswer(
+        command,
+        context,
+        itemOf({ operation_id: saved.operationId, chat_id: saved.chatId, saved: saved.saved }),
+      ),
+    )
+    return
+  }
   const read = { app: messenger.app, env: context.env, anyFile: allowAnyFile === true }
   const attachments = await readAttachments(
     {

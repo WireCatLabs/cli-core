@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Messengers can opt in to `messages send --draft`.** Set the optional `drafts` trait and implement the optional
+  `saveDraft` port to save text for the owner to review and send. The write is guarded by `drafts`; empty drafts
+  and send-only options are refused. Existing adapters and command trees stay unchanged until they opt in.
+
 ### Changed — may break callers
 
 - **Flag renames first shipped in 0.399.0 also affect callers upgrading directly from 0.398.0 or earlier.** Use
