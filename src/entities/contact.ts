@@ -14,6 +14,9 @@ export const contact = v.strictObject({
   description: v.nullable(text),
   /** The newest message in a one-to-one chat with them. */
   last_messaged_at: v.nullable(time),
+  /** For a source that knows it, such as a Zoom contact. */
+  email: v.optional(v.nullable(text)),
+  phones: v.optional(v.array(v.strictObject({ number: text, label: v.nullable(text) }))),
   /** `contacts show`: the chats shared with them. */
   chats: v.optional(v.array(v.pick(chat, ["ref", "id", "title", "kind", "last_message_at"]))),
   /** `contacts show --with-notes`: the owner's private notes about them. */

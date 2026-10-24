@@ -350,6 +350,8 @@ const samples: Record<EntityName, unknown> = {
     username: null,
     description: null,
     last_messaged_at: null,
+    email: "synthetic@example.com",
+    phones: [{ number: "+1 555 0100", label: "Mobile" }],
   },
   contact_update: { operation_id: "synthetic", person: { id: "91", name: null, username: null } },
   contact_state_change: { operation_id: "synthetic", person_id: "91" },
