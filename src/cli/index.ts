@@ -1,5 +1,6 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
 export { parseDuration } from "../domain/duration.js"
+export { botTemplate } from "../entities/list-results.js"
 export { syncProgress } from "../entities/store-records.js"
 export { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 export { type AppErrors, failureContext } from "../errors/reasons.js"

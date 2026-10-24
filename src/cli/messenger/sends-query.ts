@@ -22,8 +22,8 @@ export const SENDS_QUERY: QueryRegistry = {
   ),
 }
 
-export const sendFilter = (words: QueryWords): SendFilter | undefined => {
-  const terms = queryTerms(words, SENDS_QUERY, "sends list")
+export const sendFilter = (words: QueryWords, command = "sends list"): SendFilter | undefined => {
+  const terms = queryTerms(words, SENDS_QUERY, command)
   if (terms.size === 0) return undefined
   const outcome = sendAttempt.entries.outcome.options.find((value) => value === terms.get("outcome"))
   const chatId = terms.get("chat_id"),

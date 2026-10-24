@@ -4,13 +4,17 @@ import { Command } from "commander"
 import { capability } from "../../ports/messenger.js"
 import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { typedQuery, withQuery } from "../list-query.js"
 import { window, withPaging } from "../paging.js"
 import { lines, pageOf, topicAnswer } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { TOPICS_QUERY, topicTitle } from "./list-result-queries.js"
 
 const listed = (messenger: Messenger) =>
-  async function (this: Command, chat: string) {
-    const [, query] = this.args
+  async function (this: Command, chat: string, value?: string | string[]) {
+    const searching = this.name() === "topics"
+    const words = !searching && Array.isArray(value) ? value : []
+    const query = searching && typeof value === "string" ? value : topicTitle(words)
     const context = messengerContext(this, messenger)
     if (context.settings.offline) {
       throw new CliError("validation_error", "`topics` asks the messenger; not with --offline")
@@ -19,14 +23,14 @@ const listed = (messenger: Messenger) =>
     const found = await context.withMessenger((adapter) =>
       capability(adapter, "topics", "list forum topics")(chat, wanted),
     )
-    const command = query === undefined ? "topics list" : "search topics"
+    const command = searching ? "search topics" : "topics list"
     renderAnswer(
       this,
       context,
       listOf(command, {
         items: found.items.map(topicAnswer),
         ...pageOf(context.settings, found),
-        args: { chat, ...(query === undefined ? {} : { text: query }) },
+        args: { chat, ...(searching ? { text: query } : typedQuery(words) ? { query: typedQuery(words) } : {}) },
       }),
       lines(({ id, title, closed, pinned, unread_count }) =>
         [id, title, closed ? "closed" : "", pinned ? "pinned" : "", unread_count ? `${unread_count} unread` : ""].join(
@@ -50,10 +54,13 @@ export const topicsCommand = (messenger: Messenger): Command => {
   const topics = annotate(new Command("topics"), { offline: false }).description("the topics of a forum group")
 
   topics.addCommand(
-    withPaging(
-      annotate(new Command("list"), { effects: REMOTE_READ })
-        .description("a forum group's topics, newest activity first")
-        .argument("<chat>", messenger.chatArgument),
+    withQuery(
+      withPaging(
+        annotate(new Command("list"), { effects: REMOTE_READ })
+          .description("a forum group's topics, newest activity first")
+          .argument("<chat>", messenger.chatArgument),
+      ),
+      TOPICS_QUERY,
     ).action(listed(messenger)),
   )
 

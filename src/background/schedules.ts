@@ -150,12 +150,17 @@ export const scheduledRuns = (state: string): { job: string; last: LastRun | und
   }
 }
 
-export const listSchedules = (state: string): Schedule[] =>
+export const listSchedules = (state: string, filter: Partial<Pick<Schedule, "name" | "kind">> = {}): Schedule[] =>
   existsSync(schedulesDir(state))
     ? readdirSync(schedulesDir(state))
         .map((name) => scheduleFile(state, name))
         .filter((file) => existsSync(file))
         .map(readSchedule)
+        .filter(
+          (schedule) =>
+            (filter.name === undefined || schedule.name === filter.name) &&
+            (filter.kind === undefined || schedule.kind === filter.kind),
+        )
         .sort((a, b) => a.name.localeCompare(b.name))
     : []
 

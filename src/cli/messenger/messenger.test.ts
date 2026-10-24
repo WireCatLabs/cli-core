@@ -5458,11 +5458,29 @@ describe("the guard, account and mcp config commands", () => {
 
     const listed = await call(["topics", "list", "7", "--limit", "5", "--json"], online, env)
     await call(["search", "topics", "7", "pisos", "--json"], online, env)
+    const filtered = await call(
+      ["topics", "list", "7", 'title:"Book club"', "--limit", "1", "--page", "2", "--json"],
+      online,
+      env,
+    )
+    expect(filtered.code, filtered.stderr.join("\n")).toBe(0)
+    expect(
+      (
+        await call(
+          ["topics", "list", "7", "closed:true"],
+          async () => {
+            throw new Error("unsupported filters must not connect")
+          },
+          env,
+        )
+      ).code,
+    ).toBe(2)
 
     expect(json(listed.stdout).items).toEqual([expect.objectContaining({ id: "4", pinned: true })])
     expect(asked).toEqual([
       { limit: 5, offset: 0 },
       { limit: 20, offset: 0, search: "pisos" },
+      { limit: 1, offset: 1, search: "Book club" },
     ])
     expect((await call(["topics", "list", "7"], async () => fake, env)).code).toBe(2)
   })

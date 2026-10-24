@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Shared lists declare typed queries, including bots, schedules, forum topics, calls and stickers.** Stored bot chats, recipients, send history,
+  profiles and schedules filter at their native readers; forum title terms go to the provider. Message predicates
+  require `--offline` and run in SQLite before the limit, reporting interpreted time bounds. Provider lists that
+  accept no filters refuse terms before connecting, instead of filtering an incomplete response. Existing empty
+  queries keep their previous behavior. Shared list-result contracts include the template schema for provider CLIs.
+
 ## 0.408.0 — 24.10.2026
 
 ### Fixed

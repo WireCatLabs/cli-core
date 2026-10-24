@@ -13,8 +13,10 @@ import { capability } from "../../ports/messenger.js"
 import type { Services } from "../../services/index.js"
 import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { CALLS_QUERY, STICKERS_QUERY } from "./list-result-queries.js"
 
 const kindsOf = (typed: string | undefined): MediaKind[] => {
   const kinds = typed === undefined ? [...MEDIA_KINDS] : typed.split(",").map((kind) => kind.trim())
@@ -68,10 +70,17 @@ export const mediaCommand = (messenger: Messenger): Command =>
 /** `stickers list` — the sets the account added, or one set's stickers with the ids `messages send --sticker` takes. */
 export const stickersCommand = (messenger: Messenger): Command => {
   const stickers = new Command("stickers").description("the stickers the account has added")
-  annotate(stickers.command("list"), { effects: REMOTE_READ })
+  withQuery(
+    annotate(stickers.command("list"), {
+      effects: REMOTE_READ,
+      examples: [`${messenger.app.command} personal stickers list`],
+    }),
+    STICKERS_QUERY,
+  )
     .description("sticker sets, or with --set the stickers in one; reading changes nothing")
     .option("--set <id>", "the stickers in this set")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      listQuery(typedQuery(words), STICKERS_QUERY, "stickers list")
       const context = messengerContext(this, messenger)
       const { set } = this.opts<{ set?: string }>()
       const items = await context.withMessenger(
@@ -96,10 +105,17 @@ export const stickersCommand = (messenger: Messenger): Command => {
 /** `calls list` — the account's call history, newest first. */
 export const callsCommand = (messenger: Messenger): Command => {
   const calls = new Command("calls").description("the account's calls")
-  annotate(calls.command("list"), { effects: REMOTE_READ })
+  withQuery(
+    annotate(calls.command("list"), {
+      effects: REMOTE_READ,
+      examples: [`${messenger.app.command} personal calls list`],
+    }),
+    CALLS_QUERY,
+  )
     .description("calls made and received, newest first; reading changes nothing")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      listQuery(typedQuery(words), CALLS_QUERY, "calls list")
       const context = messengerContext(this, messenger)
       const limit = context.settings.limit
       const page = await context.withMessenger((adapter) => capability(adapter, "calls", "list calls")({ limit }))

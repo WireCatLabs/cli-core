@@ -84,6 +84,35 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, system: ServerSystem
 const posix = process.platform !== "win32"
 
 describe.runIf(posix)("schedule on Linux", () => {
+  it("narrows stored schedules by name and kind without touching a timer", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux")
+    for (const [name, kind] of [
+      ["sync", "command"],
+      ["brief", "agent"],
+    ]) {
+      const file = scheduleFile(env.CHAT_STATE_DIR, name as string)
+      mkdirSync(join(file, ".."), { recursive: true })
+      writeFileSync(
+        file,
+        JSON.stringify({
+          name,
+          kind,
+          argv: ["doctor"],
+          when: { every: 60 },
+          environment: {},
+          createdAt: "2026-10-01T00:00:00Z",
+        }),
+      )
+    }
+    const result = await call(["list", "kind:agent name:brief", "--json"], env, system)
+    expect(result.code, result.err).toBe(0)
+    expect(JSON.parse(result.out).items).toEqual([{ name: "brief", kind: "agent", when: "every 1h", last: null }])
+    const refused = await call(["list", "kind:agent OR kind:command", "--json"], env, system)
+    expect(refused.code).toBe(2)
+    expect(ran).toEqual([])
+  })
+
   it("writes a oneshot service and a timer that run `schedule exec <file>`, lists it, and removes both", async () => {
     const { env } = setup()
     const { system, ran } = machine("linux")

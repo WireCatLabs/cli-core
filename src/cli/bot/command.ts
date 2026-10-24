@@ -6,10 +6,14 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { withQuery } from "../list-query.js"
 import { renderItem, wholeList } from "../messenger/chat-answers.js"
+import { RECIPIENTS_QUERY, recipientFilter } from "../messenger/recipients-query.js"
+import { SENDS_QUERY, sendFilter } from "../messenger/sends-query.js"
 import { botAdminsCommand, botMembersCommand } from "./admins.js"
 import { botContext, online } from "./context.js"
 import { botExamples } from "./examples.js"
+import { BOT_CHATS_QUERY, BOT_PROFILES_QUERY, botChatFilter, botProfileName } from "./list-queries.js"
 import { botMcpCommand } from "./mcp.js"
 import { botCan, botIdOf, botMessagesCommand } from "./messages.js"
 import { botModerateCommand, botRulesCommand } from "./moderation.js"
@@ -138,13 +142,17 @@ const meCommand = (bot: BotMessenger): Command =>
     })
 
 const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
-  annotate(new Command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "list", "list --check") })
+  withQuery(
+    annotate(new Command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "list", "list --check") }),
+    BOT_PROFILES_QUERY,
+  )
     .description(
       `every name on this machine that has a bot token; --check asks ${bot.name ?? "the messenger"} which bot each is`,
     )
     .summary("every bot profile on this machine; --check asks which bot each is")
     .option("--check", "ask the messenger who each bot is, with its token")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      const wanted = botProfileName(words)
       const context = botContext(this, bot)
       const check = this.opts<{ check?: boolean }>().check === true
       if (check) online(context, this)
@@ -157,6 +165,7 @@ const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
         }
         const rows = []
         for (const name of names) {
+          if (wanted !== undefined && name !== wanted) continue
           const tokens =
             bot.tokenStore?.(this, name) ??
             new BotTokenStore({
@@ -186,15 +195,19 @@ const recipientsCommand = (bot: BotMessenger): Command => {
   const command = new Command("recipients")
     .description("the chats this bot may write to; with no list, every chat — `clear` removes the list")
     .summary("the chats this bot may write to; with no list, every chat")
-  annotate(command.command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "recipients list") })
+  withQuery(
+    annotate(command.command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "recipients list") }),
+    RECIPIENTS_QUERY,
+  )
     .description("the chats on the list, or nothing when there is no list")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      const filter = recipientFilter(words, "bot recipients list")
       const context = botContext(this, bot)
       await context.run(async () =>
         renderAnswer(
           this,
           context,
-          wholeList("bot recipients list", (context.recipients().read() ?? []).map(snakeKeys)),
+          wholeList("bot recipients list", context.recipients().list(filter).items.map(snakeKeys)),
         ),
       )
     })
@@ -247,12 +260,16 @@ const sendsCommand = (bot: BotMessenger): Command =>
     .description("what this bot sent, edited and deleted from this machine — ids and outcomes, never text")
     .summary("what this bot sent, edited and deleted from here — never the text")
     .addCommand(
-      annotate(new Command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "sends list") })
+      withQuery(
+        annotate(new Command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "sends list") }),
+        SENDS_QUERY,
+      )
         .description("every send, edit and delete this bot made from this machine, with its outcome")
-        .action(async function (this: Command) {
+        .action(async function (this: Command, words: string[]) {
+          const filter = sendFilter(words, "bot sends list")
           const context = botContext(this, bot)
           await context.run(async () =>
-            renderAnswer(this, context, wholeList("bot sends list", context.journal().entries().map(snakeKeys))),
+            renderAnswer(this, context, wholeList("bot sends list", context.journal().entries(filter).map(snakeKeys))),
           )
         }),
     )
@@ -263,12 +280,16 @@ const chatsCommand = (bot: BotMessenger): Command => {
       `the chats this bot is in — ${bot.name ?? "the messenger"} gives a bot no list of them, so \`list\` shows the ones it has seen`,
     )
     .summary("the chats this bot is in, and what it does there")
-  annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "chats list") })
+  withQuery(
+    annotate(command.command("list"), { effects: REMOTE_READ, examples: botExamples(bot, "chats list") }),
+    BOT_CHATS_QUERY,
+  )
     .description(`chats this bot has seen on this machine — not a complete list from ${bot.name ?? "the messenger"}`)
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
+      const filter = botChatFilter(words)
       const context = botContext(this, bot)
       await context.run(async () =>
-        renderAnswer(this, context, wholeList("bot chats list", context.registry.list().map(snakeKeys))),
+        renderAnswer(this, context, wholeList("bot chats list", context.registry.list(filter).map(snakeKeys))),
       )
     })
 
