@@ -122,6 +122,17 @@ const meetingCueSample = {
 }
 
 const samples: Record<EntityName, unknown> = {
+  call_record: {
+    id: "1",
+    chat_id: null,
+    caller_id: null,
+    direction: "incoming",
+    outcome: "missed",
+    kind: "audio",
+    at,
+    duration_seconds: null,
+  },
+  sticker_inventory: { id: "5", title: "Cats", count: 2, link: null },
   bot_profile: { name: "sales", token: "keyring" },
   bot_template: { name: "hello_world", status: "APPROVED", language: "en_US", category: "UTILITY" },
   bot_seen_chat: { id: "7", title: "Book club", kind: "group", first_seen_at: at, last_seen_at: at },

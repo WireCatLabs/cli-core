@@ -56,3 +56,24 @@ export const botTemplate = v.strictObject({
   language: v.nullable(text),
   category: v.nullable(text),
 })
+
+export const callRecord = v.strictObject({
+  id,
+  chat_id: v.nullable(id),
+  caller_id: v.nullable(id),
+  direction: v.picklist(["incoming", "outgoing"]),
+  outcome: v.picklist(["answered", "missed", "declined"]),
+  kind: v.picklist(["audio", "video"]),
+  at: time,
+  duration_seconds: v.nullable(v.number()),
+})
+
+export const stickerInventory = v.strictObject({
+  id,
+  title: v.optional(text),
+  count: v.optional(v.number()),
+  link: v.optional(v.nullable(text)),
+  set_id: v.optional(v.nullable(id)),
+  emoji: v.optional(v.array(text)),
+  url: v.optional(v.nullable(text)),
+})

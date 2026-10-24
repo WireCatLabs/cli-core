@@ -72,7 +72,9 @@ import {
   botSeenChat,
   botTemplate,
   botWebhook,
+  callRecord,
   scheduledJob,
+  stickerInventory,
 } from "./list-results.js"
 import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
@@ -194,6 +196,7 @@ export {
   botTemplate,
   botWebhook,
   cachedChatMetadata,
+  callRecord,
   chart,
   chat,
   chatAdminChange,
@@ -318,6 +321,7 @@ export {
   searchHistoryClear,
   sendAttempt,
   serveSummary,
+  stickerInventory,
   storeBackup,
   storeChatStatus,
   storeCheck,
@@ -441,6 +445,8 @@ export const ENTITIES = {
   bot_menu_entry: botMenuEntry,
   bot_webhook: botWebhook,
   scheduled_job: scheduledJob,
+  call_record: callRecord,
+  sticker_inventory: stickerInventory,
   note,
   "note.hit": v.pick(note, [
     "kind",

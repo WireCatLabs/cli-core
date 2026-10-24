@@ -108,6 +108,25 @@ const invoke = async (argv: string[], adapter: MessengerAdapter, own: Partial<Me
 }
 
 describe("reads only the server answers", () => {
+  it.each(["calls", "stickers"])("refuses unsupported %s predicates before connecting", async (group) => {
+    let touched = false
+    const adapter: MessengerAdapter = {
+      ...base,
+      calls: async () => {
+        touched = true
+        return { items: [call], hasMore: false }
+      },
+      stickerSets: async () => {
+        touched = true
+        return []
+      },
+    }
+    const result = await invoke([group, "list", "id:5", "--json"], adapter)
+    expect(result.code).toBe(2)
+    expect(result.stderr).toContain("query.unsupported-field")
+    expect(touched).toBe(false)
+  })
+
   it("`chats media` asks for the kinds named, pages back by message id, and exists only where the messenger offers it", async () => {
     const asked: unknown[] = []
     const adapter: MessengerAdapter = {
@@ -143,6 +162,7 @@ describe("reads only the server answers", () => {
     const cannot = await invoke(["calls", "list"], base)
 
     expect(JSON.parse(listed.stdout)).toMatchObject({ items: [snakeKeys(call)], page: { has_more: false } })
+    expect(v.safeParse(ENTITIES.call_record, JSON.parse(listed.stdout).items[0]).success).toBe(true)
     expect(cannot.stderr).toContain("cannot list calls")
   })
 
@@ -367,6 +387,8 @@ describe("reads only the server answers", () => {
 
     expect(JSON.parse(sets.stdout)).toMatchObject({ items: [{ id: "5", title: "Cats" }], page: { has_more: false } })
     expect(JSON.parse(one.stdout).items).toEqual([{ id: "51", set_id: "5", emoji: ["🐱"], url: null }])
+    for (const result of [sets, one])
+      expect(v.safeParse(ENTITIES.sticker_inventory, JSON.parse(result.stdout).items[0]).success).toBe(true)
   })
 
   it("`messages send --sticker` sends it alone, refuses text beside it, and exists only where the messenger offers it", async () => {
