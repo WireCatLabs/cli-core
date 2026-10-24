@@ -95,9 +95,13 @@ and `AccountEditing`.
   `TopicReadState`, for a messenger with forum topics.
 - An adapter that needs what the store holds — WhatsApp addresses a message by its sender — reads it
   through `ConnectOptions.stored` in `connect`: `message(chatId, id)` and `newestIncoming(chatId, before?)`,
-  over the command's own store handle. Never open a second one.
+  over the command's own store handle. Optional `threadMessages(chatId, threadId, window)` reads a paged provider
+  thread from that same store, scoped to the connected account. Never open a second one.
 - `Attachment.providerRef` is yours alone: keep there what fetches the file again, keys included.
   No answer, live event or log prints it, and a later copy without it keeps the stored one.
+- Set `readsComments: true` when the messenger can read stored comments but cannot send them. Keep
+  `channelComments: false` to leave `messages send --comment-to` unavailable. When `readsComments` is unset,
+  comment reads inherit the existing `channelComments` capability.
 - An option your messenger cannot do is **refused with `validation_error`**. It is never dropped.
   For example, a messenger with no silent messages refuses `silent: true`.
 
@@ -235,7 +239,7 @@ Some messengers push history to the client instead of answering a request for it
   and `audit` connect and ask it; only `--offline` refuses `fetch` and `audit`, and `list` then reads the stored
   members. Without `members`, `list` reads the stored members and `fetch` and `audit` say the messenger cannot.
 - Give the adapter the `PushedHistory` group. `feed(onBatch, signal)` hands over what the messenger
-  pushes, as `HistoryBatch` objects: `{ chats?, people?, messages?, votes?, reactions?, stars?, events? }`, any of them, for any chats. It
+  pushes, as `HistoryBatch` objects: `{ chats?, people?, messages?, votes?, reactions?, stars?, deletions?, events? }`, any of them, for any chats. It
   ends when `signal` aborts.
 - A vote in `votes` is `{ chatId, messageId, vote: { person, answers, votedAt } }` (`HistoryVote`): the poll
   message's chat and id, and the vote as `PollVoteEvent` carries it. `votedAt` is when the person voted, not when the
@@ -256,6 +260,9 @@ Some messengers push history to the client instead of answering a request for it
   absent `starred` keeps what the store holds. A live one comes from `watch` as `{ event: "star", chatId, chatTitle,
   messageId, starred }` (`MessageStarEvent`). The same star twice is kept once; with no time on a star, the last one
   saved wins. `messages list <chat> starred:true` and `search messages is:starred` then read them.
+- A deletion in `deletions` is `{ chatId, messageId }`: a tombstone from a synced snapshot. It applies after the
+  batch's messages, only within the named chat. An older replay cannot restore the deleted content. Send these
+  through history rather than presenting old deletions as new `watch` events.
 - How far the owner's own message got in a one-to-one chat is `Message.delivery`: `delivered`, or `read` once the
   other person opened it. A pushed message carries it when the messenger says; leave it out otherwise, since an absent
   `delivery` keeps what the store holds. A live receipt comes from `watch` (and `listen`) as `{ event: "delivery",
