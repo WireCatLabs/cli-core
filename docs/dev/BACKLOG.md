@@ -56,3 +56,5 @@ None open.
   tg and max parity and docs. After #1837.
 - **CORE-33** · P2 · `stats messages counters refresh` becomes `stats messages counters sync`: `refresh` is the
   word the vocabulary rules out. tg, max and wa. After #1837.
+
+- **CORE-35** · P2 · 🚧 `fix/zoom-batch-contract-1024` · Declare the meeting batch result schema while retaining typed projection into each nested answer.
