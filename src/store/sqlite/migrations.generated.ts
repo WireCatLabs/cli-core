@@ -666,5 +666,32 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "DELETE FROM accounts WHERE id IN (SELECT folder_id FROM temp.drive_moves);",
       "DROP TABLE temp.drive_moves;"
     ]
+  },
+  {
+    "name": "20261024232109_version-32-files",
+    "statements": [
+      "CREATE TABLE `entity_link_events` (\n\t`id` integer PRIMARY KEY,\n\t`linkable_type` text NOT NULL,\n\t`linkable_id` integer NOT NULL,\n\t`entity_type` text NOT NULL,\n\t`from_entity_id` integer,\n\t`to_entity_id` integer,\n\t`method` text NOT NULL,\n\t`confidence` real,\n\t`author` text NOT NULL,\n\t`created_at` integer NOT NULL\n);",
+      "CREATE TABLE `files` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`kind` text NOT NULL,\n\t`name` text NOT NULL,\n\t`path` text NOT NULL,\n\t`path_folded` text,\n\t`parent_id` integer,\n\t`document_id` integer,\n\t`mime` text,\n\t`size` integer,\n\t`content_hash` text,\n\t`url` text,\n\t`external_created_at` integer,\n\t`external_updated_at` integer,\n\t`metadata` text,\n\t`seen_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_files_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `fk_files_parent_id_files_id_fk` FOREIGN KEY (`parent_id`) REFERENCES `files`(`id`),\n\tCONSTRAINT `fk_files_document_id_documents_id_fk` FOREIGN KEY (`document_id`) REFERENCES `documents`(`id`),\n\tCONSTRAINT `files_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE TABLE `link_reviews` (\n\t`id` integer PRIMARY KEY,\n\t`linkable_type` text NOT NULL,\n\t`linkable_id` integer NOT NULL,\n\t`entity_type` text NOT NULL,\n\t`candidates` text NOT NULL,\n\t`reason` text NOT NULL,\n\t`status` text NOT NULL,\n\t`chosen_id` integer,\n\t`decided_by` text,\n\t`decided_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `link_reviews_linkable_type_linkable_id_entity_type_unique` UNIQUE(`linkable_type`,`linkable_id`,`entity_type`)\n);",
+      "ALTER TABLE `identities` ADD `email` text;",
+      "CREATE INDEX `entity_link_events_by_linkable_type_linkable_id` ON `entity_link_events` (`linkable_type`,`linkable_id`);",
+      "CREATE INDEX `entity_link_events_by_entity_type_to_entity_id` ON `entity_link_events` (`entity_type`,`to_entity_id`);",
+      "CREATE INDEX `files_by_account_id_path_folded` ON `files` (`account_id`,`path_folded`);",
+      "CREATE INDEX `files_path_to_fold` ON `files` (`id`) WHERE path_folded IS NULL;",
+      "CREATE INDEX `files_by_parent_id` ON `files` (`parent_id`);",
+      "CREATE INDEX `files_by_document_id` ON `files` (`document_id`);",
+      "CREATE INDEX `identities_by_email` ON `identities` (`email`) WHERE email IS NOT NULL;",
+      "CREATE INDEX `link_reviews_by_status_created_at` ON `link_reviews` (`status`,`created_at`);"
+    ]
+  },
+  {
+    "name": "20261024232202_version-32-files-data",
+    "statements": [
+      "-- A folder account's provider says what the folder is. Drive's stand-in folders (`google-drive:<principal>`) keep\n-- `folder`: version 31 moves their documents to the `google-drive` account, and they are no local folder either way.\nUPDATE accounts SET provider = CASE\n    WHEN json_valid(settings) AND json_extract(settings, '$.format') = 'markdown' THEN 'local' ELSE 'obsidian' END\n  WHERE provider = 'folder' AND coalesce(name, '') NOT LIKE 'google-drive:%';",
+      "UPDATE identities SET email = lower(trim(external_id)) WHERE provider = 'email' AND instr(external_id, '@') > 1;",
+      "-- A document hard-deleted (a rename onto a gone note's path) takes its file row along; the rename writes its own.\nCREATE TRIGGER files_document_bd BEFORE DELETE ON documents BEGIN\n  DELETE FROM files WHERE document_id = old.id;\nEND;",
+      "-- One `files` row per document is written in JS on open (`fillFiles`), from the document after this id.\nINSERT OR REPLACE INTO store_settings (key, value, at) VALUES ('files_backfill_after', '0', unixepoch() * 1000);",
+      "-- A mail contact's address is its external id; every writer of one gets the column filled the same way.\nCREATE TRIGGER identities_email_ai AFTER INSERT ON identities\n  WHEN new.provider = 'email' AND new.email IS NULL AND instr(new.external_id, '@') > 1 BEGIN\n  UPDATE identities SET email = lower(trim(new.external_id)) WHERE id = new.id;\nEND;"
+    ]
   }
 ]

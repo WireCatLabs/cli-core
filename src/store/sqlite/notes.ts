@@ -1,7 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
 import { googleDocumentLinks } from "../../domain/google-documents.js"
-import { DOCUMENT_ACCOUNT_PROVIDERS, filesAccountSql, isDocumentAccountProvider } from "../../domain/providers.js"
+import {
+  DOCUMENT_ACCOUNT_PROVIDERS,
+  filesAccountSql,
+  folderProviderOf,
+  folderProviderSql,
+  isDocumentAccountProvider,
+} from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
@@ -10,6 +16,7 @@ import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
+import { syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, linkKind } from "./link-kinds.js"
 import type { NoteSearch } from "./note-search.js"
@@ -22,12 +29,14 @@ export const NOTE_FORMATS = ["obsidian", "markdown"] as const
 export const LINK_ORIGINS = ["file", "owner", "suggested", "message"] as const
 
 /**
- * A notes folder: an `accounts` row of provider `folder`. Where it is on disk is this computer's config. A
+ * A notes folder: an `accounts` row of provider `local` or `obsidian`. Where it is on disk is this computer's config. A
  * documents account (Drive's, one per Google account) is read and written the same way and names its `account`.
  */
 export interface NoteFolder {
   id: string
   name: string
+  /** `obsidian` for a vault, `local` for a plain folder; `folder` for Drive's stand-in folders from before. */
+  provider: string
   format: (typeof NOTE_FORMATS)[number]
   createdAt: string
   account?: { provider: string; account: string }
@@ -362,6 +371,7 @@ const folderOf = (row: Row): NoteFolder => {
   return {
     id: String(row.id),
     name: folder ? String(row.name) : `${String(row.provider)}:${String(row.external_id)}`,
+    provider: String(row.provider),
     format: (settings.format ?? (folder ? "obsidian" : "markdown")) as NoteFolder["format"],
     createdAt: iso(row.created_at),
     ...(folder ? {} : { account: { provider: String(row.provider), account: String(row.external_id) } }),
@@ -413,21 +423,23 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
   return {
     addFolder: async ({ name, format = "obsidian" }) => {
       const at = now()
+      const checked = oneOf(format, NOTE_FORMATS, "a folder's format")
       const row = database
         .prepare(
-          "INSERT INTO accounts (provider, external_id, name, settings, created_at, updated_at) VALUES ('folder', ?, ?, ?, ?, ?) RETURNING id",
+          "INSERT INTO accounts (provider, external_id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
         )
         .get(
+          folderProviderOf(checked),
           ulid(at),
           textOf(name, "a folder's name", 200),
-          JSON.stringify({ format: oneOf(format, NOTE_FORMATS, "a folder's format") }),
+          JSON.stringify({ format: checked }),
           at,
           at,
         )
       return folderOf(folderRow(String(row?.id)))
     },
     folders: async () =>
-      database.prepare("SELECT * FROM accounts WHERE provider = 'folder' ORDER BY name, id").all().map(folderOf),
+      database.prepare(`SELECT * FROM accounts WHERE ${folderProviderSql()} ORDER BY name, id`).all().map(folderOf),
     documentsAccount: async ({ provider, account }, create = false) => {
       if (!isDocumentAccountProvider(provider))
         throw new CliError("validation_error", `${provider} is not a provider whose accounts hold documents`)
@@ -492,6 +504,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
               at,
               at,
             )
+          syncFile(database, at, Number(row?.id))
           return { note: documentOf(documentRow(String(row?.id))), changed: true }
         }
         const same =
@@ -501,7 +514,10 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           (found.metadata ?? null) === metadata &&
           (found.content_hash ?? null) === (input.contentHash ?? null) &&
           found.deleted_at == null
-        if (same) return { note: documentOf(found), changed: false }
+        if (same) {
+          syncFile(database, at, Number(found.id))
+          return { note: documentOf(found), changed: false }
+        }
         if ((found.body ?? "") !== text)
           database
             .prepare("INSERT INTO document_revisions (document_id, body, revision, created_at) VALUES (?, ?, ?, ?)")
@@ -522,6 +538,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
             at,
             Number(found.id),
           )
+        syncFile(database, at, Number(found.id))
         return { note: documentOf(documentRow(String(found.id))), changed: true }
       }),
     renameFileNote: async (folderId, from, to) =>
@@ -544,15 +561,21 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
             "UPDATE documents SET external_id = ?, location = ?, file_name = ?, extension = ?, updated_at = ? WHERE id = ?",
           )
           .run(target, location, fileName, extension, now(), Number(found.id))
+        syncFile(database, now(), Number(found.id))
         return documentOf(documentRow(String(found.id)))
       }),
     deleteFileNotes: async (folderId, paths) =>
       write(database, () => {
         const folder = Number(folderRow(folderId).id)
         const mark = database.prepare(
-          "UPDATE documents SET deleted_at = ?, body = '' WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL",
+          "UPDATE documents SET deleted_at = ?, body = '' WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL RETURNING id",
         )
-        return paths.reduce((sum, path) => sum + mark.run(now(), folder, path).changes, 0)
+        return paths.reduce((sum, path) => {
+          const at = now()
+          const marked = mark.all(at, folder, path)
+          for (const row of marked) syncFile(database, at, Number(row.id), { seen: false })
+          return sum + marked.length
+        }, 0)
       }),
     addNote: async ({ text, title, about = [] }) =>
       write(database, () => {

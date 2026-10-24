@@ -139,6 +139,22 @@ describe("provider-neutral document annotation transfer", () => {
     expect(JSON.stringify(preview)).not.toContain("Reviewed owner note")
   })
 
+  it("copies a collection from a store before version 32 into a vault account, with a files row per document", async () => {
+    const f = await seed()
+    const db = await openCache(f.source)
+    rollBackTo(db, 21)
+    expect(db.prepare("SELECT provider FROM accounts WHERE name = ?").get(collection)).toEqual({ provider: "folder" })
+    db.close()
+    const preview = await previewDocumentTransfer(f.options)
+    await applyDocumentTransfer({ ...f.options, expected_fingerprint: preview.fingerprint })
+    const copied = await sql(f.destination)
+    expect(
+      copied
+        .prepare("SELECT a.provider, f.path FROM files f JOIN accounts a ON a.id = f.account_id WHERE a.name = ?")
+        .all(collection),
+    ).toEqual([{ provider: "obsidian", path: "budget.md" }])
+  })
+
   it("remaps collisions, histories, evidence, statuses, authors and both link directions without changing the source", async () => {
     const f = await seed()
     const other = await open(f.destination)

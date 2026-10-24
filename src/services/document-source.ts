@@ -1,3 +1,4 @@
+import { isFolderProvider } from "../domain/providers.js"
 import type { Profiles } from "../search/account-list.js"
 import type { Note, NoteFolder } from "../store/index.js"
 
@@ -11,7 +12,7 @@ export const documentSource = (note: Note, folders: NoteFolder[], profiles: Prof
       ? Object.entries(profiles.drive ?? {}).find(([, key]) =>
           folder.account
             ? key.provider === folder.account.provider && key.account === folder.account.account
-            : key.provider === "folder" && key.account === folder.name,
+            : isFolderProvider(key.provider) && key.account === folder.name,
         )?.[0]
       : undefined
   return {

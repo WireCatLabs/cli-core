@@ -1,4 +1,4 @@
-import { isDocumentAccountProvider } from "../../../domain/providers.js"
+import { folderProviderSql, isDocumentAccountProvider } from "../../../domain/providers.js"
 import type { CacheDatabase } from "../../driver.js"
 
 type Row = Record<string, unknown>
@@ -27,10 +27,10 @@ export const collectionAccounts = (database: CacheDatabase, collection: string):
   return key
     ? database
         .prepare(
-          "SELECT * FROM accounts WHERE (provider=? AND external_id=?) OR (provider='folder' AND name=?) ORDER BY id LIMIT 2",
+          `SELECT * FROM accounts WHERE (provider=? AND external_id=?) OR (${folderProviderSql()} AND name=?) ORDER BY id LIMIT 2`,
         )
         .all(key.provider, key.account, collection)
-    : database.prepare("SELECT * FROM accounts WHERE provider='folder' AND name=? ORDER BY id LIMIT 2").all(collection)
+    : database.prepare(`SELECT * FROM accounts WHERE ${folderProviderSql()} AND name=? ORDER BY id LIMIT 2`).all(collection)
 }
 
 /** The stand-in folder version 31 moved an account's documents from, as its `settings.movedFrom` records it. */

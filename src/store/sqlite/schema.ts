@@ -146,8 +146,12 @@ export const identities = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     description: text("description"),
+    email: text("email"),
   },
-  (table) => [unique().on(table.provider, table.externalId)],
+  (table) => [
+    unique().on(table.provider, table.externalId),
+    index("identities_by_email").on(table.email).where(sql`email IS NOT NULL`),
+  ],
 )
 
 export const identityLinks = sqliteTable(
@@ -980,6 +984,41 @@ export const documents = sqliteTable(
   (table) => [unique().on(table.accountId, table.externalId)],
 )
 
+export const files = sqliteTable(
+  "files",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    path: text("path").notNull(),
+    pathFolded: text("path_folded"),
+    parentId: integer("parent_id").references((): AnySQLiteColumn => files.id),
+    documentId: integer("document_id").references(() => documents.id),
+    mime: text("mime"),
+    size: integer("size"),
+    contentHash: text("content_hash"),
+    url: text("url"),
+    externalCreatedAt: integer("external_created_at"),
+    externalUpdatedAt: integer("external_updated_at"),
+    metadata: text("metadata"),
+    seenAt: integer("seen_at"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    index("files_by_account_id_path_folded").on(table.accountId, table.pathFolded),
+    index("files_path_to_fold").on(table.id).where(sql`path_folded IS NULL`),
+    index("files_by_parent_id").on(table.parentId),
+    index("files_by_document_id").on(table.documentId),
+  ],
+)
+
 export const documentRevisions = sqliteTable(
   "document_revisions",
   {
@@ -1717,6 +1756,48 @@ export const taggings = sqliteTable(
 )
 
 export { tagConsolidations, tagRedirects } from "./schema/tag-consolidations.js"
+
+export const entityLinkEvents = sqliteTable(
+  "entity_link_events",
+  {
+    id: integer("id").primaryKey(),
+    linkableType: text("linkable_type").notNull(),
+    linkableId: integer("linkable_id").notNull(),
+    entityType: text("entity_type").notNull(),
+    fromEntityId: integer("from_entity_id"),
+    toEntityId: integer("to_entity_id"),
+    method: text("method").notNull(),
+    confidence: real("confidence"),
+    author: text("author").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("entity_link_events_by_linkable_type_linkable_id").on(table.linkableType, table.linkableId),
+    index("entity_link_events_by_entity_type_to_entity_id").on(table.entityType, table.toEntityId),
+  ],
+)
+
+export const linkReviews = sqliteTable(
+  "link_reviews",
+  {
+    id: integer("id").primaryKey(),
+    linkableType: text("linkable_type").notNull(),
+    linkableId: integer("linkable_id").notNull(),
+    entityType: text("entity_type").notNull(),
+    candidates: text("candidates").notNull(),
+    reason: text("reason").notNull(),
+    status: text("status").notNull(),
+    chosenId: integer("chosen_id"),
+    decidedBy: text("decided_by"),
+    decidedAt: integer("decided_at"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.linkableType, table.linkableId, table.entityType),
+    index("link_reviews_by_status_created_at").on(table.status, table.createdAt),
+  ],
+)
 
 export const conversations = sqliteTable(
   "conversations",

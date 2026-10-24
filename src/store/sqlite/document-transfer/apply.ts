@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { folderProviderOf } from "../../../domain/providers.js"
 import type {
   DocumentTransferReceipt,
   TransferEntity,
@@ -7,12 +8,27 @@ import type {
 } from "../../document-transfer/model.js"
 import type { CacheDatabase, SqlValue } from "../../driver.js"
 import { botNamed, ownerPerson } from "../actors.js"
+import { syncFile } from "../files.js"
 import { canonicalTagNamed } from "../tags.js"
 import { referenceOfThing, type Thing } from "../things.js"
 import { write } from "../transaction.js"
 import { copyPeople } from "./people.js"
 import { planTransfer } from "./plan.js"
 import { TRANSFER_TABLES } from "./snapshot.js"
+
+/** A file exported before store version 32 names its folder `folder`; here it gets the provider its format says. */
+const providerHere = ({ provider, name, settings }: TransferValues): string | number | null => {
+  if (provider !== "folder" || String(name ?? "").startsWith("google-drive:")) return provider ?? null
+  return folderProviderOf(formatOf(settings) === "markdown" ? "markdown" : "obsidian")
+}
+
+const formatOf = (settings: unknown): unknown => {
+  try {
+    return (JSON.parse(String(settings)) as { format?: unknown } | null)?.format
+  } catch {
+    return undefined
+  }
+}
 
 const COLUMNS = {
   document:
@@ -89,7 +105,11 @@ export const applyTransfer = (
         database,
         "accounts",
         "provider external_id name created_at settings updated_at scope organization_id",
-        { ...snapshot.collection, organization_id: organization?.id ?? null },
+        {
+          ...snapshot.collection,
+          provider: providerHere(snapshot.collection),
+          organization_id: organization?.id ?? null,
+        },
       )
     }
     mappings.set(`account:${String(snapshot.collection.id)}`, { type: "account", id: collectionId })
@@ -110,6 +130,7 @@ export const applyTransfer = (
         if (Object.hasOwn(values, "project_id")) values.project_id = null
       }
       const id = insert(database, TRANSFER_TABLES[entity.kind], COLUMNS[entity.kind], values)
+      if (entity.kind === "document") syncFile(database, now(), id, { seen: false })
       mappings.set(entity.key, { type: entity.kind, id })
       inserted.add(entity.key)
     }

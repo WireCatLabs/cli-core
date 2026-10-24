@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { folderProviderSql } from "../../../domain/providers.js"
 import { digest } from "../../document-transfer/digest.js"
 import type { DocumentTransferPreview, TransferSnapshot } from "../../document-transfer/model.js"
 import type { CacheDatabase } from "../../driver.js"
@@ -32,7 +33,10 @@ export const planTransfer = (
   const targets = collectionAccounts(database, collectionNameOf(snapshot.collection))
   if (targets.length > 1) conflicts.add("the destination has duplicate document collection identities")
   const target = targets[0]
-  if (!target && database.prepare("SELECT id FROM accounts WHERE provider='folder' AND external_id=?").get(collection))
+  if (
+    !target &&
+    database.prepare(`SELECT id FROM accounts WHERE ${folderProviderSql()} AND external_id=?`).get(collection)
+  )
     conflicts.add("source collection identity is held by another destination collection")
   const hasReceipts = database
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='document_annotation_transfers'")

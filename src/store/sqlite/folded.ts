@@ -9,6 +9,7 @@ export const FOLDED = [
   { table: "attachments", column: "name" },
   { table: "attachments", column: "local_path" },
   { table: "meetings", column: "title" },
+  { table: "files", column: "path" },
 ] as const
 
 export const folded = (value: string | null | undefined): string | null =>

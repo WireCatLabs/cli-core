@@ -69,6 +69,7 @@ const NAMES = {
   "tasks:id WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL": "tasks_close_reason_to_fold",
   "attachments:id WHERE local_path IS NOT NULL AND local_path_folded IS NULL": "attachments_local_path_to_fold",
   "meetings:id WHERE title IS NOT NULL AND title_folded IS NULL": "meetings_title_to_fold",
+  "files:id WHERE path_folded IS NULL": "files_path_to_fold",
 }
 
 const parseKey = (k) => {

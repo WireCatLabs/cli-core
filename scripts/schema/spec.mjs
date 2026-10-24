@@ -44,7 +44,19 @@ const EDITS = {
     note: "`uid` goes: `id` everywhere (owner).",
     doc: "A real person, whatever accounts they write from: their identities point here. `owner` marks the owner.",
   },
-  identities: { cols: { is_bot: "bot", first_seen_at: "created_at" } },
+  identities: {
+    cols: { is_bot: "bot", first_seen_at: "created_at" },
+    add: [
+      [
+        "email",
+        "text",
+        {
+          note: "the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise",
+        },
+      ],
+    ],
+    keys: ["INDEX (email) WHERE email IS NOT NULL"],
+  },
   identity_links: {
     cols: { linked_at: "created_at", linked_by: "author" },
     add: [
@@ -713,6 +725,46 @@ const NEW = {
       ],
       keys: ["UNIQUE (account_id, external_id)"],
     },
+    {
+      name: "files",
+      doc: "One item in one place, the source record of a document: a file under a local or Obsidian folder, a Drive file or folder. A folder is a row of its own (`kind` folder), so a subtree is a prefix of `path_folded` and a folder has a row for its own facts. `documents` stays the entity every `document:<id>` names.",
+      cols: [
+        id(),
+        fk("account_id", "accounts", {
+          notnull: true,
+          note: "the place: a local folder, an Obsidian vault, a Google account",
+        }),
+        c("external_id", "text", {
+          notnull: true,
+          note: "the provider's id: a Drive file id; for a local file, its path from the folder's root",
+        }),
+        c("kind", "text", { notnull: true, note: "file, folder, page" }),
+        c("name", "text", { notnull: true, note: "the item's own name, with its extension" }),
+        c("path", "text", { notnull: true, note: "from the account's root, `/` between names" }),
+        c("path_folded", "text", { note: "`path` folded for prefix and substring search; filled on open when NULL" }),
+        fk("parent_id", "files", { note: "the folder's own row; NULL at the root" }),
+        fk("document_id", "documents", {
+          note: "the document this file is a copy of; NULL for a local folder, which has no document row",
+        }),
+        c("mime", "text"),
+        c("size", "integer", { note: "bytes" }),
+        c("content_hash", "text", { note: "sha-256 hex of the content" }),
+        c("url", "text", { note: "the provider's web link, never one that carries a secret" }),
+        c("external_created_at", "integer"),
+        c("external_updated_at", "integer"),
+        c("metadata", "text", {
+          note: "JSON, allow-listed provider fields: `front_matter` (a Markdown file's own), `version`, a second Drive parent in `parents`",
+        }),
+        c("seen_at", "integer", { note: "the last sync or import that returned it" }),
+        ...ts(),
+        del(),
+      ],
+      keys: [
+        "UNIQUE (account_id, external_id)",
+        "INDEX (account_id, path_folded)",
+        "INDEX (id) WHERE path_folded IS NULL",
+      ],
+    },
     documentRevisionsTable,
     fts("document_words", "Word index over documents.", "normalized_text, scope"),
     fts("document_stems", "Stem index, the pair of document_words.", "stems, scope"),
@@ -925,7 +977,49 @@ const NEW = {
       keys: ["PRIMARY KEY (source_type, source_id)"],
     },
   ],
-  tags: [taggingTable, ...tagConsolidationTables],
+  tags: [
+    taggingTable,
+    ...tagConsolidationTables,
+    {
+      name: "entity_link_events",
+      doc: "Every change of the entity a source record belongs to — a calendar entry or Zoom meeting to its event, a file to its document — as `identity_link_events` records it for contacts.",
+      cols: [
+        id(),
+        ...poly("linkable", "the source record: `file`, `calendar_entry`, `meeting`"),
+        c("entity_type", "text", { notnull: true, note: "`document`, `event`, `event_series`" }),
+        c("from_entity_id", "integer", { note: "the entity it left; NULL for its first link" }),
+        c("to_entity_id", "integer", { note: "the entity it joined; NULL when it was unlinked" }),
+        c("method", "text", {
+          notnull: true,
+          note: "the rule that made it (`content-hash`, `ical-uid`, `join-key`, …) or `owner`",
+        }),
+        c("confidence", "real"),
+        c("author", "text", { notnull: true, note: "`owner`, `rules` or a provider" }),
+        c("created_at", "integer", { notnull: true }),
+      ],
+      keys: ["INDEX (linkable_type, linkable_id)", "INDEX (entity_type, to_entity_id)"],
+    },
+    {
+      name: "link_reviews",
+      doc: "The owner's review list: a source record with two or more equally good entities, which the rules leave unlinked — two events for one meeting, two documents with one hash, two persons with one address.",
+      cols: [
+        id(),
+        ...poly("linkable", "the source record: `file`, `calendar_entry`, `meeting`, `identity`"),
+        c("entity_type", "text", { notnull: true, note: "`document`, `event`, `event_series`, `person`" }),
+        c("candidates", "text", { notnull: true, note: "JSON array of the candidate entities' ids, ascending" }),
+        c("reason", "text", {
+          notnull: true,
+          note: "what they share: `content-hash`, `join-key`, `ical-uid`, `email`",
+        }),
+        c("status", "text", { notnull: true, note: "`open`, `linked` (the owner chose one), `apart` (none of them)" }),
+        c("chosen_id", "integer", { note: "the entity the owner chose" }),
+        c("decided_by", "text"),
+        c("decided_at", "integer"),
+        ...ts(),
+      ],
+      keys: ["UNIQUE (linkable_type, linkable_id, entity_type)", "INDEX (status, created_at)"],
+    },
+  ],
   events: [
     {
       name: "event_series",

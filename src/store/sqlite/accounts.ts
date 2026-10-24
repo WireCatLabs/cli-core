@@ -168,6 +168,7 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.delete(accountIdentities).where(eq(accountIdentities.accountId, accountKey)).run()
   // The inbox project and its tasks are the owner's; only the tie to the account goes.
   orm.update(projects).set({ accountId: null }).where(eq(projects.accountId, accountKey)).run()
+  orm.run(sql`DELETE FROM files WHERE account_id = ${accountKey}`)
   orm.delete(accounts).where(eq(accounts.id, accountKey)).run()
   dropOrphanPeople(database, unseenBefore)
   orm.run(

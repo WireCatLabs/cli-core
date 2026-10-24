@@ -23,11 +23,25 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "whatsapp-bot", kind: "messages", aliases: ["wa-bot"] },
   { name: "email", kind: "mail", aliases: [] },
   { name: "notes", kind: "notes", aliases: [] },
+  { name: "local", kind: "notes", aliases: [] },
+  { name: "obsidian", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
 ]
 
-/** The store keeps a notes folder as an `accounts` row of this provider; people call it `notes`. */
-export const FOLDER_PROVIDER = "folder"
+/**
+ * A notes folder is an `accounts` row of one of these providers; people call every one `notes`. `obsidian` is a vault,
+ * `local` a plain folder (store version 32). `folder` is what they were before, and what Drive's stand-in folders and
+ * profile keys saved before that still say.
+ */
+export const FOLDER_PROVIDERS = ["local", "obsidian", "folder"] as const
+export const isFolderProvider = (provider: string): boolean =>
+  (FOLDER_PROVIDERS as readonly string[]).includes(provider)
+/** The same test in SQL, over an `accounts` row's `provider` column. */
+export const folderProviderSql = (column = "provider"): string =>
+  `${column} IN (${FOLDER_PROVIDERS.map((name) => `'${name}'`).join(", ")})`
+/** The provider a new folder of this format gets. */
+export const folderProviderOf = (format: "obsidian" | "markdown"): "obsidian" | "local" =>
+  format === "markdown" ? "local" : "obsidian"
 /**
  * Providers whose account holds documents the way a notes folder does: one account per remote principal, its
  * files as `documents` rows (store version 31 moved Drive here from a `folder` named `google-drive:<principal>`).
@@ -38,7 +52,7 @@ export const isDocumentAccountProvider = (provider: string): boolean =>
   (DOCUMENT_ACCOUNT_PROVIDERS as readonly string[]).includes(provider)
 /** A folder or a documents account, in SQL over an `accounts` row's `provider` column. */
 export const filesAccountSql = (column = "provider"): string =>
-  `${column} IN (${[FOLDER_PROVIDER, ...DOCUMENT_ACCOUNT_PROVIDERS].map((name) => `'${name}'`).join(", ")})`
+  `${column} IN (${[...FOLDER_PROVIDERS, ...DOCUMENT_ACCOUNT_PROVIDERS].map((name) => `'${name}'`).join(", ")})`
 /** Notes written in memo have no account row; this is their account. */
 export const INTERNAL_NOTES = "internal"
 
@@ -143,7 +157,7 @@ export const providerNamed = (word: string): ProviderEntry | undefined => {
 
 /** The kind of a provider the registry knows; `undefined` for one no entry names, which a search skips. */
 export const kindIn = (provider: Provider): Kind | undefined =>
-  provider === FOLDER_PROVIDER ? "notes" : registry.find(({ name }) => name === provider)?.kind
+  isFolderProvider(provider) ? "notes" : registry.find(({ name }) => name === provider)?.kind
 
 /** A provider the registry does not list counts as a messenger here; a search asks `kindIn` and skips it. */
 export const kindOf = (provider: Provider): Kind => kindIn(provider) ?? "messages"

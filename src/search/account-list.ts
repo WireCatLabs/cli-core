@@ -1,9 +1,9 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import type { Provider } from "../domain/models.js"
 import {
-  FOLDER_PROVIDER,
   INTERNAL_NOTES,
   isDocumentAccountProvider,
+  isFolderProvider,
   isKind,
   type Kind,
   kindIn,
@@ -80,7 +80,7 @@ export interface ListedEntry {
 }
 
 /** `stored` is a documents account's own key: it is listed as `notes:<id>`, as its folder was before version 31. */
-type Held = ListedAccount & { name: string | null; stored?: AccountKey }
+type Held = ListedAccount & { name: string | null; folder?: Provider; stored?: AccountKey }
 
 /** The app running knows its own provider is a messenger, entry or not. */
 const kindHere = (provider: Provider, running: ListContext["running"]): Kind | undefined =>
@@ -92,8 +92,14 @@ const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"
     .map(({ provider, account, name }) => ({ provider, account, name, kind: kindHere(provider, running) })),
   { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes" },
   ...stored
-    .filter(({ provider }) => provider === FOLDER_PROVIDER)
-    .map(({ id, name }) => ({ provider: "notes", account: String(id), name, kind: "notes" as const })),
+    .filter(({ provider }) => isFolderProvider(provider))
+    .map(({ id, name, provider }) => ({
+      provider: "notes",
+      account: String(id),
+      name,
+      kind: "notes" as const,
+      folder: provider,
+    })),
   ...stored
     .filter(({ provider }) => isDocumentAccountProvider(provider))
     .map(({ id, provider, account, name }) => ({
@@ -146,7 +152,7 @@ const accountOf = (prefix: string, ref: string, held: readonly Held[], context: 
       kind: kindHere(key.provider, context.running),
     }
   const recorded = context.profiles[prefix.toLowerCase()]?.[ref]
-  if (recorded?.provider === FOLDER_PROVIDER) {
+  if (recorded && isFolderProvider(recorded.provider)) {
     const folder = held.find((one) => one.provider === "notes" && one.name === recorded.account)
     if (folder) return folder
     return fail(`no stored folder for ${prefix}:${ref}; sync that profile first`)
@@ -186,11 +192,12 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
   const recorded = context.profiles[wanted]
   if (
     recorded &&
-    Object.values(recorded).every((key) => key.provider === FOLDER_PROVIDER || isDocumentAccountProvider(key.provider))
+    Object.values(recorded).every((key) => isFolderProvider(key.provider) || isDocumentAccountProvider(key.provider))
   )
     return Object.keys(recorded).map((profile) => accountOf(word, profile, held, context))
   const provider = providerOf(word, held, context)
   if (isDocumentAccountProvider(provider)) return storedAs(held, { provider, account: "" })
+  if (isFolderProvider(provider)) return held.filter(({ folder }) => folder === provider)
   return held.filter((one) => one.provider === provider)
 }
 

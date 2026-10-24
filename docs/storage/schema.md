@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-97 tables, 21 full-text indexes.
+100 tables, 21 full-text indexes.
 
 ## Conventions
 
@@ -150,8 +150,9 @@ A real person, whatever accounts they write from: their identities point here. `
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `description` | text |  |  | What they wrote about themselves. |
+| `email` | text |  |  | the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise |
 
-*Keys and indexes:* `UNIQUE (provider, external_id)`
+*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`
 
 ### `identity_links`
 
@@ -942,6 +943,35 @@ A file or page that stands on its own: a file in a notes folder (md, pdf, docx, 
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`
+
+### `files`
+
+One item in one place, the source record of a document: a file under a local or Obsidian folder, a Drive file or folder. A folder is a row of its own (`kind` folder), so a subtree is a prefix of `path_folded` and a folder has a row for its own facts. `documents` stays the entity every `document:<id>` names.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the place: a local folder, an Obsidian vault, a Google account |
+| `external_id` | text | not null |  | the provider's id: a Drive file id; for a local file, its path from the folder's root |
+| `kind` | text | not null |  | file, folder, page |
+| `name` | text | not null |  | the item's own name, with its extension |
+| `path` | text | not null |  | from the account's root, `/` between names |
+| `path_folded` | text |  |  | `path` folded for prefix and substring search; filled on open when NULL |
+| `parent_id` | integer |  | → `files.id` | the folder's own row; NULL at the root |
+| `document_id` | integer |  | → `documents.id` | the document this file is a copy of; NULL for a local folder, which has no document row |
+| `mime` | text |  |  |  |
+| `size` | integer |  |  | bytes |
+| `content_hash` | text |  |  | sha-256 hex of the content |
+| `url` | text |  |  | the provider's web link, never one that carries a secret |
+| `external_created_at` | integer |  |  | when the source says it was created |
+| `external_updated_at` | integer |  |  | when the source says it last changed |
+| `metadata` | text |  |  | JSON, allow-listed provider fields: `front_matter` (a Markdown file's own), `version`, a second Drive parent in `parents` |
+| `seen_at` | integer |  |  | the last sync or import that returned it |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, path_folded)`, `INDEX (id) WHERE path_folded IS NULL`, `INDEX (parent_id)`, `INDEX (document_id)`
 
 ### `document_revisions`
 
@@ -1775,6 +1805,46 @@ Immutable text-free receipts for owner-reviewed tag consolidation. IDs, hashes a
 | `request_fingerprint` | text | not null |  |  |
 
 *Keys and indexes:* `INDEX (source_id)`, `INDEX (survivor_id)`, `INDEX (actor_type, actor_id)`
+
+### `entity_link_events`
+
+Every change of the entity a source record belongs to — a calendar entry or Zoom meeting to its event, a file to its document — as `identity_link_events` records it for contacts.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `linkable_type` | text | not null |  | the source record: `file`, `calendar_entry`, `meeting` |
+| `linkable_id` | integer | not null |  | the row in the `linkable_type` table |
+| `entity_type` | text | not null |  | `document`, `event`, `event_series` |
+| `from_entity_id` | integer |  |  | the entity it left; NULL for its first link |
+| `to_entity_id` | integer |  |  | the entity it joined; NULL when it was unlinked |
+| `method` | text | not null |  | the rule that made it (`content-hash`, `ical-uid`, `join-key`, …) or `owner` |
+| `confidence` | real |  |  |  |
+| `author` | text | not null |  | `owner`, `rules` or a provider |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (linkable_type, linkable_id)`, `INDEX (entity_type, to_entity_id)`
+
+### `link_reviews`
+
+The owner's review list: a source record with two or more equally good entities, which the rules leave unlinked — two events for one meeting, two documents with one hash, two persons with one address.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `linkable_type` | text | not null |  | the source record: `file`, `calendar_entry`, `meeting`, `identity` |
+| `linkable_id` | integer | not null |  | the row in the `linkable_type` table |
+| `entity_type` | text | not null |  | `document`, `event`, `event_series`, `person` |
+| `candidates` | text | not null |  | JSON array of the candidate entities' ids, ascending |
+| `reason` | text | not null |  | what they share: `content-hash`, `join-key`, `ical-uid`, `email` |
+| `status` | text | not null |  | `open`, `linked` (the owner chose one), `apart` (none of them) |
+| `chosen_id` | integer |  |  | the entity the owner chose |
+| `decided_by` | text |  |  |  |
+| `decided_at` | integer |  |  |  |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (linkable_type, linkable_id, entity_type)`, `INDEX (status, created_at)`
 
 ## Chunks, embeddings and search state
 
