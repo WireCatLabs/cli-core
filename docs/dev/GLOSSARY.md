@@ -76,7 +76,13 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | project | the owner's work unit with a task key | entity | `entity:` references still parse for old files |
 | organization | a company, team, family or community | entity | none |
 | person | one human, across every messenger and mail (`person:<uid>`) | user, people | tg bot help: "user:<id> for a person", "the person's user id"; drive `people` |
-| contact | one identity in a messenger's contact list | user | none found beyond the above |
+| contact | one person as one source knows them: a mail correspondent, a Telegram user, a Drive owner, a calendar attendee; an `identities` row | user | none found beyond the above |
+| entity | the thing the owner means — a person, an event, a document; it carries no provider id ([WC-DATA-2](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)) | record, object | none |
+| source record | one source's copy of an entity, keyed by account and `external_id`: a contact, a Zoom meeting, an email, a message | entity, item | none |
+| core entity | an entity or source record whose table cli-core owns because more than one tool needs it | shared table | none |
+| preferred source record | the copy whose fields an entity shows, chosen by a rule per entity | primary, main copy | none |
+| provider registry | the providers this store knows: the built-ins plus what each CLI wrote with `registerProvider` | provider list | none |
+| review list | pairs that may be one thing, kept for the owner to decide instead of linked by a rule (not built yet) | duplicates, merge queue | none |
 | identity | one way to reach a person or an organization: an account in a messenger or mailbox, an e-mail address, a phone (`contact:<provider>/<id>`) | contact (when meaning the account), user | memo `note <identity>` takes `<messenger>:<name>` |
 | key document | **open (NEED-990)**: no CLI, help text or doc defines it today | — | — |
 | fact | what happened: a statement, question, decision or promise, with evidence | memory | none |
