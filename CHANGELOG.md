@@ -42,6 +42,8 @@ shape of this file.
 
 ### Added
 
+- Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
+
 - **Stored events accept native queries on id, origin and timestamps.** SQLite applies filters before returning rows; stores without query support refuse a filtered request.
 - **Shared task updates include project priority and parent.** Project tasks can be updated without choosing a messenger account.
 
