@@ -9,6 +9,8 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **The first-run permission question is one switch: read only, or read and write.** It reads the same for a person, a script and an agent over MCP; "read and write" (was "as now") leaves each profile's own permissions in place. A stored `ask` answer is no longer accepted, and none was ever written.
+
 - **Flag renames first shipped in 0.399.0 also affect callers upgrading directly from 0.398.0 or earlier.** Use
   `--analysis-provider`, `--embedding-provider`, `--consent-provider`, `--claim`, `--answer-model`, `--template-mode`,
   `--disappear-after` and `--text-file`; see the 0.399.0 notes for the retired spellings and query replacements.
