@@ -203,14 +203,14 @@ const askTools = async (run: FirstRun) => {
 }
 
 const PERMISSION_CHOICES: { answer: PermissionAnswer; text: string }[] = [
-  { answer: "readonly", text: "read only — search and read; nothing sends or changes, bots and agents included" },
-  { answer: "allow", text: "as now — each profile's own permissions" },
+  { answer: "readonly", text: "read only — search and read; nothing sends or changes" },
+  { answer: "allow", text: "read and write — as each profile's permissions allow" },
 ]
 
 const askPermissions = async ({ io }: FirstRun, answers: SetupAnswers): Promise<PermissionAnswer> => {
   const now = answers.permissions ?? "allow"
   const current = Math.max(1, PERMISSION_CHOICES.findIndex(({ answer }) => answer === now) + 1)
-  io.say("What may commands and agents do, in every WireCat tool?")
+  io.say("Read only, or read and write? The same for you, scripts and agents over MCP, in every WireCat tool:")
   PERMISSION_CHOICES.forEach(({ text }, at) => {
     io.say(`  ${at + 1}. ${text}`)
   })

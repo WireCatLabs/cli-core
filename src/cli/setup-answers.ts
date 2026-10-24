@@ -3,8 +3,8 @@ import type { Level } from "../sends/permissions.js"
 import { storePath } from "../store/path.js"
 import { readSharedSection, sharedConfigPath, writeSharedSection } from "../store/shared-config.js"
 
-/** "allow" leaves every profile as its own configuration says. */
-export const PERMISSION_ANSWERS = ["readonly", "ask", "allow"] as const
+/** One switch for every tool, the same on the command line and over MCP; "allow" leaves each profile as configured. */
+export const PERMISSION_ANSWERS = ["readonly", "allow"] as const
 export type PermissionAnswer = (typeof PERMISSION_ANSWERS)[number]
 
 /**
