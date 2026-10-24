@@ -179,6 +179,7 @@ export {
 export { botFiles, botsDirectory, ChatRegistry, registryProfiles, type SeenChat } from "./bot/registry.js"
 export { BotTokenStore, type BotTokenStoreOptions } from "./bot/token.js"
 export { PressLog, UpdatesCursor } from "./bot/updates.js"
+export type { CommandAvailability, DiscoveredCommand } from "./command-availability.js"
 export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-contract.js"
 export { CONTRACT, commandsCommand } from "./commands-command.js"
 export { configCommand, refuseUnknownKey } from "./config-command.js"
