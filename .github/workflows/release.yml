@@ -198,7 +198,8 @@ jobs:
 
   build:
     needs: gate
-    if: github.ref == 'refs/heads/main' || inputs.dry_run
+    # A reused release skips validation and checks; without always() that skip would cascade to here.
+    if: ${{ always() && needs.gate.result == 'success' && (github.ref == 'refs/heads/main' || inputs.dry_run) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -245,7 +246,7 @@ jobs:
 
   package-dry-run:
     needs: build
-    if: inputs.dry_run
+    if: ${{ always() && needs.build.result == 'success' && inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -262,7 +263,7 @@ jobs:
 
   publish:
     needs: build
-    if: ${{ !inputs.dry_run }}
+    if: ${{ always() && needs.build.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -298,7 +299,7 @@ jobs:
 
   tag:
     needs: [build, publish]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ always() && needs.publish.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
