@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.421.0 — 25.10.2026
+
 ### Changed — may break callers
 
 - **Old command names and old permission keys are no longer recognised.** A retired command path (`contacts profile`, `bot store fetch`, `search mail` and the rest) gets the ordinary "unknown command" answer, on the command line and over MCP, with no pointer to a replacement. A saved permission key is read only as written: nothing maps an old key to a new one, and `chats.mute` no longer covers `chats unmute`. Removed with it: `movedCommandError` from `/cli`; `PERMISSIONS`, `Permission`, `permissionFor` and `assertStatsPermissionsCurrent` from `/sends`; the `permission` field of an MCP tool definition; and the `skipMovedPermissions` option of `resolveSettings`. A CLI that imports one of them drops the import; nothing replaces them.
