@@ -3,6 +3,7 @@ import { CliError, configFilePath, resolvePaths, saveConfigFile } from "@wirecat
 import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
 import { parseDuration } from "../domain/duration.js"
+import { DEFAULT_RERANK_MODEL, RERANK_MODELS } from "../embeddings/models.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import {
   assertOverridesTighten,
@@ -105,6 +106,12 @@ const SHARED_PROFILE_ENTRIES = {
   speech_model: v.optional(v.string(plain("has to be a model id from `models list`, in quotes"))),
   search_catch_up: v.optional(flag),
   picture_search: v.optional(flag),
+  search_reranker: v.optional(
+    v.picklist(
+      [...RERANK_MODELS.map((model) => model.id), "off"],
+      plain(`has to be off or a reranker id: ${RERANK_MODELS.map((model) => model.id).join(", ")}`),
+    ),
+  ),
   ...AI_ENTRIES,
 }
 
@@ -204,6 +211,8 @@ export interface Settings extends AISettings {
   searchCatchUp?: boolean
   /** Search and `images embed` read the pictures themselves, with a model on this machine. Off until set. */
   pictureSearch?: boolean
+  /** The reranker that orders `search messages --discover`'s first hits once it is downloaded, or `off`. */
+  searchReranker: string
   limit: number
   /** Which page, 1-based. Per invocation only — a page number in a file is a setting nobody wants twice. */
   page: number
@@ -479,6 +488,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const senderColors = fromLayers("sender_colors", false)
     const searchCatchUp = fromLayers("search_catch_up", false)
     const pictureSearch = fromLayers("picture_search", false)
+    const searchReranker = fromLayers<string>("search_reranker", DEFAULT_RERANK_MODEL)
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = readOnlyLockOf(app, env)
@@ -539,6 +549,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       senderColors: senderColors.value,
       searchCatchUp: searchCatchUp.value,
       pictureSearch: pictureSearch.value,
+      searchReranker: searchReranker.value,
       limit: limit.value,
       page: flags.page ?? 1,
       all: flags.all === true,
@@ -573,6 +584,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         senderColors: senderColors.from,
         searchCatchUp: searchCatchUp.from,
         pictureSearch: pictureSearch.from,
+        searchReranker: searchReranker.from,
         record: record.from,
         keepRunsForDays: keepRunsForDays.from,
         sendsPerHour: sendsPerHour.from,

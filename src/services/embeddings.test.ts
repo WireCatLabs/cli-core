@@ -459,6 +459,7 @@ describe("derived index freshness", () => {
       ...storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard),
       embedders: {
         get: async () => ({ model, embed: async () => [new Float32Array(384)], close: async () => {} }),
+        reranker: () => Promise.reject(new Error("no reranker")),
         close: async () => {},
       },
     })

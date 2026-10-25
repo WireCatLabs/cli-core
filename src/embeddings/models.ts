@@ -124,6 +124,98 @@ export const textModel = (id: string): TextModel => {
   return found
 }
 
+/**
+ * Cross-encoders that read a question and one hit together and score how well the hit answers it: discovery's
+ * last step. Pinned and checked as the text models are, and kept beside them. Picked in the evidence-pipeline
+ * benchmark (cli-testing performance/search/evidence-pipeline, "Reranker variants").
+ */
+export interface RerankModel {
+  id: string
+  title: string
+  languages: string
+  licence: string
+  /** Question and hit together; a longer pair loses the end of the hit. */
+  maxTokens: number
+  files: ModelFile[]
+  onnx: string
+}
+
+const mmarco = huggingFace("cross-encoder/mmarco-mMiniLMv2-L12-H384-v1", "1427fd652930e4ba29e8149678df786c240d8825")
+const bge = huggingFace("onnx-community/bge-reranker-v2-m3-ONNX", "6f5ff65298512715a1e669753bc754d2bc8f367b")
+
+export const RERANK_MODELS: RerankModel[] = [
+  {
+    id: "mmarco",
+    title: "mMARCO mMiniLMv2-L12 cross-encoder, 8-bit",
+    languages: "about 100 languages, Russian and English among them",
+    licence: "Apache-2.0",
+    maxTokens: 512,
+    // The x86 name is the quantizer's target; Core runs every model as WebAssembly, on any processor.
+    onnx: "onnx/model_quint8_avx2.onnx",
+    files: [
+      {
+        name: "onnx/model_quint8_avx2.onnx",
+        url: mmarco("onnx/model_quint8_avx2.onnx"),
+        sha256: "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b",
+        bytes: 118_620_016,
+      },
+      {
+        name: "tokenizer.json",
+        url: mmarco("tokenizer.json"),
+        sha256: "62c24cdc13d4c9952d63718d6c9fa4c287974249e16b7ade6d5a85e7bbb75626",
+        bytes: 17_082_660,
+      },
+      {
+        name: "tokenizer_config.json",
+        url: mmarco("tokenizer_config.json"),
+        sha256: "e7fbfbfa6347b4e414c1cee50d142e2c2f9a895dad68b068ae83a8b564c3837e",
+        bytes: 435,
+      },
+    ],
+  },
+  {
+    id: "bge-reranker-v2-m3",
+    title: "BGE reranker v2 m3, 8-bit",
+    languages: "over 100 languages — better than mmarco in the benchmark, about seven times slower",
+    licence: "Apache-2.0 (BAAI's; the ONNX export declares none)",
+    maxTokens: 512,
+    onnx: "onnx/model_quantized.onnx",
+    files: [
+      {
+        name: "onnx/model_quantized.onnx",
+        url: bge("onnx/model_quantized.onnx"),
+        sha256: "912fc1215c2dbff6499700534bd8d31253af01573861abbfc43afd1fab6cce5d",
+        bytes: 570_727_094,
+      },
+      {
+        name: "tokenizer.json",
+        url: bge("tokenizer.json"),
+        sha256: "8bf8afbfd11306bd872018c53bfdf2e160a56f8edbcf49933324404791c148d3",
+        bytes: 17_082_900,
+      },
+      {
+        name: "tokenizer_config.json",
+        url: bge("tokenizer_config.json"),
+        sha256: "b87c8703482b0300d3da30e201519aa641f6a450f5eb5bf1e624afbf70c74d80",
+        bytes: 1_203,
+      },
+    ],
+  },
+]
+
+export const DEFAULT_RERANK_MODEL = "mmarco"
+
+export const rerankModel = (id: string): RerankModel => {
+  const found = RERANK_MODELS.find((model) => model.id === id)
+  if (!found) {
+    throw new CliError(
+      "validation_error",
+      `no reranker ${id} — one of: ${RERANK_MODELS.map((model) => model.id).join(", ")}`,
+    )
+  }
+  return found
+}
+
 /** The cosine a meaning hit must beat, measured in bench/search-quality; an unmeasured model keeps every hit. */
 /** A vector's model: the provider, the model and its size — vectors of two of them never mix. */
 export const vectorModelKey = (model: TextModel): string => `local:${model.id}:${model.dims}`

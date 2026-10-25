@@ -6,7 +6,14 @@ import { Command } from "commander"
 import type * as v from "valibot"
 import { isTextModelInstalled, textModelsDirectory } from "../../embeddings/embed.js"
 import { embeddingKeys } from "../../embeddings/keys.js"
-import { DEFAULT_TEXT_MODEL, TEXT_MODELS, type TextModel } from "../../embeddings/models.js"
+import {
+  DEFAULT_RERANK_MODEL,
+  DEFAULT_TEXT_MODEL,
+  RERANK_MODELS,
+  type RerankModel,
+  TEXT_MODELS,
+  type TextModel,
+} from "../../embeddings/models.js"
 import { model as modelEntity } from "../../entities/model.js"
 import {
   DEFAULT_IMAGE_MODEL,
@@ -15,7 +22,7 @@ import {
   imageModelsDirectory,
   isImageModelInstalled,
 } from "../../images/picture/models.js"
-import { downloadImageModel, downloadTextModel } from "../../services/model-downloads.js"
+import { downloadImageModel, downloadRerankModel, downloadTextModel } from "../../services/model-downloads.js"
 import {
   install,
   installedBytes,
@@ -71,6 +78,18 @@ const textItem = (model: TextModel, directory: string): ModelItem => ({
   size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
   downloaded: isTextModelInstalled(model, directory),
   default: model.id === DEFAULT_TEXT_MODEL,
+  path: join(directory, model.id),
+})
+
+const rerankItem = (model: RerankModel, directory: string, chosen: string): ModelItem => ({
+  id: model.id,
+  kind: "reranker",
+  title: model.title,
+  languages: model.languages,
+  licence: model.licence,
+  size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
+  downloaded: isTextModelInstalled(model, directory),
+  default: model.id === chosen,
   path: join(directory, model.id),
 })
 
@@ -142,6 +161,20 @@ const downloadEmbeddingModel = async (
   )
 }
 
+const downloadReranker = async (command: Command, messenger: Messenger, id: string): Promise<void> => {
+  const context = baseContext(command, messenger.resolveSettings)
+  await context.run(
+    async () => {
+      const { model, directory } = await downloadRerankModel(id, {
+        env: context.env,
+        progress: (line) => context.renderer.note(line),
+      })
+      renderAnswer(command, context, itemOf(rerankItem(model, directory, context.settings.searchReranker)), downloaded)
+    },
+    { unbounded: true },
+  )
+}
+
 const modelKeysCommand = (messenger: Messenger, tool: string): Command => {
   const key = new Command("keys").description("API keys for embedding and analysis providers")
 
@@ -198,7 +231,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
     }),
     ROOT_MODELS_QUERY,
   )
-    .description("speech and embedding models, their download status and the default of each kind")
+    .description("speech, embedding and reranker models: downloaded or not, each kind's default")
     .action(async function (this: Command, words: string[]) {
       const terms = nativeTerms(listQuery(typedQuery(words), ROOT_MODELS_QUERY, "models list"), "models list")
       const context = baseContext(this, messenger.resolveSettings)
@@ -214,17 +247,24 @@ export const modelsCommand = (messenger: Messenger): Command => {
           kinds === undefined || kinds === "text"
             ? TEXT_MODELS.filter((model) => id === undefined || model.id === id)
             : []
+        const rerankers =
+          kinds === undefined || kinds === "reranker"
+            ? RERANK_MODELS.filter((model) => id === undefined || model.id === id)
+            : []
         const chosen = audioModels.length > 0 ? choose(messenger, context.settings, {}, context.env).model.id : ""
         const catalogue = [
           ...audioModels.map((model) => audioItem(model, modelsDirectory(context.env), chosen)),
           ...textModels.map((model) => textItem(model, textModelsDirectory(context.env))),
+          ...rerankers.map((model) =>
+            rerankItem(model, textModelsDirectory(context.env), context.settings.searchReranker),
+          ),
         ]
         const items = catalogue.filter((item) => kept === undefined || item.downloaded === (kept === "true"))
         const next = items
           .filter((item) => item.default && !item.downloaded)
           .map((item) => nextStep("models.download", { args: { model: item.id } }))
         renderAnswer(this, context, everyModel("models list", items, next), () =>
-          items.map((item) => `${item.kind.padEnd(5)} ${modelLine(item, 18)}  ${item.languages}\n`).join(""),
+          items.map((item) => `${item.kind.padEnd(8)} ${modelLine(item, 18)}  ${item.languages}\n`).join(""),
         )
       })
     })
@@ -232,16 +272,19 @@ export const modelsCommand = (messenger: Messenger): Command => {
     annotate(models.command("download"), {
       effects: FETCH,
       output: { entity: "model" },
-      examples: [`${tool} models download ${DEFAULT_TEXT_MODEL}`],
+      examples: [`${tool} models download ${DEFAULT_TEXT_MODEL}`, `${tool} models download ${DEFAULT_RERANK_MODEL}`],
     }),
   )
-    .summary("download and verify one speech or embedding model")
-    .description("download and verify one speech or embedding model: tens to hundreds of MB, each size in models list")
+    .summary("download and verify one speech, embedding or reranker model")
+    .description(
+      "download and verify one speech, embedding or reranker model: tens to hundreds of MB, each size in models list",
+    )
     .argument("<model>", "a model id from models list")
     .option("--accept-terms", "accept the model's licence terms, for a model that has its own")
     .action(async function (this: Command, id: string, options: { acceptTerms?: boolean }) {
       if (orderedModels().some((model) => model.id === id)) return downloadAudioModel(this, messenger, id)
       if (TEXT_MODELS.some((model) => model.id === id)) return downloadEmbeddingModel(this, messenger, id, options)
+      if (RERANK_MODELS.some((model) => model.id === id)) return downloadReranker(this, messenger, id)
       throw new CliError("validation_error", "unknown model; choose an id from models list")
     })
   return models

@@ -14,6 +14,25 @@ import { prepareLucene, searchLucene } from "./messages-search.js"
 export const MEANING_DEPTH = 100
 const RRF_K = 60
 
+/** How many of discovery's first hits the reranker reads, and its share of their order: the benchmark's winner. */
+export const RERANK_DEPTH = 50
+const RERANK_WEIGHT = 0.7
+/** Pairs scored between two looks at the clock. */
+const RERANK_CHUNK = 5
+
+/** The reranker, opened; or why discovery keeps its own order. */
+export type RerankLane = () => Promise<
+  | { model: string; score(question: string, passages: string[]): Promise<number[]>; done(): Promise<void> }
+  | { skipped: RerankSkipped }
+>
+
+export interface RerankSkipped {
+  reason: string
+  /** Absent when the model itself failed or the search ran out of time. */
+  step?: "models.download"
+  model: string
+}
+
 export type MeaningRanked = (AccountKey & { chatId: Id; id: Id; score: number })[]
 
 /** Why meaning was not searched, and the step that would make it searchable. */
@@ -36,6 +55,7 @@ export const searchDiscovery = async (
   asked: SearchQuery,
   messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
   meaning?: MeaningLane,
+  rerank?: RerankLane,
 ): Promise<SearchFound> => {
   // A question's own "?" would parse as a one-character wildcard and send it to strict search (BUG-395).
   const request =
@@ -62,7 +82,7 @@ export const searchDiscovery = async (
   if (terms.length > 64) exhausted("discovery terms")
   // Before the clock starts: loading the model alone takes about a second of the word search's budget.
   const lane = meaning ? await meaning(text, original.scopeAccounts) : undefined
-  const started = performance.now()
+  let started = performance.now()
   const check = () => {
     if (request.signal?.aborted)
       throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
@@ -199,6 +219,44 @@ export const searchDiscovery = async (
     meaningCandidates = near.length
     candidates = fusedWithMeaning(candidates, near, described)
   }
+  let reranked: { model: string; scored: number } | undefined
+  let rerankSkipped: RerankSkipped | undefined
+  if (rerank && candidates.length > 1) {
+    const opening = performance.now()
+    const reranker = await rerank()
+    // Loading the model is not the search's time, as for meaning.
+    started += performance.now() - opening
+    if ("skipped" in reranker) rerankSkipped = reranker.skipped
+    else {
+      const scoring = performance.now()
+      try {
+        const head = candidates.slice(0, RERANK_DEPTH)
+        const passages = head.map((m) => pairInput(m, parentByLocator.get(m.locator)))
+        let scores: number[] = []
+        let chunk = 0
+        while (scores.length < passages.length) {
+          if (request.signal?.aborted)
+            throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
+          const now = performance.now()
+          if (now + chunk > started + QUERY_LIMITS.milliseconds) break
+          scores = scores.concat(
+            await reranker.score(text, passages.slice(scores.length, scores.length + RERANK_CHUNK)),
+          )
+          chunk = performance.now() - now
+        }
+        if (scores.length < passages.length || performance.now() > started + QUERY_LIMITS.milliseconds) {
+          // A part of the hits rescored cannot be mixed with the rest; their time is given back to the search.
+          started += performance.now() - scoring
+          rerankSkipped = { reason: "it would take longer than the search may", model: reranker.model }
+        } else {
+          candidates = mixedWithReranker(head, scores).concat(candidates.slice(RERANK_DEPTH))
+          reranked = { model: reranker.model, scored: head.length }
+        }
+      } finally {
+        await reranker.done()
+      }
+    }
+  }
   check()
   const items = await Promise.all(
     candidates.slice(0, request.limit).map(async ({ fused: _fused, ...m }) => {
@@ -231,8 +289,10 @@ export const searchDiscovery = async (
         terms,
         queries: [...(plan.changed ? [] : plan.queries), relaxed],
         ...(lane && "ranked" in lane ? { meaning: { model: lane.model, candidates: meaningCandidates } } : {}),
+        ...(reranked ? { rerank: reranked } : {}),
       },
     },
+    ...(rerankSkipped ? { rerankSkipped } : {}),
     ...(lane && "skipped" in lane ? { meaningSkipped: lane.skipped } : {}),
     ...(lane && "partly" in lane && lane.partly ? { meaningSkipped: lane.partly } : {}),
   }
@@ -300,3 +360,33 @@ const fusedWithMeaning = (
 }
 
 type Ranked = FoundMessage & { fused: number }
+
+/** What the reranker reads of a hit, as the benchmark gave it: its reply parent first, each line headed by where, who and when. */
+const pairInput = (hit: FoundMessage, parent: FoundMessage | undefined): string => {
+  const line = (m: { senderName: string | null; timestamp: string | null; text: string }) =>
+    `[${hit.chatTitle ?? hit.chatId} · ${m.senderName ?? "unknown"} · ${m.timestamp?.slice(0, 10) ?? "undated"}] ${m.text}`
+  const before = parent ?? hit.replyTo ?? undefined
+  return (before ? [before, hit] : [hit]).map(line).join("\n")
+}
+
+const scaled = (values: number[]): number[] => {
+  const low = values.reduce((a, b) => Math.min(a, b), Number.POSITIVE_INFINITY)
+  const span = values.reduce((a, b) => Math.max(a, b), Number.NEGATIVE_INFINITY) - low
+  return values.map((value) => (span ? (value - low) / span : 1))
+}
+
+/**
+ * The benchmark's winning mix: discovery's score and the reranker's, each scaled to 0–1 over the hits it read,
+ * weighed 0.3 and 0.7. `score` keeps discovery's own; the reranker's is beside it.
+ */
+const mixedWithReranker = (head: Ranked[], scores: number[]): Ranked[] => {
+  const fused = scaled(head.map((m) => m.score ?? 0))
+  const read = scaled(scores)
+  return head
+    .map((m, i) => ({
+      hit: m.discovery ? { ...m, discovery: { ...m.discovery, rerankerScore: scores[i] as number } } : m,
+      mixed: (1 - RERANK_WEIGHT) * (fused[i] as number) + RERANK_WEIGHT * (read[i] as number),
+    }))
+    .sort((a, b) => b.mixed - a.mixed)
+    .map(({ hit }) => hit)
+}

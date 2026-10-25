@@ -41,6 +41,8 @@ export interface QueryMetadata {
     queries: string[]
     /** Present when meaning was searched too: the model, and how many of its nearest messages the filters allowed. */
     meaning?: { model: string; candidates: number }
+    /** Present when the reranker reordered the first hits: the model, and how many it read. */
+    rerank?: { model: string; scored: number }
   }
   version: 1
   fieldsVersion: number

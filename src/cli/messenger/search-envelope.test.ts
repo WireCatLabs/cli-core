@@ -135,6 +135,21 @@ describe("search answers", () => {
     )
   })
 
+  it("**says discovery kept its own order** while the reranker is not downloaded", async () => {
+    const { call, pretty, store } = await setup()
+    await store.close()
+
+    const answer = json(await call("search", "messages", "which chapter?", "--discover", "--json"))
+    expect(answer.missing).toContainEqual({
+      field: "discovery",
+      why: "not reranked: mmarco is not downloaded",
+      step: "models.download",
+    })
+    expect((await pretty("search", "messages", "which chapter?", "--discover")).stderr.join("")).toContain(
+      "not reranked: mmarco is not downloaded — `chat models download mmarco`",
+    )
+  })
+
   it("**says a voice note was found through a garbled spelling**, in the hit and the answer", async () => {
     const { call, store } = await setup()
     await store.messages.saveMessages(
