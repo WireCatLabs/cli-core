@@ -23,4 +23,4 @@ jobs:
     uses: WireCatLabs/cli-base/.github/workflows/release-checks.yml@46d997062ff444708c4251331dc4e6ab216a6d03 # v0.47.5
     with:
       dependencies: true
-      languages: '["actions","javascript-typescript","c-cpp"]'
+      languages: '["actions","javascript-typescript","python","c-cpp","java-kotlin"]'
