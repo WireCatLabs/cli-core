@@ -54,7 +54,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261023105101_version-29-transcript-words-triggers", version: 29, minCompatible: 1 },
   { name: "20261025064253_version-30-reviewed-tag-consolidation", version: 30, minCompatible: 30 },
   { name: "20261025064302_version-30-resolved-tag-view", version: 30, minCompatible: 30 },
-  { name: "20261025064650_version-31-drive-account", version: 31, minCompatible: 31 },
+  { name: "20261025070402_version-31-drive-account", version: 31, minCompatible: 31 },
 ]
 
 export const generatedMigrations = (

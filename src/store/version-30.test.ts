@@ -46,9 +46,10 @@ it("serializes the structural upgrade and refuses actual old SDK tag/rekey write
   expect(() => reader.exec("UPDATE tags SET updated_at=2")).toThrow()
   reader.exec("ROLLBACK")
   expect(() => cached.all()).toThrow(/tags/)
-  expect(
-    upgrader.prepare("SELECT version,min_compatible FROM schema_migrations ORDER BY version DESC LIMIT 1").get(),
-  ).toEqual({ version: 30, min_compatible: 30 })
+  expect(upgrader.prepare("SELECT version,min_compatible FROM schema_migrations WHERE version = 30").get()).toEqual({
+    version: 30,
+    min_compatible: 30,
+  })
   for (const table of ["taggings", "canonical_auto_tag_claims"])
     expect(
       upgrader

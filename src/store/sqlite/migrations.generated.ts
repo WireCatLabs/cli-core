@@ -619,7 +619,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
-    "name": "20261025064650_version-31-drive-account",
+    "name": "20261025070402_version-31-drive-account",
     "statements": [
       "-- Drive documents leave their stand-in notes folder (`folder`, named `google-drive:<principal>`) for the\n-- principal's `google-drive` account, by UPDATE, so every `document:<id>` reference holds. One folder per\n-- principal moves, the oldest; a duplicate, or one whose files the account already holds, stays a folder.\nCREATE TEMP TABLE drive_moves (folder_id INTEGER PRIMARY KEY, principal TEXT NOT NULL, account_id INTEGER);",
       "INSERT INTO temp.drive_moves (folder_id, principal)\nSELECT f.id, substr(f.name, 14) FROM accounts f\nWHERE f.provider = 'folder' AND substr(f.name, 1, 13) = 'google-drive:' AND length(f.name) > 13\n  AND f.id = (SELECT min(o.id) FROM accounts o WHERE o.provider = 'folder' AND o.name = f.name)\n  AND NOT EXISTS (\n    SELECT 1 FROM documents held JOIN accounts g ON g.id = held.account_id\n    WHERE g.provider = 'google-drive' AND g.external_id = substr(f.name, 14)\n      AND held.external_id IN (SELECT external_id FROM documents WHERE account_id = f.id)\n  );",

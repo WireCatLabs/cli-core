@@ -1,7 +1,7 @@
 {
-  "id": "e93c7c09-c6bd-466f-acf4-b94d78873cab",
+  "id": "bf756635-4f07-4191-96f0-25d714bdb2d2",
   "prevIds": [
-    "98c92641-0187-4714-b03c-a201aba8c6be"
+    "21a98b3f-b62e-400a-8409-aedd851f5610"
   ],
   "version": "7",
   "dialect": "sqlite",
@@ -27,15 +27,19 @@
       "entityType": "tables"
     },
     {
-      "name": "auto_tag_claims",
-      "entityType": "tables"
-    },
-    {
       "name": "bot_updates",
       "entityType": "tables"
     },
     {
       "name": "bots",
+      "entityType": "tables"
+    },
+    {
+      "name": "canonical_auto_tag_claims",
+      "entityType": "tables"
+    },
+    {
+      "name": "canonical_tags",
       "entityType": "tables"
     },
     {
@@ -339,11 +343,15 @@
       "entityType": "tables"
     },
     {
-      "name": "taggings",
+      "name": "tag_consolidations",
       "entityType": "tables"
     },
     {
-      "name": "tags",
+      "name": "tag_redirects",
+      "entityType": "tables"
+    },
+    {
+      "name": "taggings",
       "entityType": "tables"
     },
     {
@@ -1046,76 +1054,6 @@
     },
     {
       "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "chat_id",
-      "entityType": "columns",
-      "table": "auto_tag_claims"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "tag_id",
-      "entityType": "columns",
-      "table": "auto_tag_claims"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "algorithm",
-      "entityType": "columns",
-      "table": "auto_tag_claims"
-    },
-    {
-      "type": "real",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "score",
-      "entityType": "columns",
-      "table": "auto_tag_claims"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "fields",
-      "entityType": "columns",
-      "table": "auto_tag_claims"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "auto_tag_claims"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "table": "auto_tag_claims"
-    },
-    {
-      "type": "integer",
       "notNull": false,
       "autoincrement": false,
       "default": null,
@@ -1333,6 +1271,126 @@
       "name": "updated_at",
       "entityType": "columns",
       "table": "bots"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "chat_id",
+      "entityType": "columns",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tag_id",
+      "entityType": "columns",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "algorithm",
+      "entityType": "columns",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "type": "real",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "score",
+      "entityType": "columns",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fields",
+      "entityType": "columns",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "canonical_tags"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "canonical_tags"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'tag'",
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "canonical_tags"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "canonical_tags"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "canonical_tags"
     },
     {
       "type": "integer",
@@ -8272,6 +8330,166 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_id",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "survivor_id",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_member_ids",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "survivor_member_ids",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "actor_type",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "actor_id",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "idempotency_key",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "vocabulary_fingerprint",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preview_fingerprint",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "counts",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "request_fingerprint",
+      "entityType": "columns",
+      "table": "tag_consolidations"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_id",
+      "entityType": "columns",
+      "table": "tag_redirects"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "survivor_id",
+      "entityType": "columns",
+      "table": "tag_redirects"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "tag_redirects"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
       "table": "taggings"
     },
     {
@@ -8363,56 +8581,6 @@
       "name": "updated_at",
       "entityType": "columns",
       "table": "taggings"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "tags"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "name",
-      "entityType": "columns",
-      "table": "tags"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "'tag'",
-      "generated": null,
-      "name": "kind",
-      "entityType": "columns",
-      "table": "tags"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "tags"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "table": "tags"
     },
     {
       "type": "integer",
@@ -9236,36 +9404,6 @@
     },
     {
       "columns": [
-        "chat_id"
-      ],
-      "tableTo": "chats",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_auto_tag_claims_chat_id_chats_id_fk",
-      "entityType": "fks",
-      "table": "auto_tag_claims"
-    },
-    {
-      "columns": [
-        "tag_id"
-      ],
-      "tableTo": "tags",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_auto_tag_claims_tag_id_tags_id_fk",
-      "entityType": "fks",
-      "table": "auto_tag_claims"
-    },
-    {
-      "columns": [
         "account_id"
       ],
       "tableTo": "accounts",
@@ -9293,6 +9431,36 @@
       "name": "fk_bots_owner_person_id_persons_id_fk",
       "entityType": "fks",
       "table": "bots"
+    },
+    {
+      "columns": [
+        "chat_id"
+      ],
+      "tableTo": "chats",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_auto_tag_claims_chat_id_chats_id_fk",
+      "entityType": "fks",
+      "table": "canonical_auto_tag_claims"
+    },
+    {
+      "columns": [
+        "tag_id"
+      ],
+      "tableTo": "canonical_tags",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_auto_tag_claims_tag_id_tags_id_fk",
+      "entityType": "fks",
+      "table": "canonical_auto_tag_claims"
     },
     {
       "columns": [
@@ -10736,9 +10904,69 @@
     },
     {
       "columns": [
+        "source_id"
+      ],
+      "tableTo": "canonical_tags",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_tag_consolidations_source_id_canonical_tags_id_fk",
+      "entityType": "fks",
+      "table": "tag_consolidations"
+    },
+    {
+      "columns": [
+        "survivor_id"
+      ],
+      "tableTo": "canonical_tags",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_tag_consolidations_survivor_id_canonical_tags_id_fk",
+      "entityType": "fks",
+      "table": "tag_consolidations"
+    },
+    {
+      "columns": [
+        "source_id"
+      ],
+      "tableTo": "canonical_tags",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_tag_redirects_source_id_canonical_tags_id_fk",
+      "entityType": "fks",
+      "table": "tag_redirects"
+    },
+    {
+      "columns": [
+        "survivor_id"
+      ],
+      "tableTo": "canonical_tags",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_tag_redirects_survivor_id_canonical_tags_id_fk",
+      "entityType": "fks",
+      "table": "tag_redirects"
+    },
+    {
+      "columns": [
         "tag_id"
       ],
-      "tableTo": "tags",
+      "tableTo": "canonical_tags",
       "columnsTo": [
         "id"
       ],
@@ -10857,7 +11085,7 @@
       "nameExplicit": false,
       "name": "auto_tag_claims_pk",
       "entityType": "pks",
-      "table": "auto_tag_claims"
+      "table": "canonical_auto_tag_claims"
     },
     {
       "columns": [
@@ -11121,6 +11349,15 @@
       "nameExplicit": false,
       "name": "bots_pk",
       "table": "bots",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "tags_pk",
+      "table": "canonical_tags",
       "entityType": "pks"
     },
     {
@@ -11632,8 +11869,17 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "taggings_pk",
-      "table": "taggings",
+      "name": "tag_consolidations_pk",
+      "table": "tag_consolidations",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "source_id"
+      ],
+      "nameExplicit": false,
+      "name": "tag_redirects_pk",
+      "table": "tag_redirects",
       "entityType": "pks"
     },
     {
@@ -11641,8 +11887,8 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "tags_pk",
-      "table": "tags",
+      "name": "taggings_pk",
+      "table": "taggings",
       "entityType": "pks"
     },
     {
@@ -11875,20 +12121,6 @@
     {
       "columns": [
         {
-          "value": "tag_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "auto_tag_claims_by_tag_id",
-      "entityType": "indexes",
-      "table": "auto_tag_claims"
-    },
-    {
-      "columns": [
-        {
           "value": "account_id",
           "isExpression": false
         },
@@ -11917,6 +12149,20 @@
       "name": "bots_by_owner_person_id",
       "entityType": "indexes",
       "table": "bots"
+    },
+    {
+      "columns": [
+        {
+          "value": "tag_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "canonical_auto_tag_claims_by_tag_id",
+      "entityType": "indexes",
+      "table": "canonical_auto_tag_claims"
     },
     {
       "columns": [
@@ -13597,6 +13843,66 @@
     {
       "columns": [
         {
+          "value": "source_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "tag_consolidations_by_source_id",
+      "entityType": "indexes",
+      "table": "tag_consolidations"
+    },
+    {
+      "columns": [
+        {
+          "value": "survivor_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "tag_consolidations_by_survivor_id",
+      "entityType": "indexes",
+      "table": "tag_consolidations"
+    },
+    {
+      "columns": [
+        {
+          "value": "actor_type",
+          "isExpression": false
+        },
+        {
+          "value": "actor_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "tag_consolidations_by_actor_type_actor_id",
+      "entityType": "indexes",
+      "table": "tag_consolidations"
+    },
+    {
+      "columns": [
+        {
+          "value": "survivor_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "tag_redirects_by_survivor_id",
+      "entityType": "indexes",
+      "table": "tag_redirects"
+    },
+    {
+      "columns": [
+        {
           "value": "taggable_type",
           "isExpression": false
         },
@@ -14193,6 +14499,15 @@
     },
     {
       "columns": [
+        "name"
+      ],
+      "nameExplicit": false,
+      "name": "tags_name_unique",
+      "entityType": "uniques",
+      "table": "canonical_tags"
+    },
+    {
+      "columns": [
         "folded"
       ],
       "nameExplicit": false,
@@ -14220,12 +14535,12 @@
     },
     {
       "columns": [
-        "name"
+        "idempotency_key"
       ],
       "nameExplicit": false,
-      "name": "tags_name_unique",
+      "name": "tag_consolidations_idempotency_key_unique",
       "entityType": "uniques",
-      "table": "tags"
+      "table": "tag_consolidations"
     },
     {
       "columns": [
