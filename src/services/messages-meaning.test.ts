@@ -7,11 +7,15 @@ import type { Messenger } from "../cli/messenger/context.js"
 import type { Message } from "../domain/models.js"
 import type { TextModel } from "../embeddings/models.js"
 import type { SendGuard } from "../sends/guard.js"
+import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { storedDeps } from "./deps.js"
 import { embeddingsService } from "./embeddings.js"
+import { messagesService } from "./messages.js"
 import { searchStore } from "./messages-archive-search.js"
 import { meaningLane } from "./messages-meaning.js"
+import { embedNotes } from "./notes-search.js"
+import { searchAll } from "./search-all.js"
 
 const tiny: TextModel = {
   id: "e5-small",
@@ -30,6 +34,18 @@ const tiny: TextModel = {
 vi.mock("../embeddings/models.js", async (original) => {
   const real = await original<typeof import("../embeddings/models.js")>()
   return { ...real, textModel: (id: string) => (id === "e5-small" ? tiny : real.textModel(id)) }
+})
+
+const opened = vi.hoisted(() => ({ models: 0 }))
+vi.mock("../embeddings/embed.js", async (original) => {
+  const real = await original<typeof import("../embeddings/embed.js")>()
+  return {
+    ...real,
+    openEmbedder: (...args: Parameters<typeof real.openEmbedder>) => {
+      opened.models++
+      return real.openEmbedder(...args)
+    },
+  }
 })
 
 const account = { provider: "test", account: "1" }
@@ -60,7 +76,8 @@ const download = () => {
 }
 
 const setUp = async () => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "discover-meaning-")), "m.db") })
+  const path = join(mkdtempSync(join(tmpdir(), "discover-meaning-")), "m.db")
+  const store = await openStore({ path })
   stores.push(store)
   await store.chats.saveChats(
     account,
@@ -87,7 +104,9 @@ const setUp = async () => {
   const deps = storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard)
   const discover = (text: string, extra: object = {}) =>
     searchStore(store, account, { text, discover: true, limit: 10, timezone: "UTC", ...extra }, {}, meaningLane(deps))
-  return { store, embeddings: embeddingsService(deps), discover }
+  const all = (text: string, extra: object = {}) =>
+    messagesService(deps).searchAll({ text, limit: 10, timezone: "UTC", only: ["messages"], ...extra })
+  return { path, store, embeddings: embeddingsService(deps), discover, all }
 }
 
 beforeEach(() => {
@@ -209,5 +228,99 @@ describe("discovery by meaning", () => {
     const { embeddings } = await setUp()
 
     expect((await embeddings.refresh({ threads: 1, messages: false })).messages).toBeUndefined()
+  })
+})
+
+describe("search all by meaning", () => {
+  it("fuses the messages nearest in meaning into the messages list, saying which search found each", async () => {
+    download()
+    const { all, embeddings } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+
+    const found = await all("cat")
+
+    expect(found.messages).toEqual({ by: "words and meaning" })
+    const byRef = new Map(found.items.map((item) => [item.ref.split("/").at(-1), item.foundBy]))
+    expect(byRef.get("1")).toEqual(["words", "meaning"])
+    expect(byRef.get("2")).toEqual(["meaning"])
+    expect(found.items[0]?.ref).toMatch(/\/1$/)
+  })
+
+  it("says which step is missing while the model or the vectors are", async () => {
+    const { all } = await setUp()
+    expect((await all("cat")).messages).toEqual({
+      by: "words",
+      meaningSkipped: { reason: "e5-small is not downloaded", step: "models.download", model: "e5-small" },
+    })
+    download()
+    expect((await all("cat")).messages?.meaningSkipped).toMatchObject({ step: "conversations.rebuild" })
+    expect((await all("cat")).items.map(({ foundBy }) => foundBy)).toEqual([["words"]])
+  })
+
+  it("loads the model once for messages and notes alike", async () => {
+    download()
+    const { store, embeddings, all } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+    await store.notes.addNote({ text: "kitten" })
+    await embedNotes(store, { threads: 1 })
+    opened.models = 0
+
+    const found = await all("cat", { only: ["messages", "notes"] })
+
+    expect(found.messages?.by).toBe("words and meaning")
+    expect(found.notes?.by).toBe("words and meaning")
+    expect(opened.models).toBe(1)
+  })
+
+  it("takes a lane built from a store and env alone, as memo has them", async () => {
+    download()
+    const { store, embeddings } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+    const lane = meaningLane({ env: process.env, store: async () => store, messenger: { app: { command: "memo" } } })
+
+    const found = await searchAll(store, account, { text: "cat", limit: 10, only: ["messages"] }, {}, undefined, lane)
+
+    expect(found.messages).toEqual({ by: "words and meaning" })
+  })
+
+  it("leaves --exact and the server's own hits to words, with no note", async () => {
+    download()
+    const { all, embeddings } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+
+    for (const extra of [{ exact: true }, { backend: "server" }]) {
+      const found = await all("cat", extra)
+      expect(found.messages).toBeUndefined()
+      expect(found.items.map(({ foundBy }) => foundBy.join())).toEqual(extra.exact ? ["words"] : [])
+    }
+  })
+
+  it("keeps the query's filters on the meaning hits, and skips meaning when NOT or OR would change them", async () => {
+    download()
+    const { all, embeddings } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+
+    expect((await all("cat chat:10")).items.map(({ ref }) => ref.split("/").at(-2))).toEqual(["10"])
+    const negated = await all("cat -chat:10")
+    expect(negated.items.map(({ foundBy }) => foundBy)).toEqual([["words"]])
+    expect(negated.messages?.meaningSkipped?.reason).toMatch(/NOT/)
+    expect((await all("cat OR chat:10")).messages?.by).toBe("words")
+    const either = await all("cat OR fish")
+    expect(either.messages).toEqual({ by: "words and meaning" })
+    expect(either.items.some(({ foundBy }) => foundBy.join() === "meaning")).toBe(true)
+  })
+
+  it("never brings back a chat hidden from search", async () => {
+    download()
+    const { path, all, embeddings } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+    const database = await openCache(path)
+    database.prepare("UPDATE chats SET searchable = 0 WHERE external_id = ?").run("10")
+    database.close()
+
+    const found = await all("cat")
+
+    expect(found.messages?.by).toBe("words and meaning")
+    expect(found.items.map(({ ref }) => ref.split("/").at(-2))).not.toContain("10")
   })
 })

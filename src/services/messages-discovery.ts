@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { implicitTextTerms, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
+import type { WarmEmbedders } from "../embeddings/embed.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { exhausted, QUERY_LIMITS } from "../search/lucene/types.js"
 import { planQuestion, words } from "../search/question-plan.js"
@@ -48,10 +49,14 @@ export interface MeaningSkipped {
   model: string
 }
 
-/** The messages of these accounts nearest in meaning to the question, best first; or why there are none. */
+/**
+ * The messages of these accounts nearest in meaning to the question, best first; or why there are none. `embedders`
+ * is the search's own, when another part of it loads the same model.
+ */
 export type MeaningLane = (
   question: string,
   accounts: AccountKey[],
+  embedders?: Pick<WarmEmbedders, "get">,
 ) => Promise<{ model: string; ranked: MeaningRanked; partly?: MeaningSkipped } | { skipped: MeaningSkipped }>
 
 export const searchDiscovery = async (
@@ -314,7 +319,7 @@ export const searchDiscovery = async (
 }
 
 /** The nearest messages the question's filters allow, as hits, nearest first. */
-const nearEligible = async (
+export const nearEligible = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,

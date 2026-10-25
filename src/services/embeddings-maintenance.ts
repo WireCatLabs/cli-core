@@ -40,7 +40,10 @@ const PER_REQUEST = 256
 /** e5's tokenizer reads ~3.7 characters a token in Russian; 3 keeps the bound above the real count. */
 const CHARS_PER_TOKEN_AT_LEAST = 3
 
-const notDownloaded = (deps: ServiceDeps, id: string) =>
+/** Enough of the deps to find a local model and name the command that downloads it. */
+export type ModelDeps = Pick<ServiceDeps, "env" | "embedders"> & { messenger: { app: { command: string } } }
+
+const notDownloaded = (deps: ModelDeps, id: string) =>
   new CliError(
     "not_found",
     `${id} is not downloaded — \`${typedCommand(deps.messenger.app.command, `models download ${id}`)}\``,
@@ -56,7 +59,7 @@ export const notBuiltError = (deps: ServiceDeps, chatId: Id) =>
     `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations links rebuild --chat ${chatId}`)}\``,
   )
 
-export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT_TEXT_MODEL) => {
+export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = DEFAULT_TEXT_MODEL) => {
   if (typeof choice !== "string") {
     const { remote, apiKey, concurrency = 4 } = choice
     return {
@@ -116,7 +119,7 @@ type EmbeddingTarget = ReturnType<typeof embeddingTarget>
 
 /** The server's warm model when there is one, kept open after; otherwise opened here and closed. */
 export const withEmbedder = async <T>(
-  deps: ServiceDeps,
+  deps: ModelDeps,
   target: EmbeddingTarget,
   choice: ModelChoice | undefined,
   { threads }: { threads?: number | undefined },

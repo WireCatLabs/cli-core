@@ -1,12 +1,18 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
+import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
 import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
+import { runEmbedders } from "../embeddings/embed.js"
+import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
+import { MESSAGE_PARSING } from "../search/lucene/types.js"
+import { planQuestion } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
-import type { SearchFound, SearchQuery } from "./messages.js"
+import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { MAX_SEARCH_OFFSET, searchStore } from "./messages-archive-search.js"
+import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-discovery.js"
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
@@ -60,6 +66,8 @@ export interface SearchAllFound {
   skipped: Skipped<SearchedResource>[]
   /** How the notes were searched, when they were. */
   notes?: { by: "words" | "words and meaning"; meaningSkipped?: string }
+  /** How the messages were searched, when they were; never by meaning with `exact` or the server alone. */
+  messages?: { by: "words" | "words and meaning"; meaningSkipped?: MeaningSkipped }
   /** The messenger's server step for messages, as `search messages` reports it. */
   server?: ServerSearched
 }
@@ -94,6 +102,22 @@ export type SearchAllMessenger = Partial<Pick<MessengerTraits, "savedChatId" | "
 }
 
 /**
+ * The filters the meaning hits must pass, or `undefined` when they cannot be followed: a NOT anywhere (meaning would
+ * bring the excluded back), or a filter under OR or in a group, which the plain list of filters would turn into AND.
+ */
+const filtersBeside = (text: string): string | undefined => {
+  const { root } = parseLucene(text, MESSAGE_PARSING)
+  const followable = (node: QueryNode, required: boolean): boolean =>
+    node.kind === "boolean"
+      ? node.clauses.every(({ node: inner, occur }) => occur !== "must_not" && followable(inner, false))
+      : node.kind === "predicate" && (required || node.field === "text" || node.field === "exact")
+  const top = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" as const }]
+  return top.every(({ node, occur }) => occur !== "must_not" && followable(node, occur === "must"))
+    ? planQuestion(text).scope
+    : undefined
+}
+
+/**
  * `search all`: messages, mail and notes from the local store — messages also from the messenger's
  * server, as `search messages` asks it — each list best first, merged by reciprocal rank so no
  * resource's own scores have to be compared with another's.
@@ -105,6 +129,7 @@ export const searchAll = async (
   messenger: SearchAllMessenger = {},
   searchMessages: (query: SearchQuery) => Promise<SearchFound> = (query) =>
     searchStore(store, account, query, messenger),
+  meaning?: MeaningLane,
 ): Promise<SearchAllFound> => {
   if (!request.text.trim()) throw new CliError("validation_error", "say what to find")
   const offset = request.offset ?? 0
@@ -120,6 +145,7 @@ export const searchAll = async (
   const skipped: SearchAllFound["skipped"] = []
   let hasMore = false
   let notes: SearchAllFound["notes"]
+  let messagesBy: SearchAllFound["messages"]
   let server: ServerSearched | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
@@ -152,7 +178,7 @@ export const searchAll = async (
       (await store.accounts.accounts()).filter(({ provider }) => kindIn(provider) === kind)
     for (const one of found.skipped ?? []) if (!skipped.some(({ source }) => source === one.source)) skipped.push(one)
     accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
-    return found.items.map((hit): SearchAllItem => {
+    const itemOf = (hit: FoundMessage, foundBy: SearchAllItem["foundBy"]): SearchAllItem => {
       const at = parseLocator(hit.locator)
       return {
         kind: kind === "mail" ? "mail" : "message",
@@ -166,53 +192,93 @@ export const searchAll = async (
           ? { name: hit.email.from.name ?? hit.email.from.address, ref: hit.email.from.ref }
           : { name: hit.senderName, ref: null },
         ...(hit.email ? { email: hit.email } : {}),
-        foundBy: ["words"],
+        foundBy,
       }
+    }
+    const byWords = found.items.map((hit) => itemOf(hit, ["words"]))
+    // Server hits are only those the server returned; the local vectors would add others.
+    if (kind === "mail" || !meaning || request.exact || request.backend === "server") return byWords
+    const filters = filtersBeside(request.text)
+    const lane =
+      filters === undefined
+        ? {
+            skipped: {
+              reason: "the query uses NOT, or a filter under OR or in a group, which meaning cannot follow",
+              model: DEFAULT_TEXT_MODEL,
+            },
+          }
+        : await meaning(request.text, read, embedders)
+    if ("skipped" in lane) {
+      messagesBy = { by: "words", meaningSkipped: lane.skipped }
+      return byWords
+    }
+    messagesBy = { by: "words and meaning", ...(lane.partly ? { meaningSkipped: lane.partly } : {}) }
+    const near = await nearEligible(store, account, query, messenger, lane.ranked, filters ?? "")
+    // One list per resource, as notes give theirs, so messages get no second vote against mail.
+    const fused = new Map<string, { item: SearchAllItem; score: number }>()
+    byWords.forEach((item, rank) => {
+      fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
     })
+    near.forEach((hit, rank) => {
+      const held = fused.get(hit.locator)
+      if (held) held.item.foundBy = ["words", "meaning"]
+      fused.set(hit.locator, {
+        item: held?.item ?? itemOf(hit, ["meaning"]),
+        score: (held?.score ?? 0) + 1 / (RRF_K + rank + 1),
+      })
+    })
+    return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
   }
 
-  for (const resource of only) {
-    try {
-      if (resource === "notes") {
-        const chosen = request.scope?.notes
-        const found = await searchNotes(store, request.text, {
-          limit: window,
-          command,
-          ...(chosen === undefined ? {} : notesScopeOf(chosen)),
-          ...(request.exact ? { exact: true } : {}),
-          ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
-          ...(request.env === undefined ? {} : { env: request.env }),
-        })
-        hasMore ||= found.has_more
-        notes = {
-          by: found.by,
-          ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
-        }
-        lists.push(
-          found.hits.map((hit) => ({
-            kind: hit.kind ?? "note",
-            ref: hit.ref,
-            provider: hit.provider ?? "notes",
-            account: hit.account ?? hit.folder_id ?? INTERNAL_NOTES,
-            ...(hit.url ? { url: hit.url } : {}),
-            title: hit.title,
-            timestamp: hit.updated_at,
-            text: hit.excerpt,
-            foundBy: hit.found_by,
-          })),
-        )
-        const read = chosen?.map(({ account }) => account) ?? [
-          INTERNAL_NOTES,
-          ...(await store.notes.folders()).map(({ id }) => id),
-          ...(await store.notes.documentsAccounts()).map(({ id }) => id),
-        ]
-        accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
-      } else lists.push(await messagesOf(resource))
-      searched.push(resource)
-    } catch (error) {
-      if (!skippable(error)) throw error
-      skipped.push({ resource, code: error.code, reason: error.message })
+  // Messages and notes both look up by meaning with the same model: loading it costs most of a second.
+  const embedders = runEmbedders()
+  try {
+    for (const resource of only) {
+      try {
+        if (resource === "notes") {
+          const chosen = request.scope?.notes
+          const found = await searchNotes(store, request.text, {
+            limit: window,
+            command,
+            embedders,
+            ...(chosen === undefined ? {} : notesScopeOf(chosen)),
+            ...(request.exact ? { exact: true } : {}),
+            ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
+            ...(request.env === undefined ? {} : { env: request.env }),
+          })
+          hasMore ||= found.has_more
+          notes = {
+            by: found.by,
+            ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
+          }
+          lists.push(
+            found.hits.map((hit) => ({
+              kind: hit.kind ?? "note",
+              ref: hit.ref,
+              provider: hit.provider ?? "notes",
+              account: hit.account ?? hit.folder_id ?? INTERNAL_NOTES,
+              ...(hit.url ? { url: hit.url } : {}),
+              title: hit.title,
+              timestamp: hit.updated_at,
+              text: hit.excerpt,
+              foundBy: hit.found_by,
+            })),
+          )
+          const read = chosen?.map(({ account }) => account) ?? [
+            INTERNAL_NOTES,
+            ...(await store.notes.folders()).map(({ id }) => id),
+            ...(await store.notes.documentsAccounts()).map(({ id }) => id),
+          ]
+          accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
+        } else lists.push(await messagesOf(resource))
+        searched.push(resource)
+      } catch (error) {
+        if (!skippable(error)) throw error
+        skipped.push({ resource, code: error.code, reason: error.message })
+      }
     }
+  } finally {
+    await embedders.close()
   }
 
   const ranked = new Map<string, { item: SearchAllItem; score: number }>()
@@ -233,6 +299,7 @@ export const searchAll = async (
     accounts,
     skipped,
     ...(notes === undefined ? {} : { notes }),
+    ...(messagesBy === undefined ? {} : { messages: messagesBy }),
     ...(server === undefined ? {} : { server }),
   }
 }

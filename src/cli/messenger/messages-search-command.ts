@@ -13,7 +13,7 @@ import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { messagesAnswer, offsetOf } from "./search-answers.js"
+import { meaningNote, messagesAnswer, offsetOf } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { syncOptions, syncRequest, syncsFirst } from "./search-sync-options.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
@@ -169,16 +169,7 @@ const searchAction = (messenger: Messenger) =>
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
     for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
-    const meaning = found.meaningSkipped
-    if (meaning) {
-      const step =
-        meaning.step === "models.download"
-          ? ` — \`${command} models download ${meaning.model}\`, then \`${command} conversations rebuild\` gives messages their vectors`
-          : meaning.step === "conversations.rebuild"
-            ? ` — \`${command} conversations rebuild\` gives messages their vectors, a batch a run`
-            : ""
-      context.renderer.note(`meaning search not used: ${meaning.reason}${step}`)
-    }
+    if (found.meaningSkipped) context.renderer.note(meaningNote(found.meaningSkipped, command))
     const rerank = found.rerankSkipped
     if (rerank)
       context.renderer.note(
