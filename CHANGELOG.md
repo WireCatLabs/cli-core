@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Every CLI on cli-core gets `skill status` and `skill show --for claude|agents`** from cli-base 0.56.0. `skill
+  status` says, for each agent, whether its installed SKILL.md matches this version; `skill show --for` prints the copy
+  installed there, so a host can show what `skill install` would change.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.56.** The peer range moves from `>=0.53.0 <0.54.0` to `>=0.56.0 <0.57.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.54 and 0.55 change the release lock and the
+  changelog guard, which a CLI adopts through community's standards sync, and 0.56 adds the `missing-run-log` lint
+  rule: a CLI without `runs` fails `cli-dev lint` until it registers `runsCommand(app)`.
+
 ## 0.426.0 — 25.10.2026
 
 ### Added
