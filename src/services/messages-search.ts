@@ -39,6 +39,8 @@ export interface QueryMetadata {
     truncated: boolean
     terms: string[]
     queries: string[]
+    /** Present when meaning was searched too: the model, and how many of its nearest messages the filters allowed. */
+    meaning?: { model: string; candidates: number }
   }
   version: 1
   fieldsVersion: number

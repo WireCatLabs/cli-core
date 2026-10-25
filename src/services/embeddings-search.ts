@@ -154,7 +154,9 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         source,
         timezone,
       })
-      const locallyRefreshed = refresh ? await embeddingsMaintenance(deps).refresh(refresh) : undefined
+      const locallyRefreshed = refresh
+        ? await embeddingsMaintenance(deps).refresh({ ...refresh, messages: false })
+        : undefined
       const store = await deps.store()
       const account = await deps.account()
       const target = embeddingTarget(deps, choice)

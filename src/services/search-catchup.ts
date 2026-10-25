@@ -57,6 +57,7 @@ export const catchUpSearch = async (
       maxMessages,
       check,
       threads: 1,
+      messages: false,
     })
     check()
     return {

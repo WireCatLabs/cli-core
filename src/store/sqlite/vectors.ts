@@ -233,7 +233,11 @@ export interface NearestChunk {
 const SCAN_PAGE = 5_000
 
 export const dot = (query: Float32Array, blob: Uint8Array): number => {
-  const vector = new Float32Array(blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength))
+  // A view, not a copy: copying every blob cost more than the scoring itself (cli-testing vector-index).
+  const vector =
+    blob.byteOffset % 4 === 0
+      ? new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4)
+      : new Float32Array(blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength))
   let sum = 0
   for (let index = 0; index < query.length; index++) sum += (query[index] as number) * (vector[index] as number)
   return sum

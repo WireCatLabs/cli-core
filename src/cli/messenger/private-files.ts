@@ -21,15 +21,18 @@ export const privateFiles = (
 ): PrivateFiles => {
   if (platform === "win32") return { checked: false, reason: "Windows has no Unix file modes" }
   const problems: ModeProblem[] = []
-  const check = (path: string, want: number) => {
+  // A folder where a file should be, or the reverse, is a problem of its own; a mode is no fix for it.
+  const check = (path: string, want: number, folder: boolean) => {
     if (!existsSync(path)) return
-    const mode = statSync(path).mode & 0o777
+    const stat = statSync(path)
+    if (stat.isDirectory() !== folder) return
+    const mode = stat.mode & 0o777
     if ((mode & 0o077) === 0) return
     const octal = (value: number) => `0${value.toString(8)}`
     problems.push({ path, mode: octal(mode), want: octal(want), fix: `chmod ${want.toString(8)} ${shellQuoted(path)}` })
   }
-  for (const file of files) check(file, 0o600)
-  for (const dir of dirs) check(dir, 0o700)
+  for (const file of files) check(file, 0o600, false)
+  for (const dir of dirs) check(dir, 0o700, true)
   return { checked: true, ok: problems.length === 0, problems }
 }
 

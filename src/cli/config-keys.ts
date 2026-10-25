@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { readConfigText } from "./config-issues.js"
 
 const reasonOf = (issue: v.BaseIssue<unknown>): string => {
   if (issue.expected === "never") return "is an unknown setting"
@@ -27,12 +27,10 @@ export const loadSnakeCaseConfig = <T extends v.GenericSchema>(
   schema: T,
   fallback: () => v.InferOutput<T>,
 ): v.InferOutput<T> => {
-  let text: string
-  try {
-    text = readFileSync(path, "utf8")
-  } catch {
-    return fallback()
-  }
+  const read = readConfigText(path)
+  if ("issue" in read) throw new CliError("configuration_error", `${path}: ${read.issue.what}`)
+  if (read.text === undefined) return fallback()
+  const text = read.text
   let parsed: unknown
   try {
     parsed = JSON.parse(text)

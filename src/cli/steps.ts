@@ -155,6 +155,12 @@ export const STEPS = defineSteps([
     why: "the chat's conversations are not searchable by meaning yet; this embeds them",
   },
   {
+    id: "conversations.rebuild",
+    command: "conversations rebuild",
+    args: [],
+    why: "messages have no vectors yet, so discovery searched by words alone; this embeds them, a bounded batch a run",
+  },
+  {
     id: "stats.evidence",
     command: "*",
     args: [

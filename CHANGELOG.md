@@ -16,6 +16,30 @@ shape of this file.
 - **`@modelcontextprotocol/server` is `^2.4.0`** (was exactly 2.3.0), so a CLI on server 2.4.x shares one copy with cli-core.
 - **Dependencies moved to their latest majors:** `@anthropic-ai/sdk` 1.3, `sherpa-onnx` 2.0, `drizzle-orm` 1.0.0-rc.5.
 
+### Added
+
+- **`search messages --discover` also searches by meaning, on its own, once it can.** When e5-small is downloaded and messages have their own vectors, discovery adds the 100 messages nearest in meaning to its word matches and merges the two lists by reciprocal rank fusion (k = 60), as arm A2 of the [evidence-pipeline benchmark](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/evidence-pipeline) did. The question's filters apply to both. Each hit's `discovery.found_by` says which list found it, and `score` is then the fused score. Otherwise discovery searches by words exactly as before and says why meaning was not used: a `meaning search not used: …` note in the terminal, and `missing`/`next` (`models.download` or `conversations.rebuild`) in `--json` and MCP. A search never downloads a model and never sends text anywhere. `--exact`, `--newest` and strict queries are untouched.
+- **`conversations rebuild`, and `conversations embed` without `--chat`, give each message its own vector** with the default local model, within the same `--max-chunks` bound; the answer's `messages` says how many were embedded and how many are left. Messages edited since are embedded again, and deleted ones lose their vectors. A search's catch-up never does this.
+
+## 0.431.0 — 25.10.2026
+
+### Added
+
+- **`readConfigText(path)`, `readConfigFile(path)`, `withoutSetting(raw, setting)` and `settingPathOf(setting)` from `/cli`**, for a tool with its own config file and `config unset`. `readConfigText` gives the text, `undefined` for no file, or an issue for a folder at the path or a file that cannot be read. `readConfigFile` adds the JSON parse. `withoutSetting` removes one setting at any depth, list items included (`mail.accounts.0.colour`, `permissions.messages.send`), and any object the removal leaves empty, but keeps a list item so the items after it keep their numbers.
+
+### Fixed
+
+- **A bad setting inside a list item is removed alone.** Before, `checkConfigText` could not reach into a list. It reported `mail.accounts.0.colour`, then loaded the rest of the file as empty, and missed issues elsewhere (an unknown permission key) until the next run. Now everything else loads, and every issue is found in one pass, in nested lists too. An item of the wrong type is dropped, and the items after it are still named by their place in the file. `config unset` with no profile reaches a path through a list.
+- **A config file that cannot be read is reported, not taken for no file.** A folder at the path gives `invalid_value` "the path is a folder, not a file"; a file this user may not read gives "the file could not be read". Neither has a `fix`. `loadSnakeCaseConfig` refuses both instead of using its fallback.
+- **A file holding a list, a string, a number or `null` is refused as a whole**: `invalid_value` "the file must hold a JSON object", with no `key` and no `fix`. Before, valibot read `[]` as `{}`.
+- **`privateFiles` suggests no file mode for a folder where a file should be**, or for a file where a folder should be: the config issue says what is wrong.
+
+## 0.430.0 — 25.10.2026
+
+### Added
+
+- **Run records for a CLI with its own commander program** (`/cli`). `recordRuns(program, options)` gives a `startCli` tool WC-LIFE-15 in one call: `--record` and `--no-record`, a failed run for every failed command — a usage error before any action included, named by its command words and never an argument — and a run of every command when the flag or the saved `record` asks. `providerEvent(event)` and `providerRequest(operation)` put a provider call's operation, status and duration into the current command's run from anywhere in the program. `commandRuns(options)` keeps one command's run from a tool's own hooks under `run()`, and `runSettings(flag, saved)` is the rule both follow. zoom-cli, drive-cli and cli-memo replace their own copies with it. A run with no profile now leaves `profile` out rather than writing `""`.
+
 ## 0.429.0 — 25.10.2026
 
 ### Added

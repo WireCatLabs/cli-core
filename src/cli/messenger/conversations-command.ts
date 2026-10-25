@@ -518,7 +518,8 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       .summary("build and embed the chats that changed, on this machine only")
       .description(
         "build, then embed with the model on this machine, the chats that changed since their build and the group " +
-          "chats never built — or only --chat; bounded per run, so run it again for the rest; never asks the " +
+          "chats never built — or only --chat; with the default model, also each message on its own, which " +
+          "`search messages --discover` reads; bounded per run, so run it again for the rest; never asks the " +
           "messenger, downloads no model and sends no text anywhere",
       )
       .option("--chat <chat>", messenger.chatArgument),
@@ -673,9 +674,17 @@ const renderRefreshed = (command: Command, context: MessengerContext, refreshed:
           (one) => `${one.chat}  built: ${one.messages} messages → ${one.conversations} conversations\n`,
         ),
         ...refreshed.embedded.map((one) => `${one.chat}  ${one.embedded} chunks embedded with ${one.model}\n`),
+        refreshed.messages?.embedded
+          ? `${refreshed.messages.embedded} messages embedded with ${refreshed.model}\n`
+          : "",
       ].join(""),
     )
-    if (refreshed.built.length + refreshed.embedded.length === 0 && refreshed.left.length === 0) {
+    if (
+      refreshed.built.length + refreshed.embedded.length === 0 &&
+      refreshed.left.length === 0 &&
+      !refreshed.messages?.embedded &&
+      !refreshed.messages?.left
+    ) {
       context.renderer.note("every chat is up to date")
     }
   } else renderAnswer(command, context, refreshedAnswer(refreshed))
@@ -688,7 +697,7 @@ const notDownloaded = (root: Command, model: string, lead: string): string => {
   return `${lead}: ${model} is not downloaded${step?.kind === "command" ? ` — \`${stepLine(root, step)}\`` : ""}`
 }
 
-const leftNotes = ({ model, modelAvailable, embedded, left }: Refreshed, root: Command) => {
+const leftNotes = ({ model, modelAvailable, embedded, left, messages }: Refreshed, root: Command) => {
   const of = (needs: "build" | "embed") => left.filter((one) => one.needs === needs).map(({ chat }) => chat)
   const build = of("build")
   const embed = of("embed")
@@ -698,6 +707,7 @@ const leftNotes = ({ model, modelAvailable, embedded, left }: Refreshed, root: C
       ? `still to embed: chat ${embed.join(", ")} — run it again, or raise --max-chats and --max-chunks`
       : "",
     embed.length > 0 && !modelAvailable && embedded.length === 0 ? notDownloaded(root, model, "nothing embedded") : "",
+    messages?.left ? `still to embed: ${messages.left} messages — run it again, or raise --max-chunks` : "",
   ].filter(Boolean)
 }
 

@@ -117,6 +117,24 @@ describe("search answers", () => {
     expect(answer.items.length).toBeGreaterThan(0)
   })
 
+  it("**says discovery searched by words only** while the meaning model is not downloaded", async () => {
+    const { call, pretty, store } = await setup()
+    await store.close()
+
+    const answer = json(await call("search", "messages", "which chapter?", "--discover", "--json"))
+    const parsed = v.safeParse(listEnvelopeSchema(ENTITIES["message.hit"] as v.GenericSchema), answer)
+    expect(parsed.issues).toBeUndefined()
+    expect(answer.missing).toContainEqual({
+      field: "discovery",
+      why: "searched by words only: e5-small is not downloaded",
+      step: "models.download",
+    })
+    expect((await pretty("search", "messages", "which chapter?", "--discover")).stderr.join("")).toContain(
+      "meaning search not used: e5-small is not downloaded — `chat models download e5-small`, then " +
+        "`chat conversations rebuild` gives messages their vectors",
+    )
+  })
+
   it("**says a voice note was found through a garbled spelling**, in the hit and the answer", async () => {
     const { call, store } = await setup()
     await store.messages.saveMessages(

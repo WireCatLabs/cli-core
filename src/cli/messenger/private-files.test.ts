@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { chmodSync, mkdtempSync, statSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -24,6 +24,15 @@ describe("privateFiles", () => {
     expect(statSync(file).mode & 0o777).toBe(0o600)
     expect(statSync(folder).mode & 0o777).toBe(0o700)
     expect(privateFiles({ files: [file], dirs: [folder] })).toEqual({ checked: true, ok: true, problems: [] })
+  })
+
+  it.skipIf(process.platform === "win32")("suggests no file mode for a folder where a file should be", () => {
+    const folder = mkdtempSync(join(tmpdir(), "private-"))
+    const config = join(folder, "config.json")
+    mkdirSync(config)
+    chmodSync(config, 0o755)
+    chmodSync(folder, 0o700)
+    expect(privateFiles({ files: [config], dirs: [folder] })).toEqual({ checked: true, ok: true, problems: [] })
   })
 
   it("does not check on Windows, which has no Unix file modes", () => {
