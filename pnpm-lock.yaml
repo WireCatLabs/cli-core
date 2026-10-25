@@ -36,8 +36,8 @@ importers:
         specifier: 1.0.1
         version: 1.0.1
       '@wirecat/cli-core-sqlite':
-        specifier: 1.0.1
-        version: 1.0.1
+        specifier: 1.1.0
+        version: 1.1.0
       '@xmldom/xmldom':
         specifier: 0.9.12
         version: 0.9.12
@@ -1341,6 +1341,9 @@ packages:
 
   '@wirecat/cli-core-sqlite@1.0.1':
     resolution: {integrity: sha512-dFkTE3+XdvZwrt7bZZEd2fzdqR2vFgnnGPOhmBKGNa7uKQHjOdqJL8Q9O5cajIjy5o8Gl0LVn0OZbYajhLvQ1A==}
+
+  '@wirecat/cli-core-sqlite@1.1.0':
+    resolution: {integrity: sha512-GpGlh/dAIX/nblBYCdT6DfWSLFxav9mxxeELQAfEuw+QZdT9unKxbi5xa02s/s4JS1P7n0PQx2sCABj4FlMRNw==}
 
   '@wirecat/cli-core@0.414.0':
     resolution: {integrity: sha512-Qk0Bp3LdChAQFwS240hsOynelT7HTcHHugTTGTBLUfIlABTgB/SBW7XgjoGq0PcP3ysRWGvOetoTb9YxHhD8aQ==}
@@ -3554,6 +3557,8 @@ snapshots:
       onnxruntime-common: 1.30.0
 
   '@wirecat/cli-core-sqlite@1.0.1': {}
+
+  '@wirecat/cli-core-sqlite@1.1.0': {}
 
   '@wirecat/cli-core@0.414.0(@napi-rs/canvas@1.0.13)(@wirecat/cli-base@0.57.0(commander@15.0.0)(typescript@7.0.2)(vitest@5.0.5))(commander@15.0.0)(typescript@7.0.2)(zod@4.6.7)':
     dependencies:
