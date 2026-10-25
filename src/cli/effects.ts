@@ -98,10 +98,18 @@ export const isStoreChange = (command: Command): boolean => {
 
 export const STORE_CHANGE_REFUSAL = "change the message store"
 
+/** ` --dry-run` where the program has it, so an example of a command that calls a provider calls nothing. */
+export const previewFlag = (program: Command): string =>
+  program.options.some((option) => option.long === "--dry-run") ? " --dry-run" : ""
+
+/** What a read-only refusal says the command would do: the store holds more than messages outside a messenger. */
+export const storeChangeRefusal = (app: Pick<AppIdentity, "messenger">): string =>
+  app.messenger === false ? "change the local store" : STORE_CHANGE_REFUSAL
+
 /** Under `<PREFIX>_READ_ONLY`, refuses a change to the store — for a caller outside `run()`, an MCP tool. */
 export const refuseStoreChange = (app: AppIdentity, env: NodeJS.ProcessEnv): void => {
   const lock = readOnlyLockOf(app, env)
-  if (lock) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
+  if (lock) throw readOnlyRefusal(lock, storeChangeRefusal(app))
 }
 
 const pathOf = (command: Command): string[] => {

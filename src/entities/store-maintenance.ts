@@ -3,6 +3,12 @@ import { count, text, time } from "./fields.js"
 
 const absent = v.strictObject({ path: text, exists: v.literal(false) })
 const schema = v.strictObject({ version: count, min_compatible: count, writable: v.boolean(), speaks: count })
+const infoSchema = v.strictObject({
+  ...schema.entries,
+  reason: v.picklist(["missing", "older", "current", "newer", "too_new"]),
+  upgrade: v.nullable(v.strictObject({ version: count, min_compatible: count })),
+})
+const client = v.strictObject({ command: text, version: text, core: text, speaks: count, seen_at: time })
 const wordIndex = v.strictObject({
   watermark: count,
   filled_through: count,
@@ -25,20 +31,52 @@ const stemIndex = v.strictObject({
 })
 const readFailure = { path: text, exists: v.literal(true), opens: v.literal(false), error: text }
 const rows = v.partial(
-  v.strictObject({ accounts: count, chats: count, messages: count, attachments: count, identities: count }),
+  v.strictObject({
+    accounts: count,
+    chats: count,
+    messages: count,
+    emails: count,
+    documents: count,
+    meetings: count,
+    events: count,
+    attachments: count,
+    identities: count,
+  }),
 )
+const perAccount = { chats: count, messages: count, emails: count, documents: count, meetings: count }
+/** Over every account in the store; absent for a file with no schema yet. */
+const contents = {
+  by_provider: v.optional(v.array(v.strictObject({ provider: text, accounts: count, ...perAccount }))),
+  by_chat_kind: v.optional(v.array(v.strictObject({ provider: text, kind: text, chats: count, messages: count }))),
+  /** `name` is the one `account list` shows; the messenger's own id for the account is left out. */
+  by_account: v.optional(
+    v.array(v.strictObject({ provider: text, account_id: count, name: v.nullable(text), ...perAccount })),
+  ),
+  /** Calendar years in UTC. */
+  by_year: v.optional(v.array(v.strictObject({ provider: text, year: count, messages: count }))),
+  /** `type` is what the file is attached to: a message, an email, a document… `bytes` counts the sizes known. */
+  by_attachment_kind: v.optional(v.array(v.strictObject({ type: text, kind: text, count, bytes: count }))),
+}
 export const storeInfo = v.union([
-  absent,
-  v.strictObject(readFailure),
+  v.strictObject({ ...absent.entries, schema: infoSchema }),
+  v.strictObject({ ...readFailure, schema: v.strictObject({ speaks: count }) }),
   v.strictObject({
     path: text,
     exists: v.literal(true),
     bytes: v.strictObject({ file: count, wal: count }),
-    schema,
+    journal_mode: text,
+    /** `free` pages hold nothing; a `VACUUM` would give them back. */
+    pages: v.strictObject({ size: count, count, free: count }),
+    migrations: v.array(v.strictObject({ version: count, min_compatible: count, applied_at: time })),
+    /** From the marker a backup job leaves in `backups/last.json` beside the store; null without one. */
+    backup: v.nullable(v.strictObject({ at: time, file: v.nullable(text), checked: v.nullable(text) })),
+    schema: infoSchema,
+    clients: v.array(client),
     rows,
     pending_normalization: v.nullable(count),
     word_index: v.nullable(wordIndex),
     stem_index: v.nullable(stemIndex),
+    ...contents,
   }),
 ])
 export const storeCheck = v.union([

@@ -65,8 +65,8 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
       )
       .addOption(new Option("--analysis-provider <provider>", "analysis: agent, openai or anthropic"))
 
-      .option("--model <model>", "analysis model; overrides analysis_model")
-      .option("--base-url <url>", "analysis API endpoint; overrides analysis_base_url")
+      .option("--model <model>", "analysis model; overrides models.analysis.model")
+      .option("--base-url <url>", "analysis API endpoint; overrides models.analysis.base_url")
       .option("--size <n>", "analysis answer messages per batch, 10–200; default 50", positiveCount("--size"))
       .option(
         "--max-tokens <n>",
@@ -138,7 +138,6 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
     }
     if (
       options.analysisProvider !== undefined ||
-      options.provider !== undefined ||
       options.model !== undefined ||
       options.baseUrl !== undefined ||
       options.size !== undefined ||
@@ -202,10 +201,7 @@ const embeddingClearCommand = (messenger: Messenger): Command =>
     const context = messengerContext(this, messenger)
     refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
     const given =
-      options.model !== undefined ||
-      options.embeddingProvider !== undefined ||
-      options.provider !== undefined ||
-      options.baseUrl !== undefined
+      options.model !== undefined || options.embeddingProvider !== undefined || options.baseUrl !== undefined
     const model = given ? choiceOf(options, messenger, context, { needKey: false }) : undefined
     const cleared = await context.withServices((services) => services.embeddings.clear(chat, model))
     renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} vectors dropped\n`)
@@ -574,11 +570,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     )
 
     .action(async function (this: Command) {
-      const { chat, provider, consentProvider } = this.opts<{
-        chat?: string
-        provider?: string
-        consentProvider?: string
-      }>()
+      const { chat, consentProvider } = this.opts<{ chat?: string; consentProvider?: string }>()
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
       await context.withStore(async (store, account) => {
@@ -591,7 +583,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
                   BATCH_SIZE.default,
                 )
               ).chat
-        await analysisConsents(store, account).revoke(chatId, consentProvider ?? provider)
+        await analysisConsents(store, account).revoke(chatId, consentProvider)
       })
       renderAnswer(this, context, itemOf({ revoked: true }))
     })

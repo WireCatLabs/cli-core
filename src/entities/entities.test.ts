@@ -1052,7 +1052,18 @@ const samples: Record<EntityName, unknown> = {
   store_job_cancel: { job: "1", cancelled: true },
   store_job_retry: { retried: "1", job: "2", pid: 1, chat: "7", log: "./synthetic.log" },
   store_job_clear: { cleared: ["1"] },
-  store_info: { path: "./synthetic.db", exists: false },
+  store_info: {
+    path: "./synthetic.db",
+    exists: false,
+    schema: {
+      version: 0,
+      min_compatible: 0,
+      speaks: 33,
+      writable: true,
+      reason: "missing",
+      upgrade: { version: 33, min_compatible: 32 },
+    },
+  },
   store_check: { path: "./synthetic.db", exists: false, ok: true },
   store_migration: { path: "./synthetic.db", exists: false },
   store_reindex: { path: "./synthetic.db", exists: false },
@@ -1062,6 +1073,7 @@ const samples: Record<EntityName, unknown> = {
   store_reset: { path: "./synthetic.db", exists: false, reset: false },
   store_repair: { path: "./synthetic.db", exists: false },
   store_copy_removal: { path: "./synthetic.db", deleted: { name: "synthetic__repair_12345678", rows: 0 } },
+  store_table: { name: "messages", kind: "data", rows: 2, bytes: 4096 },
   watch_item: message,
   serve_summary: { profile: "synthetic", started_at: at, stopped_at: at, kept: { message: 1 } },
   job: {

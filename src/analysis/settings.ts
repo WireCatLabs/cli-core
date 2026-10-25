@@ -12,9 +12,6 @@ const AI_FIELDS = {
   embeddingModel: v.optional(model),
   embeddingBaseUrl: v.optional(url),
   embeddingDims: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(65536))),
-  analysisProvider: v.optional(v.picklist(["agent", "openai", "anthropic"])),
-  analysisModel: v.optional(model),
-  analysisBaseUrl: v.optional(url),
   models: v.optional(modelSettingsShape),
 }
 const fileKey = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
@@ -27,13 +24,10 @@ export const AI_ENTRIES = Object.fromEntries(
   embedding_model: (typeof AI_FIELDS)["embeddingModel"]
   embedding_base_url: (typeof AI_FIELDS)["embeddingBaseUrl"]
   embedding_dims: (typeof AI_FIELDS)["embeddingDims"]
-  analysis_provider: (typeof AI_FIELDS)["analysisProvider"]
-  analysis_model: (typeof AI_FIELDS)["analysisModel"]
-  analysis_base_url: (typeof AI_FIELDS)["analysisBaseUrl"]
   models: (typeof AI_FIELDS)["models"]
 }
 export type AISettings = v.InferOutput<v.ObjectSchema<typeof AI_FIELDS, undefined>>
-export const AI_DEFAULTS: AISettings = { embeddingProvider: "local", analysisProvider: "agent" }
+export const AI_DEFAULTS: AISettings = { embeddingProvider: "local" }
 
 export const AI_SETTING_KEYS = Object.keys(AI_FIELDS) as (keyof AISettings)[]
 
@@ -61,7 +55,7 @@ export const resolveAISettings = (
     })
   const values = Object.fromEntries(resolved.map(({ key, value }) => [key, value])) as AISettings
   const sources = Object.fromEntries(resolved.map(({ key, from }) => [key, from]))
-  const models = resolveModelSettings(prefix, layers, env, { values, sources })
+  const models = resolveModelSettings(prefix, layers, env)
   return {
     values: { ...values, models: models.models },
     sources: {

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { normalize } from "../store/normalize.js"
+import { type Language, type LanguageOf, languagesOf } from "./languages.js"
 import EnglishStemmer from "./snowball/english-stemmer.js"
 import RussianStemmer from "./snowball/russian-stemmer.js"
 import SpanishStemmer from "./snowball/spanish-stemmer.js"
@@ -7,10 +8,10 @@ import SpanishStemmer from "./snowball/spanish-stemmer.js"
 /** The version of the vendored files in `./snowball/`; `bin/snowball-update` regenerates them. */
 export const SNOWBALL_VERSION = "3.1.1"
 
-export const CYRILLIC_STEMMERS = ["russian", "none"] as const
-export const LATIN_STEMMERS = ["spanish", "english", "none"] as const
-export type CyrillicStemmer = (typeof CYRILLIC_STEMMERS)[number]
-export type LatinStemmer = (typeof LATIN_STEMMERS)[number]
+export type CyrillicStemmer = LanguageOf<"cyrillic"> | "none"
+export type LatinStemmer = LanguageOf<"latin"> | "none"
+export const CYRILLIC_STEMMERS: readonly CyrillicStemmer[] = [...languagesOf("cyrillic"), "none"]
+export const LATIN_STEMMERS: readonly LatinStemmer[] = [...languagesOf("latin"), "none"]
 /** `latin` is one stemmer, `none`, or several joined by commas in alphabetical order (`english,spanish`). */
 export type Stemmers = { cyrillic: CyrillicStemmer; latin: string }
 
@@ -75,7 +76,7 @@ const MARKS = /\p{M}+/gu
 const CYRILLIC = /^\p{Script=Cyrillic}+$/u
 const LATIN = /^\p{Script=Latin}+$/u
 
-const snowball = {
+const snowball: Record<Language | "none", () => { stemWord(word: string): string } | null> = {
   russian: () => new RussianStemmer(),
   spanish: () => new SpanishStemmer(),
   english: () => new EnglishStemmer(),

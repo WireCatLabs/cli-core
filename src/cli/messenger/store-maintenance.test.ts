@@ -19,7 +19,7 @@ import { RULES_VERSION } from "../../conversations/link.js"
 import { DEFAULT_TASK_CATEGORIES } from "../../domain/task-categories.js"
 import { ENTITIES } from "../../entities/index.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
-import { openCache } from "../../store/open.js"
+import { openCache, openFile } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { configCommand } from "../config-command.js"
 import { run } from "../program.js"
@@ -120,7 +120,8 @@ describe("store info", () => {
   it("says there is no file rather than creating one", async () => {
     const env = envFor()
     const { answer } = await call(["store", "info", "--json"], env)
-    expect(answer).toEqual({ path: env.MESSAGING_STORE, exists: false })
+    expect(answer).toMatchObject({ path: env.MESSAGING_STORE, exists: false, schema: { reason: "missing" } })
+    expect(existsSync(String(env.MESSAGING_STORE))).toBe(false)
   })
 
   it("reads a baseline file without changing its normalization state", async () => {
@@ -134,6 +135,62 @@ describe("store info", () => {
       pending_normalization: 2,
     })
     expect((await call(["store", "info", "--json"], env)).answer.schema.version).toBe(latest)
+  })
+})
+
+describe("store info contents", () => {
+  it("**breaks the rows down by provider, chat kind, account, UTC year and attachment kind, over every account**", async () => {
+    const env = envFor()
+    const database = await seeded(env)
+    database.exec(`
+      INSERT INTO accounts (id, provider, external_id, name, created_at, updated_at)
+        VALUES (2, 'email', 'synthetic@example.com', NULL, 0, 0);
+      INSERT INTO email_threads (id, account_id, external_id, created_at, updated_at) VALUES (1, 2, 't1', 0, 0);
+      INSERT INTO emails (id, account_id, email_thread_id, external_id, created_at, updated_at)
+        VALUES (1, 2, 1, 'e1', 0, 0), (2, 2, 1, 'e2', 0, 0);
+      INSERT INTO messages (chat_id, account_id, external_id, sent_at, text, created_at, source, updated_at)
+        VALUES (1, 1, '2', ${Date.UTC(2023, 11, 31, 23, 30)}, 'Synthetic', 0, 'fetch', 0);
+      INSERT INTO attachments (attachable_type, attachable_id, position, kind, size, created_at, updated_at)
+        VALUES ('message', 1, 0, 'photo', 100, 0, 0), ('message', 2, 0, 'photo', NULL, 0, 0),
+               ('email', 1, 0, 'file', 7, 0, 0);
+    `)
+    database.close()
+
+    const { answer } = await call(["store", "info", "--json"], env)
+    expect(answer.rows).toMatchObject({ accounts: 2, messages: 3, emails: 2, documents: 0, meetings: 0, events: 0 })
+    expect(answer.by_provider).toEqual([
+      { provider: "chat", accounts: 1, chats: 2, messages: 3, emails: 0, documents: 0, meetings: 0 },
+      { provider: "email", accounts: 1, chats: 0, messages: 0, emails: 2, documents: 0, meetings: 0 },
+    ])
+    expect(answer.by_chat_kind).toEqual([
+      { provider: "chat", kind: "group", chats: 1, messages: 2 },
+      { provider: "chat", kind: "private", chats: 1, messages: 1 },
+    ])
+    expect(answer.by_account).toEqual([
+      { provider: "chat", account_id: 1, name: null, chats: 2, messages: 3, emails: 0, documents: 0, meetings: 0 },
+      { provider: "email", account_id: 2, name: null, chats: 0, messages: 0, emails: 2, documents: 0, meetings: 0 },
+    ])
+    expect(JSON.stringify(answer)).not.toContain("synthetic@example.com")
+    expect(answer.by_year).toEqual([
+      { provider: "chat", year: 1970, messages: 2 },
+      { provider: "chat", year: 2023, messages: 1 },
+    ])
+    expect(answer.by_attachment_kind).toEqual([
+      { type: "email", kind: "file", count: 1, bytes: 7 },
+      { type: "message", kind: "photo", count: 2, bytes: 100 },
+    ])
+  })
+
+  it("opens the file read-only, leaving a store in rollback journal mode as it was", async () => {
+    const env = envFor()
+    const database = await seeded(env)
+    database.exec("PRAGMA journal_mode = DELETE")
+    database.close()
+
+    expect((await call(["store", "info", "--json"], env)).code).toBe(0)
+    const after = await openFile(String(env.MESSAGING_STORE))
+    expect(after.prepare("PRAGMA journal_mode").get()?.journal_mode).toBe("delete")
+    after.close()
   })
 })
 

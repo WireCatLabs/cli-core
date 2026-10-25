@@ -7,7 +7,6 @@ import type { Settings } from "./settings.js"
 
 export interface AnalysisOptions {
   analysisProvider?: string
-  provider?: string
   model?: string
   baseUrl?: string
 }
@@ -18,37 +17,24 @@ export const analysisChoice = (
   env: NodeJS.ProcessEnv,
   keyring?: KeyringStore,
 ): AnalysisProvider => {
-  if (options.analysisProvider !== undefined && options.provider !== undefined)
-    throw new CliError("validation_error", "give --analysis-provider or its legacy --provider spelling, not both")
-  options = { ...options, provider: options.analysisProvider ?? options.provider }
   const configured = { ...settings.models?.default, ...settings.models?.analysis }
-  settings = {
-    ...settings,
-    analysisProvider: configured.provider === "off" ? "agent" : (configured.provider ?? settings.analysisProvider),
-    analysisModel: configured.model ?? settings.analysisModel,
-    analysisBaseUrl: configured.base_url ?? settings.analysisBaseUrl,
-  }
+  // `off` and no provider both leave the linking to the agent.
+  const saved = configured.provider === undefined || configured.provider === "off" ? "agent" : configured.provider
   const override =
-    (options.provider !== undefined && options.provider !== (settings.analysisProvider ?? "agent")) ||
-    (options.baseUrl !== undefined &&
-      options.baseUrl.replace(/\/+$/, "") !== settings.analysisBaseUrl?.replace(/\/+$/, ""))
-  const provider =
-    options.provider ??
-    (settings.analysisProvider && settings.analysisProvider !== "agent"
-      ? settings.analysisProvider
-      : options.baseUrl
-        ? "openai"
-        : "agent")
+    (options.analysisProvider !== undefined && options.analysisProvider !== saved) ||
+    (options.baseUrl !== undefined && options.baseUrl.replace(/\/+$/, "") !== configured.base_url?.replace(/\/+$/, ""))
+  const provider = options.analysisProvider ?? (saved !== "agent" ? saved : options.baseUrl ? "openai" : "agent")
   if (provider === "agent")
     throw new CliError(
       "validation_error",
-      "analysis_provider is agent; use your linking skill, or configure openai/anthropic to use --analyze",
+      "models.analysis.provider is off or not set, so the agent links the chat: use your linking skill, or set it to openai or anthropic to use --analyze",
     )
   if (provider !== "openai" && provider !== "anthropic")
     throw new CliError("validation_error", "analysis provider must be agent, openai or anthropic")
-  const model = options.model ?? (override ? undefined : settings.analysisModel)
-  if (!model?.trim()) throw new CliError("validation_error", "set analysis_model or give --model before --analyze")
-  const customUrl = options.baseUrl ?? (override ? undefined : settings.analysisBaseUrl)
+  const model = options.model ?? (override ? undefined : configured.model)
+  if (!model?.trim())
+    throw new CliError("validation_error", "set models.analysis.model or give --model before --analyze")
+  const customUrl = options.baseUrl ?? (override ? undefined : configured.base_url)
   const baseUrl = customUrl ?? (provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1")
   if (!endpoint(baseUrl))
     throw new CliError("validation_error", "use an HTTP/S analysis endpoint without credentials, query or fragment")

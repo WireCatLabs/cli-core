@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { fold } from "../store/normalize.js"
+import { LANGUAGES, type Language } from "./languages.js"
 
 interface Affix {
   flag: string
@@ -16,8 +17,11 @@ interface Dictionary {
 }
 
 /** The Hunspell dictionary that tells a real word from a garbled one, for each language the store stems. */
-export const DICTIONARIES = { russian: "dictionary-ru", english: "dictionary-en", spanish: "dictionary-es" } as const
-export type DictionaryLanguage = keyof typeof DICTIONARIES
+export const DICTIONARIES = Object.fromEntries(LANGUAGES.map(({ name, dictionary }) => [name, dictionary])) as Record<
+  Language,
+  string
+>
+export type DictionaryLanguage = Language
 
 /** `fold`, without Unicode normalisation for plain Russian letters: it would double the time Russian loads in. */
 const folded = (word: string): string =>

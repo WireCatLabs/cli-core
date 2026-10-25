@@ -79,8 +79,8 @@ export interface ListedEntry {
   accounts: ListedAccount[]
 }
 
-/** `stored` is a documents account's own key: it is listed as `notes:<id>`, as its folder was before version 31. */
-type Held = ListedAccount & { name: string | null; folder?: Provider; stored?: AccountKey }
+/** `stored` is a folder's or a documents account's own key (`local:<ulid>`); either is listed as `notes:<id>`. */
+type Held = ListedAccount & { name: string | null; stored?: AccountKey }
 
 /** The app running knows its own provider is a messenger, entry or not. */
 const kindHere = (provider: Provider, running: ListContext["running"]): Kind | undefined =>
@@ -93,12 +93,12 @@ const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"
   { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes" },
   ...stored
     .filter(({ provider }) => isFolderProvider(provider))
-    .map(({ id, name, provider }) => ({
+    .map(({ id, name, provider, account }) => ({
       provider: "notes",
       account: String(id),
       name,
       kind: "notes" as const,
-      folder: provider,
+      stored: { provider, account },
     })),
   ...stored
     .filter(({ provider }) => isDocumentAccountProvider(provider))
@@ -142,8 +142,14 @@ const accountOf = (prefix: string, ref: string, held: readonly Held[], context: 
     const stored = storedAs(held, { provider, account: ref })[0]
     if (stored) return stored
   }
-  const ofProvider = held.filter((one) => one.provider === provider)
-  const byId = ofProvider.find(({ account }) => account === ref || account === ref.toLowerCase())
+  const folder = isFolderProvider(provider)
+  const ofProvider = folder
+    ? storedAs(held, { provider, account: "" })
+    : held.filter((one) => one.provider === provider)
+  const byId = ofProvider.find(
+    ({ account, stored }) =>
+      account === ref || account === ref.toLowerCase() || (folder && stored?.account === ref.toUpperCase()),
+  )
   if (byId) return byId
   const keyed = (key: AccountKey): Held =>
     ofProvider.find(({ account }) => account === key.account) ?? {
@@ -196,8 +202,8 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
   )
     return Object.keys(recorded).map((profile) => accountOf(word, profile, held, context))
   const provider = providerOf(word, held, context)
-  if (isDocumentAccountProvider(provider)) return storedAs(held, { provider, account: "" })
-  if (isFolderProvider(provider)) return held.filter(({ folder }) => folder === provider)
+  if (isDocumentAccountProvider(provider) || isFolderProvider(provider))
+    return storedAs(held, { provider, account: "" })
   return held.filter((one) => one.provider === provider)
 }
 

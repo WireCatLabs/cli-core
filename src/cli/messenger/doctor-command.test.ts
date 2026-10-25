@@ -9,6 +9,7 @@ import { FloodMemory } from "../../sends/flood.js"
 import type { SendEntry } from "../../sends/journal.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
+import { configCommand } from "../config-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { chatsCommand } from "./chats-command.js"
@@ -60,7 +61,10 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, connect: Messenger["
   const streams = captureStreams()
   const code = await run(
     argv,
-    { app, commands: () => [doctorCommand(messenger), chatsCommand(messenger)] },
+    {
+      app,
+      commands: () => [doctorCommand(messenger), chatsCommand(messenger), configCommand(app, settingsFor(app))],
+    },
     {
       streams,
       tty: false,
@@ -144,6 +148,33 @@ describe("doctor", () => {
     },
   )
 
+  it.skipIf(process.platform === "win32")(
+    "names a config file or config folder others can read, with or without a profile named",
+    async () => {
+      const { root, env } = setup()
+      await call(["chats", "list"], env, async () => connection)
+      const folder = join(root, "config")
+      const file = join(folder, "config.json")
+      chmodSync(file, 0o644)
+      chmodSync(folder, 0o775)
+      const wanted = [
+        { path: file, mode: "0644", want: "0600" },
+        { path: folder, mode: "0775", want: "0700" },
+      ]
+
+      const named = await call(["doctor", "--json"], env, refused)
+      expect(named.answer.files.problems).toEqual(wanted)
+      expect(named.stderr.join("\n")).toContain(`to make it private: chmod 600 '${file}'`)
+      expect(named.stderr.join("\n")).toContain(`to make it private: chmod 700 '${folder}'`)
+
+      const { CHAT_PROFILE: _, ...unnamed } = env
+      const none = await call(["doctor", "--json"], unnamed, refused)
+      expect(none.answer.profile).toBeNull()
+      expect(none.answer.files.problems).toEqual(wanted)
+      expect(none.stderr.join("\n")).toContain(`to make it private: chmod 600 '${file}'`)
+    },
+  )
+
   it("leaves alone the folder the owner chose for the store", async () => {
     const { root, env } = setup()
     await call(["chats", "list"], env, async () => connection)
@@ -163,14 +194,104 @@ describe("doctor", () => {
     })
   })
 
-  it("**answers when the configuration will not load**, and says why", async () => {
+  it("**answers on a file that is not JSON**, with the place it stopped and no command to run", async () => {
     const { root, env } = setup()
     mkdirSync(join(root, "config"), { recursive: true })
-    writeFileSync(join(root, "config", "config.json"), "{ not json")
+    const file = join(root, "config", "config.json")
+    writeFileSync(file, '{\n  "profiles": {},\n  not json\n}\n')
 
-    const { code, answer } = await call(["doctor", "--json"], env, refused)
+    const { code, answer, stdout } = await call(["doctor", "--json"], env, refused)
     expect(code).toBe(0)
-    expect(answer.config.error).toBeTypeOf("string")
+    expect(JSON.parse(stdout[0] ?? "")).not.toHaveProperty("error")
+    expect(answer.config).toEqual({
+      path: file,
+      found: true,
+      issues: [
+        { kind: "invalid_json", file, line: 3, column: 3, what: "the file is not valid JSON at line 3, column 3" },
+      ],
+    })
+    expect(answer.store).toBeDefined()
+    expect(answer.profile).toBe("default")
+  })
+
+  const configured = (env: NodeJS.ProcessEnv, root: string, contents: unknown) => {
+    mkdirSync(join(root, "config"), { recursive: true })
+    writeFileSync(join(root, "config", "config.json"), JSON.stringify(contents))
+    return env
+  }
+
+  it.each([
+    ["unknown_setting", { profiles: { work: { limitt: 5 } } }, "chat work config unset limitt"],
+    ["unknown_setting", { default_profile: "work" }, "chat config unset default_profile"],
+    ["unknown_setting", { bot: { defaults: { colour: true } } }, "chat config unset --defaults --bot colour"],
+    [
+      "unknown_permission",
+      { profiles: { work: { permissions: { "bogus.thing": "deny" } } } },
+      "chat work config unset permissions.bogus.thing",
+    ],
+    [
+      "unknown_permission",
+      { profiles: { work: { permissions: { "messages.bogus": "deny" } } } },
+      "chat work config unset permissions.messages.bogus",
+    ],
+    [
+      "unknown_permission",
+      { personal: { profiles: { work: { permissions: { "bot.store.fetch": "deny" } } } } },
+      "chat work config unset --personal permissions.bot.store.fetch",
+    ],
+    ["invalid_value", { profiles: { work: { limit: "20" } } }, "chat work config unset limit"],
+    [
+      "invalid_value",
+      { profiles: { work: { permissions: { "messages.send": "yes" } } } },
+      "chat work config unset permissions.messages.send",
+    ],
+  ])("**reports %s with a fix that removes it**: %j", async (kind, contents, fix) => {
+    const { root, env } = setup()
+    configured(env, root, contents)
+
+    const before = (await call(["doctor", "--json"], env, refused)).answer.config.issues
+    expect(before).toEqual([expect.objectContaining({ kind, fix })])
+    const fields = ["file", "fix", "key", "kind", "what", ...(fix.startsWith("chat work") ? ["profile"] : [])]
+    expect(Object.keys(before[0]).sort()).toEqual(fields.sort())
+    expect(JSON.stringify(before)).not.toMatch(/"20"|yes/)
+
+    const [, ...words] = fix.split(" ")
+    expect((await call(words, env, refused)).code).toBe(0)
+    expect((await call(["doctor", "--json"], env, refused)).answer.config.issues).toEqual([])
+  })
+
+  it("**reports every problem in every section at once**, a key the profile hides included", async () => {
+    const { root, env } = setup()
+    configured(env, root, {
+      default_profile: "work",
+      defaults: { permissions: { "messages.dlete": "deny" }, limitt: 1 },
+      profiles: { work: { permissions: { messages: "allow", "bogus.x": "deny" }, color: "yes", other: 1 } },
+      bot: { profiles: { sales: { permissions: { "bot.store.fetch": "deny" } } } },
+    })
+
+    const { code, answer } = await call(["work", "doctor", "--json"], env, refused)
+    expect(code).toBe(0)
+    const found = answer.config.issues.map((issue: { kind: string; key: string }) => `${issue.kind} ${issue.key}`)
+    expect(found.sort()).toEqual([
+      "invalid_value color",
+      "unknown_permission permissions.bogus.x",
+      "unknown_permission permissions.bot.store.fetch",
+      "unknown_permission permissions.messages.dlete",
+      "unknown_setting default_profile",
+      "unknown_setting limitt",
+      "unknown_setting other",
+    ])
+    expect((await call(["work", "chats", "list"], env, refused)).code).toBe(3)
+  })
+
+  it("answers with no profile named, reporting the file and what needs none", async () => {
+    const { root, env } = setup()
+    const { CHAT_PROFILE: _, ...unnamed } = configured(env, root, { profiles: { work: { limitt: 1 } } })
+
+    const { code, answer } = await call(["doctor", "--json"], unnamed, refused)
+    expect(code).toBe(0)
+    expect(answer.profile).toBeNull()
+    expect(answer.config.issues).toEqual([expect.objectContaining({ kind: "unknown_setting", profile: "work" })])
   })
 
   it("says a store from a newer version cannot be written, and leaves it as it was", async () => {

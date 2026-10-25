@@ -20,6 +20,7 @@ import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
+import { runContextOf } from "../runs/run-context.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
@@ -34,7 +35,7 @@ import {
   isStoreChange,
   judgedEffects,
   judgedTargets,
-  STORE_CHANGE_REFUSAL,
+  storeChangeRefusal,
 } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
@@ -44,9 +45,16 @@ import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
-import { asFirstWord, commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
+import { commandWords, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
-import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
+import {
+  type GlobalFlags,
+  NoProfileHere,
+  namedProfile,
+  type ResolveOptions,
+  type Settings,
+  settingsFor,
+} from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
 import { commandAt, lineOf, withLines } from "./steps.js"
 
@@ -61,7 +69,7 @@ export interface ProgramDefinition {
       flags?: GlobalFlags,
       options?: ResolveOptions,
     ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint"> &
-      Partial<Pick<Settings, "permissions">>
+      Partial<Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "sources">>
   }
   configure?: (program: Command) => void
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
@@ -85,13 +93,17 @@ export const createProgram = (
   { out, err }: ProgramOptions = {},
 ): Command => {
   const program = new Command()
+  const mounted = commands()
+  const messenger = app.messenger !== false
+  const found = messenger ? "found messages" : "found items"
+  const content = messenger ? "message content" : "content"
 
   program
     .name(app.command)
     .usage("[profile] [options] <command>")
     .description(
       `${app.description}\n\n` +
-        `The first word is the profile whenever it is not a command — \`${app.command} personal chats list\`.\n` +
+        `The first word is the profile whenever it is not a command — \`${app.command} personal ${messenger ? "chats list" : (sampleCommand(mounted) ?? "<command>")}\`.\n` +
         `\`${app.envPrefix}_PROFILE\` says the same thing for a whole shell session.\n` +
         "No profile is assumed: without one, a command that uses an account stops and lists the profiles here.",
     )
@@ -105,36 +117,38 @@ export const createProgram = (
     .option("--json", "machine-readable output: one JSON value on stdout; --json=id,text keeps only those fields")
     .option("--jsonl", "machine-readable output: one JSON object per line, for streaming and jq")
     .option("--quiet", "diagnostics off; a failure is still said")
-    .option("--trace", "the connection's own log lines on stderr — never message content")
+    .option("--trace", `the connection's own log lines on stderr — never ${content}`)
     .option("--debug", "on a failure, its whole record — cause and stack — in place of the short line")
     .option("--timeout <duration>", "give up on the whole command after this — 30s, 2m, 500ms")
     .option("--offline", "answer from what was recorded and never connect; fails if nothing was")
     .option("--no-input", "never prompt or open interactive login; piped input remains available")
     .option("--max-input-bytes <bytes>", "maximum buffered input bytes (default: 16777216)")
     .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 4194304; 0 disables)")
-    .option("--brief", "found messages as reference, title, time, sender and excerpt only")
-    .option("--full", "found messages with their whole text and every provider field")
+    .option("--brief", `${found} as reference, title, time, ${messenger ? "sender" : "author"} and excerpt only`)
+    .option("--full", `${found} with their whole text and every provider field`)
     .option("--dry-run", "preview parsed arguments and permissions before running the action")
     .option("--yes", "go ahead without the question an ask level puts before a write")
-    .option("--record", "keep this run — ids and timings, never message content")
+    .option("--record", `keep this run — ids and timings, never ${content}`)
     .option("--no-record", "do not keep it, whatever the configuration says")
     .showHelpAfterError()
 
-  for (const command of commands()) program.addCommand(command)
+  for (const command of mounted) program.addCommand(command)
   configure?.(program)
   assertSharedContracts(program)
   installHelp(program, { pitch: app.description, ...firstScreen })
 
   // Commander builds a usage line from the command tree, where the profile is not a word.
-  for (const top of program.commands) {
-    if (PROFILE_FREE.has(top.name())) continue
-    forEachCommand(top, (command) =>
-      command.configureHelp({
-        ...command.configureHelp(),
-        commandUsage: (shown) => `${app.command} <profile>${new Help().commandUsage(shown).slice(app.command.length)}`,
-      }),
-    )
-  }
+  if (firstScreen?.profile !== false)
+    for (const top of program.commands)
+      forEachCommand(top, (command) =>
+        command.configureHelp({
+          ...command.configureHelp(),
+          commandUsage: (shown) => {
+            const usage = new Help().commandUsage(shown)
+            return takesProfile(shown) ? `${app.command} <profile>${usage.slice(app.command.length)}` : usage
+          },
+        }),
+      )
 
   // Depth-first: Commander does not pass `configureOutput` down to a command added with
   // `addCommand`, so `tg messages --help` would write to the real terminal.
@@ -246,6 +260,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   const exit: { code?: number } = {}
   const environment: RunOptions = {
     ...options,
+    argv,
     streams: control.streams,
     signal: options.signal ? AbortSignal.any([control.signal, options.signal]) : control.signal,
     commandSignal: control.signal,
@@ -345,18 +360,20 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
     const input = options.stdin ?? process.stdin
-    await setupAtStart({
-      command,
-      env: commandEnv,
-      contentLanguages: definition.app.contentLanguages,
-      path,
-      headless,
-      readOnlyLock: lock,
-      input,
-      terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
-    })
+    // The first-run questions write the shared config; a dry run writes nothing.
+    if (!flags.dryRun)
+      await setupAtStart({
+        command,
+        env: commandEnv,
+        contentLanguages: definition.app.contentLanguages,
+        path,
+        headless,
+        readOnlyLock: lock,
+        input,
+        terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
+      })
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
-    if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
+    if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, storeChangeRefusal(definition.app))
     refuseWriteBeforeConnecting(action, {
       app: definition.app,
       env: commandEnv,
@@ -483,9 +500,19 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         // No permission governs housekeeping like `skill install`, so no profile's settings change its preview.
         needsProfile: keyForCommand(path) !== null,
       })
-      const permissions = "permissions" in resolved ? (resolved.permissions as Settings["permissions"]) : {}
-      const unset = `${command} ${asFirstWord(resolved.profile)}config unset${path[0] === "bot" ? " --bot" : ""}`
-      const previewed = preview(action, permissions, unset, definition.configuration?.permissionKey)
+      const previewed = preview(
+        action,
+        {
+          permissions: resolved.permissions ?? {},
+          permissionSources: resolved.permissionSources ?? {},
+          configPath: resolved.configPath ?? "",
+          profile: resolved.profile,
+          ...(resolved.savedPermissions ? { savedPermissions: resolved.savedPermissions } : {}),
+        },
+        command,
+        definition.configuration?.permissionKey,
+        definition.app.messenger !== false,
+      )
       renderAnswer(action, outputFor(action), itemOf(snakeKeys(previewed)))
       throw new PreviewComplete()
     }
@@ -514,7 +541,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         profile !== undefined && !/\s/.test(profile) ? [profile] : [],
       )
   } catch (failure) {
-    const settled = await settleFailure(failure, { definition, program, rest: lifted, profile, options })
+    const settled = await settleFailure(failure, { definition, program, rest: lifted, argv, profile, options })
     return report(streams, reporting, failed(definition, program, lifted, failure, settled, debug))
   }
   if (profile !== undefined) program.setOptionValue("profile", profile)
@@ -529,7 +556,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       `"${profile}" is not a command, so it was read as a profile name — and no command followed it. ` +
       `Run \`${command} --help\` for the commands, or \`${command} ${profile} account show\` if "${profile}" is your profile.`
     const failure = new CliError("validation_error", message, { param: "profile" })
-    const settled = await settleFailure(failure, { definition, program, rest, profile, options })
+    const settled = await settleFailure(failure, { definition, program, rest, argv, profile, options })
     return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
   }
 
@@ -571,10 +598,10 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         message += ` — "${profile}" is not a command, so it was read as a profile name — which left "${rest[0]}" to be one.`
       }
       const failure = new CliError("validation_error", message)
-      const settled = await settleFailure(failure, { definition, program, rest, profile, options })
+      const settled = await settleFailure(failure, { definition, program, rest, argv, profile, options })
       return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
     }
-    const settled = await settleFailure(error, { definition, program, rest, profile, options })
+    const settled = await settleFailure(error, { definition, program, rest, argv, profile, options })
     const exit = report(streams, reporting, failed(definition, program, rest, error, settled, debug))
     return signalExit ?? exit
   } finally {
@@ -635,6 +662,8 @@ interface Failed {
   definition: ProgramDefinition
   program: Command
   rest: string[]
+  /** As given, the profile word included: what the run keeps, masked. */
+  argv: string[]
   profile: string | undefined
   options: RunOptions
 }
@@ -668,11 +697,11 @@ const settleFailure = async (failure: unknown, state: Failed): Promise<{ settlem
 /**
  * **Every failure is kept as a run** — a usage error, a configuration that will not load, a command
  * that never opens a run — unless recording was turned off. One its own run already kept is skipped.
- * Only the command's words are named, never its arguments: those can be a message.
+ * Its arguments are kept masked (`maskArgv`): a value that can be a message never is.
  */
 const keepFailure = async (
   failure: unknown,
-  { definition, program, rest, profile, options }: Failed,
+  { definition, program, rest, argv, profile, options }: Failed,
 ): Promise<void> => {
   if (wasSettled(failure)) return
   const env = options.env ?? process.env
@@ -687,11 +716,19 @@ const keepFailure = async (
   } catch {
     // A configuration that will not load is a failure worth keeping too; the flags are all there is to go on.
   }
+  const command = `${options.agent ? "mcp " : ""}${path || definition.app.command}`
   await recorded(
     {
       app: definition.app,
-      command: `${options.agent ? "mcp " : ""}${path || definition.app.command}`,
-      profile: settings?.profile ?? profile ?? "default",
+      command,
+      context: runContextOf({
+        bin: definition.app.command,
+        command: path ? command : options.agent ? "mcp" : "",
+        program,
+        argv,
+        env,
+      }),
+      profile: settings ? namedProfile(settings) : profile,
       record: false,
       keepFailed: settings?.keepFailedRuns ?? !rest.includes("--no-record"),
       trace: false,
@@ -736,11 +773,12 @@ const failed = (
   settled: { settlementFailed?: true },
   debug: boolean,
 ): Failure => {
-  const failure =
-    settled.settlementFailed && isCliFailure(error)
-      ? new CliError(error.code, error.message, { ...error.details, settlement_failed: true })
-      : error
   const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  const told = error instanceof NoProfileHere && !commandAt(program, "setup") ? error.withoutSetup(path) : error
+  const failure =
+    settled.settlementFailed && isCliFailure(told)
+      ? new CliError(told.code, told.message, { ...told.details, settlement_failed: true })
+      : told
   const effects = judgedEffects(path ? metaOf(commandAt(program, path) ?? program).effects : undefined)
   const object = errorObjectOf(failure, {
     ...failureContext(app.errors),

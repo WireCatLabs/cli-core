@@ -4,7 +4,7 @@ import * as v from "valibot"
 import type { MeetingProjectDiscoveryReader } from "../project-discovery.js"
 import { readMeetingProjectEvidence } from "../project-evidence.js"
 import { meetingProjectEvidence } from "../project-evidence-answer.js"
-import { agentResult, UNTRUSTED } from "./agent-text.js"
+import { agentResult, UNTRUSTED_NEUTRAL } from "./agent-text.js"
 
 // Some MCP clients validate structured errors too; both branches keep their strict common schema.
 const output: Record<string, unknown> = {
@@ -14,7 +14,7 @@ const output: Record<string, unknown> = {
 export const meetingProjectEvidenceTool = {
   name: "meeting_project_evidence",
   outputSchema: { ...output, type: "object" as const },
-  description: `Read one bounded page of cited project-name/key/alias evidence from the selected account's local meeting index. Does not refresh indexes or confirm project membership. Query takes exact meeting_id, identity_id, person_id, tag_id, event_id, series_id and UTC started_at terms joined by AND. Resume with next's frozen query even when hits are empty; archive/index completeness remains unknown. ${UNTRUSTED}`,
+  description: `Read one bounded page of cited project-name/key/alias evidence from the selected account's local meeting index. Does not refresh indexes or confirm project membership. Query takes exact meeting_id, identity_id, person_id, tag_id, event_id, series_id and UTC started_at terms joined by AND. Resume with next's frozen query even when hits are empty; archive/index completeness remains unknown. ${UNTRUSTED_NEUTRAL}`,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     type: "object" as const,

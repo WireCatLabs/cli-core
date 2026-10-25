@@ -150,7 +150,7 @@ describe("a run's own keyring", () => {
       keyring,
     })
     const analysis = analysisChoice(
-      { provider: "openai", model: "m", baseUrl: "https://models.example/v1" },
+      { analysisProvider: "openai", model: "m", baseUrl: "https://models.example/v1" },
       app,
       settings,
       env,

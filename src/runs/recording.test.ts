@@ -1,5 +1,5 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
@@ -20,9 +20,19 @@ const BODY = "the pin is 4321"
 
 type Action = (context: BaseContext) => Promise<unknown>
 
-const call = async (argv: string[], action: Action = async () => {}, config?: string) => {
+const call = async (
+  argv: string[],
+  action: Action = async () => {},
+  config?: string,
+  extraEnv: Record<string, string> = {},
+) => {
   const root = mkdtempSync(join(tmpdir(), "runs-recording-"))
-  const env = { APP_PROFILE: "default", APP_STATE_DIR: join(root, "state"), APP_CONFIG_DIR: join(root, "config") }
+  const env = {
+    APP_PROFILE: "default",
+    APP_STATE_DIR: join(root, "state"),
+    APP_CONFIG_DIR: join(root, "config"),
+    ...extraEnv,
+  }
   if (config !== undefined) {
     mkdirSync(env.APP_CONFIG_DIR, { recursive: true })
     writeFileSync(join(env.APP_CONFIG_DIR, "config.json"), config)
@@ -35,6 +45,8 @@ const call = async (argv: string[], action: Action = async () => {}, config?: st
         new Command("send")
           .argument("<chat>")
           .argument("<text>")
+          .option("--caption <caption>")
+          .option("--limit <n>")
           .action(async function (this: Command) {
             const context = baseContext(this, resolveSettings)
             context.renderer.result(
@@ -83,7 +95,7 @@ describe("a recorded run", () => {
     expect(listRuns(runsDir)).toEqual([])
   })
 
-  it("is kept when it fails, with the code a script branches on and never the sentence", async () => {
+  it("is kept when it fails, with the code a script branches on and the sentence masked", async () => {
     const { code, runsDir } = await call(["messages", "send", TITLE, BODY], async () => {
       throw new CliError("provider_error", `Telegram refused "${BODY}"`, { provider_error: "PEER_ID_INVALID" })
     })
@@ -127,6 +139,88 @@ describe("a recorded run", () => {
 
     expect(streams.stderr.map((line) => JSON.parse(line).operation)).toEqual(["messages.send", "messages.send"])
     expect(listRuns(runsDir)).toEqual([])
+  })
+})
+
+describe("what a run says about how it was started", () => {
+  const PHONE = "+79161234567"
+  const runFile = (runsDir: string) => {
+    const [metadata] = listRuns(runsDir)
+    const found = readdirSync(runsDir, { recursive: true }).find((entry) => String(entry).endsWith("run.json"))
+    return { metadata, raw: readFileSync(join(runsDir, String(found)), "utf8") }
+  }
+
+  it("**keeps the whole command and its arguments, with message text and phone numbers masked**", async () => {
+    const { runsDir } = await call(
+      ["messages", "send", PHONE, BODY, "--caption", TITLE, "--limit", "5", "--record"],
+      undefined,
+      undefined,
+      { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "6f1c2a9e-session" },
+    )
+
+    const { raw } = runFile(runsDir)
+    const written = JSON.parse(raw)
+    expect(written).toMatchObject({
+      command: "messages send",
+      cli_command: "app messages send",
+      argv: ["messages", "send", "[redacted]", "[redacted]", "--caption", "[redacted]", "--limit", "5", "--record"],
+      agent: { kind: "claude-code", session_id: "6f1c2a9e-session" },
+    })
+    expect(everythingUnder(runsDir)).not.toContain(PHONE)
+    expect(everythingUnder(runsDir)).not.toContain("79161234567")
+    expect(everythingUnder(runsDir)).not.toContain(BODY)
+    expect(everythingUnder(runsDir)).not.toContain(TITLE)
+  })
+
+  it("names the word that was no command, and keeps the profile", async () => {
+    const { runsDir } = await call(["work", "mesages", "list", BODY])
+
+    const { raw } = runFile(runsDir)
+    expect(JSON.parse(raw)).toMatchObject({
+      command: "app",
+      cli_command: "app",
+      unknown_command: "mesages",
+      argv: ["work", "mesages", "[redacted]", "[redacted]"],
+    })
+    expect(JSON.parse(raw)).not.toHaveProperty("agent")
+  })
+
+  it("says what went wrong: class, masked message, where the call went, the cause and our own frames", async () => {
+    const { runsDir } = await call(["messages", "send", "777", BODY], async () => {
+      throw new CliError("rate_limited", `MAX refused "${BODY}" from ${PHONE}`, {
+        status: 429,
+        method: "post",
+        endpoint: `https://botapi.max.ru/chats/777/messages?access_token=${"x".repeat(12)}`,
+        cause: new TypeError(`fetch failed for ${PHONE}`),
+      })
+    })
+
+    const { raw } = runFile(runsDir)
+    const { error } = JSON.parse(raw)
+    expect(error).toMatchObject({
+      class: "CliError",
+      code: "rate_limited",
+      message: 'MAX refused "[redacted]" from [number]',
+      http: { method: "POST", endpoint_template: "https://botapi.max.ru/chats/:id/messages", status: 429 },
+      causes: [{ class: "TypeError", message: "fetch failed for [number]" }],
+    })
+    expect(error.stack[0]).toMatch(/^\S+ \S+:\d+$/)
+    expect(raw).not.toContain(homedir())
+    expect(raw).not.toContain("access_token")
+    expect(raw).not.toContain(BODY)
+    expect(raw).not.toContain(PHONE)
+  })
+
+  it("names a messenger protocol's refusal by its key and code, not as an HTTP status", async () => {
+    const { runsDir } = await call(["messages", "send", "777", BODY], async () => {
+      throw new CliError("rate_limited", "Telegram asks to wait 30 s", { provider_error: "FLOOD_WAIT", status: 420 })
+    })
+
+    expect(JSON.parse(runFile(runsDir).raw).error).toMatchObject({
+      code: "rate_limited",
+      provider: { key: "FLOOD_WAIT", code: 420 },
+    })
+    expect(JSON.parse(runFile(runsDir).raw).error).not.toHaveProperty("http")
   })
 })
 

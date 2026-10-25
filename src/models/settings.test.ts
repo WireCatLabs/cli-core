@@ -7,14 +7,11 @@ import { settingsFor } from "../cli/settings.js"
 import { modelTarget } from "./settings.js"
 
 describe("purpose model settings", () => {
-  it("resolves each field, default fallback, legacy analysis and explicit off with sources", () => {
+  it("resolves each field, default fallback and explicit off with sources", () => {
     const resolved = resolveAISettings(
       "APP",
       [
-        [
-          "profile",
-          { models: { replies: { provider: "off" } }, analysis_provider: "anthropic", analysis_model: "legacy" },
-        ],
+        ["profile", { models: { replies: { provider: "off" }, analysis: { provider: "anthropic", model: "chosen" } } }],
         [
           "defaults",
           { models: { default: { provider: "openai", model: "default-model", base_url: "https://example.test/v1" } } },
@@ -23,7 +20,7 @@ describe("purpose model settings", () => {
       { APP_MODELS_REPLIES_MODEL: "reply-model" },
     )
     expect(modelTarget(resolved.values, "replies")).toBeUndefined()
-    expect(modelTarget(resolved.values, "analysis")).toMatchObject({ provider: "anthropic", model: "legacy" })
+    expect(modelTarget(resolved.values, "analysis")).toMatchObject({ provider: "anthropic", model: "chosen" })
     expect(modelTarget(resolved.values, "other")).toEqual({
       provider: "openai",
       model: "default-model",

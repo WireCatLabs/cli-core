@@ -32,7 +32,10 @@ export const commandsCommand = (app: AppIdentity): Command => {
           reason: "output.one-object",
         })
     })
-    .argument("[path...]", "one command path, for example: search messages; inspect other groups in separate calls")
+    .argument(
+      "[path...]",
+      `one command path, for example: ${app.messenger === false ? "commands info" : "search messages"}; inspect other groups in separate calls`,
+    )
     .action(function (this: Command, path: string[]) {
       const root = rootOf(this)
       const output = outputFor(this)
@@ -67,7 +70,7 @@ export const commandsCommand = (app: AppIdentity): Command => {
   command.addCommand(
     annotate(new Command("info"), {
       effects: NO_EFFECTS,
-      examples: [`${app.command} commands info messages list`],
+      examples: [`${app.command} commands info ${app.messenger === false ? "commands" : "messages list"}`],
     })
       .description(DISCOVERY_DESCRIPTIONS.info)
       .argument("[path...]", "one command path; without one, export schemas, error reasons and explicit overrides")

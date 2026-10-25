@@ -204,6 +204,32 @@ describe("--source as a list of accounts and groups", () => {
     expect(named("local")).toEqual([plain.id])
   })
 
+  it("names one notes folder as obsidian:<id> or local:<id>, by its stored id, its id or its name", async () => {
+    const store = await seeded()
+    const vault = await store.notes.addFolder({ name: "Vault" })
+    const plain = await store.notes.addFolder({ name: "Plain", format: "markdown" })
+    const held = await store.accounts.storedAccounts()
+    const ulidOf = (id: string) => String(held.find((one) => String(one.id) === id)?.account)
+    await store.accounts.saveAccountGroup("work", [`local:${ulidOf(plain.id)}`])
+    const context = {
+      held,
+      groups: await store.accounts.accountGroups(),
+      profiles: {},
+      running: { provider: "telegram", command: "tg" },
+    }
+    const named = (value: string) =>
+      entriesOfList(value, context).flatMap(({ accounts }) => accounts.map(({ account }) => account))
+    expect(named(`obsidian:${ulidOf(vault.id)},local:${ulidOf(plain.id).toLowerCase()}`)).toEqual([vault.id, plain.id])
+    expect(named(`obsidian:${vault.id},local:plain,group:work`)).toEqual([vault.id, plain.id, plain.id])
+    expect(entriesOfList(`local:${plain.id}`, context)[0]?.accounts).toEqual([
+      { provider: "notes", account: plain.id, kind: "notes" },
+    ])
+    expect(() => entriesOfList(`obsidian:${ulidOf(plain.id)}`, context)).toThrow(
+      `no obsidian account "${ulidOf(plain.id)}" — the store holds notes:${vault.id} (Vault)`,
+    )
+    expect(() => entriesOfList(`local:${vault.id}`, context)).toThrow(/no local account/)
+  })
+
   it("forgets a removed group", async () => {
     const store = await seeded()
     await store.accounts.saveAccountGroup("work", ["tg:102"])

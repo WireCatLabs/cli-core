@@ -26,6 +26,7 @@ export {
 export { pendingNormalization } from "./sqlite/backfill.js"
 export type { ChatRekey, ChatRekeys } from "./sqlite/chat-rekey.js"
 export { CHAT_COLUMNS, TRACKED_CHAT_COLUMNS, titlePart } from "./sqlite/chats.js"
+export { storeClients } from "./sqlite/clients.js"
 export { CHAT_LIST_KEY, type ChatCompleteness, fetchedKey, historyStartKey } from "./sqlite/completeness.js"
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export type { CounterTarget } from "./sqlite/counters.js"
@@ -53,6 +54,7 @@ export {
 } from "./sqlite/mentions.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
+export { openSqlite } from "./sqlite/open.js"
 export type {
   PersonPreparationRead,
   PreparationFact,
@@ -85,6 +87,7 @@ export {
   stemsState,
 } from "./sqlite/stems.js"
 export { fillStems, resetStems } from "./sqlite/stems-fill.js"
+export { rowCounts, storeContents } from "./sqlite/store-contents.js"
 export type { StoredTag, TagFilter, TagTarget, TaskTagTarget } from "./sqlite/tags.js"
 export { savedTaskCategories } from "./sqlite/task-category-settings.js"
 export { DEFAULT_AGENT_CLOSE, savedAgentClose } from "./sqlite/task-close.js"

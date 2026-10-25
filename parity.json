@@ -4207,6 +4207,12 @@
       }
     },
     "skill show": {
+      "in": "all",
+      "options": {
+        "--for": "all"
+      }
+    },
+    "skill status": {
       "in": "all"
     },
     "stats": {
@@ -4612,6 +4618,12 @@
       "in": "all"
     },
     "store status": {
+      "in": "all"
+    },
+    "store tables": {
+      "in": "all"
+    },
+    "store tables list": {
       "in": "all"
     },
     "tags": {

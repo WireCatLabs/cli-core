@@ -189,6 +189,8 @@ export const queryTerms = (words: QueryWords, registry: QueryRegistry, command: 
 /**
  * A `time` term as epoch ms bounds: `time>=7d`, `time:[2026-10-01 TO 2026-10-07]`, `time:today`, and the `meta`
  * an answer reports them by: the zone calendar words and bare dates were read in, and the bounds in UTC.
+ * `until` is inclusive: an exclusive end (a bare date's next midnight, `… TO …}`) comes back 1 ms inside. `since` stays
+ * as written, because the inbox reads strictly after a `date>` start.
  */
 export const timeBounds = (
   term: Predicate | undefined,
@@ -204,14 +206,15 @@ export const timeBounds = (
     zone,
     term.span,
   )
+  const until = range.upper === undefined ? undefined : range.upper - (range.upper_inclusive ? 0 : 1)
   return {
     ...(range.lower === undefined ? {} : { since: range.lower }),
-    ...(range.upper === undefined ? {} : { until: range.upper }),
+    ...(until === undefined ? {} : { until }),
     meta: {
       timezone: zone,
       window: {
         ...(range.lower === undefined ? {} : { since: new Date(range.lower).toISOString() }),
-        ...(range.upper === undefined ? {} : { until: new Date(range.upper).toISOString() }),
+        ...(until === undefined ? {} : { until: new Date(until).toISOString() }),
       },
     },
   }

@@ -3,11 +3,10 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type AppIdentity, envName } from "../ports/app.js"
 import { AUTHORITY_KEY, BOT_API_KEY } from "../sends/permissions.js"
-import { loadSnakeCaseConfig } from "./config-keys.js"
 import { baseContext, environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
-import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
+import { knownBeside, knownPermissionKeys, type PermissionKeyOf, unknownPermissionIssues } from "./permission-keys.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
 import { nextStep } from "./steps.js"
 import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
@@ -16,6 +15,10 @@ import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } fro
  * The settings in force and where each came from, and changing them. Printed whole: no field the
  * configuration accepts can hold a secret — the schema has nowhere to put one.
  */
+/** `sender_colors` colours who wrote a message; a CLI without messages has nothing to colour. */
+const shownSettings = (app: AppIdentity, config: Configuration): string[] =>
+  app.messenger === false ? config.allSettings.filter((setting) => setting !== "sender_colors") : config.allSettings
+
 export const configCommand = (
   app: AppIdentity,
   config: Configuration,
@@ -29,7 +32,12 @@ export const configCommand = (
     .action(async function (this: Command) {
       const bot = this.opts<{ bot?: boolean }>().bot === true
       const context = baseContext(this, (flags, options) =>
-        config.resolveSettings(flags, { ...options, needsProfile: false, ...(bot ? { kind: "bot" } : {}) }),
+        config.resolveSettings(flags, {
+          ...options,
+          needsProfile: false,
+          withIssues: true,
+          ...(bot ? { kind: "bot" } : {}),
+        }),
       )
       const { settings, renderer, env } = context
       const overridden = pathsAreOverridden({ appName: app.appName, prefix: app.envPrefix, env })
@@ -44,13 +52,18 @@ export const configCommand = (
           config_file: settings.configPath,
           config_found: settings.configFound,
           paths_overridden: overridden,
-          settings: [...config.allSettings, "command_timeout_ms"]
+          settings: [...shownSettings(app, config), "command_timeout_ms"]
             .filter((setting) => bot || setting !== "read_other_bots")
-            .map((setting) => sourced(settings, setting, config.schema)),
+            .map((setting) => sourced(settings, setting)),
           store_settings: await storeSettings(env),
         }),
       )
 
+      for (const issue of [
+        ...(settings.configIssues ?? []),
+        ...unknownPermissionIssues(this, settings, app.command, permissionKey),
+      ])
+        renderer.warn(`${issue.what}, so it is left out${issue.fix ? ` — \`${issue.fix}\` removes it` : ""}`)
       if (overridden) {
         renderer.note(
           `${envName(app, "CONFIG_DIR")}, ${envName(app, "STATE_DIR")} or ${envName(app, "CACHE_DIR")} is set — ` +
@@ -68,8 +81,7 @@ export const configCommand = (
     )
       .argument(
         "<setting>",
-        // default_profile is only removed now: `config unset` still takes it, `config set` refuses it.
-        `one of: ${[...config.allSettings.filter((one) => action === "unset" || one !== "default_profile"), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
+        `one of: ${[...shownSettings(app, config), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
       )
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")
@@ -87,10 +99,7 @@ export const configCommand = (
         bot,
       } = this.opts<{ defaults?: boolean; personal?: boolean; bot?: boolean }>()
       const context = baseContext(this, (flags, options) =>
-        config.resolveSettings(flags, {
-          ...options,
-          needsProfile: !everyone && setting !== "default_profile" && !isStoreSetting(setting),
-        }),
+        config.resolveSettings(flags, { ...options, needsProfile: false, withIssues: true }),
       )
       const { settings, renderer, env } = context
       if (isStoreSetting(setting)) {
@@ -123,37 +132,43 @@ export const configCommand = (
         return
       }
       const defaults = everyone === true
-      if (setting === "default_profile" && (defaults || personal || bot))
-        throw new CliError(
-          "validation_error",
-          "default_profile is one for the whole file — drop --defaults, --personal and --bot",
-        )
+      // The unset `doctor` gives for a problem outside any profile: one with no profile typed reaches it, whatever
+      // profile the environment names.
+      const root =
+        action === "unset" &&
+        !defaults &&
+        !personal &&
+        !bot &&
+        settings.sources.profile !== "first word" &&
+        (settings.configIssues ?? []).some((issue) => issue.fix === `${app.command} config unset ${setting}`)
+      if (!root && !defaults && settings.sources.profile === NONE_NAMED)
+        config.resolveSettings(this.optsWithGlobals(), { env, withIssues: true })
       if (personal && bot)
         throw new CliError("validation_error", "--personal and --bot name different sections; use one")
       const kind = bot ? "bot" : personal ? "personal" : undefined
       const lock = envName(app, "PROFILE_LOCK")
-      if ((defaults || setting === "default_profile") && env[lock]) {
-        // The defaults are every other profile's settings too, and default_profile picks one of them.
+      if ((defaults || root) && env[lock]) {
+        // The defaults are every other profile's settings too, and the top of the file is everyone's.
         throw new CliError(
           "permission_error",
-          `this process is locked to profile ${settings.profile} (${lock}) — ${setting === "default_profile" ? setting : "--defaults"} changes other profiles`,
+          `this process is locked to profile ${settings.profile} (${lock}) — ${root ? setting : "--defaults"} changes other profiles`,
         )
       }
       if (environmentOf(this).agent) refuseGuardedKey(setting, action === "set" ? String(given) : undefined)
       if (action === "set") refuseUnknownKey(this, setting, String(given), permissionKey)
       const saved = config.changeSetting(settings.configPath, {
-        profile: defaults || setting === "default_profile" ? undefined : settings.profile,
+        profile: defaults || root ? undefined : settings.profile,
         setting,
         value: action === "set" ? String(given) : undefined,
         kind,
+        root,
       })
       renderAnswer(
         this,
         context,
         itemOf({
           config_file: settings.configPath,
-          scope:
-            setting === "default_profile" ? "default_profile" : scopeOf(kind, defaults ? undefined : settings.profile),
+          scope: root ? "file" : scopeOf(kind, defaults ? undefined : settings.profile),
           setting,
           value: saved,
         }),
@@ -232,11 +247,7 @@ const scopeOf = (kind: string | undefined, profile: string | undefined): string 
   [kind, profile === undefined ? "defaults" : `profiles.${profile}`].filter(Boolean).join(".")
 
 /** A shared setting from what was resolved; a messenger's own from the file, where it lives. */
-const sourced = (settings: Settings, setting: string, schema: Configuration["schema"]) => {
-  if (setting === "default_profile") {
-    const named = loadSnakeCaseConfig(settings.configPath, schema, () => ({ profiles: {} })).default_profile
-    return { setting, value: named ?? null, from: named === undefined ? "default" : "config file" }
-  }
+const sourced = (settings: Settings, setting: string) => {
   if (setting === "models") {
     return {
       setting,
@@ -254,8 +265,7 @@ const sourced = (settings: Settings, setting: string, schema: Configuration["sch
   const field = setting.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase())
   if (field in settings.sources) {
     const value = (settings as unknown as Record<string, unknown>)[field]
-    // No list is every action, and `null` would read as none.
-    return { setting, value: setting === "allow" ? (value ?? "all") : (value ?? null), from: settings.sources[field] }
+    return { setting, value: value ?? null, from: settings.sources[field] }
   }
   const { value, from } = fromFile<unknown>(settings, setting, UNLISTED_DEFAULTS[setting] ?? null)
   return { setting, value, from }

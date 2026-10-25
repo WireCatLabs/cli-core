@@ -77,12 +77,15 @@ const setup = async () => {
     NO_COLOR: "1",
   }
   mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
-  const configure = (extra = {}) =>
+  const configure = (extra = {}, analysis = {}) =>
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
       JSON.stringify({
         profiles: {
-          default: { analysis_provider: "openai", analysis_model: "test-model", analysis_base_url: baseUrl, ...extra },
+          default: {
+            models: { analysis: { provider: "openai", model: "test-model", base_url: baseUrl, ...analysis } },
+            ...extra,
+          },
         },
       }),
     )
@@ -227,7 +230,7 @@ describe("analysis CLI consent and configuration", () => {
     expect(
       (await call("conversations", "links", "rebuild", "--chat", "9", "--model", "test-model", "--json")).code,
     ).not.toBe(0)
-    configure({ analysis_provider: "agent" })
+    configure({}, { provider: "off" })
     expect(
       (await call("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")).code,
     ).not.toBe(0)
@@ -253,11 +256,16 @@ describe("analysis CLI consent and configuration", () => {
     expect(json(capped)).toMatchObject({ stopped: "budget", stored: 0 })
     expect(calls()).toBe(0)
     const shown = json(await call("config", "show", "--json"))
-    expect(shown.settings).toContainEqual({ setting: "analysis_provider", value: "openai", from: "config file" })
+    expect(shown.settings).toContainEqual(
+      expect.objectContaining({
+        setting: "models",
+        value: { analysis: expect.objectContaining({ provider: "openai" }) },
+      }),
+    )
   })
   it("under the read-only lock sends nothing to a remote provider, and still analyzes on a local server", async () => {
     const { call, locked, configure, calls } = await setup()
-    configure({ analysis_base_url: "https://analysis.example.com/v1" })
+    configure({}, { base_url: "https://analysis.example.com/v1" })
     const refused = await locked("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")
     expect(refused.code).toBe(5)
     expect(JSON.parse(refused.stderr).error.message).toBe(

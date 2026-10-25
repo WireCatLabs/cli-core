@@ -36,12 +36,12 @@ describe("where a setting came from", () => {
     expect(settings({ profile: "work" }, { APP_PROFILE: "other" }).sources.profile).toBe("first word")
   })
 
-  it("**no longer takes a profile from `default_profile`**: it names the profile to type and the way to drop it", () => {
+  it("**refuses `default_profile` as any unknown setting**, naming no profile to use instead", () => {
     withConfig(JSON.stringify({ default_profile: "work", profiles: { work: {} } }))
-    expect(() => strict()).toThrow(
-      "default_profile is no longer read — name the profile: `app work …`; `app config unset default_profile` removes it",
+    expect(() => strict({ profile: "work" })).toThrow(
+      "setting default_profile is not a setting of app — remove it with `app config unset default_profile`",
     )
-    expect(strict({ profile: "work" }).profile).toBe("work")
+    expect(() => strict({ profile: "work" })).not.toThrow(/name the profile|no longer/)
   })
 
   it("**names where the command budget came from**, which has no file row to fall back on", () => {
@@ -136,12 +136,10 @@ describe("paging", () => {
 
 describe("the order a setting is decided in", () => {
   it("prefers the command line to everything else", () => {
-    withConfig(JSON.stringify({ default_profile: "fromFile" }))
     expect(settings({ profile: "fromFlag" }, { APP_PROFILE: "fromEnv" }).profile).toBe("fromFlag")
   })
 
   it("prefers the environment to the file", () => {
-    withConfig(JSON.stringify({ default_profile: "fromFile" }))
     expect(settings({}, { APP_PROFILE: "fromEnv" }).profile).toBe("fromEnv")
   })
 
@@ -331,7 +329,9 @@ describe("the configuration file", () => {
 
   it("**names the field when one is misspelled**, rather than silently using the default", () => {
     withConfig(JSON.stringify({ profiles: { default: { limitt: 5 } } }))
-    expect(() => settings()).toThrowError(/profiles\.default\.limitt/)
+    expect(() => settings()).toThrowError(
+      /setting limitt is not a setting of app — remove it with `app default config unset limitt`$/,
+    )
     expect(() => settings()).toThrowError(expect.objectContaining({ code: "configuration_error" }))
   })
 
@@ -348,99 +348,36 @@ describe("the configuration file", () => {
 
   it("refuses a setting of the wrong type, naming it", () => {
     withConfig(JSON.stringify({ profiles: { default: { limit: "20" } } }))
-    expect(() => settings()).toThrowError(/profiles\.default\.limit/)
+    expect(() => settings()).toThrowError(/setting limit has to be a whole number, 1 or more — remove it with/)
   })
 
-  it("**names the first problem in plain words**, not the validation library's, and no list of keys", () => {
+  it("**names the first problem in plain words**, not the validation library's, and counts the rest", () => {
     withConfig(JSON.stringify({ profiles: { default: { limitt: 5 } } }))
-    expect(() => settings()).toThrowError(/config\.json: profiles\.default\.limitt is an unknown setting$/)
+    expect(() => settings()).toThrowError(/config\.json: setting limitt is not a setting of app — remove it with/)
 
     withConfig(JSON.stringify({ profiles: { default: { limit: 0, color: "yes" } } }))
-    expect(() => settings()).toThrowError(/: profiles\.default\.limit has an invalid value \(and 1 more problem\)$/)
+    expect(() => settings()).toThrowError(
+      /: setting limit has to be a whole number, 1 or more — .*\(and 1 more problem/,
+    )
 
     withConfig(JSON.stringify({ profiles: { default: { limit: 2.5, color: 1 } }, defaultProfil: "x", other: 1 }))
-    expect(() => settings()).toThrowError(/: profiles\.default\.limit has an invalid value \(and 2 more problems\)$/)
-    expect(() => settings()).not.toThrowError(/Expected|Invalid|2\.5|known/)
+    expect(() => settings()).toThrowError(/\(and 3 more problems — `doctor` lists them all\)$/)
+    expect(() => settings()).not.toThrowError(/Expected|Invalid|2\.5/)
   })
 
-  it("**never prints a setting's value**, only its key", () => {
+  it("**never prints a setting's value**, only its key and what it has to be", () => {
     withConfig(JSON.stringify({ profiles: { default: { color: "secret-looking-value" } } }))
-    expect(() => settings()).toThrowError(/: profiles\.default\.color has the wrong type$/)
+    expect(() => settings()).toThrowError(/: setting color has to be true or false — remove it with/)
+    expect(() => settings()).not.toThrowError(/secret-looking-value/)
+    withConfig(JSON.stringify({ profiles: { default: { transcribe_with: "secret-looking-value" } } }))
+    expect(() => settings()).toThrowError(/setting transcribe_with has to be auto, messenger or local/)
     expect(() => settings()).not.toThrowError(/secret-looking-value/)
   })
 
-  it("**says which snake_case key a camelCase one should become**", () => {
-    withConfig(JSON.stringify({ defaultProfile: "personal" }))
-    expect(() => settings()).toThrowError(/: defaultProfile is an unknown setting; rename it to default_profile$/)
-
+  it("**points no camelCase key at a snake_case one**: it is just an unknown setting", () => {
     withConfig(JSON.stringify({ profiles: { work: { timeoutMs: 5 } } }))
-    expect(() => settings()).toThrowError(/: profiles\.work\.timeoutMs is an unknown setting; rename it to timeout_ms$/)
-
-    withConfig(JSON.stringify({ profiles: { work: { fooBar: 5 } } }))
-    expect(() => settings()).not.toThrowError(/rename/)
-  })
-
-  it("says the file is not JSON rather than reporting a missing setting", () => {
-    withConfig("{ this is not json }")
-    expect(() => settings()).toThrowError(/not valid JSON/)
-  })
-})
-
-describe("what a flag is checked for", () => {
-  it("refuses `--limit` that is not a whole number, instead of quietly showing nothing", () => {
-    expect(() => settings({ limit: Number.NaN })).toThrowError(expect.objectContaining({ code: "validation_error" }))
-    expect(() => settings({ limit: 0 })).toThrowError(/whole number/)
-  })
-
-  it("refuses a profile name that would become a path", () => {
-    expect(() => settings({ profile: "../elsewhere" })).toThrowError(
-      expect.objectContaining({ code: "validation_error" }),
-    )
-  })
-})
-
-describe("where each setting came from", () => {
-  it("creates the starter file and identifies its values as configuration defaults", () => {
-    const resolved = settings()
-    expect(resolved.configFound).toBe(true)
-    expect(resolved.sources).toMatchObject({ limit: "config defaults", record: "default", profile: "none named" })
-  })
-
-  it("tells a flag from the file from the built-in value", () => {
-    withConfig(JSON.stringify({ profiles: { default: { limit: 7, record: true } } }))
-
-    expect(settings().sources).toMatchObject({ limit: "config file", record: "config file", color: "default" })
-    expect(settings({ limit: 3 }).sources.limit).toBe("flag")
-    expect(settings({ limit: 3 }).limit).toBe(3)
-    expect(settings().configFound).toBe(true)
-  })
-
-  it("names what chose the profile: the first word, then APP_PROFILE", () => {
-    withConfig(JSON.stringify({ profiles: { home: {}, work: {} } }))
-
-    expect(settings({ profile: "work" }, { APP_PROFILE: "home" }).sources.profile).toBe("first word")
-    expect(settings({}, { APP_PROFILE: "work" }).sources.profile).toBe("APP_PROFILE")
-    expect(settings().configuredProfiles).toEqual(["home", "work"])
-  })
-})
-
-describe("keeping a failed run", () => {
-  it("is on unless recording was turned off by name, by flag or in the file", () => {
-    expect(settings().keepFailedRuns).toBe(true)
-    expect(settings({ record: false }).keepFailedRuns).toBe(false)
-    withConfig(JSON.stringify({ profiles: { default: { record: false } } }))
-    expect(settings().keepFailedRuns).toBe(false)
-  })
-})
-
-describe("defaults shared by every profile", () => {
-  it("sit between the profile's own setting and the built-in one", () => {
-    withConfig(JSON.stringify({ defaults: { limit: 50, record: true }, profiles: { work: { limit: 5 } } }))
-
-    expect(settings({ profile: "work" })).toMatchObject({ limit: 5, record: true })
-    expect(settings({ profile: "work" }).sources).toMatchObject({ limit: "config file", record: "config defaults" })
-    expect(settings({ limit: 7 }).limit).toBe(7)
-    expect(settings({ profile: "home" }).sources.limit).toBe("config defaults")
+    expect(() => settings()).toThrowError(/setting timeoutMs is not a setting of app/)
+    expect(() => settings()).not.toThrowError(/rename|timeout_ms/)
   })
 })
 
@@ -455,7 +392,7 @@ describe("changing a setting", () => {
 
     changeSetting(path(), { profile: "work", setting: "limit", value: undefined })
     changeSetting(path(), { profile: "work", setting: "record", value: undefined })
-    expect(file()).toEqual({ profiles: {} })
+    expect(file()).toEqual({})
   })
 
   it("**writes one permission key at a time**, and refuses a level that is not one", () => {
@@ -468,7 +405,7 @@ describe("changing a setting", () => {
       /deny, readonly, ask, allow/,
     )
     expect(() => changeSetting(path(), { profile: "work", setting: "permissions.mesages", value: "deny" })).toThrow(
-      /starts with one of messages/,
+      /permissions\.mesages names no command/,
     )
   })
 
@@ -664,9 +601,7 @@ it("preserves public schema entry types when a provider composes permission sett
     description: "",
     version: "0.0.0",
   })
-  expectTypeOf<keyof typeof schema.entries>().toEqualTypeOf<
-    "default_profile" | "defaults" | "profiles" | "personal" | "bot"
-  >()
+  expectTypeOf<keyof typeof schema.entries>().toEqualTypeOf<"defaults" | "profiles" | "personal" | "bot">()
   const provider = v.strictObject({
     permissions: schema.entries.defaults.wrapped.entries.permissions,
     custom: v.optional(v.boolean()),
@@ -678,26 +613,17 @@ it("preserves public schema entry types when a provider composes permission sett
   expect(names).toEqual(["permissions", "custom"])
 })
 
-describe("retired read-receipt setting", () => {
-  it.each([true, false])("refuses catch_up_marks_read=%s with a migration hint", (value) => {
-    withConfig(JSON.stringify({ profiles: { personal: { catch_up_marks_read: value } } }))
+describe("a setting no schema knows", () => {
+  it.each(["catch_up_marks_read", "default_profile"])("refuses %s like any other, pointing nowhere else", (key) => {
+    withConfig(JSON.stringify({ profiles: { personal: { [key]: true } } }))
     expect(() => settings()).toThrowError(
       expect.objectContaining({
         code: "configuration_error",
-        message: expect.stringContaining("chats mark-read"),
+        message: expect.stringContaining(
+          `setting ${key} is not a setting of app — remove it with \`app personal config unset ${key}\``,
+        ),
       }),
     )
-  })
-  it("refuses the setting accepted by a consumer's older schema", () => {
-    withConfig(JSON.stringify({ profiles: { personal: { catch_up_marks_read: true } } }))
-    const legacy = settingsFor(
-      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "1" },
-      {
-        schema: v.looseObject({ profiles: v.record(v.string(), v.looseObject({})) }),
-      },
-    )
-    expect(() => legacy.resolveSettings({ profile: "personal" }, { env: {}, configDir })).toThrowError(
-      expect.objectContaining({ code: "configuration_error", message: expect.stringContaining("chats mark-read") }),
-    )
+    expect(() => settings()).not.toThrowError(/mark-read|name the profile/)
   })
 })

@@ -25,6 +25,27 @@ export const usableProfileName = (profile: string): string => {
 /** The top-level commands that never read a profile; every other one is `<tool> <profile> …`. */
 export const PROFILE_FREE: ReadonlySet<string> = new Set(["commands", "complete", "guide", "help", "skill", "upgrade"])
 
+const freeOfProfile = new WeakSet<Command>()
+
+/**
+ * Marks a command, and every command under it, as one that reads no profile, so help shows it without one:
+ * `drive doctor`, not `drive personal doctor`. Which commands those are is the CLI's to say.
+ */
+export const profileFree = <T extends Command>(command: T): T => {
+  freeOfProfile.add(command)
+  return command
+}
+
+/** Whether the command line puts a profile before this command: not for `PROFILE_FREE` or a `profileFree` one. */
+export const takesProfile = (command: Command): boolean => {
+  let top: Command | undefined
+  for (let at: Command | null = command; at?.parent; at = at.parent) {
+    if (freeOfProfile.has(at)) return false
+    top = at
+  }
+  return top !== undefined && !PROFILE_FREE.has(top.name())
+}
+
 /**
  * Every word that means a command at the top level. Taken off the built program rather than
  * written out, because a list written out goes stale the day a command is added — and `help` is in
@@ -79,4 +100,15 @@ export const rootOf = (command: Command): Command => {
   let root = command
   while (root.parent) root = root.parent
   return root
+}
+
+/** A command this CLI really has, for an example: the first that takes a profile, down to its first leaf. */
+export const sampleCommand = (commands: readonly Command[]): string | undefined => {
+  const words: string[] = []
+  let command = commands.find((one) => !PROFILE_FREE.has(one.name()))
+  while (command) {
+    words.push(command.name())
+    command = command.commands.find((one) => one.name() !== "help")
+  }
+  return words.length ? words.join(" ") : undefined
 }

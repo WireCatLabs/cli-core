@@ -8,6 +8,7 @@ import { botMcpCommand as botMcpCommandDefinition } from "./bot/mcp.js"
 import { botMessagesCommand as botMessagesCommandDefinition } from "./bot/messages.js"
 import { commandsCommand as commandsCommandDefinition } from "./commands-command.js"
 import { configCommand as configCommandDefinition } from "./config-command.js"
+import { honoursDryRun } from "./dry-run-guard.js"
 import { guideCommand as guideCommandDefinition } from "./guide.js"
 import { addMeetingBatchCommand as addMeetingBatchCommandDefinition } from "./meeting-batch.js"
 import { addMeetingPreparationCommand as addMeetingPreparationCommandDefinition } from "./meeting-preparation-command.js"
@@ -67,9 +68,12 @@ import {
 import { topicsCommand as topicsCommandDefinition } from "./messenger/topics-command.js"
 import { watchCommand as watchCommandDefinition } from "./messenger/watch-command.js"
 import { runsCommand as runsCommandDefinition } from "./runs/command.js"
-import { sharedCommand } from "./shared-contracts.js"
+import { sharedCommand as protectedCommand } from "./shared-contracts.js"
+
 import { skillCommand as skillCommandDefinition } from "./skill-command.js"
 import { upgradeCommand as upgradeCommandDefinition } from "./upgrade-command.js"
+
+const sharedCommand: typeof protectedCommand = (factory) => honoursDryRun(protectedCommand(factory))
 
 export const botAdminsCommand = sharedCommand(botAdminsCommandDefinition)
 export const botMembersCommand = sharedCommand(botMembersCommandDefinition)

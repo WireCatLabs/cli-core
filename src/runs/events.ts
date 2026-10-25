@@ -15,6 +15,10 @@ export interface RequestEvent {
   opcode?: number
   seq?: number
   status?: number
+  /** An HTTP API's verb, `POST`. */
+  method?: string
+  /** The path it went to with ids as `:id` and no query string — `/chats/:id/messages`. Never the URL as sent. */
+  endpointTemplate?: string
   /** The size of what went out or came back. */
   bytes?: number
   ids?: Record<string, string>
@@ -83,6 +87,8 @@ export const renderEvent = (event: DiagnosticEvent): string => {
     if (event.ageMs !== undefined) parts.push(`cached ${age(event.ageMs)}`)
   } else {
     if (event.opcode !== undefined) parts.push(`op ${event.opcode}`, `seq ${event.seq}`)
+    if (event.method !== undefined || event.endpointTemplate !== undefined)
+      parts.push([event.method, event.endpointTemplate].filter(Boolean).join(" "))
     if (event.status !== undefined) parts.push(`${event.status}`)
   }
   if (event.ids) for (const [name, value] of Object.entries(event.ids)) parts.push(`${name} ${value}`)

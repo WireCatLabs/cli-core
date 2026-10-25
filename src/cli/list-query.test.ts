@@ -1,6 +1,6 @@
-import type { QueryRegistry } from "@wirecat/cli-base/query"
+import { OPERATORS_BY_TYPE, type QueryRegistry } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
-import { listQuery, nativeTerms, queryArgument, queryTerms, termField } from "./list-query.js"
+import { listQuery, nativeField, nativeTerms, queryArgument, queryTerms, termField, timeBounds } from "./list-query.js"
 
 const REGISTRY = {
   entity: "fact",
@@ -45,5 +45,29 @@ describe("nativeTerms", () => {
 it("tells an MCP caller a native list takes AND only", () => {
   expect(queryArgument(REGISTRY).wrapped.pipe.at(-1)).toMatchObject({
     description: expect.stringMatching(/^field:value terms joined by AND that narrow the list; fields: kind/),
+  })
+})
+
+describe("timeBounds", () => {
+  const TIMED = {
+    entity: "event",
+    backend: "native",
+    fields: [nativeField({ name: "time", type: "time", operators: OPERATORS_BY_TYPE.time, example: "time>=7d" })],
+  } as const satisfies QueryRegistry
+  const bounds = (query: string) =>
+    timeBounds(nativeTerms(listQuery(query, TIMED, "events list"), "events list").get("time"), "UTC")
+
+  it("ends a range of bare dates on the last millisecond of its last day", () => {
+    expect(bounds("time:[2026-10-01 TO 2026-10-31]")).toMatchObject({
+      since: Date.parse("2026-10-01T00:00:00Z"),
+      until: Date.parse("2026-10-31T23:59:59.999Z"),
+      meta: { window: { until: "2026-10-31T23:59:59.999Z" } },
+    })
+  })
+
+  it("keeps an inclusive end timestamp and moves an exclusive one 1 ms inside", () => {
+    const at = "2026-10-31T12:00:00Z"
+    expect(bounds(`time:["2026-10-01T00:00:00Z" TO "${at}"]`)).toMatchObject({ until: Date.parse(at) })
+    expect(bounds(`time:["2026-10-01T00:00:00Z" TO "${at}"}`)).toMatchObject({ until: Date.parse(at) - 1 })
   })
 })

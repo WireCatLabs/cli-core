@@ -110,8 +110,10 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
     env: io.env,
     tty,
     signal: controller.signal,
-    atStart: (command) =>
-      setupAtStart({
+    atStart: async (command) => {
+      // The first-run questions write the shared config; a dry run writes nothing.
+      if (command.optsWithGlobals<{ dryRun?: boolean }>().dryRun === true) return
+      await setupAtStart({
         command: entry.app.command,
         env: io.env,
         contentLanguages: entry.app.contentLanguages,
@@ -119,7 +121,8 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
         headless: headless(command),
         readOnlyLock: readOnlyLockOf(entry.app, io.env),
         input: io.stdin,
-      }),
+      })
+    },
     ask: async (question, command) => {
       if (headless(command) || io.stdin.isTTY !== true) return false
       const answer = await readSecret(`${question} [y/N] `, {

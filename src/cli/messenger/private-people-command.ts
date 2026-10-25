@@ -95,12 +95,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
     command.action(async function (this: Command, person: string, id?: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, `contacts.notes.${name}`)
-      const {
-        textFile,
-        file: legacyFile,
-        revision,
-      } = this.opts<{ textFile?: string; file?: string; revision?: string }>()
-      const file = textFile ?? legacyFile
+      const { textFile: file, revision } = this.opts<{ textFile?: string; revision?: string }>()
       const text = file === undefined || file === "-" ? await readAll(context.stdin) : await readFile(file, "utf8")
       const version = Number(revision)
       if (name === "edit" && (!Number.isSafeInteger(version) || version < 1))

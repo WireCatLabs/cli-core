@@ -25,6 +25,9 @@ None open.
 
 - **CORE-36** · P2 · 🚧 `fix/shared-contract-audit` Enforce shared command contracts by default; exact, reasoned overrides only. Export actual schemas/reasons for complete cross-CLI audits.
 
+- **CORE-39** · P2 · One run-recording helper for a CLI with its own command program (zoom-cli, drive-cli and
+  cli-memo each carry a `src/run-recording.ts` that already differs). Start after their `feat/runs` pull requests merge,
+  then replace the three copies (owner, 2026-10-25). Rule: cli-base WC-LIFE-15.
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
 - **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,
@@ -35,8 +38,6 @@ None open.
   (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
   (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No
   separate SDK: cli-core is the shared base (owner, 2026-10-23). Plan first.
-- **CORE-26** · P2 · Calendar events in the store for the new `cal` CLI (Google Calendar first): an event entity
-  linked to people, meetings and chats, searchable like the rest. Nothing handles calendars today. Plan first.
 - **CORE-6** · P2 · 🟡 Search start-up measured: model open 1.44 s, empty-store reopen 8.4 ms, bare Node 31.7 ms
   (medians). Next compare one-shot CLI and long-lived MCP on the same synthetic corpus before optimizing.
   [Runner and limits](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/startup) · [notes](BACKLOG-NOTES.md#core-6).

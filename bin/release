@@ -138,6 +138,13 @@ if [ "$mode" = ci ]; then
   done
   [ -n "$run" ] || { echo "the release workflow did not start within a minute — see gh run list --workflow release.yml" >&2; exit 1; }
   gh run watch "$run" --exit-status
+  # A green run is not proof: on 2026-10-25 a run passed with publish skipped and nothing reached npm.
+  seen=""
+  for _ in $(seq 36); do
+    if published; then seen=1; break; fi
+    sleep 5
+  done
+  [ -n "$seen" ] || { echo "the release run passed but npm does not show $version — see gh run view $run" >&2; exit 1; }
   git fetch -q --tags origin
   echo "published $package@$version"
   exit 0

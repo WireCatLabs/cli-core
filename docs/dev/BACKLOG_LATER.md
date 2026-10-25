@@ -3,9 +3,6 @@
 Someday work: P3 items, nice-to-haves and research. Same ids, marks and one-line format as
 [BACKLOG.md](BACKLOG.md#rules). An item moves to [BACKLOG.md](BACKLOG.md) when it becomes P2.
 
-- **CORE-38** · P3 · One table of the languages search stems: Russian, English and Spanish are listed three times —
-  `src/cli/first-run.ts` (`LANGUAGES`), `src/search/stem.ts` (`CYRILLIC_STEMMERS`, `LATIN_STEMMERS`) and
-  `src/search/dictionary.ts` (`DICTIONARIES`). Not small: the stemmer lists are types `parseStemmers` checks against.
 - **CORE-13** · P3 · Serve relay, what v1 leaves out: a Windows named pipe, `ask` forwarded to the client, waiting
   for a starting serve, per-watcher buffers, `mcp --http` through serve, a path type on options.
   [The serve relay](ARCHITECTURE.md#the-serve-relay) · [notes](BACKLOG-NOTES.md#core-13).

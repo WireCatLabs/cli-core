@@ -20,6 +20,7 @@ import {
   type Registration,
   syncAllowedFor,
   UNTRUSTED,
+  UNTRUSTED_NEUTRAL,
   WRITE,
 } from "./tool.js"
 
@@ -94,6 +95,22 @@ const runnableOnly = (result: CallToolResult, offered: (command: string) => bool
   }
 }
 
+const takesNothing = (one: McpCommand): boolean =>
+  Object.values(one.input.entries).every((entry) => entry.type === "optional")
+
+/** A reading command an agent can run as it is, a listing first: the example in the call's description. */
+const sampleOf = (commands: Record<string, McpCommand>): string => {
+  const reading = Object.entries(commands).filter(([, one]) => !one.writes)
+  const bare = reading.filter(([, one]) => takesNothing(one))
+  return (
+    bare.find(([command]) => command.endsWith(" list"))?.[0] ??
+    bare[0]?.[0] ??
+    reading[0]?.[0] ??
+    Object.keys(commands)[0] ??
+    ""
+  )
+}
+
 /**
  * **Three tools in place of one per command** (CLI-74, NEED-766): search the commands, then run one
  * with `read` or `write`. A command keeps its CLI path and its arguments, and runs as its own tool
@@ -106,8 +123,14 @@ export const registerCommands = (
   errors?: AppErrors,
   /** Throws the refusal of a command left out because the lock or a level stops it, so the agent learns why. */
   withheld?: (command: string) => void,
+  /** `AppIdentity.messenger`; left out, a catalogue with `messages` commands is taken for a messenger's. */
+  isMessenger?: boolean,
 ) => {
   const byNormal = new Map(Object.keys(commands).map((command) => [normal(command), command]))
+  const messenger = isMessenger ?? Object.keys(commands).some((command) => command.split(" ")[0] === "messages")
+  const tasks = messenger ? '"unread", "send message", "chat members"' : '"list", "show", "change a setting"'
+  const sample = messenger ? "messages list" : sampleOf(commands)
+  const untrusted = messenger ? UNTRUSTED : UNTRUSTED_NEUTRAL
 
   server.registerTool(
     `${prefix}_tools_search`,
@@ -115,7 +138,7 @@ export const registerCommands = (
       outputSchema: toStandardJsonSchema(v.looseObject({})),
       title: "Find a command",
       description:
-        `Find the command for a task — "unread", "send message", "chat members" — before calling ` +
+        `Find the command for a task — ${tasks} — before calling ` +
         `${prefix}_read or ${prefix}_write with it. Each match gives its command, whether it writes, its arguments and the shape of its answer. ` +
         "With no words, lists every command and title, without arguments.",
       inputSchema: toStandardJsonSchema(
@@ -192,7 +215,7 @@ export const registerCommands = (
     command: v.pipe(
       v.string(),
       v.minLength(1),
-      v.description(`a command ${prefix}_tools_search returned: "messages list"`),
+      v.description(`a command ${prefix}_tools_search returned: "${sample}"`),
     ),
     arguments: v.optional(v.pipe(v.record(v.string(), v.unknown()), v.description("that command's arguments"))),
   })
@@ -201,7 +224,7 @@ export const registerCommands = (
     {
       outputSchema: toStandardJsonSchema(ANSWER),
       title: "Run a reading command",
-      description: `Run one command that only reads, with the arguments ${prefix}_tools_search showed. ${UNTRUSTED}`,
+      description: `Run one command that only reads, with the arguments ${prefix}_tools_search showed. ${untrusted}`,
       inputSchema: toStandardJsonSchema(call),
       annotations: READ,
     },
@@ -213,7 +236,7 @@ export const registerCommands = (
       {
         outputSchema: toStandardJsonSchema(ANSWER),
         title: "Run a writing command",
-        description: `Run one command that changes something — sends, edits, deletes, joins — with the arguments ${prefix}_tools_search showed. ${UNTRUSTED}`,
+        description: `Run one command that changes something — ${messenger ? "sends, edits, deletes, joins" : "creates, edits, deletes"} — with the arguments ${prefix}_tools_search showed. ${untrusted}`,
         inputSchema: toStandardJsonSchema(call),
         annotations: WRITE,
       },

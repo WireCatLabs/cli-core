@@ -21,6 +21,8 @@ const FIELDS = [
   "opcode",
   "seq",
   "status",
+  "method",
+  "endpoint_template",
   "bytes",
   "ids",
   "counts",

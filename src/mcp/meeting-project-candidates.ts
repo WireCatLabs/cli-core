@@ -5,7 +5,7 @@ import { boundMeetingProjectCandidatesItem } from "../cli/meeting-project-candid
 import { meetingProjectCandidatesInput, readMeetingProjectCandidates } from "../cli/meeting-project-candidates-read.js"
 import { meetingProjectCandidates } from "../entities/index.js"
 import type { StoredMeetingProjectCandidateReader } from "../services/index.js"
-import { agentBody, agentResult, UNTRUSTED } from "./text.js"
+import { agentBody, agentResult, UNTRUSTED_NEUTRAL } from "./text.js"
 
 const inputSchema: Record<string, unknown> = { ...jsonSchemaOf(meetingProjectCandidatesInput) }
 const outputSchema: Record<string, unknown> = {
@@ -14,7 +14,7 @@ const outputSchema: Record<string, unknown> = {
 
 export const meetingProjectCandidatesTool = {
   name: "meeting_project_candidates",
-  description: `Suggest existing global projects from one selected local meeting's title and one bounded page of current transcript cues. Matches literal names, keys and aliases; returns citations, ambiguity, fingerprints and incomplete evidence coverage. Does not create projects, infer membership or save links. Resume with evidence.coverage.next_cursor and the same ref. ${UNTRUSTED}`,
+  description: `Suggest existing global projects from one selected local meeting's title and one bounded page of current transcript cues. Matches literal names, keys and aliases; returns citations, ambiguity, fingerprints and incomplete evidence coverage. Does not create projects, infer membership or save links. Resume with evidence.coverage.next_cursor and the same ref. ${UNTRUSTED_NEUTRAL}`,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: { ...inputSchema, type: "object" as const },
   outputSchema: { ...outputSchema, type: "object" as const },

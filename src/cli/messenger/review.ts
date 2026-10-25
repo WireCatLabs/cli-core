@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import type { Review } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
-import { kindsOf, REVIEW_DAYS, reviewStart, UNANSWERED_HOURS } from "../../services/inbox.js"
+import { REVIEW_DAYS, reviewStart, UNANSWERED_HOURS } from "../../services/inbox.js"
 import { type Hearing, modelWith } from "../../speech/hearing.js"
 import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
@@ -58,7 +58,6 @@ export const reviewCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, query: string[]) {
       const options = this.opts<{
         new?: boolean
-        kind?: string
         unanswered?: string | true
         all?: boolean
         transcribe?: boolean
@@ -67,9 +66,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
       const hearWith = modelWith(options.transcribe, options.model)
       const context = messengerContext(this, messenger)
       const { settings, renderer, format, env } = context
-      const { since: from, chat, meta, kinds: queriedKinds } = catchUpQuery(query, REVIEW_QUERY, "review")
-      if (options.kind !== undefined && queriedKinds !== undefined)
-        throw new CliError("validation_error", "give kind: or its legacy --kind spelling, not both")
+      const { since: from, chat, meta, kinds } = catchUpQuery(query, REVIEW_QUERY, "review")
       if (options.new && (from !== undefined || options.unanswered !== undefined)) {
         // An open question stays open: moving past it would drop it from the next review.
         throw new CliError("validation_error", "--new keeps its own point — not with a date or --unanswered")
@@ -84,7 +81,6 @@ export const reviewCommand = (messenger: Messenger): Command =>
         : undefined
       const since = from ?? saved?.first ?? reviewStart()
       const hours = options.unanswered === undefined ? undefined : unansweredHours(options.unanswered)
-      const kinds = queriedKinds ?? (options.kind === undefined ? undefined : kindsOf(options.kind))
       let hearing: Hearing | undefined
       const transcribe = options.transcribe === true
       const { found, reader } = await context.withServices(async (services, connect) => {

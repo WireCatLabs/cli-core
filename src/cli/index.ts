@@ -11,7 +11,7 @@ export { callMeetingPreparationTool, meetingPreparationTool } from "../mcp/meeti
 export { callMeetingProjectCandidatesTool, meetingProjectCandidatesTool } from "../mcp/meeting-project-candidates.js"
 export { callMeetingSeriesInventoryTool, meetingSeriesInventoryTool } from "../mcp/meeting-series-inventory.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
-export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
+export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION, UNTRUSTED_NEUTRAL } from "../mcp/text.js"
 export { MEETING_RESULT_ENTITIES } from "../meetings/index.js"
 export { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 export type {
@@ -110,6 +110,7 @@ export {
   startRun,
 } from "../runs/run.js"
 export { currentRun, inRun, type RunScope, useAsProcessRun } from "../runs/scope.js"
+export { LANGUAGES } from "../search/languages.js"
 export { guardedApp, guardedPress, guardedStart, type Pressed } from "../sends/buttons.js"
 export { guardedClose, guardedCreatePoll, guardedVote } from "../sends/polls.js"
 export type { InboxReader } from "../services/inbox.js"
@@ -127,7 +128,6 @@ export {
   type Observation,
 } from "./agent-evaluation.js"
 export { answerEntity } from "./answer-entity.js"
-
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"
 export {
   apiFlagOf,
@@ -140,10 +140,8 @@ export {
   readApiBody,
 } from "./bot/api-input.js"
 export { prepareRpcApiBody, type RpcApiBody } from "./bot/api-rpc.js"
-
 export { type BotContext, botContext, botWords } from "./bot/context.js"
 export { type BotCopy, botCopy } from "./bot/copy.js"
-
 export { botCan, botIdOf } from "./bot/messages.js"
 export {
   BOT_ACTIONS,
@@ -184,6 +182,7 @@ export type { CommandAvailability, DiscoveredCommand } from "./command-availabil
 export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-contract.js"
 export { CONTRACT } from "./commands-command.js"
 export { refuseUnknownKey } from "./config-command.js"
+export { type ConfigIssue, type ConfigIssueKind, checkConfigText, issueMessage } from "./config-issues.js"
 export { loadSnakeCaseConfig } from "./config-keys.js"
 export {
   type AgentRun,
@@ -217,10 +216,12 @@ export {
   logsInOrOut,
   NO_EFFECTS,
   ownerOnlyOption,
+  previewFlag,
   REMOTE_READ,
   REMOTE_WRITE,
   reachesOtherService,
   refuseUnderReadOnly,
+  storeChangeRefusal,
 } from "./effects.js"
 export { type CliEntry, type EntryContext, type EntryIo, startCli } from "./entry.js"
 export {
@@ -249,7 +250,6 @@ export {
   asksAtStart,
   type FirstRun,
   type FirstRunIo,
-  LANGUAGES,
   setupAtStart,
   systemLanguage,
 } from "./first-run.js"
@@ -363,8 +363,23 @@ export { storeSummary } from "./messenger/store-maintenance-command.js"
 export { type Saving, stored } from "./messenger/stored.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
 export { window, withPaging } from "./paging.js"
-export { knownBeside, knownPermissionKeys, type PermissionKeyOf, unknownPermissionKeys } from "./permission-keys.js"
-export { asFirstWord, commandWords, liftProfile, refuseCommandName, rootOf, usableProfileName } from "./profile.js"
+export {
+  knownBeside,
+  knownPermissionKeys,
+  type PermissionKeyOf,
+  unknownPermissionIssues,
+  unknownPermissionKeys,
+} from "./permission-keys.js"
+export {
+  asFirstWord,
+  commandWords,
+  liftProfile,
+  profileFree,
+  refuseCommandName,
+  rootOf,
+  takesProfile,
+  usableProfileName,
+} from "./profile.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {
@@ -376,6 +391,7 @@ export {
   fromFile,
   type GlobalFlags,
   NONE_NAMED,
+  namedProfile,
   type ProfileKind,
   plain,
   type ResolveOptions,
@@ -459,5 +475,6 @@ export {
   sharedContracts,
 } from "./shared-contracts.js"
 export { runnable, withSafety } from "./steps.js"
+export { type StoreInfo, sharedStoreCommand, storeInfo, storeInfoCommand } from "./store-info.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

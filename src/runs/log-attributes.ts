@@ -12,6 +12,8 @@ const diagnostic: Record<KeysOf<DiagnosticEvent>, true> = {
   opcode: true,
   seq: true,
   status: true,
+  method: true,
+  endpointTemplate: true,
   bytes: true,
   ids: true,
   counts: true,

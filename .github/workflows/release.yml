@@ -4,6 +4,9 @@ name: Release
 # token anywhere in this repository and renaming the file breaks publishing until npm is told.
 #
 # Full validation builds, checks and packs once; `build` verifies the immutable tarball.
+# When the release commit has the tree of its pull request's head and every required check is green there,
+# `reuse` skips that validation and `pack` only builds and packs (scripts/release-reuse.sh); the run summary
+# says which path ran and why. The npm audits and Parity run on both paths.
 # The job able to publish runs no code from our dependencies; `publish` holds the OIDC permission and only
 # runs `npm publish` on that file; `tag` is the only one that may write to the repository.
 on:
@@ -44,9 +47,40 @@ jobs:
           echo "::error::this run is at $GITHUB_SHA, but bin/release checked '${COMMIT}' — nothing is published"
           exit 1
 
-  validation:
+  reuse:
     needs: checked-commit
     if: github.ref == 'refs/heads/main' || inputs.dry_run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      reuse: ${{ steps.decide.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ github.sha }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          APP_REF: ${{ inputs.app_ref }}
+          # security.yml's checks; the ruleset does not require them yet.
+          EXTRA_CONTEXTS: |
+            security / workflows
+            security / secrets
+            security / source (actions)
+            security / source (javascript-typescript)
+            security / source (python)
+            security / source (c-cpp)
+            security / source (java-kotlin)
+        run: bash scripts/release-reuse.sh
+
+  validation:
+    needs: [checked-commit, reuse]
+    if: (github.ref == 'refs/heads/main' || inputs.dry_run) && needs.reuse.outputs.reuse != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
@@ -55,8 +89,8 @@ jobs:
       app_ref: ${{ inputs.app_ref }}
 
   checks:
-    needs: checked-commit
-    if: github.ref == 'refs/heads/main' || inputs.dry_run
+    needs: [checked-commit, reuse]
+    if: (github.ref == 'refs/heads/main' || inputs.dry_run) && needs.reuse.outputs.reuse != 'true'
     permissions:
       contents: read
       actions: read
@@ -65,9 +99,107 @@ jobs:
     with:
       languages: '["actions","javascript-typescript","python","c-cpp","java-kotlin"]'
 
+  # The reuse path's share of `checks`: the same two audits as cli-base's release-checks.yml, which cannot run them
+  # alone. They read the registry, not this tree, so a pull request's result says nothing about them.
+  audits:
+    needs: reuse
+    if: needs.reuse.outputs.reuse == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      # The audit reads only the lockfile; installing would run dependency lifecycle scripts for nothing.
+      - run: pnpm audit --prod --audit-level high
+      - name: Audit a fresh production install of the package
+        run: |
+          audit_dir=$(mktemp -d)
+          npm pack --ignore-scripts --pack-destination "$audit_dir" > /dev/null
+          cd "$audit_dir"
+          npm init --yes > /dev/null
+          npm install --package-lock-only --ignore-scripts --omit=dev --no-audit --no-fund "$audit_dir"/*.tgz
+          npm audit --omit=dev --audit-level=high
+
+  parity:
+    needs: reuse
+    if: needs.reuse.outputs.reuse == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/parity.yml
+    with:
+      app_ref: ${{ inputs.app_ref }}
+
+  # What node-ci.yml's pack step does for the full path: build once, pack once, hand `build` the digest.
+  pack:
+    needs: reuse
+    if: needs.reuse.outputs.reuse == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      package-sha256: ${{ steps.package.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Pack the build
+        id: package
+        run: |
+          npm pack --ignore-scripts
+          set -- ./*.tgz
+          [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "Expected exactly one package tarball"; exit 1; }
+          echo "sha256=$(sha256sum "$1" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: validated-package
+          path: ./*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  # Exactly one path must have run, and all of it must have passed: a skipped job is success to `needs`.
+  gate:
+    needs: [reuse, validation, checks, audits, parity, pack]
+    if: ${{ always() && (github.ref == 'refs/heads/main' || inputs.dry_run) }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      package-sha256: ${{ needs.validation.outputs.package-sha256 || needs.pack.outputs.package-sha256 }}
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          result() { echo "$NEEDS" | jq -r --arg job "$1" '.[$job].result'; }
+          [ "$(result reuse)" = success ] || { echo "::error::reuse: $(result reuse)"; exit 1; }
+          if [ "$(echo "$NEEDS" | jq -r '.reuse.outputs.reuse')" = true ]; then
+            ran="audits parity pack" skipped="validation checks"
+          else
+            ran="validation checks" skipped="audits parity pack"
+          fi
+          for job in $ran; do
+            [ "$(result "$job")" = success ] || { echo "::error::$job: $(result "$job")"; exit 1; }
+          done
+          for job in $skipped; do
+            [ "$(result "$job")" = skipped ] || { echo "::error::$job should have been skipped: $(result "$job")"; exit 1; }
+          done
+
   build:
-    needs: [checks, validation]
-    if: github.ref == 'refs/heads/main' || inputs.dry_run
+    needs: gate
+    # A reused release skips validation and checks; without always() that skip would cascade to here.
+    if: ${{ always() && needs.gate.result == 'success' && (github.ref == 'refs/heads/main' || inputs.dry_run) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -86,7 +218,7 @@ jobs:
           name: validated-package
       - name: Verify validated package integrity
         env:
-          EXPECTED_SHA256: ${{ needs.validation.outputs.package-sha256 }}
+          EXPECTED_SHA256: ${{ needs.gate.outputs.package-sha256 }}
         run: |
           set -- ./*.tgz
           [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "Expected exactly one package tarball"; exit 1; }
@@ -114,7 +246,7 @@ jobs:
 
   package-dry-run:
     needs: build
-    if: inputs.dry_run
+    if: ${{ always() && needs.build.result == 'success' && inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -131,7 +263,7 @@ jobs:
 
   publish:
     needs: build
-    if: ${{ !inputs.dry_run }}
+    if: ${{ always() && needs.build.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -167,7 +299,7 @@ jobs:
 
   tag:
     needs: [build, publish]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ always() && needs.publish.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
