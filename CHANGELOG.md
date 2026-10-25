@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.429.0 — 25.10.2026
+
 ### Added
 
 - **`@wirecat/cli-core/cli/start` gives a bin `startCli` without the rest of `./cli`**, and **a bare `--version` or `-V` is answered before the program loads**. Importing `./cli` for `startCli` loaded about 1,000 files before the program even ran; `./cli/start` loads about 50 (`check:dist` keeps it under 80). The version is `app.version` and a newline on stdout, exit 0 — what Commander printed. Nothing else runs for it: no SQLite swap, no crash handler, and no notice a tool's `run` prints. `--version` with any other word (`--version --json`, `personal --version`) goes through the program as before. `startCli` and `run()` load the first-run questions, the store and the consent prompt only when a command asks them: the program module alone now loads about 320 files, not 850 (the `./cli` barrel a CLI imports still loads them all).
