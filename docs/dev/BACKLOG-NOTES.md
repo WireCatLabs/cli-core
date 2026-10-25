@@ -24,6 +24,26 @@ chat kinds use query terms. CLI and MCP both accept only canonical argument name
   Next compare memo/drive through one-shot CLI and long-lived MCP against the same synthetic corpus; check which
   paths already use `warmEmbedders` before changing lifecycle or store opening.
 
+## CORE-40
+
+- **Where a start goes after `./cli/start`** (2026-10-25, cli-core 0.425.0, Node 24.19, compile cache on). A bare
+  `--version` now costs ~60 ms and 52 files. Every other command imports `./cli` (~880 cli-core files, ~400 ms of
+  the ~0.6 s a command takes before its own work). In that graph the largest single module whose import, made lazy,
+  frees others frees 119 of 1,056 (`shared-command-exports`), then `entities/index` 73, `store/store` 69,
+  `services/index` 48: no hub cut pays, as [lazy store and services](https://github.com/WireCatLabs/cli-testing/tree/main/performance/startup/lazy-store-and-services) found too.
+- **Mounting only the command being run is not safe.** `config` (permission keys, `permission-keys.ts`), every bot
+  command (`bot/context.ts` refuses unknown keys), `envelope.ts`, `steps.ts`, the setup hint in
+  `messenger/context.ts` and `conversations` walk the whole command tree.
+- **Option A — lazy action bodies, in waves.** The tree stays eager (names, options, help, annotations); each command
+  module imports its services, store and entities inside its action. ~60 files that other sessions edit. Acceptance
+  per wave: `commands --json` of tg, max and wa byte-identical before and after, and the module count of
+  `tg config show --json` going down. Pays only when every builder a tool mounts is light.
+- **Option B — a bundle of each tool's `dist`.** esbuild on tg (after tg-cli's mtcute change), one 21 MB ESM file
+  with a two-line entry that turns the compile cache on first: medians ~470–575 ms wall and ~600–720 ms CPU against
+  ~620–670 ms and ~880–980 ms unbundled, about 100–150 ms wall and 300 ms CPU per command. Costs: `bun:sqlite` and
+  `better-sqlite3` stubbed, native addons left outside, asset paths that rely on `import.meta.url`, a second build
+  to test. [Numbers and scripts](https://github.com/WireCatLabs/cli-testing/tree/main/performance/startup/fast-start).
+
 ## CORE-8
 
 - **One message search without a language switch** — Lucene syntax with legacy's forgiving matching,
