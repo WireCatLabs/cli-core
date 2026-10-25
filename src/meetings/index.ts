@@ -65,6 +65,7 @@ export {
   meetingIssuesOf,
   meetingItem,
 } from "./item.js"
+export { joinKeyOf, joinUrlWithoutQuery } from "./join-key.js"
 export {
   CHAT_MESSAGES_READ,
   type MeetingChatLine,

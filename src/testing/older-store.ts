@@ -2,6 +2,15 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  33: `DROP TRIGGER event_index_ai; DROP TRIGGER event_index_au; DROP TRIGGER event_index_ad;
+    DROP TRIGGER event_index_entry_au; DROP TRIGGER event_index_participant_ai; DROP TRIGGER event_index_participant_au;
+    DROP TRIGGER event_index_participant_ad; DROP TRIGGER calendar_entries_time_bi; DROP TRIGGER calendar_entries_time_bu;
+    DROP TABLE event_words_vocab; DROP TABLE event_words; DROP TABLE event_stems; DROP TABLE event_index_pending;
+    DELETE FROM search_index_state WHERE name = 'event_index';
+    DROP TABLE calendar_entry_participants; DROP TABLE calendar_entry_revisions; DROP TABLE calendar_entries;
+    DROP TABLE calendars; DROP INDEX meetings_by_join_key; DROP INDEX meetings_join_key_to_fill;
+    ALTER TABLE meetings DROP COLUMN join_key; ALTER TABLE events DROP COLUMN status;
+    ALTER TABLE events DROP COLUMN all_day; ALTER TABLE events DROP COLUMN source_deleted_at;`,
   32: `CREATE TRIGGER document_tombstone AFTER UPDATE OF deleted_at ON documents
       WHEN old.deleted_at IS NULL AND new.deleted_at IS NOT NULL BEGIN
       DELETE FROM taggings WHERE taggable_type = 'document' AND taggable_id = new.id;

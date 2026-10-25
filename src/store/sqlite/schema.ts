@@ -1116,6 +1116,138 @@ export const memoryIndexPending = sqliteTable(
   (table) => [primaryKey({ columns: [table.indexableType, table.id] })],
 )
 
+export const calendars = sqliteTable(
+  "calendars",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    title: text("title"),
+    timezone: text("timezone"),
+    accessRole: text("access_role"),
+    primaryCalendar: integer("primary_calendar").notNull(),
+    synced: integer("synced").notNull(),
+    seenAt: integer("seen_at"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [unique().on(table.accountId, table.externalId)],
+)
+
+export const calendarEntries = sqliteTable(
+  "calendar_entries",
+  {
+    id: integer("id").primaryKey(),
+    calendarId: integer("calendar_id")
+      .notNull()
+      .references(() => calendars.id),
+    kind: text("kind").notNull(),
+    seriesEntryId: integer("series_entry_id").references((): AnySQLiteColumn => calendarEntries.id),
+    eventId: integer("event_id").references(() => events.id),
+    eventSeriesId: integer("event_series_id").references(() => eventSeries.id),
+    externalId: text("external_id").notNull(),
+    icalUid: text("ical_uid"),
+    originalStartsAt: integer("original_starts_at"),
+    exception: integer("exception").notNull(),
+    status: text("status").notNull(),
+    title: text("title"),
+    description: text("description"),
+    location: text("location"),
+    startsAt: integer("starts_at"),
+    endsAt: integer("ends_at"),
+    allDay: integer("all_day").notNull(),
+    startDate: text("start_date"),
+    endDate: text("end_date"),
+    timezone: text("timezone"),
+    recurrence: text("recurrence"),
+    recurrenceEndsAt: integer("recurrence_ends_at"),
+    eventType: text("event_type"),
+    transparency: text("transparency"),
+    visibility: text("visibility"),
+    ownResponse: text("own_response"),
+    organizerIdentityId: integer("organizer_identity_id").references(() => identities.id),
+    joinUrl: text("join_url"),
+    joinKey: text("join_key"),
+    conference: text("conference"),
+    url: text("url"),
+    sequence: integer("sequence"),
+    etag: text("etag"),
+    externalUpdatedAt: integer("external_updated_at"),
+    metadata: text("metadata"),
+    seenAt: integer("seen_at"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    unique().on(table.calendarId, table.externalId),
+    unique().on(table.seriesEntryId, table.originalStartsAt),
+    index("calendar_entries_by_calendar_id_starts_at").on(table.calendarId, table.startsAt),
+    index("calendar_entries_by_ical_uid").on(table.icalUid).where(sql`ical_uid IS NOT NULL`),
+    index("calendar_entries_by_join_key").on(table.joinKey).where(sql`join_key IS NOT NULL`),
+    index("calendar_entries_by_event_id").on(table.eventId),
+    index("calendar_entries_by_event_series_id").on(table.eventSeriesId),
+    index("calendar_entries_by_event_type_event_id").on(table.eventType, table.eventId),
+    index("calendar_entries_by_organizer_identity_id").on(table.organizerIdentityId),
+  ],
+)
+
+export const calendarEntryRevisions = sqliteTable(
+  "calendar_entry_revisions",
+  {
+    id: integer("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => calendarEntries.id),
+    title: text("title"),
+    startsAt: integer("starts_at"),
+    endsAt: integer("ends_at"),
+    location: text("location"),
+    status: text("status"),
+    recurrence: text("recurrence"),
+    recurrenceEndsAt: integer("recurrence_ends_at"),
+    externalUpdatedAt: integer("external_updated_at"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [index("calendar_entry_revisions_by_entry_id_created_at").on(table.entryId, table.createdAt)],
+)
+
+export const calendarEntryParticipants = sqliteTable(
+  "calendar_entry_participants",
+  {
+    id: integer("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => calendarEntries.id),
+    identityId: integer("identity_id").references(() => identities.id),
+    email: text("email").notNull(),
+    name: text("name"),
+    response: text("response"),
+    optional: integer("optional").notNull(),
+    organizer: integer("organizer").notNull(),
+    self: integer("self").notNull(),
+    resource: integer("resource").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.entryId, table.email),
+    index("calendar_entry_participants_by_identity_id").on(table.identityId),
+  ],
+)
+
+export const eventIndexPending = sqliteTable(
+  "event_index_pending",
+  {
+    id: integer("id").notNull(),
+    indexableType: text("indexable_type").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.indexableType, table.id] })],
+)
+
 export const eventSeries = sqliteTable("event_series", {
   id: integer("id").primaryKey(),
   title: text("title"),
@@ -1140,6 +1272,9 @@ export const events = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    status: text("status"),
+    allDay: integer("all_day"),
+    sourceDeletedAt: integer("source_deleted_at"),
   },
   (table) => [index("events_by_time").on(table.startsAt), index("events_by_event_series_id").on(table.eventSeriesId)],
 )
@@ -1195,11 +1330,13 @@ export const meetings = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
-    /** `fold(title)`: SQLite's lower() folds ASCII only, so filters compare this. */
     titleFolded: text("title_folded"),
+    joinKey: text("join_key"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
+    index("meetings_by_join_key").on(table.joinKey).where(sql`join_key IS NOT NULL`),
+    index("meetings_join_key_to_fill").on(table.id).where(sql`join_url IS NOT NULL AND join_key IS NULL`),
     index("meetings_by_time").on(table.accountId, desc(table.startedAt)),
     index("meetings_by_account_id_title_folded").on(table.accountId, table.titleFolded),
     index("meetings_title_to_fold").on(table.id).where(sql`title IS NOT NULL AND title_folded IS NULL`),

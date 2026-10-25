@@ -35,6 +35,9 @@ const eventOf = (row: Record<string, unknown>): Event => ({
   timezone: str(row.timezone),
   origin: String(row.origin) as Event["origin"],
   deletedAt: int(row.deleted_at),
+  status: str(row.status),
+  allDay: bool(row.all_day),
+  sourceDeletedAt: int(row.source_deleted_at),
   createdAt: Number(row.created_at),
   updatedAt: Number(row.updated_at),
 })

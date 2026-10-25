@@ -27,7 +27,7 @@ import type {
   TranscriptAppend,
   TranscriptAppendReceipt,
 } from "../../meetings/index.js"
-import { MeetingError } from "../../meetings/index.js"
+import { joinKeyOf, MeetingError } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import * as eventQueries from "./events.js"
@@ -357,6 +357,7 @@ const save = (context: StoreContext, input: MeetingSave): number => {
       description: meeting.description,
       location: meeting.location,
       join_url: meeting.joinUrl,
+      join_key: meeting.joinUrl ? (joinKeyOf(meeting.joinUrl) ?? "") : null,
       started_at: meeting.startedAt,
       ended_at: meeting.endedAt,
       duration_ms: meeting.durationMs,

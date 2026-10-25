@@ -8,6 +8,7 @@ import { sharedConfigPath } from "../shared-config.js"
 import { backfillNormalized, pendingNormalization } from "./backfill.js"
 import { fillFiles } from "./files.js"
 import { fillFolded } from "./folded.js"
+import { fillJoinKeys } from "./join-keys.js"
 import { logPruner } from "./log-pruning.js"
 import { openSqlite, type StoreContext } from "./open.js"
 import { loadProviders } from "./providers.js"
@@ -73,6 +74,7 @@ export const openStoreContext = async ({
       if (notice) warn(notice)
       fillFiles(database, now)
       fillFolded(database)
+      fillJoinKeys(database)
       const pending = pendingNormalization(database)
       if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)
       followDefaultStemmers(database, now)

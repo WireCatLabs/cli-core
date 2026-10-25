@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-100 tables, 21 full-text indexes.
+105 tables, 23 full-text indexes.
 
 ## Conventions
 
@@ -1155,6 +1155,144 @@ Cancellation is cooperative: the signal is checked before and between queries an
 An active synchronous SQLite query completes before cancellation is reported; callers await the
 read before closing its connection.
 
+### `calendars`
+
+One calendar of an account: Google's primary calendar, a shared or subscribed one. Only those the owner owns are synced; the rest are listed so the owner knows they exist.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | provider `google-calendar` |
+| `external_id` | text | not null |  | the provider's calendar id |
+| `title` | text |  |  |  |
+| `timezone` | text |  |  | IANA |
+| `access_role` | text |  |  | owner, writer, reader, freeBusyReader |
+| `primary_calendar` | integer | not null |  | 1 for the account's primary calendar |
+| `synced` | integer | not null |  | 1 when its entries sync: the owner owns it or chose it |
+| `seen_at` | integer |  |  | the last calendar list that returned it |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`
+
+### `calendar_entries`
+
+One calendar's copy of an event, a series or one occurrence of a series: the source record of `events` and `event_series`. No passcode, PIN or join-URL query string is ever stored.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `calendar_id` | integer | not null | → `calendars.id` | the `calendar` it belongs to |
+| `kind` | text | not null |  | single, series, occurrence |
+| `series_entry_id` | integer |  | → `calendar_entries.id` | on an occurrence: its series' entry |
+| `event_id` | integer |  | → `events.id` | single and occurrence entries |
+| `event_series_id` | integer |  | → `event_series.id` | series entries |
+| `external_id` | text | not null |  | the provider's event id, unique within the calendar |
+| `ical_uid` | text |  |  | shared by every copy across calendars and every occurrence of a series |
+| `original_starts_at` | integer |  |  | an occurrence's slot in its series |
+| `exception` | integer | not null |  | 1 for an occurrence changed apart from its series |
+| `status` | text | not null |  | confirmed, tentative, cancelled |
+| `title` | text |  |  |  |
+| `description` | text |  |  | plain text, lines with a passcode, password or PIN removed |
+| `location` | text |  |  |  |
+| `starts_at` | integer |  |  |  |
+| `ends_at` | integer |  |  | exclusive; never before `starts_at` (a trigger refuses it) |
+| `all_day` | integer | not null |  |  |
+| `start_date` | text |  |  | `YYYY-MM-DD` of an all-day entry |
+| `end_date` | text |  |  | exclusive |
+| `timezone` | text |  |  |  |
+| `recurrence` | text |  |  | a series: its RRULE lines, JSON |
+| `recurrence_ends_at` | integer |  |  | a series: its last slot; NULL repeats indefinitely |
+| `event_type` | text |  |  | default, outOfOffice, focusTime, workingLocation, birthday, fromGmail; only default and fromGmail are searched |
+| `transparency` | text |  |  |  |
+| `visibility` | text |  |  |  |
+| `own_response` | text |  |  | the owner's answer: needsAction, accepted, declined, tentative |
+| `organizer_identity_id` | integer |  | → `identities.id` | the `identity` it belongs to |
+| `join_url` | text |  |  | without its query string |
+| `join_key` | text |  |  | as `meetings.join_key` |
+| `conference` | text |  |  | zoom, meet, teams, … |
+| `url` | text |  |  | the provider's page of the event |
+| `sequence` | integer |  |  |  |
+| `etag` | text |  |  |  |
+| `external_updated_at` | integer |  |  | when the source says it last changed |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `seen_at` | integer |  |  | the last sync that returned it |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (calendar_id, external_id)`, `UNIQUE (series_entry_id, original_starts_at)`, `INDEX (calendar_id, starts_at)`, `INDEX (ical_uid) WHERE ical_uid IS NOT NULL`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (event_id)`, `INDEX (event_series_id)`, `INDEX (event_type, event_id)`, `INDEX (organizer_identity_id)`
+
+### `calendar_entry_revisions`
+
+A calendar entry's tracked fields as they were before a change: a moved meeting keeps its old time, a series shortened by "this and following" its old rule.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `entry_id` | integer | not null | → `calendar_entries.id` | the `calendar_entry` it belongs to |
+| `title` | text |  |  |  |
+| `starts_at` | integer |  |  |  |
+| `ends_at` | integer |  |  |  |
+| `location` | text |  |  |  |
+| `status` | text |  |  |  |
+| `recurrence` | text |  |  |  |
+| `recurrence_ends_at` | integer |  |  |  |
+| `external_updated_at` | integer |  |  | the provider's edit time of the values replaced |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (entry_id, created_at)`
+
+### `calendar_entry_participants`
+
+Who a calendar entry lists: a role in that entry, not a contact of its own. A person's address points at the `email` contact of it; a room has none.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `entry_id` | integer | not null | → `calendar_entries.id` | the `calendar_entry` it belongs to |
+| `identity_id` | integer |  | → `identities.id` | the `email` contact of the address; NULL for a room |
+| `email` | text | not null |  | lower case |
+| `name` | text |  |  |  |
+| `response` | text |  |  | needsAction, accepted, declined, tentative |
+| `optional` | integer | not null |  |  |
+| `organizer` | integer | not null |  |  |
+| `self` | integer | not null |  |  |
+| `resource` | integer | not null |  | 1 for a room or a piece of equipment |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (entry_id, email)`, `INDEX (identity_id)`
+
+### `event_words`
+
+Word index over events: title, cleaned description, location and attendee names.
+
+```sql
+CREATE VIRTUAL TABLE event_words USING fts5(normalized_text, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
+CREATE VIRTUAL TABLE event_words_vocab USING fts5vocab(event_words, 'col')
+```
+
+### `event_stems`
+
+Stem index, the pair of event_words.
+
+```sql
+CREATE VIRTUAL TABLE event_stems USING fts5(stems, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
+```
+
+### `event_index_pending`
+
+Rows of events waiting to be indexed: triggers enqueue, JS normalizes, stems and writes the index.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | not null |  |  |
+| `indexable_type` | text | not null |  | which table the waiting row belongs to |
+
+*Keys and indexes:* `PRIMARY KEY (indexable_type, id)`
+
 ### `event_series`
 
 A repeating event, above any one provider's recurrence.
@@ -1182,10 +1320,13 @@ The owner's own record of something that happened, as a person is the owner's re
 | `starts_at` | integer |  |  | when it starts |
 | `ends_at` | integer |  |  | when it ends |
 | `timezone` | text |  |  | IANA zone the event is held in, e.g. Europe/Madrid |
-| `origin` | text | not null |  | auto or owner |
+| `origin` | text | not null |  | auto (from a meeting), owner, or calendar |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `status` | text |  |  | confirmed, tentative, cancelled; cancelled only when every live calendar entry of it is |
+| `all_day` | integer |  |  | 1 for an all-day event: its times are the UTC midnights of its dates |
+| `source_deleted_at` | integer |  |  | when its calendar deleted it; a past event keeps its row as a meeting that happened |
 
 *Keys and indexes:* `INDEX (starts_at)`, `INDEX (event_series_id)`
 
@@ -1238,8 +1379,9 @@ One occurrence: it happened once, at one time.
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `title_folded` | text |  |  | `fold(title)`, which `meetings list title:` compares |
+| `join_key` | text |  |  | the meeting's room without its passcode — `zoom:<number>`, `meet:<code>`, else host and path — which a calendar entry is matched by; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (id) WHERE join_url IS NOT NULL AND join_key IS NULL`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
 
 ### `meeting_participants`
 

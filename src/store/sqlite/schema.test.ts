@@ -389,6 +389,7 @@ describe("what the initial migration seeds and enforces", () => {
         .map((row) => row.name),
     ).toEqual([
       "document_index",
+      "event_index",
       "memory_index",
       "message_stems",
       "message_words",

@@ -70,6 +70,7 @@ const NAMES = {
   "attachments:id WHERE local_path IS NOT NULL AND local_path_folded IS NULL": "attachments_local_path_to_fold",
   "meetings:id WHERE title IS NOT NULL AND title_folded IS NULL": "meetings_title_to_fold",
   "files:id WHERE path_folded IS NULL": "files_path_to_fold",
+  "meetings:id WHERE join_url IS NOT NULL AND join_key IS NULL": "meetings_join_key_to_fill",
 }
 
 const parseKey = (k) => {

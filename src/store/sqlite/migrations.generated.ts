@@ -598,6 +598,55 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
+    "name": "20261024234714_version-33-calendars",
+    "statements": [
+      "CREATE TABLE `calendar_entries` (\n\t`id` integer PRIMARY KEY,\n\t`calendar_id` integer NOT NULL,\n\t`kind` text NOT NULL,\n\t`series_entry_id` integer,\n\t`event_id` integer,\n\t`event_series_id` integer,\n\t`external_id` text NOT NULL,\n\t`ical_uid` text,\n\t`original_starts_at` integer,\n\t`exception` integer NOT NULL,\n\t`status` text NOT NULL,\n\t`title` text,\n\t`description` text,\n\t`location` text,\n\t`starts_at` integer,\n\t`ends_at` integer,\n\t`all_day` integer NOT NULL,\n\t`start_date` text,\n\t`end_date` text,\n\t`timezone` text,\n\t`recurrence` text,\n\t`recurrence_ends_at` integer,\n\t`event_type` text,\n\t`transparency` text,\n\t`visibility` text,\n\t`own_response` text,\n\t`organizer_identity_id` integer,\n\t`join_url` text,\n\t`join_key` text,\n\t`conference` text,\n\t`url` text,\n\t`sequence` integer,\n\t`etag` text,\n\t`external_updated_at` integer,\n\t`metadata` text,\n\t`seen_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_calendar_entries_calendar_id_calendars_id_fk` FOREIGN KEY (`calendar_id`) REFERENCES `calendars`(`id`),\n\tCONSTRAINT `fk_calendar_entries_series_entry_id_calendar_entries_id_fk` FOREIGN KEY (`series_entry_id`) REFERENCES `calendar_entries`(`id`),\n\tCONSTRAINT `fk_calendar_entries_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`),\n\tCONSTRAINT `fk_calendar_entries_event_series_id_event_series_id_fk` FOREIGN KEY (`event_series_id`) REFERENCES `event_series`(`id`),\n\tCONSTRAINT `fk_calendar_entries_organizer_identity_id_identities_id_fk` FOREIGN KEY (`organizer_identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `calendar_entries_calendar_id_external_id_unique` UNIQUE(`calendar_id`,`external_id`),\n\tCONSTRAINT `calendar_entries_series_entry_id_original_starts_at_unique` UNIQUE(`series_entry_id`,`original_starts_at`)\n);",
+      "CREATE TABLE `calendar_entry_participants` (\n\t`id` integer PRIMARY KEY,\n\t`entry_id` integer NOT NULL,\n\t`identity_id` integer,\n\t`email` text NOT NULL,\n\t`name` text,\n\t`response` text,\n\t`optional` integer NOT NULL,\n\t`organizer` integer NOT NULL,\n\t`self` integer NOT NULL,\n\t`resource` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_calendar_entry_participants_entry_id_calendar_entries_id_fk` FOREIGN KEY (`entry_id`) REFERENCES `calendar_entries`(`id`),\n\tCONSTRAINT `fk_calendar_entry_participants_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `calendar_entry_participants_entry_id_email_unique` UNIQUE(`entry_id`,`email`)\n);",
+      "CREATE TABLE `calendar_entry_revisions` (\n\t`id` integer PRIMARY KEY,\n\t`entry_id` integer NOT NULL,\n\t`title` text,\n\t`starts_at` integer,\n\t`ends_at` integer,\n\t`location` text,\n\t`status` text,\n\t`recurrence` text,\n\t`recurrence_ends_at` integer,\n\t`external_updated_at` integer,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `fk_calendar_entry_revisions_entry_id_calendar_entries_id_fk` FOREIGN KEY (`entry_id`) REFERENCES `calendar_entries`(`id`)\n);",
+      "CREATE TABLE `calendars` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`title` text,\n\t`timezone` text,\n\t`access_role` text,\n\t`primary_calendar` integer NOT NULL,\n\t`synced` integer NOT NULL,\n\t`seen_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_calendars_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `calendars_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE TABLE `event_index_pending` (\n\t`id` integer NOT NULL,\n\t`indexable_type` text NOT NULL,\n\tCONSTRAINT `event_index_pending_pk` PRIMARY KEY(`indexable_type`, `id`)\n);",
+      "ALTER TABLE `events` ADD `status` text;",
+      "ALTER TABLE `events` ADD `all_day` integer;",
+      "ALTER TABLE `events` ADD `source_deleted_at` integer;",
+      "ALTER TABLE `meetings` ADD `join_key` text;",
+      "CREATE INDEX `calendar_entries_by_calendar_id_starts_at` ON `calendar_entries` (`calendar_id`,`starts_at`);",
+      "CREATE INDEX `calendar_entries_by_ical_uid` ON `calendar_entries` (`ical_uid`) WHERE ical_uid IS NOT NULL;",
+      "CREATE INDEX `calendar_entries_by_join_key` ON `calendar_entries` (`join_key`) WHERE join_key IS NOT NULL;",
+      "CREATE INDEX `calendar_entries_by_event_id` ON `calendar_entries` (`event_id`);",
+      "CREATE INDEX `calendar_entries_by_event_series_id` ON `calendar_entries` (`event_series_id`);",
+      "CREATE INDEX `calendar_entries_by_event_type_event_id` ON `calendar_entries` (`event_type`,`event_id`);",
+      "CREATE INDEX `calendar_entries_by_organizer_identity_id` ON `calendar_entries` (`organizer_identity_id`);",
+      "CREATE INDEX `calendar_entry_participants_by_identity_id` ON `calendar_entry_participants` (`identity_id`);",
+      "CREATE INDEX `calendar_entry_revisions_by_entry_id_created_at` ON `calendar_entry_revisions` (`entry_id`,`created_at`);",
+      "CREATE INDEX `meetings_by_join_key` ON `meetings` (`join_key`) WHERE join_key IS NOT NULL;"
+    ]
+  },
+  {
+    "name": "20261024234814_version-33-calendars-triggers",
+    "statements": [
+      "-- The event is indexed, not each entry: its title, description and location, and the names its entries list.\n-- Stemming needs JS, so the triggers only queue the event and the next search indexes it, as tasks do.\nCREATE VIRTUAL TABLE event_words USING fts5(\n  normalized_text, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2', prefix = '3');",
+      "CREATE VIRTUAL TABLE event_words_vocab USING fts5vocab(event_words, 'col');",
+      "CREATE VIRTUAL TABLE event_stems USING fts5(\n  stems, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2');",
+      "CREATE TRIGGER event_index_ai AFTER INSERT ON events BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id) VALUES ('event', new.id);\nEND;",
+      "CREATE TRIGGER event_index_au AFTER UPDATE OF title, description, location, deleted_at ON events\n  WHEN old.title IS NOT new.title OR old.description IS NOT new.description OR old.location IS NOT new.location\n    OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id) VALUES ('event', new.id);\nEND;",
+      "CREATE TRIGGER event_index_ad AFTER DELETE ON events BEGIN\n  DELETE FROM event_words WHERE rowid = old.id;\n  DELETE FROM event_stems WHERE rowid = old.id;\n  DELETE FROM event_index_pending WHERE indexable_type = 'event' AND id = old.id;\nEND;",
+      "-- An entry that joins or leaves an event, or changes kind, changes what the event is found by.\nCREATE TRIGGER event_index_entry_au AFTER UPDATE OF event_id, event_type, deleted_at ON calendar_entries\n  WHEN old.event_id IS NOT new.event_id OR old.event_type IS NOT new.event_type OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', value FROM (SELECT old.event_id AS value UNION SELECT new.event_id) WHERE value IS NOT NULL;\nEND;",
+      "CREATE TRIGGER event_index_participant_ai AFTER INSERT ON calendar_entry_participants BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', event_id FROM calendar_entries WHERE id = new.entry_id AND event_id IS NOT NULL;\nEND;",
+      "CREATE TRIGGER event_index_participant_au AFTER UPDATE OF name ON calendar_entry_participants\n  WHEN old.name IS NOT new.name BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', event_id FROM calendar_entries WHERE id = new.entry_id AND event_id IS NOT NULL;\nEND;",
+      "CREATE TRIGGER event_index_participant_ad AFTER DELETE ON calendar_entry_participants BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', event_id FROM calendar_entries WHERE id = old.entry_id AND event_id IS NOT NULL;\nEND;",
+      "CREATE TRIGGER calendar_entries_time_bi BEFORE INSERT ON calendar_entries\n  WHEN new.ends_at < new.starts_at BEGIN\n  SELECT RAISE(ABORT, 'a calendar entry cannot end before it starts');\nEND;",
+      "CREATE TRIGGER calendar_entries_time_bu BEFORE UPDATE OF starts_at, ends_at ON calendar_entries\n  WHEN new.ends_at < new.starts_at BEGIN\n  SELECT RAISE(ABORT, 'a calendar entry cannot end before it starts');\nEND;",
+      "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('event_index', 0, 0, 0, 1, NULL, NULL);",
+      "INSERT OR IGNORE INTO event_index_pending (indexable_type, id) SELECT 'event', id FROM events;"
+    ]
+  },
+  {
+    "name": "20261024234910_version-33-join-key-fill",
+    "statements": [
+      "CREATE INDEX `meetings_join_key_to_fill` ON `meetings` (`id`) WHERE join_url IS NOT NULL AND join_key IS NULL;"
+    ]
+  },
+  {
     "name": "20261025064253_version-30-reviewed-tag-consolidation",
     "statements": [
       "CREATE TABLE `tag_consolidations` (\n\t`id` integer PRIMARY KEY,\n\t`source_id` integer NOT NULL,\n\t`survivor_id` integer NOT NULL,\n\t`source_member_ids` text NOT NULL,\n\t`survivor_member_ids` text NOT NULL,\n\t`actor_type` text NOT NULL,\n\t`actor_id` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`idempotency_key` text NOT NULL UNIQUE,\n\t`vocabulary_fingerprint` text NOT NULL,\n\t`preview_fingerprint` text NOT NULL,\n\t`counts` text NOT NULL,\n\t`request_fingerprint` text NOT NULL,\n\tCONSTRAINT `fk_tag_consolidations_source_id_canonical_tags_id_fk` FOREIGN KEY (`source_id`) REFERENCES `canonical_tags`(`id`),\n\tCONSTRAINT `fk_tag_consolidations_survivor_id_canonical_tags_id_fk` FOREIGN KEY (`survivor_id`) REFERENCES `canonical_tags`(`id`)\n);",
