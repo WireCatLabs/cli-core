@@ -15,7 +15,7 @@ shape of this file.
 
 ### Fixed
 
-- **A deny saved on the sync command itself now stops it.** `permissions.messages.sync: deny` and `permissions.bot.messages.sync: deny` were ignored, because both commands were checked under their parent key; the command line, MCP discovery and the MCP server now refuse them. Bot commands also refuse a denied read (`bot.messages: deny` stops `bot messages list` and `bot messages sync`) before they connect, as messenger commands already did.
+- **A deny saved on the sync command itself now stops it.** `permissions.bot.messages.sync: deny` was ignored, because `bot messages sync` was checked under `bot.messages`; `permissions.messages.sync: deny` could not be saved at all and was refused as naming no command. Both are now honoured on the command line, in MCP discovery and by the MCP server. Bot commands also refuse a denied read (`bot.messages: deny` stops `bot messages list` and `bot messages sync`) before they connect, as messenger commands already did.
 
 ## 0.420.0 — 25.10.2026
 

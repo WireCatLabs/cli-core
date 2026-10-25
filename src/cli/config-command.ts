@@ -76,10 +76,7 @@ export const configCommand = (
       .option("--bot", "only for bots — the bot section of the file")
     if (action === "set")
       sub
-        .argument(
-          "<value>",
-          "a number, true or false, or for allow a list like send,reaction; for a group tg:work,max:Alice,email:me@x",
-        )
+        .argument("<value>", "a number, true or false; for a group tg:work,max:Alice,email:me@x")
         .description("save a setting to the configuration file")
     else sub.description("remove a setting from the configuration file")
 
