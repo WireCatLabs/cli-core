@@ -1,71 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
 import type { AccountAction, ChatAction, SendKind } from "./journal.js"
-import { canonicalPermissionKey, canonicalPermissions } from "./permission-aliases.js"
-
-/**
- * What a profile may be allowed to do (max-cli `CLI-37`, `NEED-251`). One name per thing the owner would
- * recognise, so `sessions` — which logs the owner out of their phone — never rides along with
- * adding a contact. There is no `*`: "everything" is not setting `allow` at all, and a wildcard
- * would switch on `delete` without anyone naming it.
- */
-export const PERMISSIONS = [
-  "send",
-  "forward",
-  "reaction",
-  "edit",
-  "pin",
-  "read",
-  "delete",
-  "groups",
-  "contacts",
-  "profile",
-  "folders",
-  "sessions",
-] as const
-
-export type Permission = (typeof PERMISSIONS)[number]
-
-const ACCOUNT: Record<AccountAction, Permission> = {
-  "contact-add": "contacts",
-  "contact-remove": "contacts",
-  "contact-import": "contacts",
-  "contact-rename": "contacts",
-  "contact-block": "contacts",
-  "contact-unblock": "contacts",
-  profile: "profile",
-  "folder-create": "folders",
-  "folder-update": "folders",
-  "folder-delete": "folders",
-  "folder-order": "folders",
-  "folder-join": "folders",
-  "sessions-end": "sessions",
-  "chat-mute": "profile",
-  "chat-unmute": "profile",
-  "chat-archive": "profile",
-  "chat-unarchive": "profile",
-  "chat-pin": "profile",
-  "chat-unpin": "profile",
-  "chat-mark-unread": "profile",
-  "message-star": "profile",
-  "message-unstar": "profile",
-  privacy: "profile",
-}
-
-export const permissionFor = (kind: SendKind, action?: string): Permission => {
-  switch (kind) {
-    case "message":
-      return "send"
-    case "chat":
-      return "groups"
-    case "account": {
-      const permission = ACCOUNT[action as AccountAction]
-      if (!permission) throw new Error(`an account change without a known action: ${action}`)
-      return permission
-    }
-    default:
-      return kind
-  }
-}
 
 /** What a profile may do with one command path — the standard's "Permissions". */
 export const LEVELS = ["deny", "readonly", "ask", "allow"] as const
@@ -173,48 +107,6 @@ export const RESOURCES = [
   "images",
 ] as const
 
-const OLD_WORDS: Record<Permission, PermissionKey[]> = {
-  send: ["messages.send", "polls.create", "chats.start"],
-  forward: ["messages.forward"],
-  reaction: ["reactions", "polls.vote", "messages.press", "chats.app"],
-  edit: ["messages.edit", "polls.close"],
-  pin: ["messages.pin", "messages.unpin"],
-  read: ["chats.mark-read"],
-  delete: ["messages.delete", "chats.delete", "chats.clear"],
-  groups: [
-    "chats.create",
-    "chats.update",
-    "chats.join",
-    "chats.leave",
-    "chats.members",
-    "chats.admins",
-    "chats.links",
-    "chats.requests",
-    "chats.moderate",
-    "topics.enable",
-    "topics.create",
-    "topics.edit",
-    "topics.delete",
-  ],
-  contacts: ["contacts"],
-  profile: ["account.update", "account.privacy.set", "chats.mute", "messages.star", "messages.unstar"],
-  folders: ["chats.folders"],
-  sessions: ["account.sessions.end"],
-}
-
-/** The command path an old `allow` word stood for, as one key — what an MCP tool's `permission` is checked against. */
-export const keyOfWord = (word: Permission): PermissionKey => OLD_WORDS[word][0] as PermissionKey
-
-/**
- * A bot's old words meant its own writes: `profile` was its command menu, and `read` was taking
- * updates, which every level but `deny` allows now.
- */
-const botKeysOf = (word: Permission): PermissionKey[] => {
-  if (word === "profile") return ["bot.commands"]
-  if (word === "read") return []
-  return OLD_WORDS[word].map((key) => `bot.${key}`)
-}
-
 /**
  * Layers come nearest first. A key a nearer layer sets hides that key and every key under it in the
  * farther layers, so a profile's `messages: readonly` is not undone by `messages.delete: allow` in
@@ -225,7 +117,7 @@ export const layerPermissions = (layers: readonly [string, Readonly<Record<Permi
   const sources: Record<PermissionKey, string> = {}
   for (const [from, layer] of layers) {
     const nearer = Object.keys(levels)
-    for (const [key, level] of Object.entries(canonicalPermissions(layer ?? {}))) {
+    for (const [key, level] of Object.entries(layer ?? {})) {
       if (nearer.some((named) => key === named || key.startsWith(`${named}.`))) continue
       levels[key] = level
       sources[key] = from
@@ -254,12 +146,6 @@ const nearest = (levels: Readonly<Record<PermissionKey, Level>>, key: Permission
 }
 
 /**
- * `chats unmute` was checked as `chats.mute` before it had its own key; a config that names only the old key
- * keeps meaning it, so a `chats.mute: readonly` written then still stops an unmute.
- */
-const FORMER_KEYS: Partial<Record<PermissionKey, PermissionKey>> = { "chats.unmute": "chats.mute" }
-
-/**
  * The most specific key the owner set wins. A built-in default (`DEFAULT_PERMISSIONS`) only ever
  * tightens: against a broader key of the owner's, the stricter of the two holds — so
  * `messages: readonly` still stops a deletion, and `messages: allow` does not drop its question.
@@ -270,8 +156,6 @@ export const levelFor = (
   key: PermissionKey,
   defaults: Readonly<Record<PermissionKey, Level>> = DEFAULT_PERMISSIONS,
 ): { level: Level; key: PermissionKey | null } => {
-  permissions = canonicalPermissions(permissions)
-  key = canonicalPermissionKey(key)
   const found = profileLevel(permissions, key, defaults)
   const ceiling = permissions[CEILING_KEY]
   return ceiling && ORDER[ceiling] < ORDER[found.level] ? { level: ceiling, key: CEILING_KEY } : found
@@ -282,8 +166,6 @@ const profileLevel = (
   key: PermissionKey,
   defaults: Readonly<Record<PermissionKey, Level>>,
 ): { level: Level; key: PermissionKey | null } => {
-  const former = FORMER_KEYS[key]
-  if (former !== undefined && permissions[key] === undefined) return profileLevel(permissions, former, defaults)
   const own = nearest(permissions, key)
   const builtIn = nearest(defaults, key)
   if (!builtIn || (own && own.depth >= builtIn.depth)) return own ? { level: own.level, key: own.key } : ALLOWED
@@ -291,7 +173,15 @@ const profileLevel = (
   return { level: own.level, key: own.key }
 }
 
-const CHAT_KEYS: Partial<Record<string, PermissionKey>> = { settings: "chats.update" }
+const CHAT_KEYS: Partial<Record<ChatAction, PermissionKey>> = {
+  settings: "chats.update",
+  "requests.accept": "chats.requests.confirm",
+  "requests.decline": "chats.requests.reject",
+  "link.create": "chats.links.create",
+  "link.reset": "chats.links.reset",
+  "link.revoke": "chats.links.remove",
+  "link.update": "chats.links.update",
+}
 
 const ACCOUNT_KEYS: Record<AccountAction, PermissionKey> = {
   "contact-add": "contacts.add",
@@ -331,7 +221,7 @@ const KIND_KEYS: Record<Exclude<SendKind, "chat" | "account">, PermissionKey> = 
 
 /** The command path a guarded write belongs to, when the caller did not name it. */
 export const keyForWrite = (kind: SendKind, action?: string): PermissionKey => {
-  if (kind === "chat") return canonicalPermissionKey(CHAT_KEYS[action ?? ""] ?? `chats.${action ?? "update"}`)
+  if (kind === "chat") return CHAT_KEYS[action as ChatAction] ?? `chats.${action ?? "update"}`
   if (kind === "account") {
     const key = ACCOUNT_KEYS[action as AccountAction]
     if (!key) throw new Error(`an account change without a known action: ${action}`)
@@ -342,7 +232,6 @@ export const keyForWrite = (kind: SendKind, action?: string): PermissionKey => {
 
 /** `keyForWrite` read backwards, as far as a command's key says it: an unpin is a `pin`, a chat change names its action. */
 export const writeOfKey = (key: PermissionKey): { kind?: SendKind; action?: ChatAction | AccountAction } => {
-  key = canonicalPermissionKey(key)
   const account = Object.entries(ACCOUNT_KEYS).find(([, named]) => named === key)?.[0]
   if (account) return { kind: "account", action: account as AccountAction }
   const kind = Object.entries(KIND_KEYS).find(([, named]) => named === key || key.startsWith(`${named}.`))?.[0]
@@ -431,16 +320,13 @@ const NAMED_WRITE_KEYS = [
 
 /** Every key a write is checked against that a command path may not spell out. */
 export const WRITE_KEYS: readonly PermissionKey[] = [
-  ...new Set(
-    [
-      ...NAMED_WRITE_KEYS,
-      ...Object.keys(DEFAULT_PERMISSIONS),
-      ...Object.values(KIND_KEYS),
-      ...Object.values(ACCOUNT_KEYS),
-      ...(Object.values(CHAT_KEYS) as PermissionKey[]),
-      ...PERMISSIONS.flatMap((word) => [...OLD_WORDS[word], ...botKeysOf(word)]),
-    ].map(canonicalPermissionKey),
-  ),
+  ...new Set([
+    ...NAMED_WRITE_KEYS,
+    ...Object.keys(DEFAULT_PERMISSIONS),
+    ...Object.values(KIND_KEYS),
+    ...Object.values(ACCOUNT_KEYS),
+    ...(Object.values(CHAT_KEYS) as PermissionKey[]),
+  ]),
 ]
 
 /** Commands that look after the tool and its files and never show a message: no level stops them. */
@@ -475,33 +361,6 @@ const STORE_MAINTENANCE = new Set(["info", "check", "copies"])
 /** Commands outside `messages` that print what people wrote, so `deny messages` reaches them too. */
 const SHOW_MESSAGES = new Set(["inbox", "review", "watch", "serve", "store", "conversations"])
 
-/** Before every search moved under `search` (2026-10-09). */
-const OLD_SEARCH_KEY = /^(bot\.)?(messages|conversations|topics)\.search(?:\.|$)/
-
-/** Statistics and searches moved; a deny under an old path would stop applying unseen, so the command refuses. */
-export const assertStatsPermissionsCurrent = (
-  path: readonly string[],
-  permissions: Readonly<Record<string, Level>>,
-): void => {
-  if (path[0] === "bot") {
-    assertStatsPermissionsCurrent(path.slice(1), permissions)
-    return
-  }
-  if (path[0] === "search" && Object.keys(permissions).some((key) => OLD_SEARCH_KEY.test(key)))
-    throw new CliError(
-      "configuration_error",
-      "search permission paths have moved — rename messages.search, conversations.search and topics.search to search.messages, search.conversations and search.topics",
-      { retryable: false },
-    )
-  if (path[0] !== "stats") return
-  if (Object.keys(permissions).some((key) => /^(bot\.)?(messages|chats|tasks)\.stats(?:\.|$)/.test(key)))
-    throw new CliError(
-      "configuration_error",
-      "statistics permission paths have moved — rename messages.stats, chats.stats and tasks.stats to stats.messages.show, stats.chats.show and stats.tasks.show",
-      { retryable: false },
-    )
-}
-
 export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => {
   if (path[0] === "bot") return readKeysForCommand(path.slice(1)).map((key) => `bot.${key}`)
   const key = keyForCommand(path)
@@ -535,7 +394,6 @@ export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => 
  */
 export const keyForCommand = (path: readonly string[]): PermissionKey | null | undefined => {
   if (path.length === 0) return null
-  path = canonicalPermissionKey(path.join(".")).split(".")
   const [top, next] = path
   if (top === "bot") {
     if (next === undefined || BOT_HOUSEKEEPING.has(next)) return null
@@ -544,7 +402,7 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   }
   if (KEYED_UNDER_HOUSEKEEPING.has(path.join("."))) return path.join(".")
   if (top === undefined || HOUSEKEEPING.has(top) || (top === "search" && next === "runs")) return null
-  // Picture models moved from `models image` (0.270.0); a model is housekeeping wherever it is listed.
+  // A model is housekeeping wherever it is listed.
   if (top === "images" && next === "models") return null
   if (top === "attachments" && (next === "check" || next === "jobs")) return null
   if (top === "attachments" && next === "download") return "messages"
@@ -554,7 +412,7 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
     return path[2] === "rebuild" ? "conversations.links.rebuild" : "conversations.links"
   // Vectors are written to the local store only, and the text never leaves the machine (phase 5 E10).
   if (
-    (top === "conversations" && next === "embeddings") ||
+    (top === "conversations" && (next === "embeddings" || next === "embed")) ||
     (top === "images" && next === "embed") ||
     (top === "conversations" && next === "rebuild")
   )
@@ -566,7 +424,6 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   if (top === "mentions")
     return next === "rebuild" || next === "confirm" || next === "reject" ? `mentions.${next}` : "messages"
   if (top === "store" && (next === "gaps" || next === "jobs")) return path.join(".")
-  if (top === "messages" && next === "sync") return "messages"
   if (SHOW_MESSAGES.has(top) || (top === "contacts" && (next === "context" || next === "prepare" || next === "events")))
     return "messages"
   if ((RESOURCES as readonly string[]).includes(top)) return path.join(".")
@@ -586,7 +443,7 @@ export const permissionOverrides = (entries: readonly string[] = []): Record<Per
       )
     levels[key] = level as Level
   }
-  return canonicalPermissions(levels)
+  return levels
 }
 
 /** No startup flag grants access: an override may narrow the profile's level, never lift it or a key under it. */
@@ -594,8 +451,6 @@ export const assertOverridesTighten = (
   overrides: Readonly<Record<PermissionKey, Level>>,
   profile: Readonly<Record<PermissionKey, Level>>,
 ): void => {
-  overrides = canonicalPermissions(overrides)
-  profile = canonicalPermissions(profile)
   for (const [key, level] of Object.entries(overrides)) {
     const under = Object.keys(profile).filter((named) => named.startsWith(`${key}.`))
     const lifted = [key, ...under].find((named) => ORDER[level] > ORDER[levelFor(profile, named).level])

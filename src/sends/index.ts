@@ -28,7 +28,6 @@ export {
   sendsPathFor,
 } from "./journal.js"
 export {
-  assertStatsPermissionsCurrent,
   CEILING_KEY,
   DEFAULT_PERMISSIONS,
   keyForCommand,
@@ -37,10 +36,7 @@ export {
   type Level,
   layerPermissions,
   levelFor,
-  PERMISSIONS,
-  type Permission,
   type PermissionKey,
-  permissionFor,
   permissionOverrides,
   readKeysForCommand,
   skipFlagFor,

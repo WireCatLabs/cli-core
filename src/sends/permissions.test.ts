@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
-  assertStatsPermissionsCurrent,
+  DEFAULT_PERMISSIONS,
   keyForCommand,
+  keyForWrite,
   layerPermissions,
   levelFor,
   permissionOverrides,
@@ -90,12 +91,40 @@ describe("startup permission overrides", () => {
   })
 })
 
-it("refuses old statistics permission keys and names the paths that replace them", () => {
-  expect(() => assertStatsPermissionsCurrent(["stats", "messages", "show"], { "messages.stats": "deny" })).toThrow(
-    "stats.messages.show",
-  )
-  expect(() => assertStatsPermissionsCurrent(["stats", "tasks", "show"], { "tasks.stats": "readonly" })).toThrow(
-    "stats.tasks.show",
-  )
-  expect(() => assertStatsPermissionsCurrent(["messages", "list"], { "messages.stats": "deny" })).not.toThrow()
+describe("a command checked under its full path", () => {
+  it.each([
+    [["messages", "sync"], "messages.sync"],
+    [["bot", "messages", "sync"], "bot.messages.sync"],
+  ])("checks %j as %s", (path, key) => {
+    expect(keyForCommand(path)).toBe(key)
+    expect(readKeysForCommand(path)).toEqual([key])
+  })
+
+  it("**stops it with a deny on its own key or on a parent**", () => {
+    for (const key of ["bot.messages.sync", "bot.messages", "bot"])
+      expect(levelFor({ [key]: "deny" }, "bot.messages.sync").level).toBe("deny")
+    expect(levelFor({ "messages.sync": "deny" }, "messages.sync").level).toBe("deny")
+    expect(levelFor({ messages: "deny" }, "messages.sync").level).toBe("deny")
+  })
+
+  it("lets an allow on its own key win over a parent deny in the same section, never across sections", () => {
+    expect(levelFor({ "bot.messages": "deny", "bot.messages.sync": "allow" }, "bot.messages.sync").level).toBe("allow")
+    const { levels } = layerPermissions([
+      ["profile", { "bot.messages": "deny" }],
+      ["defaults", { "bot.messages.sync": "allow" }],
+    ])
+    expect(levelFor(levels, "bot.messages.sync").level).toBe("deny")
+  })
+
+  it("keeps every built-in level for the keys under it", () => {
+    for (const [key, level] of Object.entries(DEFAULT_PERMISSIONS))
+      expect(levelFor({}, `${key}.under`)).toEqual({ level, key })
+  })
+
+  it("keys a chat change by the command that makes it", () => {
+    expect(keyForWrite("chat", "requests.accept")).toBe("chats.requests.confirm")
+    expect(keyForWrite("chat", "requests.decline")).toBe("chats.requests.reject")
+    expect(keyForWrite("chat", "link.revoke")).toBe("chats.links.remove")
+    expect(keyForWrite("chat", "link.create")).toBe("chats.links.create")
+  })
 })

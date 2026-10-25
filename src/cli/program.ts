@@ -43,9 +43,8 @@ import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
-import { movedCommandError } from "./moved.js"
 import { PreviewComplete, preview } from "./preview.js"
-import { commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
+import { asFirstWord, commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
@@ -485,7 +484,9 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         needsProfile: keyForCommand(path) !== null,
       })
       const permissions = "permissions" in resolved ? (resolved.permissions as Settings["permissions"]) : {}
-      renderAnswer(action, outputFor(action), itemOf(snakeKeys(preview(action, permissions))))
+      const unset = `${command} ${asFirstWord(resolved.profile)}config unset${path[0] === "bot" ? " --bot" : ""}`
+      const previewed = preview(action, permissions, unset, definition.configuration?.permissionKey)
+      renderAnswer(action, outputFor(action), itemOf(snakeKeys(previewed)))
       throw new PreviewComplete()
     }
     // Not inside the scheduled run itself: its own failure is already on its way to last.json.
@@ -528,12 +529,6 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       `"${profile}" is not a command, so it was read as a profile name — and no command followed it. ` +
       `Run \`${command} --help\` for the commands, or \`${command} ${profile} account show\` if "${profile}" is your profile.`
     const failure = new CliError("validation_error", message, { param: "profile" })
-    const settled = await settleFailure(failure, { definition, program, rest, profile, options })
-    return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
-  }
-
-  const failure = movedCommandError(program, rest)
-  if (failure !== undefined) {
     const settled = await settleFailure(failure, { definition, program, rest, profile, options })
     return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
   }

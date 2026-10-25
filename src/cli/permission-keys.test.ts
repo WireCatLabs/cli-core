@@ -41,6 +41,18 @@ describe("the permission keys a file may name", () => {
     ])
   })
 
+  it("**knows a command's full path**, and no narrower key under a command checked as another", () => {
+    const root = new Command("app")
+    root.command("messages").command("sync")
+    root.command("bot").command("messages").command("sync")
+    root.command("conversations").command("show")
+    root.command("attachments").command("list")
+    const known = knownPermissionKeys(root)
+    expect([...known]).toEqual(expect.arrayContaining(["messages.sync", "bot.messages", "bot.messages.sync"]))
+    for (const key of ["conversations.show", "attachments.list", "conversations.links.add", "bot.store.fetch"])
+      expect(known.has(key)).toBe(false)
+  })
+
   it("takes a CLI's own key for a command `keyForCommand` does not know", () => {
     const known = knownPermissionKeys(program(), (command) => (command.name() === "odd" ? "chats.odd" : undefined))
     expect(known.has("chats.odd")).toBe(true)

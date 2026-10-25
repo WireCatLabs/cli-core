@@ -2394,7 +2394,7 @@ describe("the shared read commands", () => {
     expect((await call(["search", "messages", "--regex", "ch.pt", "--json"], never, env)).code).toBe(2)
   })
 
-  it("**search mail is memo's**: it answers with the pointer, and search messages never returns mail", async () => {
+  it("**search mail is not a command here**, and search messages never returns mail", async () => {
     const root = mkdtempSync(join(tmpdir(), "mail-search-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -2418,9 +2418,8 @@ describe("the shared read commands", () => {
     })
     const mail = await call(["search", "mail", "chapter", "--json"], never, env)
     expect(mail.code).toBe(2)
-    expect(mail.stderr.join("\n")).toContain(
-      "mail is searched by the separate memo CLI: install @wirecat/cli-memo, then `memo search mail …`",
-    )
+    expect(mail.stderr.join("\n")).toContain("unknown command")
+    expect(mail.stderr.join("\n")).not.toContain("memo")
 
     const args = ["search", "messages", "chapter", "--json"]
     const all = await call([...args, "--source", "all"], never, env)

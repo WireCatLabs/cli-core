@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Old command names and old permission keys are no longer recognised.** A retired command path (`contacts profile`, `bot store fetch`, `search mail` and the rest) gets the ordinary "unknown command" answer, on the command line and over MCP, with no pointer to a replacement. A saved permission key is read only as written: nothing maps an old key to a new one, and `chats.mute` no longer covers `chats unmute`. Removed with it: `movedCommandError` from `/cli`; `PERMISSIONS`, `Permission`, `permissionFor` and `assertStatsPermissionsCurrent` from `/sends`; the `permission` field of an MCP tool definition; and the `skipMovedPermissions` option of `resolveSettings`. A CLI that imports one of them drops the import; nothing replaces them.
+- **Bot commands and `--dry-run` refuse a saved permission key that no command checks**, as messenger commands already did. They stop with a `configuration_error` that names the key and the `config unset` that removes it: "permissions.bot.store.fetch names no command — remove it with \`tg sales config unset --bot permissions.bot.store.fetch\`". `config show`, `set` and `unset` still run, so the file can be repaired. Before, a bot command did not look at the keys at all, and an old key was quietly renamed or ignored.
+- **`messages sync` and `bot messages sync` are checked as `messages.sync` and `bot.messages.sync`**, their own paths. A level on `messages` or `bot.messages` still applies to them; `commands --json` now reports the longer key.
+
+### Fixed
+
+- **A deny saved on the sync command itself now stops it.** `permissions.messages.sync: deny` and `permissions.bot.messages.sync: deny` were ignored, because both commands were checked under their parent key; the command line, MCP discovery and the MCP server now refuse them. Bot commands also refuse a denied read (`bot.messages: deny` stops `bot messages list` and `bot messages sync`) before they connect, as messenger commands already did.
+
 ## 0.420.0 — 25.10.2026
 
 ### Changed — may break callers

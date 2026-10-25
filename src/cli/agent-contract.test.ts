@@ -259,10 +259,15 @@ it("refuses preview of denied source data and write paths before exposing target
   const stats = new Command("stats").addCommand(new Command("messages").addCommand(new Command("show")))
   root.addCommand(stats)
   const leaf = findCommand(root, ["stats", "messages", "show"])
-  expect(() => preview(leaf, { messages: "deny" })).toThrow("messages")
-  expect(() => preview(leaf, { "messages.stats": "deny" })).toThrow("stats.messages.show")
+  const unset = "fixture work config unset"
+  expect(() => preview(leaf, { messages: "deny" }, unset)).toThrow("messages")
+  expect(() => preview(leaf, { "messages.stats": "deny" }, unset)).toThrow(
+    "permissions.messages.stats names no command — remove it with `fixture work config unset permissions.messages.stats`",
+  )
   root.addCommand(new Command("messages").addCommand(new Command("send")))
-  expect(() => preview(findCommand(root, ["messages", "send"]), { messages: "readonly" })).toThrow("does not permit")
+  expect(() => preview(findCommand(root, ["messages", "send"]), { messages: "readonly" }, unset)).toThrow(
+    "does not permit",
+  )
 })
 
 it("honors the whole-command timeout environment and explicit flag precedence", async () => {

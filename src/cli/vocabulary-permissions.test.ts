@@ -7,14 +7,14 @@ import { sharedProgram } from "../testing/shared-program.js"
 import { run } from "./program.js"
 
 const cases = [
-  ["contacts.alias", ["contacts", "aliases", "set", "11", "Synthetic"]],
-  ["tasks.plan", ["tasks", "update", "DOC-1", "--title", "Synthetic"]],
-  ["metadata.refresh", ["metadata", "sync", "--chat", "7"]],
-  ["tags.auto", ["tags", "rebuild"]],
+  ["contacts.nicknames", ["contacts", "aliases", "set", "11", "Synthetic"]],
+  ["tasks.schedule", ["tasks", "update", "DOC-1", "--title", "Synthetic"]],
+  ["metadata.fetch", ["metadata", "sync", "--chat", "7"]],
+  ["tags.guess", ["tags", "rebuild"]],
 ] as const
 
-describe("saved permission paths after command renames", () => {
-  it.each(cases)("refuses moved path %s before the canonical command runs", async (permission, ...spellings) => {
+describe("saved permission keys no command checks", () => {
+  it.each(cases)("refuses %s before the command runs", async (permission, ...spellings) => {
     const root = mkdtempSync(join(tmpdir(), "vocabulary-permissions-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -32,7 +32,8 @@ describe("saved permission paths after command renames", () => {
       expect(await run([...argv, "--json"], sharedProgram, { streams, tty: false, env })).toBe(3)
       expect(streams.stdout).toEqual([])
       expect(JSON.parse(streams.stderr.at(-1) ?? "{}").error.code).toBe("configuration_error")
-      expect(streams.stderr.join("")).toContain(`rename permissions.${permission} to permissions.`)
+      expect(streams.stderr.join("")).toContain(`permissions.${permission} names no command`)
+      expect(streams.stderr.join("")).not.toContain("rename")
       expect(existsSync(env.MESSAGING_STORE)).toBe(false)
     }
   })

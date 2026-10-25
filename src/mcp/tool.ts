@@ -26,14 +26,7 @@ import { partialOutcome, startRecording } from "../runs/recording.js"
 import { newRunId } from "../runs/run.js"
 import { inRun } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
-import {
-  assertStatsPermissionsCurrent,
-  keyForCommand,
-  levelFor,
-  type Permission,
-  type PermissionKey,
-  readKeysForCommand,
-} from "../sends/permissions.js"
+import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
 import { onlineDeps, storeModeDeps } from "../services/deps.js"
 import { type Services, servicesFor } from "../services/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -97,8 +90,6 @@ interface Tool<S extends Input> {
   /** What it touches, where its hints cannot say: a read of the messenger kept in the store is not a write there. */
   effects?: Effects
   _meta?: Record<string, unknown>
-  /** A write, and what the profile's `allow` must name for it to be offered. */
-  permission?: Permission
   /** Writes what the owner keeps, as its command (`isStoreChange`): `<PREFIX>_READ_ONLY` refuses it. */
   changesStore?: true
   /** The CLI command it answers as, where its name does not spell it: `chats send-as`. Its level is read from it. */
@@ -371,7 +362,6 @@ const callRunner = ({
           })
         definition.check?.(args)
         if (definition.changesStore) refuseStoreChange(messenger.app, defaults.env)
-        assertStatsPermissionsCurrent(path, defaults.settings.permissions ?? {})
         refuseLacking(messenger, path)
         for (const permission of readKeysForCommand(path)) {
           if (levelFor(defaults.settings.permissions ?? {}, permission).level === "deny")

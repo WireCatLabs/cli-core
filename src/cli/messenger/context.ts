@@ -17,19 +17,13 @@ import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { type Asker, ceilingRefusal, guardFor, type SendGuard } from "../../sends/guard.js"
 import { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "../../sends/pace.js"
-import {
-  assertStatsPermissionsCurrent,
-  CEILING_KEY,
-  levelFor,
-  type PermissionKey,
-  readKeysForCommand,
-} from "../../sends/permissions.js"
+import { CEILING_KEY, levelFor, type PermissionKey, readKeysForCommand } from "../../sends/permissions.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { OFFLINE, type ServiceDeps, type ServiceMessenger, type Services, servicesFor } from "../../services/index.js"
 import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { type BaseContext, type BaseEnvironment, baseContext, environmentOf } from "../context.js"
-import { knownPermissionKeys, type PermissionKeyOf, unknownPermissionKeys } from "../permission-keys.js"
+import { type PermissionKeyOf, refuseUnknownPermissionKeys } from "../permission-keys.js"
 import { asFirstWord } from "../profile.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../settings.js"
 import { rootOf } from "../steps.js"
@@ -678,7 +672,6 @@ const pathOf = (command: Command): string[] => {
 
 /** `deny` stops a read too, before anything connects: what the profile may not see is never fetched. */
 const refuseDenied = (command: Command, settings: Settings) => {
-  assertStatsPermissionsCurrent(pathOf(command), settings.permissions)
   for (const key of readKeysForCommand(pathOf(command))) {
     const { level, key: named } = levelFor(settings.permissions, key)
     if (level !== "deny") continue
@@ -720,16 +713,12 @@ export const messengerContext = (
   const { profile } = base.settings
   refuseDenied(command, base.settings)
   refuseLacking(messenger, pathOf(command))
-  for (const key of unknownPermissionKeys(
+  refuseUnknownPermissionKeys(
+    command,
     base.settings.permissions,
-    knownPermissionKeys(command, messenger.permissionKey),
-  )) {
-    throw new CliError(
-      "configuration_error",
-      `permissions.${key} names no command — remove it with \`${app.command} ${asFirstWord(profile)}config unset permissions.${key}\``,
-      { permission: key },
-    )
-  }
+    `${app.command} ${asFirstWord(profile)}config unset`,
+    messenger.permissionKey,
+  )
   // Read when warning, not now: serve swaps the renderer's methods for log records after this.
   const warn: Warn = (text, warning) => (base.renderer.warn as Warn)(text, warning)
   const accountFor = (): AccountKey => {

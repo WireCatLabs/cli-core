@@ -78,21 +78,20 @@ describe("config", () => {
     expect((await call(["config", "unset", "permissions.messages.dlete"], env)).code).toBe(0)
   })
 
-  it("**renames a moved permission key** with set and unset, while every other command refuses it", async () => {
+  it("**removes a saved key no command checks** with unset, and refuses to save one", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
     await call(["work", "config", "set", "region", "eu"], env)
     const file = join(env.CHAT_CONFIG_DIR, "config.json")
     const saved = JSON.parse(readFileSync(file, "utf8"))
-    saved.profiles.work.permissions = { "models.audio": "deny" }
+    saved.profiles.work.permissions = { "models.nicknames": "deny" }
     writeFileSync(file, JSON.stringify(saved))
 
-    expect((await call(["work", "config", "show", "--json"], env)).code).toBe(3)
-    expect((await call(["work", "config", "set", "permissions.models.text", "deny"], env)).code).toBe(2)
-    expect((await call(["work", "config", "set", "permissions.models", "deny"], env)).code).toBe(0)
-    expect((await call(["work", "config", "unset", "permissions.models.audio"], env)).code).toBe(0)
-    expect(JSON.parse(readFileSync(file, "utf8")).profiles.work.permissions).toEqual({ models: "deny" })
     expect((await call(["work", "config", "show", "--json"], env)).code).toBe(0)
+    expect((await call(["work", "config", "set", "permissions.models.voices", "deny"], env)).code).toBe(2)
+    expect((await call(["work", "config", "set", "permissions.models", "deny"], env)).code).toBe(0)
+    expect((await call(["work", "config", "unset", "permissions.models.nicknames"], env)).code).toBe(0)
+    expect(JSON.parse(readFileSync(file, "utf8")).profiles.work.permissions).toEqual({ models: "deny" })
   })
 
   it("refuses to change every profile from a process locked to one", async () => {

@@ -202,7 +202,7 @@ describe("reads only the server answers", () => {
     expect(muted).toHaveLength(3)
   })
 
-  it("`chats unmute` is checked as `chats.unmute`, and a config naming only `chats.mute` still covers it", async () => {
+  it("`chats mute` and `chats unmute` are each checked under their own key", async () => {
     const muted: unknown[] = []
     const adapter: MessengerAdapter = {
       ...base,
@@ -229,10 +229,10 @@ describe("reads only the server answers", () => {
 
     expect(ownKey.stderr).toContain("chats.unmute")
     expect(await codes({ "chats.unmute": "readonly" })).toEqual([0, 5])
-    expect(await codes({ "chats.mute": "readonly" })).toEqual([5, 5])
+    expect(await codes({ "chats.mute": "readonly" })).toEqual([5, 0])
     expect(await codes({ "chats.mute": "readonly", "chats.unmute": "allow" })).toEqual([5, 0])
-    expect(await codes({ chats: "readonly", "chats.mute": "allow" })).toEqual([0, 0])
-    expect(await codes({ "chats.mute": "ask" })).toEqual([7, 7])
+    expect(await codes({ chats: "readonly", "chats.mute": "allow" })).toEqual([0, 5])
+    expect(await codes({ "chats.mute": "ask" })).toEqual([7, 0])
   })
 
   it("`chats archive`, `pin` and `mark-unread` change the owner's own chat list, each under its own key", async () => {

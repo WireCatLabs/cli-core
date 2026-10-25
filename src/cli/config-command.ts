@@ -93,7 +93,6 @@ export const configCommand = (
         config.resolveSettings(flags, {
           ...options,
           needsProfile: !everyone && setting !== "default_profile" && !isStoreSetting(setting),
-          skipMovedPermissions: true,
         }),
       )
       const { settings, renderer, env } = context

@@ -1,5 +1,5 @@
+import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
-import { canonicalPermissionKey } from "../sends/permission-aliases.js"
 import { CEILING_KEY, keyForCommand, type PermissionKey, WRITE_KEYS } from "../sends/permissions.js"
 
 export type PermissionKeyOf = (command: Command) => PermissionKey | null | undefined
@@ -29,11 +29,11 @@ export const knownPermissionKeys = (
 ): Set<PermissionKey> => {
   const known = new Set<PermissionKey>()
   const add = (key: PermissionKey) => {
-    key = canonicalPermissionKey(key)
     for (let parts = key.split("."); parts.length > 0; parts = parts.slice(0, -1)) known.add(parts.join("."))
   }
   for (const one of everyCommand(rootOf(command))) {
-    const key = keyOf(one)
+    const own = keyOf(one)
+    const key = own === undefined ? keyForCommand(pathOf(one)) : own
     if (key) add(key)
   }
   for (const key of [...WRITE_KEYS, ...extra]) add(key)
@@ -53,3 +53,19 @@ export const unknownPermissionKeys = (
   levels: Readonly<Record<PermissionKey, unknown>>,
   known: ReadonlySet<PermissionKey>,
 ): PermissionKey[] => Object.keys(levels).filter((key) => key !== CEILING_KEY && !known.has(key))
+
+/** A saved key no command checks would do nothing, so the command refuses to run; `unset` names the fix. */
+export const refuseUnknownPermissionKeys = (
+  command: Command,
+  levels: Readonly<Record<PermissionKey, unknown>>,
+  unset: string,
+  keyOf?: PermissionKeyOf,
+): void => {
+  const [key] = unknownPermissionKeys(levels, knownPermissionKeys(command, keyOf))
+  if (key === undefined) return
+  throw new CliError(
+    "configuration_error",
+    `permissions.${key} names no command — remove it with \`${unset} permissions.${key}\``,
+    { permission: key },
+  )
+}
