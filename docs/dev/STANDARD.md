@@ -1310,7 +1310,8 @@ The three tools, their arguments and what each permission shows are on the handb
   `bot api` is not held back by the key; the CLI keeps checking `bot.api.<operation>` as before.
 - **The first-run answer caps every profile of every WireCat tool** (TASK-757, NEED-1676). Before the first command
   at a terminal, a tool asks what no WireCat tool has asked yet — languages (written to the store's
-  `search_stemmers`), other tools to install, and what commands and agents may do — and keeps the answers in the
+  `search_stemmers`; a new store ticks the tool's `AppIdentity.contentLanguages` that search can stem, else English
+  and the system's language, and only the answer writes the setting), other tools to install, and what commands and agents may do — and keeps the answers in the
   `setup` section of the shared `~/.config/WireCat/config.json`. "Read only" puts the `*` key at `readonly` among a
   profile's levels: `levelFor` never returns a level above it, so it holds over a profile's own `allow`, over MCP
   and over `--permission`. A config file cannot name `*`; only the question at a terminal writes it, and an

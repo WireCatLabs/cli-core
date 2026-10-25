@@ -114,6 +114,7 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
       setupAtStart({
         command: entry.app.command,
         env: io.env,
+        contentLanguages: entry.app.contentLanguages,
         path: commandPathOf(command),
         headless: headless(command),
         readOnlyLock: readOnlyLockOf(entry.app, io.env),

@@ -15,6 +15,11 @@ export interface AppIdentity {
   issues?: string
   /** The language of the transcript a person reads: its day headings and the word for "you". `ru-RU` when unset. */
   locale?: string
+  /**
+   * ISO 639-1 codes of the languages its content is mostly in (`["ru"]`). The first run pre-ticks the ones search
+   * can stem in place of English and the system's language; the person still confirms, since the choice is shared.
+   */
+  contentLanguages?: readonly string[]
   /** Error reasons and detail keys of its own — max's `max_code`, tg's `migrated_chat_id` — kept in every error it prints. */
   errors?: AppErrors
 }

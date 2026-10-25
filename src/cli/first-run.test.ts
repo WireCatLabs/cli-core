@@ -51,6 +51,21 @@ describe("the questions every WireCat tool shares", () => {
     expect(await run(env, []).done).toEqual([])
   })
 
+  it("**ticks the CLI's content languages instead** on a new store, skipping those search cannot stem", async () => {
+    const env = place()
+    const asked = run(env, ["", "", ""], { contentLanguages: ["ru", "de"] })
+    await asked.done
+    expect(asked.said).toEqual(expect.arrayContaining(["  1. Russian ✓", "  2. English", "  3. Spanish"]))
+    expect(await stemmers(env)).toEqual({ cyrillic: "russian", latin: "none" })
+  })
+
+  it("ticks English and the system's language when no content language can be stemmed", async () => {
+    const env = place()
+    const asked = run(env, ["", "", ""], { contentLanguages: ["de"] })
+    await asked.done
+    expect(await stemmers(env)).toEqual({ cyrillic: "none", latin: "english,spanish" })
+  })
+
   it("**keeps a store's languages on Enter** once it is in use", async () => {
     const env = place()
     const store = await openStore({ env })
