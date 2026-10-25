@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.427.0 — 25.10.2026
+
 ### Added
 
 - **Every CLI on cli-core gets `skill status` and `skill show --for claude|agents`** from cli-base 0.56.0. `skill
