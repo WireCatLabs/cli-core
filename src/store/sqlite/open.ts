@@ -1,3 +1,4 @@
+// biome-ignore-all lint/plugin/no-sqlite-driver: cli-core owns the store, so it opens the driver itself
 import { type CacheDatabase, PRAGMAS } from "../driver.js"
 import { quietSqliteWarning } from "../sqlite-warning.js"
 import type { SQLiteAsyncDatabase } from "./drizzle/core.js"

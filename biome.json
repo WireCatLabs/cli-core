@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["./config/wirecat/biome.base.json"],
-  "plugins": [{ "path": "./config/wirecat/no-sqlite-driver.grit", "includes": [] }],
   "files": {
     "includes": [
       "**",
@@ -15,6 +14,15 @@
       "!.worktrees",
       "!config/wirecat"
     ]
+  },
+  "linter": {
+    "rules": {
+      "complexity": { "useMathMinMax": "off" }
+    }
+  },
+  "markdown": {
+    "formatter": { "enabled": false },
+    "linter": { "enabled": false }
   },
   "overrides": [
     {
