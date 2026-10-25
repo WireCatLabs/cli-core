@@ -1,6 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
 import { googleDocumentLinks } from "../../domain/google-documents.js"
+import {
+  DOCUMENT_ACCOUNT_PROVIDERS,
+  FOLDER_PROVIDER,
+  filesAccountSql,
+  isDocumentAccountProvider,
+} from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
@@ -20,12 +26,16 @@ import { write } from "./transaction.js"
 export const NOTE_FORMATS = ["obsidian", "markdown"] as const
 export const LINK_ORIGINS = ["file", "owner", "suggested", "message"] as const
 
-/** A notes folder: an `accounts` row of provider `folder`. Where it is on disk is this computer's config. */
+/**
+ * A notes folder: an `accounts` row of provider `folder`. Where it is on disk is this computer's config. A
+ * documents account (Drive's, one per Google account) is read and written the same way and names its `account`.
+ */
 export interface NoteFolder {
   id: string
   name: string
   format: (typeof NOTE_FORMATS)[number]
   createdAt: string
+  account?: { provider: string; account: string }
 }
 
 /**
@@ -113,7 +123,12 @@ export interface MessageDocument {
 
 export interface NotesStore extends NoteSearch, ImportedDocuments {
   addFolder(input: { name: string; format?: NoteFolder["format"] }): Promise<NoteFolder>
+  /** The notes folders only; a documents account is not one (`documentsAccounts`). */
   folders(): Promise<NoteFolder[]>
+  /** One documents account by its key (`{ provider: "google-drive", account: <principal> }`), created when asked. */
+  documentsAccount(key: { provider: string; account: string }, create?: boolean): Promise<NoteFolder | undefined>
+  /** Every documents account the store holds, by provider then account. */
+  documentsAccounts(): Promise<NoteFolder[]>
   saveFileNote(input: FileNoteInput): Promise<{ note: Note; changed: boolean }>
   /** Moves a file note to a new path in its folder, keeping its id, links and tags; a gone note at `to` is dropped. */
   renameFileNote(folderId: string, from: string, to: string): Promise<Note>
@@ -348,11 +363,13 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
 /** A folder's `accounts` row; its format lives in `settings`. */
 const folderOf = (row: Row): NoteFolder => {
   const settings = row.settings == null ? {} : (JSON.parse(String(row.settings)) as { format?: string })
+  const folder = row.provider === FOLDER_PROVIDER
   return {
     id: String(row.id),
-    name: String(row.name),
-    format: (settings.format ?? "obsidian") as NoteFolder["format"],
+    name: folder ? String(row.name) : `${String(row.provider)}:${String(row.external_id)}`,
+    format: (settings.format ?? (folder ? "obsidian" : "markdown")) as NoteFolder["format"],
     createdAt: iso(row.created_at),
+    ...(folder ? {} : { account: { provider: String(row.provider), account: String(row.external_id) } }),
   }
 }
 
@@ -371,7 +388,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
   const { database, now } = context
   const folderRow = (id: string) => {
     const row = /^\d+$/.test(id)
-      ? database.prepare("SELECT * FROM accounts WHERE id = ? AND provider = 'folder'").get(Number(id))
+      ? database.prepare(`SELECT * FROM accounts WHERE id = ? AND ${filesAccountSql()}`).get(Number(id))
       : undefined
     if (!row) throw new CliError("not_found", `no notes folder ${id} in the local store`)
     return row
@@ -416,6 +433,28 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
     },
     folders: async () =>
       database.prepare("SELECT * FROM accounts WHERE provider = 'folder' ORDER BY name, id").all().map(folderOf),
+    documentsAccount: async ({ provider, account }, create = false) => {
+      if (!isDocumentAccountProvider(provider))
+        throw new CliError("validation_error", `${provider} is not a provider whose accounts hold documents`)
+      const find = () =>
+        database.prepare("SELECT * FROM accounts WHERE provider = ? AND external_id = ?").get(provider, account)
+      const found = find()
+      if (found || !create) return found ? folderOf(found) : undefined
+      const at = now()
+      database
+        .prepare(
+          "INSERT OR IGNORE INTO accounts (provider, external_id, name, settings, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?)",
+        )
+        .run(provider, textOf(account, "an account's id", 200), JSON.stringify({ format: "markdown" }), at, at)
+      return folderOf(find() as Row)
+    },
+    documentsAccounts: async () =>
+      database
+        .prepare(
+          `SELECT * FROM accounts WHERE provider IN (${DOCUMENT_ACCOUNT_PROVIDERS.map(() => "?").join(", ")}) ORDER BY provider, external_id`,
+        )
+        .all(...DOCUMENT_ACCOUNT_PROVIDERS)
+        .map(folderOf),
     saveFileNote: async (input) =>
       write(database, () => {
         const folder = Number(folderRow(input.folderId).id)

@@ -28,6 +28,17 @@ export const PROVIDERS: readonly ProviderEntry[] = [
 
 /** The store keeps a notes folder as an `accounts` row of this provider; people call it `notes`. */
 export const FOLDER_PROVIDER = "folder"
+/**
+ * Providers whose account holds documents the way a notes folder does: one account per remote principal, its
+ * files as `documents` rows (store version 31 moved Drive here from a `folder` named `google-drive:<principal>`).
+ * The provider registry's `documents` kind replaces this list when Drive leaves `notes` (Wave 3 R2).
+ */
+export const DOCUMENT_ACCOUNT_PROVIDERS = ["google-drive"] as const
+export const isDocumentAccountProvider = (provider: string): boolean =>
+  (DOCUMENT_ACCOUNT_PROVIDERS as readonly string[]).includes(provider)
+/** A folder or a documents account, in SQL over an `accounts` row's `provider` column. */
+export const filesAccountSql = (column = "provider"): string =>
+  `${column} IN (${[FOLDER_PROVIDER, ...DOCUMENT_ACCOUNT_PROVIDERS].map((name) => `'${name}'`).join(", ")})`
 /** Notes written in memo have no account row; this is their account. */
 export const INTERNAL_NOTES = "internal"
 

@@ -234,4 +234,40 @@ describe("shared document knowledge", () => {
       await f.index.close()
     }
   })
+  it("**keeps a documents provider's files in its own account**, never a notes folder", async () => {
+    const f = await setup()
+    try {
+      const drive = documentIngestion(f.store, {
+        provider: "google-drive",
+        externalId: (id) => `${id}.md`,
+        catalogInput: (item: SourceFile) => ({
+          externalId: `${item.id}.md`,
+          kind: "file",
+          name: item.name,
+          parents: [],
+        }),
+        frontMatter: () => ({ source: "google-drive" }),
+      })
+      const ref = await drive.save(f.principal, content(f.metadata), "drive-hash")
+      expect(await drive.save(f.principal, content(f.metadata), "drive-hash")).toBe(ref)
+      expect(await drive.catalog.import(f.principal, [f.metadata])).toEqual({ entries: 1, retired: 0 })
+      const account = await drive.collection(f.principal, false)
+      expect(account).toMatchObject({
+        name: `google-drive:${f.principal}`,
+        format: "markdown",
+        account: { provider: "google-drive", account: f.principal },
+      })
+      expect((await f.store.notes.folders()).map(({ name }) => name)).toEqual([`synthetic:${f.principal}`])
+      expect((await f.store.notes.documentsAccounts()).map(({ id }) => id)).toEqual([account?.id])
+      expect((await f.store.notes.note(ref)).folderId).toBe(account?.id)
+      const knowledge = documentKnowledge(f.store, async (principal) => (await drive.collection(principal, false))?.id)
+      await knowledge.tags(f.principal, ref, "add", ["drive-only"])
+      expect(await knowledge.tags(f.principal, ref, "list")).toEqual(["drive-only"])
+      await expect(f.store.notes.documentsAccount({ provider: "folder", account: "x" }, true)).rejects.toThrow(
+        "not a provider whose accounts hold documents",
+      )
+    } finally {
+      await f.index.close()
+    }
+  })
 })

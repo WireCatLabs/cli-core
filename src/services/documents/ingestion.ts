@@ -3,7 +3,12 @@ import { walkQuery } from "@wirecat/cli-base/query"
 import type { SourceContent, SourceFile } from "../../documents/model.js"
 import type { CatalogInput, CatalogQuery, MessageStore, Note } from "../../store/index.js"
 export interface IngestionOptions<M extends SourceFile> {
-  collectionName(principal: string): string
+  /**
+   * The documents account's provider (`google-drive`): each principal's documents live under
+   * `{ provider, account: principal }`. Without it they live in a notes folder named `collectionName(principal)`.
+   */
+  provider?: string
+  collectionName?(principal: string): string
   externalId(id: string): string
   catalogInput(file: M): CatalogInput
   frontMatter(content: SourceContent<M>): Record<string, unknown>
@@ -14,6 +19,10 @@ export const documentIngestion = <M extends SourceFile>(
   options: IngestionOptions<M>,
 ) => {
   const folder = async (principal: string, create: boolean) => {
+    if (options.provider)
+      return store.notes.documentsAccount({ provider: options.provider, account: principal }, create)
+    if (!options.collectionName)
+      throw new CliError("configuration_error", "document ingestion needs a provider or a collection name")
     const name = options.collectionName(principal)
     const found = (await store.notes.folders()).find((item) => item.name === name)
     return found ?? (create ? await store.notes.addFolder({ name, format: "markdown" }) : undefined)

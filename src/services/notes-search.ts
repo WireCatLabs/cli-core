@@ -507,7 +507,7 @@ export const searchNotes = async (
   const hasMore = slice ? matched.hasMore : ordered.length > window || matched.hasMore || titled.hasMore
   const hits: FoundNote[] = []
   const counts = new Map<string, LinkedRecord>()
-  const folders = await store.notes.folders()
+  const folders = [...(await store.notes.folders()), ...(await store.notes.documentsAccounts())]
   const profiles = await store.accounts.profiles()
   for (const [ref, { note, foundBy }] of page) {
     const links = (await store.notes.links({ from: ref })).map(({ to, targetText, kind, anchor }) => ({
@@ -608,6 +608,7 @@ export const searchNotesOf = async (
   const held = [
     { provider: "notes", account: INTERNAL_NOTES },
     ...(await store.notes.folders()).map(({ id }) => ({ provider: "notes", account: id })),
+    ...(await store.notes.documentsAccounts()).map(({ id }) => ({ provider: "notes", account: id })),
   ]
   const named =
     list === undefined

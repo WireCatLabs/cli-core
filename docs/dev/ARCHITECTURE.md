@@ -429,9 +429,16 @@ kinds fail with both names. Searches skip the accounts of a provider nobody regi
 **Documents and files — not built yet.** A new `files` table holds one row per item in one place: a local file, a
 Drive file or folder, later a Notion page. A folder is a `files` row; children point at it with `parent_id`, and
 `path` / `path_folded` find a subtree by prefix (NEED-1739). A file joins a document by `account_id` + `external_id`,
-then by `content_hash` when exactly one live document matches; more than one goes to the review list. Drive files
-move from the stand-in `folder` account to a real `google-drive` account; folder accounts become `local` or
-`obsidian` (NEED-1738).
+then by `content_hash` when exactly one live document matches; more than one goes to the review list. Folder
+accounts become `local` or `obsidian` (NEED-1738).
+
+**Drive documents live in a `google-drive` account**, one per Google account (`external_id` = the principal), since
+store version 31 moved them there from the stand-in notes folder named `google-drive:<principal>`. The account's
+`settings` keep `format` and `movedFrom` (the folder's id, external id and name). The notes code reads and writes
+such an account as it does a folder (`DOCUMENT_ACCOUNT_PROVIDERS`, `src/domain/providers.ts`), but
+`notes.folders()` leaves it out: `notes.documentsAccount(key)` and `documentsAccounts()` find it, and
+`documentIngestion({ provider })` writes into it. Search still lists it as `notes:<id>`, until Drive becomes kind
+`documents` (Wave 3 R2). Annotation transfers name it `google-drive:<principal>` on both sides of version 31.
 
 **Calendar entries on the events hub — not built yet.** `calendars` and `calendar_entries` are a calendar's source
 records; `events` (`schema.ts:1087`) and `event_series` stay the entities that `meetings` already points at. An

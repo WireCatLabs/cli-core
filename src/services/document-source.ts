@@ -8,8 +8,10 @@ export const documentSource = (note: Note, folders: NoteFolder[], profiles: Prof
   const remote = note.source === "file" && metadata?.source === "google-drive"
   const profile =
     remote && folder
-      ? Object.entries(profiles.drive ?? {}).find(
-          ([, key]) => key.provider === "folder" && key.account === folder.name,
+      ? Object.entries(profiles.drive ?? {}).find(([, key]) =>
+          folder.account
+            ? key.provider === folder.account.provider && key.account === folder.account.account
+            : key.provider === "folder" && key.account === folder.name,
         )?.[0]
       : undefined
   return {
