@@ -711,8 +711,10 @@ const quiesce = async (
 }
 
 /**
- * For a store this build cannot migrate: a backup beside it, then an empty store at this build's
- * schema. The backup is made before anything is deleted, and its path is said before the delete.
+ * For a store this build cannot migrate, or one the owner wants empty: a backup beside it, then an empty
+ * store at this build's schema. The backup is made before anything is deleted, and its path is said before
+ * the delete. A new file rather than `DELETE FROM` every table: deleted rows would stay readable in free
+ * pages until a VACUUM, and every table comes back in this build's shape.
  */
 const resetCommand = (messenger: Messenger): Command =>
   annotate(new Command("reset"), { output: { entity: "store_reset" }, effects: LOCAL_WRITE })
@@ -720,11 +722,17 @@ const resetCommand = (messenger: Messenger): Command =>
     .description(
       "back the store up beside itself, then delete it and start an empty one at this build's schema; asks first, or --yes",
     )
-    .option("--no-backup", "delete the store without backing it up first")
-    .action(async function (this: Command, { backup: keep }: { backup: boolean }) {
+    .option("--no-backup", "delete the store without backing it up first; needs --allow-dangerous")
+    .option("--allow-dangerous", "yes, delete — with --no-backup nothing is kept, and it cannot be undone")
+    .option("--dry-run", "list every table it would empty, with its rows, and delete nothing")
+    .action(async function (
+      this: Command,
+      { backup: keep, allowDangerous, dryRun }: { backup: boolean; allowDangerous?: boolean; dryRun?: boolean },
+    ) {
       const { renderer } = outputFor(this)
       const { command } = messenger.app
-      const path = storePath(environmentOf(this).env ?? process.env)
+      const env = environmentOf(this).env ?? process.env
+      const path = storePath(env)
       if (!existsSync(path)) {
         result(this, { path, exists: false, reset: false })
         renderer.note(
@@ -732,9 +740,20 @@ const resetCommand = (messenger: Messenger): Command =>
         )
         return
       }
+      if (dryRun) {
+        result(this, await resetPreview(path, messenger, env, keep))
+        return
+      }
+      if (!keep && allowDangerous !== true) {
+        throw new CliError(
+          "confirmation_required",
+          `--no-backup deletes the store at ${path} with no copy, and it cannot be undone — --dry-run lists what it ` +
+            "deletes; add --allow-dangerous to go ahead",
+        )
+      }
       refuseWhileServing(this, messenger)
-      if (this.optsWithGlobals<{ yes?: boolean }>().yes !== true) {
-        const what = `this deletes the store at ${path} and starts an empty one, ${keep ? "after a backup beside it" : "with no backup"}`
+      if (allowDangerous !== true && this.optsWithGlobals<{ yes?: boolean }>().yes !== true) {
+        const what = `this deletes the store at ${path} and starts an empty one, after a backup beside it`
         const answer = await answerOf(this, `${what}. Go ahead? [y/N] `)
         if (answer === null) throw new CliError("confirmation_required", `${what} — add --yes to go ahead`)
         if (!/^\s*y(es)?\s*$/i.test(answer)) throw new CliError("cancelled", "cancelled — the store is unchanged")
@@ -762,7 +781,7 @@ const resetCommand = (messenger: Messenger): Command =>
         renderer.note(`backed the store up to ${backup}`)
       }
 
-      for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path}${suffix}`, { force: true })
+      for (const suffix of STORE_PARTS) rmSync(`${path}${suffix}`, { force: true })
       await (await openStore({ path, command })).close()
       const schema = await reading(path, (database) => schemaOf(database).version)
 
@@ -773,6 +792,47 @@ const resetCommand = (messenger: Messenger): Command =>
           : `the store is empty at schema ${schema}; there is no backup`,
       )
     })
+
+const STORE_PARTS = ["", "-wal", "-shm"]
+
+/**
+ * What a reset would delete, read without a write lock so it answers while a sync runs. `in_use` is what the
+ * real run would refuse over now; `null` where this system cannot say who has the file open.
+ */
+const resetPreview = async (path: string, messenger: Messenger, env: NodeJS.ProcessEnv, keep: boolean) => {
+  const files = STORE_PARTS.map((suffix) => `${path}${suffix}`).filter((file) => existsSync(file))
+  const holders = holdersOf(files.map((file) => realpathSync(file)))
+  const serving = servingProfiles(messenger.app, env).length > 0
+  const read = await readingOnly(path, (database) => ({
+    schema: schemaOf(database).version,
+    tables: emptiedTables(database),
+  }))
+  return {
+    path,
+    exists: true,
+    reset: false,
+    dryRun: true,
+    files,
+    bytes: files.reduce((sum, file) => sum + bytesOf(file), 0),
+    schema: read.schema,
+    tables: read.tables,
+    backupFirst: keep,
+    inUse: serving || (holders === undefined ? null : holders.length > 0),
+  }
+}
+
+/** The tables that hold data; a search index and its shadow tables are rebuilt from them, so they are left out. */
+const emptiedTables = (database: CacheDatabase) => {
+  const all = database
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all()
+    .map((row) => ({ name: String(row.name), virtual: /^\s*CREATE\s+VIRTUAL/i.test(String(row.sql)) }))
+  const indexes = all.filter((table) => table.virtual).map((table) => `${table.name}_`)
+  return all
+    .filter((table) => !table.virtual && table.name !== "schema_migrations")
+    .filter((table) => !indexes.some((prefix) => table.name.startsWith(prefix)))
+    .map((table) => ({ name: table.name, rows: count(database, `"${table.name}"`) }))
+}
 
 const isoOf = (value: unknown) => new Date(Number(value)).toISOString()
 

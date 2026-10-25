@@ -58,11 +58,20 @@ shape of this file.
 
 ### Added
 
+- **`store reset --dry-run` lists what a reset would empty and deletes nothing**: the store's files, their bytes,
+  every data table with its row count (search indexes are left out: they are rebuilt from those tables), whether a
+  backup comes first, and `in_use` — whether a serve or another process has the file open now, which the real reset
+  refuses (`null` where the system cannot say). It reads without a write lock, so it answers while a sync runs, and
+  it runs under `<PREFIX>_READ_ONLY`. A desktop app shows the list in its confirmation dialog.
 - **`profileFree(command)` and `takesProfile(command)` from `/cli`: a CLI marks the commands that read no profile, and help asks its own command tree.** A marked command, and every command under it, gets no `personal` in its help example and no `<profile>` in its usage line: `drive doctor`, `drive api list`, not `drive personal doctor`. `PROFILE_FREE` (`commands`, `complete`, `guide`, `help`, `skill`, `upgrade`) still counts for every CLI. drive and zm mark their own housekeeping commands to use it.
 - **`storeChangeRefusal(app)` and `previewFlag(program)` from `/cli`.**
 
 ### Changed — may break callers
 
+- **`store reset --no-backup` needs `--allow-dangerous`; `--yes` no longer deletes the store with no copy.** A reset
+  that keeps no backup cannot be undone, so it takes the word for a deletion nobody gets back, as `store clear` does.
+  `--allow-dangerous` also answers the question, so `store reset --no-backup --allow-dangerous` runs unattended. A
+  plain reset, which backs the store up beside itself first, still takes `--yes`.
 - **Help and examples that cli-core writes no longer speak of messages to a CLI that is not a messenger, or show a command that does something unasked.** The first screen's "Works with" says zm and drive are "searchable with your other WireCat data", in every CLI (tg, max and wa included). `guide`'s example names the CLI's first scenario (`tg guide catch-up --json`) in place of `<name>`, and is left out when the CLI has none. `models download` (the messenger `models` command) says its size and examples the default text model only, not `parakeet-v3`. `meetings scheduled` and `meetings prepare` example `--dry-run` where the program has it. `commands`' argument example is `commands info` for a CLI that is not a messenger. The `<PREFIX>_READ_ONLY` refusal of a store change says "change the local store" for such a CLI; tg, max and wa keep "change the message store".
 - **"Availability: available for this profile" is shown only where a profile is in play.** A CLI whose first screen has `profile: false` (memo), and a command that reads no profile, show the line only when the command is unavailable, with its reason.
 - **`createProgram` puts no `<profile>` in the usage line of a CLI whose first screen has `profile: false`**, nor of a `profileFree` command.

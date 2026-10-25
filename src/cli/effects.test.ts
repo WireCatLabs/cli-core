@@ -409,6 +409,10 @@ describe("the read-only lock on the message store", () => {
   it("still previews store repair with --dry-run", async () => {
     expect((await locked(["ro", "store", "repair", "--dry-run"], join(root, "preview.db"))).code).toBe(0)
   })
+
+  it("still previews store reset with --dry-run", async () => {
+    expect((await locked(["ro", "store", "reset", "--dry-run"], join(root, "preview.db"))).code).toBe(0)
+  })
 })
 
 describe("reads a pushed history answers from the store", () => {
