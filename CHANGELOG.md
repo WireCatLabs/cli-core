@@ -16,6 +16,8 @@ shape of this file.
 - **`@modelcontextprotocol/server` is `^2.4.0`** (was exactly 2.3.0), so a CLI on server 2.4.x shares one copy with cli-core.
 - **Dependencies moved to their latest majors:** `@anthropic-ai/sdk` 1.3, `sherpa-onnx` 2.0, `drizzle-orm` 1.0.0-rc.5.
 
+## 0.432.0 — 25.10.2026
+
 ### Added
 
 - **`search messages --discover` also searches by meaning, on its own, once it can.** When e5-small is downloaded and messages have their own vectors, discovery adds the 100 messages nearest in meaning to its word matches and merges the two lists by reciprocal rank fusion (k = 60), as arm A2 of the [evidence-pipeline benchmark](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/evidence-pipeline) did. The question's filters apply to both. Each hit's `discovery.found_by` says which list found it, and `score` is then the fused score. Otherwise discovery searches by words exactly as before and says why meaning was not used: a `meaning search not used: …` note in the terminal, and `missing`/`next` (`models.download` or `conversations.rebuild`) in `--json` and MCP. A search never downloads a model and never sends text anywhere. `--exact`, `--newest` and strict queries are untouched.
