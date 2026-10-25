@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
-import { REMOTE_READ } from "./effects.js"
+import { previewFlag, REMOTE_READ } from "./effects.js"
 import { communicationOptions } from "./meeting-communications.js"
 import { type MeetingPreparationReader, readMeetingPreparation } from "./meeting-preparation-read.js"
 
@@ -81,7 +81,7 @@ export const addMeetingPreparationCommand = (
       origin: "handwritten",
       effects: REMOTE_READ,
       output: { entity: "meeting_preparation" },
-      examples: [`${program.name()} meetings prepare 123 --json`],
+      examples: [`${program.name()} meetings prepare 123${previewFlag(program)} --json`],
     },
   )
 }

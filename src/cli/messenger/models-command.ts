@@ -232,10 +232,11 @@ export const modelsCommand = (messenger: Messenger): Command => {
     annotate(models.command("download"), {
       effects: FETCH,
       output: { entity: "model" },
-      examples: [`${tool} models download parakeet-v3`, `${tool} models download ${DEFAULT_TEXT_MODEL}`],
+      examples: [`${tool} models download ${DEFAULT_TEXT_MODEL}`],
     }),
   )
-    .description("download and verify one speech or embedding model")
+    .summary("download and verify one speech or embedding model")
+    .description("download and verify one speech or embedding model: tens to hundreds of MB, each size in models list")
     .argument("<model>", "a model id from models list")
     .option("--accept-terms", "accept the model's licence terms, for a model that has its own")
     .action(async function (this: Command, id: string, options: { acceptTerms?: boolean }) {

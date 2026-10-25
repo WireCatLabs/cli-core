@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`profileFree(command)` and `takesProfile(command)` from `/cli`: a CLI marks the commands that read no profile, and help asks its own command tree.** A marked command, and every command under it, gets no `personal` in its help example and no `<profile>` in its usage line: `drive doctor`, `drive api list`, not `drive personal doctor`. `PROFILE_FREE` (`commands`, `complete`, `guide`, `help`, `skill`, `upgrade`) still counts for every CLI. drive and zm mark their own housekeeping commands to use it.
+- **`storeChangeRefusal(app)` and `previewFlag(program)` from `/cli`.**
+
+### Changed — may break callers
+
+- **Help and examples that cli-core writes no longer speak of messages to a CLI that is not a messenger, or show a command that does something unasked.** The first screen's "Works with" says zm and drive are "searchable with your other WireCat data", in every CLI (tg, max and wa included). `guide`'s example names the CLI's first scenario (`tg guide catch-up --json`) in place of `<name>`, and is left out when the CLI has none. `models download` (the messenger `models` command) says its size and examples the default text model only, not `parakeet-v3`. `meetings scheduled` and `meetings prepare` example `--dry-run` where the program has it. `commands`' argument example is `commands info` for a CLI that is not a messenger. The `<PREFIX>_READ_ONLY` refusal of a store change says "change the local store" for such a CLI; tg, max and wa keep "change the message store".
+- **"Availability: available for this profile" is shown only where a profile is in play.** A CLI whose first screen has `profile: false` (memo), and a command that reads no profile, show the line only when the command is unavailable, with its reason.
+- **`createProgram` puts no `<profile>` in the usage line of a CLI whose first screen has `profile: false`**, nor of a `profileFree` command.
+- **A guide scenario step may start with a profile word** (`tg personal chats list`), so scenarios can name the profile as the command line requires. `checkStep` skips a first word that is not a command and is a usable profile name; its "steps leave out the profile" refusal is gone.
+
 ## 0.425.0 — 25.10.2026
 
 ### Added
