@@ -15,6 +15,8 @@ export type { MessageLink, MessagePermalink } from "./domain/message-link.js"
 export type * from "./domain/models.js"
 export { countedPoll } from "./domain/polls.js"
 export {
+  FOLDER_PROVIDERS,
+  isFolderProvider,
   isKind,
   KINDS,
   type Kind,
