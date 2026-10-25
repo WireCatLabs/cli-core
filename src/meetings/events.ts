@@ -19,7 +19,15 @@ export const linkEvent = async (
           startsAt: meeting.startedAt,
           endsAt: meeting.endedAt ?? meeting.startedAt,
         })
-  let event = candidates.length === 1 ? candidates[0] : undefined
+  if (candidates.length > 1) {
+    await store.reviewMeetingLink?.(
+      meeting.id,
+      candidates.map(({ id }) => id),
+      now,
+    )
+    return null
+  }
+  let event = candidates[0]
   if (!event) {
     let eventSeriesId = series?.eventSeriesId ?? null
     if (series?.kind === "recurring" && eventSeriesId === null) {

@@ -13,6 +13,7 @@ export {
   meetingTranscript,
 } from "./answers.js"
 export type { MeetingBatchReader } from "./batch.js"
+export { calendarText, ENTRY_METADATA_KEYS, entryMetadata, withoutLinkQueries } from "./calendar-text.js"
 export type {
   MeetingContextStore,
   MeetingEventLinkInput,
@@ -24,6 +25,22 @@ export type {
 } from "./context-store.js"
 export { type MeetingCueIdentity, meetingCueFingerprint } from "./cue-fingerprint.js"
 export { EVENT_QUERY } from "./event-query.js"
+export type {
+  CalendarInput,
+  EntryInput,
+  EntryKind,
+  EntryParticipantInput,
+  EntryRevision,
+  EntryStatus,
+  EventDetails,
+  EventFilter,
+  EventStore,
+  LinkReview,
+  ReviewDecision,
+  StoredCalendar,
+  StoredEntry,
+  StoredParticipant,
+} from "./event-store.js"
 export { linkEvent } from "./events.js"
 export {
   exportMeeting,

@@ -1,4 +1,5 @@
 export { meetingStoreContract } from "./contract.js"
+export { CONTRACT_NOW, type EventStoreFixture, eventStoreContract } from "./event-store-contract.js"
 export { type MeetingManagementContractFixture, meetingManagementContract } from "./management-contract.js"
 export { memoryMeetingStore } from "./memory.js"
 export {

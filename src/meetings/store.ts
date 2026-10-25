@@ -130,6 +130,8 @@ export interface MeetingStore {
   setEventSeries(meetingSeriesId: number, eventSeriesId: number, now: number): Promise<void>
   /** Automatic linking must not replace an existing link. */
   linkMeeting(id: number, eventId: number, now: number, mode?: "auto" | "owner"): Promise<void>
+  /** Two or more events fit a meeting equally: no link, and the pair goes to the owner's review list. */
+  reviewMeetingLink?(meetingId: number, eventIds: number[], now: number): Promise<void>
   cursor(accountId: number): Promise<string | null>
   setCursor(accountId: number, value: string, now: number): Promise<void>
 }

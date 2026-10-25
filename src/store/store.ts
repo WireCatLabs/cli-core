@@ -1,4 +1,5 @@
 import type { ContextEvidenceReader, ContextIndex, ContextRecordReader } from "../context/evidence.js"
+import type { EventStore } from "../meetings/index.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
 import {
@@ -24,6 +25,7 @@ import * as accounts from "./sqlite/accounts.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
+import { eventStoreOver } from "./sqlite/calendar.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
@@ -98,6 +100,8 @@ export interface MessageStore {
   readonly catalog: CatalogStore
   /** Where each document is kept: its files, their folders and paths. */
   readonly files: FilesStore
+  /** Calendars and their entries, the source records of events: the `EventStore` a calendar CLI writes through. */
+  readonly calendar: EventStore
   /** Choices that hold until replaced, each with its evidence. */
   readonly meetingFindings: MeetingFindingsStore
   /** Cited facts and follow-ups about one project from stored messages, mail and documents, for review. */
@@ -204,6 +208,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
   const catalog = once(() => catalogStoreOver(context))
   const files = once(() => filesStoreOver(context))
+  const calendar = once(() => eventStoreOver(context))
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
   const facts = once(() => factsStoreOver(context))
@@ -294,6 +299,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get files() {
       return files()
+    },
+    get calendar() {
+      return calendar()
     },
     get meetingFindings() {
       return meetingFindings()

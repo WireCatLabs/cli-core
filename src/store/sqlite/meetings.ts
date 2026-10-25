@@ -30,6 +30,7 @@ import type {
 import { joinKeyOf, MeetingError } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
+import { reviewLink } from "./calendar.js"
 import * as eventQueries from "./events.js"
 import { fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
@@ -843,6 +844,11 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     },
     async linkMeeting(id, eventId, now, mode) {
       eventQueries.linkMeeting(database, id, eventId, now, mode)
+    },
+    async reviewMeetingLink(meetingId, eventIds, now) {
+      write(database, () =>
+        reviewLink(database, { type: "meeting", id: meetingId }, "event", eventIds, "join-key", now),
+      )
     },
     async cursor(accountId) {
       return str(

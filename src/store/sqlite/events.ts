@@ -1,5 +1,11 @@
 import type { QueryAst } from "@wirecat/cli-base/query"
-import type { Event, EventCandidateFilter, EventSeries, NewRecord } from "../../meetings/index.js"
+import {
+  type Event,
+  type EventCandidateFilter,
+  type EventSeries,
+  joinKeyOf,
+  type NewRecord,
+} from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { queryFilter } from "./query-filter.js"
 
@@ -24,7 +30,7 @@ export const page = (filter: { limit?: number; offset?: number }): [number, numb
   return [filter.limit ?? -1, filter.offset ?? 0]
 }
 
-const eventOf = (row: Record<string, unknown>): Event => ({
+export const eventOf = (row: Record<string, unknown>): Event => ({
   id: Number(row.id),
   eventSeriesId: int(row.event_series_id),
   title: str(row.title),
@@ -71,20 +77,30 @@ export const events = (database: CacheDatabase, query?: QueryAst): Event[] => {
     .map(eventOf)
 }
 
-/** An event without an end occupies its start instant. */
-export const eventCandidates = (database: CacheDatabase, filter: EventCandidateFilter): Event[] =>
-  database
+/**
+ * The events a meeting may belong to: overlapping in time, with exclusive ends so back-to-back meetings do not both
+ * match, and sharing its series or its room (`join_key`, never the link with its passcode). The room is matched on
+ * other meetings and on calendar entries, so an event with no meeting yet is found. An event without an end, and a
+ * meeting with none, occupy their start instant.
+ */
+export const eventCandidates = (database: CacheDatabase, filter: EventCandidateFilter): Event[] => {
+  const key = joinKeyOf(filter.joinUrl) ?? ""
+  const end = Math.max(filter.endsAt, filter.startsAt + 1)
+  return database
     .prepare(
       `SELECT e.* FROM events e
         WHERE e.deleted_at IS NULL AND e.starts_at IS NOT NULL
-          AND e.starts_at <= ? AND coalesce(e.ends_at, e.starts_at) >= ?
+          AND e.starts_at < ? AND coalesce(e.ends_at, e.starts_at + 1) > ?
           AND (e.event_series_id IN (SELECT event_series_id FROM meeting_series WHERE id = ?)
-            OR (? IS NOT NULL AND EXISTS (SELECT 1 FROM meetings m
-              WHERE m.event_id = e.id AND m.deleted_at IS NULL AND m.join_url = ?)))
+            OR (? <> '' AND (EXISTS (SELECT 1 FROM meetings m
+                WHERE m.event_id = e.id AND m.deleted_at IS NULL AND m.join_key = ?)
+              OR EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id AND ce.deleted_at IS NULL
+                AND ce.status <> 'cancelled' AND ce.join_key = ?))))
         ORDER BY e.id`,
     )
-    .all(filter.endsAt, filter.startsAt, filter.meetingSeriesId, filter.joinUrl, filter.joinUrl)
+    .all(end, filter.startsAt, filter.meetingSeriesId, key, key, key)
     .map(eventOf)
+}
 
 export const createEvent = (database: CacheDatabase, input: NewRecord<Event>, now: number): Event => {
   if (input.eventSeriesId !== null && !exists(database, "event_series", input.eventSeriesId))
@@ -142,9 +158,17 @@ export const linkMeeting = (
 ) => {
   if (!exists(database, "meetings", id)) throw new Error("Meeting not found")
   if (!exists(database, "events", eventId)) throw new Error("Event not found")
-  database
+  const from = database.prepare("SELECT event_id FROM meetings WHERE id = ?").get(id)?.event_id
+  const changed = database
     .prepare(
       `UPDATE meetings SET event_id = ?, updated_at = ? WHERE id = ?${mode === "owner" ? "" : " AND event_id IS NULL"}`,
     )
-    .run(eventId, now, id)
+    .run(eventId, now, id).changes
+  if (changed && int(from) !== eventId)
+    database
+      .prepare(
+        "INSERT INTO entity_link_events (linkable_type, linkable_id, entity_type, from_entity_id, to_entity_id, method, " +
+          "confidence, author, created_at) VALUES ('meeting', ?, 'event', ?, ?, ?, NULL, ?, ?)",
+      )
+      .run(id, int(from), eventId, mode === "owner" ? "owner" : "rules", mode === "owner" ? "owner" : "rules", now)
 }
