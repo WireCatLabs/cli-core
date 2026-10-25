@@ -169,7 +169,12 @@ const downloadReranker = async (command: Command, messenger: Messenger, id: stri
         env: context.env,
         progress: (line) => context.renderer.note(line),
       })
-      renderAnswer(command, context, itemOf(rerankItem(model, directory, context.settings.searchReranker)), downloaded)
+      renderAnswer(
+        command,
+        context,
+        itemOf(rerankItem(model, directory, context.settings.searchReranker ?? DEFAULT_RERANK_MODEL)),
+        downloaded,
+      )
     },
     { unbounded: true },
   )
@@ -256,7 +261,11 @@ export const modelsCommand = (messenger: Messenger): Command => {
           ...audioModels.map((model) => audioItem(model, modelsDirectory(context.env), chosen)),
           ...textModels.map((model) => textItem(model, textModelsDirectory(context.env))),
           ...rerankers.map((model) =>
-            rerankItem(model, textModelsDirectory(context.env), context.settings.searchReranker),
+            rerankItem(
+              model,
+              textModelsDirectory(context.env),
+              context.settings.searchReranker ?? DEFAULT_RERANK_MODEL,
+            ),
           ),
         ]
         const items = catalogue.filter((item) => kept === undefined || item.downloaded === (kept === "true"))

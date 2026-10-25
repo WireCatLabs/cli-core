@@ -212,7 +212,7 @@ export interface Settings extends AISettings {
   /** Search and `images embed` read the pictures themselves, with a model on this machine. Off until set. */
   pictureSearch?: boolean
   /** The reranker that orders `search messages --discover`'s first hits once it is downloaded, or `off`. */
-  searchReranker: string
+  searchReranker?: string
   limit: number
   /** Which page, 1-based. Per invocation only — a page number in a file is a setting nobody wants twice. */
   page: number
