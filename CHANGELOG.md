@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.433.0 — 25.10.2026
+
 ### Changed — may break callers
 
 - **`upgrade`'s help shows only `<cli> upgrade --check` as an example.** The bare `<cli> upgrade` example is gone
