@@ -4207,6 +4207,12 @@
       }
     },
     "skill show": {
+      "in": "all",
+      "options": {
+        "--for": "all"
+      }
+    },
+    "skill status": {
       "in": "all"
     },
     "stats": {

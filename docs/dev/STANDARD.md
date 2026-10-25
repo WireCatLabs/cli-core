@@ -943,7 +943,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--find-by-phone` | `<who>` | who finds the account by its number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--fingerprint` | `<hash>` | refuse if the inspected coverage plan changed |  | `store gaps repair` |
 | `--first-name` | `<name>` | your first name |  | `account update` |
-| `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install` |
+| `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install`, `skill show` |
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
 | `--from` | `<who>` | sender to match in `bot search messages` |  | `bot search messages` (planned) |
