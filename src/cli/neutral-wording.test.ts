@@ -5,7 +5,7 @@ import { Client } from "@modelcontextprotocol/client"
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server"
 import { captureStreams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
-import type { Command } from "commander"
+import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { registerCommands } from "../mcp/index.js"
@@ -13,6 +13,7 @@ import { answered } from "../mcp/tool.js"
 import { sharedProgram } from "../testing/shared-program.js"
 import { storeChangeRefusal } from "./effects.js"
 import { itemOf } from "./envelope.js"
+import { profileFree } from "./profile.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
 import { commandsCommand, configCommand } from "./shared-command-exports.js"
@@ -118,6 +119,21 @@ describe("shared wording", () => {
     expect(tools).not.toMatch(/send message|chat members|messages list/)
     expect(tools).toContain('returned: \\"notes list\\"')
     expect(tools).toContain("creates, edits, deletes —")
+  })
+
+  it("**shows the profile with a command that takes one**, never a `profileFree` one", () => {
+    const description = (commands: () => Command[]) => createProgram({ app: notesApp, commands }).description()
+
+    expect(description(() => [profileFree(new Command("doctor")), new Command("mcp")])).toContain(
+      "`notes personal mcp`",
+    )
+    expect(
+      description(() => [
+        new Command("sync").addCommand(profileFree(new Command("check"))).addCommand(new Command("run")),
+      ]),
+    ).toContain("`notes personal sync run`")
+    const freeOnly = description(() => [profileFree(new Command("doctor"))])
+    expect(freeOnly).toBe("notes")
   })
 
   it("**follows `AppIdentity.messenger`** over a catalogue that has `messages` commands, as memo's does", async () => {
