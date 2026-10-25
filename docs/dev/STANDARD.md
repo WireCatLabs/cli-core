@@ -413,6 +413,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--language` | `<lucene\|legacy>` | choice | the query language |  |
 | `--local` |  | switch | use the model on this machine, never the source |  |
 | `--max-age` | `<duration>` | duration | how old a stored snapshot may be and still count as fresh |  |
+| `--draft` |  | switch | save text for the owner to review and send, without sending a message |  |
 | `--md` |  | switch | the text is the messenger's Markdown |  |
 | `--no-backup` |  | switch | do not back the file up before deleting it |  |
 | `--no-input` |  | switch | never prompt or open an interactive login |  |
