@@ -123,16 +123,19 @@ const call = (command: Command): string =>
     ...command.registeredArguments.map((one) => (one.required ? `<${one.name()}>` : `[${one.name()}]`)),
   ].join(" ")
 
+const fieldsOf = (schema: Record<string, unknown>): string[] => {
+  const variants = schema.anyOf as Record<string, unknown>[] | undefined
+  if (variants) return variants.flatMap(fieldsOf)
+  const required = (schema.required as string[] | undefined) ?? []
+  return [...required, ...Object.keys((schema.properties as object | undefined) ?? {})]
+}
+
 const returnsOf = (command: Command): string => {
   const output = metaOf(command).output
   const { item, coverage } = outputOf(command)
   if (!output || coverage !== "declared-entity")
     return short(command.summary() || command.description()) || "not declared"
-  const required = (item.required as string[] | undefined) ?? []
-  const fields = [
-    ...required,
-    ...Object.keys((item.properties as object | undefined) ?? {}).filter((name) => !required.includes(name)),
-  ]
+  const fields = [...new Set(fieldsOf(item))]
   const noun = (output.view ? `${output.entity} ${output.view}` : output.entity).replaceAll("_", " ")
   const more = fields.length > 8 ? `, and ${fields.length - 8} more` : ""
   const root = rootOf(command)

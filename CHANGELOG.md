@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The first screen of `tg --help`, `max --help` and `wa --help` points at `account list`.** A row under "Start here" names `<tool> account list`, which lists every profile on this computer without a profile in front, so a reader who does not know their profile names finds them. A tool without `account list` shows no row.
+
+### Fixed
+
+- **"Returns" lists the fields of commands whose output has several shapes.** A command's help and the generated `docs/commands.md` showed `message send — ; every field: …` with no fields for every output declared as a union (`message_send`, `store_info`, `chat_group_change` and others; 41 lines in tg-cli's page). The line now lists the fields of every shape, required first, as for any other output.
+
 ## 0.413.0 — 25.10.2026
 
 ### Added
