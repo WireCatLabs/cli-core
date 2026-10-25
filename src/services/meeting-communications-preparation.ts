@@ -55,7 +55,8 @@ export const readPreparationCommunications = async (plan: CommunicationPlan, sig
         const text = excerpt(item.text, plan.input.query, 300, { literal: true })
         // excerpt() puts every text on one line, so only a shorter result means words were cut.
         const whole = item.text.replace(/\s+/g, " ").trim()
-        items.push({ ...item, text, selectionId: read.id, textTruncated: text !== whole })
+        const { sender: _, ...rest } = item
+        items.push({ ...rest, text, selectionId: read.id, textTruncated: text !== whole })
       }
     } catch (error) {
       preparationCancelled(signal)

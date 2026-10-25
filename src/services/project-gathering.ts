@@ -1,5 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ContextEvidenceItem, ContextEvidenceReader, ContextIndex, ContextSource } from "../context/evidence.js"
+import type {
+  ContextEvidenceItem,
+  ContextEvidenceReader,
+  ContextEvidenceSender,
+  ContextIndex,
+  ContextSource,
+} from "../context/evidence.js"
 import { CONTEXT_MAX_READ_BYTES, contextEvidenceFingerprint } from "../context/evidence.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
@@ -42,7 +48,7 @@ export interface ProjectIndexCatchUp {
   documents: number
   code: string | null
 }
-export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
+export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text" | "sender"> {
   kind: ContextSource["kind"]
   source: number
   text: string
@@ -60,10 +66,19 @@ export interface ProjectEvidenceItem extends Omit<ContextEvidenceItem, "text"> {
  * naming only a person.
  */
 export type ProjectEvidenceContext = "project" | "linked-chat" | "sender" | "person-only"
+/** Who wrote this run's message and mail items: one stored person, or one identity linked to none. */
+export interface ProjectEvidencePerson {
+  person: string | null
+  name: string
+  identities: { provider: string; account: string; id: string }[]
+  items: number
+  contexts: Partial<Record<ProjectEvidenceContext, number>>
+}
 export type ProjectGatheringStop = "reads" | "read-bytes" | "elapsed" | "items" | null
 
 const terminal = new Set(["done", "unavailable", "failed"])
 const PAGE = 20
+const PEOPLE = 20
 const CONTEXTS: ProjectEvidenceContext[] = ["person-only", "sender", "linked-chat", "project"]
 const contextOf = (lane: ProjectLane): ProjectEvidenceContext =>
   lane.kinds.includes("linked-chat")
@@ -141,6 +156,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   const usage = { reads: 0, readBytes: 0, aroundBytes: 0, items: 0 }
   const items: ProjectEvidenceItem[] = []
   const byRef = new Map<string, ProjectEvidenceItem>()
+  const senderOf = new Map<string, ContextEvidenceSender>()
   const matchedAgain = new Map<string, Set<string>>()
   const oversized = new Map<string, { ref: string; lanes: string[]; source: number; bytes: number }>()
   let stopped: ProjectGatheringStop = null
@@ -176,8 +192,10 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     seen.add(seenKey(item.ref))
     const short = excerpt(item.text, lane.query ?? "", 300, { literal: true })
     const fingerprint = contextEvidenceFingerprint(item)
+    const { sender, ...stored } = item
+    if (sender) senderOf.set(item.ref, sender)
     const entry: ProjectEvidenceItem = {
-      ...item,
+      ...stored,
       kind,
       source,
       text: short,
@@ -319,6 +337,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     signal,
   )
 
+  const people = peopleOf(items, senderOf)
+
   const totals = {
     reads: (previous?.totals.reads ?? 0) + usage.reads,
     readBytes: (previous?.totals.readBytes ?? 0) + usage.readBytes,
@@ -383,6 +403,8 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
       issue: progress[index]?.code ?? null,
     })),
     items,
+    people: people.slice(0, PEOPLE),
+    peopleOmitted: Math.max(0, people.length - PEOPLE),
     oversized: [...oversized.values()],
     matchedAgain: [...matchedAgain].map(([ref, lanes]) => ({ ref, lanes: [...lanes] })),
     usage: { ...usage, elapsedMs: now() - started },
@@ -392,5 +414,29 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     completeness: "unknown" as const,
     checkpoint: resumable ? encodeCheckpoint(checkpoint) : null,
   }
+}
+/** The owner's own messages say nothing about who else is involved, so they are left out. */
+const peopleOf = (items: ProjectEvidenceItem[], senderOf: Map<string, ContextEvidenceSender>) => {
+  const byKey = new Map<string, ProjectEvidencePerson>()
+  for (const item of items) {
+    const sender = senderOf.get(item.ref)
+    if (!sender || sender.owner) continue
+    const key = sender.person ?? JSON.stringify([sender.provider, sender.id])
+    const found = byKey.get(key) ?? {
+      person: sender.person,
+      name: sender.personName ?? sender.name ?? sender.id,
+      identities: [],
+      items: 0,
+      contexts: {},
+    }
+    byKey.set(key, found)
+    if (
+      !found.identities.some((i) => i.provider === sender.provider && i.account === item.account && i.id === sender.id)
+    )
+      found.identities.push({ provider: sender.provider, account: item.account, id: sender.id })
+    found.items++
+    found.contexts[item.context] = (found.contexts[item.context] ?? 0) + 1
+  }
+  return [...byKey.values()].sort((a, b) => b.items - a.items || a.name.localeCompare(b.name))
 }
 export type ProjectGathering = Awaited<ReturnType<typeof gatherProjectEvidence>>

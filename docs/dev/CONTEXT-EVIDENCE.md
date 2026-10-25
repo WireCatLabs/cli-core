@@ -80,7 +80,11 @@ coverage separately.
 Each item retains its canonical message/document/cue reference, provider/account identity, text, title,
 available source URL, timestamp, update time and document revision. Imported document time prefers
 the stored remote modification time, including existing Drive front-matter provenance; a local
-update fallback is explicitly `stored-update`. Internal owner notes are excluded: the existing
+update fallback is explicitly `stored-update`. A message or email also carries `sender`: the stored identity that
+wrote it (`provider`, `id`, an email's address, `name`), the `person:<id>` the store links it to with that person's
+name (`personName`), and `owner` when the identity is the owner's (linked to the owner person, or the account's
+own). It is `null` when the record names no sender, absent for documents and meeting cues, and not part of the
+fingerprint or the charged bytes. Internal owner notes are excluded: the existing
 [preparation notes reader](MEETING-PREPARATION.md) applies their own association rules.
 
 Sources with `kind: "meeting"` search current, nondeleted transcript cues through the existing

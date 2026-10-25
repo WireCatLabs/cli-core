@@ -771,3 +771,86 @@ it("keeps the fingerprint a person's name lane had before sender lanes, so its c
     gatherProjectEvidence({ evidence: f.port }, { ...request, people: [{ senders: [{ provider: "x", id: "1" }] }] }),
   ).rejects.toMatchObject({ details: { param: "people.0.reference" } })
 })
+
+it("counts who wrote the run's items by stored person, joining a person's identities and leaving out the owner", async () => {
+  const f = await fixture()
+  const row = (sql: string, ...params: (string | number)[]) => present(f.db.prepare(sql).get(...params))
+  const identity = (provider: string, id: string, name: string | null) =>
+    Number(
+      row(
+        "INSERT INTO identities(provider,external_id,name,created_at,updated_at) VALUES(?,?,?,0,0) RETURNING id",
+        provider,
+        id,
+        name ?? id,
+      ).id,
+    )
+  const link = (identityId: number, personId: number) =>
+    f.db
+      .prepare(
+        "INSERT INTO identity_links(identity_id,person_id,method,confidence,created_at,author,updated_at) VALUES(?,?,'manual',1,0,'owner',0)",
+      )
+      .run(identityId, personId)
+  const stepa = Number(row("INSERT INTO persons(name,created_at,updated_at) VALUES('Степа',0,0) RETURNING id").id)
+  const owner = Number(row("SELECT id FROM persons WHERE owner=1").id)
+  const account = String(row("SELECT external_id FROM accounts WHERE id=?", f.accountId).external_id)
+  const u7 = identity("example-calendar", "u7", "Stefan")
+  const address = identity("email", "stepa@example.com", null)
+  const u8 = identity("example-calendar", "u8", "Bob")
+  const mine = identity("example-calendar", "u9", "Me elsewhere")
+  const self = identity("example-calendar", account, "Me")
+  link(u7, stepa)
+  link(address, stepa)
+  link(mine, owner)
+  const chat = Number(
+    row(
+      "INSERT INTO chats(account_id,external_id,kind,title,created_at,updated_at) VALUES(?,'dm','group','Crew',0,0) RETURNING id",
+      f.accountId,
+    ).id,
+  )
+  for (const [n, [sender, text]] of (
+    [
+      [u7, "Harbour crane booked"],
+      [u7, "Harbour berth moved"],
+      [u8, "Harbour lunch"],
+      [mine, "Harbour from my phone"],
+      [self, "Harbour from me"],
+    ] as const
+  ).entries())
+    f.db
+      .prepare(
+        "INSERT INTO messages(chat_id,account_id,external_id,sender_identity_id,sent_at,text,normalized_text,normalizer_version,created_at,updated_at,source) VALUES(?,?,?,?,?,?,?,1,0,0,'history')",
+      )
+      .run(chat, f.accountId, `p${n}`, sender, 400 + n, text, normalize(text))
+  f.db
+    .prepare(
+      "INSERT INTO emails(id,account_id,email_thread_id,external_id,subject,body_text,from_identity_id,sent_at,created_at,updated_at) VALUES(2,?,1,'dates','Harbour dates','Tuesday',?,600,0,0)",
+    )
+    .run(f.mailId, address)
+  f.db.prepare("INSERT INTO email_words(rowid,normalized_text,scope) VALUES(2,'harbour dates tuesday','')").run()
+  f.db.exec("DELETE FROM email_index_pending")
+
+  const result = await gatherProjectEvidence({ evidence: f.port }, { ...f.request, project: { name: "Harbour" } })
+
+  expect(result.items).toHaveLength(11)
+  expect(result.items.some((i) => "sender" in i)).toBe(false)
+  expect(result.people).toEqual([
+    {
+      person: `person:${stepa}`,
+      name: "Степа",
+      identities: [
+        { provider: "example-calendar", account, id: "u7" },
+        { provider: "email", account: "example-mail", id: "stepa@example.com" },
+      ],
+      items: 3,
+      contexts: { project: 3 },
+    },
+    {
+      person: null,
+      name: "Bob",
+      identities: [{ provider: "example-calendar", account, id: "u8" }],
+      items: 1,
+      contexts: { project: 1 },
+    },
+  ])
+  expect(result.peopleOmitted).toBe(0)
+})

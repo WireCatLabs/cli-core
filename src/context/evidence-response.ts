@@ -81,6 +81,17 @@ export const validateContextEvidencePage = (page: ContextEvidencePage, request: 
           : item.timeKind !== (source.kind === "meeting" ? "meeting-start" : "sent")
       )
         fail()
+      const sender = item.sender
+      if (
+        sender != null &&
+        (typeof sender !== "object" ||
+          typeof sender.provider !== "string" ||
+          typeof sender.id !== "string" ||
+          typeof sender.owner !== "boolean" ||
+          [sender.name, sender.person, sender.personName].some((v) => v !== null && typeof v !== "string") ||
+          (sender.person !== null && !/^person:[1-9]\d*$/.test(sender.person)))
+      )
+        fail()
       const text = [item.text, item.title, item.url, item.provider, item.account, item.timeKind]
       if (text.some((value) => value !== null && typeof value !== "string")) fail()
       if (source.kind === "document") {

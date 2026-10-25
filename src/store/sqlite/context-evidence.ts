@@ -118,9 +118,20 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
         senders === undefined
           ? ""
           : ` AND ${corpus.sender} IN (SELECT id FROM identities WHERE provider=a.provider AND external_id IN (${senders.map(() => "?").join(",")}))`
-      const base = `FROM ${corpus.table} n JOIN accounts a ON a.id=n.account_id ${corpus.join}
-        WHERE n.account_id=? AND a.provider=? AND a.external_id=? AND n.deleted_at IS NULL
+      const from = `FROM ${corpus.table} n JOIN accounts a ON a.id=n.account_id ${corpus.join}`
+      const where = `WHERE n.account_id=? AND a.provider=? AND a.external_id=? AND n.deleted_at IS NULL
         AND ${byChat}${bySender}`
+      const base = `${from} ${where}`
+      const author =
+        corpus.sender === null
+          ? { join: "", columns: "NULL AS sender_id" }
+          : {
+              join: `LEFT JOIN identities si ON si.id=${corpus.sender} LEFT JOIN identity_links sl ON sl.identity_id=si.id
+                LEFT JOIN persons sp ON sp.id=sl.person_id`,
+              columns: `si.provider AS sender_provider,si.external_id AS sender_id,si.name AS sender_name,
+                sp.id AS sender_person,sp.name AS sender_person_name,
+                coalesce(sp.owner=1,0) OR (si.provider=a.provider AND si.external_id=a.external_id) AS sender_owner`,
+            }
       // A chat or sender read uses no word index, so words still waiting for it hide nothing.
       if (!searched) coverage.index = "ready"
       else if (!database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(corpus.index)) {
@@ -153,7 +164,8 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
       }
       const selection = `SELECT n.id,n.external_id,${corpus.chat} AS chat,a.provider,a.external_id AS account,
         ${corpus.title} AS title,${corpus.body} AS body,${corpus.url} AS url,${corpus.at} AS at,
-        n.updated_at,${corpus.revision} AS revision,${corpus.timeKind} AS time_kind ${base}
+        n.updated_at,${corpus.revision} AS revision,${corpus.timeKind} AS time_kind,${author.columns}
+        ${from} ${author.join} ${where}
         AND ${corpus.at}>=? AND ${corpus.at}<?
         ${!searched ? "" : `AND n.id IN (SELECT rowid FROM ${corpus.index} WHERE ${corpus.index} MATCH ?)`}
         ${!searched ? "" : source.kind === "message" ? `AND n.normalized_text IS NOT NULL AND n.normalizer_version=${NORMALIZER_VERSION}` : `AND NOT EXISTS(SELECT 1 FROM ${source.kind === "mail" ? "email" : "document"}_index_pending p WHERE p.id=n.id AND p.indexable_type='${source.kind === "mail" ? "email" : "document"}')`}
@@ -219,6 +231,21 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
           timeKind: row.time_kind as "sent" | "source-modified" | "stored-update",
           updatedAt: Number(row.updated_at),
           revision: row.revision == null ? null : Number(row.revision),
+          ...(corpus.sender === null
+            ? {}
+            : {
+                sender:
+                  row.sender_id == null
+                    ? null
+                    : {
+                        provider: String(row.sender_provider),
+                        id: String(row.sender_id),
+                        name: row.sender_name == null ? null : String(row.sender_name),
+                        person: row.sender_person == null ? null : `person:${row.sender_person}`,
+                        personName: row.sender_person_name == null ? null : String(row.sender_person_name),
+                        owner: Boolean(row.sender_owner),
+                      },
+              }),
         })),
       }
     })
