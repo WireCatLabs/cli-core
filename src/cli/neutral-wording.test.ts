@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest"
 import { registerCommands } from "../mcp/index.js"
 import { answered } from "../mcp/tool.js"
 import { sharedProgram } from "../testing/shared-program.js"
+import { storeChangeRefusal } from "./effects.js"
 import { itemOf } from "./envelope.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -89,6 +90,9 @@ describe("shared wording", () => {
     expect(option(program, "--brief")).toBe("found messages as reference, title, time, sender and excerpt only")
     expect(option(program, "--record")).toBe("keep this run — ids and timings, never message content")
     expect(metaOf(at(program, "commands", "info")).examples).toEqual(["chat commands info messages list"])
+    expect(at(program, "commands").registeredArguments[0]?.description).toContain("for example: search messages")
+    expect(storeChangeRefusal(sharedProgram.app)).toBe("change the message store")
+    expect(metaOf(at(program, "meetings", "scheduled")).examples).toEqual(["chat meetings scheduled --dry-run --json"])
     expect(at(program, "config", "set").registeredArguments[0]?.description).toContain("sender_colors")
     expect(await shownSettings(sharedProgram, "CHAT")).toContain("sender_colors")
     const tools = await mcpTexts(["messages list", "messages delete"])
@@ -105,6 +109,8 @@ describe("shared wording", () => {
     expect(option(program, "--full")).toBe("found items with their whole text and every provider field")
     expect(option(program, "--trace")).toBe("the connection's own log lines on stderr — never content")
     expect(metaOf(at(program, "commands", "info")).examples).toEqual(["notes commands info commands"])
+    expect(at(program, "commands").registeredArguments[0]?.description).toContain("for example: commands info")
+    expect(storeChangeRefusal(notesApp)).toBe("change the local store")
     expect(at(program, "config", "set").registeredArguments[0]?.description).not.toContain("sender_colors")
     expect(await shownSettings(notes, "NOTES")).not.toContain("sender_colors")
     const tools = await mcpTexts(["notes list", "notes delete"])

@@ -32,7 +32,10 @@ export const commandsCommand = (app: AppIdentity): Command => {
           reason: "output.one-object",
         })
     })
-    .argument("[path...]", "one command path, for example: search messages; inspect other groups in separate calls")
+    .argument(
+      "[path...]",
+      `one command path, for example: ${app.messenger === false ? "commands info" : "search messages"}; inspect other groups in separate calls`,
+    )
     .action(function (this: Command, path: string[]) {
       const root = rootOf(this)
       const output = outputFor(this)

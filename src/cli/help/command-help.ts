@@ -3,7 +3,7 @@ import { writes } from "@wirecat/cli-base/standards"
 import type { Argument, Command } from "commander"
 import { commandPathOf, outputOf } from "../command-contract.js"
 import { environmentOf } from "../context.js"
-import { PROFILE_FREE } from "../profile.js"
+import { takesProfile } from "../profile.js"
 import { commandAt } from "../steps.js"
 import { short } from "./commands-text.js"
 
@@ -203,7 +203,7 @@ export const EXAMPLE_PROFILE = "personal"
 const withProfile = (command: Command, example: string): string => {
   const root = rootOf(command)
   const top = commandPathOf(command)[0]
-  if (!profiled.has(root) || top === undefined || PROFILE_FREE.has(top)) return example
+  if (!profiled.has(root) || top === undefined || !takesProfile(command)) return example
   const prefix = `${root.name()} ${top}`
   return example === prefix || example.startsWith(`${prefix} `)
     ? `${root.name()} ${EXAMPLE_PROFILE} ${example.slice(root.name().length + 1)}`
@@ -240,11 +240,16 @@ export const commandHelpText = (command: Command): string => {
     ...metaOf(command),
     path: commandPathOf(command),
   })
-  const access = availability
-    ? rows("Availability:", [
-        availability.available ? "available for this profile" : `unavailable — ${availability.reason}`,
-      ])
-    : []
+  // "Available for this profile" says nothing where no profile is in play: a tool without profiles, or a command
+  // that reads none.
+  const profileMatters = profiled.has(rootOf(command)) && takesProfile(command)
+  const access = !availability
+    ? []
+    : availability.available
+      ? profileMatters
+        ? rows("Availability:", ["available for this profile"])
+        : []
+      : rows("Availability:", [`unavailable — ${availability.reason}`])
   return [
     "",
     ...access,

@@ -3,8 +3,10 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { commandsCommand } from "../commands-command.js"
+import { type BaseEnvironment, provide } from "../context.js"
+import { profileFree } from "../profile.js"
 import { createProgram, type ProgramDefinition, run } from "../program.js"
-import { commandHelpMarkdown, exampleReport, nextUsually } from "./command-help.js"
+import { commandHelpMarkdown, commandHelpText, exampleReport, nextUsually } from "./command-help.js"
 
 const app = { command: "tg", appName: "tg-cli", envPrefix: "TG", description: "Telegram", version: "1.0.0" }
 const READ = { remote: "read", local: "read" } as const
@@ -101,6 +103,44 @@ describe("generated command help", () => {
 
   it("names no profile in the example of a command that reads none", async () => {
     expect((await help(["commands", "info"])).stdout).toMatch(/Example: +tg commands info/)
+  })
+
+  it("names no profile, in the example or the usage, where the CLI marks a command profile-free", async () => {
+    const free: ProgramDefinition = {
+      ...tool,
+      commands: () => [
+        ...tool.commands(),
+        profileFree(annotate(new Command("doctor"), { effects: READ }).action(() => {})),
+        new Command("api").addCommand(profileFree(annotate(new Command("list"), { effects: READ }).action(() => {}))),
+      ],
+    }
+    for (const path of [["doctor"], ["api", "list"]]) {
+      const streams = captureStreams()
+      await run([...path, "--help"], free, { streams, tty: false, env: {} })
+      const stdout = streams.stdout.join("\n")
+      expect(stdout).toContain(`Usage: tg ${path.join(" ")}`)
+      expect(stdout).toMatch(new RegExp(`Example: +tg ${path.join(" ")}\n`))
+    }
+    expect((await help(["messages", "list"])).stdout).toContain("Usage: tg <profile> messages list")
+  })
+
+  it("says a command is available for this profile only where a profile is in play", () => {
+    const availability = (definition: ProgramDefinition, path: string[], available = true) => {
+      const program = createProgram(definition)
+      provide(program, {
+        discoveryAvailability: () => (available ? { available: true } : { available: false, reason: "denied" }),
+      } as BaseEnvironment)
+      const command = path.reduce((at, name) => at.commands.find((one) => one.name() === name) as Command, program)
+      return commandHelpText(command)
+        .split("\n")
+        .find((line) => line.startsWith("Availability:"))
+    }
+    expect(availability(tool, ["messages", "list"])).toContain("available for this profile")
+    expect(availability(tool, ["commands", "info"])).toBeUndefined()
+    expect(availability({ ...tool, firstScreen: { profile: false } }, ["messages", "list"])).toBeUndefined()
+    expect(availability({ ...tool, firstScreen: { profile: false } }, ["messages", "list"], false)).toContain(
+      "unavailable — denied",
+    )
   })
 
   it("keeps the profile a written example already names", () => {

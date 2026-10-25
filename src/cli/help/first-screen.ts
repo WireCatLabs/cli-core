@@ -52,12 +52,12 @@ export const WIRECAT_TOOLS: readonly Tool[] = [
   {
     command: "zm",
     package: "@wirecat/zoom-cli",
-    does: "Zoom meetings: transcripts and summaries, searchable with your messages",
+    does: "Zoom meetings: transcripts and summaries, searchable with your other WireCat data",
   },
   {
     command: "drive",
     package: "@wirecat/drive-cli",
-    does: "Google Drive and Docs as local text, searchable with your messages",
+    does: "Google Drive and Docs as local text, searchable with your other WireCat data",
   },
   {
     command: "memo",

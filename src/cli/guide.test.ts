@@ -1,7 +1,9 @@
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { captureStreams } from "@wirecat/cli-base"
+import { metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { sharedProgram } from "../testing/shared-program.js"
@@ -15,6 +17,15 @@ const call = async (argv: string[]) => {
 }
 
 describe("guide", () => {
+  it("examples a scenario the tool has, never a placeholder", () => {
+    const at = (directory: string) => metaOf(guideCommand({ command: "chat" }, { directory })).examples
+    expect(at(fileURLToPath(new URL("fixtures/scenarios", import.meta.url)))).toEqual([
+      "chat guide",
+      "chat guide catch-up --json",
+    ])
+    expect(at(join(tmpdir(), "no-such-scenarios"))).toEqual(["chat guide"])
+  })
+
   it("lists the scenarios and the ones another tool holds, with no profile", async () => {
     const { code, stdout } = await call(["guide"])
 
@@ -98,7 +109,8 @@ describe("checkGuide", () => {
 
   it.each([
     ["tg review", 'starts with "tg", not chat'],
-    ["chat personal review", 'no command "personal" — steps leave out the profile'],
+    ["chat personal nothing", 'no command "personal"'],
+    ["chat mesages list Team", 'no command "mesages"'],
     ["chat messages", "needs one of:"],
     ["chat messages list Team --nope", "no option --nope"],
     ["chat messages list Team --limit", "--limit needs a value"],
@@ -109,7 +121,12 @@ describe("checkGuide", () => {
     expect(checkStep(createProgram(sharedProgram), line).join("; ")).toContain(problem)
   })
 
-  it.each(["chat messages list --help", "chat messages list -h", "chat messages --help"])("accepts %s", (line) => {
+  it.each([
+    "chat messages list --help",
+    "chat messages list -h",
+    "chat messages --help",
+    "chat personal messages list Team",
+  ])("accepts %s", (line) => {
     expect(checkStep(createProgram(sharedProgram), line)).toEqual([])
   })
 

@@ -52,7 +52,7 @@ export const upgradeCommand = (
     annotate(new Command("upgrade"), {
       effects: LOCAL_WRITE,
       offline: false,
-      examples: [`${app.command} upgrade --check`, `${app.command} upgrade`],
+      examples: [`${app.command} upgrade --check`],
     }),
     { unless: "check" },
   )

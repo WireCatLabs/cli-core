@@ -7,7 +7,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { environmentOf, outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
 import { itemOf, listOf, renderAnswer } from "./envelope.js"
-import { PROFILE_FREE } from "./profile.js"
+import { commandWords, PROFILE_FREE, usableProfileName } from "./profile.js"
 
 export interface GuideStep {
   /** The command as a person types it: the tool's name first, no profile — `tg review --since 1d`. */
@@ -110,6 +110,19 @@ export const loadScenarios = async (directory: string): Promise<{ scenarios: Sce
   }
 }
 
+/** Only the file names, for the example: building the program parses no scenario. */
+const firstScenarioName = (directory: string): string | undefined => {
+  try {
+    return readdirSync(directory)
+      .filter((file) => file.endsWith(".md") && file.toLowerCase() !== "readme.md")
+      .map((file) => basename(file, ".md"))
+      .filter((name) => NAME.test(name))
+      .sort()[0]
+  } catch {
+    return undefined
+  }
+}
+
 const guides = new WeakMap<Command, GuideOptions>()
 
 const rows = (pairs: readonly (readonly [string, string])[]): string[] => {
@@ -148,13 +161,14 @@ const scenarioText = (cli: string, scenario: Scenario, profile: boolean): string
 
 /**
  * `<tool> guide` lists the tool's scenarios and the ones it works with; `<tool> guide <name>` prints one: the goal,
- * each step as a command and why, and what to look at. The files are read when the command runs, never when the
+ * each step as a command and why, and what to look at. The files are parsed when the command runs, never when the
  * program is built. `checkGuide` validates them in the tool's CI.
  */
 export const guideCommand = (app: Pick<AppIdentity, "command">, options: GuideOptions): Command => {
+  const first = firstScenarioName(options.directory)
   const command = annotate(new Command("guide"), {
     effects: NO_EFFECTS,
-    examples: [`${app.command} guide`, `${app.command} guide <name> --json`],
+    examples: [`${app.command} guide`, ...(first ? [`${app.command} guide ${first} --json`] : [])],
   })
     .description("scenarios: the commands for a common task, in order, and why each")
     .argument("[name]", "one scenario; without it, the list")
@@ -276,20 +290,35 @@ const ownerOf = (chain: readonly Command[], flag: string): { owner: Command; opt
   return undefined
 }
 
+const isCommandWord = (program: Command, word: string | undefined): boolean =>
+  word !== undefined && commandWords(program).has(word)
+
+const isProfileWord = (word: string | undefined): boolean => {
+  if (word === undefined || word.startsWith("-")) return false
+  try {
+    usableProfileName(word)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** What is wrong with one step on this program: the path, each option and its value, the arguments. Never runs it. */
 export const checkStep = (program: Command, run: string): string[] => {
   const [tool, ...rest] = words(run)
   if (tool !== program.name()) return [`starts with "${tool ?? ""}", not ${program.name()}`]
   const chain: Command[] = [program]
   let at = program
-  let index = 0
+  // The first word may be the profile, as the command line takes it: `tg personal chats list`.
+  let index = isCommandWord(program, rest[0]) || !isProfileWord(rest[0]) ? 0 : 1
   for (; index < rest.length; index++) {
     const next = at.commands.find((one) => one.name() === rest[index] || one.aliases().includes(rest[index] ?? ""))
     if (!next) break
     chain.unshift(next)
     at = next
   }
-  if (at === program) return [`no command "${rest[0] ?? ""}" — steps leave out the profile`]
+  // A mistyped command reads like a profile word; when nothing follows that is a command, name the first word.
+  if (at === program) return [`no command "${rest[0] ?? ""}"`]
   const help = (at as unknown as { _getHelpOption: () => Option | null })._getHelpOption()
   const beforeDashes = rest.slice(index, rest.includes("--") ? rest.indexOf("--") : undefined)
   if (help && beforeDashes.some((word) => word === help.long || word === help.short)) return []

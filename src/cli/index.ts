@@ -216,10 +216,12 @@ export {
   logsInOrOut,
   NO_EFFECTS,
   ownerOnlyOption,
+  previewFlag,
   REMOTE_READ,
   REMOTE_WRITE,
   reachesOtherService,
   refuseUnderReadOnly,
+  storeChangeRefusal,
 } from "./effects.js"
 export { type CliEntry, type EntryContext, type EntryIo, startCli } from "./entry.js"
 export {
@@ -368,7 +370,16 @@ export {
   unknownPermissionIssues,
   unknownPermissionKeys,
 } from "./permission-keys.js"
-export { asFirstWord, commandWords, liftProfile, refuseCommandName, rootOf, usableProfileName } from "./profile.js"
+export {
+  asFirstWord,
+  commandWords,
+  liftProfile,
+  profileFree,
+  refuseCommandName,
+  rootOf,
+  takesProfile,
+  usableProfileName,
+} from "./profile.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {

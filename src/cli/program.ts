@@ -35,7 +35,7 @@ import {
   isStoreChange,
   judgedEffects,
   judgedTargets,
-  STORE_CHANGE_REFUSAL,
+  storeChangeRefusal,
 } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
@@ -45,7 +45,7 @@ import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
-import { commandWords, liftProfile, PROFILE_FREE, sampleCommand, valuedOptions } from "./profile.js"
+import { commandWords, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import {
   type GlobalFlags,
@@ -138,15 +138,17 @@ export const createProgram = (
   installHelp(program, { pitch: app.description, ...firstScreen })
 
   // Commander builds a usage line from the command tree, where the profile is not a word.
-  for (const top of program.commands) {
-    if (PROFILE_FREE.has(top.name())) continue
-    forEachCommand(top, (command) =>
-      command.configureHelp({
-        ...command.configureHelp(),
-        commandUsage: (shown) => `${app.command} <profile>${new Help().commandUsage(shown).slice(app.command.length)}`,
-      }),
-    )
-  }
+  if (firstScreen?.profile !== false)
+    for (const top of program.commands)
+      forEachCommand(top, (command) =>
+        command.configureHelp({
+          ...command.configureHelp(),
+          commandUsage: (shown) => {
+            const usage = new Help().commandUsage(shown)
+            return takesProfile(shown) ? `${app.command} <profile>${usage.slice(app.command.length)}` : usage
+          },
+        }),
+      )
 
   // Depth-first: Commander does not pass `configureOutput` down to a command added with
   // `addCommand`, so `tg messages --help` would write to the real terminal.
@@ -371,7 +373,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
       })
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
-    if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
+    if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, storeChangeRefusal(definition.app))
     refuseWriteBeforeConnecting(action, {
       app: definition.app,
       env: commandEnv,
