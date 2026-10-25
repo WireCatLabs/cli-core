@@ -142,3 +142,57 @@ it("refuses the upgraded file to a build of version 31, which still reads folder
   )
   database.close()
 })
+
+it("writes the same Drive files rows when version 31 already moved the documents to the google-drive account", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "version-32-")), "wirecat.db")
+  const old = await openCache(path)
+  migrate(old, { migrations: MIGRATIONS.filter(({ version }) => version <= 31), now: () => 1000 })
+  const drive = Number(
+    old
+      .prepare(
+        "INSERT INTO accounts (provider, external_id, name, created_at, updated_at) VALUES ('google-drive', 'owner-1', 'Google Drive', 1000, 1000) RETURNING id",
+      )
+      .get()?.id,
+  )
+  const document = old.prepare(
+    "INSERT INTO documents (account_id, external_id, kind, title, front_matter, metadata, created_at, updated_at) " +
+      "VALUES (?, ?, ?, ?, ?, ?, 1000, 1000) RETURNING id",
+  )
+  const file = Number(
+    document.get(
+      drive,
+      "file-1.md",
+      "file",
+      "Plan",
+      '{"source":"google-drive","fileId":"file-1"}',
+      '{"catalog":{"name":"Plan","parents":["folder-1.md"],"active":true}}',
+    )?.id,
+  )
+  document.run(
+    drive,
+    "folder-1.md",
+    "folder",
+    "Team",
+    '{"source":"google-drive","fileId":"folder-1"}',
+    '{"catalog":{"name":"Team","parents":[],"active":true}}',
+  )
+  old.close()
+
+  await (await openStore({ path })).close()
+
+  const database = await openCache(path)
+  expect(database.prepare("SELECT provider FROM accounts WHERE id = ?").get(drive)).toEqual({
+    provider: "google-drive",
+  })
+  expect(
+    database
+      .prepare(
+        "SELECT f.external_id, f.path, p.external_id AS parent, f.document_id FROM files f LEFT JOIN files p ON p.id = f.parent_id ORDER BY f.path",
+      )
+      .all(),
+  ).toEqual([
+    { external_id: "folder-1", path: "Team", parent: null, document_id: expect.any(Number) },
+    { external_id: "file-1", path: "Team/Plan", parent: "folder-1", document_id: file },
+  ])
+  database.close()
+})
