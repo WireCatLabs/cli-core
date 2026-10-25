@@ -26,12 +26,12 @@ export const tagCreationReview = (
   kind: "tag" | "topic",
 ): TagCreationReview => {
   const metadata = database
-    .prepare("SELECT count(*) AS count,coalesce(sum(length(CAST(name AS BLOB))),0) AS bytes FROM tags")
+    .prepare("SELECT count(*) AS count,coalesce(sum(length(CAST(name AS BLOB))),0) AS bytes FROM canonical_tags")
     .get()
   const aliasMetadata = database
     .prepare(
       "SELECT count(*) AS count,coalesce(sum(length(CAST(a.name AS BLOB))),0) AS bytes FROM aliases a " +
-        "JOIN tags t ON t.id=a.aliasable_id WHERE a.aliasable_type='tag' AND a.account_id IS NULL",
+        "JOIN canonical_tags t ON t.id=a.aliasable_id WHERE a.aliasable_type='tag' AND a.account_id IS NULL",
     )
     .get()
   if (
@@ -42,10 +42,14 @@ export const tagCreationReview = (
     throw new CliError("validation_error", "label creation review exceeds its metadata budget", {
       reason: "tag-review.over-budget",
     })
-  const rows = database.prepare("SELECT id,name,kind FROM tags ORDER BY id").all()
+  const rows = database
+    .prepare(
+      "SELECT t.id,t.name,t.kind,r.canonical_id,r.name AS canonical_name FROM canonical_tags t JOIN resolved_tags r ON r.id=t.id ORDER BY t.id",
+    )
+    .all()
   const aliases = database
     .prepare(
-      "SELECT a.id,a.aliasable_id,a.name FROM aliases a JOIN tags t ON t.id=a.aliasable_id " +
+      "SELECT a.id,a.aliasable_id,a.name FROM aliases a JOIN canonical_tags t ON t.id=a.aliasable_id " +
         "WHERE a.aliasable_type='tag' AND a.account_id IS NULL ORDER BY a.id",
     )
     .all()
@@ -56,10 +60,10 @@ export const tagCreationReview = (
     values.push(String(alias.name))
     names.set(id, values)
   }
-  const candidates = rows
+  const scored = rows
     .map((row) => ({
-      id: String(row.id),
-      name: String(row.name),
+      id: String(row.canonical_id),
+      name: String(row.canonical_name),
       kind: row.kind as "tag" | "topic",
       similarity: Math.max(
         ...[String(row.name), ...(names.get(Number(row.id)) ?? [])].map((value) =>
@@ -68,6 +72,12 @@ export const tagCreationReview = (
       ),
     }))
     .filter((entry) => entry.similarity >= 0.65)
+  const grouped = new Map<string, (typeof scored)[number]>()
+  for (const entry of scored) {
+    const held = grouped.get(entry.id)
+    if (!held || entry.similarity > held.similarity) grouped.set(entry.id, entry)
+  }
+  const candidates = [...grouped.values()]
     .sort((a, b) => b.similarity - a.similarity || Number(a.id) - Number(b.id))
     .slice(0, 10)
   return {

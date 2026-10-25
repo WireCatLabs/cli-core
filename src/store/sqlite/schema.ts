@@ -12,6 +12,7 @@ import {
   unique,
   uniqueIndex,
 } from "./drizzle/core.js"
+import { canonicalTags } from "./schema/canonical-tags.js"
 
 /**
  * The store's base tables — what `drizzle-kit generate` diffs against. Every column is explained in
@@ -1615,30 +1616,27 @@ export const agentActions = sqliteTable(
   ],
 )
 
-export const tags = sqliteTable("tags", {
-  id: integer("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  kind: text("kind").notNull().default("tag"),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-})
+export { canonicalTags } from "./schema/canonical-tags.js"
 
-export const autoTagClaims = sqliteTable(
-  "auto_tag_claims",
+export const canonicalAutoTagClaims = sqliteTable(
+  "canonical_auto_tag_claims",
   {
     chatId: integer("chat_id")
       .notNull()
       .references(() => chats.id),
     tagId: integer("tag_id")
       .notNull()
-      .references(() => tags.id),
+      .references(() => canonicalTags.id),
     algorithm: text("algorithm").notNull(),
     score: real("score").notNull(),
     fields: text("fields").notNull(),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [primaryKey({ columns: [table.chatId, table.tagId] }), index("auto_tag_claims_by_tag_id").on(table.tagId)],
+  (table) => [
+    primaryKey({ columns: [table.chatId, table.tagId] }),
+    index("canonical_auto_tag_claims_by_tag_id").on(table.tagId),
+  ],
 )
 
 export const links = sqliteTable(
@@ -1701,7 +1699,7 @@ export const taggings = sqliteTable(
     id: integer("id").primaryKey(),
     tagId: integer("tag_id")
       .notNull()
-      .references(() => tags.id),
+      .references(() => canonicalTags.id),
     taggableType: text("taggable_type").notNull(),
     taggableId: integer("taggable_id").notNull(),
     main: integer("main").notNull().default(0),
@@ -1717,6 +1715,8 @@ export const taggings = sqliteTable(
     index("taggings_by_author_type_author_id").on(table.authorType, table.authorId),
   ],
 )
+
+export { tagConsolidations, tagRedirects } from "./schema/tag-consolidations.js"
 
 export const conversations = sqliteTable(
   "conversations",

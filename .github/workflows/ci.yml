@@ -57,6 +57,9 @@ jobs:
       - name: Check mail on the minimum supported Node
         run: |
           T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-mail.mjs "$T/mail.db"
+      - name: Check reviewed tags on the minimum supported Node
+        run: |
+          T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-tags.mjs "$T/tags.db"
 
   sqlite-restart:
     runs-on: ubuntu-latest

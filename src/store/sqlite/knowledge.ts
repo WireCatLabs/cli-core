@@ -24,6 +24,7 @@ import {
   setMainTopic,
   type TagKind,
   type TagRow,
+  tagNamed,
 } from "./tags.js"
 import { TASK_KEY_PREFIXES } from "./task-keys.js"
 import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
@@ -324,10 +325,10 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   const subfolderLabels = (folder: number, path: string, tag?: string) =>
     database
       .prepare(
-        "SELECT t.name FROM links l JOIN tags t ON t.id = l.to_id WHERE l.from_type = 'account' AND l.from_id = ? " +
+        "SELECT DISTINCT t.name FROM links l JOIN resolved_tags t ON t.id=l.to_id WHERE l.from_type = 'account' AND l.from_id = ? " +
           `AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND l.anchor = ?${tag === undefined ? "" : " AND t.name = ?"} ORDER BY t.name`,
       )
-      .all(folder, path, ...(tag === undefined ? [] : [tag]))
+      .all(folder, path, ...(tag === undefined ? [] : [tagNamed(database, tag)?.name ?? tag]))
       .map((row) => String(row.name))
 
   const annotationOf = (row: Row): Annotation | undefined => {
@@ -571,7 +572,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           database
             .prepare(
               `DELETE FROM links WHERE from_type = 'account' AND from_id = ? AND kind = ${linkKind("labelled")} AND to_type = 'tag' AND anchor = ? ` +
-                "AND to_id IN (SELECT id FROM tags WHERE name = ?)",
+                "AND to_id IN (SELECT id FROM resolved_tags WHERE name = ?)",
             )
             .run(thing.id, path, name).changes > 0,
       )
@@ -593,9 +594,9 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const rows = database
         .prepare(
           "SELECT * FROM (" +
-            "SELECT DISTINCT g.taggable_type AS type, g.taggable_id AS id, NULL AS path FROM taggings g JOIN tags t ON t.id = g.tag_id " +
+            "SELECT DISTINCT g.taggable_type AS type, g.taggable_id AS id, NULL AS path FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id " +
             `WHERE g.taggable_type IN (${types.map(() => "?").join(",") || "NULL"}) AND (? IS NULL OR t.name = ?) ` +
-            "UNION SELECT DISTINCT 'account' AS type, l.from_id AS id, l.anchor AS path FROM links l JOIN tags t ON t.id = l.to_id " +
+            "UNION SELECT DISTINCT 'account' AS type, l.from_id AS id, l.anchor AS path FROM links l JOIN resolved_tags t ON t.id=l.to_id " +
             `WHERE ? = 1 AND l.from_type = 'account' AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND (? IS NULL OR t.name = ?)` +
             ") ORDER BY type = 'account', type, id, path LIMIT ? OFFSET ?",
         )

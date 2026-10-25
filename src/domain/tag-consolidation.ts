@@ -11,6 +11,8 @@ export interface TagConsolidationOptions {
 export interface TagConsolidationPreview {
   source: { id: string; name: string }
   survivor: { id: string; name: string }
+  sourceMemberIds: string[]
+  survivorMemberIds: string[]
   vocabularyFingerprint: string
   previewFingerprint: string
   assignments: {
@@ -48,10 +50,31 @@ export interface TagConsolidationPreview {
     rows: number
     readBytes: number
     samplesComplete: boolean
-    applySupported: false
+    applySupported: true
   }
 }
 
 export interface TagConsolidationStore {
   previewTagConsolidation(options: TagConsolidationOptions): Promise<TagConsolidationPreview>
+  applyTagConsolidation(options: TagConsolidationApplyOptions): Promise<TagConsolidationReceipt>
+}
+
+export interface TagConsolidationApplyOptions extends Omit<TagConsolidationOptions, "sampleLimit"> {
+  by: "owner"
+  expectedPreviewFingerprint: string
+  idempotencyKey: string
+}
+
+export interface TagConsolidationReceipt {
+  id: string
+  sourceId: string
+  survivorId: string
+  sourceMemberIds: string[]
+  survivorMemberIds: string[]
+  actor: { type: "person"; id: string }
+  createdAt: string
+  idempotencyKey: string
+  vocabularyFingerprint: string
+  previewFingerprint: string
+  counts: { assignments: number; aliases: number; automaticClaims: number; links: number }
 }

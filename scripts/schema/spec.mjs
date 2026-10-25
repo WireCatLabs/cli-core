@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
+import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
 const info = JSON.parse(readFileSync(`${scratch}/info.json`, "utf8"))
@@ -265,6 +266,7 @@ const EDITS = {
     keys: ["UNIQUE (command, params) WHERE name IS NULL", "INDEX (last_run_at DESC)"],
   },
   tags: {
+    rename: "canonical_tags",
     replaceCols: [
       ["id", "integer", { pk: true }],
       [
@@ -287,9 +289,10 @@ const EDITS = {
     note: "Split into `tags` + `taggings` (owner).",
   },
   auto_tag_claims: {
+    rename: "canonical_auto_tag_claims",
     cols: { tag: "tag_id" },
     colTypes: { tag_id: "integer" },
-    colRefs: { tag_id: "tags.id" },
+    colRefs: { tag_id: "canonical_tags.id" },
     add: [["updated_at", "integer", { notnull: true }]],
   },
   links: {
@@ -922,25 +925,7 @@ const NEW = {
       keys: ["PRIMARY KEY (source_type, source_id)"],
     },
   ],
-  tags: [
-    {
-      name: "taggings",
-      doc: "One tag on one thing.",
-      cols: [
-        id(),
-        fk("tag_id", "tags", { notnull: true }),
-        ...poly(
-          "taggable",
-          "`chat`, `identity`, `message`, `email`, `document`, `note`, `person`, `organization`, `project`, `task`, `event`, …",
-        ),
-        c("main", "integer", { notnull: true, note: "1 on the thing's main topic; at most one per thing" }),
-        c("source", "text", { notnull: true, note: "where it came from: owner, agent, auto, an import" }),
-        ...actor("author"),
-        ...ts(),
-      ],
-      keys: ["UNIQUE (tag_id, taggable_type, taggable_id)", "UNIQUE (taggable_type, taggable_id) WHERE main = 1"],
-    },
-  ],
+  tags: [taggingTable, ...tagConsolidationTables],
   events: [
     {
       name: "event_series",

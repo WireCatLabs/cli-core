@@ -57,7 +57,7 @@ export const meetingSelectionSql = (input: MeetingSelection): { clauses: string[
   }
   if (input.tagId !== undefined) {
     clauses.push(
-      "EXISTS (SELECT 1 FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type='meeting' AND g.taggable_id=m.id AND t.id=?)",
+      "EXISTS (SELECT 1 FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE g.taggable_type='meeting' AND g.taggable_id=m.id AND t.canonical_id=(SELECT canonical_id FROM resolved_tags WHERE id=?))",
     )
     params.push(input.tagId)
   }

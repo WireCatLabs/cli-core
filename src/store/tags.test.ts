@@ -267,7 +267,7 @@ describe("topics", () => {
     })
     const database = await openCache(path)
     const main = database
-      .prepare("SELECT t.name FROM taggings g JOIN tags t ON t.id = g.tag_id WHERE g.main = 1")
+      .prepare("SELECT t.name FROM taggings g JOIN canonical_tags t ON t.id = g.tag_id WHERE g.main = 1")
       .all()
       .map((row) => row.name)
     database.close()

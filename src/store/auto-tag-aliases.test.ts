@@ -31,7 +31,7 @@ it("combines canonical and alias automatic claims and retains manual labels acro
     await store.chats.replaceAutoTags(key, "1", "invented", matches)
     const database = await openCache(path)
     try {
-      const claims = database.prepare("SELECT tag_id,score,fields FROM auto_tag_claims").all()
+      const claims = database.prepare("SELECT tag_id,score,fields FROM canonical_auto_tag_claims").all()
       expect(claims).toHaveLength(1)
       expect(claims[0]?.tag_id).toBe(tag.id)
       expect(claims[0]?.score).toBe(0.6)

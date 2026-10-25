@@ -717,13 +717,13 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       write(database, () => {
         const id = Number(documentRow(documentId).id)
         const stated = [...new Set(tags.map(normalizeTag))]
+        const selected = [...new Set(stated.map((name) => ensureTag(context, name).id))]
         database
           .prepare(
             "DELETE FROM taggings WHERE taggable_type = 'document' AND taggable_id = ? AND source = 'file' " +
-              "AND tag_id NOT IN (SELECT t.id FROM tags t JOIN json_each(?) j ON j.value = t.name)",
+              "AND tag_id NOT IN (SELECT t.id FROM resolved_tags t JOIN json_each(?) j ON j.value=t.canonical_id)",
           )
-          .run(id, JSON.stringify(stated))
-        for (const tag of stated) ensureTag(context, tag)
+          .run(id, JSON.stringify(selected))
         addTags(context, { type: "document", id }, stated, "file")
         return documentTags(id)
       }),

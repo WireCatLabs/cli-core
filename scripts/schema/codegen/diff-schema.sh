@@ -21,8 +21,9 @@ import pathlib, re, sys
 source = pathlib.Path(sys.argv[1])
 def expand(match):
     module = source.parent / "schema" / (match.group(1) + ".ts")
-    return re.sub(r'^import .* from .*\n\n', '', module.read_text(), count=1).rstrip()
+    return re.sub(r'^(?:import [^\n]+\n)+\n', '', module.read_text(), count=1).rstrip()
 text = re.sub(r'^export \{[^}]+\} from "\./schema/([a-z-]+)\.js"$', expand, source.read_text(), flags=re.M)
+text = re.sub(r'^import [^\n]+ from [^\n]+\n', '', text, flags=re.M)
 pathlib.Path(sys.argv[2]).write_text(text)
 PYCODE
 differences=$(diff -u "$out/expanded.ts" "$tmp" | grep -E '^[-+][^-+]' | grep -v -E '^[-+]\s*(//|/\*\*|\*)' || true)

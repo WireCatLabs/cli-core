@@ -1,7 +1,8 @@
 import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { eq } from "drizzle-orm"
+import { eq, getTableName } from "drizzle-orm"
+import { getTableConfig } from "drizzle-orm/sqlite-core"
 import { afterEach, describe, expect, it } from "vitest"
 import type { CacheDatabase } from "../driver.js"
 import { migrate } from "../migrations.js"
@@ -9,7 +10,7 @@ import { openCache } from "../open.js"
 import { openStore } from "../store.js"
 import { LINK_KINDS } from "./link-kinds.js"
 import { type OpenedSqlite, openSqlite } from "./open.js"
-import { accounts } from "./schema.js"
+import { accounts, tagConsolidations, tagRedirects } from "./schema.js"
 
 const DOC = join(import.meta.dirname, "../../../docs/storage/schema.md")
 const fresh = () => join(mkdtempSync(join(tmpdir(), "schema-")), "messages.db")
@@ -137,10 +138,10 @@ describe("the initial migration", () => {
            normalized_text, updated_at) VALUES (1, 1, '4', 1, 1, 'Tomatoes ripen', 1, 'sync', 'tomatoes ripen', 1)`)
     run(`INSERT INTO attachments (attachable_type, attachable_id, position, kind, text, normalized_text, created_at,
            updated_at) VALUES ('message', 1, 0, 'document', 'Seed catalogue', 'seed catalogue', 1, 1)`)
-    run(`INSERT INTO tags (name, created_at, updated_at) VALUES ('garden', 1, 1)`)
+    run(`INSERT INTO canonical_tags (name, created_at, updated_at) VALUES ('garden', 1, 1)`)
     run(`INSERT INTO taggings (tag_id, taggable_type, taggable_id, source, created_at, updated_at)
            VALUES (1, 'message', 1, 'owner', 1, 1), (1, 'chat', 1, 'owner', 1, 1)`)
-    run(`INSERT INTO auto_tag_claims (chat_id, tag_id, algorithm, score, fields, created_at, updated_at)
+    run(`INSERT INTO canonical_auto_tag_claims (chat_id, tag_id, algorithm, score, fields, created_at, updated_at)
            VALUES (1, 1, 'rule', 1, '[]', 1, 1)`)
     run(`INSERT INTO aliases (aliasable_type, aliasable_id, account_id, name, name_folded, source, created_at, updated_at)
            VALUES ('identity', 1, NULL, 'Bobby', 'bobby', 'owner', 1, 1), ('chat', 1, NULL, 'Club', 'club', 'owner', 1, 1),
@@ -177,7 +178,7 @@ describe("the initial migration", () => {
     run("DELETE FROM chats")
     expect(all("SELECT name FROM aliases ORDER BY name")).toEqual([{ name: "B" }, { name: "Bobby" }])
     expect(one("SELECT count(*) AS n FROM taggings")).toEqual({ n: 0 })
-    expect(one("SELECT count(*) AS n FROM auto_tag_claims")).toEqual({ n: 0 })
+    expect(one("SELECT count(*) AS n FROM canonical_auto_tag_claims")).toEqual({ n: 0 })
     run("DELETE FROM identities")
     expect(all("SELECT name FROM aliases")).toEqual([{ name: "B" }])
     run("INSERT INTO identities_fts (identities_fts) VALUES ('integrity-check')")
@@ -292,11 +293,11 @@ describe("the initial migration", () => {
            thread_root_id, updated_at) VALUES (2, 1, '12', 3, 'x', 1, 'sync', 99, 1)`),
     ).toThrow(/FOREIGN KEY/)
 
-    run(`INSERT INTO tags (name, kind, created_at, updated_at) VALUES ('Food', 'topic', 1, 1), ('Wellbeing', 'topic', 1, 1),
+    run(`INSERT INTO canonical_tags (name, kind, created_at, updated_at) VALUES ('Food', 'topic', 1, 1), ('Wellbeing', 'topic', 1, 1),
            ('animals', 'tag', 1, 1)`)
-    expect(() => run(`INSERT INTO tags (name, kind, created_at, updated_at) VALUES ('Food', 'tag', 1, 1)`)).toThrow(
-      /UNIQUE/,
-    )
+    expect(() =>
+      run(`INSERT INTO canonical_tags (name, kind, created_at, updated_at) VALUES ('Food', 'tag', 1, 1)`),
+    ).toThrow(/UNIQUE/)
     run(`INSERT INTO taggings (tag_id, taggable_type, taggable_id, main, source, created_at, updated_at)
            VALUES (1, 'chat', 1, 1, 'owner', 1, 1), (3, 'chat', 1, 0, 'owner', 1, 1)`)
     expect(() =>
@@ -456,7 +457,7 @@ describe("what the initial migration seeds and enforces", () => {
     for (const hash of ["only", "shared"])
       run(`INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at)
              VALUES ('m', '${hash}', 1, x'00', 1, 1)`)
-    run(`INSERT INTO tags (name, kind, created_at, updated_at) VALUES ('work', 'tag', 1, 1)`)
+    run(`INSERT INTO canonical_tags (name, kind, created_at, updated_at) VALUES ('work', 'tag', 1, 1)`)
     run(`INSERT INTO links (from_type, from_id, to_type, to_id, kind, anchor, source, created_at, updated_at)
            VALUES ('account', 1, 'tag', 1, 'labelled', 'Projects', 'owner', 1, 1)`)
 
@@ -547,4 +548,53 @@ describe("the data-model rules (cli-base docs/standards/data-model.md)", () => {
     expect(await columnsWhere((_, { name }) => PROVIDER_ID.test(name))).toEqual([])
     expect(await columnsWhere((_, { type }) => type.startsWith("bool"))).toEqual([])
   })
+})
+
+it("keeps the tag ORM foreign keys and lookup indexes aligned with the structural migration", async () => {
+  const database = await open()
+  migrate(database)
+  for (const table of [tagRedirects, tagConsolidations]) {
+    const definition = getTableConfig(table)
+    const expected = definition.foreignKeys
+      .flatMap((key) => {
+        const reference = key.reference()
+        return reference.columns.map(
+          (column, index) =>
+            `${column.name}:${getTableName(reference.foreignTable)}.${reference.foreignColumns[index]?.name}`,
+        )
+      })
+      .sort()
+    const actual = database
+      .prepare("SELECT * FROM pragma_foreign_key_list(?)")
+      .all(definition.name)
+      .map((row) => `${row.from}:${row.table}.${row.to}`)
+      .sort()
+    expect(actual).toEqual(expected)
+    expect(actual).toHaveLength(2)
+    for (const index of definition.indexes) {
+      const columns = index.config.columns.map((column) => ("name" in column ? column.name : null))
+      expect(
+        database
+          .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
+          .all(index.config.name)
+          .map((row) => row.name),
+      ).toEqual(columns)
+    }
+    if (definition.name === "tag_consolidations") {
+      expect(definition.columns.filter((column) => column.isUnique).map((column) => column.name)).toContain(
+        "idempotency_key",
+      )
+      const unique = database.prepare("SELECT name FROM pragma_index_list(?) WHERE origin='u'").all(definition.name)
+      expect(
+        unique.some(
+          (index) =>
+            database
+              .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
+              .all(String(index.name))
+              .map((row) => row.name)
+              .join(",") === "idempotency_key",
+        ),
+      ).toBe(true)
+    }
+  }
 })

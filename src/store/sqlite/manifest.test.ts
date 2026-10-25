@@ -85,6 +85,21 @@ describe("the generated migrations", () => {
     ).toThrow(/disagree/)
   })
 
+  it("never lowers or silently defaults an activated compatibility gate", () => {
+    const generated = [
+      { name: "a", statements: ["SELECT 1"] },
+      { name: "b", statements: ["SELECT 2"] },
+    ]
+    const first = { name: "a", version: 25, minCompatible: 25 }
+    for (const minCompatible of [undefined, 0, 1, 24, NaN, 27])
+      expect(() =>
+        generatedMigrations([first, { name: "b", version: 26, minCompatible } as (typeof MANIFEST)[number]], generated),
+      ).toThrow(/minCompatible/)
+    expect(
+      generatedMigrations([first, { name: "b", version: 26, minCompatible: 25 }], generated).at(-1)?.minCompatible,
+    ).toBe(25)
+  })
+
   it("refuses a manifest row with no bundled migration, and numbers the rest", () => {
     const generated = [{ name: "b", statements: ["SELECT 1"] }]
     expect(generatedMigrations([{ name: "b", version: 6, minCompatible: 6 }], generated)).toEqual([

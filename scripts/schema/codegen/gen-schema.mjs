@@ -20,7 +20,7 @@ const DEFAULTS = {
   "accounts.scope": "personal",
   "projects.scope": "personal",
   "organizations.scope": "personal",
-  "tags.kind": "tag",
+  "canonical_tags.kind": "tag",
   "taggings.main": 0,
   "searches.runs": 0,
 }

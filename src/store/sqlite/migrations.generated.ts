@@ -596,5 +596,26 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('transcript_index', 0, 0, 0, 1, NULL, NULL);",
       "INSERT OR IGNORE INTO transcript_index_pending (indexable_type, id)\n  SELECT 'attachment', id FROM attachments WHERE attachable_type = 'message' AND coalesce(text, '') <> ''\n    AND (coalesce(extractor, '') LIKE 'speech:%' OR kind IN ('voice', 'video_note') OR coalesce(mime, '') = 'audio/ogg');"
     ]
+  },
+  {
+    "name": "20261025064253_version-30-reviewed-tag-consolidation",
+    "statements": [
+      "CREATE TABLE `tag_consolidations` (\n\t`id` integer PRIMARY KEY,\n\t`source_id` integer NOT NULL,\n\t`survivor_id` integer NOT NULL,\n\t`source_member_ids` text NOT NULL,\n\t`survivor_member_ids` text NOT NULL,\n\t`actor_type` text NOT NULL,\n\t`actor_id` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`idempotency_key` text NOT NULL UNIQUE,\n\t`vocabulary_fingerprint` text NOT NULL,\n\t`preview_fingerprint` text NOT NULL,\n\t`counts` text NOT NULL,\n\t`request_fingerprint` text NOT NULL,\n\tCONSTRAINT `fk_tag_consolidations_source_id_canonical_tags_id_fk` FOREIGN KEY (`source_id`) REFERENCES `canonical_tags`(`id`),\n\tCONSTRAINT `fk_tag_consolidations_survivor_id_canonical_tags_id_fk` FOREIGN KEY (`survivor_id`) REFERENCES `canonical_tags`(`id`)\n);",
+      "CREATE TABLE `tag_redirects` (\n\t`source_id` integer PRIMARY KEY,\n\t`survivor_id` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `fk_tag_redirects_source_id_canonical_tags_id_fk` FOREIGN KEY (`source_id`) REFERENCES `canonical_tags`(`id`),\n\tCONSTRAINT `fk_tag_redirects_survivor_id_canonical_tags_id_fk` FOREIGN KEY (`survivor_id`) REFERENCES `canonical_tags`(`id`)\n);",
+      "ALTER TABLE `auto_tag_claims` RENAME TO `canonical_auto_tag_claims`;",
+      "ALTER TABLE `tags` RENAME TO `canonical_tags`;",
+      "DROP INDEX IF EXISTS `auto_tag_claims_by_tag_id`;",
+      "CREATE INDEX `canonical_auto_tag_claims_by_tag_id` ON `canonical_auto_tag_claims` (`tag_id`);",
+      "CREATE INDEX `tag_consolidations_by_source_id` ON `tag_consolidations` (`source_id`);",
+      "CREATE INDEX `tag_consolidations_by_survivor_id` ON `tag_consolidations` (`survivor_id`);",
+      "CREATE INDEX `tag_consolidations_by_actor_type_actor_id` ON `tag_consolidations` (`actor_type`,`actor_id`);",
+      "CREATE INDEX `tag_redirects_by_survivor_id` ON `tag_redirects` (`survivor_id`);"
+    ]
+  },
+  {
+    "name": "20261025064302_version-30-resolved-tag-view",
+    "statements": [
+      "CREATE VIEW resolved_tags AS\nSELECT original.id,canonical.name,canonical.kind,canonical.id AS canonical_id,original.created_at,original.updated_at\nFROM canonical_tags original\nLEFT JOIN tag_redirects r ON r.source_id=original.id\nJOIN canonical_tags canonical ON canonical.id=coalesce(r.survivor_id,original.id);"
+    ]
   }
 ]

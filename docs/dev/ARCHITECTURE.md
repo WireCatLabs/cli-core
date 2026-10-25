@@ -460,7 +460,8 @@ The schema before this one lived in `messages.db` and is not converted: the new 
 build still installed never opens it. Every migration after the first is forward-only, additive, numbered, and
 never edited once it reached anyone's file — a test refuses a generated rebuild of a base table.
 `min_compatible` lets an older CLI keep using a file a newer one migrated; a migration that drops what an older
-build reads raises it, and that build then refuses the file and asks to be upgraded. It is 1.
+build reads raises it, and that build then refuses the file and asks to be upgraded. Store version 30
+sets it to 30 for the tag/automatic-claim structural compatibility boundary.
 
 ⚠ **Announce a migration number before writing it.** Several sessions work in this repository at
 once, and two of them taking the same number is a conflict no rebase fixes. The next free number
@@ -488,7 +489,7 @@ it by editing that line in a PR of its own, merged before the migration.
    `version`. Two folders with one version — the generated one and its custom one, as version 7 —
    apply as one migration and write one `schema_migrations` row. Versions run on without a gap
    (`manifest.test.ts:38-44`).
-6. **`minCompatible` stays where it is** — 1 today — for an additive change. Raising it locks every
+6. **`minCompatible` stays where it is** — 30 after the tag compatibility boundary — for an additive change. Every manifest row declares it explicitly; it cannot decrease. Raising it locks every
    older build out of the file: ask the owner first; it is a major version of this package, and
    tg-cli and max-cli ship their upgrade the same day.
 7. **`pnpm db:bundle`** after every `db:generate` and every edit of a `migration.sql`. It rewrites

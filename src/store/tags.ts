@@ -1,7 +1,7 @@
 import type { StoreContext } from "./sqlite/open.js"
 import type { AnyTagTarget, StoredTag, TagFilter } from "./sqlite/tags.js"
 import * as tagQueries from "./sqlite/tags.js"
-import { write } from "./sqlite/transaction.js"
+import { read, write } from "./sqlite/transaction.js"
 import type { AccountKey } from "./types.js"
 
 export interface TagsStore {
@@ -32,6 +32,6 @@ export const tagsStoreOver = (context: StoreContext): TagsStore => {
       return removed
     },
 
-    tags: async (key, filter = {}) => tagQueries.tagsOf(context, key, filter),
+    tags: async (key, filter = {}) => read(database, () => tagQueries.tagsOf(context, key, filter)),
   }
 }

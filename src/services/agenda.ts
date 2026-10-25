@@ -22,6 +22,7 @@ import {
 import { CHAT_KINDS } from "./chats.js"
 import type { ServiceDeps } from "./deps.js"
 import { taskAccount } from "./task-rules.js"
+import { taskTagFilters } from "./task-tag-filters.js"
 
 const DAY = 86_400_000
 
@@ -147,8 +148,9 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
           throw error
         })
     const open = await find()
+    const tags = await taskTagFilters(store, parts.tasks)
     const listed = parts.tasks
-      ? await find(queryFilter(parts.tasks, taskColumns(holder, at), { command: "tasks agenda" }))
+      ? await find(queryFilter(parts.tasks, taskColumns(holder, at, tags), { command: "tasks agenda" }))
       : open
     const tasks = listed
       .map((task) => ({ task, reasons: reasonsOf(task, at, dueWithin) }))
@@ -255,13 +257,9 @@ const split = (query: QueryAst): { tasks?: QueryAst; chats?: QueryAst } => {
   return { tasks: of("tasks"), chats: of("chats") }
 }
 
-const TAGGED =
-  "EXISTS (SELECT 1 FROM taggings g JOIN tags n ON n.id = g.tag_id " +
-  "WHERE g.taggable_type = 'task' AND g.taggable_id = t.id AND n.name = ?)"
-
 /** A claim that lapsed holds nothing, as `tasks claim` reads it. */
-const taskColumns = (holder: string | undefined, at: number): ColumnMap => ({
-  tag: { where: (node) => ({ sql: TAGGED, params: [node.value.trim().toLowerCase()] }) },
+const taskColumns = (holder: string | undefined, at: number, tags: ReadonlyMap<string, Where>): ColumnMap => ({
+  tag: { where: (node) => tags.get(node.value) ?? { sql: "0", params: [] } },
   category: { type: "kw", sql: "t.category" },
   claimed: {
     where: (node) => {
