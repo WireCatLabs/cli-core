@@ -30,6 +30,14 @@ const timeOf = (value: unknown): number | null => {
 
 const LOCAL = new Set(["local", "obsidian"])
 
+/** A local file of a document, where it is and its own facts. */
+export interface LocalPlace {
+  accountId: number
+  path: string
+  contentHash: string | null
+  frontMatter: unknown
+}
+
 /** Nested Drive folders deeper than this are cut at the root: a parent cycle must not recurse forever. */
 const MAX_DEPTH = 64
 
@@ -59,13 +67,21 @@ const localFolder = (database: CacheDatabase, now: number, accountId: number, pa
 }
 
 /** A file's document is the one its writer saved it as (`import`); a change of it is logged as every link is. */
-const logLink = (database: CacheDatabase, now: number, fileId: number, from: unknown, to: number) =>
+export const logFileLink = (
+  database: CacheDatabase,
+  now: number,
+  fileId: number,
+  from: unknown,
+  to: number | null,
+  method = "import",
+  author = "rules",
+) =>
   database
     .prepare(
       "INSERT INTO entity_link_events (linkable_type, linkable_id, entity_type, from_entity_id, to_entity_id, method, " +
-        "confidence, author, created_at) VALUES ('file', ?, 'document', ?, ?, 'import', 1, 'rules', ?)",
+        "confidence, author, created_at) VALUES ('file', ?, 'document', ?, ?, ?, 1, ?, ?)",
     )
-    .run(fileId, from == null ? null : Number(from), to, now)
+    .run(fileId, from == null ? null : Number(from), to, method, author, now)
 
 /** Moves the rows under a folder whose path changed, in one statement over the old prefix. */
 const movePaths = (database: CacheDatabase, accountId: number, from: string, to: string): void => {
@@ -80,22 +96,28 @@ const movePaths = (database: CacheDatabase, accountId: number, from: string, to:
  * Writes the `files` row of one document from the document as it is now: the document's source record. A Drive
  * document (catalog metadata or Drive front matter) is keyed by its Drive file id and placed under its first parent;
  * a local one by its path, under folder rows made from that path. `seen` marks a sync or import that returned it.
+ * `place` names a local file of the document other than the one its own columns name: a copy in another folder.
  */
 export const syncFile = (
   database: CacheDatabase,
   now: number,
   documentId: number,
-  { seen = true, depth = 0 }: { seen?: boolean; depth?: number } = {},
+  {
+    seen = true,
+    depth = 0,
+    place,
+    method = "import",
+  }: { seen?: boolean; depth?: number; place?: LocalPlace; method?: string } = {},
 ): Placed | null => {
   const doc = database.prepare("SELECT * FROM documents WHERE id = ?").get(documentId) as Row | undefined
   if (!doc) return null
-  const accountId = Number(doc.account_id)
-  const front = objectOf(doc.front_matter)
-  const catalog = objectOf(objectOf(doc.metadata)?.catalog)
+  const accountId = place?.accountId ?? Number(doc.account_id)
+  const front = place ? objectOf(place.frontMatter) : objectOf(doc.front_matter)
+  const catalog = place ? undefined : objectOf(objectOf(doc.metadata)?.catalog)
   const provider = database.prepare("SELECT provider FROM accounts WHERE id = ?").get(accountId)?.provider
   // A vault file may carry an exported Drive file's front matter and still be a file on disk.
   const remote = catalog !== undefined || (front?.source === "google-drive" && !LOCAL.has(String(provider)))
-  const externalId = (remote && stringOf(front?.fileId)) || String(doc.external_id)
+  const externalId = (remote && stringOf(front?.fileId)) || (place?.path ?? String(doc.external_id))
   const kind = doc.kind === "folder" ? "folder" : doc.kind === "page" ? "page" : "file"
   let name: string
   let parent: Placed | null = null
@@ -117,18 +139,23 @@ export const syncFile = (
       ...(parents.length > 1 ? { parents } : {}),
     }
   } else {
-    const path = String(doc.external_id)
+    const path = place?.path ?? String(doc.external_id)
     name = nameOf(path)
     const slash = path.lastIndexOf("/")
     parent = localFolder(database, now, accountId, slash < 0 ? "" : path.slice(0, slash))
     metadata = front === undefined ? {} : { front_matter: front }
   }
-  const path = remote ? (parent ? `${parent.path}/${name}` : name) : String(doc.external_id)
-  const existing = (database.prepare("SELECT * FROM files WHERE document_id = ?").get(documentId) ??
-    database.prepare("SELECT * FROM files WHERE account_id = ? AND external_id = ?").get(accountId, externalId)) as
-    | Row
-    | undefined
-  const gone = doc.deleted_at != null ? Number(doc.deleted_at) : catalog?.active === false ? now : null
+  const path = remote ? (parent ? `${parent.path}/${name}` : name) : (place?.path ?? String(doc.external_id))
+  // The place first; then, for a Drive file first saved under its document's own key, that row (`<id>.md`).
+  const existing = (database
+    .prepare("SELECT * FROM files WHERE account_id = ? AND external_id = ?")
+    .get(accountId, place?.path ?? externalId) ??
+    (place
+      ? undefined
+      : database
+          .prepare("SELECT * FROM files WHERE document_id = ? AND account_id = ? AND external_id = ?")
+          .get(documentId, accountId, String(doc.external_id)))) as Row | undefined
+  const gone = place ? null : doc.deleted_at != null ? Number(doc.deleted_at) : catalog?.active === false ? now : null
   const values = {
     account_id: accountId,
     external_id: externalId,
@@ -140,7 +167,7 @@ export const syncFile = (
     document_id: documentId,
     mime: doc.mime ?? (remote ? (stringOf(front?.mime) ?? null) : null),
     size: doc.size ?? (remote && Number.isSafeInteger(front?.size) ? front?.size : null),
-    content_hash: doc.content_hash ?? null,
+    content_hash: place ? place.contentHash : (doc.content_hash ?? null),
     url: doc.url ?? (remote ? (stringOf(front?.sourceUrl) ?? null) : null),
     external_created_at: doc.external_created_at ?? null,
     external_updated_at: doc.external_updated_at ?? (remote ? timeOf(front?.modifiedAt) : null),
@@ -156,12 +183,12 @@ export const syncFile = (
       )
       .get(...(Object.values(values) as (string | number | null)[]), Number(doc.created_at), now)
     const placed = { id: Number(row?.id), path }
-    logLink(database, now, placed.id, null, documentId)
+    logFileLink(database, now, placed.id, null, documentId, method)
     if (remote && kind === "folder") placeChildren(database, now, accountId, String(doc.external_id), depth)
     return placed
   }
   const id = Number(existing.id)
-  if (existing.document_id !== documentId) logLink(database, now, id, existing.document_id, documentId)
+  if (existing.document_id !== documentId) logFileLink(database, now, id, existing.document_id, documentId, method)
   const changed = Object.entries(values).some(([key, value]) => key !== "seen_at" && existing[key] !== value)
   if (changed || values.seen_at !== existing.seen_at) {
     database

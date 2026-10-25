@@ -16,9 +16,10 @@ import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
-import { syncFile } from "./files.js"
+import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, linkKind } from "./link-kinds.js"
+import { reviewLink } from "./link-reviews.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
@@ -378,6 +379,23 @@ const folderOf = (row: Row): NoteFolder => {
   }
 }
 
+const frontMatterObject = (text: unknown): Record<string, unknown> | undefined => {
+  try {
+    const value: unknown = JSON.parse(String(text))
+    return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const frontMatterOf = (metadata: unknown): unknown => {
+  try {
+    return (JSON.parse(String(metadata)) as { front_matter?: unknown } | null)?.front_matter ?? null
+  } catch {
+    return null
+  }
+}
+
 const pathParts = (path: string) => {
   const slash = path.lastIndexOf("/")
   const fileName = slash < 0 ? path : path.slice(slash + 1)
@@ -419,6 +437,78 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
     return { limit, offset }
   }
   const documentTags = (id: number) => labelsOf(database, { type: "document", id })
+  /** A file row of a folder by its path; a local folder's own rows are not notes. */
+  const fileAt = (folder: number, path: string, liveOnly = false): Row | undefined =>
+    database
+      .prepare(
+        `SELECT * FROM files WHERE account_id = ? AND external_id = ? AND kind <> 'folder'${liveOnly ? " AND deleted_at IS NULL" : ""}`,
+      )
+      .get(folder, path)
+  const isLocal = (accountId: unknown) =>
+    database
+      .prepare(`SELECT 1 FROM accounts WHERE id = ? AND provider IN ('local', 'obsidian')`)
+      .get(Number(accountId)) !== undefined
+  /** Drive's documents are found by its folder and `<id>.md`, whichever account that folder is now. */
+  const remoteDocument = (row: Row) => {
+    const front = frontMatterObject(row.front_matter)
+    return front?.source === "google-drive" || frontMatterObject(row.metadata)?.catalog !== undefined
+  }
+  /** Drive's own saves keep their documents by folder and `<id>.md`; only files on disk join by content. */
+  const localSave = (folder: number, frontMatter: unknown) =>
+    isLocal(folder) && (frontMatter as { source?: unknown } | null | undefined)?.source !== "google-drive"
+  /**
+   * The documents whose shown file has this content: live ones, else gone ones no file holds any more, so a file
+   * moved to another folder is the same document whichever folder syncs first. Empty text matches nothing.
+   */
+  const sameContent = (hash: string | null, text: string): number[] => {
+    if (!hash || !text.trim()) return []
+    const live = database
+      .prepare("SELECT id FROM documents WHERE content_hash = ? AND deleted_at IS NULL ORDER BY id")
+      .all(hash)
+    if (live.length) return live.map(({ id }) => Number(id))
+    return database
+      .prepare(
+        "SELECT d.id FROM documents d WHERE d.content_hash = ? AND d.deleted_at IS NOT NULL AND NOT EXISTS " +
+          "(SELECT 1 FROM files f WHERE f.document_id = d.id AND f.deleted_at IS NULL) ORDER BY d.id",
+      )
+      .all(hash)
+      .map(({ id }) => Number(id))
+  }
+  /**
+   * A local document's own place columns follow the file it shows (the owner's pin, else the latest changed), so
+   * readers that still go by `documents.account_id` find it where it is. Drive's documents keep theirs.
+   */
+  const followPreferred = (id: number, at: number) => {
+    const document = documentRow(String(id))
+    if (!isLocal(document.account_id) || remoteDocument(document)) return
+    const preferred = database
+      .prepare(
+        `SELECT f.account_id, f.external_id FROM files f JOIN documents d ON d.id = f.document_id
+          JOIN accounts a ON a.id = f.account_id WHERE f.document_id = ? AND f.deleted_at IS NULL AND f.kind <> 'folder'
+          AND a.provider IN ('local', 'obsidian') ORDER BY ${PREFERRED_FILE} LIMIT 1`,
+      )
+      .get(id)
+    if (!preferred) return
+    const [account, path] = [Number(preferred.account_id), String(preferred.external_id)]
+    if (Number(document.account_id) === account && String(document.external_id) === path) return
+    const blocking = database
+      .prepare("SELECT id, deleted_at FROM documents WHERE account_id = ? AND external_id = ? AND id <> ?")
+      .get(account, path, id)
+    if (blocking?.deleted_at == null && blocking !== undefined) return
+    if (blocking) database.prepare("DELETE FROM documents WHERE id = ?").run(Number(blocking.id))
+    const { location, fileName, extension } = pathParts(path)
+    database
+      .prepare(
+        "UPDATE documents SET account_id = ?, external_id = ?, location = ?, file_name = ?, extension = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(account, path, location, fileName, extension, at, id)
+  }
+  /** The document as the folder that holds this file sees it: its folder and path are the file's. */
+  const noteAt = (id: number, folder: number, path: string): Note => ({
+    ...documentOf(documentRow(String(id))),
+    folderId: String(folder),
+    path,
+  })
 
   return {
     addFolder: async ({ name, format = "obsidian" }) => {
@@ -473,9 +563,26 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         const title =
           typeof input.metadata?.title === "string" && input.metadata.title ? input.metadata.title : input.title
         const at = now()
-        const found = database
-          .prepare("SELECT * FROM documents WHERE account_id = ? AND external_id = ?")
-          .get(folder, path)
+        const hash = input.contentHash ?? null
+        const here = { accountId: folder, path, contentHash: hash, frontMatter: input.frontMatter ?? null }
+        const place = fileAt(folder, path)
+        const found: Row | undefined =
+          place?.document_id != null
+            ? documentRow(String(place.document_id))
+            : database.prepare("SELECT * FROM documents WHERE account_id = ? AND external_id = ?").get(folder, path)
+        // Rule 2 (requirements 3.3): a new local file with the content of exactly one document is a copy of it.
+        const candidates = !found && !place && localSave(folder, input.frontMatter) ? sameContent(hash, text) : []
+        if (candidates.length === 1) {
+          const id = candidates[0] as number
+          const joined = documentRow(String(id))
+          if (joined.deleted_at != null)
+            database
+              .prepare("UPDATE documents SET deleted_at = NULL, body = ?, updated_at = ? WHERE id = ?")
+              .run(text, at, id)
+          syncFile(database, at, id, { place: here, method: "content-hash" })
+          followPreferred(id, at)
+          return { note: noteAt(id, folder, path), changed: true }
+        }
         if (found?.metadata != null) {
           const stored = JSON.parse(String(found.metadata)) as { catalog?: unknown }
           if (stored.catalog !== undefined)
@@ -496,7 +603,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
               location,
               fileName,
               extension,
-              input.contentHash ?? null,
+              hash,
               frontMatter,
               text,
               metadata,
@@ -504,78 +611,126 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
               at,
               at,
             )
-          syncFile(database, at, Number(row?.id))
-          return { note: documentOf(documentRow(String(row?.id))), changed: true }
+          const id = Number(row?.id)
+          const file = syncFile(database, at, id)
+          if (candidates.length > 1 && file)
+            reviewLink(database, { type: "file", id: file.id }, "document", candidates, "content-hash", at)
+          return { note: noteAt(id, folder, path), changed: true }
         }
+        const id = Number(found.id)
+        const own = Number(found.account_id) === folder && String(found.external_id) === path
+        // A copy elsewhere changes the document's text; its own front matter stays on its file row.
+        const keptFrontMatter = own ? frontMatter : found.front_matter == null ? null : String(found.front_matter)
+        const keptMetadata = own ? metadata : found.metadata == null ? null : String(found.metadata)
         const same =
           (found.body ?? "") === text &&
           (found.title ?? null) === title &&
-          (found.front_matter ?? null) === frontMatter &&
-          (found.metadata ?? null) === metadata &&
-          (found.content_hash ?? null) === (input.contentHash ?? null) &&
+          (found.front_matter ?? null) === keptFrontMatter &&
+          (found.metadata ?? null) === keptMetadata &&
+          (found.content_hash ?? null) === hash &&
           found.deleted_at == null
-        if (same) {
-          syncFile(database, at, Number(found.id))
-          return { note: documentOf(found), changed: false }
-        }
-        if ((found.body ?? "") !== text)
+        if (!same) {
+          if ((found.body ?? "") !== text)
+            database
+              .prepare("INSERT INTO document_revisions (document_id, body, revision, created_at) VALUES (?, ?, ?, ?)")
+              .run(id, String(found.body ?? ""), Number(found.revision), at)
           database
-            .prepare("INSERT INTO document_revisions (document_id, body, revision, created_at) VALUES (?, ?, ?, ?)")
-            .run(Number(found.id), String(found.body ?? ""), Number(found.revision), at)
-        database
-          .prepare(
-            "UPDATE documents SET title = ?, body = ?, front_matter = ?, content_hash = ?, metadata = ?, language = ?, " +
-              "revision = revision + ?, updated_at = ?, deleted_at = NULL WHERE id = ?",
-          )
-          .run(
-            title,
-            text,
-            frontMatter,
-            input.contentHash ?? null,
-            metadata,
-            language,
-            (found.body ?? "") === text ? 0 : 1,
-            at,
-            Number(found.id),
-          )
-        syncFile(database, at, Number(found.id))
-        return { note: documentOf(documentRow(String(found.id))), changed: true }
+            .prepare(
+              "UPDATE documents SET title = ?, body = ?, front_matter = ?, content_hash = ?, metadata = ?, language = ?, " +
+                "revision = revision + ?, updated_at = ?, deleted_at = NULL WHERE id = ?",
+            )
+            .run(
+              title,
+              text,
+              keptFrontMatter,
+              hash,
+              keptMetadata,
+              language,
+              (found.body ?? "") === text ? 0 : 1,
+              at,
+              id,
+            )
+        }
+        syncFile(database, at, id, own ? {} : { place: here })
+        if (!same) followPreferred(id, at)
+        return { note: noteAt(id, folder, path), changed: !same }
       }),
     renameFileNote: async (folderId, from, to) =>
       write(database, () => {
         const folder = Number(folderRow(folderId).id)
         const target = textOf(to, "a note's path", 4096)
-        const found = database
+        const at = now()
+        const place = fileAt(folder, from, true)
+        const legacy = database
           .prepare("SELECT id FROM documents WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL")
           .get(folder, from)
-        if (!found) throw new CliError("not_found", `no live note at ${from} in folder ${folderId}`)
+        const id = place?.document_id != null ? Number(place.document_id) : legacy ? Number(legacy.id) : undefined
+        if (id === undefined) throw new CliError("not_found", `no live note at ${from} in folder ${folderId}`)
+        const takenFile = fileAt(folder, target)
+        if (takenFile?.deleted_at == null && takenFile !== undefined)
+          throw new CliError("validation_error", `a live note is already at ${target} in folder ${folderId}`)
         const taken = database
-          .prepare("SELECT id, deleted_at FROM documents WHERE account_id = ? AND external_id = ?")
-          .get(folder, target)
+          .prepare("SELECT id, deleted_at FROM documents WHERE account_id = ? AND external_id = ? AND id <> ?")
+          .get(folder, target, id)
         if (taken && taken.deleted_at == null)
           throw new CliError("validation_error", `a live note is already at ${target} in folder ${folderId}`)
+        // The gone note at the target goes, as it always did; its file row goes with it or on its own.
         if (taken) database.prepare("DELETE FROM documents WHERE id = ?").run(Number(taken.id))
-        const { location, fileName, extension } = pathParts(target)
-        database
-          .prepare(
-            "UPDATE documents SET external_id = ?, location = ?, file_name = ?, extension = ?, updated_at = ? WHERE id = ?",
-          )
-          .run(target, location, fileName, extension, now(), Number(found.id))
-        syncFile(database, now(), Number(found.id))
-        return documentOf(documentRow(String(found.id)))
+        if (takenFile) database.prepare("DELETE FROM files WHERE id = ?").run(Number(takenFile.id))
+        if (place) database.prepare("UPDATE files SET external_id = ? WHERE id = ?").run(target, Number(place.id))
+        const document = documentRow(String(id))
+        const own = Number(document.account_id) === folder && String(document.external_id) === from
+        if (own) {
+          const { location, fileName, extension } = pathParts(target)
+          database
+            .prepare(
+              "UPDATE documents SET external_id = ?, location = ?, file_name = ?, extension = ?, updated_at = ? WHERE id = ?",
+            )
+            .run(target, location, fileName, extension, at, id)
+          syncFile(database, at, id)
+        } else
+          syncFile(database, at, id, {
+            place: {
+              accountId: folder,
+              path: target,
+              contentHash: place?.content_hash == null ? null : String(place.content_hash),
+              frontMatter: frontMatterOf(place?.metadata),
+            },
+          })
+        return noteAt(id, folder, target)
       }),
     deleteFileNotes: async (folderId, paths) =>
       write(database, () => {
         const folder = Number(folderRow(folderId).id)
-        const mark = database.prepare(
-          "UPDATE documents SET deleted_at = ?, body = '' WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL RETURNING id",
-        )
-        return paths.reduce((sum, path) => {
+        let deleted = 0
+        for (const path of paths) {
           const at = now()
-          const marked = mark.all(at, folder, path)
-          for (const row of marked) syncFile(database, at, Number(row.id), { seen: false })
-          return sum + marked.length
-        }, 0)
+          const place = fileAt(folder, path, true)
+          if (!place) {
+            const marked = database
+              .prepare(
+                "UPDATE documents SET deleted_at = ?, body = '' WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL RETURNING id",
+              )
+              .all(at, folder, path)
+            for (const row of marked) syncFile(database, at, Number(row.id), { seen: false })
+            deleted += marked.length
+            continue
+          }
+          database.prepare("UPDATE files SET deleted_at = ?, updated_at = ? WHERE id = ?").run(at, at, Number(place.id))
+          deleted++
+          if (place.document_id == null) continue
+          const id = Number(place.document_id)
+          // A document stays while any copy of it is live (requirements 3.1.7).
+          const elsewhere = database
+            .prepare("SELECT 1 FROM files WHERE document_id = ? AND deleted_at IS NULL AND kind <> 'folder' LIMIT 1")
+            .get(id)
+          if (elsewhere) followPreferred(id, at)
+          else
+            database
+              .prepare("UPDATE documents SET deleted_at = ?, body = '' WHERE id = ? AND deleted_at IS NULL")
+              .run(at, id)
+        }
+        return deleted
       }),
     addNote: async ({ text, title, about = [] }) =>
       write(database, () => {
@@ -623,7 +778,14 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           ? []
           : database
               .prepare(
-                "SELECT d.* FROM documents d WHERE d.deleted_at IS NULL AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 AND (? IS NULL OR d.account_id = ?) " +
+                // In a folder, a document is wherever one of its live files is, under that file's path.
+                (folder === null
+                  ? "SELECT d.* FROM documents d WHERE d.deleted_at IS NULL AND ? IS NULL AND ? IS NULL "
+                  : "SELECT d.*, f.account_id AS account_id, CASE WHEN a.provider IN ('local', 'obsidian') " +
+                    "THEN f.external_id ELSE d.external_id END AS external_id FROM files f " +
+                    "JOIN documents d ON d.id = f.document_id JOIN accounts a ON a.id = f.account_id " +
+                    "WHERE f.deleted_at IS NULL AND d.deleted_at IS NULL AND f.account_id = ? AND ? IS NOT NULL ") +
+                  "AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
                   `AND (? IS NULL OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
                   "AND (? IS NULL OR instr(lower(coalesce(d.body, '')), lower(?)) > 0) ORDER BY d.created_at DESC, d.id DESC LIMIT ?",
               )
