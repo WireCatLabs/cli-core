@@ -78,6 +78,14 @@ describe("archive discovery", () => {
       (await searchStore(store, account, { ...request("What time does Helix export run?"), discover: false })).items,
     ).toEqual([])
   })
+  it("reads a question mark as punctuation when the planner leaves the question as written", async () => {
+    const store = await open()
+    for (const text of ["Why do Helix logs expire?", "Почему Helix logs expire?"]) {
+      const found = await searchStore(store, account, request(text))
+      expect(found.query?.discovery?.method).toBe("lexical-partial")
+      expect(ids(found)).toContain("5")
+    }
+  })
   it("retrieves partial evidence for permission questions while retaining sender filters", async () => {
     const store = await open()
     for (const text of ["Can operators run Helix export?", "Могут операторы выполнить Helix export?"]) {
