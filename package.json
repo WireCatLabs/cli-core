@@ -48,6 +48,10 @@
       "types": "./dist/cli/index.d.ts",
       "default": "./dist/cli/index.js"
     },
+    "./cli/start": {
+      "types": "./dist/cli/entry.d.ts",
+      "default": "./dist/cli/entry.js"
+    },
     "./sends": {
       "types": "./dist/sends/index.d.ts",
       "default": "./dist/sends/index.js"

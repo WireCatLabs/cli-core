@@ -212,4 +212,29 @@ describe("startCli", () => {
       else delete (process.stderr as { isTTY?: boolean }).isTTY
     }
   })
+
+  it("**answers a bare --version or -V without loading the program**, as Commander prints it", async () => {
+    let commander = ""
+    await new Command()
+      .version(APP.version, "-V, --version")
+      .exitOverride()
+      .configureOutput({ writeOut: (text) => (commander += text) })
+      .parseAsync(["--version"], { from: "user" })
+      .catch(() => undefined)
+    for (const flag of ["--version", "-V"]) {
+      const { io, exits } = fakeIo({ argv: [flag] })
+      const run = vi.fn(async () => 0)
+      let printed = ""
+      io.stdout?.on("data", (chunk: Buffer) => (printed += chunk.toString()))
+      await start(io, run)
+      expect([printed, exits, run.mock.calls.length]).toEqual([commander, [], 0])
+    }
+  })
+
+  it("leaves --version with anything else on the line to the program", async () => {
+    const { io } = fakeIo({ argv: ["--version", "--json"] })
+    const run = vi.fn(async () => 0)
+    await start(io, run)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
 })
