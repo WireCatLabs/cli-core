@@ -5,6 +5,7 @@ import type { CacheDatabase } from "../driver.js"
 import { int, str } from "./events.js"
 import { CORPORA, drainCorpus } from "./note-index.js"
 import { write } from "./transaction.js"
+import { dropUnusedVectors } from "./vector-index.js"
 
 export const titleOf = (subject: string | null): string | null =>
   subject?.replace(/^\s*((re|fwd?|aw|wg)\s*:\s*)+/i, "").trim() || null
@@ -87,7 +88,7 @@ const chunkThread = (database: CacheDatabase, threadId: number, now: number) => 
         now,
       )
   }
-  purgeUnused(database, before)
+  dropUnusedVectors(database, before)
 }
 
 export const queueThreads = (database: CacheDatabase, ids: Iterable<number>) => {
@@ -99,7 +100,7 @@ export const queueThreads = (database: CacheDatabase, ids: Iterable<number>) => 
 
 const ATTACHMENTS_OF_EMAIL = "SELECT id FROM attachments WHERE attachable_type = 'email' AND attachable_id = ?"
 
-/** Drops the pieces of an email's attachment texts; answers their hashes, for `purgeUnused` once new ones are in. */
+/** Drops the pieces of an email's attachment texts; answers their hashes, for `dropUnusedVectors` once new ones are in. */
 export const dropAttachmentChunks = (database: CacheDatabase, emailId: number): string[] => {
   const hashes = database
     .prepare(
@@ -111,25 +112,6 @@ export const dropAttachmentChunks = (database: CacheDatabase, emailId: number): 
     .prepare(`DELETE FROM chunks WHERE chunkable_type = 'attachment' AND chunkable_id IN (${ATTACHMENTS_OF_EMAIL})`)
     .run(emailId)
   return hashes
-}
-
-/** Vectors are keyed by text alone, so one goes only when no piece of anything holds that text any more. */
-export const purgeUnused = (database: CacheDatabase, hashes: string[]) => {
-  const unique = new Set(hashes)
-  if (unique.size === 0) return
-  // The key is (model, content_hash): naming the model reaches the row by the key; the hash alone scans every vector.
-  const models = database
-    .prepare(
-      `WITH RECURSIVE m(model) AS (SELECT min(model) FROM embeddings
-         UNION ALL SELECT (SELECT min(model) FROM embeddings WHERE model > m.model) FROM m WHERE m.model IS NOT NULL)
-       SELECT model FROM m WHERE model IS NOT NULL`,
-    )
-    .all()
-    .map(({ model }) => String(model))
-  const purge = database.prepare(
-    "DELETE FROM embeddings WHERE model = ? AND content_hash = ? AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ?)",
-  )
-  for (const hash of unique) for (const model of models) purge.run(model, hash, hash)
 }
 
 /** Each attachment's extracted text, in pieces for search by meaning, as an email's own text is. */
@@ -183,7 +165,7 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
           .all()
           .map(({ id }) => Number(id)),
       )
-      purgeUnused(database, single)
+      dropUnusedVectors(database, single)
       database
         .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
         .run(MAIL_CUT, CUT, Date.now())
@@ -208,7 +190,7 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
       for (const row of unchunked) {
         const before = dropAttachmentChunks(database, Number(row.id))
         chunkAttachments(database, Number(row.account_id), Number(row.id), Date.now())
-        purgeUnused(database, before)
+        dropUnusedVectors(database, before)
       }
     })
   const emails = drainCorpus(database, CORPORA.email, stemmerFor)

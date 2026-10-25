@@ -28,6 +28,7 @@ import {
 } from "./schema.js"
 import { ensureTag } from "./tags.js"
 import { parsed, present, toIso, toMs } from "./values.js"
+import { dropUnusedVectors } from "./vector-index.js"
 
 /** The chat's own id, when the store key is a chat of this account. */
 export const chatOf = ({ orm }: StoreContext, accountKey: number, chatKey: number): Id | undefined =>
@@ -349,15 +350,20 @@ export const leftChats = (
 }
 
 /** These chats and everything under them, children before parents: the foreign keys are enforced. */
-export const purgeChats = ({ orm }: StoreContext, pks: number[]): void => {
+export const purgeChats = ({ orm, database }: StoreContext, pks: number[]): void => {
   if (pks.length === 0) return
   const messagesOf = orm.select({ pk: messages.id }).from(messages).where(inArray(messages.chatId, pks))
-  orm
+  const chatPks = sql`(SELECT value FROM json_each(${JSON.stringify(pks)}))`
+  const released = orm
     .delete(chunks)
     .where(
-      sql`${chunks.chunkableType}='conversation' AND ${chunks.chunkableId} IN (SELECT id FROM conversations WHERE chat_id IN (SELECT value FROM json_each(${JSON.stringify(pks)})))`,
+      sql`(${chunks.chunkableType}='conversation' AND ${chunks.chunkableId} IN (SELECT id FROM conversations WHERE chat_id IN ${chatPks}))
+        OR (${chunks.chunkableType}='message' AND ${chunks.chunkableId} IN (SELECT id FROM messages WHERE chat_id IN ${chatPks}))
+        OR (${chunks.chunkableType}='image' AND ${chunks.chunkableId} IN (SELECT a.id FROM attachments a
+          JOIN messages m ON a.attachable_type = 'message' AND m.id = a.attachable_id WHERE m.chat_id IN ${chatPks}))`,
     )
-    .run()
+    .returning({ hash: chunks.contentHash })
+    .all()
   orm
     .delete(involvements)
     .where(
@@ -394,6 +400,10 @@ export const purgeChats = ({ orm }: StoreContext, pks: number[]): void => {
   orm.delete(messageRevisions).where(inArray(messageRevisions.messageId, messagesOf)).run()
   orm.delete(messages).where(inArray(messages.chatId, pks)).run()
   orm.delete(chats).where(inArray(chats.id, pks)).run()
+  dropUnusedVectors(
+    database,
+    released.map(({ hash }) => hash),
+  )
 }
 
 export const chatsWith = ({ orm, now }: StoreContext, accountKey: number, key: AccountKey, memberId: Id): Chat[] => {

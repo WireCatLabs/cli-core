@@ -12,7 +12,6 @@ import {
   drainEmailIndex,
   dropAttachmentChunks,
   MAIL_PIECES,
-  purgeUnused,
   queueThreads,
   threadPieces,
   titleOf,
@@ -25,6 +24,7 @@ import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "
 import type { Orm, StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
 import { write } from "./transaction.js"
+import { dropUnusedVectors } from "./vector-index.js"
 import { dot } from "./vectors.js"
 
 type Row = Record<string, unknown>
@@ -564,7 +564,7 @@ const saveEmail = (
         now,
       )
     chunkAttachments(database, accountId, emailId, now)
-    purgeUnused(database, before)
+    dropUnusedVectors(database, before)
   }
   return found ? Number(found.email_thread_id) : null
 }
@@ -925,7 +925,7 @@ export const mailStoreOver = (
         mark.all(now, now, accountId, id).map((r) => {
           const pieces = dropAttachmentChunks(database, Number(r.id))
           forget.run(Number(r.id))
-          purgeUnused(database, pieces)
+          dropUnusedVectors(database, pieces)
           return Number(r.email_thread_id)
         }),
       )

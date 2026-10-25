@@ -391,6 +391,7 @@ describe("the word index", () => {
       stemmed: 2,
       notes_indexed: 0,
       involvements: 0,
+      unused_vectors_dropped: 0,
     })
     expect(await words(env, "hola")).toBe(1)
     const { answer: info } = await call(["store", "info", "--json"], env)
@@ -425,6 +426,31 @@ describe("the word index", () => {
 
     await call(["store", "migrate", "--json"], env)
     expect((await call(["store", "check", "--json"], env)).answer.word_index).toMatchObject({ terms_ready: true })
+  })
+
+  it("`store check` names the vectors no text uses, and `store rebuild` drops them and keeps used ones", async () => {
+    const env = envFor()
+    const database = await seeded(env)
+    database.exec(
+      `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, created_at, updated_at)
+       VALUES ('message', 1, 0, 0, 4, 'used', 0, 0)`,
+    )
+    database.exec(
+      `INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at)
+       VALUES ('m:x:1', 'used', 1, x'0000803f', 0, 0), ('m:x:1', 'unused', 1, x'0000803f', 0, 0),
+         ('m:y:1', 'unused', 1, x'0000803f', 0, 0)`,
+    )
+    database.close()
+
+    const checked = await call(["store", "check"], env)
+    expect(checked.stderr.join("")).toContain(
+      "2 vectors belong to no text the store still holds — `chat store rebuild`",
+    )
+    expect((await call(["store", "rebuild", "--json"], env)).answer.unused_vectors_dropped).toBe(2)
+    expect((await call(["store", "check", "--json"], env)).answer.vectors).toEqual({
+      models: { "m:x:1": 1 },
+      unused: 0,
+    })
   })
 
   it("`store rebuild` refuses a file requiring a newer build", async () => {

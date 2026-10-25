@@ -1,6 +1,6 @@
 import { type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
-import { searchIndex } from "./vector-index.js"
+import { dropUnusedVectors, searchIndex } from "./vector-index.js"
 import { dot } from "./vectors.js"
 
 const IS_IMAGE = sql`(a.kind = 'photo' OR a.mime LIKE 'image/%')`
@@ -95,7 +95,7 @@ export interface ImageChunk {
  * deleted, with the vectors nothing else uses any more.
  */
 export const saveImageChunks = (
-  { orm, now }: StoreContext,
+  { orm, now, database }: StoreContext,
   accountPk: number,
   chatKey: number,
   chunks: ImageChunk[],
@@ -127,9 +127,7 @@ export const saveImageChunks = (
         VALUES ('image', ${attachmentPk}, 0, 0, ${length}, ${hash}, ${scope}, ${accountPk}, ${occurredAt}, ${at}, ${at})`,
     )
   }
-  for (const hash of old)
-    orm.run(sql`DELETE FROM embeddings WHERE content_hash = ${hash}
-      AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash})`)
+  dropUnusedVectors(database, old)
 }
 
 /** The hashes among these that already have a vector of `model`. */
@@ -280,7 +278,7 @@ export const picturesToEmbed = (
 
 /** Makes each hash the picture chunk of its image; the vectors are saved apart, by `saveVectors`. */
 export const savePictureChunks = (
-  { orm, now }: StoreContext,
+  { orm, now, database }: StoreContext,
   accountPk: number,
   pictures: { attachmentPk: number; hash: string; bytes: number; occurredAt: number }[],
 ): void => {
@@ -291,16 +289,13 @@ export const savePictureChunks = (
   const gone = sql`chunkable_type = 'image' AND position = ${PICTURE_POSITION} AND account_id = ${accountPk}
     AND NOT EXISTS (SELECT 1 FROM attachments a JOIN messages m ON a.attachable_type = 'message'
       AND m.id = a.attachable_id WHERE a.id = chunkable_id AND m.deleted_at IS NULL)`
-  const dropped = orm.all<{ hash: string }>(sql`SELECT content_hash AS hash FROM chunks WHERE ${gone}`)
-  orm.run(sql`DELETE FROM chunks WHERE ${gone}`)
-  for (const { hash } of dropped)
-    orm.run(sql`DELETE FROM embeddings WHERE content_hash = ${hash}
-      AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash})`)
+  const released = orm.all<{ hash: string }>(sql`DELETE FROM chunks WHERE ${gone} RETURNING content_hash AS hash`)
   for (const { attachmentPk, hash, bytes, occurredAt } of pictures) {
-    orm.run(
+    const replaced = orm.get<{ hash: string }>(
       sql`DELETE FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = ${attachmentPk}
-        AND position = ${PICTURE_POSITION}`,
+        AND position = ${PICTURE_POSITION} RETURNING content_hash AS hash`,
     )
+    if (replaced) released.push(replaced)
     orm.run(
       sql`INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope,
           account_id, occurred_at, created_at, updated_at)
@@ -308,4 +303,8 @@ export const savePictureChunks = (
           ${occurredAt}, ${at}, ${at})`,
     )
   }
+  dropUnusedVectors(
+    database,
+    released.map(({ hash }) => hash),
+  )
 }

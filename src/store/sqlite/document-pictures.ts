@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { SqlValue } from "../driver.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
-import { ensureVectorIndex, unitVector } from "./vector-index.js"
+import { dropUnusedVectors, ensureVectorIndex, unitVector } from "./vector-index.js"
 import { dot } from "./vectors.js"
 
 /** A document's picture is one chunk of this type at position 0; its vector is the picture's, not text's. */
@@ -16,13 +16,6 @@ const idOf = (ref: string): number => {
   return Number(match[1])
 }
 
-const purge = (database: StoreContext["database"], hashes: Iterable<string>) => {
-  const drop = database.prepare(
-    "DELETE FROM embeddings WHERE content_hash = ? AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ?)",
-  )
-  for (const hash of hashes) drop.run(hash, hash)
-}
-
 /** Drops a document's picture chunk, and its vector when no other chunk shares the bytes. */
 export const dropDocumentPicture = (database: StoreContext["database"], documentId: number): boolean => {
   const hashes = database
@@ -30,7 +23,7 @@ export const dropDocumentPicture = (database: StoreContext["database"], document
     .all(DOCUMENT_PICTURE, documentId)
     .map((row) => String(row.hash))
   database.prepare("DELETE FROM chunks WHERE chunkable_type = ? AND chunkable_id = ?").run(DOCUMENT_PICTURE, documentId)
-  purge(database, hashes)
+  dropUnusedVectors(database, hashes)
   return hashes.length > 0
 }
 

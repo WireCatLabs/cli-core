@@ -192,8 +192,10 @@ const embeddingStatusCommand = (messenger: Messenger): Command =>
 const embeddingClearCommand = (messenger: Messenger): Command =>
   withModelOptions(
     destroysNothing(annotate(new Command("clear"), { output: { entity: "conversation_change" }, effects: LOCAL_WRITE }))
-      .summary("remove stored conversation vectors")
-      .description("drop a chat's vectors, or only one model's; messages and conversations are never touched")
+      .summary("remove a chat's stored conversation and message vectors")
+      .description(
+        "drop a chat's conversation and message vectors, or only one model's; messages and conversations are never touched",
+      )
       .option("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
     const options = this.optsWithGlobals<ModelOptions & { chat?: string }>()
