@@ -27,6 +27,9 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **cli-core needs `@wirecat/cli-base` 0.57.** The peer range moves from `>=0.56.0 <0.57.0` to `>=0.57.0 <0.58.0`:
+  cli-base 0.57 saves `config.json` owner-only (`0600`), which the new `doctor` check below expects. A CLI that pins
+  cli-base moves its pin with this release.
 - **cli-core needs `@wirecat/cli-base` 0.56.** The peer range moves from `>=0.53.0 <0.54.0` to `>=0.56.0 <0.57.0`. A
   CLI that pins cli-base moves its pin with this release. cli-base 0.54 and 0.55 change the release lock and the
   changelog guard, which a CLI adopts through community's standards sync, and 0.56 adds the `missing-run-log` lint
