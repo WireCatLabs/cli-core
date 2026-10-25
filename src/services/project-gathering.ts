@@ -146,9 +146,14 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   let stopped: ProjectGatheringStop = null
   const open = (u: ProjectUnitProgress) => !terminal.has(u.state) && u.state !== "read-limited"
   const linkedLanes = new Set(plan.linkedChats.flatMap((c) => (c.lane === null ? [] : [c.lane])))
-  // One even share per linked chat plus one for the word and sender lanes, so one busy chat cannot fill a run; never
-  // below a page, so every chat still gets its whole first page.
-  const linkedLimit = Math.max(PAGE, Math.floor(plan.budgets.maxItems / (linkedLanes.size + 1)))
+  // One even share per linked chat still open plus one for the word and sender lanes while any is open, so one busy
+  // chat cannot fill a run while others wait, yet a chat left alone gets the whole run; never below a page, so every
+  // chat still gets its whole first page.
+  const openLanes = new Set(progress.flatMap((u, index) => (open(u) ? [units[index]?.lane.id] : [])))
+  const shares =
+    [...linkedLanes].filter((id) => openLanes.has(id)).length +
+    ([...openLanes].some((id) => id !== undefined && !linkedLanes.has(id)) ? 1 : 0)
+  const linkedLimit = Math.max(PAGE, Math.floor(plan.budgets.maxItems / Math.max(1, shares)))
   const linkedTaken = new Map<string, number>()
   const capped = new Set<string>()
 

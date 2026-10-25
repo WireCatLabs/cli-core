@@ -12,6 +12,10 @@ shape of this file.
 - **`movedCommandError(program, args)` from `/cli`** answers a renamed or moved command path with the pointer `run` gives ("`drive models text download` is not here — use `models download`"), for a CLI that parses without `run`. drive is the one today.
 - **The store records which CLIs open it, so an upgrade that locks some out names them** (available from cli-core 0.415.0). `openStore({ command, version })` saves each CLI's command, version, cli-core version and the newest store schema it speaks in `store_settings` (`clients`). A migration that raises the store's minimum prints one line to stderr naming each recorded CLI it locks out and the command to run (`memo upgrade`); a CLI refused by a newer store now says `run \`<its command> upgrade\`` and which CLI moved the store. The messenger context, the MCP server and `store migrate` pass the CLI's version already; other CLIs pass `version` to `openStore`.
 
+### Fixed
+
+- **A busy linked chat left alone drains at full speed with `--cursor`.** Each linked chat's share of a run's items is now split among the linked chats that still have something to read, and the word and sender lanes take a share only while they do too. Before, chats that had already finished still took a share, so with ten linked chats the last busy one got 20 items a run and needed about 45 runs instead of about 10.
+
 ### Changed — may break callers
 
 - **cli-core needs cli-base 0.53.** The peer range is now `>=0.53.0 <0.54.0`, so a CLI moves its cli-base pin to 0.53.0 together with this release. cli-base 0.53.0 makes the command lint require a query declaration on every handwritten list (`WC-CMD-20`); its runtime API is unchanged.
