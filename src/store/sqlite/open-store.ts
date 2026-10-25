@@ -22,6 +22,10 @@ export interface StoreOptions {
   now?: () => number
   /** The CLI's own name, for the advice a failed migration gives. */
   command?: string
+  /** The CLI's own version: with `command`, recorded in the store so an upgrade can name the CLIs it locks out. */
+  version?: string
+  /** Where the notice of an upgrade that locks other CLIs out goes; stderr, since stdout may carry JSON or MCP. */
+  warn?: (line: string) => void
 }
 export const BACKFILL_ON_OPEN = 5_000
 
@@ -48,6 +52,8 @@ export const openStoreContext = async ({
   env,
   now = Date.now,
   command,
+  version,
+  warn = (line) => process.stderr.write(`${line}\n`),
   readOnly = false,
 }: StoreOptions = {}): Promise<StoreContext> => {
   if (typeof readOnly !== "boolean") throw new CliError("validation_error", "readOnly must be a boolean")
@@ -60,9 +66,10 @@ export const openStoreContext = async ({
   const opened = await openSqlite(file, { readOnly })
   const database = opened.database
   try {
-    if (readOnly) assertReadCompatible(database)
+    if (readOnly) assertReadCompatible(database, command)
     else {
-      migrate(database, { now, command })
+      const notice = migrate(database, { now, command, ...(version ? { version } : {}) })
+      if (notice) warn(notice)
       fillFolded(database)
       const pending = pendingNormalization(database)
       if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)

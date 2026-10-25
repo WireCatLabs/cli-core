@@ -76,11 +76,11 @@ export interface LazyStore {
   close: () => Promise<void>
 }
 
-export const lazyStore = (env: NodeJS.ProcessEnv, command: string): LazyStore => {
+export const lazyStore = (env: NodeJS.ProcessEnv, command: string, version?: string): LazyStore => {
   let opened: Promise<MessageStore> | undefined
   return {
     open: () => {
-      opened ??= openStore({ env, command })
+      opened ??= openStore({ env, command, ...(version ? { version } : {}) })
       return opened
     },
     close: async () => {
@@ -499,7 +499,7 @@ export const connected = (
   >,
   { settings, env, renderer }: Pick<BaseContext, "settings" | "env" | "renderer">,
   events: EventSink,
-  store: LazyStore = lazyStore(env, app.command),
+  store: LazyStore = lazyStore(env, app.command, app.version),
   {
     listen: watching = false,
     closeWaitMs = SAVES_WAIT_MS,
@@ -599,7 +599,7 @@ export const connectedFor = async (
   base: BaseContext,
   options: ConnectOptions & { events: EventSink },
 ): Promise<{ connection: MessengerAdapter; adapter: MessengerAdapter; close: () => Promise<void> }> => {
-  const store = lazyStore(base.env, messenger.app.command)
+  const store = lazyStore(base.env, messenger.app.command, messenger.app.version)
   let connection: MessengerAdapter | undefined
   try {
     connection = await connectFor(command, messenger, base, {
@@ -768,7 +768,7 @@ export const messengerContext = (
       base.run(
         async () => {
           const account = accountFor()
-          const store = await openStore({ env: base.env, command: app.command })
+          const store = await openStore({ env: base.env, command: app.command, version: app.version })
           try {
             return await work(store, account)
           } finally {
@@ -785,7 +785,7 @@ export const messengerContext = (
           let warned: Promise<MessageStore> | undefined
           let released: Promise<void> | undefined
           const releaseConnection = () => (released ??= held?.close() ?? Promise.resolve())
-          const openOnce = () => (store ??= openStore({ env: base.env, command: app.command }))
+          const openOnce = () => (store ??= openStore({ env: base.env, command: app.command, version: app.version }))
           const deps: ServiceDeps = {
             messenger,
             profile,
