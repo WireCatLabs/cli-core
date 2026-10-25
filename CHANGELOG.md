@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The Anthropic adapter takes only `stop_sequences` as an option.** `@anthropic-ai/sdk` 1.x sends API version
+  2026-10-21, which refuses `temperature`, `top_p` and `top_k` on every model, so the adapter now refuses them
+  before any request. The SDK also sends the key as `Authorization: Bearer` instead of `X-Api-Key`: a custom
+  Anthropic base URL whose gateway reads `X-Api-Key` must read `Authorization` instead.
+- **`@wirecat/cli-base` peer range is `>=0.55.0 <0.56.0`** (was `<0.54.0`).
+- **Dependencies moved to their latest majors:** `@anthropic-ai/sdk` 1.3, `sherpa-onnx` 2.0, `drizzle-orm` 1.0.0-rc.5.
+
 ## 0.421.0 — 25.10.2026
 
 ### Changed — may break callers

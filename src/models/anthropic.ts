@@ -1,12 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk"
 import * as v from "valibot"
-import { checkedOptions, range } from "./options.js"
+import { checkedOptions } from "./options.js"
 import { type ModelAdapter, messagesFor, systemFor } from "./types.js"
 
+// API version 2026-10-21 refuses temperature, top_p and top_k on every model.
 const options = v.strictObject({
-  temperature: range(0, 1),
-  top_p: range(0, 1),
-  top_k: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   stop_sequences: v.optional(v.array(v.string())),
 })
 
