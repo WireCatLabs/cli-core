@@ -17,7 +17,9 @@ import {
 } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { bool, eventOf, fromJson, int, str, toJson } from "./events.js"
+import { logFileLink } from "./files.js"
 import { identityOf } from "./identities.js"
+import { reviewLink } from "./link-reviews.js"
 import type { StoreContext } from "./open.js"
 import { read, write } from "./transaction.js"
 
@@ -154,28 +156,6 @@ const ownerUnlinked = (database: CacheDatabase, type: string, id: number): boole
     )
     .get(type, id)
   return last !== undefined && last.to_entity_id == null
-}
-
-/**
- * Two or more equally good entities: no link, and one row on the owner's review list. A later sync updates the
- * candidates of an open row and leaves a decided one as the owner left it.
- */
-export const reviewLink = (
-  database: CacheDatabase,
-  linkable: { type: string; id: number },
-  entity: string,
-  candidates: number[],
-  reason: string,
-  now: number,
-): void => {
-  database
-    .prepare(
-      `INSERT INTO link_reviews (linkable_type, linkable_id, entity_type, candidates, reason, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'open', ?, ?)
-       ON CONFLICT (linkable_type, linkable_id, entity_type) DO UPDATE SET candidates = excluded.candidates,
-         reason = excluded.reason, updated_at = excluded.updated_at WHERE link_reviews.status = 'open'`,
-    )
-    .run(linkable.type, linkable.id, entity, JSON.stringify([...candidates].sort((a, b) => a - b)), reason, now, now)
 }
 
 const distinctIds = (rows: Row[], column = "id"): number[] => [...new Set(rows.map((row) => Number(row[column])))]
@@ -734,6 +714,22 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
             author: "owner",
             now,
           })
+        }
+        if (chosen !== null && review.linkableType === "file") {
+          // The document made for the file while the choice was open goes when nothing else holds it.
+          const file = database.prepare("SELECT document_id FROM files WHERE id = ?").get(review.linkableId)
+          const made = file?.document_id == null ? null : Number(file.document_id)
+          database
+            .prepare("UPDATE files SET document_id = ?, updated_at = ? WHERE id = ?")
+            .run(chosen, now, review.linkableId)
+          logFileLink(database, now, review.linkableId, made, chosen, "owner", "owner")
+          if (made !== null && made !== chosen)
+            database
+              .prepare(
+                "UPDATE documents SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND NOT EXISTS " +
+                  "(SELECT 1 FROM files WHERE document_id = ? AND deleted_at IS NULL)",
+              )
+              .run(now, now, made, made)
         }
         if (chosen === null && review.linkableType === "calendar_entry") {
           const entry = entryOf(entryRow(review.linkableId))

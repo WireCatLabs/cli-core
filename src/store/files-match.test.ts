@@ -168,3 +168,17 @@ describe("a file with the content of one document (rule 2)", () => {
     expect(await sql(`SELECT account_id FROM documents WHERE id = ${note.id}`)).toEqual([{ account_id: Number(work) }])
   })
 })
+
+it("moves a file the owner reviewed to the document they chose; the one made while it waited goes", async () => {
+  const { store, work, home, save, listed } = await setup()
+  const third = await store.notes.addFolder({ name: "Third" })
+  const { note: one } = await save(work, "a.md", "One")
+  await save(home, "b.md", "Two")
+  await save(work, "a.md", "Same")
+  await save(home, "b.md", "Same")
+  const { note: made } = await save(third.id, "c.md", "Same")
+  const [review] = await store.calendar.reviews({ status: "open" })
+  await store.calendar.resolveReview(review?.id as number, { choose: Number(one.id) }, 10)
+  expect(await listed(third.id)).toEqual([[one.id, "c.md"]])
+  expect((await store.notes.note(made.ref)).deletedAt).not.toBeNull()
+})
