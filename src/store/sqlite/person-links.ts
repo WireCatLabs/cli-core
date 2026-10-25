@@ -193,8 +193,13 @@ export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: 
   const key = address.trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+$/.test(key) || ref.provider === "email") return
   const found = required(context, ref)
-  if (!identityRow(context, { provider: "email", id: key })) identityOf(context, "email", key, null)
-  const contact = required(context, { provider: "email", id: key })
+  context.database.prepare("UPDATE identities SET email = ? WHERE id = ? AND email IS NOT ?").run(key, found.pk, key)
+  // The mail contact of the address, found by the address column every contact with one carries (store version 32).
+  const mail = context.database
+    .prepare("SELECT external_id FROM identities WHERE provider = 'email' AND email = ? LIMIT 1")
+    .get(key)
+  if (!mail) identityOf(context, "email", key, null)
+  const contact = required(context, { provider: "email", id: mail ? String(mail.external_id) : key })
   if (contact.personPk === found.personPk || separatedByOwner(context, found.pk, contact.pk)) return
   mergePerson(context, found.personPk, contact.personPk, { method: "same-email", by })
   resolvePersonLinks(
