@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.425.0 — 25.10.2026
+
 ### Added
 
 - **`registerCommands` takes the CLI's `AppIdentity.messenger` as a sixth argument**, and the shared MCP server passes it. With `false` the three tools speak of the CLI's own commands — "list", "show", "change a setting"; "creates, edits, deletes" — even when the catalogue has a `messages` command, as memo's does. Left out, a catalogue with `messages` commands is still taken for a messenger's, so tg, max and wa read exactly as before. A CLI that calls `registerCommands` itself (drive, zm, memo) passes `APP.messenger` to get the neutral text.
