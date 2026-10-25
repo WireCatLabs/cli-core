@@ -21,9 +21,9 @@ const RERANK_WEIGHT = 0.7
 const RERANK_CHUNK = 5
 /**
  * Scoring has its own clock, not the word search's 2 s: 50 pairs are bounded work, and BGE on WebAssembly takes
- * ~2–7 s of it (cli-testing performance/search/evidence-pipeline, "In Core").
+ * ~7–10 s of it (cli-testing performance/search/evidence-pipeline, "In Core").
  */
-export const RERANK_MILLISECONDS = 10_000
+export const RERANK_MILLISECONDS = 15_000
 
 /** The reranker, opened; or why discovery keeps its own order. */
 export type RerankLane = () => Promise<

@@ -159,7 +159,7 @@ describe("discovery's reranker", () => {
     const slow: RerankLane = async () => ({
       model: "slow",
       score: async (_question, passages) => {
-        now += 11_000
+        now += 16_000
         return passages.map(() => 1)
       },
       done: async () => {},
