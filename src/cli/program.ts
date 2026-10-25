@@ -349,6 +349,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     await setupAtStart({
       command,
       env: commandEnv,
+      contentLanguages: definition.app.contentLanguages,
       path,
       headless,
       readOnlyLock: lock,

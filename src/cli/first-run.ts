@@ -37,6 +37,8 @@ export interface FirstRun {
   command: string
   env: NodeJS.ProcessEnv
   io: FirstRunIo
+  /** `AppIdentity.contentLanguages`: ticked on a new store in place of English and the system's language. */
+  contentLanguages?: readonly string[] | undefined
   /** Every question, as `setup` asks them; otherwise only those no WireCat tool asked yet. */
   all?: boolean
   /** Where tools are looked for and how one is installed; injected by tests. */
@@ -132,17 +134,20 @@ const installerHere = () => {
   }
 }
 
-const askLanguages = async ({ command, env, io }: FirstRun) => {
+const suggested = (env: NodeJS.ProcessEnv, contentLanguages: readonly string[] | undefined): Language[] => {
+  const own = LANGUAGES.filter(({ code }) => contentLanguages?.includes(code))
+  const system = systemLanguage(env)
+  return (own.length ? own : LANGUAGES.filter(({ code }) => code === "en" || code === system)).map(({ name }) => name)
+}
+
+const askLanguages = async ({ command, env, io, contentLanguages }: FirstRun) => {
   const store = await openStore({ env })
   let rebuild = false
   try {
     const saved = (await store.searchIndex.stemmers()) ?? undefined
     // A store already in use keeps the languages it was built with, so Enter changes nothing (RISK-1612).
     const inUse = saved !== undefined || (await store.accounts.accounts()).length > 0
-    const system = systemLanguage(env)
-    const ticked = inUse
-      ? languagesOf(saved ?? DEFAULT_STEMMERS)
-      : LANGUAGES.filter(({ code }) => code === "en" || code === system).map(({ name }) => name)
+    const ticked = inUse ? languagesOf(saved ?? DEFAULT_STEMMERS) : suggested(env, contentLanguages)
     const numbers = ticked.map((name) => LANGUAGES.findIndex((one) => one.name === name) + 1)
     io.say("Languages you write and speak — search finds every form of their words, and spellings speech mangles:")
     LANGUAGES.forEach(({ name, label }, at) => {
@@ -256,6 +261,7 @@ export const askSetupQuestions = async (run: FirstRun): Promise<Question[]> => {
 export const setupAtStart = async (start: {
   command: string
   env: NodeJS.ProcessEnv
+  contentLanguages?: readonly string[] | undefined
   path: readonly string[]
   headless: boolean
   readOnlyLock?: string | undefined
@@ -268,6 +274,7 @@ export const setupAtStart = async (start: {
   await askSetupQuestions({
     command: start.command,
     env: start.env,
+    contentLanguages: start.contentLanguages,
     all: start.path[0] === "setup",
     io: {
       ask: (prompt) => readSecret(prompt, { input, echo: true }),

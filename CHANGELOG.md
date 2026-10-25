@@ -9,6 +9,7 @@ shape of this file.
 
 ### Added
 
+- `AppIdentity.contentLanguages`: ISO 639-1 codes of the languages a CLI's content is in. On a new store the first run pre-ticks the ones search can stem in place of English and the system's language; the person still confirms the shared choice. Unset, nothing changes.
 - Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
 
 ### Fixed
