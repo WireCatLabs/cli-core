@@ -25,6 +25,19 @@ shape of this file.
   Messages and notes share one loaded model within a `search all`, so searching both by meaning loads e5-small once:
   on a 10,000-message store with 200 notes the median went from 1.7 s to 0.9 s.
 
+### Fixed
+
+- **A vector goes once no text in the store uses it, by one rule for every kind.** Messages, images, notes,
+  documents and their pictures, mail, meeting transcripts and account purges each had their own query; they now all
+  call `dropUnusedVectors`, which drops every model's vector of a released hash that no chunk holds any more, and
+  keeps one a chunk of any kind still holds. Three writes left vectors behind and no longer do: an image whose
+  picture changed, a meeting transcript whose text changed, and a purged chat (`store clear --left` and a chat
+  merged into another), which also left its messages' and images' chunks. The rule reaches each vector by its key
+  (model, hash), where most of the old queries scanned every vector once per hash.
+- **`conversations embeddings clear --chat` drops the chat's message vectors too**, not only its conversations'; a
+  vector a chunk outside the chat shares stays.
+- **`store check` notes vectors no text uses** (`vectors.unused`) when there are any.
+
 ## 0.434.0 — 25.10.2026
 
 ### Changed — may break callers

@@ -211,18 +211,21 @@ export const vectorStatus = ({ orm }: StoreContext, chatKey: number, model: stri
 }
 
 /**
- * Drops the vectors of the chat's chunks, or only one model's — but not one another chat's chunk still
- * points at: the same text in two chats has one vector. Messages are never touched.
+ * Drops the vectors of the chat's conversation and message chunks, or only one model's — but not one a chunk outside
+ * the chat still points at: the same text in two chats has one vector. The chunks themselves stay, to be embedded again.
  */
 export const clearVectors = ({ orm }: StoreContext, chatKey: number, model: string | undefined): number =>
   orm.all<{ n: number }>(
-    sql`DELETE FROM embeddings
+    sql`WITH mine(id) AS (
+        SELECT k.id FROM chunks k JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id
+          WHERE c.chat_id = ${chatKey}
+        UNION ALL SELECT k.id FROM chunks k JOIN messages m ON k.chunkable_type = 'message' AND m.id = k.chunkable_id
+          WHERE m.chat_id = ${chatKey})
+      DELETE FROM embeddings
       WHERE ${model === undefined ? sql`1` : sql`model = ${model}`}
-        AND content_hash IN (SELECT k.content_hash FROM chunks k
-          JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id WHERE c.chat_id = ${chatKey})
-        AND content_hash NOT IN (SELECT k.content_hash FROM chunks k
-          LEFT JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id
-          WHERE c.id IS NULL OR c.chat_id <> ${chatKey})
+        AND content_hash IN (SELECT content_hash FROM chunks WHERE id IN (SELECT id FROM mine))
+        AND NOT EXISTS (SELECT 1 FROM chunks o WHERE o.content_hash = embeddings.content_hash
+          AND o.id NOT IN (SELECT id FROM mine))
       RETURNING 1 AS n`,
   ).length
 

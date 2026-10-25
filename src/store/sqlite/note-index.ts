@@ -9,6 +9,7 @@ import { indexRow } from "./index-state.js"
 import { speech } from "./lucene-fields.js"
 import { savedStemmers } from "./stems.js"
 import { write } from "./transaction.js"
+import { dropUnusedVectors } from "./vector-index.js"
 
 export interface NoteIndexState {
   /** Rows written since they were indexed. */
@@ -162,10 +163,6 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
       "INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope, account_id, created_at, updated_at) " +
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ),
-    purge: database.prepare(
-      `DELETE FROM embeddings WHERE content_hash = ?
-         AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ?)`,
-    ),
     dequeue: database.prepare(`DELETE FROM ${corpus.type}_index_pending WHERE indexable_type = ? AND id = ?`),
   }
   return (id: number) => {
@@ -182,7 +179,6 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
     if (words !== "") statements.words.run(id, words, scope)
     const stems = terms ? terms.stems : text ? stemmer.indexText(text) : ""
     if (stems !== "") statements.stems.run(id, stems, scope)
-    const after = new Set<string>()
     if (text.trim() && corpus.pieces !== false) {
       const at = Date.now()
       const sections = row?.metadata == null ? [] : storedSections(String(row.metadata))
@@ -191,11 +187,10 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
         : splitText(text, CHUNK_CHARS)
       ranges.forEach(({ start, end }, position) => {
         const hash = chunkHash(text.slice(start, end))
-        after.add(hash)
         statements.chunk.run(corpus.type, id, position, start, end, hash, scope, int(row?.account_id), at, at)
       })
     }
-    for (const hash of before) if (!after.has(hash)) statements.purge.run(hash, hash)
+    dropUnusedVectors(database, before)
     if (!live && corpus.type === "document") dropDocumentPicture(database, id)
     statements.dequeue.run(queuedAs(corpus), id)
   }

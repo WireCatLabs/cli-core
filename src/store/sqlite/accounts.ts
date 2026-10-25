@@ -30,6 +30,7 @@ import {
   syncRanges,
   syncs,
 } from "./schema.js"
+import { dropUnusedVectors } from "./vector-index.js"
 
 /** An account's row, made on first sight; a name only replaces what was known when there is one. */
 export const accountPk = (
@@ -171,10 +172,7 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.run(sql`DELETE FROM files WHERE account_id = ${accountKey}`)
   orm.delete(accounts).where(eq(accounts.id, accountKey)).run()
   dropOrphanPeople(database, unseenBefore)
-  orm.run(
-    sql`DELETE FROM embeddings WHERE content_hash IN (SELECT value FROM json_each(${JSON.stringify(hashes)}))
-      AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.content_hash = embeddings.content_hash)`,
-  )
+  dropUnusedVectors(database, hashes)
 }
 
 /** Identity and person rows a person's own record keeps, not evidence that anyone saw them. */

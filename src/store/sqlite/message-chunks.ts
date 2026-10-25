@@ -1,6 +1,6 @@
 import { sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
-import { searchIndex } from "./vector-index.js"
+import { dropUnusedVectors, searchIndex } from "./vector-index.js"
 import { dot } from "./vectors.js"
 
 /** A live message with text, and the chunk and vector it already has, if any. */
@@ -30,12 +30,6 @@ export const messagesToEmbed = (
     )
     .map((row) => ({ ...row, embedded: row.embedded === 1 }))
 
-const dropUnshared = ({ orm }: StoreContext, hashes: Iterable<string>) => {
-  for (const hash of hashes)
-    orm.run(sql`DELETE FROM embeddings WHERE content_hash = ${hash}
-      AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash})`)
-}
-
 /** Makes each hash its message's chunk; the vectors are saved apart, by `saveVectors`. */
 export const saveMessageChunks = (
   context: StoreContext,
@@ -61,7 +55,7 @@ export const saveMessageChunks = (
         VALUES ('message', ${messagePk}, 0, 0, ${length}, ${hash}, ${scope}, ${accountPk}, ${occurredAt}, ${at}, ${at})`,
     )
   }
-  dropUnshared(context, old)
+  dropUnusedVectors(context.database, old)
 }
 
 /**
@@ -73,8 +67,8 @@ export const dropGoneMessageChunks = (context: StoreContext, accountPk: number):
     WHERE m.id = chunkable_id AND m.deleted_at IS NULL AND trim(m.text) <> '')`
   const dropped = context.orm.all<{ hash: string }>(sql`SELECT content_hash AS hash FROM chunks WHERE ${gone}`)
   context.orm.run(sql`DELETE FROM chunks WHERE ${gone}`)
-  dropUnshared(
-    context,
+  dropUnusedVectors(
+    context.database,
     dropped.map(({ hash }) => hash),
   )
   return dropped.length

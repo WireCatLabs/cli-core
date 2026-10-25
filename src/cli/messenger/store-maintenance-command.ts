@@ -267,6 +267,8 @@ const checkCommand = (messenger: Messenger): Command =>
         renderer.note(
           `${orphans} pointers name a row that is gone or a type the store does not know — see orphan_pointers`,
         )
+      if (answer.vectors && answer.vectors.unused > 0)
+        renderer.note(`${answer.vectors.unused} vectors belong to no text the store still holds — see vectors.unused`)
       const older = answer.conversations.filter((chat) => chat.provider === messenger.provider && !chat.current).length
       if (older > 0) {
         renderer.note(
@@ -340,8 +342,8 @@ const indexIntegrity = (database: CacheDatabase, index: string, rank = 1): strin
 }
 
 /**
- * Vectors per model, and how many no chunk of any build points at any more — a rebuild that changed a
- * conversation's text leaves its old vector behind until `conversations embed clear` (phase 5).
+ * Vectors per model, and how many no chunk points at any more. Each write that drops chunks drops those
+ * (`dropUnusedVectors`), so a count above zero was most likely left by an older build.
  */
 const vectorsHeld = (database: CacheDatabase) => {
   const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'embeddings'").get()

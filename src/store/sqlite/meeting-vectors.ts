@@ -4,6 +4,7 @@ import { positiveReadInteger } from "./meeting-reads.js"
 import { type MeetingSelection, meetingSelectionSql } from "./meeting-selection.js"
 import type { StoreContext } from "./open.js"
 import { read, write } from "./transaction.js"
+import { dropUnusedVectors } from "./vector-index.js"
 import { dot, saveVectors } from "./vectors.js"
 
 interface Scope {
@@ -211,11 +212,15 @@ export const meetingVectorsOver = (context: StoreContext): MeetingVectors => ({
         text: load(Number(row.id)),
       }))
       let count = 0
+      const released: string[] = []
       for (const { row, text } of prepared) {
         input.signal?.throwIfAborted()
-        context.database
-          .prepare("DELETE FROM chunks WHERE chunkable_type='meeting_transcript' AND chunkable_id=?")
-          .run(Number(row.id))
+        for (const { hash } of context.database
+          .prepare(
+            "DELETE FROM chunks WHERE chunkable_type='meeting_transcript' AND chunkable_id=? RETURNING content_hash AS hash",
+          )
+          .all(Number(row.id)))
+          released.push(String(hash))
         const chunks = cutChunks([{ id: String(row.id), sender: null, text: text.text }], undefined, () =>
           input.signal?.throwIfAborted(),
         )
@@ -242,16 +247,13 @@ export const meetingVectorsOver = (context: StoreContext): MeetingVectors => ({
           count++
         }
       }
-      context.database
+      for (const { hash } of context.database
         .prepare(
-          "DELETE FROM embeddings WHERE EXISTS (SELECT 1 FROM chunks k WHERE k.content_hash=embeddings.content_hash AND k.chunkable_type='meeting_transcript' AND k.account_id=? AND NOT EXISTS (SELECT 1 FROM meeting_transcripts t JOIN meetings m ON m.id=t.meeting_id WHERE t.id=k.chunkable_id AND t.deleted_at IS NULL AND t.superseded_at IS NULL AND m.deleted_at IS NULL AND m.account_id=?)) AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.content_hash=embeddings.content_hash AND (k.chunkable_type <> 'meeting_transcript' OR k.account_id IS NOT ? OR EXISTS (SELECT 1 FROM meeting_transcripts t JOIN meetings m ON m.id=t.meeting_id WHERE t.id=k.chunkable_id AND t.deleted_at IS NULL AND t.superseded_at IS NULL AND m.deleted_at IS NULL AND m.account_id=?)))",
+          "DELETE FROM chunks WHERE chunkable_type='meeting_transcript' AND account_id=? AND NOT EXISTS (SELECT 1 FROM meeting_transcripts t JOIN meetings m ON m.id=t.meeting_id WHERE t.id=chunks.chunkable_id AND t.deleted_at IS NULL AND t.superseded_at IS NULL AND m.deleted_at IS NULL AND m.account_id=?) RETURNING content_hash AS hash",
         )
-        .run(input.accountId, input.accountId, input.accountId, input.accountId)
-      context.database
-        .prepare(
-          "DELETE FROM chunks WHERE chunkable_type='meeting_transcript' AND account_id=? AND NOT EXISTS (SELECT 1 FROM meeting_transcripts t JOIN meetings m ON m.id=t.meeting_id WHERE t.id=chunks.chunkable_id AND t.deleted_at IS NULL AND t.superseded_at IS NULL AND m.deleted_at IS NULL AND m.account_id=?)",
-        )
-        .run(input.accountId, input.accountId)
+        .all(input.accountId, input.accountId))
+        released.push(String(hash))
+      dropUnusedVectors(context.database, released)
       input.signal?.throwIfAborted()
       const hasMore = found.length > limit
       return {

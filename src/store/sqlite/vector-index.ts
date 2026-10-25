@@ -244,3 +244,26 @@ export const vectorIndexCounts = (database: CacheDatabase) =>
       extra: count(`${held} EXCEPT ${wanted}`),
     }
   })
+
+/**
+ * The one rule for a vector whose text may be gone: it goes once no chunk of any kind holds its hash, for every model.
+ * Call it with the hashes a write released, after that write's new chunks are in, so a text that comes back keeps its
+ * vector. The key is (model, content_hash): naming each model reaches the row by the key; the hash alone scans every
+ * vector.
+ */
+export const dropUnusedVectors = (database: CacheDatabase, hashes: Iterable<string>): void => {
+  const unique = new Set(hashes)
+  if (unique.size === 0) return
+  const models = database
+    .prepare(
+      `WITH RECURSIVE m(model) AS (SELECT min(model) FROM embeddings
+         UNION ALL SELECT (SELECT min(model) FROM embeddings WHERE model > m.model) FROM m WHERE m.model IS NOT NULL)
+       SELECT model FROM m WHERE model IS NOT NULL`,
+    )
+    .all()
+    .map(({ model }) => String(model))
+  const drop = database.prepare(
+    "DELETE FROM embeddings WHERE model = ? AND content_hash = ? AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ?)",
+  )
+  for (const hash of unique) for (const model of models) drop.run(model, hash, hash)
+}
