@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.422.0 — 25.10.2026
+
 ### Added
 
 - **`AppIdentity.messenger`: set it to `false` in a CLI that is not a messenger** (a notes, files or calendar CLI from cli-template). The shared program, `commands`, `config` and MCP text then stop speaking of chats and messages: the profile example in the program description names the CLI's own first command, `commands info`'s example is `<cmd> commands info commands`, `--brief` and `--full` describe "found items", `--trace` and `--record` say "never content", and `config show` and the `config set`/`unset` list leave out `sender_colors`. Unset means a messenger: tg, max and wa print exactly what they did. A CLI that sets it refreshes its contract snapshots once.
