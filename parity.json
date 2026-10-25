@@ -4611,6 +4611,7 @@
     "store reset": {
       "in": "all",
       "options": {
+        "--dry-run": "all",
         "--no-backup": "all"
       }
     },

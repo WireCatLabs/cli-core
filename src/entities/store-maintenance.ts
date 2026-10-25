@@ -159,6 +159,18 @@ export const storeReset = v.union([
   v.strictObject({
     path: text,
     exists: v.literal(true),
+    reset: v.literal(false),
+    dry_run: v.literal(true),
+    files: v.array(text),
+    bytes: count,
+    schema: count,
+    tables: v.array(v.strictObject({ name: text, rows: count })),
+    backup_first: v.boolean(),
+    in_use: v.nullable(v.boolean()),
+  }),
+  v.strictObject({
+    path: text,
+    exists: v.literal(true),
     reset: v.literal(true),
     backup: v.nullable(text),
     backed_up: v.nullable(

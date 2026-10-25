@@ -602,6 +602,43 @@ describe("store reset", () => {
     expect(await messagesIn(path)).toBe(0)
   })
 
+  it("**--dry-run lists every table it would empty, with its rows**, and deletes nothing", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const path = String(env.MESSAGING_STORE)
+
+    const { code, answer } = await call(["store", "reset", "--no-backup", "--dry-run", "--json"], env)
+    expect(code).toBe(0)
+    expect(answer).toMatchObject({ path, reset: false, dry_run: true, schema: latest, backup_first: false })
+    expect(answer.files).toContain(path)
+    expect(answer.bytes).toBeGreaterThan(0)
+    const tables = Object.fromEntries(
+      answer.tables.map((table: { name: string; rows: number }) => [table.name, table.rows]),
+    )
+    expect(tables).toMatchObject({ accounts: 1, chats: 2, messages: 2 })
+    expect(Object.keys(tables).some((name) => name.startsWith("messages_fts") || name === "schema_migrations")).toBe(
+      false,
+    )
+    expect(await messagesIn(path)).toBe(2)
+    expect(readdirSync(dirname(path)).some((name) => name.includes(".backup-"))).toBe(false)
+  })
+
+  it("**--dry-run answers while a write is under way**, which the real reset would wait out", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const writer = await openCache(String(env.MESSAGING_STORE))
+    writer.exec("BEGIN IMMEDIATE")
+    try {
+      const { code, answer } = await call(["store", "reset", "--dry-run", "--json"], env, 10)
+      expect(code).toBe(0)
+      expect(answer.backup_first).toBe(true)
+      if (process.platform === "linux") expect(answer.in_use).toBe(false)
+    } finally {
+      writer.exec("ROLLBACK")
+      writer.close()
+    }
+  })
+
   it("**a migration that fails names `store reset`**, keeping SQLite's own words", async () => {
     const env = envFor()
     const database = await seeded(env)
