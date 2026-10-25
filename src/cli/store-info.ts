@@ -89,4 +89,6 @@ export const storeInfoCommand = (): Command =>
 
 /** `store info` for a tool with no `store` command of its own. */
 export const sharedStoreCommand = (): Command =>
-  new Command("store").description("the shared local store every WireCat tool reads").addCommand(storeInfoCommand())
+  annotate(new Command("store"), { effects: LOCAL_READ })
+    .description("the shared local store every WireCat tool reads")
+    .addCommand(storeInfoCommand())
