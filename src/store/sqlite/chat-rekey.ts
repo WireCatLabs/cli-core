@@ -174,7 +174,7 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
     "member_stays",
     "member_counts",
     "member_observations",
-    "auto_tag_claims",
+    "canonical_auto_tag_claims",
   ])
     database.prepare(`UPDATE OR IGNORE ${table} SET chat_id = ? WHERE chat_id = ?`).run(kept, gone)
   // Moved members fire no insert trigger, so the chat's involvements are queued by hand.

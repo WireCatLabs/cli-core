@@ -596,5 +596,148 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('transcript_index', 0, 0, 0, 1, NULL, NULL);",
       "INSERT OR IGNORE INTO transcript_index_pending (indexable_type, id)\n  SELECT 'attachment', id FROM attachments WHERE attachable_type = 'message' AND coalesce(text, '') <> ''\n    AND (coalesce(extractor, '') LIKE 'speech:%' OR kind IN ('voice', 'video_note') OR coalesce(mime, '') = 'audio/ogg');"
     ]
+  },
+  {
+    "name": "20261025064253_version-30-reviewed-tag-consolidation",
+    "statements": [
+      "CREATE TABLE `tag_consolidations` (\n\t`id` integer PRIMARY KEY,\n\t`source_id` integer NOT NULL,\n\t`survivor_id` integer NOT NULL,\n\t`source_member_ids` text NOT NULL,\n\t`survivor_member_ids` text NOT NULL,\n\t`actor_type` text NOT NULL,\n\t`actor_id` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`idempotency_key` text NOT NULL UNIQUE,\n\t`vocabulary_fingerprint` text NOT NULL,\n\t`preview_fingerprint` text NOT NULL,\n\t`counts` text NOT NULL,\n\t`request_fingerprint` text NOT NULL,\n\tCONSTRAINT `fk_tag_consolidations_source_id_canonical_tags_id_fk` FOREIGN KEY (`source_id`) REFERENCES `canonical_tags`(`id`),\n\tCONSTRAINT `fk_tag_consolidations_survivor_id_canonical_tags_id_fk` FOREIGN KEY (`survivor_id`) REFERENCES `canonical_tags`(`id`)\n);",
+      "CREATE TABLE `tag_redirects` (\n\t`source_id` integer PRIMARY KEY,\n\t`survivor_id` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `fk_tag_redirects_source_id_canonical_tags_id_fk` FOREIGN KEY (`source_id`) REFERENCES `canonical_tags`(`id`),\n\tCONSTRAINT `fk_tag_redirects_survivor_id_canonical_tags_id_fk` FOREIGN KEY (`survivor_id`) REFERENCES `canonical_tags`(`id`)\n);",
+      "ALTER TABLE `auto_tag_claims` RENAME TO `canonical_auto_tag_claims`;",
+      "ALTER TABLE `tags` RENAME TO `canonical_tags`;",
+      "DROP INDEX IF EXISTS `auto_tag_claims_by_tag_id`;",
+      "CREATE INDEX `canonical_auto_tag_claims_by_tag_id` ON `canonical_auto_tag_claims` (`tag_id`);",
+      "CREATE INDEX `tag_consolidations_by_source_id` ON `tag_consolidations` (`source_id`);",
+      "CREATE INDEX `tag_consolidations_by_survivor_id` ON `tag_consolidations` (`survivor_id`);",
+      "CREATE INDEX `tag_consolidations_by_actor_type_actor_id` ON `tag_consolidations` (`actor_type`,`actor_id`);",
+      "CREATE INDEX `tag_redirects_by_survivor_id` ON `tag_redirects` (`survivor_id`);"
+    ]
+  },
+  {
+    "name": "20261025064302_version-30-resolved-tag-view",
+    "statements": [
+      "CREATE VIEW resolved_tags AS\nSELECT original.id,canonical.name,canonical.kind,canonical.id AS canonical_id,original.created_at,original.updated_at\nFROM canonical_tags original\nLEFT JOIN tag_redirects r ON r.source_id=original.id\nJOIN canonical_tags canonical ON canonical.id=coalesce(r.survivor_id,original.id);"
+    ]
+  },
+  {
+    "name": "20261025070402_version-31-drive-account",
+    "statements": [
+      "-- Drive documents leave their stand-in notes folder (`folder`, named `google-drive:<principal>`) for the\n-- principal's `google-drive` account, by UPDATE, so every `document:<id>` reference holds. One folder per\n-- principal moves, the oldest; a duplicate, or one whose files the account already holds, stays a folder.\nCREATE TEMP TABLE drive_moves (folder_id INTEGER PRIMARY KEY, principal TEXT NOT NULL, account_id INTEGER);",
+      "INSERT INTO temp.drive_moves (folder_id, principal)\nSELECT f.id, substr(f.name, 14) FROM accounts f\nWHERE f.provider = 'folder' AND substr(f.name, 1, 13) = 'google-drive:' AND length(f.name) > 13\n  AND f.id = (SELECT min(o.id) FROM accounts o WHERE o.provider = 'folder' AND o.name = f.name)\n  AND NOT EXISTS (\n    SELECT 1 FROM documents held JOIN accounts g ON g.id = held.account_id\n    WHERE g.provider = 'google-drive' AND g.external_id = substr(f.name, 14)\n      AND held.external_id IN (SELECT external_id FROM documents WHERE account_id = f.id)\n  );",
+      "INSERT OR IGNORE INTO accounts (provider, external_id, name, scope, organization_id, created_at, updated_at)\nSELECT 'google-drive', m.principal, 'Google Drive', f.scope, f.organization_id, f.created_at, f.updated_at\nFROM temp.drive_moves m JOIN accounts f ON f.id = m.folder_id;",
+      "UPDATE temp.drive_moves SET account_id = (\n  SELECT id FROM accounts WHERE provider = 'google-drive' AND external_id = drive_moves.principal\n);",
+      "UPDATE accounts SET\n  settings = (\n    SELECT json_set(\n      CASE WHEN json_valid(accounts.settings) AND json_type(accounts.settings) = 'object' THEN accounts.settings ELSE '{}' END,\n      '$.format', coalesce(CASE WHEN json_valid(f.settings) THEN json_extract(f.settings, '$.format') END, 'markdown'),\n      '$.movedFrom', json_object('id', f.id, 'external_id', f.external_id, 'name', f.name)\n    )\n    FROM temp.drive_moves m JOIN accounts f ON f.id = m.folder_id WHERE m.account_id = accounts.id\n  ),\n  scope = (SELECT f.scope FROM temp.drive_moves m JOIN accounts f ON f.id = m.folder_id WHERE m.account_id = accounts.id),\n  organization_id = (\n    SELECT f.organization_id FROM temp.drive_moves m JOIN accounts f ON f.id = m.folder_id WHERE m.account_id = accounts.id\n  )\nWHERE id IN (SELECT account_id FROM temp.drive_moves);",
+      "UPDATE account_identities SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = account_identities.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE aliases SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = aliases.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE bot_updates SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = bot_updates.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE chats SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = chats.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE chunks SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = chunks.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE documents SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = documents.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE email_threads SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = email_threads.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE emails SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = emails.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE involvements SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = involvements.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE mailboxes SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = mailboxes.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE mail_rules SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = mail_rules.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE meeting_series SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = meeting_series.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE meetings SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = meetings.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE messages SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = messages.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE projects SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = projects.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE proposed_actions SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = proposed_actions.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE reminders SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = reminders.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE sync_cursors SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = sync_cursors.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE syncs SET account_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = syncs.account_id)\nWHERE account_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE agent_actions SET actor_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = agent_actions.actor_id)\nWHERE actor_type = 'account' AND actor_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE agent_actions SET target_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = agent_actions.target_id)\nWHERE target_type = 'account' AND target_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE aliases SET aliasable_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = aliases.aliasable_id)\nWHERE aliasable_type = 'account' AND aliasable_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE attachments SET attachable_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = attachments.attachable_id)\nWHERE attachable_type = 'account' AND attachable_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE chunks SET chunkable_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = chunks.chunkable_id)\nWHERE chunkable_type = 'account' AND chunkable_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE involvements SET subject_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = involvements.subject_id)\nWHERE subject_type = 'account' AND subject_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE links SET from_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = links.from_id)\nWHERE from_type = 'account' AND from_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE links SET to_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = links.to_id)\nWHERE to_type = 'account' AND to_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE memories SET subject_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = memories.subject_id)\nWHERE subject_type = 'account' AND subject_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE notes SET notable_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = notes.notable_id)\nWHERE notable_type = 'account' AND notable_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE proposed_actions SET target_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = proposed_actions.target_id)\nWHERE target_type = 'account' AND target_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE taggings SET taggable_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = taggings.taggable_id)\nWHERE taggable_type = 'account' AND taggable_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE facts SET subject_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = facts.subject_id)\nWHERE subject_type = 'account' AND subject_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE mention_pending SET source_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = mention_pending.source_id)\nWHERE source_type = 'account' AND source_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE mentions SET source_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = mentions.source_id)\nWHERE source_type = 'account' AND source_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "UPDATE mentions SET target_id = (SELECT account_id FROM temp.drive_moves WHERE folder_id = mentions.target_id)\nWHERE target_type = 'account' AND target_id IN (SELECT folder_id FROM temp.drive_moves);",
+      "-- A profile that named the folder names the account: `{ provider: \"google-drive\", account: <principal> }`.\nUPDATE store_settings SET value = (\n  SELECT json_group_object(app.key, CASE WHEN app.type = 'object' THEN (\n    SELECT json_group_object(profile.key, CASE\n      WHEN profile.type = 'object' AND json_extract(profile.value, '$.provider') = 'folder'\n        AND json_extract(profile.value, '$.account') IN (SELECT 'google-drive:' || principal FROM temp.drive_moves)\n      THEN json_set(profile.value, '$.provider', 'google-drive', '$.account', substr(json_extract(profile.value, '$.account'), 14))\n      WHEN profile.type IN ('object', 'array') THEN json(profile.value)\n      ELSE profile.value END)\n    FROM json_each(app.value) profile\n  ) WHEN app.type = 'array' THEN json(app.value) ELSE app.value END)\n  FROM json_each(store_settings.value) app\n)\nWHERE key = 'profiles' AND json_valid(value) AND json_type(value) = 'object'\n  AND EXISTS (SELECT 1 FROM temp.drive_moves);",
+      "-- A group member `notes:<folder id>` follows the documents to `notes:<account id>`.\nUPDATE store_settings SET value = (\n  SELECT json_group_object(grp.key, CASE WHEN grp.type = 'array' THEN (\n    SELECT json_group_array(coalesce(\n      (SELECT 'notes:' || m.account_id FROM temp.drive_moves m WHERE 'notes:' || m.folder_id = member.value),\n      member.value))\n    FROM json_each(grp.value) member\n  ) WHEN grp.type = 'object' THEN json(grp.value) ELSE grp.value END)\n  FROM json_each(store_settings.value) grp\n)\nWHERE key = 'accountGroups' AND json_valid(value) AND json_type(value) = 'object'\n  AND EXISTS (SELECT 1 FROM temp.drive_moves);",
+      "DELETE FROM accounts WHERE id IN (SELECT folder_id FROM temp.drive_moves);",
+      "DROP TABLE temp.drive_moves;"
+    ]
+  },
+  {
+    "name": "20261025071848_version-32-files",
+    "statements": [
+      "CREATE TABLE `entity_link_events` (\n\t`id` integer PRIMARY KEY,\n\t`linkable_type` text NOT NULL,\n\t`linkable_id` integer NOT NULL,\n\t`entity_type` text NOT NULL,\n\t`from_entity_id` integer,\n\t`to_entity_id` integer,\n\t`method` text NOT NULL,\n\t`confidence` real,\n\t`author` text NOT NULL,\n\t`created_at` integer NOT NULL\n);",
+      "CREATE TABLE `files` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`kind` text NOT NULL,\n\t`name` text NOT NULL,\n\t`path` text NOT NULL,\n\t`path_folded` text,\n\t`parent_id` integer,\n\t`document_id` integer,\n\t`mime` text,\n\t`size` integer,\n\t`content_hash` text,\n\t`url` text,\n\t`external_created_at` integer,\n\t`external_updated_at` integer,\n\t`metadata` text,\n\t`seen_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_files_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `fk_files_parent_id_files_id_fk` FOREIGN KEY (`parent_id`) REFERENCES `files`(`id`),\n\tCONSTRAINT `fk_files_document_id_documents_id_fk` FOREIGN KEY (`document_id`) REFERENCES `documents`(`id`),\n\tCONSTRAINT `files_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE TABLE `link_reviews` (\n\t`id` integer PRIMARY KEY,\n\t`linkable_type` text NOT NULL,\n\t`linkable_id` integer NOT NULL,\n\t`entity_type` text NOT NULL,\n\t`candidates` text NOT NULL,\n\t`reason` text NOT NULL,\n\t`status` text NOT NULL,\n\t`chosen_id` integer,\n\t`decided_by` text,\n\t`decided_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `link_reviews_linkable_type_linkable_id_entity_type_unique` UNIQUE(`linkable_type`,`linkable_id`,`entity_type`)\n);",
+      "ALTER TABLE `documents` ADD `pinned_file_id` integer;",
+      "ALTER TABLE `identities` ADD `email` text;",
+      "CREATE INDEX `entity_link_events_by_linkable_type_linkable_id` ON `entity_link_events` (`linkable_type`,`linkable_id`);",
+      "CREATE INDEX `entity_link_events_by_entity_type_to_entity_id` ON `entity_link_events` (`entity_type`,`to_entity_id`);",
+      "CREATE INDEX `files_by_account_id_path_folded` ON `files` (`account_id`,`path_folded`);",
+      "CREATE INDEX `files_path_to_fold` ON `files` (`id`) WHERE path_folded IS NULL;",
+      "CREATE INDEX `files_by_parent_id` ON `files` (`parent_id`);",
+      "CREATE INDEX `files_by_document_id` ON `files` (`document_id`);",
+      "CREATE INDEX `identities_by_email` ON `identities` (`email`) WHERE email IS NOT NULL;",
+      "CREATE INDEX `link_reviews_by_status_created_at` ON `link_reviews` (`status`,`created_at`);"
+    ]
+  },
+  {
+    "name": "20261025071850_version-32-files-data",
+    "statements": [
+      "-- A folder account's provider says what the folder is. Drive's stand-in folders (`google-drive:<principal>`) keep\n-- `folder`: version 31 moves their documents to the `google-drive` account, and they are no local folder either way.\nUPDATE accounts SET provider = CASE\n    WHEN json_valid(settings) AND json_extract(settings, '$.format') = 'markdown' THEN 'local' ELSE 'obsidian' END\n  WHERE provider = 'folder' AND substr(coalesce(name, ''), 1, 13) <> 'google-drive:';",
+      "UPDATE identities SET email = lower(trim(external_id)) WHERE provider = 'email' AND instr(external_id, '@') > 1;",
+      "-- A document hard-deleted (a rename onto a gone note's path) takes its file row along; the rename writes its own.\nCREATE TRIGGER files_document_bd BEFORE DELETE ON documents BEGIN\n  DELETE FROM files WHERE document_id = old.id;\nEND;",
+      "-- One `files` row per document is written in JS on open (`fillFiles`), from the document after this id.\nINSERT OR REPLACE INTO store_settings (key, value, at) VALUES ('files_backfill_after', '0', unixepoch() * 1000);",
+      "-- A mail contact's address is its external id; every writer of one gets the column filled the same way.\nCREATE TRIGGER identities_email_ai AFTER INSERT ON identities\n  WHEN new.provider = 'email' AND new.email IS NULL AND instr(new.external_id, '@') > 1 BEGIN\n  UPDATE identities SET email = lower(trim(new.external_id)) WHERE id = new.id;\nEND;",
+      "-- A deleted document keeps its tags: a file moved between folders is revived with them (owner's choice). Its tags go\n-- when the row itself does (`document_bd`), and readers leave out a deleted document's taggings.\nDROP TRIGGER document_tombstone;"
+    ]
+  },
+  {
+    "name": "20261025072643_version-33-calendars",
+    "statements": [
+      "CREATE TABLE `calendar_entries` (\n\t`id` integer PRIMARY KEY,\n\t`calendar_id` integer NOT NULL,\n\t`kind` text NOT NULL,\n\t`series_entry_id` integer,\n\t`event_id` integer,\n\t`event_series_id` integer,\n\t`external_id` text NOT NULL,\n\t`ical_uid` text,\n\t`original_starts_at` integer,\n\t`exception` integer NOT NULL,\n\t`status` text NOT NULL,\n\t`title` text,\n\t`description` text,\n\t`location` text,\n\t`starts_at` integer,\n\t`ends_at` integer,\n\t`all_day` integer NOT NULL,\n\t`start_date` text,\n\t`end_date` text,\n\t`timezone` text,\n\t`recurrence` text,\n\t`recurrence_ends_at` integer,\n\t`event_type` text,\n\t`transparency` text,\n\t`visibility` text,\n\t`own_response` text,\n\t`organizer_identity_id` integer,\n\t`join_url` text,\n\t`join_key` text,\n\t`conference` text,\n\t`url` text,\n\t`sequence` integer,\n\t`etag` text,\n\t`external_updated_at` integer,\n\t`metadata` text,\n\t`seen_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_calendar_entries_calendar_id_calendars_id_fk` FOREIGN KEY (`calendar_id`) REFERENCES `calendars`(`id`),\n\tCONSTRAINT `fk_calendar_entries_series_entry_id_calendar_entries_id_fk` FOREIGN KEY (`series_entry_id`) REFERENCES `calendar_entries`(`id`),\n\tCONSTRAINT `fk_calendar_entries_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`),\n\tCONSTRAINT `fk_calendar_entries_event_series_id_event_series_id_fk` FOREIGN KEY (`event_series_id`) REFERENCES `event_series`(`id`),\n\tCONSTRAINT `fk_calendar_entries_organizer_identity_id_identities_id_fk` FOREIGN KEY (`organizer_identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `calendar_entries_calendar_id_external_id_unique` UNIQUE(`calendar_id`,`external_id`),\n\tCONSTRAINT `calendar_entries_series_entry_id_original_starts_at_unique` UNIQUE(`series_entry_id`,`original_starts_at`)\n);",
+      "CREATE TABLE `calendar_entry_participants` (\n\t`id` integer PRIMARY KEY,\n\t`entry_id` integer NOT NULL,\n\t`identity_id` integer,\n\t`email` text NOT NULL,\n\t`name` text,\n\t`response` text,\n\t`optional` integer NOT NULL,\n\t`organizer` integer NOT NULL,\n\t`self` integer NOT NULL,\n\t`resource` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_calendar_entry_participants_entry_id_calendar_entries_id_fk` FOREIGN KEY (`entry_id`) REFERENCES `calendar_entries`(`id`),\n\tCONSTRAINT `fk_calendar_entry_participants_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `calendar_entry_participants_entry_id_email_unique` UNIQUE(`entry_id`,`email`)\n);",
+      "CREATE TABLE `calendar_entry_revisions` (\n\t`id` integer PRIMARY KEY,\n\t`entry_id` integer NOT NULL,\n\t`title` text,\n\t`starts_at` integer,\n\t`ends_at` integer,\n\t`location` text,\n\t`status` text,\n\t`recurrence` text,\n\t`recurrence_ends_at` integer,\n\t`external_updated_at` integer,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `fk_calendar_entry_revisions_entry_id_calendar_entries_id_fk` FOREIGN KEY (`entry_id`) REFERENCES `calendar_entries`(`id`)\n);",
+      "CREATE TABLE `calendars` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`external_id` text NOT NULL,\n\t`title` text,\n\t`timezone` text,\n\t`access_role` text,\n\t`primary_calendar` integer NOT NULL,\n\t`synced` integer NOT NULL,\n\t`seen_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_calendars_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `calendars_account_id_external_id_unique` UNIQUE(`account_id`,`external_id`)\n);",
+      "CREATE TABLE `event_index_pending` (\n\t`id` integer NOT NULL,\n\t`indexable_type` text NOT NULL,\n\tCONSTRAINT `event_index_pending_pk` PRIMARY KEY(`indexable_type`, `id`)\n);",
+      "ALTER TABLE `events` ADD `status` text;",
+      "ALTER TABLE `events` ADD `all_day` integer;",
+      "ALTER TABLE `events` ADD `source_deleted_at` integer;",
+      "ALTER TABLE `meetings` ADD `join_key` text;",
+      "CREATE INDEX `calendar_entries_by_calendar_id_starts_at` ON `calendar_entries` (`calendar_id`,`starts_at`);",
+      "CREATE INDEX `calendar_entries_by_ical_uid` ON `calendar_entries` (`ical_uid`) WHERE ical_uid IS NOT NULL;",
+      "CREATE INDEX `calendar_entries_by_join_key` ON `calendar_entries` (`join_key`) WHERE join_key IS NOT NULL;",
+      "CREATE INDEX `calendar_entries_by_event_id` ON `calendar_entries` (`event_id`);",
+      "CREATE INDEX `calendar_entries_by_event_series_id` ON `calendar_entries` (`event_series_id`);",
+      "CREATE INDEX `calendar_entries_by_event_type_event_id` ON `calendar_entries` (`event_type`,`event_id`);",
+      "CREATE INDEX `calendar_entries_by_organizer_identity_id` ON `calendar_entries` (`organizer_identity_id`);",
+      "CREATE INDEX `calendar_entry_participants_by_identity_id` ON `calendar_entry_participants` (`identity_id`);",
+      "CREATE INDEX `calendar_entry_revisions_by_entry_id_created_at` ON `calendar_entry_revisions` (`entry_id`,`created_at`);",
+      "CREATE INDEX `meetings_by_join_key` ON `meetings` (`join_key`) WHERE join_key IS NOT NULL;",
+      "CREATE INDEX `meetings_join_key_to_fill` ON `meetings` (`id`) WHERE join_url IS NOT NULL AND join_key IS NULL;"
+    ]
+  },
+  {
+    "name": "20261025072644_version-33-calendars-triggers",
+    "statements": [
+      "-- The event is indexed, not each entry: its title, description and location, and the names its entries list.\n-- Stemming needs JS, so the triggers only queue the event and the next search indexes it, as tasks do.\nCREATE VIRTUAL TABLE event_words USING fts5(\n  normalized_text, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2', prefix = '3');",
+      "CREATE VIRTUAL TABLE event_words_vocab USING fts5vocab(event_words, 'col');",
+      "CREATE VIRTUAL TABLE event_stems USING fts5(\n  stems, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2');",
+      "CREATE TRIGGER event_index_ai AFTER INSERT ON events BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id) VALUES ('event', new.id);\nEND;",
+      "CREATE TRIGGER event_index_au AFTER UPDATE OF title, description, location, deleted_at ON events\n  WHEN old.title IS NOT new.title OR old.description IS NOT new.description OR old.location IS NOT new.location\n    OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id) VALUES ('event', new.id);\nEND;",
+      "CREATE TRIGGER event_index_ad AFTER DELETE ON events BEGIN\n  DELETE FROM event_words WHERE rowid = old.id;\n  DELETE FROM event_stems WHERE rowid = old.id;\n  DELETE FROM event_index_pending WHERE indexable_type = 'event' AND id = old.id;\nEND;",
+      "-- An entry that joins or leaves an event, or changes kind, changes what the event is found by.\nCREATE TRIGGER event_index_entry_au AFTER UPDATE OF event_id, event_type, deleted_at ON calendar_entries\n  WHEN old.event_id IS NOT new.event_id OR old.event_type IS NOT new.event_type OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', value FROM (SELECT old.event_id AS value UNION SELECT new.event_id) WHERE value IS NOT NULL;\nEND;",
+      "CREATE TRIGGER event_index_participant_ai AFTER INSERT ON calendar_entry_participants BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', event_id FROM calendar_entries WHERE id = new.entry_id AND event_id IS NOT NULL;\nEND;",
+      "CREATE TRIGGER event_index_participant_au AFTER UPDATE OF name ON calendar_entry_participants\n  WHEN old.name IS NOT new.name BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', event_id FROM calendar_entries WHERE id = new.entry_id AND event_id IS NOT NULL;\nEND;",
+      "CREATE TRIGGER event_index_participant_ad AFTER DELETE ON calendar_entry_participants BEGIN\n  INSERT OR IGNORE INTO event_index_pending (indexable_type, id)\n    SELECT 'event', event_id FROM calendar_entries WHERE id = old.entry_id AND event_id IS NOT NULL;\nEND;",
+      "CREATE TRIGGER calendar_entries_time_bi BEFORE INSERT ON calendar_entries\n  WHEN new.ends_at < new.starts_at BEGIN\n  SELECT RAISE(ABORT, 'a calendar entry cannot end before it starts');\nEND;",
+      "CREATE TRIGGER calendar_entries_time_bu BEFORE UPDATE OF starts_at, ends_at ON calendar_entries\n  WHEN new.ends_at < new.starts_at BEGIN\n  SELECT RAISE(ABORT, 'a calendar entry cannot end before it starts');\nEND;",
+      "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('event_index', 0, 0, 0, 1, NULL, NULL);",
+      "INSERT OR IGNORE INTO event_index_pending (indexable_type, id) SELECT 'event', id FROM events;"
+    ]
   }
 ]

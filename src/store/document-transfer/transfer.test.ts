@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { existsSync, linkSync, mkdtempSync, readFileSync, statSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -24,12 +25,12 @@ const sql = async (path: string) => {
   handles.push(db)
   return db
 }
-const seed = async () => {
+const seed = async (name = collection) => {
   const root = mkdtempSync(join(tmpdir(), "annotation-transfer-"))
   const source = join(root, "source.db"),
     destination = join(root, "destination.db")
   const store = await openStore({ path: source, now: () => Date.parse("2026-10-16T00:00:00Z") })
-  const folder = await store.notes.addFolder({ name: collection })
+  const folder = await store.notes.addFolder({ name })
   const first = {
     folderId: folder.id,
     path: "budget.md",
@@ -111,7 +112,7 @@ const seed = async () => {
     nextMemory,
     fact,
     nextFact,
-    options: { source, destination, collection },
+    options: { source, destination, collection: name },
   }
 }
 
@@ -136,6 +137,22 @@ describe("provider-neutral document annotation transfer", () => {
     expect(readFileSync(f.source).equals(before)).toBe(true)
     expect(statSync(f.source).mtimeMs).toBe(modified)
     expect(JSON.stringify(preview)).not.toContain("Reviewed owner note")
+  })
+
+  it("copies a collection from a store before version 32 into a vault account, with a files row per document", async () => {
+    const f = await seed()
+    const db = await openCache(f.source)
+    rollBackTo(db, 21)
+    expect(db.prepare("SELECT provider FROM accounts WHERE name = ?").get(collection)).toEqual({ provider: "folder" })
+    db.close()
+    const preview = await previewDocumentTransfer(f.options)
+    await applyDocumentTransfer({ ...f.options, expected_fingerprint: preview.fingerprint })
+    const copied = await sql(f.destination)
+    expect(
+      copied
+        .prepare("SELECT a.provider, f.path FROM files f JOIN accounts a ON a.id = f.account_id WHERE a.name = ?")
+        .all(collection),
+    ).toEqual([{ provider: "obsidian", path: "budget.md" }])
   })
 
   it("remaps collisions, histories, evidence, statuses, authors and both link directions without changing the source", async () => {
@@ -555,4 +572,133 @@ describe("provider-neutral document annotation transfer", () => {
     })
     expect(existsSync(missing)).toBe(false)
   })
+
+  describe("a Drive collection, named google-drive:<principal> on either side of store version 31", () => {
+    const drive = "google-drive:synthetic-owner"
+    const driveAccounts = async (path: string) =>
+      (await sql(path))
+        .prepare(
+          "SELECT a.provider, a.external_id, count(d.id) AS documents FROM accounts a LEFT JOIN documents d ON d.account_id = a.id " +
+            "WHERE a.provider = 'google-drive' OR a.name LIKE 'google-drive:%' GROUP BY a.id ORDER BY a.id",
+        )
+        .all()
+
+    it("copies a stand-in folder from an older source into the google-drive account, never a new folder", async () => {
+      const f = await seed(drive)
+      const db = await openCache(f.source)
+      rollBackTo(db, 31)
+      db.close()
+      const preview = await previewDocumentTransfer(f.options)
+      expect(preview.ready).toBe(true)
+      const receipt = await applyDocumentTransfer({ ...f.options, expected_fingerprint: preview.fingerprint })
+      expect(receipt.references[f.doc.ref]).toMatch(/^document:/)
+      expect(await driveAccounts(f.destination)).toEqual([
+        { provider: "google-drive", external_id: "synthetic-owner", documents: 1 },
+      ])
+      expect((await sql(f.source)).prepare("SELECT provider FROM accounts WHERE name = ?").get(drive)).toEqual({
+        provider: "folder",
+      })
+    })
+
+    it("reuses the destination's moved document for a source that was moved too", async () => {
+      const f = await seed(drive)
+      const db = await openCache(f.source)
+      rollBackTo(db, 31)
+      db.close()
+      await (await openStore({ path: f.source })).close()
+      const target = await open(f.destination)
+      const account = await target.notes.documentsAccount(
+        { provider: "google-drive", account: "synthetic-owner" },
+        true,
+      )
+      const input = {
+        folderId: String(account?.id),
+        path: "budget.md",
+        title: "Synthetic budget",
+        text: "Budget version one",
+        contentHash: "h1",
+      }
+      const { note: existing } = await target.notes.saveFileNote(input)
+      await target.notes.saveFileNote({ ...input, text: "Budget version two", contentHash: "h2" })
+      const preview = await previewDocumentTransfer(f.options)
+      expect(preview.conflicts).toEqual([])
+      const receipt = await applyDocumentTransfer({ ...f.options, expected_fingerprint: preview.fingerprint })
+      expect(receipt.references[f.doc.ref]).toBe(existing.ref)
+      expect(await driveAccounts(f.destination)).toEqual([
+        { provider: "google-drive", external_id: "synthetic-owner", documents: 1 },
+      ])
+    })
+  })
+})
+
+const minimalTaggedTransfer = async () => {
+  const root = mkdtempSync(join(tmpdir(), "consolidated-tag-transfer-"))
+  const source = join(root, "source.db"),
+    destination = join(root, "destination.db")
+  const store = await open(source)
+  const folder = await store.notes.addFolder({ name: collection })
+  const document = (
+    await store.notes.saveFileNote({
+      folderId: folder.id,
+      path: "session.md",
+      title: "Synthetic session",
+      text: "Synthetic meeting context",
+    })
+  ).note
+  await store.knowledge.addTags(null, { type: "document", id: document.id }, ["arrival"])
+  return { source, destination, store, options: { source, destination, collection } }
+}
+const consolidateTags = async (store: Awaited<ReturnType<typeof open>>) => {
+  const first = await store.knowledge.createTag("welcome")
+  const catalog = await store.knowledge.vocabulary()
+  const source = catalog.entries.find((row) => row.name === "arrival")
+  if (!source) throw Error("missing synthetic arrival tag")
+  const options = {
+    sourceId: source.id,
+    survivorId: String(first.id),
+    expectedVocabularyFingerprint: catalog.fingerprint,
+  }
+  const preview = await store.knowledge.previewTagConsolidation(options)
+  await store.knowledge.applyTagConsolidation({
+    ...options,
+    expectedPreviewFingerprint: preview.previewFingerprint,
+    by: "owner",
+    idempotencyKey: "transfer-boundary",
+  })
+}
+const image = (path: string) => {
+  const digest = createHash("sha256").update(readFileSync(path))
+  if (existsSync(`${path}-wal`)) digest.update(readFileSync(`${path}-wal`))
+  return digest.digest("hex")
+}
+
+it("refuses a consolidated source label before copying or changing either store", async () => {
+  const fixture = await minimalTaggedTransfer()
+  await consolidateTags(fixture.store)
+  const before = image(fixture.source)
+  const blocked = await previewDocumentTransfer(fixture.options)
+  expect(blocked.ready).toBe(false)
+  expect(blocked.conflicts.some((value) => value.includes("consolidated group"))).toBe(true)
+  await expect(
+    applyDocumentTransfer({ ...fixture.options, expected_fingerprint: blocked.fingerprint }),
+  ).rejects.toMatchObject({ code: "configuration_error" })
+  expect(image(fixture.source)).toBe(before)
+  expect(existsSync(fixture.destination)).toBe(false)
+})
+
+it("refuses a consolidated destination label before changing either store", async () => {
+  const fixture = await minimalTaggedTransfer()
+  const target = await open(fixture.destination)
+  await target.knowledge.createTag("arrival")
+  await consolidateTags(target)
+  const sourceBefore = image(fixture.source),
+    targetBefore = image(fixture.destination)
+  const blocked = await previewDocumentTransfer(fixture.options)
+  expect(blocked.ready).toBe(false)
+  expect(blocked.conflicts.some((value) => value.includes("consolidated group"))).toBe(true)
+  await expect(
+    applyDocumentTransfer({ ...fixture.options, expected_fingerprint: blocked.fingerprint }),
+  ).rejects.toMatchObject({ code: "configuration_error" })
+  expect(image(fixture.source)).toBe(sourceBefore)
+  expect(image(fixture.destination)).toBe(targetBefore)
 })

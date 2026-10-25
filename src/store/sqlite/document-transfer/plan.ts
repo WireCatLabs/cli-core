@@ -1,10 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
+import { folderProviderSql } from "../../../domain/providers.js"
 import { digest } from "../../document-transfer/digest.js"
 import type { DocumentTransferPreview, TransferSnapshot } from "../../document-transfer/model.js"
 import type { CacheDatabase } from "../../driver.js"
 import { ownerPerson } from "../actors.js"
+import { tagMemberIds } from "../tag-resolution.js"
 import { canonicalTagNamed } from "../tags.js"
 import { stateOfThing, type Thing, thingOf } from "../things.js"
+import { collectionAccounts, collectionNameOf, movedFromOf } from "./collection.js"
 import { planPeople } from "./people.js"
 
 export interface TransferPlan {
@@ -27,12 +30,13 @@ export const planTransfer = (
   const snapshotHash = digest(snapshot)
   const bindingsHash = digest(Object.entries(bindings).sort(([a], [b]) => a.localeCompare(b)))
   const collection = String(snapshot.collection.external_id)
-  const targets = database
-    .prepare("SELECT * FROM accounts WHERE provider='folder' AND name=? ORDER BY id LIMIT 2")
-    .all(String(snapshot.collection.name))
+  const targets = collectionAccounts(database, collectionNameOf(snapshot.collection))
   if (targets.length > 1) conflicts.add("the destination has duplicate document collection identities")
   const target = targets[0]
-  if (!target && database.prepare("SELECT id FROM accounts WHERE provider='folder' AND external_id=?").get(collection))
+  if (
+    !target &&
+    database.prepare(`SELECT id FROM accounts WHERE ${folderProviderSql()} AND external_id=?`).get(collection)
+  )
     conflicts.add("source collection identity is held by another destination collection")
   const hasReceipts = database
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='document_annotation_transfers'")
@@ -40,8 +44,13 @@ export const planTransfer = (
   const receipt =
     hasReceipts &&
     database
-      .prepare("SELECT * FROM document_annotation_transfers WHERE source_key=? AND collection=?")
-      .get(sourceKey, collection)
+      .prepare("SELECT * FROM document_annotation_transfers WHERE source_key=? AND collection IN (?,?,?) LIMIT 1")
+      .get(
+        sourceKey,
+        collection,
+        String(movedFromOf(snapshot.collection)?.external_id ?? collection),
+        String(movedFromOf(target)?.external_id ?? collection),
+      )
   if (receipt && (receipt.snapshot_hash !== snapshotHash || receipt.bindings_hash !== bindingsHash))
     conflicts.add(
       "the source or binding decisions changed after a completed transfer; keep the original store selected",
@@ -89,11 +98,12 @@ export const planTransfer = (
       // A new author handle is created without copying credentials, settings or metadata.
       else continue
     } else if (external.collection && external.external_id) {
+      const holders = JSON.stringify(collectionAccounts(database, external.collection).map(({ id }) => Number(id)))
       const row = database
         .prepare(
-          "SELECT d.id FROM documents d JOIN accounts a ON a.id=d.account_id WHERE a.provider='folder' AND a.name=? AND d.external_id=? AND d.deleted_at IS NULL",
+          "SELECT id FROM documents WHERE account_id IN (SELECT value FROM json_each(?)) AND external_id=? AND deleted_at IS NULL ORDER BY id LIMIT 1",
         )
-        .get(external.collection, external.external_id)
+        .get(holders, external.external_id)
       if (row) found = { type: "document", id: Number(row.id) }
     } else if (["message", "chat", "identity", "email", "email_thread"].includes(external.kind))
       found = thingOf(database, external.reference)
@@ -113,7 +123,15 @@ export const planTransfer = (
   if (target && target.organization_id !== organization)
     conflicts.add("the destination collection has a different organization binding")
   for (const tagging of snapshot.taggings) {
+    if (Number(tagging.tag_group_size ?? 1) > 1)
+      conflicts.add(
+        `source tag ${String(tagging.tag_id)} belongs to a consolidated group; annotation transfer cannot preserve that group yet`,
+      )
     const tag = canonicalTagNamed(database, String(tagging.tag_name))
+    if (tag && tagMemberIds(database, tag.id).length > 1)
+      conflicts.add(
+        `destination tag ${String(tag.id)} belongs to a consolidated group; annotation transfer cannot preserve independent contributions yet`,
+      )
     if (tag && tag.name !== tagging.tag_name)
       conflicts.add(`destination vocabulary resolves source tag ${String(tagging.tag_id)} to another canonical label`)
     if (tag && tag.kind !== tagging.tag_kind)

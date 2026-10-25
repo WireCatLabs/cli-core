@@ -16,8 +16,10 @@ export {
   WORK_TASK_TYPES,
 } from "../domain/knowledge.js"
 export type {
+  TagConsolidationApplyOptions,
   TagConsolidationOptions,
   TagConsolidationPreview,
+  TagConsolidationReceipt,
   TagConsolidationStore,
 } from "../domain/tag-consolidation.js"
 export type { TagRedirectIndex, TagRedirectResolution, TagRedirectSnapshot } from "../domain/tag-redirects.js"
@@ -121,6 +123,7 @@ export type {
   ThreadSave,
 } from "./sqlite/emails.js"
 export type { Fact, FactInput, FactsStore } from "./sqlite/facts.js"
+export type { FileListQuery, FilesStore, StoredFile } from "./sqlite/files.js"
 export { IMPORTED_DOCUMENT_QUERY, type ImportedDocuments } from "./sqlite/imported-documents.js"
 export type { Involvement, InvolvementStore } from "./sqlite/involvements.js"
 export type {

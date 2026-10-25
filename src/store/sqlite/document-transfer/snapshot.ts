@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { filesAccountSql } from "../../../domain/providers.js"
 import { digest } from "../../document-transfer/digest.js"
 import type {
   TransferEntity,
@@ -10,6 +11,7 @@ import type {
 import type { CacheDatabase } from "../../driver.js"
 import { referenceOfThing, storedThing } from "../things.js"
 import { read } from "../transaction.js"
+import { collectionAccounts, collectionNameOf, currentCollection } from "./collection.js"
 
 export const TRANSFER_TABLES = { document: "documents", note: "notes", memory: "memories", fact: "facts" } as const
 const MAX_ENTITIES = 1000
@@ -30,9 +32,7 @@ const valuesOf = (row: Record<string, unknown>): TransferValues =>
 
 export const transferSnapshot = (database: CacheDatabase, collection: string): TransferSnapshot =>
   read(database, () => {
-    const accounts = database
-      .prepare("SELECT * FROM accounts WHERE provider='folder' AND name=? ORDER BY id LIMIT 2")
-      .all(collection)
+    const accounts = collectionAccounts(database, collection)
     if (accounts.length > 1)
       throw new CliError(
         "configuration_error",
@@ -56,6 +56,13 @@ export const transferSnapshot = (database: CacheDatabase, collection: string): T
     const entities = new Map<string, TransferEntity>()
     const links = new Map<string, TransferValues>()
     const taggings = new Map<string, TransferValues>()
+    const canonicalTags = Boolean(
+      database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_tags'").get(),
+    )
+    const tagTable = canonicalTags ? "canonical_tags" : "tags"
+    const resolution = canonicalTags
+      ? "r.canonical_id AS tag_canonical_id,(SELECT count(*) FROM resolved_tags members WHERE members.canonical_id=r.canonical_id) AS tag_group_size"
+      : "t.id AS tag_canonical_id,1 AS tag_group_size"
     const dependencies = new Map<string, { type: string; id: number }>()
     const depend = (type: unknown, id: unknown) => {
       if (type != null && id != null) dependencies.set(keyOf(type, id), { type: String(type), id: Number(id) })
@@ -107,7 +114,7 @@ export const transferSnapshot = (database: CacheDatabase, collection: string): T
       }
       for (const row of database
         .prepare(
-          "SELECT g.*,t.name AS tag_name,t.kind AS tag_kind FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type=? AND g.taggable_id=? ORDER BY g.id LIMIT 10001",
+          `SELECT g.*,t.name AS tag_name,t.kind AS tag_kind,${resolution} FROM taggings g JOIN ${tagTable} t ON t.id=g.tag_id ${canonicalTags ? "JOIN resolved_tags r ON r.id=t.id" : ""} WHERE g.taggable_type=? AND g.taggable_id=? ORDER BY g.id LIMIT 10001`,
         )
         .all(kind, Number(values.id))) {
         if (taggings.size >= MAX_AUXILIARY)
@@ -183,11 +190,11 @@ export const transferSnapshot = (database: CacheDatabase, collection: string): T
       if (thing.type === "document") {
         const doc = database
           .prepare(
-            "SELECT a.name AS collection,d.external_id,d.body,d.content_hash,d.deleted_at FROM documents d JOIN accounts a ON a.id=d.account_id WHERE d.id=? AND a.provider='folder'",
+            `SELECT a.provider,a.external_id AS account,a.name,d.external_id,d.body,d.content_hash,d.deleted_at FROM documents d JOIN accounts a ON a.id=d.account_id WHERE d.id=? AND ${filesAccountSql("a.provider")}`,
           )
           .get(thing.id)
         if (doc) {
-          item.collection = String(doc.collection)
+          item.collection = collectionNameOf({ provider: doc.provider, external_id: doc.account, name: doc.name })
           item.external_id = String(doc.external_id)
           const content = bounded({ body: doc.body, content_hash: doc.content_hash, deleted_at: doc.deleted_at })
           item.document_fingerprint = digest(content)
@@ -196,7 +203,7 @@ export const transferSnapshot = (database: CacheDatabase, collection: string): T
       external.push(item)
     }
     return {
-      collection: bounded(account),
+      collection: bounded(currentCollection(account)),
       entities: [...entities.values()].sort((a, b) => a.key.localeCompare(b.key)),
       links: [...links.values()].sort((a, b) => Number(a.id) - Number(b.id)),
       taggings: [...taggings.values()].sort((a, b) => Number(a.id) - Number(b.id)),

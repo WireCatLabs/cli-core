@@ -162,6 +162,48 @@ describe("--source as a list of accounts and groups", () => {
     expect(() => entriesOfList("folder:1", context)).toThrow(/folder is not a provider/)
   })
 
+  it("keeps a Drive account in notes, named by its id, its drive profile or google-drive:<principal>", async () => {
+    const store = await seeded()
+    const drive = await store.notes.documentsAccount({ provider: "google-drive", account: "owner-1" }, true)
+    const id = String(drive?.id)
+    const context = {
+      held: await store.accounts.storedAccounts(),
+      groups: {},
+      profiles: { drive: { work: { provider: "google-drive", account: "owner-1" } } },
+      running: { provider: "telegram", command: "tg" },
+    }
+    const notes = [{ provider: "notes", account: id, kind: "notes" }]
+    expect(entriesOfList(`notes:${id},drive:work,drive,google-drive:owner-1,google-drive`, context)).toEqual([
+      { entry: `notes:${id}`, accounts: notes },
+      { entry: "drive:work", accounts: notes },
+      { entry: "drive", accounts: notes },
+      { entry: "google-drive:owner-1", accounts: notes },
+      { entry: "google-drive", accounts: notes },
+    ])
+    expect(entriesOfList("notes", context)[0]?.accounts.map(({ account }) => account)).toEqual(["internal", id])
+    expect(() =>
+      entriesOfList("drive:home", {
+        ...context,
+        profiles: { drive: { home: { provider: "google-drive", account: "owner-2" } } },
+      }),
+    ).toThrow(/no stored documents for drive:home/)
+  })
+
+  it("names the notes folders of one provider by it: obsidian for vaults, local for plain folders", async () => {
+    const store = await seeded()
+    const vault = await store.notes.addFolder({ name: "Vault" })
+    const plain = await store.notes.addFolder({ name: "Plain", format: "markdown" })
+    const context = {
+      held: await store.accounts.storedAccounts(),
+      groups: {},
+      profiles: {},
+      running: { provider: "telegram", command: "tg" },
+    }
+    const named = (word: string) => entriesOfList(word, context)[0]?.accounts.map(({ account }) => account)
+    expect(named("obsidian")).toEqual([vault.id])
+    expect(named("local")).toEqual([plain.id])
+  })
+
   it("forgets a removed group", async () => {
     const store = await seeded()
     await store.accounts.saveAccountGroup("work", ["tg:102"])

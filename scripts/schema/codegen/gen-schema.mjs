@@ -20,7 +20,7 @@ const DEFAULTS = {
   "accounts.scope": "personal",
   "projects.scope": "personal",
   "organizations.scope": "personal",
-  "tags.kind": "tag",
+  "canonical_tags.kind": "tag",
   "taggings.main": 0,
   "searches.runs": 0,
 }
@@ -69,6 +69,8 @@ const NAMES = {
   "tasks:id WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL": "tasks_close_reason_to_fold",
   "attachments:id WHERE local_path IS NOT NULL AND local_path_folded IS NULL": "attachments_local_path_to_fold",
   "meetings:id WHERE title IS NOT NULL AND title_folded IS NULL": "meetings_title_to_fold",
+  "files:id WHERE path_folded IS NULL": "files_path_to_fold",
+  "meetings:id WHERE join_url IS NOT NULL AND join_key IS NULL": "meetings_join_key_to_fill",
 }
 
 const parseKey = (k) => {

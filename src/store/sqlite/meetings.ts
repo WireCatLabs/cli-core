@@ -27,13 +27,14 @@ import type {
   TranscriptAppend,
   TranscriptAppendReceipt,
 } from "../../meetings/index.js"
-import { MeetingError } from "../../meetings/index.js"
+import { joinKeyOf, MeetingError } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import * as eventQueries from "./events.js"
 import { fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { meetingIdentityPk } from "./identities.js"
+import { reviewLink } from "./link-reviews.js"
 import { meetingChatLinesOver } from "./meeting-chat-lines.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
@@ -357,6 +358,7 @@ const save = (context: StoreContext, input: MeetingSave): number => {
       description: meeting.description,
       location: meeting.location,
       join_url: meeting.joinUrl,
+      join_key: meeting.joinUrl ? (joinKeyOf(meeting.joinUrl) ?? "") : null,
       started_at: meeting.startedAt,
       ended_at: meeting.endedAt,
       duration_ms: meeting.durationMs,
@@ -842,6 +844,11 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     },
     async linkMeeting(id, eventId, now, mode) {
       eventQueries.linkMeeting(database, id, eventId, now, mode)
+    },
+    async reviewMeetingLink(meetingId, eventIds, now) {
+      write(database, () =>
+        reviewLink(database, { type: "meeting", id: meetingId }, "event", eventIds, "join-key", now),
+      )
     },
     async cursor(accountId) {
       return str(

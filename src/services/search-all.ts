@@ -204,6 +204,7 @@ export const searchAll = async (
         const read = chosen?.map(({ account }) => account) ?? [
           INTERNAL_NOTES,
           ...(await store.notes.folders()).map(({ id }) => id),
+          ...(await store.notes.documentsAccounts()).map(({ id }) => id),
         ]
         accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
       } else lists.push(await messagesOf(resource))

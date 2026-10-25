@@ -6,6 +6,7 @@ import { normalizeVocabularyName, vocabularySimilarity } from "../../domain/voca
 import type { StoreContext } from "./open.js"
 import { tagConsolidationStoreOver } from "./tag-consolidation.js"
 import { tagCreationReview } from "./tag-creation.js"
+import { liveTagging } from "./tags.js"
 import { read, write } from "./transaction.js"
 
 export type VocabularyKind = "project" | "tag" | "topic"
@@ -16,6 +17,7 @@ export interface VocabularyTarget {
 export interface VocabularyAlias {
   id: string
   name: string
+  retained?: true
 }
 export interface VocabularyEntry extends VocabularyTarget {
   name: string
@@ -128,7 +130,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       const projects = options.kind === undefined || options.kind === "project"
       const tags = options.kind !== "project"
       const whereProjects = "account_id IS NULL AND deleted_at IS NULL AND (? IS NULL OR scope=?)"
-      const whereTags = "(? IS NULL OR kind=?)"
+      const whereTags = "(? IS NULL OR kind=?) AND id=canonical_id"
       const tagKind = options.kind === "project" ? null : (options.kind ?? null)
       const metadata: Row[] = []
       if (projects)
@@ -142,7 +144,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       if (tags)
         metadata.push(
           ...database
-            .prepare(`SELECT kind,id,length(CAST(name AS BLOB)) AS bytes FROM tags WHERE ${whereTags} LIMIT ?`)
+            .prepare(`SELECT kind,id,length(CAST(name AS BLOB)) AS bytes FROM resolved_tags WHERE ${whereTags} LIMIT ?`)
             .all(tagKind, tagKind, maxEntries + 1),
         )
       if (metadata.length > maxEntries)
@@ -152,7 +154,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       const aliasSelection =
         "a.account_id IS NULL AND ((? AND a.aliasable_type='project' AND EXISTS " +
         "(SELECT 1 FROM projects p WHERE p.id=a.aliasable_id AND p.account_id IS NULL AND p.deleted_at IS NULL AND (? IS NULL OR p.scope=?))) " +
-        "OR (? AND a.aliasable_type='tag' AND EXISTS (SELECT 1 FROM tags t WHERE t.id=a.aliasable_id AND (? IS NULL OR t.kind=?))))"
+        "OR (? AND a.aliasable_type='tag' AND EXISTS (SELECT 1 FROM resolved_tags t WHERE t.id=a.aliasable_id AND (? IS NULL OR t.kind=?))))"
       const aliasParams = [
         Number(projects),
         options.scope ?? null,
@@ -168,11 +170,31 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
         .get(...aliasParams)
       if (Number(aliases?.count ?? 0) > maxEntries * 20)
         throw new CliError("validation_error", "vocabulary aliases exceed the selected entry budget")
-      const bytes = metadata.reduce((total, row) => total + Number(row.bytes), 0) + Number(aliases?.bytes ?? 0)
+      const retainedWhere = "t.id<>r.canonical_id AND (? IS NULL OR t.kind=?)"
+      const retainedMetadata = tags
+        ? database
+            .prepare(
+              `SELECT count(*) AS count,coalesce(sum(length(CAST(t.name AS BLOB))),0) AS bytes FROM canonical_tags t JOIN resolved_tags r ON r.id=t.id WHERE ${retainedWhere}`,
+            )
+            .get(tagKind, tagKind)
+        : undefined
+      if (Number(retainedMetadata?.count ?? 0) > maxEntries)
+        throw new CliError("validation_error", "retained tag names exceed the selected entry budget")
+      const bytes =
+        metadata.reduce((total, row) => total + Number(row.bytes), 0) +
+        Number(aliases?.bytes ?? 0) +
+        Number(retainedMetadata?.bytes ?? 0)
       if (bytes > maxReadBytes)
         throw new CliError("validation_error", "vocabulary exceeds the selected input byte budget", {
           reason: "vocabulary.over-byte-budget",
         })
+      const retained = tags
+        ? database
+            .prepare(
+              `SELECT t.id,t.name,r.canonical_id FROM canonical_tags t JOIN resolved_tags r ON r.id=t.id WHERE ${retainedWhere} ORDER BY t.id LIMIT ?`,
+            )
+            .all(tagKind, tagKind, maxEntries + 1)
+        : []
       const entries: VocabularyEntry[] = []
       if (projects)
         entries.push(
@@ -193,7 +215,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
         entries.push(
           ...database
             .prepare(
-              `SELECT t.id,t.name,t.kind,(SELECT count(*) FROM taggings g WHERE g.tag_id=t.id)+(SELECT count(*) FROM links l WHERE l.to_type='tag' AND l.to_id=t.id AND l.kind='labelled') AS uses FROM tags t WHERE ${whereTags} ORDER BY id`,
+              `SELECT t.id,t.name,t.kind,(SELECT count(*) FROM (SELECT DISTINCT g.taggable_type,g.taggable_id FROM taggings g JOIN resolved_tags r ON r.id=g.tag_id WHERE r.canonical_id=t.id AND ${liveTagging("g")}))+(SELECT count(*) FROM (SELECT DISTINCT l.from_type,l.from_id,l.anchor FROM links l JOIN resolved_tags r ON r.id=l.to_id WHERE l.to_type='tag' AND r.canonical_id=t.id AND l.kind='labelled')) AS uses FROM resolved_tags t WHERE ${whereTags} ORDER BY id`,
             )
             .all(tagKind, tagKind)
             .map((row) => ({
@@ -211,12 +233,16 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       )
       for (const row of database
         .prepare(
-          `SELECT a.id,a.aliasable_type,a.aliasable_id,a.name FROM aliases a WHERE ${aliasSelection} ORDER BY a.id`,
+          `SELECT a.id,a.aliasable_type,CASE WHEN a.aliasable_type='tag' THEN (SELECT canonical_id FROM resolved_tags WHERE id=a.aliasable_id) ELSE a.aliasable_id END AS aliasable_id,a.name FROM aliases a WHERE ${aliasSelection} ORDER BY a.id`,
         )
         .all(...aliasParams))
         byTarget
           .get(`${row.aliasable_type}:${row.aliasable_id}`)
           ?.aliases.push({ id: String(row.id), name: String(row.name) })
+      for (const row of retained)
+        byTarget
+          .get(`tag:${row.canonical_id}`)
+          ?.aliases.push({ id: `tag:${row.id}`, name: String(row.name), retained: true })
       cancelled(options.signal)
       return {
         entries,
@@ -364,12 +390,19 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       write(database, () => {
         const current = writable(options)
         const entry = targetEntry(current, target)
+        if (entry.aliases.some((alias) => alias.id === aliasId && alias.retained))
+          throw new CliError(
+            "validation_error",
+            "aliasId names a retained tag name; its original record cannot be removed as an alias",
+          )
         idOf(aliasId)
         const held = entry.aliases.find((alias) => alias.id === aliasId)
         if (!held) return { target: { kind: entry.kind, id: entry.id }, alias: null, changed: false }
         database
-          .prepare("DELETE FROM aliases WHERE id=? AND aliasable_type=? AND aliasable_id=? AND account_id IS NULL")
-          .run(idOf(aliasId), target.kind === "project" ? "project" : "tag", idOf(target.id))
+          .prepare(
+            "DELETE FROM aliases WHERE id=? AND aliasable_type=? AND (aliasable_id=? OR (aliasable_type='tag' AND aliasable_id IN (SELECT id FROM resolved_tags WHERE canonical_id=?))) AND account_id IS NULL",
+          )
+          .run(idOf(aliasId), target.kind === "project" ? "project" : "tag", idOf(target.id), idOf(target.id))
         cancelled(options.signal)
         return { target: { kind: entry.kind, id: entry.id }, alias: held, changed: true }
       }),

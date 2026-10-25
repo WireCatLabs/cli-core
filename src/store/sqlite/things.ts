@@ -1,4 +1,5 @@
 import { formatLocator } from "../../domain/locator.js"
+import { filesAccountSql } from "../../domain/providers.js"
 import { canonicalReference, formatReference, parseReference, type Reference } from "../../domain/references.js"
 import { canonicalMeetingReference, formatMeetingReference, parseMeetingReference } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
@@ -101,7 +102,7 @@ export const thingOf = (database: CacheDatabase, reference: Reference | string):
       const id = storeId(parsed.id)
       return id === undefined
         ? undefined
-        : found("account", database.prepare("SELECT id FROM accounts WHERE id = ? AND provider = 'folder'").get(id))
+        : found("account", database.prepare(`SELECT id FROM accounts WHERE id = ? AND ${filesAccountSql()}`).get(id))
     }
     case "task": {
       const id = taskRowOf(database, parsed.id)

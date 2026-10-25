@@ -266,7 +266,7 @@ not recorded.
 **Where the queries live.** `src/store/store.ts` holds the `MessageStore` interface and `storeOver`. The
 store is a set of areas, each a getter built on first use by its own file under `src/store/` —
 `accounts`, `chats`, `sync`, `messages`, `attachments`, `roster`, `people`, `conversations`, `vectors`,
-`counters`, `tags`, `mentions`, `searches`, `queries`, `searchIndex`, beside `mail`, `notes`, `tasks`,
+`counters`, `tags`, `mentions`, `searches`, `queries`, `searchIndex`, beside `mail`, `notes`, `files` (where each document is kept), `tasks`,
 `meetings` and the rest: `store.chats.saveChats(key, …)`, `store.messages.find(…)`. An area that takes the
 account first keeps that part apart where it also has store-wide methods (`AccountMessages`, `AccountPeople` …), and `forAccount` binds it whole, so
 the bound store has the same areas without the account argument. The row-id helpers they share are
@@ -429,9 +429,16 @@ kinds fail with both names. Searches skip the accounts of a provider nobody regi
 **Documents and files — not built yet.** A new `files` table holds one row per item in one place: a local file, a
 Drive file or folder, later a Notion page. A folder is a `files` row; children point at it with `parent_id`, and
 `path` / `path_folded` find a subtree by prefix (NEED-1739). A file joins a document by `account_id` + `external_id`,
-then by `content_hash` when exactly one live document matches; more than one goes to the review list. Drive files
-move from the stand-in `folder` account to a real `google-drive` account; folder accounts become `local` or
-`obsidian` (NEED-1738).
+then by `content_hash` when exactly one live document matches; more than one goes to the review list. Folder
+accounts become `local` or `obsidian` (NEED-1738).
+
+**Drive documents live in a `google-drive` account**, one per Google account (`external_id` = the principal), since
+store version 31 moved them there from the stand-in notes folder named `google-drive:<principal>`. The account's
+`settings` keep `format` and `movedFrom` (the folder's id, external id and name). The notes code reads and writes
+such an account as it does a folder (`DOCUMENT_ACCOUNT_PROVIDERS`, `src/domain/providers.ts`), but
+`notes.folders()` leaves it out: `notes.documentsAccount(key)` and `documentsAccounts()` find it, and
+`documentIngestion({ provider })` writes into it. Search still lists it as `notes:<id>`, until Drive becomes kind
+`documents` (Wave 3 R2). Annotation transfers name it `google-drive:<principal>` on both sides of version 31.
 
 **Calendar entries on the events hub — not built yet.** `calendars` and `calendar_entries` are a calendar's source
 records; `events` (`schema.ts:1087`) and `event_series` stay the entities that `meetings` already points at. An
@@ -460,7 +467,8 @@ The schema before this one lived in `messages.db` and is not converted: the new 
 build still installed never opens it. Every migration after the first is forward-only, additive, numbered, and
 never edited once it reached anyone's file — a test refuses a generated rebuild of a base table.
 `min_compatible` lets an older CLI keep using a file a newer one migrated; a migration that drops what an older
-build reads raises it, and that build then refuses the file and asks to be upgraded. It is 1.
+build reads raises it, and that build then refuses the file and asks to be upgraded. Store version 30
+sets it to 30 for the tag/automatic-claim structural compatibility boundary.
 
 ⚠ **Announce a migration number before writing it.** Several sessions work in this repository at
 once, and two of them taking the same number is a conflict no rebase fixes. The next free number
@@ -488,7 +496,7 @@ it by editing that line in a PR of its own, merged before the migration.
    `version`. Two folders with one version — the generated one and its custom one, as version 7 —
    apply as one migration and write one `schema_migrations` row. Versions run on without a gap
    (`manifest.test.ts:38-44`).
-6. **`minCompatible` stays where it is** — 1 today — for an additive change. Raising it locks every
+6. **`minCompatible` stays where it is** — 30 after the tag compatibility boundary — for an additive change. Every manifest row declares it explicitly; it cannot decrease. Raising it locks every
    older build out of the file: ask the owner first; it is a major version of this package, and
    tg-cli and max-cli ship their upgrade the same day.
 7. **`pnpm db:bundle`** after every `db:generate` and every edit of a `migration.sql`. It rewrites

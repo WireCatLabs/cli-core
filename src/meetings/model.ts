@@ -11,7 +11,8 @@ export interface EventSeries extends RecordTimes {
   id: number
   title: string | null
   recurrence: string | null
-  origin: "auto" | "owner"
+  /** `auto` from a meeting, `owner`, or `calendar` from a calendar's entries. */
+  origin: "auto" | "owner" | "calendar"
 }
 
 export interface Event extends RecordTimes {
@@ -23,8 +24,13 @@ export interface Event extends RecordTimes {
   startsAt: number | null
   endsAt: number | null
   timezone: string | null
-  origin: "auto" | "owner"
+  origin: "auto" | "owner" | "calendar"
   deletedAt: number | null
+  /** confirmed, tentative, cancelled: cancelled only when every live calendar entry of it is. */
+  status?: string | null
+  allDay?: boolean | null
+  /** When its calendar deleted it; a past event stays as a meeting that happened. */
+  sourceDeletedAt?: number | null
 }
 
 export interface MeetingSeries extends RecordTimes {

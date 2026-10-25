@@ -26,7 +26,7 @@ export interface NoteIndexState {
  */
 export interface Corpus {
   /** The singular table name: `indexable_type` in the queue, `chunkable_type` in chunks. */
-  type: "document" | "note" | "memory" | "email" | "task" | "transcript"
+  type: "document" | "note" | "memory" | "email" | "task" | "transcript" | "event"
   /** Its row in `search_index_state`. */
   index: string
   table: string
@@ -89,6 +89,21 @@ export const CORPORA = {
     read:
       `SELECT NULL AS title, coalesce(a.text, '') AS body, a.attachable_type = 'message' AND ${speech("a")} AS live, ` +
       "'personal' AS scope FROM attachments a WHERE a.id = ?",
+    pieces: false,
+  },
+  event: {
+    type: "event",
+    index: "event_index",
+    table: "events",
+    // Working location, focus time, out of office and birthdays are listed, never searched (requirements 3.4).
+    read:
+      "SELECT e.title, trim(coalesce(e.description, '') || ' ' || coalesce(e.location, '') || ' ' || coalesce((" +
+      "SELECT group_concat(p.name, ' ') FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id " +
+      "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL AND p.resource = 0 AND p.name IS NOT NULL), '')) AS body, " +
+      "e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id " +
+      "AND ce.deleted_at IS NULL AND ce.event_type IN ('workingLocation', 'focusTime', 'outOfOffice', 'birthday')) AS live, " +
+      "coalesce((SELECT a.scope FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id " +
+      "JOIN accounts a ON a.id = c.account_id WHERE ce.event_id = e.id LIMIT 1), 'personal') AS scope FROM events e WHERE e.id = ?",
     pieces: false,
   },
 } as const satisfies Record<string, Corpus>

@@ -52,6 +52,13 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261021224625_version-28-chat-state", version: 28, minCompatible: 1 },
   { name: "20261023105057_version-29-transcript-words", version: 29, minCompatible: 1 },
   { name: "20261023105101_version-29-transcript-words-triggers", version: 29, minCompatible: 1 },
+  { name: "20261025064253_version-30-reviewed-tag-consolidation", version: 30, minCompatible: 30 },
+  { name: "20261025064302_version-30-resolved-tag-view", version: 30, minCompatible: 30 },
+  { name: "20261025070402_version-31-drive-account", version: 31, minCompatible: 31 },
+  { name: "20261025071848_version-32-files", version: 32, minCompatible: 32 },
+  { name: "20261025071850_version-32-files-data", version: 32, minCompatible: 32 },
+  { name: "20261025072643_version-33-calendars", version: 33, minCompatible: 32 },
+  { name: "20261025072644_version-33-calendars-triggers", version: 33, minCompatible: 32 },
 ]
 
 export const generatedMigrations = (
@@ -60,9 +67,13 @@ export const generatedMigrations = (
 ): Migration[] => {
   const migrations: Migration[] = []
   for (const entry of manifest) {
+    if (!Number.isSafeInteger(entry.minCompatible) || entry.minCompatible < 1 || entry.minCompatible > entry.version)
+      throw new Error("each migration requires an explicit valid minCompatible")
     const found = generated.find(({ name }) => name === entry.name)
     if (!found) throw new Error(`migration ${entry.name} is in the manifest and not in the bundle — run pnpm db:bundle`)
     const last = migrations.at(-1)
+    if (last && last.version !== entry.version && entry.minCompatible < last.minCompatible)
+      throw new Error("migration minCompatible cannot decrease")
     if (last?.version !== entry.version) {
       migrations.push({ version: entry.version, minCompatible: entry.minCompatible, statements: [...found.statements] })
     } else if (last.minCompatible !== entry.minCompatible) {

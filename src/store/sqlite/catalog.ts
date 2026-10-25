@@ -3,6 +3,7 @@ import { defineQuery, type Predicate, type QueryAst, validateQuery, walkQuery } 
 import { normalizeTag } from "../../domain/tags.js"
 import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
+import { syncFile } from "./files.js"
 import type { StoreContext } from "./open.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { canonicalTagNamed } from "./tags.js"
@@ -248,22 +249,26 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
                 at,
               )
         }
+        const written = database.prepare("SELECT id FROM documents WHERE account_id = ? AND external_id = ?")
+        for (const { input } of checked) syncFile(database, at, Number(written.get(id, input.externalId)?.id))
       })
     },
     reconcile: async (accountId, externalIds) => {
       const id = account(accountId)
       if (externalIds.length > 10000) throw new CliError("validation_error", "catalog scope exceeds 10000 entries")
       const current = [...new Set(externalIds.map((key) => field(key)))]
-      return write(
-        database,
-        () =>
-          database
-            .prepare(
-              "UPDATE documents SET metadata=json_set(metadata, '$.catalog.active', json('false')) WHERE account_id=? AND json_type(metadata, '$.catalog')='object' AND json_extract(metadata, '$.catalog.active')=1" +
-                (current.length ? " AND external_id NOT IN (SELECT value FROM json_each(?))" : ""),
-            )
-            .run(...(current.length ? [id, JSON.stringify(current)] : [id])).changes,
-      )
+      return write(database, () => {
+        const retired = database
+          .prepare(
+            "UPDATE documents SET metadata=json_set(metadata, '$.catalog.active', json('false')) WHERE account_id=? AND json_type(metadata, '$.catalog')='object' AND json_extract(metadata, '$.catalog.active')=1" +
+              (current.length ? " AND external_id NOT IN (SELECT value FROM json_each(?))" : "") +
+              " RETURNING id",
+          )
+          .all(...(current.length ? [id, JSON.stringify(current)] : [id]))
+        const at = now()
+        for (const row of retired) syncFile(database, at, Number(row.id), { seen: false })
+        return retired.length
+      })
     },
     get: async (accountId, externalId, includeInactive = false) => {
       const id = account(accountId)
@@ -289,7 +294,7 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
       }
       const actorSql = "json_each(d.metadata, '$.catalog.folded.people')"
       const tagSql =
-        "SELECT 1 FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type='document' AND g.taggable_id=d.id AND t.name=?"
+        "SELECT 1 FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE g.taggable_type='document' AND g.taggable_id=d.id AND t.name=?"
       const tag = (name: string) => canonicalTagNamed(database, name)?.name ?? normalizeTag(name)
       if (query.parent !== undefined)
         add("EXISTS(SELECT 1 FROM json_each(d.metadata, '$.catalog.parents') WHERE value=?)", query.parent)

@@ -48,7 +48,7 @@ Anchors are on `origin/main`, 2026-10-13.
 2. **Kinds that lack a provider and account today.**
    - **notes, written in memo:** no account row. `search all` invents `notes` + `internal`
      (`search-all.ts:157-158`).
-   - **notes, disk folders:** an `accounts` row of provider `folder` whose `external_id` is a ulid
+   - **notes, disk folders:** an `accounts` row of provider `obsidian` (a vault) or `local` (a plain folder) whose `external_id` is a ulid
      (`src/store/sqlite/notes.ts:371-379`). Hits and the list parser use the row id: a list
      names a folder `notes:<row id>` or by its name, memo's own notes `notes:internal`, and `folder:` is not a
      provider.

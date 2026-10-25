@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { openCache } from "./open.js"
 import type { EmailInput } from "./sqlite/emails.js"
 import { type MessageStore, openStore } from "./store.js"
 
@@ -72,6 +73,19 @@ describe("a provider contact with an address", () => {
     await saveEditor(store)
     await receiveMail(store)
     expect(await personOf(store, "google-drive", "g-1")).not.toBe(await personOf(store, "email", "alice@example.com"))
+  })
+
+  it("keeps the address on the provider's contact, lower case, as the mail contact keeps its own", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "same-email-")), "store.db")
+    const store = await openStore({ path })
+    opened.push(store)
+    await receiveMail(store)
+    await saveEditor(store, " ALICE@example.com ")
+    const database = await openCache(path)
+    const emails = database.prepare("SELECT provider, email FROM identities ORDER BY provider, id").all()
+    database.close()
+    expect(emails).toContainEqual({ provider: "google-drive", email: "alice@example.com" })
+    expect(emails).toContainEqual({ provider: "email", email: "alice@example.com" })
   })
 
   it("joins nobody by name alone", async () => {

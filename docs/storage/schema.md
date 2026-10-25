@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-95 tables, 21 full-text indexes.
+105 tables, 23 full-text indexes.
 
 ## Conventions
 
@@ -150,8 +150,9 @@ A real person, whatever accounts they write from: their identities point here. `
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `description` | text |  |  | What they wrote about themselves. |
+| `email` | text |  |  | the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise |
 
-*Keys and indexes:* `UNIQUE (provider, external_id)`
+*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`
 
 ### `identity_links`
 
@@ -940,8 +941,38 @@ A file or page that stands on its own: a file in a notes folder (md, pdf, docx, 
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `pinned_file_id` | integer |  |  | the file the owner chose for the document to show; NULL shows the most recently changed (a `files` row, no foreign key: an older build may delete a file it does not know) |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`
+
+### `files`
+
+One item in one place, the source record of a document: a file under a local or Obsidian folder, a Drive file or folder. A folder is a row of its own (`kind` folder), so a subtree is a prefix of `path_folded` and a folder has a row for its own facts. `documents` stays the entity every `document:<id>` names.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the place: a local folder, an Obsidian vault, a Google account |
+| `external_id` | text | not null |  | the provider's id: a Drive file id; for a local file, its path from the folder's root |
+| `kind` | text | not null |  | file, folder, page |
+| `name` | text | not null |  | the item's own name, with its extension |
+| `path` | text | not null |  | from the account's root, `/` between names |
+| `path_folded` | text |  |  | `path` folded for prefix and substring search; filled on open when NULL |
+| `parent_id` | integer |  | → `files.id` | the folder's own row; NULL at the root |
+| `document_id` | integer |  | → `documents.id` | the document this file is a copy of; NULL for a local folder, which has no document row |
+| `mime` | text |  |  |  |
+| `size` | integer |  |  | bytes |
+| `content_hash` | text |  |  | sha-256 hex of the content |
+| `url` | text |  |  | the provider's web link, never one that carries a secret |
+| `external_created_at` | integer |  |  | when the source says it was created |
+| `external_updated_at` | integer |  |  | when the source says it last changed |
+| `metadata` | text |  |  | JSON, allow-listed provider fields: `front_matter` (a Markdown file's own), `version`, a second Drive parent in `parents` |
+| `seen_at` | integer |  |  | the last sync or import that returned it |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, path_folded)`, `INDEX (id) WHERE path_folded IS NULL`, `INDEX (parent_id)`, `INDEX (document_id)`
 
 ### `document_revisions`
 
@@ -1124,6 +1155,144 @@ Cancellation is cooperative: the signal is checked before and between queries an
 An active synchronous SQLite query completes before cancellation is reported; callers await the
 read before closing its connection.
 
+### `calendars`
+
+One calendar of an account: Google's primary calendar, a shared or subscribed one. Only those the owner owns are synced; the rest are listed so the owner knows they exist.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | provider `google-calendar` |
+| `external_id` | text | not null |  | the provider's calendar id |
+| `title` | text |  |  |  |
+| `timezone` | text |  |  | IANA |
+| `access_role` | text |  |  | owner, writer, reader, freeBusyReader |
+| `primary_calendar` | integer | not null |  | 1 for the account's primary calendar |
+| `synced` | integer | not null |  | 1 when its entries sync: the owner owns it or chose it |
+| `seen_at` | integer |  |  | the last calendar list that returned it |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id)`
+
+### `calendar_entries`
+
+One calendar's copy of an event, a series or one occurrence of a series: the source record of `events` and `event_series`. No passcode, PIN or join-URL query string is ever stored.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `calendar_id` | integer | not null | → `calendars.id` | the `calendar` it belongs to |
+| `kind` | text | not null |  | single, series, occurrence |
+| `series_entry_id` | integer |  | → `calendar_entries.id` | on an occurrence: its series' entry |
+| `event_id` | integer |  | → `events.id` | single and occurrence entries |
+| `event_series_id` | integer |  | → `event_series.id` | series entries |
+| `external_id` | text | not null |  | the provider's event id, unique within the calendar |
+| `ical_uid` | text |  |  | shared by every copy across calendars and every occurrence of a series |
+| `original_starts_at` | integer |  |  | an occurrence's slot in its series |
+| `exception` | integer | not null |  | 1 for an occurrence changed apart from its series |
+| `status` | text | not null |  | confirmed, tentative, cancelled |
+| `title` | text |  |  |  |
+| `description` | text |  |  | plain text, lines with a passcode, password or PIN removed |
+| `location` | text |  |  |  |
+| `starts_at` | integer |  |  |  |
+| `ends_at` | integer |  |  | exclusive; never before `starts_at` (a trigger refuses it) |
+| `all_day` | integer | not null |  |  |
+| `start_date` | text |  |  | `YYYY-MM-DD` of an all-day entry |
+| `end_date` | text |  |  | exclusive |
+| `timezone` | text |  |  |  |
+| `recurrence` | text |  |  | a series: its RRULE lines, JSON |
+| `recurrence_ends_at` | integer |  |  | a series: its last slot; NULL repeats indefinitely |
+| `event_type` | text |  |  | default, outOfOffice, focusTime, workingLocation, birthday, fromGmail; only default and fromGmail are searched |
+| `transparency` | text |  |  |  |
+| `visibility` | text |  |  |  |
+| `own_response` | text |  |  | the owner's answer: needsAction, accepted, declined, tentative |
+| `organizer_identity_id` | integer |  | → `identities.id` | the `identity` it belongs to |
+| `join_url` | text |  |  | without its query string |
+| `join_key` | text |  |  | as `meetings.join_key` |
+| `conference` | text |  |  | zoom, meet, teams, … |
+| `url` | text |  |  | the provider's page of the event |
+| `sequence` | integer |  |  |  |
+| `etag` | text |  |  |  |
+| `external_updated_at` | integer |  |  | when the source says it last changed |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `seen_at` | integer |  |  | the last sync that returned it |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (calendar_id, external_id)`, `UNIQUE (series_entry_id, original_starts_at)`, `INDEX (calendar_id, starts_at)`, `INDEX (ical_uid) WHERE ical_uid IS NOT NULL`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (event_id)`, `INDEX (event_series_id)`, `INDEX (event_type, event_id)`, `INDEX (organizer_identity_id)`
+
+### `calendar_entry_revisions`
+
+A calendar entry's tracked fields as they were before a change: a moved meeting keeps its old time, a series shortened by "this and following" its old rule.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `entry_id` | integer | not null | → `calendar_entries.id` | the `calendar_entry` it belongs to |
+| `title` | text |  |  |  |
+| `starts_at` | integer |  |  |  |
+| `ends_at` | integer |  |  |  |
+| `location` | text |  |  |  |
+| `status` | text |  |  |  |
+| `recurrence` | text |  |  |  |
+| `recurrence_ends_at` | integer |  |  |  |
+| `external_updated_at` | integer |  |  | the provider's edit time of the values replaced |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (entry_id, created_at)`
+
+### `calendar_entry_participants`
+
+Who a calendar entry lists: a role in that entry, not a contact of its own. A person's address points at the `email` contact of it; a room has none.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `entry_id` | integer | not null | → `calendar_entries.id` | the `calendar_entry` it belongs to |
+| `identity_id` | integer |  | → `identities.id` | the `email` contact of the address; NULL for a room |
+| `email` | text | not null |  | lower case |
+| `name` | text |  |  |  |
+| `response` | text |  |  | needsAction, accepted, declined, tentative |
+| `optional` | integer | not null |  |  |
+| `organizer` | integer | not null |  |  |
+| `self` | integer | not null |  |  |
+| `resource` | integer | not null |  | 1 for a room or a piece of equipment |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (entry_id, email)`, `INDEX (identity_id)`
+
+### `event_words`
+
+Word index over events: title, cleaned description, location and attendee names.
+
+```sql
+CREATE VIRTUAL TABLE event_words USING fts5(normalized_text, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
+CREATE VIRTUAL TABLE event_words_vocab USING fts5vocab(event_words, 'col')
+```
+
+### `event_stems`
+
+Stem index, the pair of event_words.
+
+```sql
+CREATE VIRTUAL TABLE event_stems USING fts5(stems, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
+```
+
+### `event_index_pending`
+
+Rows of events waiting to be indexed: triggers enqueue, JS normalizes, stems and writes the index.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | not null |  |  |
+| `indexable_type` | text | not null |  | which table the waiting row belongs to |
+
+*Keys and indexes:* `PRIMARY KEY (indexable_type, id)`
+
 ### `event_series`
 
 A repeating event, above any one provider's recurrence.
@@ -1151,10 +1320,13 @@ The owner's own record of something that happened, as a person is the owner's re
 | `starts_at` | integer |  |  | when it starts |
 | `ends_at` | integer |  |  | when it ends |
 | `timezone` | text |  |  | IANA zone the event is held in, e.g. Europe/Madrid |
-| `origin` | text | not null |  | auto or owner |
+| `origin` | text | not null |  | auto (from a meeting), owner, or calendar |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `status` | text |  |  | confirmed, tentative, cancelled; cancelled only when every live calendar entry of it is |
+| `all_day` | integer |  |  | 1 for an all-day event: its times are the UTC midnights of its dates |
+| `source_deleted_at` | integer |  |  | when its calendar deleted it; a past event keeps its row as a meeting that happened |
 
 *Keys and indexes:* `INDEX (starts_at)`, `INDEX (event_series_id)`
 
@@ -1207,8 +1379,9 @@ One occurrence: it happened once, at one time.
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `title_folded` | text |  |  | `fold(title)`, which `meetings list title:` compares |
+| `join_key` | text |  |  | the meeting's room without its passcode — `zoom:<number>`, `meet:<code>`, else host and path — which a calendar entry is matched by; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (id) WHERE join_url IS NOT NULL AND join_key IS NULL`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
 
 ### `meeting_participants`
 
@@ -1651,7 +1824,7 @@ Every tool an agent called through the CLIs or MCP: who, which tool, at what acc
 
 Polymorphic: `<name>_type` text + `<name>_id` integer.
 
-### `tags`
+### `canonical_tags`
 
 A tag's name, stored once. Which things carry it is `taggings`.
 
@@ -1663,15 +1836,15 @@ A tag's name, stored once. Which things carry it is `taggings`.
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
-### `auto_tag_claims`
+### `canonical_auto_tag_claims`
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `chat_id` | integer | not null | → `chats.id` | the `chat` it belongs to |
-| `tag_id` | integer | not null | → `tags.id` | the `tag` it belongs to |
-| `algorithm` | text | not null |  | Name and version of the rules that assigned the automatic tag, currently `keywords-v1`. |
-| `score` | real | not null |  | Share of the chat's metadata fields (title, username, description) that matched the tag's keywords: 1/3, 2/3 or 1; not a probability. |
-| `fields` | text | not null |  | JSON list of which metadata fields matched, from `title`, `username`, `description`. |
+| `tag_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `algorithm` | text | not null |  |  |
+| `score` | real | not null |  |  |
+| `fields` | text | not null |  |  |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
@@ -1730,7 +1903,7 @@ One tag on one thing.
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `tag_id` | integer | not null | → `tags.id` | the `tag` it belongs to |
+| `tag_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
 | `taggable_type` | text | not null |  | `chat`, `identity`, `message`, `email`, `document`, `note`, `person`, `organization`, `project`, `task`, `event`, … |
 | `taggable_id` | integer | not null |  | the row in the `taggable_type` table |
 | `main` | integer | not null |  | 1 on the thing's main topic; at most one per thing |
@@ -1741,6 +1914,80 @@ One tag on one thing.
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (tag_id, taggable_type, taggable_id)`, `UNIQUE (taggable_type, taggable_id) WHERE main = 1`, `INDEX (author_type, author_id)`
+
+### `tag_redirects`
+
+A retained plain tag now resolves to another plain tag. Original rows and their attribution remain intact.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `source_id` | integer | PK | → `canonical_tags.id` |  |
+| `survivor_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (survivor_id)`
+
+### `tag_consolidations`
+
+Immutable text-free receipts for owner-reviewed tag consolidation. IDs, hashes and counts cannot restore deleted source content.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `source_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `survivor_id` | integer | not null | → `canonical_tags.id` | the `canonical_tag` it belongs to |
+| `source_member_ids` | text | not null |  | JSON array of retained source IDs |
+| `survivor_member_ids` | text | not null |  | JSON array of retained survivor IDs |
+| `actor_type` | text | not null |  | `person` or `bot` |
+| `actor_id` | integer | not null |  | the row in the `actor_type` table |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `idempotency_key` | text | not null, unique |  |  |
+| `vocabulary_fingerprint` | text | not null |  |  |
+| `preview_fingerprint` | text | not null |  |  |
+| `counts` | text | not null |  | JSON counts only; no names, bodies or evidence |
+| `request_fingerprint` | text | not null |  |  |
+
+*Keys and indexes:* `INDEX (source_id)`, `INDEX (survivor_id)`, `INDEX (actor_type, actor_id)`
+
+### `entity_link_events`
+
+Every change of the entity a source record belongs to — a calendar entry or Zoom meeting to its event, a file to its document — as `identity_link_events` records it for contacts.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `linkable_type` | text | not null |  | the source record: `file`, `calendar_entry`, `meeting` |
+| `linkable_id` | integer | not null |  | the row in the `linkable_type` table |
+| `entity_type` | text | not null |  | `document`, `event`, `event_series` |
+| `from_entity_id` | integer |  |  | the entity it left; NULL for its first link |
+| `to_entity_id` | integer |  |  | the entity it joined; NULL when it was unlinked |
+| `method` | text | not null |  | the rule that made it (`content-hash`, `ical-uid`, `join-key`, …) or `owner` |
+| `confidence` | real |  |  |  |
+| `author` | text | not null |  | `owner`, `rules` or a provider |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (linkable_type, linkable_id)`, `INDEX (entity_type, to_entity_id)`
+
+### `link_reviews`
+
+The owner's review list: a source record with two or more equally good entities, which the rules leave unlinked — two events for one meeting, two documents with one hash, two persons with one address.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `linkable_type` | text | not null |  | the source record: `file`, `calendar_entry`, `meeting`, `identity` |
+| `linkable_id` | integer | not null |  | the row in the `linkable_type` table |
+| `entity_type` | text | not null |  | `document`, `event`, `event_series`, `person` |
+| `candidates` | text | not null |  | JSON array of the candidate entities' ids, ascending |
+| `reason` | text | not null |  | what they share: `content-hash`, `join-key`, `ical-uid`, `email` |
+| `status` | text | not null |  | `open`, `linked` (the owner chose one), `apart` (none of them) |
+| `chosen_id` | integer |  |  | the entity the owner chose |
+| `decided_by` | text |  |  |  |
+| `decided_at` | integer |  |  |  |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (linkable_type, linkable_id, entity_type)`, `INDEX (status, created_at)`
 
 ## Chunks, embeddings and search state
 

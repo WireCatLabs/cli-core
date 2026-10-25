@@ -216,8 +216,12 @@ export const event = v.strictObject({
   starts_at: v.nullable(isoTime),
   ends_at: v.nullable(isoTime),
   timezone: v.nullable(text),
-  /** `auto`: made from a meeting; `owner`: made by hand. */
-  origin: v.picklist(["auto", "owner"]),
+  /** `auto`: made from a meeting; `owner`: made by hand; `calendar`: from a calendar's entries. */
+  origin: v.picklist(["auto", "owner", "calendar"]),
+  status: v.nullable(text),
+  all_day: v.boolean(),
+  /** When its calendar deleted it: shown as "deleted in Google", kept as history. */
+  source_deleted_at: v.nullable(isoTime),
   deleted_at: v.nullable(isoTime),
   created_at: isoTime,
   updated_at: isoTime,
@@ -233,6 +237,9 @@ export const eventItem = (one: Event): v.InferOutput<typeof event> => ({
   ends_at: iso(one.endsAt),
   timezone: one.timezone,
   origin: one.origin,
+  status: one.status ?? null,
+  all_day: one.allDay === true,
+  source_deleted_at: iso(one.sourceDeletedAt ?? null),
   deleted_at: iso(one.deletedAt),
   created_at: new Date(one.createdAt).toISOString(),
   updated_at: new Date(one.updatedAt).toISOString(),

@@ -287,7 +287,7 @@ describe("events", () => {
     await store.linkMeeting(first.meeting.id, owner.id, 5000, "owner")
     expect((await linkEvent(store, await store.saveMeeting(input)))?.id).toBe(event?.id)
   })
-  it("creates an event for unknown time and avoids guessing between candidates", async () => {
+  it("creates an event for unknown time, and links none and makes none between two candidates", async () => {
     const store = memoryMeetingStore()
     const input = sampleMeeting()
     input.meeting.startedAt = null
@@ -301,11 +301,14 @@ describe("events", () => {
     input.meeting.endedAt = null
     delete input.meeting.series
     const another = await store.saveMeeting(input)
-    const created = await linkEvent(store, another)
-    expect(created?.id).not.toBe(d.meeting.eventId)
-    expect((await store.events()).length).toBe(4)
-    store.events = async () => []
+    const reviewed: number[][] = []
+    store.reviewMeetingLink = async (_meeting, events) => {
+      reviewed.push(events)
+    }
     expect(await linkEvent(store, another)).toBeNull()
+    expect((await store.events()).length).toBe(3)
+    expect(reviewed).toEqual([(await store.events()).map(({ id }) => id)])
+    expect((await store.meeting(another.meeting.id))?.meeting.eventId).toBeNull()
   })
 })
 it("speaker matching accepts only one match", () => {

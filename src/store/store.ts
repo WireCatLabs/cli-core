@@ -1,4 +1,5 @@
 import type { ContextEvidenceReader, ContextIndex, ContextRecordReader } from "../context/evidence.js"
+import type { EventStore } from "../meetings/index.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
 import {
@@ -24,11 +25,13 @@ import * as accounts from "./sqlite/accounts.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
+import { eventStoreOver } from "./sqlite/calendar.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { evidenceFindingsStoreOver } from "./sqlite/evidence-findings.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
+import { type FilesStore, filesStoreOver } from "./sqlite/files.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
@@ -95,6 +98,10 @@ export interface MessageStore {
   /** Notes, the links between anything and anything, and the owner's organisations and projects. */
   readonly notes: NotesStore
   readonly catalog: CatalogStore
+  /** Where each document is kept: its files, their folders and paths. */
+  readonly files: FilesStore
+  /** Calendars and their entries, the source records of events: the `EventStore` a calendar CLI writes through. */
+  readonly calendar: EventStore
   /** Choices that hold until replaced, each with its evidence. */
   readonly meetingFindings: MeetingFindingsStore
   /** Cited facts and follow-ups about one project from stored messages, mail and documents, for review. */
@@ -200,6 +207,8 @@ const storeOver = (context: StoreContext): MessageStore => {
   const knowledge = once(() => knowledgeStoreOver(context))
   const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
   const catalog = once(() => catalogStoreOver(context))
+  const files = once(() => filesStoreOver(context))
+  const calendar = once(() => eventStoreOver(context))
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
   const facts = once(() => factsStoreOver(context))
@@ -287,6 +296,12 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get catalog() {
       return catalog()
+    },
+    get files() {
+      return files()
+    },
+    get calendar() {
+      return calendar()
     },
     get meetingFindings() {
       return meetingFindings()
