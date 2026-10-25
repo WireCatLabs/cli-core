@@ -12,6 +12,12 @@ describe("spliceMarkdown", () => {
     )
   })
 
+  it("keeps front matter byte for byte when the text under it changes", async () => {
+    const text = "---\ntitle: Plan\n---\n\n# Plan\n\nold line\n"
+    expect(await splice(text, "# Plan (v2)\n\nnew line\n")).toBe("---\ntitle: Plan\n---\n\n# Plan (v2)\n\nnew line\n")
+    expect(await splice("---\ntitle: Plan\n---\n", "first line\n")).toBe("---\ntitle: Plan\n---\nfirst line\n")
+  })
+
   it("flips a tick in place", async () => {
     expect(await splice("* [ ] call  \n* [x] write\n", "- [x] call\n- [ ] write\n")).toBe("* [x] call  \n* [ ] write\n")
   })

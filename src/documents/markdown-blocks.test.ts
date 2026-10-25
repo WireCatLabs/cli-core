@@ -59,6 +59,14 @@ const x = 1
     ])
   })
 
+  it("leaves YAML front matter out of the blocks, and only at the top of the file", async () => {
+    const blocks = await markdownBlocks("---\ntitle: Plan\ntags: [a]\n---\n\n# Plan\n\n---\n\ntext\n")
+    expect(blocks.map((block) => block.kind)).toEqual(["heading", "rule", "paragraph"])
+    expect(await markdownBlocks("---\r\ntitle: Plan\r\n---\r\n\n# Plan\r\n")).toEqual([
+      { kind: "heading", level: 1, inlines: [{ text: "Plan" }] },
+    ])
+    expect((await markdownBlocks("# Plan\n\n---\ntitle: no\n---\n")).map((block) => block.kind)).toContain("rule")
+  })
   it("resolves reference links", async () => {
     expect(await markdownBlocks("See [docs][d].\n\n[d]: https://example.invalid/docs\n")).toEqual([
       {

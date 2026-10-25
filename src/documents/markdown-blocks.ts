@@ -32,8 +32,12 @@ export interface PlacedBlock {
 export const markdownBlocks = async (markdown: string): Promise<Block[]> =>
   (await placedMarkdownBlocks(markdown)).map((placed) => placed.block)
 
+// YAML front matter is the file's metadata, not its text: CommonMark alone reads it as a rule and a heading.
+const FRONT_MATTER = /^---[ \t]*\r?\n(?:[^\n]*\n)*?---[ \t]*(?=\r?\n|$)/
+
 export const placedMarkdownBlocks = async (markdown: string): Promise<PlacedBlock[]> => {
-  const tree = (await loadParser())(markdown)
+  // Blanked, not cut, so every offset and column still points into the file as written.
+  const tree = (await loadParser())(markdown.replace(FRONT_MATTER, (matter) => matter.replace(/[^\n]/g, " ")))
   const definitions = new Map<string, Definition>()
   const collect = (node: Nodes) => {
     if (node.type === "definition") definitions.set(node.identifier, node)
