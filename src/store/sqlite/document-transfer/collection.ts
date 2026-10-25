@@ -1,4 +1,4 @@
-import { FOLDER_PROVIDER, isDocumentAccountProvider } from "../../../domain/providers.js"
+import { isDocumentAccountProvider } from "../../../domain/providers.js"
 import type { CacheDatabase } from "../../driver.js"
 
 type Row = Record<string, unknown>
@@ -17,7 +17,9 @@ const documentsKeyOf = (collection: string): { provider: string; account: string
  * stand-in folder's name) and after it (the account's key), so transfers between stores on either side still match.
  */
 export const collectionNameOf = (row: Row): string =>
-  row.provider === FOLDER_PROVIDER ? String(row.name) : `${String(row.provider)}:${String(row.external_id)}`
+  isDocumentAccountProvider(String(row.provider))
+    ? `${String(row.provider)}:${String(row.external_id)}`
+    : String(row.name)
 
 /** At most two rows: the account a collection name stands for, and a second one only when that is ambiguous. */
 export const collectionAccounts = (database: CacheDatabase, collection: string): Row[] => {
@@ -47,7 +49,7 @@ export const movedFromOf = (row: Row | undefined): { external_id?: unknown } | u
  * shape version 31 gives it, so it lands in (or creates) the `google-drive` account, never a new stand-in folder.
  */
 export const currentCollection = (row: Row): Row => {
-  const key = row.provider === FOLDER_PROVIDER ? documentsKeyOf(String(row.name)) : undefined
+  const key = isDocumentAccountProvider(String(row.provider)) ? undefined : documentsKeyOf(String(row.name))
   if (!key) return row
   const settings = (() => {
     try {

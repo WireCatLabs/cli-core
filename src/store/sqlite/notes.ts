@@ -1,12 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
 import { googleDocumentLinks } from "../../domain/google-documents.js"
-import {
-  DOCUMENT_ACCOUNT_PROVIDERS,
-  FOLDER_PROVIDER,
-  filesAccountSql,
-  isDocumentAccountProvider,
-} from "../../domain/providers.js"
+import { DOCUMENT_ACCOUNT_PROVIDERS, filesAccountSql, isDocumentAccountProvider } from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
@@ -363,7 +358,7 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
 /** A folder's `accounts` row; its format lives in `settings`. */
 const folderOf = (row: Row): NoteFolder => {
   const settings = row.settings == null ? {} : (JSON.parse(String(row.settings)) as { format?: string })
-  const folder = row.provider === FOLDER_PROVIDER
+  const folder = !isDocumentAccountProvider(String(row.provider))
   return {
     id: String(row.id),
     name: folder ? String(row.name) : `${String(row.provider)}:${String(row.external_id)}`,
