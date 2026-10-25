@@ -34,15 +34,24 @@ export const nativeWriterLeaseStore = (layout: NativeWriterLeaseLayout): WriterL
       const root = await realpath(destination)
       signal?.throwIfAborted()
       const folder = join(root, markerDirectory)
-      await mkdir(folder, { recursive: true })
-      if ((await lstat(folder)).isSymbolicLink())
-        throw new CliError("validation_error", "archive lock directory must not be a symlink")
-      await inspection.recover(root, { apply: true, signal })
-      signal?.throwIfAborted()
       const owner: NativeLeaseOwner = { version: 1, pid: process.pid, host: hostname(), nonce: randomUUID() }
       const name = `${owner.pid}-${owner.nonce}.json`
       const path = join(folder, name)
-      const file = await open(path, "wx", 0o600)
+      // Another writer removes the folder once it is empty, so it can vanish before our marker is in it.
+      const marker = async (attempt = 1): Promise<Awaited<ReturnType<typeof open>>> => {
+        await mkdir(folder, { recursive: true })
+        try {
+          if ((await lstat(folder)).isSymbolicLink())
+            throw new CliError("validation_error", "archive lock directory must not be a symlink")
+          await inspection.recover(root, { apply: true, signal })
+          signal?.throwIfAborted()
+          return await open(path, "wx", 0o600)
+        } catch (error) {
+          if (attempt < 5 && missingLeaseFile(error)) return marker(attempt + 1)
+          throw error
+        }
+      }
+      const file = await marker()
       let retained = false
       let identity: BigIntStats | undefined
       try {

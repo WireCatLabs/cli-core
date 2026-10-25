@@ -378,3 +378,42 @@ it("rechecks a provider command's authority grant before invoking its runner", a
   expect(answer).toMatchObject({ error: { error: { code: "permission_error" } } })
   expect(run).not.toHaveBeenCalled()
 })
+
+describe("positional and flag alternatives", () => {
+  it.each([false, true])("runs one text input once and preserves positional requiredness: %s", async (required) => {
+    const root = new Command("example")
+    annotate(root.command("add"), { effects: LOCAL_WRITE })
+      .argument(required ? "<text>" : "[text]", "the text")
+      .option("--text <text>", "the same text as a flag")
+      .option("--json")
+    const commands = describeProgram(root)
+    const tool = toolsFromCommands(commands)[0]
+    if (!tool) throw new Error("missing generated command")
+    const schema = toJsonSchema(tool.input) as { required?: string[] }
+    expect(schema.required ?? []).toEqual(required ? ["text"] : [])
+    const result = await runCommandForAgent(
+      {
+        commands,
+        run: async (argv, environment) => {
+          const program = new Command("example")
+          program
+            .command("add")
+            .argument(required ? "<text>" : "[text]")
+            .option("--text <text>")
+            .option("--json")
+            .action((text: string | undefined, flags: { text?: string }) => {
+              expect(text).toBe("Synthetic text")
+              expect(flags.text).toBeUndefined()
+              environment.agent?.result({ text })
+            })
+          await program.parseAsync(argv.slice(1), { from: "user" })
+          return 0
+        },
+      },
+      ["add"],
+      { text: "Synthetic text" },
+      { profile: "" },
+    )
+    expect(result).toEqual({ result: { text: "Synthetic text" } })
+  })
+})

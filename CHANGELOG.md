@@ -9,16 +9,28 @@ shape of this file.
 
 ### Added
 
-- **`startCli`, one entry-point call for a CLI that builds its own program** (from `@wirecat/cli-core/cli`). It does what drive, zm and memo wire by hand in `src/bin/`: the crash catch, cancellation on SIGINT and SIGTERM, a quiet exit 0 on a closed pipe, the SQLite swap, the first-run questions (`entry.atStart`), the consent prompt (`entry.ask`) and the browser (`entry.openBrowser`). The program and its failure report stay the CLI's own. Nothing changes for a CLI that keeps its own wiring.
-- **Sign-in module `@wirecat/cli-core/oauth`** (available from cli-core 0.413.0). A CLI declares its provider (URLs, client, loopback or relay redirect) and gets authorization code with PKCE S256 (state check, timeout, cancel, paste fallback), refresh and revoke over plain `fetch`, and a `tokenKeeper` whose refresh takes a lock per keyring entry shared by every process, so two processes refreshing at once send one request. `credentialStorage` sits on cli-base's `Credentials`; `standardCodec` writes new entries as `oauth:<provider>:<profile>`, and `driveSessionCodec` and `zoomTokenCodec` read and write drive's and zm's existing entries unchanged, so nobody signs in again.
+- Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
 - **A contact saved with an address joins the mail contact of that exact address.** `savePeople` takes an optional
   `email`; the provider's contact and the mail contact become one person (`same-email`), whichever is saved first.
   A name never joins anyone, and two identities the owner unlinked stay apart.
 
 ### Fixed
 
+- Generated MCP commands accept a positional argument or its same-named flag alternative once. A single `text` input no longer emits both the argument and `--text`, which made Memo note creation fail. Positional requiredness is retained.
+- Public listener origins refuse embedded credentials before startup diagnostics can expose them.
+
+## 0.413.0 — 25.10.2026
+
+### Added
+
+- **`startCli`, one entry-point call for a CLI that builds its own program** (from `@wirecat/cli-core/cli`). It does what drive, zm and memo wire by hand in `src/bin/`: the crash catch, cancellation on SIGINT and SIGTERM, a quiet exit 0 on a closed pipe, the SQLite swap, the first-run questions (`entry.atStart`), the consent prompt (`entry.ask`) and the browser (`entry.openBrowser`). The program and its failure report stay the CLI's own. Nothing changes for a CLI that keeps its own wiring.
+- **Sign-in module `@wirecat/cli-core/oauth`** (available from cli-core 0.413.0). A CLI declares its provider (URLs, client, loopback or relay redirect) and gets authorization code with PKCE S256 (state check, timeout, cancel, paste fallback), refresh and revoke over plain `fetch`, and a `tokenKeeper` whose refresh takes a lock per keyring entry shared by every process, so two processes refreshing at once send one request. `credentialStorage` sits on cli-base's `Credentials`; `standardCodec` writes new entries as `oauth:<provider>:<profile>`, and `driveSessionCodec` and `zoomTokenCodec` read and write drive's and zm's existing entries unchanged, so nobody signs in again.
+- **`gatherProjectEvidence` caps each linked chat per invocation.** A linked chat returns at most `max(20, floor(maxItems / (linked chats read + 1)))` new items per run (50 for one chat at the default 100 items, 20 from four chats up); the rest stays in the checkpoint for the next `--cursor` run, which gives it a fresh share. Every linked chat still gets its first page before any chat gets a second. Each `linkedChats` entry now has `items` (new items it returned in this run) and `capped` (it hit the limit and has more to read). Before, one busy chat could fill the whole run. Checkpoints stay version 1, and old ones still resume.
+
+### Fixed
+
+- **A file lock no longer fails with "no such file" when another writer releases at the same moment** (available from cli-core 0.413.0). The releaser removes the empty marker folder; an acquirer that had just created it now creates it again instead of throwing `ENOENT`. `acquireLock`, the archive writer lease and the sign-in module's refresh lock all use it.
 - **The 0.412.0 notes for the provider registry, unknown providers and the `events` kind say "available from cli-core 0.413.0"; they shipped in 0.412.0.** The release folded them in from `main`'s head. Nothing else in those entries changes.
-- **The 0.412.0 notes for the provider registry say "available from cli-core 0.413.0"; it shipped in 0.412.0.** `registerProvider`, `useProviders`, `kindIn`, skipped unknown providers and kind `events` are all in 0.412.0.
 
 ## 0.412.0 — 24.10.2026
 

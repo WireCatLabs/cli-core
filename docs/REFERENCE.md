@@ -539,6 +539,9 @@ plus zrender and tslib total about 61.6 MiB before package-manager deduplication
 
 ## MCP from browser clients
 
+Non-messenger consumers can use `serveOverHttp` and `revokeAll` from `/mcp`. The same entry exports
+`publicUrlOf` and `portOf` to validate the public origin and local port with the messenger command rules.
+
 Writes over MCP show no form, over stdio or HTTP: the profile's permissions decide, and a level of
 `ask` goes ahead, since nobody is at a terminal to answer it. An app's own permission prompt is
 separate and cannot be verified by the server; its “always allow” setting may permit later calls
