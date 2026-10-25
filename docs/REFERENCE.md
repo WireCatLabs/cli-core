@@ -290,6 +290,19 @@ cases; `openBrowser(url, browser?)` starts the system opener detached; `outputCl
 What only one tool needs — zm's batch input file and keyring — the tool builds inside `run`, with `entry.signal`.
 Import the program lazily, as above: the compile cache and the SQLite swap only help what loads after them.
 
+Such a program keeps its own runs ([WC-LIFE-15](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-15--keep-a-run-log-through-cli-core-and-read-it-back-with-runs)):
+`recordRuns(program, { app, content, settings, profile?, agent?, recognise? })` adds `--record` and `--no-record`,
+keeps every failed command as a run — a usage error before any action too, named by the command words it can read
+and never an argument — and every command when the flag or the saved `record` asks. `settings()` returns the saved
+`record` and `keepRunsForDays` (one that throws leaves the defaults); `profile()` names the run's profile and, given
+at all, tells it that the first word may be a profile. Call it after the program's other `parseAsync` wrappers. A
+provider client far from the program logs into the command's run with `providerEvent(event)`, or
+`providerRequest(operation)`, which times one call and returns the function that ends it
+(`{ status?, error?, errorCode? }`). A tool on `run()` gets the flags and the failure before a command from `run()`
+and keeps its own command's run with `commandRuns(options)` — `start(action)`, `succeed()`, `fail(error)`, `runId()`,
+`events(event)` — from its `prepare`, `postAction` and `onFailure`. `runSettings(flag, saved)` is the rule both use:
+the flag, else the saved `record`, else off; a failure is kept unless either says no.
+
 ## Command discovery
 
 The handbook's [WC-CMD-28](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ) names
