@@ -45,7 +45,7 @@ import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
-import { commandWords, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
+import { commandWords, isProfileName, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import {
   type GlobalFlags,
@@ -554,9 +554,13 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   // A bare word with nothing after it would make commander print help **on stdout**, which breaks
   // the one contract this program has and says nothing about why.
   if (profile !== undefined && rest.length === 0) {
+    const asProfile =
+      commandAt(program, "account show") && isProfileName(profile)
+        ? `, or \`${command} ${profile} account show\` if "${profile}" is your profile`
+        : ""
     const message =
       `"${profile}" is not a command, so it was read as a profile name — and no command followed it. ` +
-      `Run \`${command} --help\` for the commands, or \`${command} ${profile} account show\` if "${profile}" is your profile.`
+      `Run \`${command} --help\` for the commands${asProfile}.`
     const failure = new CliError("validation_error", message, { param: "profile" })
     const settled = await settleFailure(failure, { definition, program, rest, argv, profile, options })
     return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
@@ -730,7 +734,8 @@ const keepFailure = async (
         argv,
         env,
       }),
-      profile: settings ? namedProfile(settings) : profile,
+      // Settings that did not load never accepted the word, which may be a refused name or somebody's words.
+      profile: settings ? namedProfile(settings) : undefined,
       record: false,
       keepFailed: settings?.keepFailedRuns ?? !rest.includes("--no-record"),
       trace: false,

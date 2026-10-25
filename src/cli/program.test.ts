@@ -1120,4 +1120,42 @@ describe("a run with no profile named", () => {
     expect(unnamed).not.toHaveProperty("profile")
     expect(named).toMatchObject({ command: "chats list", profile: "default" })
   })
+
+  it.each([
+    [["runs list"], {}],
+    [["Jane Doe", "chats", "list"], {}],
+    [["Jane Doe", "nope"], {}],
+    [["Jane Doe", "chats", "list"], { APP_PROFILE_LOCK: "work" }],
+    [["alice", "chats", "list"], { APP_PROFILE_LOCK: "work" }],
+  ])("**records no profile for a refused first word** — %j %j", async (argv, extra) => {
+    const env = { ...sandbox(), ...extra }
+
+    await go(argv, false, env)
+
+    const [kept] = runs(env)
+    const dir = join(env.APP_STATE_DIR ?? "", "runs")
+    const files = readdirSync(dir, { recursive: true, withFileTypes: true }).filter((one) => one.isFile())
+    expect(kept).toMatchObject({ status: "failed" })
+    expect(kept).not.toHaveProperty("profile")
+    for (const file of files)
+      expect(readFileSync(join(file.parentPath, file.name), "utf8")).not.toContain(
+        argv[0] === "alice" ? '"profile"' : argv[0],
+      )
+  })
+
+  it("**suggests `account show` for a bare word only to a CLI that has it**, and only for a word that can be a profile", async () => {
+    const withAccount: ProgramDefinition = {
+      app,
+      commands: () => [new Command("account").addCommand(new Command("show").action(() => {}))],
+    }
+    const bare = async (word: string, definition: ProgramDefinition) => {
+      const streams = captureStreams()
+      await run([word], definition, { streams, tty: false, env: sandbox() })
+      return JSON.parse(streams.stderr[0] ?? "{}").error.message
+    }
+
+    expect(await bare("work", withAccount)).toContain('or `app work account show` if "work" is your profile')
+    expect(await bare("runs list", withAccount)).toMatch(/Run `app --help` for the commands\.$/)
+    expect(await bare("work", program(false))).toMatch(/Run `app --help` for the commands\.$/)
+  })
 })

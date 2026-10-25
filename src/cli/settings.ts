@@ -409,7 +409,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     if (profile.from === "first word" || profile.from === PROFILE) {
       throw new CliError(
         "permission_error",
-        `this process is locked to profile ${lock} (${PROFILE_LOCK}) — profile ${profile.value} is refused`,
+        `this process is locked to profile ${lock} (${PROFILE_LOCK}) — profile "${profile.value}" is refused`,
       )
     }
     return { value: lock, from: PROFILE_LOCK }
