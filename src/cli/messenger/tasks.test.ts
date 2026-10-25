@@ -499,6 +499,26 @@ describe("tasks", () => {
     expect(item(await call("tasks", "show", "PR-1", "--json")).claimed_by).toBeNull()
   })
 
+  it("**lists tasks by who claimed them**, and a lapsed claim matches no one", async () => {
+    const call = await setup()
+    await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+    await call("tasks", "claim", "PR-1", "--holder", "session-7", "--json")
+    const keys = async (filter: string) =>
+      json(await call("tasks", "list", filter, "--json")).items.map((task: { key: string }) => task.key)
+
+    expect(await keys("claimed_by:session-7")).toEqual(["PR-1"])
+    expect(await keys("claimed_by:session-*")).toEqual(["PR-1"])
+    expect(await keys("claimed_by:*")).toEqual(["PR-1"])
+    expect(await keys("claimed_by:session-8")).toEqual([])
+    expect(await keys("NOT claimed_by:*")).toEqual([])
+
+    const store = await openStore({ path: join(call.root, "m.db") })
+    await store.tasks.claim("PR-1", "session-7", new Date(Date.now() - 1))
+    await store.close()
+    expect(await keys("claimed_by:session-7")).toEqual([])
+    expect(await keys("NOT claimed_by:*")).toEqual(["PR-1"])
+  })
+
   it("prints for a person, and says so when there is nothing", async () => {
     const call = (await setup()).pretty
     expect((await call("tasks", "list")).stderr).toContain("no tasks")
@@ -771,4 +791,20 @@ it("clears a project task parent through the canonical none value", async () => 
   const cleared = await cli("tasks", "update", id, "--parent", "none", "--json")
   expect(cleared.code, JSON.stringify(cleared)).toBe(0)
   expect(item(cleared)).toMatchObject({ id, parent: null })
+})
+
+it("claims and releases a project task, which belongs to no messenger account", async () => {
+  const cli = await setup()
+  const store = await openStore({ path: cli.env.MESSAGING_STORE })
+  let id: string
+  try {
+    const project = await store.knowledge.addProject({ name: "Synthetic Claims", key: "SCL", type: "work" })
+    id = (await store.tasks.create({ project: project.ref, title: "Draft", type: "chore" }, "owner")).id
+  } finally {
+    await store.close()
+  }
+  const claimed = await cli("tasks", "claim", id, "--holder", "session-3", "--json")
+  expect(claimed.code, JSON.stringify(claimed)).toBe(0)
+  expect(item(claimed).claimed_by).toBe("session-3")
+  expect(item(await cli("tasks", "release", id, "--holder", "session-3", "--json")).claimed_by).toBeNull()
 })

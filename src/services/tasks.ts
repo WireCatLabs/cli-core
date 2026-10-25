@@ -45,17 +45,7 @@ export const TASK_QUERY = {
   entity: "task",
   backend: "sql",
   fields: queryFieldsOf(taskEntity, {
-    exclude: [
-      "ref",
-      "description",
-      "project",
-      "account",
-      "priority",
-      "parent",
-      "claimed_by",
-      "claimed_until",
-      "close_suggestion",
-    ],
+    exclude: ["ref", "description", "project", "account", "priority", "parent", "claimed_until", "close_suggestion"],
     relations: {
       close: {
         type: "enum",
@@ -77,6 +67,7 @@ export const TASK_QUERY = {
       chat: "chat:12345",
       title: "title:*invoice*",
       source_message: 'source_message:"msg:telegram/1/2/3"',
+      claimed_by: "claimed_by:session-1",
     },
   }),
 } as const satisfies QueryRegistry
@@ -120,6 +111,13 @@ const taskColumns = (groups: ReadonlyMap<string, string>, tags: ReadonlyMap<stri
         : { sql: "t.source_group = ?", params: [groups.get(node.value) ?? ""] },
   },
   source_message: { type: "ref", sql: "t.source_locator" },
+  // A lapsed claim holds nothing, as tasks claim and the list's own claimed_by read it.
+  claimed_by: {
+    where: (node) => ({
+      sql: `t.claimed_by ${node.operator === "wildcard" ? "GLOB" : "="} ? AND t.claimed_until >= ?`,
+      params: [node.value, Date.now()],
+    }),
+  },
   reason: { type: "kw", sql: "t.close_reason_folded", folded: true },
   close: { where: () => ({ sql: "t.close_suggested_as IS NOT NULL", params: [] }) },
   assignee: {
@@ -560,19 +558,20 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         return { pair, task: await cardOf(store, dup) }
       }),
 
-    claim: (id, holder, forMs) =>
-      inStore(async (store, account) => {
-        await owned(store, account, id)
-        await store.tasks.claim(id, holder, new Date(Date.now() + forMs))
-        return cardOf(store, id)
-      }),
+    // A project task belongs to no messenger account, as show reads it.
+    claim: async (id, holder, forMs) => {
+      const store = await deps.store()
+      if (!(await store.tasks.projectTask(id))) await owned(store, await deps.account(), id)
+      await store.tasks.claim(id, holder, new Date(Date.now() + forMs))
+      return cardOf(store, id)
+    },
 
-    release: (id, holder) =>
-      inStore(async (store, account) => {
-        await owned(store, account, id)
-        await store.tasks.release(id, holder)
-        return cardOf(store, id)
-      }),
+    release: async (id, holder) => {
+      const store = await deps.store()
+      if (!(await store.tasks.projectTask(id))) await owned(store, await deps.account(), id)
+      await store.tasks.release(id, holder)
+      return cardOf(store, id)
+    },
 
     close: (id, { as, reason, by, agent, certainty, suggestOnly }) =>
       inStore(async (store, account) => {

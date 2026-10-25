@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`tasks list claimed_by:<holder>` lists the tasks a holder has claimed**, and `claimed_by:*` every claimed task.
+  A caller that wanted one agent's claims read every open task and filtered them itself. The filter matches live
+  claims only: a claim whose lease has lapsed holds nothing, as `tasks claim` and the list's own `claimed_by` field
+  already read it, so `NOT claimed_by:*` lists what no one is working on. A wildcard such as `claimed_by:claude-code:*`
+  matches by pattern.
+
+### Fixed
+
+- **`tasks claim` and `tasks release` work on a project task**, which belongs to no messenger account, as `tasks show`
+  and `tasks update` already did. They refused it as "no task for this account", so memo, which mounts these
+  commands, could not claim its own project tasks.
+
 ## 0.423.0 — 25.10.2026
 
 ### Added
