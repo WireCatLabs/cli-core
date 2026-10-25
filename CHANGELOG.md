@@ -64,6 +64,11 @@ shape of this file.
 
 - **The languages search stems are one table, `LANGUAGES`, and each entry now names its Hunspell dictionary** (`dictionary: "dictionary-ru"`). `LANGUAGES` from `/cli` keeps its other fields. `LATIN_STEMMERS` is now `english, spanish, none`, in the order the error for an unknown stemmer already printed, so the `allowed` list of a `stemmer.invalid` error comes in that order too. A caller that compared that list in order sorts it first.
 
+### Added
+
+- **A run says who started it and with what.** `run.json` (and `runs list`, `runs show`, `search runs`) gains `cli_command` — the whole command with the program's name, `max messages list`, where `command` stays `messages list` — and `argv`, the words after the program's name with every value that may be content or a secret written `[redacted]`: message text, a chat typed by title, `--caption`, `--query`, a phone number. Command words, flag names, the profile, numbers, dates, durations and an option's declared choices stay. A command line that named no command records the word as `unknown_command`, masked unless it is shaped like a command word. `agent: { kind, session_id }` names the coding agent from its environment — Claude Code (`CLAUDE_CODE_SESSION_ID`), Codex (`CODEX_THREAD_ID`), OpenCode (`OPENCODE_SESSION_ID`); Gemini CLI and Cursor give no session id, so it is `null`.
+- **A failed run says what went wrong.** `run.json` gains `error`: the error's `class`, its `code` and `reason`, its `message` with quotes, emails, phone numbers, tokens, query strings and the home directory masked, the `operation`, `http: { method, endpoint_template, status }` for an HTTP call, `provider: { key, code }` for a messenger protocol's refusal (MTProto's `FLOOD_WAIT`, 420), the `causes` chain, and `stack` as `function file:line` frames cut to the package's own path. An adapter fills `http` by putting `method` and `endpoint` on the `CliError`'s details, or `method` and `endpointTemplate` on the `response` event it emits; `provider.request` and `provider.response` records now carry `method` and `endpoint_template`, ids written `:id` and a token `:token`.
+
 ## 0.421.0 — 25.10.2026
 
 ### Changed — may break callers

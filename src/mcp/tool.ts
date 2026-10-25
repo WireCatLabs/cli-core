@@ -24,6 +24,7 @@ import { type AppErrors, failureContext } from "../errors/reasons.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { partialOutcome, startRecording } from "../runs/recording.js"
 import { newRunId } from "../runs/run.js"
+import { runContextOf } from "../runs/run-context.js"
 import { inRun } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
 import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
@@ -289,6 +290,7 @@ export const entryRunner = (registration: Registration): RunEntry => {
             keepFailed: true,
             trace: false,
             format: "json",
+            context: runContextOf({ bin: app.command, command, env: registration.defaults.env ?? process.env }),
             ...(traceId === undefined ? {} : { traceId }),
           })
         : undefined

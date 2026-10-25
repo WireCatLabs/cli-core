@@ -20,6 +20,7 @@ import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
+import { runContextOf } from "../runs/run-context.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
@@ -257,6 +258,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   const exit: { code?: number } = {}
   const environment: RunOptions = {
     ...options,
+    argv,
     streams: control.streams,
     signal: options.signal ? AbortSignal.any([control.signal, options.signal]) : control.signal,
     commandSignal: control.signal,
@@ -534,7 +536,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         profile !== undefined && !/\s/.test(profile) ? [profile] : [],
       )
   } catch (failure) {
-    const settled = await settleFailure(failure, { definition, program, rest: lifted, profile, options })
+    const settled = await settleFailure(failure, { definition, program, rest: lifted, argv, profile, options })
     return report(streams, reporting, failed(definition, program, lifted, failure, settled, debug))
   }
   if (profile !== undefined) program.setOptionValue("profile", profile)
@@ -549,7 +551,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       `"${profile}" is not a command, so it was read as a profile name — and no command followed it. ` +
       `Run \`${command} --help\` for the commands, or \`${command} ${profile} account show\` if "${profile}" is your profile.`
     const failure = new CliError("validation_error", message, { param: "profile" })
-    const settled = await settleFailure(failure, { definition, program, rest, profile, options })
+    const settled = await settleFailure(failure, { definition, program, rest, argv, profile, options })
     return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
   }
 
@@ -591,10 +593,10 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         message += ` — "${profile}" is not a command, so it was read as a profile name — which left "${rest[0]}" to be one.`
       }
       const failure = new CliError("validation_error", message)
-      const settled = await settleFailure(failure, { definition, program, rest, profile, options })
+      const settled = await settleFailure(failure, { definition, program, rest, argv, profile, options })
       return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
     }
-    const settled = await settleFailure(error, { definition, program, rest, profile, options })
+    const settled = await settleFailure(error, { definition, program, rest, argv, profile, options })
     const exit = report(streams, reporting, failed(definition, program, rest, error, settled, debug))
     return signalExit ?? exit
   } finally {
@@ -655,6 +657,8 @@ interface Failed {
   definition: ProgramDefinition
   program: Command
   rest: string[]
+  /** As given, the profile word included: what the run keeps, masked. */
+  argv: string[]
   profile: string | undefined
   options: RunOptions
 }
@@ -688,11 +692,11 @@ const settleFailure = async (failure: unknown, state: Failed): Promise<{ settlem
 /**
  * **Every failure is kept as a run** — a usage error, a configuration that will not load, a command
  * that never opens a run — unless recording was turned off. One its own run already kept is skipped.
- * Only the command's words are named, never its arguments: those can be a message.
+ * Its arguments are kept masked (`maskArgv`): a value that can be a message never is.
  */
 const keepFailure = async (
   failure: unknown,
-  { definition, program, rest, profile, options }: Failed,
+  { definition, program, rest, argv, profile, options }: Failed,
 ): Promise<void> => {
   if (wasSettled(failure)) return
   const env = options.env ?? process.env
@@ -707,10 +711,18 @@ const keepFailure = async (
   } catch {
     // A configuration that will not load is a failure worth keeping too; the flags are all there is to go on.
   }
+  const command = `${options.agent ? "mcp " : ""}${path || definition.app.command}`
   await recorded(
     {
       app: definition.app,
-      command: `${options.agent ? "mcp " : ""}${path || definition.app.command}`,
+      command,
+      context: runContextOf({
+        bin: definition.app.command,
+        command: path ? command : options.agent ? "mcp" : "",
+        program,
+        argv,
+        env,
+      }),
       profile: settings ? namedProfile(settings) : profile,
       record: false,
       keepFailed: settings?.keepFailedRuns ?? !rest.includes("--no-record"),
