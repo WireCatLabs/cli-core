@@ -47,8 +47,10 @@ nothing now.
   section and describe the correction under Unreleased. Never rewrite an immutable release tag.
 - Each session releases its own merged work: `git fetch`, `npm view`, a `chore: release` pull request
   that raises the version from what npm really has, then `bin/release`.
-- `bin/release` in every repository takes one machine-wide lock (`$XDG_RUNTIME_DIR/leemour-release.lock`),
-  so only one release of any package runs at a time on this machine. No package waits between releases.
+- `bin/release` in every repository takes a lock per npm package
+  (`$XDG_RUNTIME_DIR/leemour-release-<package>.lock`, e.g. `leemour-release-wirecat-cli-core.lock`), so two
+  releases of one package never run at once on this machine, from any checkout; different packages release
+  side by side. No package waits between releases.
 - To try an unreleased cli-core in tg-cli first, use `bin/try-messaging` in the tg worktree, never a
   committed `file:` path.
 
