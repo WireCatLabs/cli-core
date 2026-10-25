@@ -195,4 +195,21 @@ describe("startCli", () => {
       await expect(atStart(doctor)).resolves.toBeUndefined()
     })
   })
+
+  it("asks no first-run question under --dry-run, even at a terminal", async () => {
+    const { io } = fakeIo({ tty: true })
+    const stderr = Object.getOwnPropertyDescriptor(process.stderr, "isTTY")
+    Object.defineProperty(process.stderr, "isTTY", { value: true, configurable: true })
+    try {
+      await start(io, async ({ atStart }) => {
+        const program = new Command("demo").option("--dry-run")
+        const install = program.command("install").action(() => {})
+        program.setOptionValue("dryRun", true)
+        await expect(atStart(install)).resolves.toBeUndefined()
+      })
+    } finally {
+      if (stderr) Object.defineProperty(process.stderr, "isTTY", stderr)
+      else delete (process.stderr as { isTTY?: boolean }).isTTY
+    }
+  })
 })
