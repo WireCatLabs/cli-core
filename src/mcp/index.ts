@@ -1,4 +1,6 @@
 // Apart from the `cli` entry, so a CLI loads the MCP SDK and zod only when it serves MCP.
+
+export { portOf, publicUrlOf } from "../http/public-url.js"
 export {
   type AgentAnswer,
   type AgentContext,

@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
+
+### Fixed
+
+- Generated MCP commands accept a positional argument or its same-named flag alternative once. A single `text` input no longer emits both the argument and `--text`, which made Memo note creation fail. Positional requiredness is retained.
+- Public listener origins refuse embedded credentials before startup diagnostics can expose them.
+
 ## 0.413.0 — 25.10.2026
 
 ### Added
