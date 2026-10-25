@@ -1000,7 +1000,7 @@
         "type": "string",
         "minLength": 1,
         "pattern": "^(?!-$)[\\s\\S]+$",
-        "description": "a number, true or false, or for allow a list like send,reaction; for a group tg:work,max:Alice,email:me@x"
+        "description": "a number, true or false; for a group tg:work,max:Alice,email:me@x"
       }
     },
     "required": [

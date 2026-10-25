@@ -6,9 +6,9 @@ moved here word for word so the lists stay short. A note is deleted with its ite
 ## CORE-4
 
 cli-core 0.397.0 supplies concise command summaries and positional argument help. The vocabulary migration
-uses explicit report/list leaves without compatibility command aliases; saved permission paths must be
-renamed before use. Result schemas are declared by command group. Retired CLI paths are refused with the
-canonical replacement.
+uses explicit report/list leaves without compatibility command aliases. A retired command path is an unknown
+command, and a saved permission key no command checks stops every command until it is removed. Result schemas
+are declared by command group.
 
 The option migration in [#1810](https://github.com/WireCatLabs/cli-core/pull/1810) distinguishes analysis,
 embedding and consent providers, tag ownership, stored-answer models and reply-template policies. Catch-up

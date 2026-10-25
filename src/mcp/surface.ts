@@ -4,7 +4,6 @@ import { CliError } from "@wirecat/cli-base"
 import type { CommandOutput } from "@wirecat/cli-base/commands"
 import * as v from "valibot"
 import { answerSchema, listOf } from "../cli/envelope.js"
-import { movedPath, movedPointer } from "../cli/moved.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
 import type { AppErrors } from "../errors/reasons.js"
 import type { CommandAvailability } from "./agent.js"
@@ -163,9 +162,6 @@ export const registerCommands = (
         const one = command === undefined ? undefined : commands[command]
         if (command === undefined || !one) {
           withheld?.(normal(asked))
-          const moved = movedPath(normal(asked).split(" "), (path) => byNormal.has(path))
-          if (moved !== undefined)
-            throw new CliError("validation_error", `no command "${asked}" here — ${movedPointer(moved)}`)
           const near = nearest(commands, asked)
           throw new CliError(
             "validation_error",

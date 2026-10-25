@@ -5,6 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
+import { commandAvailability } from "./command-availability.js"
 import { commandsCommand } from "./commands-command.js"
 import { grantsAuthority, LOCAL_WRITE, REMOTE_READ, REMOTE_WRITE } from "./effects.js"
 import { run } from "./program.js"
@@ -104,5 +105,16 @@ describe("profile-aware CLI discovery", () => {
     const help = await call(["limited", "messages", "send", "--help"])
     expect(help.code).toBe(0)
     expect(help.stdout).toContain("<text>")
+  })
+})
+
+describe("availability of a sync command", () => {
+  it.each([
+    [["bot", "messages", "sync"], "bot.messages.sync"],
+    [["messages", "sync"], "messages.sync"],
+  ])("is withheld by a deny on its own key: %j", (path, key) => {
+    const info = { path, effects: REMOTE_READ }
+    expect(commandAvailability(info, { [key]: "deny" })).toMatchObject({ available: false, permission: key })
+    expect(commandAvailability(info, {})).toEqual({ available: true })
   })
 })

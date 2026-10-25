@@ -1101,7 +1101,7 @@ describe("the MCP server", () => {
     expect(telegram.opened()).toBe(1)
   })
 
-  it("search_all answers messages and notes together, typed, never mail; search_mail points to memo", async () => {
+  it("search_all answers messages and notes together, typed, never mail; search mail is no command here", async () => {
     const telegram = scripted()
     const { call } = await connect(telegram)
     await call("messages list", { chat: "7" })
@@ -1118,9 +1118,8 @@ describe("the MCP server", () => {
     expect(notes.body).toMatchObject({ items: [], page: { has_more: false } })
     const mail = await call("search mail", { query: "chapter" })
     expect(mail.isError).toBe(true)
-    expect(JSON.stringify(mail.body)).toContain(
-      "mail is searched by the separate memo CLI: install @wirecat/cli-memo, then `memo search mail …`",
-    )
+    expect(JSON.stringify(mail.body)).toContain('no command \\"search mail\\" here')
+    expect(JSON.stringify(mail.body)).not.toContain("memo")
     expect(telegram.opened()).toBe(1)
   })
 

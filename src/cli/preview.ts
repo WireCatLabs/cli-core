@@ -3,22 +3,28 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import { writes as writesAnything } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import {
-  assertStatsPermissionsCurrent,
   keyForCommand,
   type Level,
   levelFor,
+  type PermissionKey,
   readKeysForCommand,
   WRITE_KEYS,
 } from "../sends/permissions.js"
 import { commandPathOf } from "./command-contract.js"
+import { refuseUnknownPermissionKeys } from "./permission-keys.js"
 
 export class PreviewComplete extends Error {}
 
-export const preview = (command: Command, permissions: Readonly<Record<string, Level>>) => {
+export const preview = (
+  command: Command,
+  permissions: Readonly<Record<string, Level>>,
+  unset: string,
+  keyOf?: (path: readonly string[]) => PermissionKey | null | undefined,
+) => {
   const path = commandPathOf(command)
+  refuseUnknownPermissionKeys(command, permissions, unset, keyOf && ((one) => keyOf(commandPathOf(one))))
   const key = keyForCommand(path)
   const level = key ? levelFor(permissions, key).level : "allow"
-  assertStatsPermissionsCurrent(path, permissions)
   for (const source of readKeysForCommand(path)) {
     if (levelFor(permissions, source).level === "deny")
       throw new CliError("permission_error", `this profile does not permit ${source}`, { permission: source })

@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, memoryKeyring } from "@wirecat/cli-base"
@@ -66,6 +66,11 @@ const call = async (argv: string[], messenger = bot) => {
   return { code, answer: out ? JSON.parse(out) : undefined, stderr: streams.stderr.join("\n") }
 }
 
+const saveBotPermissions = (permissions: Record<string, string>) => {
+  mkdirSync(join(root, "config"), { recursive: true })
+  writeFileSync(join(root, "config", "config.json"), JSON.stringify({ bot: { profiles: { sales: { permissions } } } }))
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "bot-fetch-"))
   env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
@@ -107,10 +112,30 @@ describe("bot messages sync", () => {
     expect(messages?.commands.map((one) => one.name())).not.toContain("sync")
   })
 
-  it("points the old `bot store fetch` at `bot messages sync`", async () => {
-    const old = await call(["store", "fetch", "-100", "--json"])
-    expect(old.code).toBe(2)
-    expect(old.stderr).toContain("use `bot messages sync`")
+  it.each([
+    [{ "bot.messages.sync": "deny" }, "bot.messages.sync is deny"],
+    [{ "bot.messages": "deny" }, "bot.messages is deny"],
+  ])("**refuses under %o** before it connects", async (permissions, named) => {
+    saveBotPermissions(permissions)
+    const refused = await call(["messages", "sync", "-100", "--json"])
+    expect(refused.code).toBe(5)
+    expect(refused.stderr).toContain(`permissions.${named}`)
+  })
+
+  it("syncs under `bot.messages: deny` when the profile allows `bot.messages.sync` itself", async () => {
+    saveBotPermissions({ "bot.messages": "deny", "bot.messages.sync": "allow" })
+    expect((await call(["messages", "sync", "-100", "--limit", "5", "--json"])).code).toBe(0)
+  })
+
+  it("refuses a saved key no command checks, naming only that key", async () => {
+    saveBotPermissions({ "bot.store.fetch": "deny" })
+    const refused = await call(["messages", "sync", "-100", "--json"])
+    expect(refused.code).toBe(3)
+    expect(JSON.parse(refused.stderr).error).toMatchObject({
+      code: "configuration_error",
+      message:
+        "permissions.bot.store.fetch names no command — remove it with `chat sales config unset --bot permissions.bot.store.fetch`",
+    })
   })
 
   it("passes --from and the pause to the history-only connection, with its stop signal", async () => {

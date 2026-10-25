@@ -51,6 +51,17 @@ const fixture = (permission: string) => {
   return { execute, connect }
 }
 
+describe("a deny on the sync command's own key", () => {
+  it("refuses messages sync before it connects", async () => {
+    const { execute, connect } = fixture("messages.sync")
+    const result = await execute(["messages", "sync", "7"])
+    expect(result.code).toBe(5)
+    expect(result.output + result.diagnostic).toContain("permission_error")
+    expect(result.output + result.diagnostic).toContain("permissions.messages.sync is deny")
+    expect(connect).not.toHaveBeenCalled()
+  })
+})
+
 describe("unknown configured permission keys", () => {
   it.each(["messages.sedn", "messages.pins.cretae"])("refuses %s before a read or write connects", async (key) => {
     const { execute, connect } = fixture(key)

@@ -3,12 +3,15 @@ import type { Command } from "commander"
 import { pickChat } from "../../resolve.js"
 import { sendGuard } from "../../sends/guard.js"
 import { SendJournal } from "../../sends/journal.js"
-import type { Level, PermissionKey } from "../../sends/permissions.js"
+import { type Level, levelFor, type PermissionKey, readKeysForCommand } from "../../sends/permissions.js"
 import { RecipientList } from "../../sends/recipients.js"
 import { readSecret } from "../../terminal/prompt.js"
+import { commandPathOf } from "../command-contract.js"
 import { baseContext, secretInputOf } from "../context.js"
 import { terminalAsker } from "../messenger/ask.js"
+import { refuseUnknownPermissionKeys } from "../permission-keys.js"
 import { asFirstWord } from "../profile.js"
+import type { Settings } from "../settings.js"
 import { botCopy } from "./copy.js"
 import type { BotAdapter, BotChatRef, BotConnectOptions, BotMessenger } from "./port.js"
 import { botFiles, ChatRegistry } from "./registry.js"
@@ -16,6 +19,29 @@ import { BotTokenStore } from "./token.js"
 
 /** How the owner types this bot — `max sales bot` — so a refusal names the command that fixes it. */
 export const botWords = (bot: BotMessenger, profile: string): string => `${bot.app.command} ${asFirstWord(profile)}bot`
+
+/** What a messenger command refuses before it connects, for a bot: an unknown key, then a denied read. */
+const refuseBotPermissions = (
+  command: Command,
+  bot: BotMessenger,
+  settings: Pick<Settings, "profile" | "permissions" | "permissionSources">,
+): void => {
+  refuseUnknownPermissionKeys(
+    command,
+    settings.permissions,
+    `${bot.app.command} ${asFirstWord(settings.profile)}config unset --bot`,
+  )
+  for (const key of readKeysForCommand(commandPathOf(command))) {
+    const { level, key: named } = levelFor(settings.permissions, key)
+    if (level !== "deny") continue
+    throw new CliError(
+      "permission_error",
+      `bot profile ${settings.profile} denies ${key} (permissions.${named} is deny, from the ` +
+        `${settings.permissionSources[named ?? ""] ?? "default"})`,
+      { permission: key },
+    )
+  }
+}
 
 /** What a bot command needs, resolved once: the bot's settings, its token, its lists. */
 export const botContext = (command: Command, bot: BotMessenger) => {
@@ -27,6 +53,7 @@ export const botContext = (command: Command, bot: BotMessenger) => {
     bot.tokenStore?.(command, profile) ??
     new BotTokenStore({ app: bot.app, profile, env, ...(keyring ? { keyring } : {}) })
   const words = botWords(bot, profile)
+  refuseBotPermissions(command, bot, settings)
   const registry = bot.registry?.(command, profile) ?? new ChatRegistry(bot.app, profile, env)
   const recipients = () => new RecipientList(files.recipients, words)
   const journal = () => new SendJournal(files.journal, { service: bot.app.command, version: bot.app.version })

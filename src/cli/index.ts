@@ -362,7 +362,6 @@ export type { Running, ServerOptions, ServerProcess, ServerSystem } from "./mess
 export { storeSummary } from "./messenger/store-maintenance-command.js"
 export { type Saving, stored } from "./messenger/stored.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
-export { movedCommandError } from "./moved.js"
 export { window, withPaging } from "./paging.js"
 export { knownBeside, knownPermissionKeys, type PermissionKeyOf, unknownPermissionKeys } from "./permission-keys.js"
 export { asFirstWord, commandWords, liftProfile, refuseCommandName, rootOf, usableProfileName } from "./profile.js"

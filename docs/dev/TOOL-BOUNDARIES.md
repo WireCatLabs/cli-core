@@ -24,8 +24,8 @@ note on a contact, tags a chat, makes a task from a message, reads `tasks agenda
 `serve` and a reply rule's `task` action still open tasks there. These commands are the shared builders here;
 memo mounts the same ones (`Messenger.accountOf`).
 
-**Never in a source tool:** mail. `tg search mail` answers with a pointer to `memo search mail`
-(`src/cli/moved.ts`), and tg's `search all` never reads mail.
+**Never in a source tool:** mail. tg has no `search mail` (it is an unknown command there), and tg's `search all`
+never reads mail.
 
 Nobody uses these tools yet (owner, 2026-10-11), so a command moves in one step, with no alias.
 
@@ -58,8 +58,7 @@ a source tool's MCP server offers only its own service.
 
 A shared command (search, notes, tags, tasks) stays a builder here, and each tool mounts the part it may
 offer. A source tool's `search` has no `mail` leaf and its `search all` reads no mail. The
-[parity manifest](../../parity.json) lists only the source tools' commands, and refuses a row under a path in
-`src/cli/moved.ts`, so a source tool that gains `search mail` fails `parity:check`.
+[parity manifest](../../parity.json) lists only the source tools' commands.
 
 ## Steps
 
