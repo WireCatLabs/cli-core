@@ -75,6 +75,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./services` | `src/services/` | the use cases, once each, that commands and MCP tools call — see [Services](#services) |
 | `./background` | `src/background/` | what any background process needs and no messenger: the lock per app and profile, whether a PID is alive and ours, the machine seam tests replace, systemd and launchd units — `serve` and `server` are built on it, each CLI's server stays its own (NEED-492 C) |
 | `./cli` | `src/cli/`, `src/mcp/` | the command skeleton, the shared commands and the MCP server |
+| `./cli/start` | `src/cli/entry.ts` | `startCli` without the barrel: about 50 files where `./cli` loads about 1,000, checked by `check:dist`; a bare `--version` never loads the program |
 | `./sqlite-runtime` | `src/sqlite-runtime.ts` | `ensureSqlite`, the first thing `tg` and `max` run: restarts the command with the bundled SQLite when the system's lacks FTS5 — see [The store](#the-store) |
 | `./parity` | `src/parity/` | the command manifest, page and wording checks behind `cli-core-parity`, which compares `tg` and `max` |
 | `./testing` | `src/kit/` | the adapter kit: a fake adapter, the contract cases and their seed — see [the adapter guide](ADAPTERS.md). `src/testing/` is this repository's own test setup and is not published |

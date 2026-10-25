@@ -2,11 +2,11 @@ import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process"
 import { CliError, catchCrashes } from "@wirecat/cli-base"
 import type { ErrorReason } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
-import { type AppIdentity, readOnlyLockOf } from "../ports/app.js"
+import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import { ensureSqlite } from "../sqlite-runtime.js"
-import { readSecret } from "../terminal/prompt.js"
-import { commandPathOf } from "./command-contract.js"
-import { setupAtStart } from "./first-run.js"
+import { logVersion } from "./argv-log.js"
+
+export type { AppIdentity }
 
 /** What `startCli` hands the CLI's own program: the process, wired once. */
 export interface EntryContext {
@@ -76,6 +76,7 @@ const processIo = (): EntryIo => ({
 export const startCli = async (entry: CliEntry): Promise<void> => {
   const io = { ...processIo(), ...entry.io }
   const args = io.argv.slice(2)
+  if (args.length === 1 && (args[0] === "--version" || args[0] === "-V")) return printVersion(entry.app, io)
   const tty = io.stdout.isTTY === true
   const release = catchCrashes({
     cli: entry.app.command,
@@ -113,6 +114,10 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
     atStart: async (command) => {
       // The first-run questions write the shared config; a dry run writes nothing.
       if (command.optsWithGlobals<{ dryRun?: boolean }>().dryRun === true) return
+      const [{ setupAtStart }, { commandPathOf }] = await Promise.all([
+        import("./first-run.js"),
+        import("./command-contract.js"),
+      ])
       await setupAtStart({
         command: entry.app.command,
         env: io.env,
@@ -125,6 +130,7 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
     },
     ask: async (question, command) => {
       if (headless(command) || io.stdin.isTTY !== true) return false
+      const { readSecret } = await import("../terminal/prompt.js")
       const answer = await readSecret(`${question} [y/N] `, {
         input: io.stdin,
         output: io.stderr,
@@ -154,6 +160,16 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
   if (closed) io.setExitCode(0)
   else if (unwritable) io.setExitCode(3)
   else if (code !== undefined) io.setExitCode(code)
+}
+
+/**
+ * Answered before the program loads, which is most of a start: an agent asks for the version to learn whether the
+ * tool is there at all. Only the bare flag — anything else on the line goes through the program as before.
+ */
+const printVersion = (app: AppIdentity, io: EntryIo): void => {
+  const argvLog = io.env[envName(app, "TEST_ARGV_LOG")]
+  if (argvLog) logVersion(argvLog)
+  io.stdout.write(`${app.version}\n`)
 }
 
 /** Help and the version were printed already; help for a missing command is a usage mistake, as in `run()`. */

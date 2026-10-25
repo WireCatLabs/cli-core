@@ -16,6 +16,17 @@ shape of this file.
 - **`@modelcontextprotocol/server` is `^2.4.0`** (was exactly 2.3.0), so a CLI on server 2.4.x shares one copy with cli-core.
 - **Dependencies moved to their latest majors:** `@anthropic-ai/sdk` 1.3, `sherpa-onnx` 2.0, `drizzle-orm` 1.0.0-rc.5.
 
+## 0.429.0 — 25.10.2026
+
+### Added
+
+- **`@wirecat/cli-core/cli/start` gives a bin `startCli` without the rest of `./cli`**, and **a bare `--version` or `-V` is answered before the program loads**. Importing `./cli` for `startCli` loaded about 1,000 files before the program even ran; `./cli/start` loads about 50 (`check:dist` keeps it under 80). The version is `app.version` and a newline on stdout, exit 0 — what Commander printed. Nothing else runs for it: no SQLite swap, no crash handler, and no notice a tool's `run` prints. `--version` with any other word (`--version --json`, `personal --version`) goes through the program as before. `startCli` and `run()` load the first-run questions, the store and the consent prompt only when a command asks them: the program module alone now loads about 320 files, not 850 (the `./cli` barrel a CLI imports still loads them all).
+- **`store reset --dry-run` lists what a reset would empty and deletes nothing**: the store's files, their bytes,
+  every data table with its row count (search indexes are left out: they are rebuilt from those tables), whether a
+  backup comes first, and `in_use` — whether a serve or another process has the file open now, which the real reset
+  refuses (`null` where the system cannot say). It reads without a write lock, so it answers while a sync runs, and
+  it runs under `<PREFIX>_READ_ONLY`. A desktop app shows the list in its confirmation dialog.
+
 ## 0.428.0 — 25.10.2026
 
 ### Changed — may break callers
