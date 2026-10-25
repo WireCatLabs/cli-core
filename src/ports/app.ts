@@ -20,6 +20,12 @@ export interface AppIdentity {
    * can stem in place of English and the system's language; the person still confirms, since the choice is shared.
    */
   contentLanguages?: readonly string[]
+  /**
+   * `false` for a CLI that is not a messenger — notes, files, a calendar. The shared help, `config`, `commands info`
+   * and MCP text then name its own commands and leave out chats, messages and senders. Unset means a messenger, so
+   * tg, max and wa print what they always did.
+   */
+  messenger?: boolean
   /** Error reasons and detail keys of its own — max's `max_code`, tg's `migrated_chat_id` — kept in every error it prints. */
   errors?: AppErrors
 }

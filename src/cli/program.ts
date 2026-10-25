@@ -10,7 +10,7 @@ import {
   resolvePaths,
   type Streams,
 } from "@wirecat/cli-base"
-import { annotate, metaOf, refuseJoinedPath } from "@wirecat/cli-base/commands"
+import { metaOf, refuseJoinedPath } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command, Help } from "commander"
 import { relayCommand } from "../background/relay.js"
@@ -44,15 +44,7 @@ import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
-import {
-  asFirstWord,
-  commandWords,
-  liftProfile,
-  mountsMessenger,
-  PROFILE_FREE,
-  sampleCommand,
-  valuedOptions,
-} from "./profile.js"
+import { asFirstWord, commandWords, liftProfile, PROFILE_FREE, sampleCommand, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
@@ -94,7 +86,7 @@ export const createProgram = (
 ): Command => {
   const program = new Command()
   const mounted = commands()
-  const messenger = mountsMessenger(mounted)
+  const messenger = app.messenger !== false
   const found = messenger ? "found messages" : "found items"
   const content = messenger ? "message content" : "content"
 
@@ -133,7 +125,6 @@ export const createProgram = (
     .showHelpAfterError()
 
   for (const command of mounted) program.addCommand(command)
-  if (!messenger) exampleOtherThanMessages(program, app)
   configure?.(program)
   assertSharedContracts(program)
   installHelp(program, { pitch: app.description, ...firstScreen })
@@ -157,13 +148,6 @@ export const createProgram = (
     )
   }
   return program
-}
-
-/** `commands info messages list` names a command only a messenger has. */
-const exampleOtherThanMessages = (program: Command, app: AppIdentity): void => {
-  const info = program.commands.find((one) => one.name() === "commands")?.commands.find((one) => one.name() === "info")
-  const sample = sampleCommand(program.commands)
-  if (info && sample) annotate(info, { examples: [`${app.command} commands info ${sample}`] })
 }
 
 const forEachCommand = (command: Command, apply: (command: Command) => void): void => {

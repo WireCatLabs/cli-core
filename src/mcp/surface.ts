@@ -4,7 +4,6 @@ import { CliError } from "@wirecat/cli-base"
 import type { CommandOutput } from "@wirecat/cli-base/commands"
 import * as v from "valibot"
 import { answerSchema, listOf } from "../cli/envelope.js"
-import { MESSENGER_COMMANDS } from "../cli/profile.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
 import type { AppErrors } from "../errors/reasons.js"
 import type { CommandAvailability } from "./agent.js"
@@ -109,7 +108,8 @@ export const registerCommands = (
   withheld?: (command: string) => void,
 ) => {
   const byNormal = new Map(Object.keys(commands).map((command) => [normal(command), command]))
-  const messenger = Object.keys(commands).some((command) => MESSENGER_COMMANDS.has(command.split(" ")[0] ?? ""))
+  // No AppIdentity reaches here; only a messenger's catalogue has `messages` commands.
+  const messenger = Object.keys(commands).some((command) => command.split(" ")[0] === "messages")
   const tasks = messenger ? '"unread", "send message", "chat members"' : '"list", "show", "change a setting"'
   const sample = messenger
     ? "messages list"

@@ -8,7 +8,6 @@ import { baseContext, environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
-import { mountsMessenger, rootOf } from "./profile.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
 import { nextStep } from "./steps.js"
 import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
@@ -17,11 +16,9 @@ import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } fro
  * The settings in force and where each came from, and changing them. Printed whole: no field the
  * configuration accepts can hold a secret — the schema has nowhere to put one.
  */
-/** Who is speaking is a messenger's question: `sender_colors` means nothing to a notes or files CLI. */
-const shownSettings = (config: Configuration, command: Command): string[] =>
-  mountsMessenger(rootOf(command).commands)
-    ? config.allSettings
-    : config.allSettings.filter((setting) => setting !== "sender_colors")
+/** `sender_colors` colours who wrote a message; a CLI without messages has nothing to colour. */
+const shownSettings = (app: AppIdentity, config: Configuration): string[] =>
+  app.messenger === false ? config.allSettings.filter((setting) => setting !== "sender_colors") : config.allSettings
 
 export const configCommand = (
   app: AppIdentity,
@@ -51,7 +48,7 @@ export const configCommand = (
           config_file: settings.configPath,
           config_found: settings.configFound,
           paths_overridden: overridden,
-          settings: [...shownSettings(config, this), "command_timeout_ms"]
+          settings: [...shownSettings(app, config), "command_timeout_ms"]
             .filter((setting) => bot || setting !== "read_other_bots")
             .map((setting) => sourced(settings, setting, config.schema)),
           store_settings: await storeSettings(env),
@@ -73,16 +70,14 @@ export const configCommand = (
         examples: [`${app.command} personal config ${action} limit${action === "set" ? " 20" : ""}`],
       }),
     )
-      .argument("<setting>")
+      .argument(
+        "<setting>",
+        // default_profile is only removed now: `config unset` still takes it, `config set` refuses it.
+        `one of: ${[...shownSettings(app, config).filter((one) => action === "unset" || one !== "default_profile"), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
+      )
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")
       .option("--bot", "only for bots — the bot section of the file")
-    // Read when help or a contract is shown, once the whole tree is built and says whether it is a messenger's.
-    Object.defineProperty(sub.registeredArguments[0], "description", {
-      get: () =>
-        // default_profile is only removed now: `config unset` still takes it, `config set` refuses it.
-        `one of: ${[...shownSettings(config, sub).filter((one) => action === "unset" || one !== "default_profile"), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
-    })
     if (action === "set")
       sub
         .argument("<value>", "a number, true or false; for a group tg:work,max:Alice,email:me@x")

@@ -11,13 +11,19 @@ import { describe, expect, it } from "vitest"
 import { registerCommands } from "../mcp/index.js"
 import { answered } from "../mcp/tool.js"
 import { sharedProgram } from "../testing/shared-program.js"
-import { commandsCommand } from "./commands-command.js"
-import { configCommand } from "./config-command.js"
 import { itemOf } from "./envelope.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
+import { commandsCommand, configCommand } from "./shared-command-exports.js"
 
-const notesApp = { command: "notes", appName: "notes-cli", envPrefix: "NOTES", description: "notes", version: "1.0.0" }
+const notesApp = {
+  command: "notes",
+  appName: "notes-cli",
+  envPrefix: "NOTES",
+  description: "notes",
+  version: "1.0.0",
+  messenger: false,
+}
 const notesConfig = settingsFor(notesApp)
 const notes: ProgramDefinition = {
   app: notesApp,
@@ -91,7 +97,7 @@ describe("shared wording", () => {
     expect(option(program, "--brief")).toBe("found items as reference, title, time, author and excerpt only")
     expect(option(program, "--full")).toBe("found items with their whole text and every provider field")
     expect(option(program, "--trace")).toBe("the connection's own log lines on stderr — never content")
-    expect(metaOf(at(program, "commands", "info")).examples).toEqual(["notes commands info config show"])
+    expect(metaOf(at(program, "commands", "info")).examples).toEqual(["notes commands info commands"])
     expect(at(program, "config", "set").registeredArguments[0]?.description).not.toContain("sender_colors")
     expect(await shownSettings(notes, "NOTES")).not.toContain("sender_colors")
     const tools = await mcpTexts(["notes list", "notes delete"])
