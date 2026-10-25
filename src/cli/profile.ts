@@ -80,3 +80,14 @@ export const rootOf = (command: Command): Command => {
   while (root.parent) root = root.parent
   return root
 }
+
+/** A command this CLI really has, for an example: the first that takes a profile, down to its first leaf. */
+export const sampleCommand = (commands: readonly Command[]): string | undefined => {
+  const words: string[] = []
+  let command = commands.find((one) => !PROFILE_FREE.has(one.name()))
+  while (command) {
+    words.push(command.name())
+    command = command.commands.find((one) => one.name() !== "help")
+  }
+  return words.length ? words.join(" ") : undefined
+}

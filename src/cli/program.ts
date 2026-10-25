@@ -44,7 +44,7 @@ import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
-import { asFirstWord, commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
+import { asFirstWord, commandWords, liftProfile, PROFILE_FREE, sampleCommand, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
@@ -85,13 +85,17 @@ export const createProgram = (
   { out, err }: ProgramOptions = {},
 ): Command => {
   const program = new Command()
+  const mounted = commands()
+  const messenger = app.messenger !== false
+  const found = messenger ? "found messages" : "found items"
+  const content = messenger ? "message content" : "content"
 
   program
     .name(app.command)
     .usage("[profile] [options] <command>")
     .description(
       `${app.description}\n\n` +
-        `The first word is the profile whenever it is not a command — \`${app.command} personal chats list\`.\n` +
+        `The first word is the profile whenever it is not a command — \`${app.command} personal ${messenger ? "chats list" : (sampleCommand(mounted) ?? "<command>")}\`.\n` +
         `\`${app.envPrefix}_PROFILE\` says the same thing for a whole shell session.\n` +
         "No profile is assumed: without one, a command that uses an account stops and lists the profiles here.",
     )
@@ -105,22 +109,22 @@ export const createProgram = (
     .option("--json", "machine-readable output: one JSON value on stdout; --json=id,text keeps only those fields")
     .option("--jsonl", "machine-readable output: one JSON object per line, for streaming and jq")
     .option("--quiet", "diagnostics off; a failure is still said")
-    .option("--trace", "the connection's own log lines on stderr — never message content")
+    .option("--trace", `the connection's own log lines on stderr — never ${content}`)
     .option("--debug", "on a failure, its whole record — cause and stack — in place of the short line")
     .option("--timeout <duration>", "give up on the whole command after this — 30s, 2m, 500ms")
     .option("--offline", "answer from what was recorded and never connect; fails if nothing was")
     .option("--no-input", "never prompt or open interactive login; piped input remains available")
     .option("--max-input-bytes <bytes>", "maximum buffered input bytes (default: 16777216)")
     .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 4194304; 0 disables)")
-    .option("--brief", "found messages as reference, title, time, sender and excerpt only")
-    .option("--full", "found messages with their whole text and every provider field")
+    .option("--brief", `${found} as reference, title, time, ${messenger ? "sender" : "author"} and excerpt only`)
+    .option("--full", `${found} with their whole text and every provider field`)
     .option("--dry-run", "preview parsed arguments and permissions before running the action")
     .option("--yes", "go ahead without the question an ask level puts before a write")
-    .option("--record", "keep this run — ids and timings, never message content")
+    .option("--record", `keep this run — ids and timings, never ${content}`)
     .option("--no-record", "do not keep it, whatever the configuration says")
     .showHelpAfterError()
 
-  for (const command of commands()) program.addCommand(command)
+  for (const command of mounted) program.addCommand(command)
   configure?.(program)
   assertSharedContracts(program)
   installHelp(program, { pitch: app.description, ...firstScreen })

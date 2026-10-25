@@ -67,7 +67,7 @@ export const commandsCommand = (app: AppIdentity): Command => {
   command.addCommand(
     annotate(new Command("info"), {
       effects: NO_EFFECTS,
-      examples: [`${app.command} commands info messages list`],
+      examples: [`${app.command} commands info ${app.messenger === false ? "commands" : "messages list"}`],
     })
       .description(DISCOVERY_DESCRIPTIONS.info)
       .argument("[path...]", "one command path; without one, export schemas, error reasons and explicit overrides")

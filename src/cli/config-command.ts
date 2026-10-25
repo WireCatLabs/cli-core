@@ -16,6 +16,10 @@ import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } fro
  * The settings in force and where each came from, and changing them. Printed whole: no field the
  * configuration accepts can hold a secret — the schema has nowhere to put one.
  */
+/** `sender_colors` colours who wrote a message; a CLI without messages has nothing to colour. */
+const shownSettings = (app: AppIdentity, config: Configuration): string[] =>
+  app.messenger === false ? config.allSettings.filter((setting) => setting !== "sender_colors") : config.allSettings
+
 export const configCommand = (
   app: AppIdentity,
   config: Configuration,
@@ -44,7 +48,7 @@ export const configCommand = (
           config_file: settings.configPath,
           config_found: settings.configFound,
           paths_overridden: overridden,
-          settings: [...config.allSettings, "command_timeout_ms"]
+          settings: [...shownSettings(app, config), "command_timeout_ms"]
             .filter((setting) => bot || setting !== "read_other_bots")
             .map((setting) => sourced(settings, setting, config.schema)),
           store_settings: await storeSettings(env),
@@ -69,7 +73,7 @@ export const configCommand = (
       .argument(
         "<setting>",
         // default_profile is only removed now: `config unset` still takes it, `config set` refuses it.
-        `one of: ${[...config.allSettings.filter((one) => action === "unset" || one !== "default_profile"), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
+        `one of: ${[...shownSettings(app, config).filter((one) => action === "unset" || one !== "default_profile"), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
       )
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")
