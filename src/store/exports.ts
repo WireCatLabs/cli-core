@@ -26,6 +26,7 @@ export {
 export { pendingNormalization } from "./sqlite/backfill.js"
 export type { ChatRekey, ChatRekeys } from "./sqlite/chat-rekey.js"
 export { CHAT_COLUMNS, TRACKED_CHAT_COLUMNS, titlePart } from "./sqlite/chats.js"
+export { storeClients } from "./sqlite/clients.js"
 export { CHAT_LIST_KEY, type ChatCompleteness, fetchedKey, historyStartKey } from "./sqlite/completeness.js"
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export type { CounterTarget } from "./sqlite/counters.js"

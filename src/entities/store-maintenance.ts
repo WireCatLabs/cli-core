@@ -3,6 +3,12 @@ import { count, text, time } from "./fields.js"
 
 const absent = v.strictObject({ path: text, exists: v.literal(false) })
 const schema = v.strictObject({ version: count, min_compatible: count, writable: v.boolean(), speaks: count })
+const infoSchema = v.strictObject({
+  ...schema.entries,
+  reason: v.picklist(["missing", "older", "current", "newer", "too_new"]),
+  upgrade: v.nullable(v.strictObject({ version: count, min_compatible: count })),
+})
+const client = v.strictObject({ command: text, version: text, core: text, speaks: count, seen_at: time })
 const wordIndex = v.strictObject({
   watermark: count,
   filled_through: count,
@@ -52,13 +58,14 @@ const contents = {
   by_attachment_kind: v.optional(v.array(v.strictObject({ type: text, kind: text, count, bytes: count }))),
 }
 export const storeInfo = v.union([
-  absent,
-  v.strictObject(readFailure),
+  v.strictObject({ ...absent.entries, schema: infoSchema }),
+  v.strictObject({ ...readFailure, schema: v.strictObject({ speaks: count }) }),
   v.strictObject({
     path: text,
     exists: v.literal(true),
     bytes: v.strictObject({ file: count, wal: count }),
-    schema,
+    schema: infoSchema,
+    clients: v.array(client),
     rows,
     pending_normalization: v.nullable(count),
     word_index: v.nullable(wordIndex),
