@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.426.0 — 25.10.2026
+
 ### Added
 
 - **`profileFree(command)` and `takesProfile(command)` from `/cli`: a CLI marks the commands that read no profile, and help asks its own command tree.** A marked command, and every command under it, gets no `personal` in its help example and no `<profile>` in its usage line: `drive doctor`, `drive api list`, not `drive personal doctor`. `PROFILE_FREE` (`commands`, `complete`, `guide`, `help`, `skill`, `upgrade`) still counts for every CLI. drive and zm mark their own housekeeping commands to use it.
