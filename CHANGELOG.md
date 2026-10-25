@@ -17,13 +17,15 @@ shape of this file.
   `by_attachment_kind` (count and known bytes per attached-to type and kind). A desktop app or script could get these
   only by reading the file itself. They are plain grouped counts, so `store info` stays fast; the new keys are absent
   for a file with no schema yet.
+- **A run says who started it and with what.** `run.json` (and `runs list`, `runs show`, `search runs`) gains `cli_command` — the whole command with the program's name, `max messages list`, where `command` stays `messages list` — and `argv`, the words after the program's name with every value that may be content or a secret written `[redacted]`: message text, a chat typed by title, `--caption`, `--query`, a phone number. Command words, flag names, the profile, numbers, dates, durations and an option's declared choices stay. A command line that named no command records the word as `unknown_command`, masked unless it is shaped like a command word. `agent: { kind, session_id }` names the coding agent from its environment — Claude Code (`CLAUDE_CODE_SESSION_ID`), Codex (`CODEX_THREAD_ID`), OpenCode (`OPENCODE_SESSION_ID`); Gemini CLI and Cursor give no session id, so it is `null`.
+- **Codex, Gemini CLI, Cursor and OpenCode are named as the author and claim holder, not the owner.** memo's and tasks' author label (`authorOf`) and a task claim's holder (`holderOf`) read the agent with the same detection as a run's `agent`: work done from those agents was labelled `owner` unless the agent set `AI_AGENT`. A claim now holds the agent's session where it sets one — `codex:<CODEX_THREAD_ID>`, `opencode:<OPENCODE_SESSION_ID>` — as Claude Code's already did; an `AI_AGENT` name is lower-cased.
+- **A failed run says what went wrong.** `run.json` gains `error`: the error's `class`, its `code` and `reason`, its `message` with quotes, emails, phone numbers, tokens, query strings and the home directory masked, the `operation`, `http: { method, endpoint_template, status }` for an HTTP call, `provider: { key, code }` for a messenger protocol's refusal (MTProto's `FLOOD_WAIT`, 420), the `causes` chain, and `stack` as `function file:line` frames cut to the package's own path. An adapter fills `http` by putting `method` and `endpoint` on the `CliError`'s details, or `method` and `endpointTemplate` on the `response` event it emits; `provider.request` and `provider.response` records now carry `method` and `endpoint_template`, ids written `:id` and a token `:token`.
 
 ### Fixed
 
 - **A date range in a list query no longer takes in the first moment after its end** (WC-TIME-5). `timeBounds` returned the end of `time:[2026-10-01 TO 2026-10-31]` as midnight of 1 November, and of `… TO "<timestamp>"}` as the timestamp itself, while `search runs` and `contacts events` keep what starts at or before the end. A run or event at exactly that millisecond was listed. `until` is now the last millisecond inside the range; `meta.window.until` shows it (`2026-10-31T23:59:59.999Z`). The start is unchanged.
 - **`store info` opens the file read-only.** It used to open it for writing, which set the journal mode on a file it
   only described. It now changes nothing, also on a store in another journal mode.
-
 ## 0.424.0 — 25.10.2026
 
 ### Changed — may break callers
