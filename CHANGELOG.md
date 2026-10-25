@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`AppIdentity.messenger`: set it to `false` in a CLI that is not a messenger** (a notes, files or calendar CLI from cli-template). The shared program, `commands`, `config` and MCP text then stop speaking of chats and messages: the profile example in the program description names the CLI's own first command, `commands info`'s example is `<cmd> commands info commands`, `--brief` and `--full` describe "found items", `--trace` and `--record` say "never content", and `config show` and the `config set`/`unset` list leave out `sender_colors`. Unset means a messenger: tg, max and wa print exactly what they did. A CLI that sets it refreshes its contract snapshots once.
+- **The MCP `_tools_search`, `_read` and `_write` tools speak neutrally when the catalogue has no `messages` commands**: task words "list", "show", "change a setting", one of the CLI's own reading commands as the example, and "creates, edits, deletes" for writes. No setting is needed; a messenger's catalogue is unchanged.
+
 ### Changed — may break callers
 
 - **The languages search stems are one table, `LANGUAGES`, and each entry now names its Hunspell dictionary** (`dictionary: "dictionary-ru"`). `LANGUAGES` from `/cli` keeps its other fields. `LATIN_STEMMERS` is now `english, spanish, none`, in the order the error for an unknown stemmer already printed, so the `allowed` list of a `stemmer.invalid` error comes in that order too. A caller that compared that list in order sorts it first.

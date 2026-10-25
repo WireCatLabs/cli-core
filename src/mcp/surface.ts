@@ -4,6 +4,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { CommandOutput } from "@wirecat/cli-base/commands"
 import * as v from "valibot"
 import { answerSchema, listOf } from "../cli/envelope.js"
+import { MESSENGER_COMMANDS } from "../cli/profile.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
 import type { AppErrors } from "../errors/reasons.js"
 import type { CommandAvailability } from "./agent.js"
@@ -108,6 +109,11 @@ export const registerCommands = (
   withheld?: (command: string) => void,
 ) => {
   const byNormal = new Map(Object.keys(commands).map((command) => [normal(command), command]))
+  const messenger = Object.keys(commands).some((command) => MESSENGER_COMMANDS.has(command.split(" ")[0] ?? ""))
+  const tasks = messenger ? '"unread", "send message", "chat members"' : '"list", "show", "change a setting"'
+  const sample = messenger
+    ? "messages list"
+    : (Object.entries(commands).find(([, one]) => !one.writes)?.[0] ?? Object.keys(commands)[0] ?? "")
 
   server.registerTool(
     `${prefix}_tools_search`,
@@ -115,7 +121,7 @@ export const registerCommands = (
       outputSchema: toStandardJsonSchema(v.looseObject({})),
       title: "Find a command",
       description:
-        `Find the command for a task — "unread", "send message", "chat members" — before calling ` +
+        `Find the command for a task — ${tasks} — before calling ` +
         `${prefix}_read or ${prefix}_write with it. Each match gives its command, whether it writes, its arguments and the shape of its answer. ` +
         "With no words, lists every command and title, without arguments.",
       inputSchema: toStandardJsonSchema(
@@ -192,7 +198,7 @@ export const registerCommands = (
     command: v.pipe(
       v.string(),
       v.minLength(1),
-      v.description(`a command ${prefix}_tools_search returned: "messages list"`),
+      v.description(`a command ${prefix}_tools_search returned: "${sample}"`),
     ),
     arguments: v.optional(v.pipe(v.record(v.string(), v.unknown()), v.description("that command's arguments"))),
   })
@@ -213,7 +219,7 @@ export const registerCommands = (
       {
         outputSchema: toStandardJsonSchema(ANSWER),
         title: "Run a writing command",
-        description: `Run one command that changes something — sends, edits, deletes, joins — with the arguments ${prefix}_tools_search showed. ${UNTRUSTED}`,
+        description: `Run one command that changes something — ${messenger ? "sends, edits, deletes, joins" : "creates, edits, deletes"} — with the arguments ${prefix}_tools_search showed. ${UNTRUSTED}`,
         inputSchema: toStandardJsonSchema(call),
         annotations: WRITE,
       },

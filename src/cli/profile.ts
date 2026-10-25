@@ -80,3 +80,24 @@ export const rootOf = (command: Command): Command => {
   while (root.parent) root = root.parent
   return root
 }
+
+/**
+ * Whether these top-level commands are a messenger's: only a Messenger or Bot definition builds `messages` or
+ * `bot`. A notes, files or calendar CLI built from the same shared commands has neither, and its help must not
+ * talk about chats.
+ */
+export const mountsMessenger = (commands: readonly Command[]): boolean =>
+  commands.some((command) => MESSENGER_COMMANDS.has(command.name()))
+
+export const MESSENGER_COMMANDS: ReadonlySet<string> = new Set(["messages", "bot"])
+
+/** A command this CLI really has, for an example: the first that takes a profile, down to its first leaf. */
+export const sampleCommand = (commands: readonly Command[]): string | undefined => {
+  const words: string[] = []
+  let command = commands.find((one) => !PROFILE_FREE.has(one.name()))
+  while (command) {
+    words.push(command.name())
+    command = command.commands.find((one) => one.name() !== "help")
+  }
+  return words.length ? words.join(" ") : undefined
+}
