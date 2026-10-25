@@ -109,6 +109,7 @@ read  store info
 read  store jobs list
 read  store jobs show
 read  store status
+read  store tables list
 read  tags list
 read  tasks agenda
 read  tasks categories

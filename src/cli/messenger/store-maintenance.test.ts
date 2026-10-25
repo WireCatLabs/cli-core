@@ -120,7 +120,8 @@ describe("store info", () => {
   it("says there is no file rather than creating one", async () => {
     const env = envFor()
     const { answer } = await call(["store", "info", "--json"], env)
-    expect(answer).toEqual({ path: env.MESSAGING_STORE, exists: false })
+    expect(answer).toMatchObject({ path: env.MESSAGING_STORE, exists: false, schema: { reason: "missing" } })
+    expect(existsSync(String(env.MESSAGING_STORE))).toBe(false)
   })
 
   it("reads a baseline file without changing its normalization state", async () => {

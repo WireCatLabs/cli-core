@@ -475,5 +475,6 @@ export {
   sharedContracts,
 } from "./shared-contracts.js"
 export { runnable, withSafety } from "./steps.js"
+export { type StoreInfo, sharedStoreCommand, storeInfo, storeInfoCommand } from "./store-info.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

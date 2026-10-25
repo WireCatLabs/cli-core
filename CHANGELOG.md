@@ -12,6 +12,18 @@ shape of this file.
 - **Every CLI on cli-core gets `skill status` and `skill show --for claude|agents`** from cli-base 0.56.0. `skill
   status` says, for each agent, whether its installed SKILL.md matches this version; `skill show --for` prints the copy
   installed there, so a host can show what `skill install` would change.
+- **`store info` for every WireCat tool, and whether this tool can read the store.** `storeInfo(env)` returns the answer for a tool that builds its own program (drive, memo); `storeInfoCommand()` is the `info` command and `sharedStoreCommand()` a `store` group holding it, for a tool on `createProgram` with no `store` of its own (zm). `schema` gains `reason` (`missing`, `older`, `current`, `newer` — this tool may still write it — or `too_new`) and `upgrade`: `{ version, min_compatible }` the file will be at after this tool's next run, or `null`, so a caller can name every other tool whose `speaks` is below that minimum before it updates. `writable` keeps saying whether this tool can open the file. The answer has `clients`, each tool that opened the store with its `version`, cli-core `core`, `speaks` and `seen_at`. A missing store answers with this tool's `schema` too, and a file that does not open with `schema.speaks`.
+- **`store tables list` lists every table of the archive, and `store info` describes the file itself.** WireCat
+  Desktop's Storage page showed totals but not which tables the archive holds, its migrations or the last backup, and
+  the app may not open the file. `store tables list [query...]` answers each table's `name`, `kind` (`data`,
+  `search_index`, `search_index_part`, `internal`) and `rows`, read-only; a search index's rows stay `null`, since
+  counting them scans the whole index. `--full` adds `bytes`, the pages a table and its indexes hold, which reads the
+  whole file: under a second when it is in memory, ten seconds to two minutes when not, on a 3 GB store. Under Bun,
+  whose SQLite has no `dbstat`, `--full` says so. `store info` gains `journal_mode`, `pages` (`size`, `count`, and
+  `free`, the pages a `VACUUM` would give back), `migrations` (every applied version with its `min_compatible` and
+  `applied_at`) and `backup`, the time, file and check from the `backups/last.json` marker a backup job leaves beside
+  the store (`null` without one). The resource word `tables` comes from cli-base
+  ([WireCatLabs/cli-base#334](https://github.com/WireCatLabs/cli-base/pull/334)).
 
 ### Changed — may break callers
 
@@ -19,6 +31,10 @@ shape of this file.
   CLI that pins cli-base moves its pin with this release. cli-base 0.54 and 0.55 change the release lock and the
   changelog guard, which a CLI adopts through community's standards sync, and 0.56 adds the `missing-run-log` lint
   rule: a CLI without `runs` fails `cli-dev lint` until it registers `runsCommand(app)`.
+
+### Fixed
+
+- **`store info` opens the store read-only.** It no longer sets the journal mode, and a store too new for this tool answers with its schema and empty `rows` instead of failing to count tables it may have renamed.
 
 ## 0.426.0 — 25.10.2026
 
