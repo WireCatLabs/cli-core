@@ -7,7 +7,6 @@ import type { Settings } from "./settings.js"
 
 export interface AnalysisOptions {
   analysisProvider?: string
-  provider?: string
   model?: string
   baseUrl?: string
 }
@@ -18,9 +17,6 @@ export const analysisChoice = (
   env: NodeJS.ProcessEnv,
   keyring?: KeyringStore,
 ): AnalysisProvider => {
-  if (options.analysisProvider !== undefined && options.provider !== undefined)
-    throw new CliError("validation_error", "give --analysis-provider or its legacy --provider spelling, not both")
-  options = { ...options, provider: options.analysisProvider ?? options.provider }
   const configured = { ...settings.models?.default, ...settings.models?.analysis }
   settings = {
     ...settings,
@@ -29,11 +25,11 @@ export const analysisChoice = (
     analysisBaseUrl: configured.base_url ?? settings.analysisBaseUrl,
   }
   const override =
-    (options.provider !== undefined && options.provider !== (settings.analysisProvider ?? "agent")) ||
+    (options.analysisProvider !== undefined && options.analysisProvider !== (settings.analysisProvider ?? "agent")) ||
     (options.baseUrl !== undefined &&
       options.baseUrl.replace(/\/+$/, "") !== settings.analysisBaseUrl?.replace(/\/+$/, ""))
   const provider =
-    options.provider ??
+    options.analysisProvider ??
     (settings.analysisProvider && settings.analysisProvider !== "agent"
       ? settings.analysisProvider
       : options.baseUrl

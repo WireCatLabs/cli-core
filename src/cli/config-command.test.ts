@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -101,48 +101,58 @@ describe("config", () => {
     expect((await call(["config", "set", "limit", "5", "--defaults"], env)).code).toBe(5)
   })
 
-  it("**refuses to set default_profile**, and unsets one an older version wrote", async () => {
+  it("**removes a top-level key no schema knows** with an unset that names no profile, and only such a key", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
     await call(["home", "config", "set", "limit", "6"], env)
-
-    const refused = await call(["config", "set", "default_profile", "home"], env)
+    const refused = await call(["home", "config", "set", "default_profile", "home"], env)
     expect(refused.code).toBe(2)
-    expect(refused.stderr.join("\n")).toContain("default_profile is gone")
+    expect(refused.stderr.join("\n")).toContain('no setting called \\"default_profile\\"')
 
     const file = join(env.CHAT_CONFIG_DIR, "config.json")
     writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), default_profile: "home" }))
+    expect((await call(["config", "unset", "limit"], env)).code).toBe(2)
     expect((await call(["config", "unset", "default_profile", "--json"], env)).answer).toMatchObject({
+      scope: "file",
       value: null,
     })
-    expect(JSON.parse(readFileSync(file, "utf8")).default_profile).toBeUndefined()
+    const saved = JSON.parse(readFileSync(file, "utf8"))
+    expect(saved.default_profile).toBeUndefined()
+    expect(saved.profiles).toEqual({ home: { limit: 6 } })
   })
 
-  it("lists default_profile under `config unset` only", async () => {
+  it("**shows, sets and unsets on a file with problems**, leaving the others for their own unset", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
-    const help = async (action: string) => {
-      const streams = captureStreams()
-      await run(
-        ["config", action, "--help"],
-        { app, commands: () => [configCommand(app, config)] },
-        { streams, tty: false, env },
-      )
-      return streams.stdout.join("")
-    }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    const file = join(env.CHAT_CONFIG_DIR, "config.json")
+    const broken = { permissions: { "bogus.thing": "deny", "messages.bogus": "deny" }, limitt: 1, color: "yes" }
+    writeFileSync(file, JSON.stringify({ profiles: { work: broken } }))
 
-    expect(await help("set")).not.toContain("default_profile")
-    expect(await help("unset")).toContain("default_profile")
-    expect((await call(["home", "config", "set", "nonsense", "1"], env)).stderr.join("\n")).not.toContain(
-      "default_profile",
-    )
+    const shown = await call(["work", "config", "show", "--json"], env)
+    expect(shown.code).toBe(0)
+    expect(shown.stderr.join("\n")).toContain("`chat work config unset permissions.bogus.thing` removes it")
+    expect(shown.stderr.join("\n")).toContain("`chat work config unset permissions.messages.bogus` removes it")
+    expect((await call(["work", "config", "set", "limit", "5"], env)).code).toBe(0)
+    expect((await call(["work", "config", "set", "color", "maybe"], env)).code).toBe(2)
+    expect((await call(["work", "config", "set", "color", "true"], env)).code).toBe(0)
+    expect(JSON.parse(readFileSync(file, "utf8")).profiles.work).toEqual({ ...broken, color: true, limit: 5 })
+
+    for (const key of ["permissions.bogus.thing", "permissions.messages.bogus", "limitt"])
+      expect((await call(["work", "config", "unset", key], env)).code).toBe(0)
+    expect(JSON.parse(readFileSync(file, "utf8")).profiles.work).toEqual({ color: true, limit: 5 })
   })
 
-  it("refuses to unset default_profile from a process locked to one profile", async () => {
+  it("refuses a top-level unset from a process locked to one profile", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE_LOCK: "work" }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ default_profile: "work" }))
 
     expect((await call(["config", "unset", "default_profile"], env)).code).toBe(5)
+    expect(JSON.parse(readFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), "utf8"))).toEqual({
+      default_profile: "work",
+    })
   })
 
   it("**refuses every change under the read-only lock**, and still shows the settings", async () => {

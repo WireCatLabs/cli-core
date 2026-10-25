@@ -24,13 +24,9 @@ export const botWords = (bot: BotMessenger, profile: string): string => `${bot.a
 const refuseBotPermissions = (
   command: Command,
   bot: BotMessenger,
-  settings: Pick<Settings, "profile" | "permissions" | "permissionSources">,
+  settings: Pick<Settings, "profile" | "permissions" | "permissionSources" | "configPath" | "savedPermissions">,
 ): void => {
-  refuseUnknownPermissionKeys(
-    command,
-    settings.permissions,
-    `${bot.app.command} ${asFirstWord(settings.profile)}config unset --bot`,
-  )
+  refuseUnknownPermissionKeys(command, settings, bot.app.command)
   for (const key of readKeysForCommand(commandPathOf(command))) {
     const { level, key: named } = levelFor(settings.permissions, key)
     if (level !== "deny") continue

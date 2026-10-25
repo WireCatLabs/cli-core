@@ -44,7 +44,7 @@ import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
-import { asFirstWord, commandWords, liftProfile, PROFILE_FREE, sampleCommand, valuedOptions } from "./profile.js"
+import { commandWords, liftProfile, PROFILE_FREE, sampleCommand, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
@@ -61,7 +61,7 @@ export interface ProgramDefinition {
       flags?: GlobalFlags,
       options?: ResolveOptions,
     ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint"> &
-      Partial<Pick<Settings, "permissions">>
+      Partial<Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions">>
   }
   configure?: (program: Command) => void
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
@@ -487,9 +487,17 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         // No permission governs housekeeping like `skill install`, so no profile's settings change its preview.
         needsProfile: keyForCommand(path) !== null,
       })
-      const permissions = "permissions" in resolved ? (resolved.permissions as Settings["permissions"]) : {}
-      const unset = `${command} ${asFirstWord(resolved.profile)}config unset${path[0] === "bot" ? " --bot" : ""}`
-      const previewed = preview(action, permissions, unset, definition.configuration?.permissionKey)
+      const previewed = preview(
+        action,
+        {
+          permissions: resolved.permissions ?? {},
+          permissionSources: resolved.permissionSources ?? {},
+          configPath: resolved.configPath ?? "",
+          savedPermissions: resolved.savedPermissions ?? [],
+        },
+        command,
+        definition.configuration?.permissionKey,
+      )
       renderAnswer(action, outputFor(action), itemOf(snakeKeys(previewed)))
       throw new PreviewComplete()
     }

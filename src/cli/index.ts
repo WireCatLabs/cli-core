@@ -182,6 +182,7 @@ export type { CommandAvailability, DiscoveredCommand } from "./command-availabil
 export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-contract.js"
 export { CONTRACT } from "./commands-command.js"
 export { refuseUnknownKey } from "./config-command.js"
+export type { ConfigIssue, ConfigIssueKind } from "./config-issues.js"
 export { loadSnakeCaseConfig } from "./config-keys.js"
 export {
   type AgentRun,

@@ -713,12 +713,7 @@ export const messengerContext = (
   const { profile } = base.settings
   refuseDenied(command, base.settings)
   refuseLacking(messenger, pathOf(command))
-  refuseUnknownPermissionKeys(
-    command,
-    base.settings.permissions,
-    `${app.command} ${asFirstWord(profile)}config unset`,
-    messenger.permissionKey,
-  )
+  refuseUnknownPermissionKeys(command, base.settings, app.command, messenger.permissionKey)
   // Read when warning, not now: serve swaps the renderer's methods for log records after this.
   const warn: Warn = (text, warning) => (base.renderer.warn as Warn)(text, warning)
   const accountFor = (): AccountKey => {

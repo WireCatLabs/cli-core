@@ -28,12 +28,11 @@ describe("loadSnakeCaseConfig", () => {
     )
   })
 
-  it("finds the snake_case key through optional and record levels", () => {
-    expect(load({ clientId: "x" })).toThrowError(
-      /: clientId is an unknown setting; rename it to client_id \(and 1 more problem\)$/,
-    )
+  it("names an unknown camelCase key as it is, with no rename", () => {
+    expect(load({ clientId: "x" })).toThrowError(/: client_id is missing \(and 1 more problem\)$/)
+    expect(load({ clientId: "x" })).not.toThrowError(/rename/)
     expect(load({ client_id: "x", accounts: { work: { syncMode: "full" } } })).toThrowError(
-      /: accounts\.work\.syncMode is an unknown setting; rename it to sync_mode$/,
+      /: accounts\.work\.syncMode is an unknown setting$/,
     )
   })
 })

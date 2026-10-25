@@ -3,7 +3,6 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { MessageHit } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
-import { kindsOf } from "../../services/inbox.js"
 import { modelWith } from "../../speech/hearing.js"
 import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
@@ -54,13 +53,11 @@ export const inboxCommand = (messenger: Messenger): Command =>
       const {
         new: fresh,
         all,
-        kind,
         transcribe,
         model,
       } = this.opts<{
         new?: boolean
         all?: boolean
-        kind?: string
         transcribe?: boolean
         model?: string
       }>()
@@ -68,10 +65,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
       const context = messengerContext(this, messenger)
       const { app } = messenger
       const { settings, renderer, format, env } = context
-      const { since, meta, kinds: queriedKinds } = catchUpQuery(query, INBOX_QUERY, "inbox")
-      if (kind !== undefined && queriedKinds !== undefined)
-        throw new CliError("validation_error", "give kind: or its legacy --kind spelling, not both")
-      const kinds = queriedKinds ?? (kind === undefined ? undefined : kindsOf(kind))
+      const { since, meta, kinds } = catchUpQuery(query, INBOX_QUERY, "inbox")
       if (fresh && since !== undefined)
         throw new CliError("validation_error", "--new keeps its own point — not with a date in the query")
       const saved =
