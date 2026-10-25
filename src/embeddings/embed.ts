@@ -3,13 +3,14 @@ import { availableParallelism } from "node:os"
 import { basename, join } from "node:path"
 import { filesPresent, sharedModelsDirectory } from "../speech/install.js"
 import type { TextModel } from "./models.js"
+import type { Reranker } from "./rerank.js"
 
 export const textModelsDirectory = (env: NodeJS.ProcessEnv = process.env): string => sharedModelsDirectory("text", env)
 
-export const placedText = (model: TextModel, directory: string) =>
+export const placedText = (model: Pick<TextModel, "id" | "files">, directory: string) =>
   model.files.map((file) => [file, join(directory, model.id, file.name)] as [typeof file, string])
 
-export const isTextModelInstalled = (model: TextModel, directory: string): boolean =>
+export const isTextModelInstalled = (model: Pick<TextModel, "id" | "files">, directory: string): boolean =>
   filesPresent(placedText(model, directory))
 
 /** Past 8 threads one session gains nothing; Bun takes 1 unless told (`2026-10-02-embeddings.md`). */
@@ -32,13 +33,16 @@ export interface Embedder {
  */
 export interface WarmEmbedders {
   get(key: string, open: () => Promise<Embedder>): Promise<Embedder>
+  reranker(key: string, open: () => Promise<Reranker>): Promise<Reranker>
   close(): Promise<void>
 }
 
 export const WARM_IDLE_MS = 10 * 60_000
 
+type Queue = ReturnType<typeof queue>
+
 export const warmEmbedders = ({ idleMs = WARM_IDLE_MS }: { idleMs?: number } = {}): WarmEmbedders => {
-  const held = new Map<string, Promise<Embedder>>()
+  const held = new Map<string, Promise<{ close(): Promise<void> }>>()
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
   const running = new Map<string, number>()
   const drop = (key: string) => {
@@ -61,29 +65,48 @@ export const warmEmbedders = ({ idleMs = WARM_IDLE_MS }: { idleMs?: number } = {
     timer.unref?.()
     timers.set(key, timer)
   }
-  return {
-    get: (key, open) => {
-      let opening = held.get(key)
-      if (!opening) {
-        const started = open().then((one) =>
-          serial(one, {
+  const hold = <T extends { close(): Promise<void> }>(
+    key: string,
+    open: () => Promise<T>,
+    serial: (one: T, run: Queue) => T,
+  ): Promise<T> => {
+    let opening = held.get(key) as Promise<T> | undefined
+    if (!opening) {
+      const started = open().then((one) =>
+        serial(
+          one,
+          queue({
             starts: () => running.set(key, (running.get(key) ?? 0) + 1),
             ends: () => {
               running.set(key, (running.get(key) ?? 1) - 1)
               rearm(key)
             },
           }),
-        )
-        held.set(key, started)
-        // A model not downloaded yet must not stay refused once it is.
-        started.catch(() => {
-          if (held.get(key) === started) drop(key)
-        })
-        opening = started
-      }
-      rearm(key)
-      return opening
-    },
+        ),
+      )
+      held.set(key, started)
+      // A model not downloaded yet must not stay refused once it is.
+      started.catch(() => {
+        if (held.get(key) === started) drop(key)
+      })
+      opening = started
+    }
+    rearm(key)
+    return opening
+  }
+  return {
+    get: (key, open) =>
+      hold(key, open, (embedder, run) => ({
+        model: embedder.model,
+        embed: (texts, kind) => run.next(() => embedder.embed(texts, kind)),
+        close: run.closing(() => embedder.close()),
+      })),
+    reranker: (key, open) =>
+      hold(key, open, (reranker, run) => ({
+        model: reranker.model,
+        score: (question, passages) => run.next(() => reranker.score(question, passages)),
+        close: run.closing(() => reranker.close()),
+      })),
     close: async () => {
       const all = [...held.keys()].map(drop)
       await Promise.allSettled(all.map(async (one) => (await one)?.close()))
@@ -92,19 +115,19 @@ export const warmEmbedders = ({ idleMs = WARM_IDLE_MS }: { idleMs?: number } = {
 }
 
 /** Two MCP calls may arrive at once; a session is not documented to take overlapping runs. */
-const serial = (embedder: Embedder, { starts, ends }: { starts: () => void; ends: () => void }): Embedder => {
+const queue = ({ starts, ends }: { starts: () => void; ends: () => void }) => {
   let last: Promise<unknown> = Promise.resolve()
   return {
-    model: embedder.model,
-    embed: (texts, kind) => {
+    next: <R>(work: () => Promise<R>): Promise<R> => {
       starts()
-      const next = last.then(() => embedder.embed(texts, kind))
+      const next = last.then(work)
       last = next.then(ends, ends)
       return next
     },
-    close: async () => {
+    /** Closing waits for the run in progress. */
+    closing: (close: () => Promise<void>) => async (): Promise<void> => {
       await last
-      await embedder.close()
+      await close()
     },
   }
 }
@@ -130,11 +153,12 @@ export const meanOf = (data: Float32Array, tokens: number, dims: number): Float3
   return mean
 }
 
-export const openEmbedder = async (
-  model: TextModel,
+/** A model's tokenizer and ONNX session, from its folder. */
+export const loadModel = async (
+  model: { id: string; onnx: string; externalData?: string },
   directory: string,
-  { threads = defaultThreads() }: { threads?: number } = {},
-): Promise<Embedder> => {
+  threads: number,
+) => {
   const [{ Tokenizer }, ort] = await Promise.all([import("@huggingface/tokenizers"), import("@wirecat/cli-core-onnx")])
   const path = (name: string) => join(directory, model.id, name)
   const tokenizer = new Tokenizer(
@@ -148,6 +172,15 @@ export const openEmbedder = async (
       ? { externalData: [{ path: basename(model.externalData), data: readFileSync(path(model.externalData)) }] }
       : {},
   )
+  return { ort, tokenizer, session }
+}
+
+export const openEmbedder = async (
+  model: TextModel,
+  directory: string,
+  { threads = defaultThreads() }: { threads?: number } = {},
+): Promise<Embedder> => {
+  const { ort, tokenizer, session } = await loadModel(model, directory, threads)
   const typeIds = session.inputNames.includes("token_type_ids")
 
   const one = async (text: string): Promise<Float32Array> => {

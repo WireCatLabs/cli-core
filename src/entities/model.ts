@@ -1,10 +1,13 @@
 import * as v from "valibot"
 import { count, id, text } from "./fields.js"
 
-/** A model that runs on this machine: speech for voice messages, text for meaning search, image for pictures. */
+/**
+ * A model that runs on this machine: speech for voice messages, text for meaning search, image for pictures,
+ * reranker for the order of `search messages --discover`.
+ */
 export const model = v.strictObject({
   id,
-  kind: v.picklist(["audio", "text", "image"]),
+  kind: v.picklist(["audio", "text", "image", "reranker"]),
   title: text,
   /** Which languages it reads, in words. */
   languages: text,

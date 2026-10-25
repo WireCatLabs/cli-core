@@ -46,6 +46,8 @@ export interface ServiceDeps {
   searchCatchUp?: boolean
   /** This account has picture search on (`pictureSearch`): its images are embedded and searched by their pixels. */
   pictures?: boolean
+  /** Which reranker orders `--discover`'s first hits (`searchReranker`), or `off`; the default when unset. */
+  reranker?: string
   /** Opens the picture model; tests give a fake. */
   pictureEmbedder?: () => Promise<import("../images/picture/embedder.js").PictureEmbedder>
   agentText?: true
@@ -129,7 +131,7 @@ export const onlineDeps = (
   messenger: ServiceMessenger,
   adapter: MessengerAdapter,
   guard: SendGuard,
-  where: { profile?: string; env?: NodeJS.ProcessEnv; pictures?: boolean } = {},
+  where: { profile?: string; env?: NodeJS.ProcessEnv; pictures?: boolean; reranker?: string } = {},
 ): ServiceDeps => ({
   messenger,
   ...where,

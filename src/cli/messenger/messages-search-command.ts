@@ -179,6 +179,11 @@ const searchAction = (messenger: Messenger) =>
             : ""
       context.renderer.note(`meaning search not used: ${meaning.reason}${step}`)
     }
+    const rerank = found.rerankSkipped
+    if (rerank)
+      context.renderer.note(
+        `not reranked: ${rerank.reason}${rerank.step === "models.download" ? ` — \`${command} models download ${rerank.model}\`` : ""}`,
+      )
     if (found.picturesSkipped && found.picturesModel === undefined)
       context.renderer.note(`pictures not searched: ${found.picturesSkipped}`)
     const stemming = found.query?.stemming

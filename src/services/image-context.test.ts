@@ -51,7 +51,11 @@ const setUp = async (chats: Record<string, Message[]>) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "image-context-")), "m.db") })
   const deps = {
     ...storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard),
-    embedders: { get: async () => fakeEmbedder, close: async () => {} },
+    embedders: {
+      get: async () => fakeEmbedder,
+      reranker: () => Promise.reject(new Error("no reranker")),
+      close: async () => {},
+    },
   }
   for (const [id, messages] of Object.entries(chats)) {
     await store.chats.saveChats(account, [

@@ -73,7 +73,7 @@ export interface Defaults {
   guard: SendGuard
   /** The profile's own entries, for a tool reading a setting of its own — `transcribeWith`. */
   settings: Pick<Settings, "configured" | "shared" | "profile"> &
-    Partial<Pick<Settings, "permissions" | "searchCatchUp" | "pictureSearch" | "offline">> &
+    Partial<Pick<Settings, "permissions" | "searchCatchUp" | "pictureSearch" | "searchReranker" | "offline">> &
     AISettings
   env: NodeJS.ProcessEnv
   keyring?: KeyringStore
@@ -351,6 +351,7 @@ const callRunner = ({
     profile: defaults.settings.profile,
     env: defaults.env,
     pictures: defaults.settings.pictureSearch,
+    reranker: defaults.settings.searchReranker,
   }
   return async (key, definition, args, ctx) => {
     const path = commandOf(key, definition).split(" ")

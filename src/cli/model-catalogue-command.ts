@@ -17,7 +17,7 @@ export const MODEL_CATALOGUE_QUERY = defineQuery({
   entity: "model",
   backend: "native",
   fields: [
-    termField("kind", "enum", "kind:audio", { values: ["audio", "text"] }),
+    termField("kind", "enum", "kind:audio", { values: ["audio", "text", "reranker"] }),
     termField("id", "kw", "id:e5-small"),
     termField("downloaded", "bool", "downloaded:true"),
   ],

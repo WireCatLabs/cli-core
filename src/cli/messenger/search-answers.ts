@@ -50,6 +50,7 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
           missing_terms: hit.discovery.missingTerms,
           parent: hit.discovery.parent,
           found_by: hit.discovery.foundBy,
+          reranker_score: hit.discovery.rerankerScore,
         })
       : undefined,
     email: hit.email
@@ -138,6 +139,15 @@ const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } =>
       field: "discovery",
       why: `searched by words only: ${meaning.reason}`,
       ...(meaning.step ? { step: meaning.step } : {}),
+    })
+  }
+  const rerank = found.rerankSkipped
+  if (rerank) {
+    if (rerank.step === "models.download") next.push(nextStep("models.download", { args: { model: rerank.model } }))
+    missing.push({
+      field: "discovery",
+      why: `not reranked: ${rerank.reason}`,
+      ...(rerank.step ? { step: rerank.step } : {}),
     })
   }
   if (found.picturesModel !== undefined) {

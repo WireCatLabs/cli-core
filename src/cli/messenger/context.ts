@@ -780,6 +780,7 @@ export const messengerContext = (
             history: base.settings.keepFailedRuns,
             searchCatchUp: base.settings.searchCatchUp,
             pictures: base.settings.pictureSearch,
+            reranker: base.settings.searchReranker,
             guard,
             ...(embedders ? { embedders } : {}),
             connection: async () => {
