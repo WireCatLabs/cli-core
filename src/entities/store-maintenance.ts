@@ -148,7 +148,14 @@ export const storeMigration = v.union([
 ])
 export const storeReindex = v.union([
   absent,
-  v.strictObject({ path: text, exists: v.literal(true), ...indexed, file_texts: count, involvements: count }),
+  v.strictObject({
+    path: text,
+    exists: v.literal(true),
+    ...indexed,
+    file_texts: count,
+    involvements: count,
+    unused_vectors_dropped: count,
+  }),
 ])
 export const storeBackup = v.strictObject({
   path: text,

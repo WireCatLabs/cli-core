@@ -28,6 +28,7 @@ import { storePath } from "../../store/path.js"
 import { deleteCopy, type RepairReport, repairStore } from "../../store/repair.js"
 import {
   drainNoteIndex,
+  dropAllUnusedVectors,
   fillSearchIndex,
   fillStems,
   involvementStoreOver,
@@ -268,7 +269,9 @@ const checkCommand = (messenger: Messenger): Command =>
           `${orphans} pointers name a row that is gone or a type the store does not know — see orphan_pointers`,
         )
       if (answer.vectors && answer.vectors.unused > 0)
-        renderer.note(`${answer.vectors.unused} vectors belong to no text the store still holds — see vectors.unused`)
+        renderer.note(
+          `${answer.vectors.unused} vectors belong to no text the store still holds — \`${command} store rebuild\` drops them`,
+        )
       const older = answer.conversations.filter((chat) => chat.provider === messenger.provider && !chat.current).length
       if (older > 0) {
         renderer.note(
@@ -343,7 +346,7 @@ const indexIntegrity = (database: CacheDatabase, index: string, rank = 1): strin
 
 /**
  * Vectors per model, and how many no chunk points at any more. Each write that drops chunks drops those
- * (`dropUnusedVectors`), so a count above zero was most likely left by an older build.
+ * (`dropUnusedVectors`), so a count above zero was most likely left by an older build; `store rebuild` drops them.
  */
 const vectorsHeld = (database: CacheDatabase) => {
   const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'embeddings'").get()
@@ -489,7 +492,7 @@ const reindexCommand = (messenger: Messenger): Command =>
 
     .summary("rebuild the local archive's search indexes")
     .description(
-      "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored; loses nothing",
+      "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored, and drop the vectors no stored text uses; loses nothing",
     )
     .action(async function (this: Command) {
       const { renderer } = outputFor(this)
@@ -524,6 +527,7 @@ const reindexCommand = (messenger: Messenger): Command =>
           ...buildStems(database, (note) => renderer.note(note), { force: true }),
           ...buildNoteIndex(database, (note) => renderer.note(note), { reset: true }),
           involvements: involvementStoreOver({ database, now: Date.now }).rebuild(),
+          unusedVectorsDropped: dropAllUnusedVectors(database),
         }
       })
       result(this, answer)

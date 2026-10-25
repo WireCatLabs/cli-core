@@ -37,7 +37,9 @@ shape of this file.
   (model, hash), where most of the old queries scanned every vector once per hash.
 - **`conversations embeddings clear --chat` drops the chat's message vectors too**, not only its conversations'; a
   vector a chunk outside the chat shares stays, and `conversations embed --chat` makes them again.
-- **`store check` notes vectors no text uses** (`vectors.unused`) when there are any.
+- **`store rebuild` drops the vectors no stored text uses**, which older builds left behind, and says how many in
+  `unused_vectors_dropped`. `store check` counts them (`vectors.unused`) and, when there are any, notes that
+  `store rebuild` drops them.
 
 ## 0.434.0 — 25.10.2026
 

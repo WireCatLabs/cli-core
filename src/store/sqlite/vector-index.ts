@@ -267,3 +267,11 @@ export const dropUnusedVectors = (database: CacheDatabase, hashes: Iterable<stri
   )
   for (const hash of unique) for (const model of models) drop.run(model, hash, hash)
 }
+
+/** Every vector no chunk holds, left by a build before `dropUnusedVectors` covered every write; how many. */
+export const dropAllUnusedVectors = (database: CacheDatabase): number =>
+  database
+    .prepare(
+      "DELETE FROM embeddings WHERE NOT EXISTS (SELECT 1 FROM chunks k WHERE k.content_hash = embeddings.content_hash) RETURNING 1",
+    )
+    .all().length
