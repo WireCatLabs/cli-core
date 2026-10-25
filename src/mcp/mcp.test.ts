@@ -847,6 +847,7 @@ describe("the MCP server", () => {
       "store jobs list",
       "store jobs show",
       "store status",
+      "store tables list",
       "tags list",
       "tasks agenda",
       "tasks categories",
@@ -2215,6 +2216,7 @@ describe("the MCP server", () => {
       "store restore",
 
       "store status",
+      "store tables list",
     ])
   })
 

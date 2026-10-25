@@ -1073,6 +1073,7 @@ const samples: Record<EntityName, unknown> = {
   store_reset: { path: "./synthetic.db", exists: false, reset: false },
   store_repair: { path: "./synthetic.db", exists: false },
   store_copy_removal: { path: "./synthetic.db", deleted: { name: "synthetic__repair_12345678", rows: 0 } },
+  store_table: { name: "messages", kind: "data", rows: 2, bytes: 4096 },
   watch_item: message,
   serve_summary: { profile: "synthetic", started_at: at, stopped_at: at, kept: { message: 1 } },
   job: {

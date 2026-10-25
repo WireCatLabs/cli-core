@@ -124,6 +124,7 @@ export interface MessageStore {
 }
 
 export { BACKFILL_ON_OPEN, type StoreOptions } from "./sqlite/open-store.js"
+export { fileFacts, readStoreTables, type TableKind } from "./sqlite/store-tables.js"
 
 export const openStore = async (options: StoreOptions = {}): Promise<MessageStore> => {
   const context = await openStoreContext(options)

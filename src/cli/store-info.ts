@@ -7,6 +7,7 @@ import { compatibilityOf, fileSchemaOf } from "../store/compatibility.js"
 import type { CacheDatabase } from "../store/driver.js"
 import { storePath } from "../store/path.js"
 import {
+  fileFacts,
   openSqlite,
   pendingNormalization,
   rowCounts,
@@ -58,6 +59,7 @@ export const storeInfo = async (env: NodeJS.ProcessEnv): Promise<StoreInfo> => {
       const answer = {
         path,
         exists: true,
+        ...fileFacts(database, path),
         bytes: { file: bytesOf(path), wal: bytesOf(`${path}-wal`) },
         schema,
         clients: storeClients(database).map(({ seenAt, ...client }) => ({
