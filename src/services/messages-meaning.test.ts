@@ -147,6 +147,37 @@ describe("discovery by meaning", () => {
     expect(found.items.map(({ chatId }) => chatId)).toEqual(["10"])
   })
 
+  describe("searches strictly, words only, when the filters are more than plain terms", () => {
+    const strict = async (text: string) => {
+      download()
+      const { store, discover, embeddings } = await setUp()
+      await store.messages.saveMessages(account, "9", [{ ...message("5", "kitten"), senderId: "200" }], {
+        via: "history",
+      })
+      await embeddings.refresh({ threads: 1 })
+      const found = await discover(text)
+      expect(found.query?.discovery).toBeUndefined()
+      expect(found.items.some(({ discovery }) => discovery?.foundBy)).toBe(false)
+      return found.items.map(({ id }) => id).sort()
+    }
+
+    it("a negated chat leaves its messages out", async () => {
+      expect(await strict("kitten -chat:10")).toEqual(["2", "5"])
+    })
+
+    it("a negated sender leaves theirs out", async () => {
+      expect(await strict("kitten -from:200")).toEqual(["2", "4"])
+    })
+
+    it("a filter under OR with the words", async () => {
+      expect(await strict("cat OR chat:10")).toEqual(["1", "4"])
+    })
+
+    it("a group of filters", async () => {
+      expect(await strict("kitten -(chat:9 from:200)")).toEqual(["2", "4"])
+    })
+  })
+
   it("re-embeds an edited message and forgets a deleted one", async () => {
     download()
     const { store, discover, embeddings } = await setUp()
