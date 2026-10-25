@@ -980,6 +980,7 @@ export const documents = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    pinnedFileId: integer("pinned_file_id"),
   },
   (table) => [unique().on(table.accountId, table.externalId)],
 )

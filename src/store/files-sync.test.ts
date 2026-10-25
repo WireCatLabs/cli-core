@@ -128,3 +128,27 @@ describe("a catalog", () => {
     ])
   })
 })
+
+describe("the file a document shows", () => {
+  it("is pinned by the owner to one of the document's own files, and unpinned again", async () => {
+    const { store, rows } = await setup()
+    const folder = await store.notes.addFolder({ name: "Vault" })
+    const { note } = await store.notes.saveFileNote({ folderId: folder.id, path: "a.md", title: null, text: "a" })
+    const { note: other } = await store.notes.saveFileNote({
+      folderId: folder.id,
+      path: "b.md",
+      title: null,
+      text: "b",
+    })
+    const [file] = (await rows(`SELECT id FROM files WHERE document_id = ${note.id}`)) as [{ id: number }]
+    const [otherFile] = (await rows(`SELECT id FROM files WHERE document_id = ${other.id}`)) as [{ id: number }]
+
+    await store.files.pin(note.ref, String(file.id))
+    expect(await rows(`SELECT pinned_file_id FROM documents WHERE id = ${note.id}`)).toEqual([
+      { pinned_file_id: file.id },
+    ])
+    await expect(store.files.pin(note.ref, String(otherFile.id))).rejects.toThrow(/is not a file of/)
+    await store.files.unpin(note.ref)
+    expect(await rows(`SELECT pinned_file_id FROM documents WHERE id = ${note.id}`)).toEqual([{ pinned_file_id: null }])
+  })
+})

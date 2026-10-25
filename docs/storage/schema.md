@@ -941,6 +941,7 @@ A file or page that stands on its own: a file in a notes folder (md, pdf, docx, 
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `pinned_file_id` | integer |  |  | the file the owner chose for the document to show; NULL shows the most recently changed (a `files` row, no foreign key: an older build may delete a file it does not know) |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`
 

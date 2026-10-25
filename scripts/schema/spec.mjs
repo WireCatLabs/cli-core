@@ -722,6 +722,9 @@ const NEW = {
         meta(),
         ...ts(),
         del(),
+        c("pinned_file_id", "integer", {
+          note: "the file the owner chose for the document to show; NULL shows the most recently changed (a `files` row, no foreign key: an older build may delete a file it does not know)",
+        }),
       ],
       keys: ["UNIQUE (account_id, external_id)"],
     },

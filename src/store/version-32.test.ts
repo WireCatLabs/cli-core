@@ -118,6 +118,9 @@ it("**a store from before version 32 keeps every document** and gains one files 
       metadata: '{"version":"7"}',
     }),
   ])
+  expect(database.prepare("SELECT count(*) AS n FROM documents WHERE pinned_file_id IS NOT NULL").get()).toEqual({
+    n: 0,
+  })
   expect(database.prepare("SELECT email FROM identities WHERE provider = 'email'").get()).toEqual({
     email: "alice@example.com",
   })

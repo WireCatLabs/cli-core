@@ -57,6 +57,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261025070402_version-31-drive-account", version: 31, minCompatible: 31 },
   { name: "20261024232109_version-32-files", version: 32, minCompatible: 32 },
   { name: "20261024232202_version-32-files-data", version: 32, minCompatible: 32 },
+  { name: "20261025022311_version-32-pinned-file", version: 32, minCompatible: 32 },
 ]
 
 export const generatedMigrations = (

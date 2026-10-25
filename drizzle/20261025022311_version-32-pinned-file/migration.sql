@@ -1,0 +1,1 @@
+ALTER TABLE `documents` ADD `pinned_file_id` integer;

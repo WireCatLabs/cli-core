@@ -123,6 +123,7 @@ export type {
   ThreadSave,
 } from "./sqlite/emails.js"
 export type { Fact, FactInput, FactsStore } from "./sqlite/facts.js"
+export type { FilesStore } from "./sqlite/files.js"
 export { IMPORTED_DOCUMENT_QUERY, type ImportedDocuments } from "./sqlite/imported-documents.js"
 export type { Involvement, InvolvementStore } from "./sqlite/involvements.js"
 export type {

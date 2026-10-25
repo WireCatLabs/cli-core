@@ -693,5 +693,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "-- One `files` row per document is written in JS on open (`fillFiles`), from the document after this id.\nINSERT OR REPLACE INTO store_settings (key, value, at) VALUES ('files_backfill_after', '0', unixepoch() * 1000);",
       "-- A mail contact's address is its external id; every writer of one gets the column filled the same way.\nCREATE TRIGGER identities_email_ai AFTER INSERT ON identities\n  WHEN new.provider = 'email' AND new.email IS NULL AND instr(new.external_id, '@') > 1 BEGIN\n  UPDATE identities SET email = lower(trim(new.external_id)) WHERE id = new.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261025022311_version-32-pinned-file",
+    "statements": [
+      "ALTER TABLE `documents` ADD `pinned_file_id` integer;"
+    ]
   }
 ]

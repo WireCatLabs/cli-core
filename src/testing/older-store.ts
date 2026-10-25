@@ -2,7 +2,7 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
-  32: `DROP TRIGGER identities_email_ai; DROP TRIGGER files_document_bd; DROP TABLE files; DROP TABLE link_reviews;
+  32: `ALTER TABLE documents DROP COLUMN pinned_file_id; DROP TRIGGER identities_email_ai; DROP TRIGGER files_document_bd; DROP TABLE files; DROP TABLE link_reviews;
     DROP TABLE entity_link_events; DROP INDEX identities_by_email; ALTER TABLE identities DROP COLUMN email;
     UPDATE accounts SET provider = 'folder' WHERE provider IN ('local', 'obsidian');
     DELETE FROM store_settings WHERE key = 'files_backfill_after';`,

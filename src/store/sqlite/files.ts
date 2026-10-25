@@ -1,6 +1,7 @@
+import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
-import { writeBatch } from "./transaction.js"
+import { write, writeBatch } from "./transaction.js"
 
 type Row = Record<string, unknown>
 
@@ -215,3 +216,37 @@ export const fillFiles = (database: CacheDatabase, now: () => number, { batch = 
     after = ids.at(-1) as number
   }
 }
+
+export interface FilesStore {
+  /** The owner's choice of the file a document shows (`document:<id>`, a file id of that document). */
+  pin(document: string, fileId: string): Promise<void>
+  /** The document shows its most recently changed file again. */
+  unpin(document: string): Promise<void>
+}
+
+const documentIdOf = (reference: string): number => {
+  const id = /^(?:document:)?(\d+)$/u.exec(reference)?.[1]
+  if (id === undefined) throw new CliError("validation_error", `${reference} is not a document reference`)
+  return Number(id)
+}
+
+export const filesStoreOver = ({ database, now }: { database: CacheDatabase; now: () => number }): FilesStore => ({
+  pin: async (document, fileId) =>
+    write(database, () => {
+      const id = documentIdOf(document)
+      const file = /^\d+$/u.test(fileId)
+        ? database.prepare("SELECT id FROM files WHERE id = ? AND document_id = ?").get(Number(fileId), id)
+        : undefined
+      if (!file) throw new CliError("not_found", `file ${fileId} is not a file of ${document}`)
+      database
+        .prepare("UPDATE documents SET pinned_file_id = ?, updated_at = ? WHERE id = ?")
+        .run(Number(fileId), now(), id)
+    }),
+  unpin: async (document) =>
+    write(database, () => {
+      const id = documentIdOf(document)
+      if (!database.prepare("SELECT 1 FROM documents WHERE id = ?").get(id))
+        throw new CliError("not_found", `no ${document} in the local store`)
+      database.prepare("UPDATE documents SET pinned_file_id = NULL, updated_at = ? WHERE id = ?").run(now(), id)
+    }),
+})
