@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { implicitTextTerms, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../domain/locator.js"
+import type { Id } from "../domain/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { exhausted, QUERY_LIMITS } from "../search/lucene/types.js"
 import { planQuestion, words } from "../search/question-plan.js"
@@ -9,11 +10,32 @@ import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { searchCombined } from "./messages-combined.js"
 import { prepareLucene, searchLucene } from "./messages-search.js"
 
+/** How many of the messages nearest in meaning join the fusion: the benchmark's pool (performance/search/evidence-pipeline). */
+export const MEANING_DEPTH = 100
+const RRF_K = 60
+
+export type MeaningRanked = (AccountKey & { chatId: Id; id: Id; score: number })[]
+
+/** Why meaning was not searched, and the step that would make it searchable. */
+export interface MeaningSkipped {
+  reason: string
+  /** Absent when the model itself failed: nothing the owner runs would fix it. */
+  step?: "models.download" | "conversations.rebuild"
+  model: string
+}
+
+/** The messages of these accounts nearest in meaning to the question, best first; or why there are none. */
+export type MeaningLane = (
+  question: string,
+  accounts: AccountKey[],
+) => Promise<{ model: string; ranked: MeaningRanked; partly?: MeaningSkipped } | { skipped: MeaningSkipped }>
+
 export const searchDiscovery = async (
   store: MessageStore,
   account: AccountKey,
   asked: SearchQuery,
   messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
+  meaning?: MeaningLane,
 ): Promise<SearchFound> => {
   // A question's own "?" would parse as a one-character wildcard and send it to strict search (BUG-395).
   const request =
@@ -38,6 +60,8 @@ export const searchDiscovery = async (
   const terms = [...new Set(plan.terms.concat(plan.aliases.flatMap((alias) => words(alias.split(" -> ")[1] ?? ""))))]
   if (!terms.length) return searchLucene(store, account, request, messenger)
   if (terms.length > 64) exhausted("discovery terms")
+  // Before the clock starts: loading the model alone takes about a second of the word search's budget.
+  const lane = meaning ? await meaning(text, original.scopeAccounts) : undefined
   const started = performance.now()
   const check = () => {
     if (request.signal?.aborted)
@@ -141,33 +165,40 @@ export const searchDiscovery = async (
   const stem = (w: string) => original.execution.stemmer?.stemToken(w) ?? w
   const stems = terms.map(stem)
   let bytes = 0
+  const described = (m: FoundMessage & { fused: number }) => {
+    check()
+    const parent = parentByLocator.get(m.locator)
+    const body = `${parent ? `${parent.text}\n` : ""}${m.text}`
+    bytes += Buffer.byteLength(body)
+    if (bytes > QUERY_LIMITS.bodyBytes) exhausted("bodyBytes")
+    const tokens = new Set(words(body).map(stem))
+    const matchedTerms = terms.filter((_, i) => tokens.has(stems[i] ?? ""))
+    const missingTerms = terms.filter((_, i) => !tokens.has(stems[i] ?? ""))
+    const coverage = matchedTerms.length / terms.length
+    return {
+      ...m,
+      score: coverage * 4 + m.fused,
+      discovery: {
+        coverage,
+        matchedTerms,
+        missingTerms,
+        ...(parent ? { parent: parent.locator } : {}),
+      },
+    }
+  }
   candidates = candidates
-    .map((m) => {
-      check()
-      const parent = parentByLocator.get(m.locator)
-      const body = `${parent ? `${parent.text}\n` : ""}${m.text}`
-      bytes += Buffer.byteLength(body)
-      if (bytes > QUERY_LIMITS.bodyBytes) exhausted("bodyBytes")
-      const tokens = new Set(words(body).map(stem))
-      const matchedTerms = terms.filter((_, i) => tokens.has(stems[i] ?? ""))
-      const missingTerms = terms.filter((_, i) => !tokens.has(stems[i] ?? ""))
-      const coverage = matchedTerms.length / terms.length
-      return {
-        ...m,
-        score: coverage * 4 + m.fused,
-        discovery: {
-          coverage,
-          matchedTerms,
-          missingTerms,
-          ...(parent ? { parent: parent.locator } : {}),
-        },
-      }
-    })
+    .map(described)
     .sort(
       (a, b) =>
         (b.score ?? 0) - (a.score ?? 0) ||
         Number(parentByLocator.has(b.locator)) - Number(parentByLocator.has(a.locator)),
     )
+  let meaningCandidates = 0
+  if (lane && "ranked" in lane) {
+    const near = await nearEligible(store, account, request, messenger, lane.ranked, plan.scope)
+    meaningCandidates = near.length
+    candidates = fusedWithMeaning(candidates, near, described)
+  }
   check()
   const items = await Promise.all(
     candidates.slice(0, request.limit).map(async ({ fused: _fused, ...m }) => {
@@ -199,7 +230,73 @@ export const searchDiscovery = async (
         truncated,
         terms,
         queries: [...(plan.changed ? [] : plan.queries), relaxed],
+        ...(lane && "ranked" in lane ? { meaning: { model: lane.model, candidates: meaningCandidates } } : {}),
       },
     },
+    ...(lane && "skipped" in lane ? { meaningSkipped: lane.skipped } : {}),
+    ...(lane && "partly" in lane && lane.partly ? { meaningSkipped: lane.partly } : {}),
   }
 }
+
+/** The nearest messages the question's filters allow, as hits, nearest first. */
+const nearEligible = async (
+  store: MessageStore,
+  account: AccountKey,
+  request: SearchQuery,
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">>,
+  ranked: MeaningRanked,
+  scope: string,
+): Promise<(FoundMessage & { cosine: number })[]> => {
+  const keyOf = (one: AccountKey & { chatId: Id; id: Id }) =>
+    JSON.stringify([one.provider, one.account, one.chatId, one.id])
+  const only = ranked
+    .slice(0, MEANING_DEPTH)
+    .filter((m) => !request.only || request.only.some((key) => keyOf(key) === keyOf(m)))
+    .map(({ provider, account, chatId, id }) => ({ provider, account, chatId, id }))
+  if (!only.length) return []
+  const eligible = await searchLucene(
+    store,
+    account,
+    { ...request, text: scope || undefined, ast: undefined, limit: only.length, only, context: 0, thread: undefined },
+    messenger,
+  )
+  const hits = new Map(
+    eligible.items.map((hit) => {
+      const { provider, account } = parseLocator(hit.locator)
+      return [keyOf({ provider, account, chatId: hit.chatId, id: hit.id }), hit]
+    }),
+  )
+  return ranked.flatMap((m) => {
+    const hit = hits.get(keyOf(m))
+    return hit ? [{ ...hit, cosine: m.score }] : []
+  })
+}
+
+/**
+ * Reciprocal rank fusion of discovery's order and the meaning order, k = 60, as the benchmark's A2 arm: a hit
+ * scores 1 / (k + rank) in each list it is in. Coverage is left out of the fused score, so a message that answers
+ * in other words can rise above one that only repeats them.
+ */
+const fusedWithMeaning = (
+  words: Ranked[],
+  near: (FoundMessage & { cosine: number })[],
+  described: (m: Ranked) => Ranked,
+): Ranked[] => {
+  const merged = new Map<string, { hit: Ranked; rrf: number }>()
+  const by = (hit: Ranked, foundBy: ("words" | "meaning")[]): Ranked =>
+    hit.discovery ? { ...hit, discovery: { ...hit.discovery, foundBy } } : hit
+  words.forEach((hit, rank) => {
+    merged.set(hit.locator, { hit: by(hit, ["words"]), rrf: 1 / (RRF_K + rank + 1) })
+  })
+  near.forEach(({ cosine: _, ...m }, rank) => {
+    const share = 1 / (RRF_K + rank + 1)
+    const held = merged.get(m.locator)
+    if (held) {
+      held.rrf += share
+      held.hit = by(held.hit, ["words", "meaning"])
+    } else merged.set(m.locator, { hit: by(described({ ...m, fused: 0 }), ["meaning"]), rrf: share })
+  })
+  return [...merged.values()].sort((a, b) => b.rrf - a.rrf).map(({ hit, rrf }) => ({ ...hit, score: rrf }))
+}
+
+type Ranked = FoundMessage & { fused: number }

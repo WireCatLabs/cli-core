@@ -49,6 +49,7 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
           matched_terms: hit.discovery.matchedTerms,
           missing_terms: hit.discovery.missingTerms,
           parent: hit.discovery.parent,
+          found_by: hit.discovery.foundBy,
         })
       : undefined,
     email: hit.email
@@ -127,6 +128,16 @@ const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } =>
         ? "other forms of words are not searched while their index is built"
         : "the word index is still being built",
       step: "store.migrate",
+    })
+  }
+  const meaning = found.meaningSkipped
+  if (meaning) {
+    if (meaning.step === "models.download") next.push(nextStep("models.download", { args: { model: meaning.model } }))
+    if (meaning.step === "conversations.rebuild") next.push(nextStep("conversations.rebuild", { args: {} }))
+    missing.push({
+      field: "discovery",
+      why: `searched by words only: ${meaning.reason}`,
+      ...(meaning.step ? { step: meaning.step } : {}),
     })
   }
   if (found.picturesModel !== undefined) {

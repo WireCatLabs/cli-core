@@ -102,6 +102,8 @@ export interface RefreshOptions {
   maxChunks?: number
   threads?: number
   progress?: (note: string) => void
+  /** With the default local model, also each message's own vector, which `--discover` reads; `false` skips it. */
+  messages?: boolean
 }
 
 export interface Refreshed {
@@ -112,6 +114,8 @@ export interface Refreshed {
   embedded: Embedded[]
   /** Chats still needing a build or vectors after this run: over a bound, or the model is missing. */
   left: { chat: Id; needs: "build" | "embed" }[]
+  /** Messages given their own vector by this run, and how many still lack one; only when they were looked at. */
+  messages?: { embedded: number; left: number }
 }
 
 export interface FoundConversations {
