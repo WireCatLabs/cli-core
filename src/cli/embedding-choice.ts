@@ -10,7 +10,6 @@ import type { ModelChoice } from "../services/embeddings.js"
 export interface ModelOptions {
   embeddingProvider?: string
   model?: string
-  provider?: string
   baseUrl?: string
   dims?: number
   concurrency?: number
@@ -18,15 +17,13 @@ export interface ModelOptions {
 
 /** A local model id, or a remote model with its key from `models keys set`. */
 export const embeddingChoice = (
-  { model, provider, embeddingProvider, baseUrl, dims, concurrency }: ModelOptions,
+  { model, embeddingProvider, baseUrl, dims, concurrency }: ModelOptions,
   app: AppIdentity,
   settings: AISettings,
   env: NodeJS.ProcessEnv,
   { needKey = true, keyring }: { needKey?: boolean; keyring?: KeyringStore | undefined } = {},
 ): ModelChoice => {
-  if (embeddingProvider !== undefined && provider !== undefined)
-    throw new CliError("validation_error", "give --embedding-provider or its legacy --provider spelling, not both")
-  provider = embeddingProvider ?? provider
+  let provider = embeddingProvider
   const flagsChooseProvider =
     (provider !== undefined && provider !== (settings.embeddingProvider ?? "local")) ||
     (baseUrl !== undefined && baseUrl.replace(/\/+$/, "") !== settings.embeddingBaseUrl?.replace(/\/+$/, ""))

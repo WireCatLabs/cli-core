@@ -133,8 +133,7 @@ describe("bot messages sync", () => {
     expect(refused.code).toBe(3)
     expect(JSON.parse(refused.stderr).error).toMatchObject({
       code: "configuration_error",
-      message:
-        "permissions.bot.store.fetch names no command — remove it with `chat sales config unset --bot permissions.bot.store.fetch`",
+      message: `${join(root, "config", "config.json")}: permissions.bot.store.fetch names no command — remove it with \`chat sales config unset --bot permissions.bot.store.fetch\``,
     })
   })
 

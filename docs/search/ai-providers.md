@@ -10,8 +10,7 @@ All text generation uses the `./models` gateway. Set `models.<purpose>.provider`
 the gateway refuses without resolving a key or making a request. A model id is required when
 a provider is enabled. Configuration alone never authorizes data transfer.
 
-Existing `analysis_provider`, `analysis_model` and `analysis_base_url` remain supported as analysis
-settings, ahead of the default-purpose fallback; explicit purpose settings take precedence.
+Conversation analysis reads `models.analysis`: with its provider unset or `off`, your agent links the chat.
 `config set models.analysis.provider openai` sets one field; `config unset models.analysis.provider`
 removes it. The whole `models` object can also be set as JSON. `config show` reports effective
 values and the source of each field. Environment overrides use names such as
@@ -42,11 +41,11 @@ requests on shutdown, so a timed-out one-shot does not leave an HTTP request hol
 | `embedding_model` | Local model ID, or the provider's embedding model; unset uses e5-small locally and text-embedding-3-small at OpenAI |
 | `embedding_base_url` | OpenAI-compatible API base, including `/v1` where required |
 | `embedding_dims` | Positive vector dimension; required for a custom embedding endpoint |
-| `analysis_provider` | `agent` (default), `openai`, `anthropic` |
-| `analysis_model` | Explicit model ID from your provider; required for configured analysis |
-| `analysis_base_url` | OpenAI-compatible API base, or Anthropic API root (without `/v1`) |
+| `models.analysis.provider` | unset or `off` (your agent links; the default), `openai`, `anthropic` |
+| `models.analysis.model` | Explicit model ID from your provider; required for configured analysis |
+| `models.analysis.base_url` | OpenAI-compatible API base, or Anthropic API root (without `/v1`) |
 
-`config set` validates values, and `config show` reports their source. Profile and kind-specific configuration use the existing settings layers. Prefixed environment variables such as `MAX_EMBEDDING_PROVIDER`, `MAX_EMBEDDING_MODEL`, `MAX_ANALYSIS_PROVIDER`, `MAX_ANALYSIS_MODEL` and corresponding `_BASE_URL` / `_DIMS` override files. Command options override settings. Changing `--analysis-provider`, `--embedding-provider` or `--base-url` to a different provider/endpoint starts a new provider choice; give that provider's model/dimensions rather than inheriting another provider's settings. `--embedding-provider local --model e5-small` selects local embeddings for one command.
+`config set` validates values, and `config show` reports their source. Profile and kind-specific configuration use the existing settings layers. Prefixed environment variables such as `MAX_EMBEDDING_PROVIDER`, `MAX_EMBEDDING_MODEL`, `MAX_MODELS_ANALYSIS_PROVIDER`, `MAX_MODELS_ANALYSIS_MODEL` and corresponding `_BASE_URL` / `_DIMS` override files. Command options override settings. Changing `--analysis-provider`, `--embedding-provider` or `--base-url` to a different provider/endpoint starts a new provider choice; give that provider's model/dimensions rather than inheriting another provider's settings. `--embedding-provider local --model e5-small` selects local embeddings for one command.
 
 ```sh
 max config set embedding_provider openai
@@ -54,8 +53,8 @@ max config set embedding_model text-embedding-3-small
 max models keys set openai
 max conversations embed --chat '<chat>' --yes
 
-max config set analysis_provider anthropic
-max config set analysis_model '<model from your provider>'
+max config set models.analysis.provider anthropic
+max config set models.analysis.model '<model from your provider>'
 max models keys set anthropic
 max conversations links rebuild --chat '<chat>' --analyze --max-tokens 100000 --yes
 ```
@@ -63,9 +62,9 @@ max conversations links rebuild --chat '<chat>' --analyze --max-tokens 100000 --
 Keys go in the OS keyring or the existing protected credential file, never config or command arguments. Public OpenAI and Anthropic can use `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, or their prefixed forms. A custom base URL uses its exact host (including port) as the key name:
 
 ```sh
-max config set analysis_provider openai
-max config set analysis_base_url http://localhost:11434/v1
-max config set analysis_model '<your installed Ollama model>'
+max config set models.analysis.provider openai
+max config set models.analysis.base_url http://localhost:11434/v1
+max config set models.analysis.model '<your installed Ollama model>'
 # A remote compatible server that needs a key:
 max models keys set '<endpoint host[:port]>'
 ```

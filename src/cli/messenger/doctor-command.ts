@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
-import { writeSecurely } from "@wirecat/cli-base"
+import { configFilePath, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { engineStates } from "../../attachments/extract.js"
@@ -12,6 +13,8 @@ import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_WRITE, NO_EFFECTS, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { unknownPermissionIssues } from "../permission-keys.js"
+import { NONE_NAMED } from "../settings.js"
 import { lineOf, nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -164,13 +167,46 @@ const diagnose = async (
     arch: process.arch,
   }
 
+  // Every problem in the file is reported, not refused: doctor is what a person runs when nothing else will.
   let context: BaseContext
   try {
-    context = baseContext(command, messenger.resolveSettings)
+    context = baseContext(command, (flags, options) =>
+      messenger.resolveSettings(flags, { ...options, needsProfile: false, readOnly: true, withIssues: true }),
+    )
   } catch (error) {
-    return { report: { cli, config: { error: messageOf(error) } } }
+    // Not the file: a profile lock, a flag or an environment variable the settings refuse.
+    const path = configFilePath(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
+    return {
+      report: {
+        cli,
+        config: { path, found: existsSync(path), issues: [] },
+        settings: { error: messageOf(error) },
+        store: snakeKeys(await storeSummary(env)),
+        runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
+      },
+    }
   }
   const { settings, renderer } = context
+  const config = {
+    path: settings.configPath,
+    found: settings.configFound,
+    issues: [
+      ...(settings.configIssues ?? []),
+      ...unknownPermissionIssues(command, settings, app.command, messenger.permissionKey),
+    ],
+  }
+  if (settings.sources.profile === NONE_NAMED)
+    return {
+      renderer,
+      report: {
+        cli,
+        profile: null,
+        config,
+        store: snakeKeys(await storeSummary(env)),
+        readers: engineStates(),
+        runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
+      },
+    }
   const { profile } = settings
   const account = recalledAccount(app, provider, profile, env)
   const store = storePath(env)
@@ -189,7 +225,7 @@ const diagnose = async (
     report: {
       cli,
       profile,
-      config: { path: settings.configPath, found: settings.configFound },
+      config,
       account: { remembered: account?.account ?? null },
       // A session file on disk says nothing about whether the messenger still accepts it.
       login: { state: "not checked" },

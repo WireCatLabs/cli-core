@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
@@ -35,7 +35,7 @@ describe("AI settings and provider selection", () => {
       const baseUrl = `http://${host}/v1`
       expect(endpointKeyName(baseUrl)).toBe(`endpoint:${host}`)
       expect(
-        analysisChoice({ provider: "openai", model: "test", baseUrl }, app, settings(), env, keyring).apiKey,
+        analysisChoice({ analysisProvider: "openai", model: "test", baseUrl }, app, settings(), env, keyring).apiKey,
       ).toBeUndefined()
     }
     expect(endpointKeyName("http://localhost:11434/v1")).toBe("localhost:11434")
@@ -43,13 +43,13 @@ describe("AI settings and provider selection", () => {
   it("defaults locally, validates config values, and reports all sources", () => {
     const { config, settings, env, root, keyring } = setup()
     expect(embeddingChoice({}, app, settings(), env, { keyring })).toBe("e5-small")
-    expect(settings().analysisProvider).toBe("agent")
+    expect(settings().models?.analysis).toBeUndefined()
     for (const [key, value] of [
       ["embedding_provider", "anthropic"],
-      ["analysis_provider", "unknown"],
+      ["models.analysis.provider", "unknown"],
       ["embedding_dims", "0"],
-      ["analysis_model", '""'],
-      ["analysis_base_url", "https://user:secret@example.test"],
+      ["models.analysis.model", '""'],
+      ["models.analysis.base_url", "https://user:secret@example.test"],
     ])
       expect(() =>
         config.changeSetting(join(root, "config.json"), {
@@ -65,19 +65,21 @@ describe("AI settings and provider selection", () => {
     })
     config.changeSetting(join(root, "config.json"), {
       profile: "default",
-      setting: "analysis_provider",
+      setting: "models.analysis.provider",
       value: "anthropic",
     })
     config.changeSetting(join(root, "config.json"), {
       profile: "default",
-      setting: "analysis_model",
+      setting: "models.analysis.model",
       value: "test-model",
     })
     expect(settings()).toMatchObject({
       embeddingProvider: "openai",
-      analysisProvider: "anthropic",
-      analysisModel: "test-model",
-      sources: { embeddingProvider: "config file", analysisProvider: "config file" },
+      models: { analysis: { provider: "anthropic", model: "test-model" } },
+      sources: {
+        embeddingProvider: "config file",
+        "models.analysis.provider": "config file: models.analysis.provider",
+      },
     })
     const fromEnv = config.resolveSettings(
       {},
@@ -93,7 +95,7 @@ describe("AI settings and provider selection", () => {
       sources: { embeddingProvider: "APP_EMBEDDING_PROVIDER" },
     })
     expect(() =>
-      config.resolveSettings({}, { env: { ...env, APP_ANALYSIS_PROVIDER: "bad" }, configDir: root }),
+      config.resolveSettings({}, { env: { ...env, APP_MODELS_ANALYSIS_PROVIDER: "bad" }, configDir: root }),
     ).toThrow("invalid")
   })
   it("keeps custom endpoints isolated from public keys and flags override configured providers", () => {
@@ -106,9 +108,7 @@ describe("AI settings and provider selection", () => {
       embeddingModel: "custom",
       embeddingBaseUrl: "https://example.test/v1",
       embeddingDims: 128,
-      analysisProvider: "openai" as const,
-      analysisModel: "custom",
-      analysisBaseUrl: "https://example.test/v1",
+      models: { analysis: { provider: "openai" as const, model: "custom", base_url: "https://example.test/v1" } },
     }
     expect(embeddingChoice({}, app, configured, env, { keyring })).toMatchObject({
       remote: { model: "custom", dims: 128 },
@@ -118,12 +118,14 @@ describe("AI settings and provider selection", () => {
     embeddingKeys(app, env, keyring).write("example.test", "fake-host")
     expect(analysisChoice({}, app, configured, env, keyring)).toMatchObject({ apiKey: "fake-host" })
     expect(embeddingChoice({}, app, configured, env, { keyring })).toMatchObject({ apiKey: "fake-host" })
-    expect(embeddingChoice({ provider: "local", model: "e5-base" }, app, configured, env, { keyring })).toBe("e5-base")
-    expect(embeddingChoice({ provider: "openai" }, app, configured, env, { keyring })).toMatchObject({
+    expect(embeddingChoice({ embeddingProvider: "local", model: "e5-base" }, app, configured, env, { keyring })).toBe(
+      "e5-base",
+    )
+    expect(embeddingChoice({ embeddingProvider: "openai" }, app, configured, env, { keyring })).toMatchObject({
       remote: { model: "custom", dims: 128 },
       apiKey: "fake-host",
     })
-    expect(embeddingChoice({ provider: "openai" }, app, settings(), env, { keyring })).toMatchObject({
+    expect(embeddingChoice({ embeddingProvider: "openai" }, app, settings(), env, { keyring })).toMatchObject({
       remote: { model: "text-embedding-3-small" },
       apiKey: "fake-openai",
     })
@@ -131,12 +133,14 @@ describe("AI settings and provider selection", () => {
       remote: { model: "override-model", dims: 128, baseUrl: "https://example.test/v1" },
     })
     expect(
-      analysisChoice({ provider: "openai", model: "override-model" }, app, configured, env, keyring),
+      analysisChoice({ analysisProvider: "openai", model: "override-model" }, app, configured, env, keyring),
     ).toMatchObject({
       model: "override-model",
       baseUrl: "https://example.test/v1",
     })
-    expect(analysisChoice({ provider: "anthropic", model: "explicit" }, app, configured, env, keyring)).toMatchObject({
+    expect(
+      analysisChoice({ analysisProvider: "anthropic", model: "explicit" }, app, configured, env, keyring),
+    ).toMatchObject({
       model: "explicit",
       baseUrl: "https://api.anthropic.com",
       apiKey: "fake-anthropic",
@@ -145,24 +149,50 @@ describe("AI settings and provider selection", () => {
     embeddingKeys(app, env, keyring).remove("example.test")
     expect(embeddingKeys(app, env, keyring).read("example.test")).toBeUndefined()
   })
+  it("**reads no analysis_* setting**: each is unknown, with no word of what replaced it", () => {
+    const { config, root } = setup()
+    for (const key of ["analysis_provider", "analysis_model", "analysis_base_url"]) {
+      expect(() =>
+        config.changeSetting(join(root, "config.json"), { profile: "default", setting: key, value: "openai" }),
+      ).toThrow(`no setting called "${key}"`)
+      writeFileSync(join(root, "config.json"), JSON.stringify({ profiles: { default: { [key]: "openai" } } }))
+      const refused = () => config.resolveSettings({}, { env: { APP_PROFILE: "default" }, configDir: root })
+      expect(refused).toThrow(
+        `setting ${key} is not a setting of app — remove it with \`app default config unset ${key}\``,
+      )
+      expect(refused).not.toThrow(/models/)
+    }
+  })
   it("refuses missing provider/model/key and malformed endpoints before any call", () => {
     const { settings, env, keyring } = setup()
-    expect(() => analysisChoice({}, app, settings(), env, keyring)).toThrow("agent")
-    expect(() => analysisChoice({ provider: "bad" }, app, settings(), env, keyring)).toThrow("provider")
-    expect(() => analysisChoice({ provider: "anthropic" }, app, settings(), env, keyring)).toThrow("analysis_model")
-    expect(() => analysisChoice({ provider: "anthropic", model: "test" }, app, settings(), env, keyring)).toThrow("key")
+    expect(() => analysisChoice({}, app, settings(), env, keyring)).toThrow("linking skill")
+    expect(() => analysisChoice({ analysisProvider: "bad" }, app, settings(), env, keyring)).toThrow("provider")
+    expect(() => analysisChoice({ analysisProvider: "anthropic" }, app, settings(), env, keyring)).toThrow(
+      "models.analysis.model",
+    )
     expect(() =>
-      analysisChoice({ provider: "openai", model: "test", baseUrl: "file:///tmp/test" }, app, settings(), env, keyring),
+      analysisChoice({ analysisProvider: "anthropic", model: "test" }, app, settings(), env, keyring),
+    ).toThrow("key")
+    expect(() =>
+      analysisChoice(
+        { analysisProvider: "openai", model: "test", baseUrl: "file:///tmp/test" },
+        app,
+        settings(),
+        env,
+        keyring,
+      ),
     ).toThrow("HTTP/S")
-    expect(() => embeddingChoice({ provider: "bad" }, app, settings(), env, { keyring })).toThrow("provider")
-    expect(() => embeddingChoice({ provider: "openai" }, app, settings(), env, { keyring })).toThrow("key")
-    expect(() => embeddingChoice({ provider: "local", dims: 128 }, app, settings(), env, { keyring })).toThrow("local")
+    expect(() => embeddingChoice({ embeddingProvider: "bad" }, app, settings(), env, { keyring })).toThrow("provider")
+    expect(() => embeddingChoice({ embeddingProvider: "openai" }, app, settings(), env, { keyring })).toThrow("key")
+    expect(() => embeddingChoice({ embeddingProvider: "local", dims: 128 }, app, settings(), env, { keyring })).toThrow(
+      "local",
+    )
     expect(() =>
       embeddingChoice({ baseUrl: "https://example.test?key=secret", dims: 128 }, app, settings(), env, { keyring }),
     ).toThrow("HTTP/S")
-    expect(embeddingChoice({ provider: "openai" }, app, settings(), env, { needKey: false, keyring })).toHaveProperty(
-      "remote",
-    )
+    expect(
+      embeddingChoice({ embeddingProvider: "openai" }, app, settings(), env, { needKey: false, keyring }),
+    ).toHaveProperty("remote")
     expect(endpoint("not a URL")).toBe(false)
   })
 })

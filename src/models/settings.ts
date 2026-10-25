@@ -24,7 +24,6 @@ export const resolveModelSettings = (
   prefix: string,
   layers: readonly (readonly [string, Readonly<Record<string, unknown>> | undefined])[],
   env: NodeJS.ProcessEnv,
-  legacy: { values: Record<string, unknown>; sources: Record<string, string> },
 ): { models: ModelSettings; sources: Record<string, string> } => {
   const configured = layers.map(([from, scope]) => [from, (scope?.models ?? {}) as ModelSettings] as const)
   const purposes = new Set([
@@ -43,21 +42,12 @@ export const resolveModelSettings = (
     const resolved: Record<string, unknown> = {}
     for (const field of MODEL_FIELDS) {
       const variable = `${prefix}_MODELS_${purpose.replaceAll("-", "_").toUpperCase()}_${field.toUpperCase()}`
-      const legacyKey = { provider: "analysisProvider", model: "analysisModel", base_url: "analysisBaseUrl" }[field]
       const candidates: [string, unknown][] = [
         [variable, env[variable]?.trim() || undefined],
         ...configured.map(([from, model]): [string, unknown] => [
           `${from}: models.${purpose}.${field}`,
           model[purpose]?.[field],
         ]),
-        ...(purpose === "analysis" && legacy.sources[legacyKey] !== "default"
-          ? [
-              [
-                legacy.sources[legacyKey] ?? "legacy analysis setting",
-                legacy.values[legacyKey] === "agent" ? "off" : legacy.values[legacyKey],
-              ] as [string, unknown],
-            ]
-          : []),
         ...(purpose === "default"
           ? []
           : [
@@ -83,21 +73,8 @@ export const resolveModelSettings = (
   return { models: checked.output, sources }
 }
 
-export const modelTarget = (
-  settings: { models?: ModelSettings; analysisProvider?: string; analysisModel?: string; analysisBaseUrl?: string },
-  purpose: string,
-): ModelTarget | undefined => {
+export const modelTarget = (settings: { models?: ModelSettings }, purpose: string): ModelTarget | undefined => {
   const configured = { ...settings.models?.default, ...settings.models?.[purpose] }
-  if (
-    purpose === "analysis" &&
-    configured.provider === undefined &&
-    settings.analysisProvider &&
-    settings.analysisProvider !== "agent"
-  ) {
-    configured.provider = settings.analysisProvider as "openai" | "anthropic"
-    configured.model ??= settings.analysisModel
-    configured.base_url ??= settings.analysisBaseUrl
-  }
   if (configured.provider === undefined || configured.provider === "off") return undefined
   if (!configured.model)
     throw new CliError("configuration_error", `set models.${purpose}.model before calling its provider`)

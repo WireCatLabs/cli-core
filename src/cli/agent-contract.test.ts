@@ -259,13 +259,22 @@ it("refuses preview of denied source data and write paths before exposing target
   const stats = new Command("stats").addCommand(new Command("messages").addCommand(new Command("show")))
   root.addCommand(stats)
   const leaf = findCommand(root, ["stats", "messages", "show"])
-  const unset = "fixture work config unset"
-  expect(() => preview(leaf, { messages: "deny" }, unset)).toThrow("messages")
-  expect(() => preview(leaf, { "messages.stats": "deny" }, unset)).toThrow(
-    "permissions.messages.stats names no command — remove it with `fixture work config unset permissions.messages.stats`",
+  const saved = (permissions: Record<string, "deny" | "readonly">) => ({
+    permissions,
+    permissionSources: {},
+    configPath: "/config.json",
+    profile: "work",
+    savedPermissions: Object.keys(permissions).map((key) => ({
+      key,
+      at: ["profiles", "work", "permissions", key],
+    })),
+  })
+  expect(() => preview(leaf, saved({ messages: "deny" }), "fixture")).toThrow("messages")
+  expect(() => preview(leaf, saved({ "messages.stats": "deny" }), "fixture")).toThrow(
+    "/config.json: permissions.messages.stats names no command — remove it with `fixture work config unset permissions.messages.stats`",
   )
   root.addCommand(new Command("messages").addCommand(new Command("send")))
-  expect(() => preview(findCommand(root, ["messages", "send"]), { messages: "readonly" }, unset)).toThrow(
+  expect(() => preview(findCommand(root, ["messages", "send"]), saved({ messages: "readonly" }), "fixture")).toThrow(
     "does not permit",
   )
 })

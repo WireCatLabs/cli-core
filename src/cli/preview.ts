@@ -2,27 +2,22 @@ import { CliError } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { writes as writesAnything } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
-import {
-  keyForCommand,
-  type Level,
-  levelFor,
-  type PermissionKey,
-  readKeysForCommand,
-  WRITE_KEYS,
-} from "../sends/permissions.js"
+import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { commandPathOf } from "./command-contract.js"
 import { refuseUnknownPermissionKeys } from "./permission-keys.js"
+import type { Settings } from "./settings.js"
 
 export class PreviewComplete extends Error {}
 
 export const preview = (
   command: Command,
-  permissions: Readonly<Record<string, Level>>,
-  unset: string,
+  settings: Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "profile">,
+  tool: string,
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined,
 ) => {
   const path = commandPathOf(command)
-  refuseUnknownPermissionKeys(command, permissions, unset, keyOf && ((one) => keyOf(commandPathOf(one))))
+  const { permissions } = settings
+  refuseUnknownPermissionKeys(command, settings, tool, keyOf && ((one) => keyOf(commandPathOf(one))))
   const key = keyForCommand(path)
   const level = key ? levelFor(permissions, key).level : "allow"
   for (const source of readKeysForCommand(path)) {
