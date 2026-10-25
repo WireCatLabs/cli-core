@@ -32,3 +32,30 @@ export const checkCliEntry = (root: string): void => {
   if (loaded)
     throw new Error(`dist/cli/index.js loads the MCP SDK or zod:\n${loaded.split("\n").slice(0, 5).join("\n")}`)
 }
+
+/** Every command, `--version` included, pays for what `cli/start` loads before the program; it was 837 files. */
+const START_MODULES = 80
+
+export const checkStartEntry = (root: string): void => {
+  if (process.versions.bun) return
+  const count = `import { registerHooks } from "node:module"
+let loaded = 0
+registerHooks({ load(url, context, next) { loaded++; return next(url, context) } })
+process.on("exit", () => process.stdout.write(String(loaded)))`
+  const entry = pathToFileURL(join(root, "cli/entry.js")).href
+  const run = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      `data:text/javascript,${encodeURIComponent(count)}`,
+      "--input-type=module",
+      "-e",
+      `await import(${JSON.stringify(entry)})`,
+    ],
+    { encoding: "utf8" },
+  )
+  if (run.status !== 0) throw new Error(`importing dist/cli/entry.js failed: ${run.stderr}`)
+  const loaded = Number(run.stdout.trim())
+  if (!(loaded > 0 && loaded <= START_MODULES))
+    throw new Error(`dist/cli/entry.js loads ${run.stdout.trim()} modules, more than ${START_MODULES}`)
+}
