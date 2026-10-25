@@ -111,9 +111,11 @@ Reads go in rounds: the first page of every lane × source × chunk unit before 
 therefore leaves no lane or person unread while another went deep. A linked chat has one unit per chunk, on its
 own account's source, with the same 20-record page and `maxPageBytes`; its units come after every word and sender
 lane's in each round, so a word lane labels a shared hit first. Each linked chat returns at most
-`max(20, floor(maxItems / (linked chats read + 1)))` new items per invocation: an even share of `maxItems` for every
-chat plus one for the word and sender lanes together, never less than one page. With the default 100 items that is
-50 for one chat, 33 for two and 20 from four chats up. A chat that reaches it is not read further in this
+`max(20, floor(maxItems / (open linked chats + 1)))` new items per invocation: an even share of `maxItems` for every
+linked chat that still has an open unit when the invocation starts, plus one for the word and sender lanes together
+while any of them has an open unit, never less than one page. With the default 100 items and the word lanes open that
+is 50 for one chat, 33 for two and 20 from four chats up. A chat that finished in an earlier invocation takes no
+share, and once the word and sender lanes are done too, a chat left alone gets the whole 100. A chat that reaches it is not read further in this
 invocation: its entry in `linkedChats` has `capped: true`, the run is not complete, and the checkpoint continues it
 with a fresh share. So one busy chat cannot fill a run while the other chats and the word lanes wait for the cursor.
 `stopped` names the budget that ended the invocation; it stays `null` when only linked chats were capped.

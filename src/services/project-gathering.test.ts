@@ -594,18 +594,12 @@ it("caps each linked chat at its share of a run's items and leaves the rest of a
       ["calm", 1, false],
     ],
     [
-      ["busy", 25, true],
-      ["quiet", 0, false],
-      ["calm", 0, false],
-    ],
-    [
-      ["busy", 10, false],
+      ["busy", 35, false],
       ["quiet", 0, false],
       ["calm", 0, false],
     ],
   ])
   expect(runs.map((r) => [r.complete, r.stopped])).toEqual([
-    [false, null],
     [false, null],
     [true, null],
   ])
@@ -613,6 +607,27 @@ it("caps each linked chat at its share of a run's items and leaves the rest of a
   expect(busyRefs).toHaveLength(60)
   expect(new Set(busyRefs).size).toBe(60)
   expect(present(runs[0]).items.filter((i) => i.context === "project").length).toBeGreaterThan(0)
+})
+
+it("gives a busy chat left alone the whole run once the quiet chats and word lanes finish", async () => {
+  const f = await fixture()
+  const busy = linkedChat(
+    f,
+    f.accountId,
+    Array.from({ length: 150 }, (_, n) => `Busy ${n}`),
+    "busy",
+  )
+  const quiet = linkedChat(f, f.accountId, ["Quiet"], "quiet")
+  const request = { ...f.request, sources: [present(f.sources[0])], linkedChats: [busy, quiet] }
+  const first = await gatherProjectEvidence({ evidence: f.port }, request)
+  const second = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...request, checkpoint: present(first.checkpoint) },
+  )
+
+  const busyItems = (run: typeof first) => run.items.filter((i) => i.ref.includes("/busy/")).length
+  expect([busyItems(first), busyItems(second)]).toEqual([33, 100])
+  expect(second.items.filter((i) => i.context !== "linked-chat")).toEqual([])
 })
 
 it("keeps the fingerprint and checkpoint of a run without linked chats", async () => {

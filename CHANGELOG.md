@@ -5,6 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **A busy linked chat left alone drains at full speed with `--cursor`.** Each linked chat's share of a run's items is now split among the linked chats that still have something to read, and the word and sender lanes take a share only while they do too. Before, chats that had already finished still took a share, so with ten linked chats the last busy one got 20 items a run and needed about 45 runs instead of about 10.
+
 ## 0.415.0 — 25.10.2026
 
 ### Added
