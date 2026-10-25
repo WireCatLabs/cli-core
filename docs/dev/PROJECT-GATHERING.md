@@ -41,8 +41,9 @@ const result = await gatherProjectEvidence(
   An item found only that way has `context: "linked-chat"`, a 300-character excerpt from the start and no
   `around` (its neighbours are the lane's own items). A chat whose account is not in `sources` is never read and
   never falls back to another account: the result's `linkedChats` lists every entry with `ref`, `source` and
-  `lane` (both null when unread) and `state`: `in-scope`, `out-of-scope` (its account is outside `sources`) or
-  `unavailable` (the chat is not stored).
+  `lane` (both null when unread), `state`: `in-scope`, `out-of-scope` (its account is outside `sources`) or
+  `unavailable` (the chat is not stored), `items` (new items its lane returned in this invocation) and `capped`
+  (it reached its per-chat limit and has more to read; see Budgets and order).
 - **People.** A person's lane finds what mentions the name. A name is not an identity, and a person's other
   conversations are not project membership: an item found only through person lanes has
   `context: "person-only"`. A reference several lanes find keeps the strongest context: `project`, then
@@ -109,9 +110,13 @@ authorization and response validation are the context reader's own.
 Reads go in rounds: the first page of every lane × source × chunk unit before any second page. A cut budget
 therefore leaves no lane or person unread while another went deep. A linked chat has one unit per chunk, on its
 own account's source, with the same 20-record page and `maxPageBytes`; its units come after every word and sender
-lane's in each round, so a word lane labels a shared hit first, and a busy chat stops on `maxItems` or `maxReads` and
-continues from the checkpoint. `stopped` names the budget that ended
-the invocation.
+lane's in each round, so a word lane labels a shared hit first. Each linked chat returns at most
+`max(20, floor(maxItems / (linked chats read + 1)))` new items per invocation: an even share of `maxItems` for every
+chat plus one for the word and sender lanes together, never less than one page. With the default 100 items that is
+50 for one chat, 33 for two and 20 from four chats up. A chat that reaches it is not read further in this
+invocation: its entry in `linkedChats` has `capped: true`, the run is not complete, and the checkpoint continues it
+with a fresh share. So one busy chat cannot fill a run while the other chats and the word lanes wait for the cursor.
+`stopped` names the budget that ended the invocation; it stays `null` when only linked chats were capped.
 
 ## Units, coverage and resume
 
