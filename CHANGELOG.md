@@ -13,14 +13,15 @@ shape of this file.
 - **`search all` finds messages by meaning too, on its own, once it can.** It runs the same meaning lookup as
   `search messages --discover` (e5-small over each message's own vector, the 100 nearest, every account the search
   reads) and fuses it with the word hits by reciprocal rank fusion (k = 60) into one messages list, before the merge
-  with mail and notes. The query's filters apply to both; a query whose filters use NOT, OR or a group stays words
-  only, since the meaning hits cannot follow them. Each item's `foundBy` says which search found it, and the answer's
+  with mail and notes. The query's filters apply to both; a query with NOT, or with a filter under OR or in a group,
+  stays words only, since the meaning hits cannot follow it (`cat OR fish` still uses meaning). Each item's `foundBy` says which search found it, and the answer's
   `messages` says how they were searched. Without the model or the vectors, `search all` reads words as before and
   says so: a `messages: meaning search not used: …` note, and `missing`/`next` (`models.download` or
   `conversations.rebuild`) in `--json` and MCP. `--exact` and `--backend server` stay words only. A search never
   downloads a model, embeds anything or sends text anywhere. `searchAll`, `searchAllWithMeetings` and
   `searchAllIncludingMeetings` take the meaning lane as an optional last argument; a caller that passes none
-  (memo's `searchEverywhere` today) searches messages by words alone.
+  (memo's `searchEverywhere` today) searches messages by words alone. `meaningLane` is exported and needs only
+  `{ env, store, messenger: { app: { command } } }`, so memo can build one without the messenger's services.
 
 ## 0.434.0 — 25.10.2026
 

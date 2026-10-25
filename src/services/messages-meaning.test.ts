@@ -14,6 +14,7 @@ import { embeddingsService } from "./embeddings.js"
 import { messagesService } from "./messages.js"
 import { searchStore } from "./messages-archive-search.js"
 import { meaningLane } from "./messages-meaning.js"
+import { searchAll } from "./search-all.js"
 
 const tiny: TextModel = {
   id: "e5-small",
@@ -243,6 +244,17 @@ describe("search all by meaning", () => {
     expect((await all("cat")).items.map(({ foundBy }) => foundBy)).toEqual([["words"]])
   })
 
+  it("takes a lane built from a store and env alone, as memo has them", async () => {
+    download()
+    const { store, embeddings } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+    const lane = meaningLane({ env: process.env, store: async () => store, messenger: { app: { command: "memo" } } })
+
+    const found = await searchAll(store, account, { text: "cat", limit: 10, only: ["messages"] }, {}, undefined, lane)
+
+    expect(found.messages).toEqual({ by: "words and meaning" })
+  })
+
   it("leaves --exact and the server's own hits to words, with no note", async () => {
     download()
     const { all, embeddings } = await setUp()
@@ -255,7 +267,7 @@ describe("search all by meaning", () => {
     }
   })
 
-  it("keeps the query's filters on the meaning hits, and skips meaning when NOT or OR would invert them", async () => {
+  it("keeps the query's filters on the meaning hits, and skips meaning when NOT or OR would change them", async () => {
     download()
     const { all, embeddings } = await setUp()
     await embeddings.refresh({ threads: 1 })
@@ -263,7 +275,11 @@ describe("search all by meaning", () => {
     expect((await all("cat chat:10")).items.map(({ ref }) => ref.split("/").at(-2))).toEqual(["10"])
     const negated = await all("cat -chat:10")
     expect(negated.items.map(({ foundBy }) => foundBy)).toEqual([["words"]])
-    expect(negated.messages?.meaningSkipped?.reason).toMatch(/NOT, OR or a group/)
+    expect(negated.messages?.meaningSkipped?.reason).toMatch(/NOT/)
+    expect((await all("cat OR chat:10")).messages?.by).toBe("words")
+    const either = await all("cat OR fish")
+    expect(either.messages).toEqual({ by: "words and meaning" })
+    expect(either.items.some(({ foundBy }) => foundBy.join() === "meaning")).toBe(true)
   })
 
   it("never brings back a chat hidden from search", async () => {

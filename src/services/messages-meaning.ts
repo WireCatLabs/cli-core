@@ -1,7 +1,7 @@
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
-import { embeddingTarget, withEmbedder } from "./embeddings-maintenance.js"
+import { embeddingTarget, type ModelDeps, withEmbedder } from "./embeddings-maintenance.js"
 import { MEANING_DEPTH, type MeaningLane, type MeaningRanked } from "./messages-discovery.js"
 import { plainWords } from "./pictures.js"
 
@@ -10,7 +10,7 @@ import { plainWords } from "./pictures.js"
  * on disk and vectors exist — never a download, never a remote model — and any failure leaves the words alone.
  */
 export const meaningLane =
-  (deps: ServiceDeps): MeaningLane =>
+  (deps: ModelDeps & Pick<ServiceDeps, "store">): MeaningLane =>
   async (question, accounts) => {
     const target = embeddingTarget(deps, DEFAULT_TEXT_MODEL)
     const skipped = (reason: string, step?: "models.download" | "conversations.rebuild") => ({

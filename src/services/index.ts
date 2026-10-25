@@ -346,6 +346,8 @@ export {
   type MeetingTaskView,
   readMeetingTask,
 } from "./meeting-tasks.js"
+export type { MeaningLane, MeaningSkipped } from "./messages-discovery.js"
+export { meaningLane } from "./messages-meaning.js"
 export type { QueryMetadata, SearchCoverage } from "./messages-search.js"
 export { metadataService } from "./metadata.js"
 export {

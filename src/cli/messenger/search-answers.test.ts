@@ -27,6 +27,22 @@ describe("allAnswer", () => {
     expect(JSON.stringify(answer)).toContain("searched by words only: no message has a vector yet")
   })
 
+  it("asks for the model once when neither notes nor messages could use it", () => {
+    const answer = allAnswer(
+      "search all",
+      {
+        ...found({
+          by: "words",
+          meaningSkipped: { reason: "e5-small is not downloaded", step: "models.download", model: "e5-small" },
+        }),
+        notes: { by: "words", meaningSkipped: "e5-small is not downloaded" },
+      },
+      { limit: 10 },
+    )
+
+    expect(answer.next?.filter(({ step }) => step === "models.download")).toHaveLength(1)
+  })
+
   it("adds nothing once messages were searched by meaning", () => {
     const answer = allAnswer("search all", found({ by: "words and meaning" }), { limit: 10 })
 

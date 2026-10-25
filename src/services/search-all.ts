@@ -1,5 +1,5 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
-import { parseLucene } from "@wirecat/cli-base/query"
+import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
 import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
@@ -100,11 +100,18 @@ export type SearchAllMessenger = Partial<Pick<MessengerTraits, "savedChatId" | "
   hintCommand?: string | null
 }
 
-/** The filters a query's text sits beside, or `undefined` when NOT, OR or a group would make them say otherwise. */
+/**
+ * The filters the meaning hits must pass, or `undefined` when they cannot be followed: a NOT anywhere (meaning would
+ * bring the excluded back), or a filter under OR or in a group, which the plain list of filters would turn into AND.
+ */
 const filtersBeside = (text: string): string | undefined => {
   const { root } = parseLucene(text, MESSAGE_PARSING)
-  const clauses = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" }]
-  return clauses.every(({ node, occur }) => occur === "must" && node.kind === "predicate")
+  const followable = (node: QueryNode, required: boolean): boolean =>
+    node.kind === "boolean"
+      ? node.clauses.every(({ node: inner, occur }) => occur !== "must_not" && followable(inner, false))
+      : node.kind === "predicate" && (required || node.field === "text" || node.field === "exact")
+  const top = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" as const }]
+  return top.every(({ node, occur }) => occur !== "must_not" && followable(node, occur === "must"))
     ? planQuestion(text).scope
     : undefined
 }
@@ -195,7 +202,7 @@ export const searchAll = async (
       filters === undefined
         ? {
             skipped: {
-              reason: "the query's filters use NOT, OR or a group, which meaning cannot follow",
+              reason: "the query uses NOT, or a filter under OR or in a group, which meaning cannot follow",
               model: DEFAULT_TEXT_MODEL,
             },
           }

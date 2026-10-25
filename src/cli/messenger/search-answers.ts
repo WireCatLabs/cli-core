@@ -303,7 +303,7 @@ export const allAnswer = (
           ]
         : []),
       ...notes.next,
-      ...messages.next,
+      ...messages.next.filter((step) => !notes.next.some((asked) => JSON.stringify(asked) === JSON.stringify(step))),
     ],
     missing: [
       ...(scan
