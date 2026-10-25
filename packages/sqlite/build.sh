@@ -60,7 +60,13 @@ case $target in
     strip --strip-unneeded "$out"
     # Plain -O3, as upstream builds Linux: no SIMD, so it loads on any CPU of the architecture.
     ext=$here/lib/$target/vec0.so
-    cc -O3 -fPIC -shared -I"$include" "$vec" -o "$ext" -lm
+    # sqlite-vec 0.1.9 typedefs uint8_t from glibc's u_int8_t names, which musl does not have.
+    case $target in
+      *-musl) vec_flags="-Du_int8_t=uint8_t -Du_int16_t=uint16_t -Du_int64_t=uint64_t" ;;
+      *) vec_flags="" ;;
+    esac
+    # shellcheck disable=SC2086
+    cc -O3 -fPIC -shared $vec_flags -I"$include" "$vec" -o "$ext" -lm
     strip --strip-unneeded "$ext"
     ;;
   win32-x64)
