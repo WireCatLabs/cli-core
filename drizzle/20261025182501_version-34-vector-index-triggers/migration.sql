@@ -2,8 +2,9 @@
 -- each model's own trigger (made with its vec0 table, `vector-index.ts`) re-derives that row. Writes in TypeScript
 -- and the schema's own delete triggers (document_bd, note_bd, …) all reach the index this way.
 -- A chunk usually comes before its vector; the vector's own trigger indexes it then.
+-- CROSS JOIN: led by the vectors, SQLite read every one of them per chunk (7 ms each at 100k).
 CREATE TRIGGER vector_index_chunk_ai AFTER INSERT ON chunks WHEN EXISTS (SELECT 1 FROM vector_indexes i
-    JOIN embeddings v ON v.model = i.model AND v.content_hash = new.content_hash) BEGIN
+    CROSS JOIN embeddings v ON v.model = i.model AND v.content_hash = new.content_hash) BEGIN
   INSERT INTO vector_index_redo (chunk_id) VALUES (new.id);
   DELETE FROM vector_index_redo;
 END;
