@@ -1,0 +1,25 @@
+name: Pull request security checks
+
+# CodeQL, zizmor and gitleaks on every pull request, so release.yml can reuse them when the release commit has
+# the pull request head's tree (scripts/release-reuse.sh). The same reusable workflow as the release's own
+# `checks`, minus the npm audits, which read the registry and stay in the release.
+on:
+  pull_request:
+
+concurrency:
+  group: security-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: WireCatLabs/cli-base/.github/workflows/release-checks.yml@c187075303a8d2096ded5faf8b5871572c35e8a4 # High production findings and fresh npm resolution
+    with:
+      dependencies: false
+      languages: '["actions","javascript-typescript","python","c-cpp","java-kotlin"]'
