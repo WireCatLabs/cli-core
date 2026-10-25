@@ -35,6 +35,7 @@ it("serializes the structural upgrade and refuses actual old SDK tag/rekey write
   opened.push(reader, upgrader)
   const cached = reader.prepare("SELECT name FROM tags ORDER BY id")
   expect(cached.all()).toEqual([{ name: "arrival" }, { name: "welcome" }])
+  expect(reader.prepare("SELECT max(version) AS version FROM schema_migrations").get()).toEqual({ version: 29 })
   upgrader.exec("PRAGMA busy_timeout=1")
   reader.exec("BEGIN IMMEDIATE")
   expect(() => migrate(upgrader)).toThrow()

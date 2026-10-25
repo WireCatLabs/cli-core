@@ -60,6 +60,7 @@ it("applies one reviewed redirect, preserves overlapping attribution and retries
   expect(database.prepare("SELECT * FROM taggings ORDER BY id").all()).toEqual(rows)
   expect(database.prepare("SELECT * FROM aliases WHERE aliasable_type='tag' ORDER BY id").all()).toEqual(aliases)
   expect(await store.knowledge.tags(null, { type: "note", id: note.id })).toEqual(["welcome"])
+  expect(await store.knowledge.tags(null, { type: "note", id: note.id }, "arrival")).toEqual(["welcome"])
   const catalog = await store.knowledge.vocabulary()
   expect(catalog.entries).toHaveLength(1)
   expect(catalog.entries[0]).toMatchObject({
@@ -149,6 +150,9 @@ it("keeps canonical aliases through chained reviews, meeting/note search and fil
         .sort(),
     ).toEqual([file.ref, note.ref].sort())
     expect(await store.knowledge.tags(null, { type: "folder", id: folder.id, path: "series" })).toEqual(["welcome"])
+    expect(await store.knowledge.tags(null, { type: "folder", id: folder.id, path: "series" }, name)).toEqual([
+      "welcome",
+    ])
   }
   await store.meetings.indexSearch({ accountId })
   expect((await store.meetings.searchHits("Ship", { accountId, tagId: source.id })).items).toHaveLength(1)

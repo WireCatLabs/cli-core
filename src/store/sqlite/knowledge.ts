@@ -24,7 +24,6 @@ import {
   setMainTopic,
   type TagKind,
   type TagRow,
-  tagNamed,
 } from "./tags.js"
 import { TASK_KEY_PREFIXES } from "./task-keys.js"
 import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
@@ -328,7 +327,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         "SELECT DISTINCT t.name FROM links l JOIN resolved_tags t ON t.id=l.to_id WHERE l.from_type = 'account' AND l.from_id = ? " +
           `AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND l.anchor = ?${tag === undefined ? "" : " AND t.name = ?"} ORDER BY t.name`,
       )
-      .all(folder, path, ...(tag === undefined ? [] : [tagNamed(database, tag)?.name ?? tag]))
+      .all(folder, path, ...(tag === undefined ? [] : [tag]))
       .map((row) => String(row.name))
 
   const annotationOf = (row: Row): Annotation | undefined => {

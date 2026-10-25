@@ -287,7 +287,7 @@ export const labelsOf = (database: CacheDatabase, thing: Thing, tag?: string): L
     .prepare(
       `SELECT t.name,CASE WHEN min(g.source)='file' AND max(g.source)='file' THEN 'file' ELSE 'owner' END AS source FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE g.taggable_type=? AND g.taggable_id=?${tag === undefined ? "" : " AND t.name = ?"} GROUP BY t.canonical_id ORDER BY t.name`,
     )
-    .all(thing.type, thing.id, ...(tag === undefined ? [] : [tagNamed(database, tag)?.name ?? tag]))
+    .all(thing.type, thing.id, ...(tag === undefined ? [] : [tag]))
     .map((row) => ({ tag: String(row.name), origin: row.source === "file" ? "file" : "owner" }))
 
 /**
