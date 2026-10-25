@@ -4620,6 +4620,12 @@
     "store status": {
       "in": "all"
     },
+    "store tables": {
+      "in": "all"
+    },
+    "store tables list": {
+      "in": "all"
+    },
     "tags": {
       "in": "all"
     },

@@ -64,6 +64,12 @@ export const storeInfo = v.union([
     path: text,
     exists: v.literal(true),
     bytes: v.strictObject({ file: count, wal: count }),
+    journal_mode: text,
+    /** `free` pages hold nothing; a `VACUUM` would give them back. */
+    pages: v.strictObject({ size: count, count, free: count }),
+    migrations: v.array(v.strictObject({ version: count, min_compatible: count, applied_at: time })),
+    /** From the marker a backup job leaves in `backups/last.json` beside the store; null without one. */
+    backup: v.nullable(v.strictObject({ at: time, file: v.nullable(text), checked: v.nullable(text) })),
     schema: infoSchema,
     clients: v.array(client),
     rows,

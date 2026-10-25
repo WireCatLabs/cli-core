@@ -151,6 +151,7 @@ import {
   storeJobRetry,
   syncProgress,
 } from "./store-records.js"
+import { storeTable } from "./store-table.js"
 import { automaticTags, tagChange } from "./tag-change.js"
 import { tagging } from "./tagging.js"
 import { task } from "./task.js"
@@ -346,6 +347,7 @@ export {
   storeRepair,
   storeReset,
   storeRestore,
+  storeTable,
   tagChange,
   tagging,
   task,
@@ -565,6 +567,7 @@ export const ENTITIES = {
   store_reset: storeReset,
   store_repair: storeRepair,
   store_copy_removal: storeCopyRemoval,
+  store_table: storeTable,
   agenda,
   model,
   chat_group_change: chatGroupChange,

@@ -52,6 +52,7 @@ import { answerOf } from "./ask.js"
 import type { Messenger } from "./context.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
 import { servingProfiles } from "./serve-command.js"
+import { storeTablesCommand } from "./store-tables-command.js"
 
 const SEARCH_INDEXES = ["messages_fts", "chats_fts", "identities_fts"]
 /** Contentless: it has no table to be compared with, only its own structure to check. */
@@ -119,6 +120,7 @@ export const storeMaintenanceCommands = (messenger: Messenger): Command[] => [
   repairCommand(messenger),
   resetCommand(messenger),
   copiesCommand(),
+  storeTablesCommand(messenger),
 ]
 
 /** Renaming tables under a running `serve` would pull them from under its statements. */
