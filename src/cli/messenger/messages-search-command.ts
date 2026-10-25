@@ -54,7 +54,8 @@ export const messagesSearchCommand = (messenger: Messenger): Command => {
     .option("--context <n>", "messages before and after each hit; 2 in the terminal, 0 otherwise", wholeCount)
     .option(
       "--discover",
-      "find partial lexical matches and eligible replies in the local archive; results are evidence, not confirmed answers",
+      "find partial word matches, eligible replies and, once messages have vectors, messages close in meaning in the " +
+        "local archive; results are evidence, not confirmed answers",
     )
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
     .addHelpText("after", SAVE_HELP)
@@ -168,6 +169,16 @@ const searchAction = (messenger: Messenger) =>
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
     for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
+    const meaning = found.meaningSkipped
+    if (meaning) {
+      const step =
+        meaning.step === "models.download"
+          ? ` — \`${command} models download ${meaning.model}\`, then \`${command} conversations rebuild\` gives messages their vectors`
+          : meaning.step === "conversations.rebuild"
+            ? ` — \`${command} conversations rebuild\` gives messages their vectors, a batch a run`
+            : ""
+      context.renderer.note(`meaning search not used: ${meaning.reason}${step}`)
+    }
     if (found.picturesSkipped && found.picturesModel === undefined)
       context.renderer.note(`pictures not searched: ${found.picturesSkipped}`)
     const stemming = found.query?.stemming

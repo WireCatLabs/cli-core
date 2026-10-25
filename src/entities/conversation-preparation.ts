@@ -16,6 +16,8 @@ export const conversationPreparation = v.strictObject({
   built: v.array(conversationBuild),
   embedded: v.array(chatEmbedding),
   left: v.array(v.strictObject({ chat: id, needs: v.picklist(["build", "embed"]) })),
+  /** Messages given their own vector, which `search messages --discover` reads, and how many still lack one. */
+  messages: v.optional(v.strictObject({ embedded: count, left: count })),
 })
 export const catchUpPreparation = v.strictObject({
   complete: v.boolean(),
