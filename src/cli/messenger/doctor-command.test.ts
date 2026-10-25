@@ -214,6 +214,26 @@ describe("doctor", () => {
     expect(answer.profile).toBe("default")
   })
 
+  it.each([
+    ["a folder", (path: string) => mkdirSync(path), "the path is a folder, not a file"],
+    ["a list", (path: string) => writeFileSync(path, "[]"), "the file must hold a JSON object"],
+  ])(
+    "**reports %s at the config path** as a whole-file problem, which other commands refuse",
+    async (_, make, what) => {
+      const { root, env } = setup()
+      mkdirSync(join(root, "config"), { recursive: true })
+      const file = join(root, "config", "config.json")
+      make(file)
+
+      const { code, answer } = await call(["doctor", "--json"], env, refused)
+      expect(code).toBe(0)
+      expect(answer.config.issues).toEqual([{ kind: "invalid_value", file, what }])
+      const listed = await call(["chats", "list", "--json"], env, refused)
+      expect(listed.code).toBe(3)
+      expect(listed.stderr.join("\n")).toContain(`${file}: ${what}`)
+    },
+  )
+
   const configured = (env: NodeJS.ProcessEnv, root: string, contents: unknown) => {
     mkdirSync(join(root, "config"), { recursive: true })
     writeFileSync(join(root, "config", "config.json"), JSON.stringify(contents))
