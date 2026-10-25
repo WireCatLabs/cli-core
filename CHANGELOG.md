@@ -16,6 +16,11 @@ shape of this file.
   read into the record. Hermes was already named `hermes-agent` from `AI_AGENT`; its `HERMES_SESSION_ID` is now the
   session, so a task claim from Hermes is held by `hermes-agent:<session>` as one from Claude Code is by its session.
   A reader of `run.json` that refuses unknown keys must accept the optional `agent.from_chat`.
+- **`validateSkill` accepts OpenClaw's declarations as a mapping at `metadata.openclaw`.** OpenClaw and ClawHub read a
+  skill's required programs and its install entry (`requires.bins`, `install: [{ kind: node, package, bins }]`) only
+  from an object under that key, so a tool's SKILL.md can now carry them and still pass its own skill check. Every
+  other metadata key stays a string, as the Agent Skills specification asks; `openclaw` as a list, a string or null is
+  still refused.
 
 ### Changed — may break callers
 
