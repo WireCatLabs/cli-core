@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       app_ref:
-        description: "Branch of tg-cli and max-cli to build"
+        description: "Branch of tg-cli, max-cli, whatsapp-cli and cli-template to build"
         type: string
         default: main
 
@@ -71,6 +71,45 @@ jobs:
         run: |
           node cli/dist/bin/${{ matrix.cli }}.js commands --json > commands.json
           node shared/dist/parity/bin.js ${{ matrix.cli }} < commands.json
+
+  # A separate job, not a row of `main`: the template has no parity manifest, so its check is its own build,
+  # typecheck, command lint and tests.
+  template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: shared
+          persist-credentials: false
+      - id: app
+        run: shared/scripts/parity/app-ref.sh template cli-template >> "$GITHUB_OUTPUT"
+        env:
+          PR_BRANCH: ${{ github.head_ref }}
+          APP_REF: ${{ inputs.app_ref }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: WireCatLabs/cli-template
+          ref: ${{ steps.app.outputs.ref }}
+          path: cli
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: shared/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          # No store cache: this job builds other repositories' branches, so a cache it saved would
+          # feed their dependencies to the next run.
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-core.tgz
+        working-directory: shared
+      - name: Build cli-template ${{ steps.app.outputs.ref }} against this cli-core
+        run: shared/scripts/parity/build-app.sh template cli cli-core.tgz "$APP_REF"
+        env:
+          APP_REF: ${{ steps.app.outputs.ref }}
+      - name: Check and test cli-template against this cli-core
+        run: pnpm ci:quick && pnpm test
+        working-directory: cli
 
   wording:
     runs-on: ubuntu-latest

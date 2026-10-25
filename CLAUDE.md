@@ -55,7 +55,7 @@ Every pull request runs two checks. The fast standards job (`standards.yml`) che
 lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
 The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
 with the coverage floor, build, `docs:check`, the schema and dist checks, Bun, old Node, the SQLite restart
-and parity, which builds tg-cli, max-cli and whatsapp-cli against the branch. The same `ci.yml` runs again
-on each merge to `main` (no publishing).
+and parity, which builds tg-cli, max-cli, whatsapp-cli and cli-template against the branch. The same `ci.yml`
+runs again on each merge to `main` (no publishing).
 Browser and platform suites run for releases, explicit manual validation, and monthly nonpublishing validation. See the
 [shared policy](https://github.com/WireCatLabs/community/blob/main/standards/README.md#ci-and-hooks).
