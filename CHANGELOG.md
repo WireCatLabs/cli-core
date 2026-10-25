@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.420.0 — 25.10.2026
+
 ### Changed — may break callers
 
 - **A meeting links to an event by its room, with exclusive ends, and two candidate events make no link** (`eventCandidates`, `linkEvent`; available from the cli-core release that carries store versions 30 to 33). Rooms are compared by `join_key`, never by the raw link with its passcode; an event a calendar entry holds is a candidate though it has no meeting yet; back-to-back events no longer both match. With two or more candidates `linkEvent` links none and creates none, and `MeetingStore.reviewMeetingLink` (optional; the store's own implements it) puts the meeting on the owner's review list. Before, it created a new automatic event: a second event for a meeting the calendar already held.
