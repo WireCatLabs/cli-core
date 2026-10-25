@@ -301,8 +301,8 @@ const inspect = (path: string) =>
       integrity: integrity.length === 1 && integrity[0] === "ok",
       foreignKeys: foreignKeys === 0,
       searchIndexes: Object.values(searchIndexes).every((state) => state === "ok"),
-      // One that is still filling is short by design; a ready one must hold exactly the vectors there are.
-      vectorIndexes: vectorIndexes.every(({ ready, indexed, expected }) => !ready || indexed === expected),
+      // One that is still filling is short by design; a ready one must hold exactly the rows its sources give.
+      vectorIndexes: vectorIndexes.every(({ ready, missing, extra }) => !ready || missing + extra === 0),
       // A backup or a VACUUM needs about as much again.
       disk: free >= size,
     }

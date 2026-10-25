@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { SqlValue } from "../driver.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
-import { ensureVectorIndex } from "./vector-index.js"
+import { ensureVectorIndex, unitVector } from "./vector-index.js"
 import { dot } from "./vectors.js"
 
 /** A document's picture is one chunk of this type at position 0; its vector is the picture's, not text's. */
@@ -76,12 +76,13 @@ export const documentPicturesOver = ({ database, now }: StoreContext): DocumentP
       const at = now()
       dropDocumentPicture(database, id)
       ensureVectorIndex(database, model, dims)
+      const unit = unitVector(vector)
       database
         .prepare(
           `INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT DO NOTHING`,
         )
-        .run(model, hash, dims, Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength), at, at)
+        .run(model, hash, dims, Buffer.from(unit.buffer, unit.byteOffset, unit.byteLength), at, at)
       database
         .prepare(
           `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope,

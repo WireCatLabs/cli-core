@@ -212,8 +212,9 @@ one, so it is a plain dot product.
 `vec0` table in the store, `vector_index_<id>` (listed in `vector_indexes`): one row per chunk with a vector of that
 model, rowid `chunks.id`, the chunk's hash beside it. `kind` (the chunk's type) and `account` are partition keys,
 `chat` and `occurred_at` metadata, so a KNN query filters on them before it ranks — exactly, since sqlite-vec 0.1.9
-compares every vector in the partition (no approximation). Triggers on `chunks`, `embeddings` and `messages` pass
-each changed chunk through `vector_index_redo`, and each model's trigger re-derives that chunk's row, in the same
+compares every vector in the partition (no approximation). Triggers on every column the index derives a row from —
+`chunks`, `embeddings`, `messages` (chat, send time), `attachments` (which message), `conversations` (which chat) and
+`chats` (which account) — pass each changed chunk through `vector_index_redo`, and each model's trigger re-derives that chunk's row, in the same
 transaction as the write — whoever writes, including the schema's own delete triggers. A store that held vectors
 before version 34 is filled on its first writable open, in short batches; until a model's index is `ready` its
 searches scan.
@@ -225,7 +226,11 @@ or a filter the index cannot express is set (a person, a project, a scope, a lis
 scans: SQLite reads 5,000 rows at a time in the chunks' key order, and JavaScript does the arithmetic
 (`nearestChunks`, `src/store/sqlite/vectors.ts`). Messages (`nearestMessages`) and images (`nearestImages`) search
 the same way. Mail, notes, meeting transcripts and document pictures still scan. `store check` compares each ready
-index's row count with the vectors it should hold.
+index's rows, whole, with the rows its sources give now, both ways.
+
+Vectors are stored at length one (`saveVectors` scales them), so the index's cosine and the scan's dot product rank
+alike; vec0 measures in float32, so a result counts as settled only when it is nearer than the last candidate by more
+than 1e-5.
 
 Every store connection loads the extension (`src/store/vector-extension.ts`); without it the store does not open.
 

@@ -49,3 +49,27 @@ CREATE TRIGGER vector_index_message_au AFTER UPDATE OF chat_id, sent_at ON messa
       WHERE a.attachable_type = 'message' AND a.attachable_id = new.id;
   DELETE FROM vector_index_redo;
 END;
+--> statement-breakpoint
+-- An image's chat and account come from its message; a chat merge moves attachments to the kept copy.
+CREATE TRIGGER vector_index_attachment_au AFTER UPDATE OF attachable_type, attachable_id ON attachments
+  WHEN old.attachable_type IS NOT new.attachable_type OR old.attachable_id IS NOT new.attachable_id BEGIN
+  INSERT INTO vector_index_redo (chunk_id) SELECT id FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = new.id;
+  DELETE FROM vector_index_redo;
+END;
+--> statement-breakpoint
+CREATE TRIGGER vector_index_conversation_au AFTER UPDATE OF chat_id ON conversations
+  WHEN old.chat_id IS NOT new.chat_id BEGIN
+  INSERT INTO vector_index_redo (chunk_id)
+    SELECT id FROM chunks WHERE chunkable_type = 'conversation' AND chunkable_id = new.id;
+  DELETE FROM vector_index_redo;
+END;
+--> statement-breakpoint
+-- Images and conversations are indexed under their chat's account; messages carry their own.
+CREATE TRIGGER vector_index_chat_au AFTER UPDATE OF account_id ON chats WHEN old.account_id IS NOT new.account_id BEGIN
+  INSERT INTO vector_index_redo (chunk_id)
+    SELECT k.id FROM messages m JOIN attachments a ON a.attachable_type = 'message' AND a.attachable_id = m.id
+      JOIN chunks k ON k.chunkable_type = 'image' AND k.chunkable_id = a.id WHERE m.chat_id = new.id
+    UNION ALL SELECT k.id FROM conversations c JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id
+      WHERE c.chat_id = new.id;
+  DELETE FROM vector_index_redo;
+END;

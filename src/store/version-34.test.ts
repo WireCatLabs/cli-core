@@ -46,7 +46,9 @@ it("**indexes the vectors a store held before version 34**, and keeps the index 
   await (await openStore({ path })).close()
 
   const database = await openCache(path)
-  expect(vectorIndexCounts(database)).toEqual([{ model: "m:x:2", dims: 2, ready: true, indexed: 3, expected: 3 }])
+  expect(vectorIndexCounts(database)).toEqual([
+    { model: "m:x:2", dims: 2, ready: true, indexed: 3, expected: 3, missing: 0, extra: 0 },
+  ])
   database.prepare("DELETE FROM embeddings WHERE content_hash = 'h2'").run()
   expect(vectorIndexCounts(database)[0]).toMatchObject({ indexed: 2, expected: 2 })
   expect(database.prepare("SELECT min_compatible FROM schema_migrations WHERE version = 34").get()).toEqual({

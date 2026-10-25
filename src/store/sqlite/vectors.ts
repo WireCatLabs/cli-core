@@ -1,7 +1,7 @@
 import { chunkHash, chunkTextOf, type TextRange } from "../../conversations/chunks.js"
 import { type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
-import { ensureVectorIndex, searchIndex } from "./vector-index.js"
+import { ensureVectorIndex, searchIndex, unitVector } from "./vector-index.js"
 
 /** A chunk of the chat's current build: its hash, and the messages its text is cut from. */
 export interface ChunkToEmbed {
@@ -177,7 +177,10 @@ export const conversationVectors = (
   return { chunks: rows.length, vectors }
 }
 
-/** A vector already there for the same model and text is kept: the same text gives the same vector. */
+/**
+ * A vector already there for the same model and text is kept: the same text gives the same vector. Each is stored at
+ * length one; a zero or non-finite vector is refused.
+ */
 export const saveVectors = (
   { orm, now, database }: StoreContext,
   model: string,
@@ -187,7 +190,8 @@ export const saveVectors = (
   if (vectors.length === 0) return
   ensureVectorIndex(database, model, dims)
   const at = now()
-  for (const { hash, vector } of vectors) {
+  for (const { hash, vector: given } of vectors) {
+    const vector = unitVector(given)
     orm.run(
       sql`INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at)
         VALUES (${model}, ${hash}, ${dims}, ${Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength)}, ${at}, ${at})

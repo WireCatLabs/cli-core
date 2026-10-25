@@ -129,7 +129,15 @@ export const storeCheck = v.union([
     ),
     vectors: v.nullable(v.strictObject({ models: v.record(text, count), unused: count })),
     vector_indexes: v.array(
-      v.strictObject({ model: text, dims: count, ready: v.boolean(), indexed: count, expected: count }),
+      v.strictObject({
+        model: text,
+        dims: count,
+        ready: v.boolean(),
+        indexed: count,
+        expected: count,
+        missing: count,
+        extra: count,
+      }),
     ),
   }),
 ])

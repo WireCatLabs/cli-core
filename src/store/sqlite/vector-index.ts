@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 import { writeBatch } from "./transaction.js"
 
@@ -29,6 +30,21 @@ const source = (model: string, dims: number) => `SELECT k.id, k.chunkable_type,
     v.vector, k.content_hash
   FROM chunks k JOIN embeddings v ON v.model = ${literal(model)} AND v.content_hash = k.content_hash
     AND length(v.vector) = ${dims * 4}`
+
+/**
+ * Every stored vector has length one, so the scan's dot product and the index's cosine rank alike. A model that
+ * already gives unit vectors (e5, the API models) changes by float rounding only. A zero vector (a text the model
+ * knows nothing of) stays zero: vec0 puts it first with no distance, so it is always among the candidates and scores
+ * 0 both ways.
+ */
+export const unitVector = (vector: Float32Array): Float32Array => {
+  let sum = 0
+  for (const value of vector) sum += value * value
+  const length = Math.sqrt(sum)
+  if (!Number.isFinite(length))
+    throw new CliError("validation_error", "a vector must have finite values", { reason: "store.vector-invalid" })
+  return length === 0 ? vector : vector.map((value) => value / length)
+}
 
 const literal = (text: string) => `'${text.replaceAll("'", "''")}'`
 
@@ -112,9 +128,12 @@ export const fillVectorIndexes = (
         if (page.length > 0) step.run(JSON.stringify(page))
         after = page.at(-1) ?? after
         const finished = page.length < batch
+        // Another process may be filling too: neither moves the other back, nor un-readies a finished index.
         database
-          .prepare("UPDATE vector_indexes SET filled_through = ?, ready = ? WHERE id = ?")
-          .run(after, finished ? 1 : 0, id)
+          .prepare(
+            "UPDATE vector_indexes SET filled_through = ?, ready = ? WHERE id = ? AND ready = 0 AND filled_through <= ?",
+          )
+          .run(after, finished ? 1 : 0, id, after)
         return finished
       })
       if (done) break
@@ -131,13 +150,20 @@ export interface IndexFilter {
   before?: number
 }
 
+/**
+ * vec0 measures in float32 and the scan in float64, so two results closer than this may swap. Far above float32's
+ * error at these lengths, far below any distance that matters for ranking.
+ */
+const NEAR_TIE = 1e-5
+
 /** vec0 refuses a k above this. */
 const MAX_K = 4_096
 
 export interface Candidate {
   id: number
   hash: string
-  distance: number
+  /** None for a zero vector. */
+  distance: number | null
 }
 
 const knn = (database: CacheDatabase, index: VectorIndex, filter: IndexFilter, query: Float32Array, k: number) =>
@@ -161,8 +187,9 @@ const knn = (database: CacheDatabase, index: VectorIndex, filter: IndexFilter, q
  * The best `limit` results by the index, or `undefined` when the caller must scan: no ready index for the model, or
  * no exact answer within the most candidates vec0 returns. `survivors` applies the scan's own SQL to the candidates,
  * in the scan's order (and checks each one's hash, so a reused chunk id is never taken for the old chunk), scores
- * them, and names the chunks behind its best `limit` results. Those are exact once each is strictly nearer than the
- * last candidate: every row nearer than that is among the candidates, and the rest cannot outrank them. A text many
+ * them, and names the chunks behind its best `limit` results. Those are exact once each is nearer than the last
+ * candidate by more than `NEAR_TIE`: every row nearer than that is among the candidates, and the rest cannot outrank
+ * them even where float32 and float64 disagree. A text many
  * chunks share has one vector, so a tie that crosses the last candidate asks for more, as the scan's order decides it.
  */
 export const searchIndex = <T>(
@@ -180,15 +207,21 @@ export const searchIndex = <T>(
     const candidates = knn(database, index, filter, query, k)
     const { results, best } = survivors(candidates)
     if (candidates.length < k) return results
-    const edge = candidates.at(-1)?.distance ?? 0
+    const edge = candidates.at(-1)?.distance ?? null
     const distance = new Map(candidates.map((candidate) => [candidate.id, candidate.distance]))
-    if (best.length >= limit && best.every((id) => (distance.get(id) ?? edge) < edge)) return results
+    // A last candidate with no distance is a zero vector: nothing is known to be nearer yet.
+    const nearer = (id: number) => edge !== null && (distance.get(id) ?? edge) < edge - NEAR_TIE
+    if (best.length >= limit && best.every(nearer)) return results
     if (k === MAX_K) return undefined
     k = Math.min(MAX_K, k * 4)
   }
 }
 
-/** Per model: the rows its index holds and the rows it should hold — `store check`'s safety net. */
+/**
+ * Per model, `store check`'s safety net: the rows its index holds against the rows `source` derives now, compared
+ * whole (chunk, kind, account, chat, time, hash, vector) both ways. `missing` are rows the index lacks or holds
+ * wrong; `extra` rows it should not hold.
+ */
 export const vectorIndexCounts = (database: CacheDatabase) =>
   (
     database.prepare("SELECT id, model, dims, ready FROM vector_indexes ORDER BY id").all() as {
@@ -197,10 +230,17 @@ export const vectorIndexCounts = (database: CacheDatabase) =>
       dims: number
       ready: number
     }[]
-  ).map(({ id, model, dims, ready }) => ({
-    model,
-    dims: Number(dims),
-    ready: ready === 1,
-    indexed: Number(database.prepare(`SELECT count(*) AS n FROM ${tableOf(id)}`).get()?.n ?? 0),
-    expected: Number(database.prepare(`SELECT count(*) AS n FROM (${source(model, Number(dims))})`).get()?.n ?? 0),
-  }))
+  ).map(({ id, model, dims, ready }) => {
+    const held = `SELECT ${COLUMNS} FROM ${tableOf(id)}`
+    const wanted = source(model, Number(dims))
+    const count = (sql: string) => Number(database.prepare(`SELECT count(*) AS n FROM (${sql})`).get()?.n ?? 0)
+    return {
+      model,
+      dims: Number(dims),
+      ready: ready === 1,
+      indexed: count(held),
+      expected: count(wanted),
+      missing: count(`${wanted} EXCEPT ${held}`),
+      extra: count(`${held} EXCEPT ${wanted}`),
+    }
+  })

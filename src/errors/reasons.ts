@@ -69,6 +69,7 @@ const OTHERS: Entry[] = [
     "the install has no sqlite-vec extension for this platform; reinstall the CLI",
   ],
   ["store.vector-extension-failed", "configuration_error", "the sqlite-vec extension did not load; reinstall the CLI"],
+  validation("store.vector-invalid", "a vector to store had a non-finite value"),
   validation("catalog.scope-limit", "the selected catalog exceeds its entry limit"),
   validation("evidence.row-too-large", "one evidence row is over its size limit"),
   validation("index.not-ready", "the search index is still being built"),

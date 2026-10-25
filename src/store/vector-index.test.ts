@@ -330,3 +330,184 @@ describe("the vector index at its edges", () => {
     expect(indexed).toHaveLength(20)
   })
 })
+
+/** An account, two chats in it, a message in each, and a second account. */
+const pair = (context: StoreContext) => {
+  const { database } = context
+  const id = (sql: string, ...values: (string | number)[]) => Number(database.prepare(sql).get(...values)?.id)
+  const [first, second] = ["a", "b"].map((name) =>
+    id(
+      "INSERT INTO accounts (provider, external_id, created_at, updated_at) VALUES ('example', ?, 1, 1) RETURNING id",
+      name,
+    ),
+  ) as [number, number]
+  const [kept, gone] = ["k", "g"].map((name) =>
+    id(
+      "INSERT INTO chats (account_id, external_id, kind, created_at, updated_at) VALUES (?, ?, 'group', 1, 1) RETURNING id",
+      first,
+      name,
+    ),
+  ) as [number, number]
+  const message = (chat: number) =>
+    id(
+      `INSERT INTO messages (chat_id, account_id, external_id, sent_at, text, source, created_at, updated_at)
+        VALUES (?, ?, 'm1', 5, 'x', 'fixture', 1, 1) RETURNING id`,
+      chat,
+      first,
+    )
+  return { id, first, second, kept, gone, keptMessage: message(kept), goneMessage: message(gone) }
+}
+
+const chunkOf = (context: StoreContext, type: string, owner: number, account: number, hash: string) =>
+  Number(
+    context.database
+      .prepare(
+        `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, account_id,
+          occurred_at, created_at, updated_at) VALUES (?, ?, 0, 0, 1, ?, ?, 5, 1, 1) RETURNING id`,
+      )
+      .get(type, owner, hash, account)?.id,
+  )
+
+const axis = Float32Array.from({ length: DIMS }, (_, n) => (n === 0 ? 1 : 0))
+
+const inStep = (context: StoreContext) => {
+  for (const { missing, extra } of vectorIndexCounts(context.database))
+    expect({ missing, extra }).toEqual({ missing: 0, extra: 0 })
+}
+
+describe("the vector index follows the rows it derives from", () => {
+  it("**finds an image a chat merge moved** to the kept chat's message", async () => {
+    const context = await open()
+    const { first, kept, keptMessage, goneMessage, id } = pair(context)
+    const attachment = id(
+      `INSERT INTO attachments (attachable_type, attachable_id, position, kind, created_at, updated_at)
+        VALUES ('message', ?, 0, 'photo', 1, 1) RETURNING id`,
+      goneMessage,
+    )
+    chunkOf(context, "image", attachment, first, "h1")
+    saveVectors(context, MODEL, DIMS, [{ hash: "h1", vector: axis }])
+    // What chat-rekey.ts's pointerMover("message") runs for a duplicate pair.
+    context.database
+      .prepare(
+        "UPDATE OR IGNORE attachments SET attachable_id = ? WHERE attachable_type = 'message' AND attachable_id = ?",
+      )
+      .run(keptMessage, goneMessage)
+    const { indexed, scanned } = bothWays(context, () =>
+      nearestImages(context, first, { model: MODEL, limit: 5, query: axis, chatKey: kept }),
+    )
+    expect(indexed).toEqual(scanned)
+    expect(indexed).toHaveLength(1)
+    inStep(context)
+  })
+
+  const conversation = async () => {
+    const context = await open()
+    const rows = pair(context)
+    for (const chat of [rows.kept, rows.gone])
+      context.database
+        .prepare("INSERT INTO conversation_state (chat_id, enabled_at, current_build) VALUES (?, 1, 1)")
+        .run(chat)
+    const id = rows.id(
+      `INSERT INTO conversations (chat_id, first_message_id, build, first_at, last_at, message_count, built_at,
+          algorithm_version, created_at, updated_at) VALUES (?, ?, 1, 1, 1, 1, 1, 1, 1, 1) RETURNING id`,
+      rows.gone,
+      rows.goneMessage,
+    )
+    const chunk = chunkOf(context, "conversation", id, rows.first, "hc")
+    context.database
+      .prepare("INSERT INTO chunk_messages (chunk_id, first_message_id, last_message_id) VALUES (?, ?, ?)")
+      .run(chunk, rows.goneMessage, rows.goneMessage)
+    saveVectors(context, MODEL, DIMS, [{ hash: "hc", vector: axis }])
+    return { context, ...rows, conversation: id }
+  }
+
+  it("finds a conversation moved to another chat", async () => {
+    const { context, first, kept, conversation: id } = await conversation()
+    context.database.prepare("UPDATE conversations SET chat_id = ? WHERE id = ?").run(kept, id)
+    const { indexed, scanned } = bothWays(context, () =>
+      nearestChunks(context, first, { model: MODEL, limit: 5, query: axis, chatKey: kept }),
+    )
+    expect(indexed).toEqual(scanned)
+    expect(indexed).toHaveLength(1)
+    inStep(context)
+  })
+
+  it("finds a conversation whose chat moved to another account", async () => {
+    const { context, second, gone } = await conversation()
+    context.database.prepare("UPDATE chats SET account_id = ? WHERE id = ?").run(second, gone)
+    const { indexed, scanned } = bothWays(context, () =>
+      nearestChunks(context, second, { model: MODEL, limit: 5, query: axis }),
+    )
+    expect(indexed).toEqual(scanned)
+    expect(indexed).toHaveLength(1)
+    inStep(context)
+  })
+
+  it("store check's comparison names a row the index holds wrong", async () => {
+    const { context, conversation: id, kept } = await conversation()
+    context.database.exec("DROP TRIGGER vector_index_conversation_au")
+    context.database.prepare("UPDATE conversations SET chat_id = ? WHERE id = ?").run(kept, id)
+    expect(vectorIndexCounts(context.database)[0]).toMatchObject({ indexed: 1, expected: 1, missing: 1, extra: 1 })
+  })
+})
+
+describe("vectors the index ranks as the scan does", () => {
+  it("**stores every vector at length one**, so a long one ranks by direction both ways", async () => {
+    const context = await open()
+    const account = crowd(context, [
+      ...Array.from({ length: 299 }, () => ({ hidden: false, vector: unit })),
+      {
+        hidden: false,
+        vector: () => Float32Array.from({ length: DIMS }, (_, n) => (n === 0 ? 1.5 : n === 1 ? 29.96 : 0)),
+      },
+    ])
+    const stored = context.database.prepare("SELECT vector FROM embeddings WHERE content_hash = 'h299'").get()
+      ?.vector as Uint8Array
+    const vector = new Float32Array(stored.buffer, stored.byteOffset, DIMS)
+    expect(Math.hypot(...vector)).toBeCloseTo(1, 6)
+    const { indexed, scanned } = bothWays(context, () =>
+      nearestMessages(context, account, { model: MODEL, limit: 5, query: axis }),
+    )
+    expect(indexed).toEqual(scanned)
+  })
+
+  it("refuses a non-finite vector", async () => {
+    const context = await open()
+    const vector = Float32Array.from({ length: DIMS }, () => Number.NaN)
+    expect(() => saveVectors(context, MODEL, DIMS, [{ hash: "z", vector }])).toThrow(/finite values/)
+  })
+
+  it("ranks zero vectors (a text the model knows nothing of) as the scan does", async () => {
+    const context = await open()
+    const account = crowd(context, [
+      ...Array.from({ length: 150 }, () => ({ hidden: false, vector: () => new Float32Array(DIMS) })),
+      ...Array.from({ length: 300 }, () => ({ hidden: false, vector: unit })),
+    ])
+    for (const limit of [5, 200, 400]) {
+      const query = unit()
+      const { indexed, scanned } = bothWays(context, () =>
+        nearestMessages(context, account, { model: MODEL, limit, query }),
+      )
+      expect(indexed, `limit ${limit}`).toEqual(scanned)
+    }
+  })
+
+  for (const noise of [1e-5, 1e-6, 1e-7])
+    it(`**answers as the scan does among near-identical vectors** (noise ${noise})`, async () => {
+      const context = await open()
+      const base = unit()
+      const account = crowd(
+        context,
+        Array.from({ length: 600 }, () => ({
+          hidden: false,
+          vector: () => base.map((value) => value + next() * noise),
+        })),
+      )
+      for (const limit of [1, 5, 20, 50, 99, 100, 101, 200]) {
+        const { indexed, scanned } = bothWays(context, () =>
+          nearestMessages(context, account, { model: MODEL, limit, query: base }),
+        )
+        expect(indexed, `limit ${limit}`).toEqual(scanned)
+      }
+    })
+})

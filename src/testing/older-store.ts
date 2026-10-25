@@ -5,6 +5,7 @@ const UNDO: Record<number, string> = {
   34: `DROP TRIGGER vector_index_chunk_ai; DROP TRIGGER vector_index_chunk_ad; DROP TRIGGER vector_index_chunk_au;
     DROP TRIGGER vector_index_embedding_ai; DROP TRIGGER vector_index_embedding_ad;
     DROP TRIGGER vector_index_embedding_au; DROP TRIGGER vector_index_message_au;
+    DROP TRIGGER vector_index_attachment_au; DROP TRIGGER vector_index_conversation_au; DROP TRIGGER vector_index_chat_au;
     DROP TABLE vector_index_redo; DROP TABLE vector_indexes;`,
   33: `DROP TRIGGER event_index_ai; DROP TRIGGER event_index_au; DROP TRIGGER event_index_ad;
     DROP TRIGGER event_index_entry_au; DROP TRIGGER event_index_participant_ai; DROP TRIGGER event_index_participant_au;
