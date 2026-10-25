@@ -65,8 +65,8 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
       )
       .addOption(new Option("--analysis-provider <provider>", "analysis: agent, openai or anthropic"))
 
-      .option("--model <model>", "analysis model; overrides analysis_model")
-      .option("--base-url <url>", "analysis API endpoint; overrides analysis_base_url")
+      .option("--model <model>", "analysis model; overrides models.analysis.model")
+      .option("--base-url <url>", "analysis API endpoint; overrides models.analysis.base_url")
       .option("--size <n>", "analysis answer messages per batch, 10–200; default 50", positiveCount("--size"))
       .option(
         "--max-tokens <n>",

@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
@@ -43,13 +43,13 @@ describe("AI settings and provider selection", () => {
   it("defaults locally, validates config values, and reports all sources", () => {
     const { config, settings, env, root, keyring } = setup()
     expect(embeddingChoice({}, app, settings(), env, { keyring })).toBe("e5-small")
-    expect(settings().analysisProvider).toBe("agent")
+    expect(settings().models?.analysis).toBeUndefined()
     for (const [key, value] of [
       ["embedding_provider", "anthropic"],
-      ["analysis_provider", "unknown"],
+      ["models.analysis.provider", "unknown"],
       ["embedding_dims", "0"],
-      ["analysis_model", '""'],
-      ["analysis_base_url", "https://user:secret@example.test"],
+      ["models.analysis.model", '""'],
+      ["models.analysis.base_url", "https://user:secret@example.test"],
     ])
       expect(() =>
         config.changeSetting(join(root, "config.json"), {
@@ -65,19 +65,21 @@ describe("AI settings and provider selection", () => {
     })
     config.changeSetting(join(root, "config.json"), {
       profile: "default",
-      setting: "analysis_provider",
+      setting: "models.analysis.provider",
       value: "anthropic",
     })
     config.changeSetting(join(root, "config.json"), {
       profile: "default",
-      setting: "analysis_model",
+      setting: "models.analysis.model",
       value: "test-model",
     })
     expect(settings()).toMatchObject({
       embeddingProvider: "openai",
-      analysisProvider: "anthropic",
-      analysisModel: "test-model",
-      sources: { embeddingProvider: "config file", analysisProvider: "config file" },
+      models: { analysis: { provider: "anthropic", model: "test-model" } },
+      sources: {
+        embeddingProvider: "config file",
+        "models.analysis.provider": "config file: models.analysis.provider",
+      },
     })
     const fromEnv = config.resolveSettings(
       {},
@@ -93,7 +95,7 @@ describe("AI settings and provider selection", () => {
       sources: { embeddingProvider: "APP_EMBEDDING_PROVIDER" },
     })
     expect(() =>
-      config.resolveSettings({}, { env: { ...env, APP_ANALYSIS_PROVIDER: "bad" }, configDir: root }),
+      config.resolveSettings({}, { env: { ...env, APP_MODELS_ANALYSIS_PROVIDER: "bad" }, configDir: root }),
     ).toThrow("invalid")
   })
   it("keeps custom endpoints isolated from public keys and flags override configured providers", () => {
@@ -106,9 +108,7 @@ describe("AI settings and provider selection", () => {
       embeddingModel: "custom",
       embeddingBaseUrl: "https://example.test/v1",
       embeddingDims: 128,
-      analysisProvider: "openai" as const,
-      analysisModel: "custom",
-      analysisBaseUrl: "https://example.test/v1",
+      models: { analysis: { provider: "openai" as const, model: "custom", base_url: "https://example.test/v1" } },
     }
     expect(embeddingChoice({}, app, configured, env, { keyring })).toMatchObject({
       remote: { model: "custom", dims: 128 },
@@ -149,12 +149,26 @@ describe("AI settings and provider selection", () => {
     embeddingKeys(app, env, keyring).remove("example.test")
     expect(embeddingKeys(app, env, keyring).read("example.test")).toBeUndefined()
   })
+  it("**reads no analysis_* setting**: each is unknown, with no word of what replaced it", () => {
+    const { config, root } = setup()
+    for (const key of ["analysis_provider", "analysis_model", "analysis_base_url"]) {
+      expect(() =>
+        config.changeSetting(join(root, "config.json"), { profile: "default", setting: key, value: "openai" }),
+      ).toThrow(`no setting called "${key}"`)
+      writeFileSync(join(root, "config.json"), JSON.stringify({ profiles: { default: { [key]: "openai" } } }))
+      const refused = () => config.resolveSettings({}, { env: { APP_PROFILE: "default" }, configDir: root })
+      expect(refused).toThrow(
+        `setting ${key} is not a setting of app — remove it with \`app default config unset ${key}\``,
+      )
+      expect(refused).not.toThrow(/models/)
+    }
+  })
   it("refuses missing provider/model/key and malformed endpoints before any call", () => {
     const { settings, env, keyring } = setup()
-    expect(() => analysisChoice({}, app, settings(), env, keyring)).toThrow("agent")
+    expect(() => analysisChoice({}, app, settings(), env, keyring)).toThrow("linking skill")
     expect(() => analysisChoice({ analysisProvider: "bad" }, app, settings(), env, keyring)).toThrow("provider")
     expect(() => analysisChoice({ analysisProvider: "anthropic" }, app, settings(), env, keyring)).toThrow(
-      "analysis_model",
+      "models.analysis.model",
     )
     expect(() =>
       analysisChoice({ analysisProvider: "anthropic", model: "test" }, app, settings(), env, keyring),
