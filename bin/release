@@ -83,7 +83,7 @@ land() {
 
 # A pull request checked before the last release and merged after it put its entry in that release's section;
 # restore moves it to Unreleased, so the fold below brings it into this version.
-restored=$(npx -y -p @wirecat/cli-base@0.55.0 cli-dev changelog restore --land)
+restored=$(npx -y -p @wirecat/cli-base@0.55.1 cli-dev changelog restore --land)
 [ -z "$restored" ] || echo "$restored"
 rerun_if_changed "$@"
 
