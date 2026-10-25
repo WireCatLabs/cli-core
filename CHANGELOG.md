@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.423.0 — 25.10.2026
+
 ### Added
 
 - **`doctor --json` lists every problem in the config file as `config.issues`.** Each issue is `{ kind, file, profile?, key?, line?, column?, what, fix? }`, with `kind` one of `invalid_json`, `unknown_setting`, `unknown_permission`, `missing_setting` or `invalid_value`. `what` is one sentence that says what a value has to be and never quotes the saved value. `fix` is a `config unset` command that runs exactly as written, and is left out for invalid JSON (`line` and `column` say where parsing stopped). Doctor checks every section of the file (`defaults`, each profile, and the `personal` and `bot` sections) and every profile in it, and lists all the problems. A permission key that a nearer section hides is reported too. Doctor still exits 0, with no top-level `error`, when it finds problems; with no profile named it answers too, with `profile: null`. The shared schema marks no setting as required, so `missing_setting` appears only with an app's own schema.
