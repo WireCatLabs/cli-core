@@ -1,13 +1,13 @@
 import { CliError, errorObjectOf, type FailureContext, isCliError, mcpErrorResult } from "@wirecat/cli-base"
 import { meetingHitsList } from "../answers.js"
 import { type MeetingHitSearch, validateMeetingHitSearch } from "../search-validation.js"
-import { agentResult, UNTRUSTED } from "./agent-text.js"
+import { agentResult, UNTRUSTED_NEUTRAL } from "./agent-text.js"
 
 const integer = { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER }
 const name = { type: "string", minLength: 1, maxLength: 200 }
 export const meetingSearchTool = {
   name: "search_meetings",
-  description: `Find words in the selected account's stored meetings, indexing new ones first; participant filters do not say who spoke a hit. ${UNTRUSTED}`,
+  description: `Find words in the selected account's stored meetings, indexing new ones first; participant filters do not say who spoke a hit. ${UNTRUSTED_NEUTRAL}`,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     type: "object" as const,

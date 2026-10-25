@@ -11,7 +11,7 @@ export { callMeetingPreparationTool, meetingPreparationTool } from "../mcp/meeti
 export { callMeetingProjectCandidatesTool, meetingProjectCandidatesTool } from "../mcp/meeting-project-candidates.js"
 export { callMeetingSeriesInventoryTool, meetingSeriesInventoryTool } from "../mcp/meeting-series-inventory.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
-export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
+export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION, UNTRUSTED_NEUTRAL } from "../mcp/text.js"
 export { MEETING_RESULT_ENTITIES } from "../meetings/index.js"
 export { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 export type {

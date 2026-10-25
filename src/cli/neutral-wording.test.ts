@@ -45,7 +45,11 @@ const shownSettings = async (definition: ProgramDefinition, prefix: string) => {
   return JSON.parse(streams.stdout[0] ?? "{}").item.settings.map((one: { setting: string }) => one.setting)
 }
 
-const mcpTexts = async (commands: string[]) => {
+const mcpTexts = async (
+  commands: string[],
+  messenger?: boolean,
+  input: Record<string, v.ObjectSchema<v.ObjectEntries, undefined>> = {},
+) => {
   const server = new McpServer({ name: "x", version: "0" })
   registerCommands(
     server,
@@ -57,11 +61,14 @@ const mcpTexts = async (commands: string[]) => {
           title: command,
           description: command,
           writes: command.endsWith("delete"),
-          input: v.object({}),
+          input: input[command] ?? v.object({}),
           run: async () => answered(itemOf({})),
         },
       ]),
     ),
+    undefined,
+    undefined,
+    messenger,
   )
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair()
   await server.connect(serverSide)
@@ -105,5 +112,22 @@ describe("shared wording", () => {
     expect(tools).not.toMatch(/send message|chat members|messages list/)
     expect(tools).toContain('returned: \\"notes list\\"')
     expect(tools).toContain("creates, edits, deletes —")
+  })
+
+  it("**follows `AppIdentity.messenger`** over a catalogue that has `messages` commands, as memo's does", async () => {
+    const tools = await mcpTexts(["messages show", "notes show", "notes list", "notes delete"], false, {
+      "messages show": v.object({ id: v.string() }),
+    })
+    expect(tools).not.toMatch(/send message|chat members|unread|sends, edits, deletes, joins/)
+    expect(tools).toContain('returned: \\"notes list\\"')
+    expect(tools).toContain("names, titles, what people wrote")
+    expect(tools).not.toContain("names, titles, messages")
+  })
+
+  it("examples a reading command that runs with no arguments, a listing first", async () => {
+    const tools = await mcpTexts(["meetings show", "events list", "events delete"], false, {
+      "meetings show": v.object({ id: v.string() }),
+    })
+    expect(tools).toContain('returned: \\"events list\\"')
   })
 })
