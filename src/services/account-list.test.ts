@@ -187,6 +187,8 @@ describe("--source as a list of accounts and groups", () => {
         profiles: { drive: { home: { provider: "google-drive", account: "owner-2" } } },
       }),
     ).toThrow(/no stored documents for drive:home/)
+  })
+
   it("names the notes folders of one provider by it: obsidian for vaults, local for plain folders", async () => {
     const store = await seeded()
     const vault = await store.notes.addFolder({ name: "Vault" })

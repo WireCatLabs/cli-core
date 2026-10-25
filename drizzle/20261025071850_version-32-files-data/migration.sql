@@ -2,7 +2,7 @@
 -- `folder`: version 31 moves their documents to the `google-drive` account, and they are no local folder either way.
 UPDATE accounts SET provider = CASE
     WHEN json_valid(settings) AND json_extract(settings, '$.format') = 'markdown' THEN 'local' ELSE 'obsidian' END
-  WHERE provider = 'folder' AND coalesce(name, '') NOT LIKE 'google-drive:%';
+  WHERE provider = 'folder' AND substr(coalesce(name, ''), 1, 13) <> 'google-drive:';
 --> statement-breakpoint
 UPDATE identities SET email = lower(trim(external_id)) WHERE provider = 'email' AND instr(external_id, '@') > 1;
 --> statement-breakpoint

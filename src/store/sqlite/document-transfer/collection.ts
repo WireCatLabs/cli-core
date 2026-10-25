@@ -30,7 +30,9 @@ export const collectionAccounts = (database: CacheDatabase, collection: string):
           `SELECT * FROM accounts WHERE (provider=? AND external_id=?) OR (${folderProviderSql()} AND name=?) ORDER BY id LIMIT 2`,
         )
         .all(key.provider, key.account, collection)
-    : database.prepare(`SELECT * FROM accounts WHERE ${folderProviderSql()} AND name=? ORDER BY id LIMIT 2`).all(collection)
+    : database
+        .prepare(`SELECT * FROM accounts WHERE ${folderProviderSql()} AND name=? ORDER BY id LIMIT 2`)
+        .all(collection)
 }
 
 /** The stand-in folder version 31 moved an account's documents from, as its `settings.movedFrom` records it. */

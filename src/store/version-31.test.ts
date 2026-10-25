@@ -85,7 +85,8 @@ it("**moves each principal's Drive documents to its google-drive account** and k
   ).toEqual([first?.id])
   expect(
     database
-      .prepare("SELECT id, name FROM accounts WHERE provider = 'folder' ORDER BY id")
+      // Version 32 then renames the folders left behind to `local` or `obsidian`; a stand-in keeps `folder`.
+      .prepare("SELECT id, name FROM accounts WHERE provider IN ('folder', 'local', 'obsidian') ORDER BY id")
       .all()
       .map(({ id, name }) => [String(id), name]),
   ).toEqual([

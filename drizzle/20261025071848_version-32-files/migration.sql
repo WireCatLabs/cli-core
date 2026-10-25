@@ -54,6 +54,7 @@ CREATE TABLE `link_reviews` (
 	CONSTRAINT `link_reviews_linkable_type_linkable_id_entity_type_unique` UNIQUE(`linkable_type`,`linkable_id`,`entity_type`)
 );
 --> statement-breakpoint
+ALTER TABLE `documents` ADD `pinned_file_id` integer;--> statement-breakpoint
 ALTER TABLE `identities` ADD `email` text;--> statement-breakpoint
 CREATE INDEX `entity_link_events_by_linkable_type_linkable_id` ON `entity_link_events` (`linkable_type`,`linkable_id`);--> statement-breakpoint
 CREATE INDEX `entity_link_events_by_entity_type_to_entity_id` ON `entity_link_events` (`entity_type`,`to_entity_id`);--> statement-breakpoint

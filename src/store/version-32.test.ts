@@ -14,7 +14,11 @@ const seedAt31 = async (path: string) => {
   )
   const vault = Number(account.get("folder", "01VAULT", "Vault", '{"format":"obsidian"}')?.id)
   const plain = Number(account.get("folder", "01PLAIN", "Plain", '{"format":"markdown"}')?.id)
-  const drive = Number(account.get("folder", "01DRIVE", "google-drive:owner-1", '{"format":"markdown"}')?.id)
+  // What version 31 leaves: Drive under its own account, and a folder that only looks like a stand-in kept as one.
+  const drive = Number(
+    account.get("google-drive", "owner-1", "Google Drive", '{"format":"markdown","movedFrom":{"id":9}}')?.id,
+  )
+  const lookalike = Number(account.get("folder", "01LOOK", "Google-Drive:owner-3", '{"format":"markdown"}')?.id)
   const document = old.prepare(
     "INSERT INTO documents (account_id, external_id, kind, title, file_name, content_hash, front_matter, body, url, " +
       "metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000, 1000) RETURNING id",
@@ -58,12 +62,12 @@ const seedAt31 = async (path: string) => {
     .prepare("INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES (?, ?, 1000, 1000)")
     .run("email", "alice@example.com")
   old.close()
-  return { vault, plain, drive, ids }
+  return { vault, plain, drive, lookalike, ids }
 }
 
 it("**a store from before version 32 keeps every document** and gains one files row each, folders and paths", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "version-32-")), "wirecat.db")
-  const { vault, plain, drive, ids } = await seedAt31(path)
+  const { vault, plain, drive, lookalike, ids } = await seedAt31(path)
 
   const store = await openStore({ path })
   await store.close()
@@ -73,7 +77,8 @@ it("**a store from before version 32 keeps every document** and gains one files 
   expect(providers).toEqual([
     { id: vault, provider: "obsidian" },
     { id: plain, provider: "local" },
-    { id: drive, provider: "folder" },
+    { id: drive, provider: "google-drive" },
+    { id: lookalike, provider: "local" },
   ])
   expect(
     database
