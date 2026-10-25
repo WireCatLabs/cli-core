@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.436.0 — 26.10.2026
+
 ### Fixed
 
 - **`--help-all` shows the profile with a command that takes one.** The example after "The first word is the profile
