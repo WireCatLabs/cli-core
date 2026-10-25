@@ -14,18 +14,12 @@ shape of this file.
 - **A contact saved with an address joins the mail contact of that exact address.** `savePeople` takes an optional
   `email`; the provider's contact and the mail contact become one person (`same-email`), whichever is saved first.
   A name never joins anyone, and two identities the owner unlinked stay apart.
+- **The first screen of `tg --help`, `max --help` and `wa --help` points at `account list`.** A row under "Start here" names `<tool> account list`, which lists every profile on this computer without a profile in front, so a reader who does not know their profile names finds them. A tool without `account list` shows no row.
 
 ### Fixed
 
 - Generated MCP commands accept a positional argument or its same-named flag alternative once. A single `text` input no longer emits both the argument and `--text`, which made Memo note creation fail. Positional requiredness is retained.
 - Public listener origins refuse embedded credentials before startup diagnostics can expose them.
-
-### Added
-
-- **The first screen of `tg --help`, `max --help` and `wa --help` points at `account list`.** A row under "Start here" names `<tool> account list`, which lists every profile on this computer without a profile in front, so a reader who does not know their profile names finds them. A tool without `account list` shows no row.
-
-### Fixed
-
 - **"Returns" lists the fields of commands whose output has several shapes.** A command's help and the generated `docs/commands.md` showed `message send — ; every field: …` with no fields for every output declared as a union (`message_send`, `store_info`, `chat_group_change` and others; 41 lines in tg-cli's page). The line now lists the fields of every shape, required first, as for any other output.
 
 ## 0.413.0 — 25.10.2026
