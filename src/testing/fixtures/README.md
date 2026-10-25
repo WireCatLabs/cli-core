@@ -34,3 +34,19 @@ A 9.5 KB Word 97–2003 document with invented text (English and Russian), for t
 
 - **Made with:** `soffice --headless --convert-to doc legacy.txt` (LibreOffice), from a text file holding
   "Synthetic legacy memo", a blank line and "The heron count rose to 42 in October. Цапли вернулись."
+
+## `budget.xlsx`
+
+A 6.5 KB workbook with invented numbers, for the spreadsheet reader test in `src/attachments/extract.test.ts`:
+one sheet "Synthetic Budget", a header row, a date, a percentage format and a formula with a cached result.
+
+- **Made with** ExcelJS 4.4.0, once, so the tests need no workbook writer:
+
+  ```js
+  const sheet = workbook.addWorksheet("Synthetic Budget")
+  sheet.addRow(["Item", "Amount", "Paid", "Share"])
+  sheet.addRow(["Rent", 1200, new Date(Date.UTC(2026, 2, 1)), 0.25])
+  sheet.addRow(["Heron food", 0.1 + 0.2, undefined, undefined])
+  sheet.getCell("D2").numFmt = "0%"
+  sheet.getCell("B4").value = { formula: "B2+B3", result: 1200.3 }
+  ```
