@@ -180,6 +180,17 @@ export { BotTokenStore, type BotTokenStoreOptions } from "./bot/token.js"
 export { PressLog, UpdatesCursor } from "./bot/updates.js"
 export type { CommandAvailability, DiscoveredCommand } from "./command-availability.js"
 export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-contract.js"
+export {
+  type CommandRunOptions,
+  type CommandRuns,
+  commandRuns,
+  providerEvent,
+  providerRequest,
+  type RunSettings,
+  recordRuns,
+  runSettings,
+  type SavedRunSettings,
+} from "./command-runs.js"
 export { CONTRACT } from "./commands-command.js"
 export { refuseUnknownKey } from "./config-command.js"
 export { type ConfigIssue, type ConfigIssueKind, checkConfigText, issueMessage } from "./config-issues.js"

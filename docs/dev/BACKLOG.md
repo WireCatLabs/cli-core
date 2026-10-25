@@ -25,7 +25,7 @@ None open.
 
 - **CORE-36** · P2 · 🚧 `fix/shared-contract-audit` Enforce shared command contracts by default; exact, reasoned overrides only. Export actual schemas/reasons for complete cross-CLI audits.
 
-- **CORE-39** · P2 · One run-recording helper for a CLI with its own command program (zoom-cli, drive-cli and
+- **CORE-39** · P2 · 🚧 `feat/command-runs` One run-recording helper for a CLI with its own command program (zoom-cli, drive-cli and
   cli-memo each carry a `src/run-recording.ts` that already differs). Start after their `feat/runs` pull requests merge,
   then replace the three copies (owner, 2026-10-25). Rule: cli-base WC-LIFE-15.
 - **CORE-40** · P2 · 🚩 Start a command without loading every command: `./cli` still loads ~880 files (~400 ms) for
