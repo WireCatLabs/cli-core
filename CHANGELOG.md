@@ -11,6 +11,10 @@ shape of this file.
 
 - **Project evidence says who wrote it.** `gatherProjectEvidence` returns `people`: who sent the run's message and mail items, person by person from the stored contacts (identities a person holds across messengers and mail count as one), with an item count split by context, the owner left out, at most 20 entries and `peopleOmitted` for the rest. It never matches names in the text. The context reader's message and mail items carry `sender` (identity, linked person, `owner`) to make that possible; project and meeting preparation items do not repeat it. See `docs/dev/PROJECT-GATHERING.md`.
 
+### Fixed
+
+- **YAML front matter at the top of a Markdown file is no longer read as a rule and a heading.** `markdownBlocks` leaves it out, so a mirrored Doc does not show it, and a Doc edit written back to the file keeps it byte for byte. A `---` line further down is still a rule.
+
 ## 0.417.0 — 25.10.2026
 
 ### Fixed
