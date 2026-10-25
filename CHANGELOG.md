@@ -11,6 +11,10 @@ shape of this file.
 
 - **`movedCommandError(program, args)` from `/cli`** answers a renamed or moved command path with the pointer `run` gives ("`drive models text download` is not here — use `models download`"), for a CLI that parses without `run`. drive is the one today.
 
+### Changed — may break callers
+
+- **cli-core needs cli-base 0.53.** The peer range is now `>=0.53.0 <0.54.0`, so a CLI moves its cli-base pin to 0.53.0 together with this release. cli-base 0.53.0 makes the command lint require a query declaration on every handwritten list (`WC-CMD-20`); its runtime API is unchanged.
+
 ## 0.414.0 — 25.10.2026
 
 ### Added
