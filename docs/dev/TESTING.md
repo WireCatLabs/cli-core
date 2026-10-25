@@ -16,7 +16,7 @@ secret scan of the new commits, beside the changelog guard. It also runs full va
 ([`.github/workflows/pr.yml`](../../.github/workflows/pr.yml), which calls
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) and through it cli-base's shared `node-ci.yml`): all of
 the commands above except `test:slow`, with the coverage floor, plus `pnpm build`, the schema and dist checks, old
-Node, the SQLite restart and parity, which builds tg-cli, max-cli and whatsapp-cli against the branch
+Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli and cli-template against the branch
 ([WC-CI-5](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/ci.md#wc-ci-5--run-the-full-linux-validation-on-every-pull-request-and-keep-platform-suites-out)).
 On a pull request parity builds each CLI at the branch with the same name as the pull request's branch when
 that CLI has one, and at its `main` otherwise, so a change paired with adoption branches in the CLIs can pass
