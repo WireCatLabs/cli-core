@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Id, Page } from "../../domain/models.js"
 import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredHit } from "../types.js"
 import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
+import { identityOf } from "./identities.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import {
@@ -169,6 +170,37 @@ export const mergePerson = (context: StoreContext, from: number, to: number, opt
     .where(eq(identityLinks.personId, from))
     .all()
   for (const { identityPk } of together) move(context, identityPk, from, to, options)
+}
+
+/** The owner once moved one of the two identities away from a person the other belonged to. */
+const separatedByOwner = ({ database }: StoreContext, one: number, other: number): boolean =>
+  database
+    .prepare(
+      `SELECT 1 FROM identity_link_events moved
+       JOIN identity_link_events held ON held.to_person_id = moved.from_person_id
+       WHERE moved.author = 'owner' AND ((moved.identity_id = ? AND held.identity_id = ?)
+         OR (moved.identity_id = ? AND held.identity_id = ?))
+       LIMIT 1`,
+    )
+    .get(one, other, other, one) !== undefined
+
+/**
+ * Joins the identity to the person of the mail contact with this exact address, making that contact when mail has
+ * not seen it yet, so whichever import comes second lands on one person. The contact is seen by no account, so it is
+ * no one's mail correspondent. An owner's unlink wins: two identities the owner separated stay apart.
+ */
+export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: string, by: string): void => {
+  const key = address.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+$/.test(key) || ref.provider === "email") return
+  const found = required(context, ref)
+  if (!identityRow(context, { provider: "email", id: key })) identityOf(context, "email", key, null)
+  const contact = required(context, { provider: "email", id: key })
+  if (contact.personPk === found.personPk || separatedByOwner(context, found.pk, contact.pk)) return
+  mergePerson(context, found.personPk, contact.personPk, { method: "same-email", by })
+  resolvePersonLinks(
+    context.database,
+    recordOf(context, contact.personPk).identities.flatMap(({ name, username }) => [name, username]),
+  )
 }
 
 /** Gives the identity a person of its own again; the ones left keep theirs. */

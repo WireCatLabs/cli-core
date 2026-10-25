@@ -39,6 +39,8 @@ export interface PersonFacts {
   username?: string | null
   isBot?: boolean | null
   description?: string | null
+  /** An address the provider shows for them: they become one person with the mail contact of that exact address. */
+  email?: string | null
 }
 
 /** One identity in one messenger, by the messenger's own id. `provider` is any string: `email` is one. */

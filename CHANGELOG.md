@@ -11,6 +11,9 @@ shape of this file.
 
 - `AppIdentity.contentLanguages`: ISO 639-1 codes of the languages a CLI's content is in. On a new store the first run pre-ticks the ones search can stem in place of English and the system's language; the person still confirms the shared choice. Unset, nothing changes.
 - Export `publicUrlOf` and `portOf` through `/mcp`, so non-messenger consumers reuse the same HTTP listener option validation as the messenger commands.
+- **A contact saved with an address joins the mail contact of that exact address.** `savePeople` takes an optional
+  `email`; the provider's contact and the mail contact become one person (`same-email`), whichever is saved first.
+  A name never joins anyone, and two identities the owner unlinked stay apart.
 
 ### Fixed
 
