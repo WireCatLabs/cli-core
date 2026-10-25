@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.424.0 — 25.10.2026
+
 ### Changed — may break callers
 
 - **A run with no profile named is recorded with no profile, not `"profile": "default"`** (WC-ACCT-1). `run.json`, `runs list`, `runs show` and `search runs` leave `profile` out for such a run — a failure kept from `tg chats list` with no profile, an MCP call with none, or a `--record` of a command that needs none. A profile the owner named, `default` included, is recorded as before. Records already on disk keep what they say. `RunMetadata.profile`, `RecordingOptions.profile` and `StartRunOptions.profile` are optional, and the `run` entity's `profile` is optional; a caller that read the field as always present checks for it first. `namedProfile(settings)` from `/cli` gives the profile a command was run for, or nothing.
