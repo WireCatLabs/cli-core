@@ -14,6 +14,7 @@ shape of this file.
   before any request. The SDK also sends the key as `Authorization: Bearer` instead of `X-Api-Key`: a custom
   Anthropic base URL whose gateway reads `X-Api-Key` must read `Authorization` instead.
 - **`@wirecat/cli-base` peer range is `>=0.55.0 <0.56.0`** (was `<0.54.0`).
+- **`@modelcontextprotocol/server` is `^2.4.0`** (was exactly 2.3.0), so a CLI on server 2.4.x shares one copy with cli-core.
 - **Dependencies moved to their latest majors:** `@anthropic-ai/sdk` 1.3, `sherpa-onnx` 2.0, `drizzle-orm` 1.0.0-rc.5.
 
 ## 0.421.0 — 25.10.2026

@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@types/pngjs>@types/node': 22.20.5
   mammoth>argparse: 2.0.1
   micromark-extension-math>katex: 0.18.2
   vite@>=8.3.0 <8.3.3: ^8.3.5
@@ -23,7 +24,7 @@ importers:
         specifier: 0.2.0
         version: 0.2.0
       '@modelcontextprotocol/server':
-        specifier: 2.4.0
+        specifier: ^2.4.0
         version: 2.4.0
       '@resvg/resvg-js':
         specifier: 2.6.2
@@ -1150,9 +1151,6 @@ packages:
 
   '@types/node@22.20.5':
     resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
-
-  '@types/node@26.6.5':
-    resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
 
   '@types/pngjs@6.0.5':
     resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
@@ -2565,9 +2563,6 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici-types@8.9.0:
-    resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
-
   unicorn-magic@0.4.1:
     resolution: {integrity: sha512-lzlXPoVB0Uy/FvTaUgX39RbixYiSKoc3JSoSf01+0c2B6FR3qdYIPN7Qjo/AV7n6sqLCk0509cT3LRj1oSZ1+A==}
     engines: {node: '>=20'}
@@ -3426,13 +3421,9 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/node@26.6.5':
-    dependencies:
-      undici-types: 8.9.0
-
   '@types/pngjs@6.0.5':
     dependencies:
-      '@types/node': 26.6.5
+      '@types/node': 22.20.5
 
   '@types/unist@2.0.11': {}
 
@@ -4854,8 +4845,6 @@ snapshots:
   underscore@1.13.8: {}
 
   undici-types@6.21.0: {}
-
-  undici-types@8.9.0: {}
 
   unicorn-magic@0.4.1: {}
 
