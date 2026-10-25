@@ -131,6 +131,13 @@ it("lists links shared in meeting chat, most shared first, with who shared them 
     },
   ])
   expect(links.items[0]?.meetings.map((one) => one.title)).toEqual(["Example links"])
+  const selected = await readMeetingLinks(store, {
+    accountId,
+    url: "https://docs.google.com/document/d/EXAMPLEdocumentId123/edit",
+  })
+  expect(selected.items.map(({ url }) => url)).toEqual(["https://docs.google.com/document/d/EXAMPLEdocumentId123/edit"])
+  expect(selected.messages).toBe(links.messages)
+  expect((await readMeetingLinks(store, { accountId, url: "https://example.invalid/missing" })).items).toEqual([])
   await expect(readMeetingLinks(store, { accountId, maxMessages: 3 })).rejects.toMatchObject({
     code: "validation_error",
   })

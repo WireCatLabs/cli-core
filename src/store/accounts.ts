@@ -1,9 +1,11 @@
+import type { ProviderEntry } from "../domain/providers.js"
 import { ACCOUNT_GROUPS, type AccountGroups, type Profiles } from "../search/account-list.js"
 import { keysOver } from "./keys.js"
 import { accountGroupsOf, profilesOf, saveProfile } from "./sqlite/account-groups.js"
 import * as accounts from "./sqlite/accounts.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkOwnIdentities } from "./sqlite/own-identities.js"
+import { registerProvider } from "./sqlite/providers.js"
 import { linkInbox } from "./sqlite/tasks.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey, StoredAccount } from "./types.js"
@@ -35,6 +37,8 @@ export interface AccountsStore extends AccountAccounts {
   profiles(): Promise<Profiles>
   /** Records which account a profile of `app` is; a no-op when the store already says so. */
   saveProfile(app: string, profile: string, key: AccountKey): Promise<void>
+  /** Writes a CLI's provider entry for every tool on this store to read; see `registerProvider`. */
+  registerProvider(entry: ProviderEntry): Promise<void>
 }
 
 export const accountAccountsOver = (context: StoreContext): AccountAccounts => {
@@ -67,6 +71,7 @@ export const accountsStoreOver = (context: StoreContext, keyed: AccountAccounts)
     profiles: async () => profilesOf(database),
     saveProfile: async (app, profile, key) =>
       write(database, () => saveProfile(database, app, profile, key, context.now())),
+    registerProvider: async (entry) => registerProvider(database, entry, context.now()),
     saveAccountGroup: async (name, members) =>
       write(database, () => {
         const groups = accountGroupsOf(database)

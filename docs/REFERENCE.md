@@ -256,6 +256,39 @@ Without support, a validated target returns `url: null`, `access: unavailable`, 
 Offline validates this account's stored message and returns reason `offline`, without connecting.
 A locator for another messenger or account is refused. Singular `link` differs from graph `links`.
 
+## The entry point of a CLI with its own program
+
+A tool on `createProgram` starts through `run()`, which already handles signals and pipes. A tool that builds its own
+commander program starts through `startCli` (from `@wirecat/cli-core/cli`), so its `src/bin/<command>.ts` is a few
+lines:
+
+```ts
+#!/usr/bin/env node
+import { enableCompileCache } from "node:module"
+import { APP } from "../app.js"
+import { reportFailure } from "../failure.js"
+
+enableCompileCache()
+const { startCli } = await import("@wirecat/cli-core/cli")
+await startCli({
+  app: APP,
+  sqlite: true,
+  run: async (entry) => (await import("../program.js")).run(entry),
+  fail: (error, entry) => reportFailure(error, entry),
+})
+```
+
+`startCli` catches a crash before the program's own handler (`catchCrashes`, with `reasons` and `interactive`),
+aborts `entry.signal` on SIGINT and SIGTERM, ends with exit 0 when a reader closes the pipe (`| head`) and 3 when the
+output cannot be written, runs `ensureSqlite` first with `sqlite: true`, and gives help and the version their own
+exit code (help for a missing command exits 2). Any other failure goes to `fail` once. It sets `process.exitCode` and
+never calls `process.exit`. The program gets the rest in `entry`: `atStart(command)` from a `preAction` hook runs the
+first-run questions (`setupAtStart`, headless without a terminal, under CI, `--json`, `--jsonl` or `--no-input`, and
+locked by `<PREFIX>_READ_ONLY`); `ask(question, command?)` is the consent prompt, false without asking in the same
+cases; `openBrowser(url, browser?)` starts the system opener detached; `outputClosed()` says the pipe closed.
+What only one tool needs — zm's batch input file and keyring — the tool builds inside `run`, with `entry.signal`.
+Import the program lazily, as above: the compile cache and the SQLite swap only help what loads after them.
+
 ## Command discovery
 
 The handbook's [WC-CMD-28](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ) names
@@ -568,15 +601,12 @@ unless the caller explicitly sets `registries: true`.
 
 ## How often, and what may break
 
-**Release when a consumer needs it.** Changes wait under `## Unreleased` until then. Apart from the weekly
-limit below, there is no gap to keep between releases.
+**Release when a consumer needs it, at any time** ([WC-REL-8](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-8--any-package-may-release-at-any-time)). Changes wait under `## Unreleased`
+until then; there is no gap to keep between releases and no weekly limit on breaking changes.
 
-**A change to a stable export that makes a CLI change its code ships at most once a week**
-([WC-REL-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-9--a-change-to-a-stable-shared-library-export-that-makes-a-cli-change-its-code-ships-at-most-once-a-week)). The parity jobs build tg-cli, max-cli and whatsapp-cli from their `main`
-against every pull request. A change to an export in the table below counts unless all three jobs pass with
-each CLI's `main` unchanged, so it also counts when it passes only against a CLI branch made for it. It counts
-when it compiles but changes behaviour a CLI must adapt to, which parity cannot see, so when in doubt it counts. The changes that count go into one release a week, and every
-CLI that uses cli-core moves to that release on the same day.
+**A release that makes a CLI change its code moves every CLI that uses cli-core on the same day.** The parity
+jobs build tg-cli, max-cli and whatsapp-cli from their `main` against every pull request; a change that fails
+there, or passes only against a CLI branch made for it, needs those CLI branches ready before it is released.
 
 **Before 1.0, any release may break a caller.** A change that does is listed in the changelog under
 "Changed — may break callers", with what to change in a consumer.

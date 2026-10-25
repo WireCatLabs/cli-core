@@ -6,12 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
 import { chunkHash } from "../conversations/chunks.js"
 import type { Message } from "../domain/models.js"
+import { useProviders } from "../domain/providers.js"
 import * as embeddingRuntime from "../embeddings/embed.js"
 import type { TextModel } from "../embeddings/models.js"
 import { textModel } from "../embeddings/models.js"
 import type { SendGuard } from "../sends/guard.js"
 import { openCache } from "../store/open.js"
-import { openStore } from "../store/store.js"
+import { openStore, registerProvider } from "../store/store.js"
 import { conversationsService } from "./conversations.js"
 import { storedDeps } from "./deps.js"
 import { embeddingsService } from "./embeddings.js"
@@ -84,7 +85,10 @@ beforeEach(() => {
   }
   vi.stubEnv("WIRECAT_STATE_DIR", cache)
 })
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  useProviders([])
+})
 
 describe("embeddings", () => {
   it("**embeds every chunk of the current build once**, and a second run embeds nothing", async () => {
@@ -255,6 +259,7 @@ describe("strict conversation search scope", () => {
 
   it("widens only explicitly and qualifies colliding native IDs in results and readiness", async () => {
     const { store, embeddings } = await setUp()
+    await registerProvider(store, { name: "test-bot", kind: "messages", aliases: [], command: "chat" })
     const bot = { provider: "test-bot", account: "1" }
     await store.chats.saveChats(bot, [
       { id: "9", title: "Bot group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },

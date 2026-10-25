@@ -47,6 +47,13 @@ describe("shared document knowledge", () => {
       await f.index.save(f.principal, content({ ...f.metadata, name: "Renamed" }), "hash-one")
       expect((await f.k.memory(f.principal, f.ref, memory.ref)).status).toBe("confirmed")
       expect(await f.k.tags(f.principal, f.ref, "list")).toEqual(["budget", "review"])
+      expect(await f.k.tags(f.principal, f.ref, "list", [], { tag: "review" })).toEqual(["review"])
+      expect(await f.k.tags(f.principal, f.ref, "list", [], { tag: "missing" })).toEqual([])
+      expect(
+        await f.k.links(f.principal, f.ref, { id: link.id, kind: "related-to", origin: "owner", confirmed: true }),
+      ).toEqual([link])
+      expect(await f.k.links(f.principal, f.ref, { role: "key" })).toEqual([])
+      expect(await f.k.links(f.principal, f.ref, { id: "999999" })).toEqual([])
       expect((await f.k.links(f.principal, f.ref)).some((item) => item.id === link.id)).toBe(true)
       expect((await f.k.note(f.principal, f.ref, note.ref)).title).toBe("Review")
       await f.index.save(f.principal, content(f.metadata, "Revised decision"), "hash-two")

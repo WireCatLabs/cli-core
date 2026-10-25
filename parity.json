@@ -1065,7 +1065,7 @@
     "--until-id": {
       "value": "<id>",
       "meaning": "only up to this message id, inclusive; the newest by default",
-      "note": "tg's `bot store fetch` takes a message link here, the message the fetch starts at, inclusive"
+      "note": "tg's `bot messages sync` takes a message link here, the message the sync starts at, inclusive"
     },
     "--until-time": {
       "value": "<time>",
@@ -1917,6 +1917,36 @@
         "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
+    "bot messages sync": {
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
+      "options": {
+        "--last": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--limit": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--page-size": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--pause": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--since-time": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--until-id": {
+          "in": ["tg"],
+          "reason": "Telegram bots read message numbers and need a starting link when none is known; MAX pages chat history directly; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
+      }
+    },
     "bot messages unpin": {
       "in": ["max", "tg"],
       "planned": {
@@ -2013,40 +2043,6 @@
       "in": ["max", "tg"],
       "planned": {
         "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
-      }
-    },
-    "bot store": {
-      "in": ["max", "tg"],
-      "reason": "Meta's Cloud API keeps no history a bot can fetch; WhatsApp bots get only what arrives by webhook"
-    },
-    "bot store fetch": {
-      "in": ["max", "tg"],
-      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
-      "options": {
-        "--last": {
-          "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
-        },
-        "--limit": {
-          "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
-        },
-        "--page-size": {
-          "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
-        },
-        "--pause": {
-          "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
-        },
-        "--since-time": {
-          "in": ["max", "tg"],
-          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
-        },
-        "--until-id": {
-          "in": ["tg"],
-          "reason": "Telegram bots read message numbers and need a starting link when none is known; MAX pages chat history directly; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
-        }
       }
     },
     "bot templates": {

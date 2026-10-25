@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isKind, KINDS, kindOf, PROVIDERS, providerNamed } from "./providers.js"
+import { isKind, KINDS, kindIn, kindOf, PROVIDERS, providerNamed } from "./providers.js"
 
 describe("the provider registry", () => {
   it("gives every provider one kind and every name or alias one provider", () => {
@@ -16,6 +16,8 @@ describe("the provider registry", () => {
     expect(kindOf("email")).toBe("mail")
     expect(kindOf("folder")).toBe("notes")
     expect(kindOf("a-messenger-of-a-consumer")).toBe("messages")
+    expect(kindIn("a-messenger-of-a-consumer")).toBeUndefined()
+    expect(isKind("events")).toBe(true)
     expect(isKind("Documents")).toBe(true)
     expect(isKind("telegram")).toBe(false)
   })

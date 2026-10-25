@@ -58,7 +58,6 @@ from this plan. Slices 3, 5, 6, 7 and 8 have no other owner.
 - MAX: each new opcode gets a row in max-cli `docs/dev/protocol.md` saying what it rests on
   (claim, source or capture). A MAX write is measured in Saved Messages first and needs the
   owner's yes (max-cli `docs/dev/BACKLOG.md`, "From the PyMax comparison").
-- Releases: at most one cli-core release every 2 hours (`CLAUDE.md`).
 
 Shared examples to copy: `src/cli/messenger/polls-command.ts` (`annotate(..., {mutates: true})`,
 `capability(...)`), `messages-send-command.ts`, `admin-folders-command.ts` (MCP tools are generated from the

@@ -5,6 +5,35 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`startCli`, one entry-point call for a CLI that builds its own program** (from `@wirecat/cli-core/cli`). It does what drive, zm and memo wire by hand in `src/bin/`: the crash catch, cancellation on SIGINT and SIGTERM, a quiet exit 0 on a closed pipe, the SQLite swap, the first-run questions (`entry.atStart`), the consent prompt (`entry.ask`) and the browser (`entry.openBrowser`). The program and its failure report stay the CLI's own. Nothing changes for a CLI that keeps its own wiring.
+- **Sign-in module `@wirecat/cli-core/oauth`** (available from cli-core 0.413.0). A CLI declares its provider (URLs, client, loopback or relay redirect) and gets authorization code with PKCE S256 (state check, timeout, cancel, paste fallback), refresh and revoke over plain `fetch`, and a `tokenKeeper` whose refresh takes a lock per keyring entry shared by every process, so two processes refreshing at once send one request. `credentialStorage` sits on cli-base's `Credentials`; `standardCodec` writes new entries as `oauth:<provider>:<profile>`, and `driveSessionCodec` and `zoomTokenCodec` read and write drive's and zm's existing entries unchanged, so nobody signs in again.
+
+### Fixed
+
+- **The 0.412.0 notes for the provider registry, unknown providers and the `events` kind say "available from cli-core 0.413.0"; they shipped in 0.412.0.** The release folded them in from `main`'s head. Nothing else in those entries changes.
+- **The 0.412.0 notes for the provider registry say "available from cli-core 0.413.0"; it shipped in 0.412.0.** `registerProvider`, `useProviders`, `kindIn`, skipped unknown providers and kind `events` are all in 0.412.0.
+
+## 0.412.0 — 24.10.2026
+
+### Added
+
+- **A stored provider registry** (available from cli-core 0.413.0). `registerProvider(store, { name, kind, aliases, command })` (from `@wirecat/cli-core/store`) writes a CLI's entry into `store_settings` under the key `providers`; every store handle loads the stored entries when it opens, so `kindOf`, `providerNamed` and `--source` in every CLI know a provider cli-core does not list. The built-ins stay the seed. `useProviders(entries)`, `kindIn(provider)`, `providerNamed`, `kindOf`, `providers()`, `KINDS` and `PROVIDERS` are exported from `@wirecat/cli-core`. Two entries that disagree on a kind, or an alias another provider has, are a `validation_error` naming both; a stored entry that clashes with a built-in is left out when the store opens, so it never stops the store opening.
+- **Knowledge lists filter at their native readers.** Organizations, projects, reminders and mail rules accept optional queries before SQL list bounds. Document tags and links accept native selectors, and meeting-link reads can select one URL before aggregation. Existing unfiltered calls keep their behavior.
+
+### Changed — may break callers
+
+- **A provider no registry entry names is skipped, never searched as messages** (available from cli-core 0.413.0). `search messages`, `search all` and `--source` lists report each of its accounts under `skipped` with the reason "unknown provider — run its CLI once" (code `not_found`). The account the search runs as is still read, whatever its provider. `kindOf` keeps its signature and its `messages` default; `kindIn` answers `undefined` for such a provider. `ListedAccount.kind` is now `Kind | undefined`.
+- **`KINDS` and `Kind` gain `events`** (available from cli-core 0.413.0). No search reads events yet; `--source events` says so.
+- **`bot store fetch` is now `bot messages sync`, and the `bot store` group is gone** (tg and max). It does what the personal `messages sync` does, so it carries the same name; `store` is for the local database. The old path answers with a pointer to the new one, and a saved `permissions.bot.store.fetch` is refused until it is renamed to `permissions.bot.messages.sync`. A CLI that customizes the command must move its override to the new path.
+
+### Fixed
+
+- **`config set` and `config unset` work while a moved permission key is saved.** Every other command still refuses the old key and names its replacement; `config unset permissions.<old>` and `config set permissions.<new>` now fix it instead of failing with the same error.
+- **`tasks update <task> --parent none` clears the parent.** The CLI keeps the sentinel through option parsing and converts it to null when building the plan, so Commander cannot turn it into an empty task id.
 
 ## Unreleased
 

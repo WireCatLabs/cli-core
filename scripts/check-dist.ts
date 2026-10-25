@@ -191,3 +191,14 @@ const update = appUpdate({
 if (update.installer({ scriptPath: "/usr/lib/node_modules/@wirecat/demo-cli/dist/bin/demo.js" }) !== "npm")
   throw new Error("./update did not read the installer from the app's script")
 console.log("dist: ./update reads an app's installer")
+
+const { credentialStorage, oauthAccount, standardCodec } = await import("@wirecat/cli-core/oauth")
+const { memoryKeyring } = await import("@wirecat/cli-base/testing")
+const signIn = credentialStorage({
+  credentials: { service: "demo-cli", configDir: mediaFolder, storage: "keyring", keyring: memoryKeyring() },
+  account: oauthAccount("demo", "personal"),
+  codec: standardCodec("demo"),
+})
+signIn.write({ tokens: { refreshToken: "invented", scopes: [] }, client: { clientId: "demo" } })
+if (signIn.read()?.tokens.refreshToken !== "invented") throw new Error("./oauth did not read back an invented sign-in")
+console.log("dist: ./oauth saves and reads an invented sign-in")

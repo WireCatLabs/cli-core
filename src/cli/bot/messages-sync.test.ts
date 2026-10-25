@@ -73,14 +73,14 @@ beforeEach(() => {
   new BotTokenStore({ app, profile: "sales", env: {}, configDir: join(root, "config"), keyring }).write("t")
 })
 
-describe("bot store fetch", () => {
+describe("bot messages sync", () => {
   it("**fetches newest first, stops at --limit, and the next run carries on to the start**", async () => {
-    const first = await call(["store", "fetch", "-100", "--limit", "150", "--page-size", "100", "--json"])
+    const first = await call(["messages", "sync", "-100", "--limit", "150", "--page-size", "100", "--json"])
     expect(first.answer.item).toMatchObject({ chat: "-100", complete: false })
     // By time each page repeats the message the last one ended at; a repeat does not count.
     expect(first.answer.item.fetched).toBeGreaterThanOrEqual(149)
 
-    const second = await call(["store", "fetch", "-100", "--json"])
+    const second = await call(["messages", "sync", "-100", "--json"])
     expect(second.answer.item).toMatchObject({ complete: true })
 
     const kept = await call(["messages", "list", "-100", "--limit", "300", "--offline", "--json"])
@@ -89,21 +89,28 @@ describe("bot store fetch", () => {
 
   it("stops at --last and at --since-time, and refuses both together", async () => {
     expect(
-      (await call(["store", "fetch", "-100", "--last", "50", "--page-size", "20", "--json"])).answer.item,
+      (await call(["messages", "sync", "-100", "--last", "50", "--page-size", "20", "--json"])).answer.item,
     ).toMatchObject({
       reached_last: true,
     })
     const since = new Date(START + 200 * 60_000).toISOString()
-    const reached = (await call(["store", "fetch", "-100", "--since-time", since, "--json"])).answer
+    const reached = (await call(["messages", "sync", "-100", "--since-time", since, "--json"])).answer
     expect(reached.item).toMatchObject({ reached_since: true })
     expect(reached.meta).toMatchObject({ window: { since } })
     expect(reached.meta).not.toHaveProperty("timezone")
-    expect((await call(["store", "fetch", "-100", "--last", "5", "--since-time", since])).code).toBe(2)
+    expect((await call(["messages", "sync", "-100", "--last", "5", "--since-time", since])).code).toBe(2)
   })
 
   it("is not there for a messenger whose bot cannot page back", async () => {
     const { fetching: _fetching, ...without } = bot
-    expect(botCommand(without).commands.map((one) => one.name())).not.toContain("store")
+    const messages = botCommand(without).commands.find((one) => one.name() === "messages")
+    expect(messages?.commands.map((one) => one.name())).not.toContain("sync")
+  })
+
+  it("points the old `bot store fetch` at `bot messages sync`", async () => {
+    const old = await call(["store", "fetch", "-100", "--json"])
+    expect(old.code).toBe(2)
+    expect(old.stderr).toContain("use `bot messages sync`")
   })
 
   it("passes --from and the pause to the history-only connection, with its stop signal", async () => {
@@ -117,12 +124,12 @@ describe("bot store fetch", () => {
       },
     }
     const fetched = await call(
-      ["store", "fetch", "-100", "--until-id", "https://example.org/10", "--limit", "1", "--json"],
+      ["messages", "sync", "-100", "--until-id", "https://example.org/10", "--limit", "1", "--json"],
       messenger,
     )
     expect(fetched.code).toBe(0)
     expect(connecting?.history).toEqual({ from: "https://example.org/10", pauseMs: 1 })
     expect(connecting?.stop).toBeInstanceOf(AbortSignal)
-    expect((await call(["store", "fetch", "-100", "--until-id", "https://example.org/10"])).code).toBe(2)
+    expect((await call(["messages", "sync", "-100", "--until-id", "https://example.org/10"])).code).toBe(2)
   })
 })
