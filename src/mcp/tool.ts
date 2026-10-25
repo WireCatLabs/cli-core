@@ -55,7 +55,7 @@ export const WRITE: ToolAnnotations = {
   openWorldHint: true,
 }
 
-export { UNTRUSTED } from "./text.js"
+export { UNTRUSTED, UNTRUSTED_NEUTRAL } from "./text.js"
 
 type Input = v.ObjectSchema<v.ObjectEntries, undefined> | v.StrictObjectSchema<v.ObjectEntries, undefined>
 

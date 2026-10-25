@@ -10,7 +10,7 @@ import {
   meetingPassageTool,
   meetingSearchTool,
   meetingTools,
-  UNTRUSTED,
+  UNTRUSTED_NEUTRAL,
 } from "./index.js"
 
 const TAG = String.fromCodePoint(0xe0041, 0xe0042)
@@ -109,6 +109,6 @@ describe("meeting MCP reads", () => {
 
   it("tells the agent on every read tool that the answer is data", () => {
     for (const tool of [...meetingTools, meetingPassageTool, meetingSearchTool])
-      expect(tool.description).toContain(UNTRUSTED)
+      expect(tool.description).toContain(UNTRUSTED_NEUTRAL)
   })
 })

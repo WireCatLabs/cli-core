@@ -387,6 +387,7 @@ export const createServer = (
       },
       app.errors,
       withheld,
+      app.messenger,
     )
     // The prompts and resources show messages, so a profile that may not read them gets neither.
     if (levelOf("messages") !== "deny") registerPrompts(server, { command: app.command, name })

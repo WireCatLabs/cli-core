@@ -12,7 +12,7 @@ import {
   positiveInteger,
 } from "../reads.js"
 import type { MeetingFilter, MeetingStore } from "../store.js"
-import { agentResult, UNTRUSTED } from "./agent-text.js"
+import { agentResult, UNTRUSTED_NEUTRAL } from "./agent-text.js"
 
 const integer = { type: "integer", minimum: 1 }
 const text = { type: "string", minLength: 1 }
@@ -76,7 +76,7 @@ export const meetingTools = [
   },
 ].map(({ properties, required, description, ...tool }) => ({
   ...tool,
-  description: `${description}. ${UNTRUSTED}`,
+  description: `${description}. ${UNTRUSTED_NEUTRAL}`,
   inputSchema: { type: "object", properties, required, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }))
@@ -190,6 +190,7 @@ export {
   agentResult,
   UNTRUSTED,
   UNTRUSTED_INSTRUCTION,
+  UNTRUSTED_NEUTRAL,
 } from "./agent-text.js"
 export { callMeetingPassageTool, meetingPassageTool } from "./passage.js"
 export { callMeetingProjectEvidenceTool, meetingProjectEvidenceTool } from "./project-evidence.js"
