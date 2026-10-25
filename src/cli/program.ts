@@ -43,7 +43,7 @@ import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
-import { movedPath, movedPointer } from "./moved.js"
+import { movedCommandError } from "./moved.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile, PROFILE_FREE, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
@@ -532,10 +532,8 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
   }
 
-  const words = rest.filter((word) => !word.startsWith("-"))
-  const moved = movedPath(words, (path) => mountedOrArgument(program, path))
-  if (moved !== undefined) {
-    const failure = new CliError("validation_error", `\`${command} ${moved}\` is not here — ${movedPointer(moved)}`)
+  const failure = movedCommandError(program, rest)
+  if (failure !== undefined) {
     const settled = await settleFailure(failure, { definition, program, rest, profile, options })
     return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
   }
@@ -714,14 +712,6 @@ const keepFailure = async (
 }
 
 /** Mounted, or reached through a command that takes no subcommand, where the rest of the path is its argument. */
-const mountedOrArgument = (program: Command, path: string): boolean => {
-  const words = path.split(" ")
-  return words.some((_, at) => {
-    const command = commandAt(program, words.slice(0, at + 1).join(" "))
-    return command !== undefined && (at === words.length - 1 || command.commands.length === 0)
-  })
-}
-
 /** `messages list` from `messages list 111 --limit 5`: the words that name commands, up to the first that does not. */
 const commandPath = (program: Command, rest: string[]): string => {
   const words: string[] = []
