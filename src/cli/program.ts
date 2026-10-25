@@ -97,16 +97,18 @@ export const createProgram = (
   const messenger = app.messenger !== false
   const found = messenger ? "found messages" : "found items"
   const content = messenger ? "message content" : "content"
+  const sample = messenger ? "chats list" : sampleCommand(mounted)
+  // A CLI where every command is profile-free has nothing to show a profile with, so it says nothing about one.
+  const profileHelp = sample
+    ? `\n\nThe first word is the profile whenever it is not a command — \`${app.command} personal ${sample}\`.\n` +
+      `\`${app.envPrefix}_PROFILE\` says the same thing for a whole shell session.\n` +
+      "No profile is assumed: without one, a command that uses an account stops and lists the profiles here."
+    : ""
 
   program
     .name(app.command)
     .usage("[profile] [options] <command>")
-    .description(
-      `${app.description}\n\n` +
-        `The first word is the profile whenever it is not a command — \`${app.command} personal ${messenger ? "chats list" : (sampleCommand(mounted) ?? "<command>")}\`.\n` +
-        `\`${app.envPrefix}_PROFILE\` says the same thing for a whole shell session.\n` +
-        "No profile is assumed: without one, a command that uses an account stops and lists the profiles here.",
-    )
+    .description(`${app.description}${profileHelp}`)
     .version(app.version, "-V, --version")
     .option(
       "-v, --verbose",
