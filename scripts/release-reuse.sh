@@ -5,6 +5,8 @@
 #
 #   GH_TOKEN GITHUB_REPOSITORY COMMIT DRY_RUN APP_REF GITHUB_REF   set by the workflow
 #   EXTRA_CONTEXTS   check names required on top of the ruleset's, one per line
+#   PULL_REQUEST     true when scripts/ci-unchanged.sh asks whether a commit on main is proven green: the release-only
+#                    conditions (main, no dry run, Parity on main) do not apply, the summary says so
 set -uo pipefail
 
 : "${GH_TOKEN:?}" "${GITHUB_REPOSITORY:?}" "${COMMIT:?}"
@@ -12,21 +14,26 @@ repo=$GITHUB_REPOSITORY
 out=${GITHUB_OUTPUT:-/dev/stdout}
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 work=$(mktemp -d)
+label="Release validation"
+[ "${PULL_REQUEST:-}" != true ] || label="Evidence for ${COMMIT:0:10}"
+
 trap 'rm -rf "$work"' EXIT
 export COMMIT
 github_actions_app=15368
 
 full() {
   echo "reuse=false" >>"$out"
-  printf '### Release validation: full\n\nReason: %s\n' "$1" >>"$summary"
+  printf '### %s: full\n\nReason: %s\n' "$label" "$1" >>"$summary"
   echo "full validation: $1"
   exit 0
 }
 api() { gh api "$@" 2>"$work/err"; }
 
-[ "${DRY_RUN:-}" != "true" ] || full "dry run"
-[ "${GITHUB_REF:-}" = "refs/heads/main" ] || full "not a run on main"
-[ "${APP_REF:-main}" = "main" ] || full "Parity builds ${APP_REF}, not the main the pull request checked"
+if [ "${PULL_REQUEST:-}" != true ]; then
+  [ "${DRY_RUN:-}" != "true" ] || full "dry run"
+  [ "${GITHUB_REF:-}" = "refs/heads/main" ] || full "not a run on main"
+  [ "${APP_REF:-main}" = "main" ] || full "Parity builds ${APP_REF}, not the main the pull request checked"
+fi
 
 prs=$(api "repos/$repo/commits/$COMMIT/pulls" \
   --jq '[.[] | select(.merge_commit_sha == env.COMMIT and .base.ref == "main" and .merged_at != null)] | map(.number) | join(" ")') ||
@@ -81,11 +88,13 @@ problems=$(jq -r -n --slurpfile required "$work/required.json" --slurpfile runs 
 [ -z "$problems" ] || full "#$pr's head ${head:0:10} is not green on every required check: $(echo "$problems" | paste -sd ';' -)"
 
 echo "reuse=true" >>"$out"
+echo "pr=$pr" >>"$out"
 {
-  printf '### Release validation: reused from #%s\n\n' "$pr"
+  printf '### %s: reused from #%s\n\n' "$label" "$pr"
   printf 'Tree `%s` of `%s` equals the tree of #%s head `%s`, which contains the commit main was at before the merge (`%s`).\n\n' \
     "$tree" "$COMMIT" "$pr" "$head" "$parent"
   printf 'All %s required checks are green on that head and are not run again.\n' "$(jq length "$work/required.json")"
-  printf 'Run again here: the npm audits, Parity (it reads other repositories'"'"' main, not this tree) and the package build.\n'
+  [ "${PULL_REQUEST:-}" = true ] ||
+    printf 'Run again here: the npm audits, Parity (it reads other repositories'"'"' main, not this tree) and the package build.\n'
 } >>"$summary"
 echo "reusing the checks of #$pr ($head)"
