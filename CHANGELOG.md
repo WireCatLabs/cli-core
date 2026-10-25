@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.416.0 — 25.10.2026
+
 ### Fixed
 
 - **A busy linked chat left alone drains at full speed with `--cursor`.** Each linked chat's share of a run's items is now split among the linked chats that still have something to read, and the word and sender lanes take a share only while they do too. Before, chats that had already finished still took a share, so with ten linked chats the last busy one got 20 items a run and needed about 45 runs instead of about 10.
