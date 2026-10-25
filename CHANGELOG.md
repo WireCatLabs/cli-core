@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.413.0 — 25.10.2026
+
 ### Added
 
 - **`startCli`, one entry-point call for a CLI that builds its own program** (from `@wirecat/cli-core/cli`). It does what drive, zm and memo wire by hand in `src/bin/`: the crash catch, cancellation on SIGINT and SIGTERM, a quiet exit 0 on a closed pipe, the SQLite swap, the first-run questions (`entry.atStart`), the consent prompt (`entry.ask`) and the browser (`entry.openBrowser`). The program and its failure report stay the CLI's own. Nothing changes for a CLI that keeps its own wiring.
