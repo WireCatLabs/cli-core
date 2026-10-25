@@ -27,7 +27,7 @@ const tool: ProgramDefinition = {
           .action(() => {}),
       )
       .addCommand(
-        annotate(new Command("send"), { effects: WRITE })
+        annotate(new Command("send"), { effects: WRITE, output: { entity: "message_send" } })
           .description("send a message")
           .argument("<chat>")
           .argument("[text]")
@@ -84,6 +84,12 @@ describe("generated command help", () => {
 
     expect((await help(["messages", "send"])).stdout).toContain(
       'Example:       tg personal messages send Team "on my way"',
+    )
+  })
+
+  it("lists the fields of every variant when the output is a union", async () => {
+    expect((await help(["messages", "send"])).stdout).toContain(
+      "Returns:       message send — operation_id, message, messages, scheduled_for, chat_id, saved;",
     )
   })
 

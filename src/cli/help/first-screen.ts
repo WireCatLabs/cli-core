@@ -100,6 +100,9 @@ const pointers = (program: Command, cli: string, start: string | undefined, prof
   ].filter((row) => row !== undefined)
   const rows: Row[] = [
     ...(start ? [["Start here:", start, profile ? "(any profile name works)" : ""] as const] : []),
+    ...(has("account list")
+      ? [["", `${cli} account list`, "your profiles and their logged-in accounts"] as const]
+      : []),
     ...next.map(([command = "", does = ""], at) => [at === 0 ? "Next:" : "", command, does] as const),
     ...(has("skill show") ? [["For agents:", `${cli} skill show`, "rules and the discovery loop"] as const] : []),
   ]
