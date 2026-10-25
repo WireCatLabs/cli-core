@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.431.0 — 25.10.2026
+
 ### Added
 
 - **`readConfigText(path)`, `readConfigFile(path)`, `withoutSetting(raw, setting)` and `settingPathOf(setting)` from `/cli`**, for a tool with its own config file and `config unset`. `readConfigText` gives the text, `undefined` for no file, or an issue for a folder at the path or a file that cannot be read. `readConfigFile` adds the JSON parse. `withoutSetting` removes one setting at any depth, list items included (`mail.accounts.0.colour`, `permissions.messages.send`), and any object the removal leaves empty, but keeps a list item so the items after it keep their numbers.
