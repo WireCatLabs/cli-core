@@ -10,6 +10,17 @@ shape of this file.
 ### Added
 
 - **`search messages --discover` reranks its first 50 hits, on its own, once the reranker is downloaded.** A cross-encoder reads the question with each hit, headed by its chat, author and date and preceded by the message it replies to, and its score is mixed with discovery's own, not put in its place: both scaled to 0–1 over those 50, then 0.3 · discovery + 0.7 · reranker; the hits after keep their order. This is the winning variant of the [evidence-pipeline benchmark](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/evidence-pipeline#reranker-variants) (holdout Answer@3 67% → 81% with mMARCO). Each hit it read has `discovery.reranker_score`; `score` stays discovery's. The default is `mmarco` (136 MB, `models download mmarco`); `bge-reranker-v2-m3` (588 MB) or `off` is the profile setting `search_reranker`. Loading and scoring do not count against the word search's 2 s: scoring has 15 s of its own, and a reranking that would not finish in them is dropped, never the search. Measured on a Ryzen AI 9 HX 470 through Core's WebAssembly runtime, 50 hits take mmarco about 0.9–1.7 s and BGE about 7–10 s. Without the model, discovery keeps its order and says so: a `not reranked: …` note in the terminal, `missing`/`next` (`models.download`) in `--json` and MCP. A search never downloads a model and never sends text anywhere; `--exact`, `--newest` and strict queries are untouched. `models list` shows the rerankers as kind `reranker`.
+- **`search all` finds messages by meaning too, on its own, once it can.** It runs the same meaning lookup as
+  `search messages --discover` (e5-small over each message's own vector, the 100 nearest, every account the search
+  reads) and fuses it with the word hits by reciprocal rank fusion (k = 60) into one messages list, before the merge
+  with mail and notes. The query's filters apply to both; a query whose filters use NOT, OR or a group stays words
+  only, since the meaning hits cannot follow them. Each item's `foundBy` says which search found it, and the answer's
+  `messages` says how they were searched. Without the model or the vectors, `search all` reads words as before and
+  says so: a `messages: meaning search not used: …` note, and `missing`/`next` (`models.download` or
+  `conversations.rebuild`) in `--json` and MCP. `--exact` and `--backend server` stay words only. A search never
+  downloads a model, embeds anything or sends text anywhere. `searchAll`, `searchAllWithMeetings` and
+  `searchAllIncludingMeetings` take the meaning lane as an optional last argument; a caller that passes none
+  (memo's `searchEverywhere` today) searches messages by words alone.
 
 ## 0.434.0 — 25.10.2026
 

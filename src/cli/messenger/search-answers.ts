@@ -7,6 +7,7 @@ import type { ENTITIES } from "../../entities/index.js"
 import { excerpt } from "../../services/excerpt.js"
 import type { FoundMessage, SearchFound } from "../../services/messages.js"
 import { MAX_SEARCH_OFFSET } from "../../services/messages-archive-search.js"
+import type { MeaningSkipped } from "../../services/messages-discovery.js"
 import type { FoundNote, NotesFoundOf } from "../../services/notes-search.js"
 import type { SearchAllItem } from "../../services/search-all.js"
 import type { MeetingSearchItem, SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
@@ -117,6 +118,31 @@ export const coverageGaps = (
   }
 }
 
+/** Messages searched by words only, and the step that would add meaning: `--discover` and `search all` alike. */
+const messageMeaningGap = (meaning: MeaningSkipped | undefined, field: string) => {
+  const next: NextStep[] = []
+  if (!meaning) return { next, missing: [] }
+  if (meaning.step === "models.download") next.push(nextStep("models.download", { args: { model: meaning.model } }))
+  if (meaning.step === "conversations.rebuild") next.push(nextStep("conversations.rebuild", { args: {} }))
+  return {
+    next,
+    missing: [
+      { field, why: `searched by words only: ${meaning.reason}`, ...(meaning.step ? { step: meaning.step } : {}) },
+    ],
+  }
+}
+
+/** The pretty note for messages searched by words only, with the command that would add meaning. */
+export const meaningNote = (meaning: MeaningSkipped, command: string): string => {
+  const step =
+    meaning.step === "models.download"
+      ? ` — \`${command} models download ${meaning.model}\`, then \`${command} conversations rebuild\` gives messages their vectors`
+      : meaning.step === "conversations.rebuild"
+        ? ` — \`${command} conversations rebuild\` gives messages their vectors, a batch a run`
+        : ""
+  return `meaning search not used: ${meaning.reason}${step}`
+}
+
 const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } => {
   const { next, missing } = coverageGaps(found, found.items.length)
   const building =
@@ -131,16 +157,9 @@ const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } =>
       step: "store.migrate",
     })
   }
-  const meaning = found.meaningSkipped
-  if (meaning) {
-    if (meaning.step === "models.download") next.push(nextStep("models.download", { args: { model: meaning.model } }))
-    if (meaning.step === "conversations.rebuild") next.push(nextStep("conversations.rebuild", { args: {} }))
-    missing.push({
-      field: "discovery",
-      why: `searched by words only: ${meaning.reason}`,
-      ...(meaning.step ? { step: meaning.step } : {}),
-    })
-  }
+  const meaning = messageMeaningGap(found.meaningSkipped, "discovery")
+  for (const step of meaning.next) next.push(step)
+  for (const gap of meaning.missing) missing.push(gap)
   const rerank = found.rerankSkipped
   if (rerank) {
     if (rerank.step === "models.download") next.push(nextStep("models.download", { args: { model: rerank.model } }))
@@ -266,6 +285,7 @@ export const allAnswer = (
 ): ListBody<HitItem> => {
   const scan = found.meetings?.complete === false ? found.meetings : undefined
   const notes = meaningGap(found.notes?.meaningSkipped, exact)
+  const messages = messageMeaningGap(found.messages?.meaningSkipped, "found_by")
   return listOf(command, {
     items: found.items.map(allHitItem),
     limit,
@@ -283,6 +303,7 @@ export const allAnswer = (
           ]
         : []),
       ...notes.next,
+      ...messages.next,
     ],
     missing: [
       ...(scan
@@ -295,6 +316,7 @@ export const allAnswer = (
           ]
         : []),
       ...notes.missing,
+      ...messages.missing,
     ],
     meta: metaOf(found.accounts, found.skipped),
   })

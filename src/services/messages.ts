@@ -570,11 +570,20 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     },
 
     searchAll: (request) =>
-      inStore((store, account) => searchAll(store, account, request, deps.messenger, unifiedMessages(store, account))),
+      inStore((store, account) =>
+        searchAll(store, account, request, deps.messenger, unifiedMessages(store, account), meaningLane(deps)),
+      ),
 
     searchAllWithMeetings: (request) =>
       inStore((store, account) =>
-        searchAllWithMeetings(store, account, request, deps.messenger, unifiedMessages(store, account)),
+        searchAllWithMeetings(
+          store,
+          account,
+          request,
+          deps.messenger,
+          unifiedMessages(store, account),
+          meaningLane(deps),
+        ),
       ),
 
     stats: (query) =>

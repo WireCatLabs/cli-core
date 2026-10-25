@@ -314,7 +314,7 @@ export const searchDiscovery = async (
 }
 
 /** The nearest messages the question's filters allow, as hits, nearest first. */
-const nearEligible = async (
+export const nearEligible = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
