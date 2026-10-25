@@ -2,9 +2,12 @@ import { joinUrlWithoutQuery } from "./join-key.js"
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'", nbsp: " " }
 
-/** A line that gives a way into a meeting: a passcode, a password, a PIN or an access code. */
+/**
+ * A line that gives a way into a meeting: a passcode, a password, a PIN or an access code. Bounded by letters and
+ * digits, not `\b`, which knows only ASCII and would never match a Cyrillic word.
+ */
 const SECRET_LINE =
-  /\b(pass ?codes?|passwords?|pwd|pins?|access ?codes?|meeting ?codes?|kennwort|пароль|пин-?код|код доступа)\b|pwd=/iu
+  /(?<![\p{L}\p{N}])(pass ?codes?|passwords?|pwd|pins?|access ?codes?|meeting ?codes?|kennwort|пароль|пин-?код|код доступа)(?![\p{L}\p{N}])|pwd=/iu
 
 const htmlToText = (html: string): string =>
   html
@@ -19,10 +22,14 @@ export const withoutLinkQueries = (text: string): string =>
   text.replace(/https?:\/\/[^\s<>"')\]]+/giu, (url) => joinUrlWithoutQuery(url) ?? "")
 
 /**
- * A calendar's text as the store keeps it: HTML reduced to text, each line naming a passcode, password or PIN
- * dropped, and links without their query strings. `null` when nothing is left.
+ * A calendar's text as the store keeps it: HTML reduced to text, links without their query strings, and each line
+ * naming a passcode, password or PIN dropped — except from a title, where "PIN reset review" is a meeting's name.
+ * `null` when nothing is left.
  */
-export const calendarText = (text: string | null | undefined): string | null => {
+export const calendarText = (
+  text: string | null | undefined,
+  { dropSecretLines = true }: { dropSecretLines?: boolean } = {},
+): string | null => {
   if (!text) return null
   const kept = htmlToText(text)
     .split(/\r?\n/u)
@@ -31,7 +38,7 @@ export const calendarText = (text: string | null | undefined): string | null => 
         .replace(/[ \t]+/gu, " ")
         .trim(),
     )
-    .filter((line) => !SECRET_LINE.test(line))
+    .filter((line) => !dropSecretLines || !SECRET_LINE.test(line))
   const joined = kept
     .join("\n")
     .replace(/\n{3,}/gu, "\n\n")

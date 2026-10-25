@@ -139,6 +139,45 @@ describe("SQLite event store", () => {
     expect(event?.id).not.toBe(before?.eventId)
   })
 
+  it("keeps a title that names a PIN or a password, which is the meeting's name", async () => {
+    const { store, calendar } = await setup()
+    const at = CONTRACT_NOW + 24 * HOUR
+    const [entry] = await store.calendar.saveEntries(
+      calendar,
+      [
+        {
+          externalId: "t",
+          kind: "single",
+          status: "confirmed",
+          title: "PIN reset review",
+          startsAt: at,
+          endsAt: at + HOUR,
+        },
+      ],
+      2,
+    )
+    expect(entry?.title).toBe("PIN reset review")
+  })
+
+  it("gives a meeting the owner kept apart from both candidates an event of its own", async () => {
+    const { store, zoom, path } = await setup()
+    const at = CONTRACT_NOW + 24 * HOUR
+    const first = await zoomMeeting(store, zoom, "occ-1", at)
+    const database = await openCache(path)
+    database.prepare("UPDATE meetings SET event_id = NULL").run()
+    await zoomMeeting(store, zoom, "occ-2", at)
+    database.prepare("UPDATE meetings SET event_id = ? WHERE external_id = 'occ-1'").run(first.event?.id as number)
+    database.close()
+    const third = await zoomMeeting(store, zoom, "occ-3", at)
+    expect(third.event).toBeNull()
+    const [review] = await store.calendar.reviews({ status: "open" })
+    expect(review?.linkableType).toBe("meeting")
+    await store.calendar.resolveReview(review?.id as number, { apart: true }, 3)
+    const linked = (await store.meetings.meeting(third.saved.meeting.id))?.meeting.eventId
+    expect(linked).not.toBeNull()
+    expect(review?.candidates).not.toContain(linked)
+  })
+
   it("keeps no passcode, PIN or join-link query anywhere in the store", async () => {
     const { store, zoom, calendar, path } = await setup()
     const at = CONTRACT_NOW + 24 * HOUR
@@ -151,12 +190,12 @@ describe("SQLite event store", () => {
           kind: "single",
           status: "confirmed",
           title: "Planning",
-          description: `<p>Join: <a href="https://example.zoom.us/j/81234567890?pwd=${PASSCODE}">link</a></p><p>Passcode: ${PASSCODE}</p><p>Dial-in PIN: ${PASSCODE}</p><p>Agenda: budget</p>`,
+          description: `<p>Join: <a href="https://example.zoom.us/j/81234567890?pwd=${PASSCODE}">link</a></p><p>Passcode: ${PASSCODE}</p><p>Dial-in PIN: ${PASSCODE}</p><p>Пароль: ${PASSCODE}</p><p>Код доступа ${PASSCODE}</p><p>Agenda: budget</p>`,
           location: `https://example.zoom.us/j/81234567890?pwd=${PASSCODE}`,
           startsAt: at,
           endsAt: at + HOUR,
           joinUrl: `https://example.zoom.us/j/81234567890?pwd=${PASSCODE}`,
-          url: `https://calendar.google.com/event?eid=${PASSCODE}`,
+          url: "https://www.google.com/calendar/event?eid=c3ludGhldGljLWV2ZW50",
           metadata: { conferenceData: { entryPoints: [{ passcode: PASSCODE }] }, colorId: "4", note: PASSCODE },
         },
       ],
@@ -188,5 +227,6 @@ describe("SQLite event store", () => {
     expect(found).toEqual(["meeting_series.join_url", "meetings.join_url"].filter((one) => found.includes(one)))
     expect(kept?.description).toBe("Join: https://example.zoom.us/j/81234567890 link\nAgenda: budget")
     expect(kept?.metadata).toBe('{"colorId":"4"}')
+    expect(kept?.url).toBe("https://www.google.com/calendar/event?eid=c3ludGhldGljLWV2ZW50")
   })
 })

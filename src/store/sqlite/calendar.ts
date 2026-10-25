@@ -415,7 +415,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       original_starts_at: input.originalStartsAt ?? null,
       exception: flag(input.exception),
       status: input.status,
-      title: calendarText(input.title),
+      title: calendarText(input.title, { dropSecretLines: false }),
       description: calendarText(input.description),
       location: calendarText(input.location),
       starts_at: input.startsAt ?? null,
@@ -434,7 +434,8 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       join_url: joinUrl,
       join_key: joinUrl ? (joinKeyOf(joinUrl) ?? "") : null,
       conference: input.conference ?? null,
-      url: joinUrlWithoutQuery(input.url),
+      // The calendar's own page of the event names it in the query (`eid`), which opens nothing on its own.
+      url: input.url ?? null,
       sequence: input.sequence ?? null,
       etag: input.etag ?? null,
       external_updated_at: input.externalUpdatedAt ?? null,
@@ -737,6 +738,30 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
         if (chosen === null && review.linkableType === "calendar_entry") {
           const entry = entryOf(entryRow(review.linkableId))
           setEntity(entry, newEntity(entry, now), "owner", "owner", now)
+        }
+        if (chosen === null && review.linkableType === "meeting") {
+          const event = Number(
+            database
+              .prepare(
+                `INSERT INTO events (title, description, location, starts_at, ends_at, timezone, origin, created_at, updated_at)
+                 SELECT title, description, location, started_at, ended_at, timezone, 'auto', ?, ? FROM meetings WHERE id = ?
+                 RETURNING id`,
+              )
+              .get(now, now, review.linkableId)?.id,
+          )
+          database
+            .prepare("UPDATE meetings SET event_id = ?, updated_at = ? WHERE id = ?")
+            .run(event, now, review.linkableId)
+          logLink(database, {
+            type: "meeting",
+            id: review.linkableId,
+            entity: "event",
+            from: null,
+            to: event,
+            method: "owner",
+            author: "owner",
+            now,
+          })
         }
         database
           .prepare(

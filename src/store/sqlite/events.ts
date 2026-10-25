@@ -8,6 +8,7 @@ import {
 } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { queryFilter } from "./query-filter.js"
+import { write } from "./transaction.js"
 
 /** JSON columns keep a missing value as SQL NULL, never the text `null`, so a read gives back what was saved. */
 export const toJson = (value: unknown): string | null =>
@@ -158,17 +159,19 @@ export const linkMeeting = (
 ) => {
   if (!exists(database, "meetings", id)) throw new Error("Meeting not found")
   if (!exists(database, "events", eventId)) throw new Error("Event not found")
-  const from = database.prepare("SELECT event_id FROM meetings WHERE id = ?").get(id)?.event_id
-  const changed = database
-    .prepare(
-      `UPDATE meetings SET event_id = ?, updated_at = ? WHERE id = ?${mode === "owner" ? "" : " AND event_id IS NULL"}`,
-    )
-    .run(eventId, now, id).changes
-  if (changed && int(from) !== eventId)
-    database
+  write(database, () => {
+    const from = database.prepare("SELECT event_id FROM meetings WHERE id = ?").get(id)?.event_id
+    const changed = database
       .prepare(
-        "INSERT INTO entity_link_events (linkable_type, linkable_id, entity_type, from_entity_id, to_entity_id, method, " +
-          "confidence, author, created_at) VALUES ('meeting', ?, 'event', ?, ?, ?, NULL, ?, ?)",
+        `UPDATE meetings SET event_id = ?, updated_at = ? WHERE id = ?${mode === "owner" ? "" : " AND event_id IS NULL"}`,
       )
-      .run(id, int(from), eventId, mode === "owner" ? "owner" : "rules", mode === "owner" ? "owner" : "rules", now)
+      .run(eventId, now, id).changes
+    if (changed && int(from) !== eventId)
+      database
+        .prepare(
+          "INSERT INTO entity_link_events (linkable_type, linkable_id, entity_type, from_entity_id, to_entity_id, method, " +
+            "confidence, author, created_at) VALUES ('meeting', ?, 'event', ?, ?, ?, NULL, ?, ?)",
+        )
+        .run(id, int(from), eventId, mode === "owner" ? "owner" : "rules", mode === "owner" ? "owner" : "rules", now)
+  })
 }
