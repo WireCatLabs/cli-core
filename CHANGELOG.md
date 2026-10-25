@@ -18,8 +18,14 @@ shape of this file.
   only by reading the file itself. They are plain grouped counts, so `store info` stays fast; the new keys are absent
   for a file with no schema yet.
 
+### Changed — may break callers
+
+- **The `--dry-run` preview of a CLI that is not a messenger (`AppIdentity.messenger: false`) no longer has `effects.messenger_contacted`.** Every preview now has `effects.service_contacted: false`, which says the same for any tool; tg, max and wa keep `messenger_contacted` beside it. No caller in the WireCat repositories reads the field. `permission.key` is now the CLI's own key when it passes `configuration.permissionKey`, as the help's availability already was: `zm --dry-run watch` names `watch`, not `messages`.
+
 ### Fixed
 
+- **A shared command that writes no longer writes under `--dry-run` in a CLI that builds its own program.** Such a program (drive's) could let `upgrade` or `models download` reach their action under `--dry-run`, which upgraded or downloaded. Every command from `/cli`'s shared exports now previews instead, with `action_invoked: false` and `validation.permissions: "not-checked"`, when a global `--dry-run` reaches a command that writes and has no `--dry-run` of its own. Under `run` nothing changes: it previews before any action, as before. drive's own `config set` and its `skill install` (from cli-base) are drive's code and still need drive's fix.
+- **`--dry-run` no longer asks the first-run questions**, which write the shared config file, in `run` and in `startCli`'s `atStart`.
 - **A date range in a list query no longer takes in the first moment after its end** (WC-TIME-5). `timeBounds` returned the end of `time:[2026-10-01 TO 2026-10-31]` as midnight of 1 November, and of `… TO "<timestamp>"}` as the timestamp itself, while `search runs` and `contacts events` keep what starts at or before the end. A run or event at exactly that millisecond was listed. `until` is now the last millisecond inside the range; `meta.window.until` shows it (`2026-10-31T23:59:59.999Z`). The start is unchanged.
 - **`store info` opens the file read-only.** It used to open it for writing, which set the journal mode on a file it
   only described. It now changes nothing, also on a store in another journal mode.

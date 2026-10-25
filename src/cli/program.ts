@@ -356,16 +356,18 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
     const input = options.stdin ?? process.stdin
-    await setupAtStart({
-      command,
-      env: commandEnv,
-      contentLanguages: definition.app.contentLanguages,
-      path,
-      headless,
-      readOnlyLock: lock,
-      input,
-      terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
-    })
+    // The first-run questions write the shared config; a dry run writes nothing.
+    if (!flags.dryRun)
+      await setupAtStart({
+        command,
+        env: commandEnv,
+        contentLanguages: definition.app.contentLanguages,
+        path,
+        headless,
+        readOnlyLock: lock,
+        input,
+        terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
+      })
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
     refuseWriteBeforeConnecting(action, {
@@ -505,6 +507,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         },
         command,
         definition.configuration?.permissionKey,
+        definition.app.messenger !== false,
       )
       renderAnswer(action, outputFor(action), itemOf(snakeKeys(previewed)))
       throw new PreviewComplete()
