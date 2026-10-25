@@ -9,6 +9,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`upgrade`'s help shows only `<cli> upgrade --check` as an example.** The bare `<cli> upgrade` example is gone
+  from it: copied and run, it upgraded. A CLI that keeps help or `commands --json` snapshots refreshes them once;
+  in tg, max and wa only this example changes. A CLI that sets its own `examples` on the shared command overrides
+  these, and cli-core's shared-command check then refuses its program when the two differ.
 - **The Anthropic adapter takes only `stop_sequences` as an option.** `@anthropic-ai/sdk` 1.x sends API version
   2026-10-21, which refuses `temperature`, `top_p` and `top_k` on every model, so the adapter now refuses them
   before any request. The SDK also sends the key as `Authorization: Bearer` instead of `X-Api-Key`: a custom
