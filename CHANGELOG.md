@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`--source obsidian:<id>` and `local:<id>` name one notes folder** (store version 32 gave folders these providers, and the list reader found no account under them). The id is the folder's id its hits show, its stored ulid or its name; `obsidian:` finds vaults only and `local:` plain folders only, so a folder of the other provider is "no obsidian account". The entry still lists as `notes:<id>`. `folder:<id>` stays refused in `--source`, as before.
+
 ## 0.422.0 — 25.10.2026
 
 ### Added
