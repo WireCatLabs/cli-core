@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`cli-core-parity` reads a large piped program again.** `<cli> commands --json | cli-core-parity <cli>` stopped with `EAGAIN: resource temporarily unavailable, read` once the program was larger than the pipe buffer and the writer was still writing: a module it loads makes a piped stdin non-blocking, and the tool read stdin with a call that cannot wait for more. It now reads stdin as a stream to the end.
+
 ## 0.418.0 — 25.10.2026
 
 ### Added

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs"
+import { text } from "node:stream/consumers"
 import { type Manifest, parityProblems } from "./manifest.js"
 import { pageProblems } from "./pages.js"
 import { wordingProblems } from "./wording.js"
@@ -33,7 +34,8 @@ if (cli === "wording" && flag !== undefined && pages.length > 0) {
 }
 if (!manifest.clis.includes(cli) || (flag !== undefined && (flag !== "--pages" || pages.length === 0))) usage()
 
-const program = JSON.parse(readFileSync(0, "utf8"))
+// Loading node:process makes a piped stdin non-blocking, so readFileSync(0) throws EAGAIN on a large pipe.
+const program = JSON.parse(await text(process.stdin))
 
 if (flag === "--pages") {
   const problems = pages.flatMap((page) =>
