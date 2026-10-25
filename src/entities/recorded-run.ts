@@ -6,7 +6,7 @@ const events = v.array(v.record(v.string(), v.unknown()))
 export const recordedRun = v.strictObject({
   run_id: id,
   command: text,
-  profile: text,
+  profile: v.optional(text),
   started_at: time,
   completed_at: v.optional(time),
   status: v.picklist(["success", "failed", "partial", "running"]),

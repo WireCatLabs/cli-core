@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **A run with no profile named is recorded with no profile, not `"profile": "default"`** (WC-ACCT-1). `run.json`, `runs list`, `runs show` and `search runs` leave `profile` out for such a run — a failure kept from `tg chats list` with no profile, an MCP call with none, or a `--record` of a command that needs none. A profile the owner named, `default` included, is recorded as before. Records already on disk keep what they say. `RunMetadata.profile`, `RecordingOptions.profile` and `StartRunOptions.profile` are optional, and the `run` entity's `profile` is optional; a caller that read the field as always present checks for it first. `namedProfile(settings)` from `/cli` gives the profile a command was run for, or nothing.
+
+### Fixed
+
+- **With no profile anywhere, the error suggests `setup` only to a CLI that has a `setup` command** (WC-ACCT-3). tg, max and wa still say ``create one with `tg personal setup` (any name in place of personal)``. A CLI without `setup`, such as one made from cli-template, now says ``any name works, such as `clidev personal mcp` (or set CLIDEV_PROFILE)``, naming the command that was typed. `details.profiles` stays `[]`.
+
 ## 0.423.0 — 25.10.2026
 
 ### Added

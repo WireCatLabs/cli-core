@@ -374,6 +374,7 @@ export {
   fromFile,
   type GlobalFlags,
   NONE_NAMED,
+  namedProfile,
   type ProfileKind,
   plain,
   type ResolveOptions,

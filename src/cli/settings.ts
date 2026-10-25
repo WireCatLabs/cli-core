@@ -286,6 +286,36 @@ export const NONE_NAMED = "none named"
 /** A name for a command that speaks for no account; never chosen for one that does. */
 const NO_PROFILE = "default"
 
+/** The profile a run is for: none when nothing named one, even though `Settings.profile` holds a placeholder. */
+export const namedProfile = (settings: Pick<Settings, "profile"> & Partial<Pick<Settings, "sources">>) =>
+  settings.sources?.profile === NONE_NAMED ? undefined : settings.profile
+
+/**
+ * No profile named and none on this computer. The settings cannot see the program, so the program swaps the
+ * `setup` this suggests for `withoutSetup` when it has no such command.
+ */
+export class NoProfileHere extends CliError {
+  constructor(private readonly app: AppIdentity) {
+    super(
+      "validation_error",
+      `name a profile: there is none on this computer yet — create one with \`${app.command} personal setup\` ` +
+        "(any name in place of personal)",
+      { profiles: [] },
+    )
+  }
+
+  /** `words`: the command that was typed, without its arguments, so the suggestion runs as written. */
+  withoutSetup(words: string): CliError {
+    const command = words ? `${this.app.command} personal ${words}` : `${this.app.command} personal …`
+    return new CliError(
+      "validation_error",
+      `name a profile: there is none on this computer yet — any name works, such as \`${command}\` ` +
+        `(or set ${envName(this.app, "PROFILE")})`,
+      { profiles: [] },
+    )
+  }
+}
+
 /** The first candidate that is set, and which layer it came from. */
 export const first = <T>(candidates: [Source, T | undefined][], fallback: T): { value: T; from: Source } => {
   for (const [from, value] of candidates) if (value !== undefined) return { value, from }
@@ -394,12 +424,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const unnamed = (config: Config, env: NodeJS.ProcessEnv, needed: boolean): { value: string; from: Source } => {
     if (!needed) return { value: NO_PROFILE, from: NONE_NAMED }
     const here = profilesOf(config, env)
+    if (here.length === 0) throw new NoProfileHere(app)
     throw new CliError(
       "validation_error",
-      here.length === 0
-        ? `name a profile: there is none on this computer yet — create one with \`${app.command} personal setup\` ` +
-            "(any name in place of personal)"
-        : `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
+      `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
       { profiles: here },
     )
   }
