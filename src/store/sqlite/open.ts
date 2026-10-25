@@ -40,10 +40,9 @@ export const openSqlite = async (
 
 const openUnderNode = async (path: string, readOnly: boolean): Promise<OpenedSqlite> => {
   quietSqliteWarning()
-  const { DatabaseSync } = await import("node:sqlite")
   const { drizzle } = await import("./drizzle/node.js")
-  const { cacheOverNodeSqlite } = await import("../drivers/node-sqlite.js")
-  const client = new DatabaseSync(path, { readOnly })
+  const { cacheOverNodeSqlite, nodeClient } = await import("../drivers/node-sqlite.js")
+  const client = await nodeClient(path, { readOnly })
   try {
     return { database: cacheOverNodeSqlite(client), orm: drizzle({ client }) as unknown as Orm }
   } catch (error) {
@@ -53,12 +52,11 @@ const openUnderNode = async (path: string, readOnly: boolean): Promise<OpenedSql
 }
 
 const openUnderBun = async (path: string, readOnly: boolean): Promise<OpenedSqlite> => {
-  const { bunDatabase, cacheOverBunSqlite } = await import("../drivers/bun-sqlite.js")
-  const Database = await bunDatabase()
+  const { bunClient, cacheOverBunSqlite } = await import("../drivers/bun-sqlite.js")
   const { drizzle } = (await import("./drizzle/bun.js")) as unknown as {
     drizzle: (config: { client: unknown }) => unknown
   }
-  const client = readOnly ? new Database(path, { readonly: true, create: false }) : new Database(path)
+  const client = await bunClient(path, readOnly ? { readonly: true, create: false } : undefined)
   try {
     return { database: cacheOverBunSqlite(client), orm: drizzle({ client }) as Orm }
   } catch (error) {

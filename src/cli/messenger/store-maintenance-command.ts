@@ -43,6 +43,7 @@ import {
   searchIndexState,
   stemmerCache,
   stemsState,
+  vectorIndexCounts,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
@@ -294,11 +295,14 @@ const inspect = (path: string) =>
     const { bavail, bsize } = statfsSync(dirname(path))
     const free = Number(bavail) * Number(bsize)
     const behind = schema.version > 0 ? chatsBehind(database) : []
+    const vectorIndexes = schema.version >= 34 ? vectorIndexCounts(database) : []
     const checks = {
       schema: schema.version >= SPEAKS && schema.writable,
       integrity: integrity.length === 1 && integrity[0] === "ok",
       foreignKeys: foreignKeys === 0,
       searchIndexes: Object.values(searchIndexes).every((state) => state === "ok"),
+      // One that is still filling is short by design; a ready one must hold exactly the rows its sources give.
+      vectorIndexes: vectorIndexes.every(({ ready, missing, extra }) => !ready || missing + extra === 0),
       // A backup or a VACUUM needs about as much again.
       disk: free >= size,
     }
@@ -321,7 +325,7 @@ const inspect = (path: string) =>
       orphanPointers: schema.version > 0 ? orphanPointers(database) : [],
       conversations: conversationsBuilt(database),
       vectors: vectorsHeld(database),
-      notApplicable: { extensions: "SQLite needs none" },
+      vectorIndexes,
     }
   })
 

@@ -92,6 +92,7 @@ export const storeCheck = v.union([
       integrity: v.boolean(),
       foreign_keys: v.boolean(),
       search_indexes: v.boolean(),
+      vector_indexes: v.boolean(),
       disk: v.boolean(),
     }),
     schema,
@@ -127,7 +128,17 @@ export const storeCheck = v.union([
       }),
     ),
     vectors: v.nullable(v.strictObject({ models: v.record(text, count), unused: count })),
-    not_applicable: v.strictObject({ extensions: text }),
+    vector_indexes: v.array(
+      v.strictObject({
+        model: text,
+        dims: count,
+        ready: v.boolean(),
+        indexed: count,
+        expected: count,
+        missing: count,
+        extra: count,
+      }),
+    ),
   }),
 ])
 const indexed = { normalized: count, indexed: count, terms: count, stemmed: count, notes_indexed: count }

@@ -739,5 +739,27 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('event_index', 0, 0, 0, 1, NULL, NULL);",
       "INSERT OR IGNORE INTO event_index_pending (indexable_type, id) SELECT 'event', id FROM events;"
     ]
+  },
+  {
+    "name": "20261025182500_version-34-vector-index",
+    "statements": [
+      "CREATE TABLE `vector_index_redo` (\n\t`chunk_id` integer NOT NULL\n);",
+      "CREATE TABLE `vector_indexes` (\n\t`id` integer PRIMARY KEY,\n\t`model` text NOT NULL UNIQUE,\n\t`dims` integer NOT NULL,\n\t`ready` integer NOT NULL,\n\t`filled_through` text NOT NULL\n);"
+    ]
+  },
+  {
+    "name": "20261025182501_version-34-vector-index-triggers",
+    "statements": [
+      "-- Every change that can add, drop or move a chunk's vector passes the chunk's id through vector_index_redo, where\n-- each model's own trigger (made with its vec0 table, `vector-index.ts`) re-derives that row. Writes in TypeScript\n-- and the schema's own delete triggers (document_bd, note_bd, …) all reach the index this way.\n-- A chunk usually comes before its vector; the vector's own trigger indexes it then.\n-- CROSS JOIN: led by the vectors, SQLite read every one of them per chunk (7 ms each at 100k).\nCREATE TRIGGER vector_index_chunk_ai AFTER INSERT ON chunks WHEN EXISTS (SELECT 1 FROM vector_indexes i\n    CROSS JOIN embeddings v ON v.model = i.model AND v.content_hash = new.content_hash) BEGIN\n  INSERT INTO vector_index_redo (chunk_id) VALUES (new.id);\n  DELETE FROM vector_index_redo;\nEND;",
+      "CREATE TRIGGER vector_index_chunk_ad AFTER DELETE ON chunks BEGIN\n  INSERT INTO vector_index_redo (chunk_id) VALUES (old.id);\n  DELETE FROM vector_index_redo;\nEND;",
+      "CREATE TRIGGER vector_index_chunk_au AFTER UPDATE OF content_hash, chunkable_type, chunkable_id, account_id, occurred_at\n  ON chunks WHEN old.content_hash IS NOT new.content_hash OR old.chunkable_type IS NOT new.chunkable_type\n    OR old.chunkable_id IS NOT new.chunkable_id OR old.account_id IS NOT new.account_id\n    OR old.occurred_at IS NOT new.occurred_at BEGIN\n  INSERT INTO vector_index_redo (chunk_id) VALUES (new.id);\n  DELETE FROM vector_index_redo;\nEND;",
+      "CREATE TRIGGER vector_index_embedding_ai AFTER INSERT ON embeddings\n  WHEN EXISTS (SELECT 1 FROM vector_indexes WHERE model = new.model) BEGIN\n  INSERT INTO vector_index_redo (chunk_id) SELECT id FROM chunks WHERE content_hash = new.content_hash;\n  DELETE FROM vector_index_redo;\nEND;",
+      "CREATE TRIGGER vector_index_embedding_ad AFTER DELETE ON embeddings\n  WHEN EXISTS (SELECT 1 FROM vector_indexes WHERE model = old.model) BEGIN\n  INSERT INTO vector_index_redo (chunk_id) SELECT id FROM chunks WHERE content_hash = old.content_hash;\n  DELETE FROM vector_index_redo;\nEND;",
+      "CREATE TRIGGER vector_index_embedding_au AFTER UPDATE OF model, content_hash, vector ON embeddings BEGIN\n  INSERT INTO vector_index_redo (chunk_id)\n    SELECT id FROM chunks WHERE content_hash = old.content_hash OR content_hash = new.content_hash;\n  DELETE FROM vector_index_redo;\nEND;",
+      "-- A message's chunk and its images' chunks are indexed under its chat and send time; a chat merge moves messages.\nCREATE TRIGGER vector_index_message_au AFTER UPDATE OF chat_id, sent_at ON messages\n  WHEN old.chat_id IS NOT new.chat_id OR old.sent_at IS NOT new.sent_at BEGIN\n  INSERT INTO vector_index_redo (chunk_id)\n    SELECT id FROM chunks WHERE chunkable_type = 'message' AND chunkable_id = new.id\n    UNION ALL SELECT k.id FROM attachments a JOIN chunks k ON k.chunkable_type = 'image' AND k.chunkable_id = a.id\n      WHERE a.attachable_type = 'message' AND a.attachable_id = new.id;\n  DELETE FROM vector_index_redo;\nEND;",
+      "-- An image's chat and account come from its message; a chat merge moves attachments to the kept copy.\nCREATE TRIGGER vector_index_attachment_au AFTER UPDATE OF attachable_type, attachable_id ON attachments\n  WHEN old.attachable_type IS NOT new.attachable_type OR old.attachable_id IS NOT new.attachable_id BEGIN\n  INSERT INTO vector_index_redo (chunk_id) SELECT id FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = new.id;\n  DELETE FROM vector_index_redo;\nEND;",
+      "CREATE TRIGGER vector_index_conversation_au AFTER UPDATE OF chat_id ON conversations\n  WHEN old.chat_id IS NOT new.chat_id BEGIN\n  INSERT INTO vector_index_redo (chunk_id)\n    SELECT id FROM chunks WHERE chunkable_type = 'conversation' AND chunkable_id = new.id;\n  DELETE FROM vector_index_redo;\nEND;",
+      "-- Images and conversations are indexed under their chat's account; messages carry their own.\nCREATE TRIGGER vector_index_chat_au AFTER UPDATE OF account_id ON chats WHEN old.account_id IS NOT new.account_id BEGIN\n  INSERT INTO vector_index_redo (chunk_id)\n    SELECT k.id FROM messages m JOIN attachments a ON a.attachable_type = 'message' AND a.attachable_id = m.id\n      JOIN chunks k ON k.chunkable_type = 'image' AND k.chunkable_id = a.id WHERE m.chat_id = new.id\n    UNION ALL SELECT k.id FROM conversations c JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id\n      WHERE c.chat_id = new.id;\n  DELETE FROM vector_index_redo;\nEND;"
+    ]
   }
 ]

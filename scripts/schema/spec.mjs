@@ -979,6 +979,25 @@ const NEW = {
       ],
       keys: ["PRIMARY KEY (source_type, source_id)"],
     },
+    {
+      name: "vector_indexes",
+      doc: "One sqlite-vec `vec0` table per embedding model, `vector_index_<id>`: a row per chunk with a vector of that model, rowid `chunks.id`, kept in step by triggers. Searches by meaning rank there before they read the chunks.",
+      cols: [
+        id(),
+        c("model", "text", { notnull: true, unique: true, note: "the `embeddings.model` it indexes" }),
+        c("dims", "integer", { notnull: true }),
+        c("ready", "integer", { notnull: true, note: "1 once it holds every vector; until then searches scan" }),
+        c("filled_through", "text", {
+          notnull: true,
+          note: "the last `content_hash` the fill of older vectors reached",
+        }),
+      ],
+    },
+    {
+      name: "vector_index_redo",
+      doc: "Always empty: a trigger inserts each changed chunk's id here, every model's index re-derives that chunk's row, and the same trigger empties it.",
+      cols: [c("chunk_id", "integer", { notnull: true })],
+    },
   ],
   tags: [
     taggingTable,

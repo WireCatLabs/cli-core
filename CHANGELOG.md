@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Search by meaning ranks by a sqlite-vec index in the store (store version 34), and every store connection loads the extension.** Each embedding model gets a `vec0` table, `vector_index_<id>`, listed in the new `vector_indexes`; triggers on `chunks`, `embeddings` and `messages` keep it in step inside each write's own transaction. `nearestMessages`, `nearestImages` and conversation search (without a person, project, scope or conversation list) take candidates from it, check them with the scan's own SQL and score them as before, so they answer exactly what the scan answers; the scan stays for the filters the index cannot express. A store that held vectors is indexed on its first open by this version, in short batches. **Version 34 raises `minCompatible` to 34**: a build without the extension cannot write chunks to a store with these triggers, so older CLIs refuse the file and ask to be upgraded. The extension ships in `@wirecat/cli-core-sqlite` 1.1.0 (now a required runtime piece on every platform, Windows included); when it is missing or does not load, opening the store fails with `store.vector-extension-missing` or `store.vector-extension-failed` and says to reinstall. Under Node the store is opened with `allowExtension`, and SQL's `load_extension()` is switched off again right after.
+- **`store check` reports `vector_indexes`** — per model, the rows its index holds and the rows it should, and how many differ either way (`missing`, `extra`), compared whole — and fails `checks.vector_indexes` when a ready index is off.
+- **Vectors are stored at length one.** `saveVectors` and a document picture's vector are scaled to unit length before they are kept, so search by dot product and by the index rank alike; a vector with a non-finite value is refused (`store.vector-invalid`). Vectors stored before keep their length. The `not_applicable.extensions` field ("SQLite needs none") is gone.
+
 ## 0.433.0 — 25.10.2026
 
 ### Changed — may break callers
