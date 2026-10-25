@@ -25,8 +25,32 @@ const stemIndex = v.strictObject({
 })
 const readFailure = { path: text, exists: v.literal(true), opens: v.literal(false), error: text }
 const rows = v.partial(
-  v.strictObject({ accounts: count, chats: count, messages: count, attachments: count, identities: count }),
+  v.strictObject({
+    accounts: count,
+    chats: count,
+    messages: count,
+    emails: count,
+    documents: count,
+    meetings: count,
+    events: count,
+    attachments: count,
+    identities: count,
+  }),
 )
+const perAccount = { chats: count, messages: count, emails: count, documents: count, meetings: count }
+/** Over every account in the store; absent for a file with no schema yet. */
+const contents = {
+  by_provider: v.optional(v.array(v.strictObject({ provider: text, accounts: count, ...perAccount }))),
+  by_chat_kind: v.optional(v.array(v.strictObject({ provider: text, kind: text, chats: count, messages: count }))),
+  /** `name` is the one `account list` shows; the messenger's own id for the account is left out. */
+  by_account: v.optional(
+    v.array(v.strictObject({ provider: text, account_id: count, name: v.nullable(text), ...perAccount })),
+  ),
+  /** Calendar years in UTC. */
+  by_year: v.optional(v.array(v.strictObject({ provider: text, year: count, messages: count }))),
+  /** `type` is what the file is attached to: a message, an email, a document… `bytes` counts the sizes known. */
+  by_attachment_kind: v.optional(v.array(v.strictObject({ type: text, kind: text, count, bytes: count }))),
+}
 export const storeInfo = v.union([
   absent,
   v.strictObject(readFailure),
@@ -39,6 +63,7 @@ export const storeInfo = v.union([
     pending_normalization: v.nullable(count),
     word_index: v.nullable(wordIndex),
     stem_index: v.nullable(stemIndex),
+    ...contents,
   }),
 ])
 export const storeCheck = v.union([

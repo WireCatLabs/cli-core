@@ -7,9 +7,22 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`store info` counts emails, documents, meetings and events, and breaks the store down, over every account.** `rows`
+  gains `emails`, `documents`, `meetings` and `events`. New lists: `by_provider` (accounts, chats, messages, emails,
+  documents and meetings per provider), `by_chat_kind` (chats and messages per provider and chat kind), `by_account`
+  (the same counts per account, with the store's account id and the name `account list` shows; the messenger's own
+  id for the account is left out, since for mail it is an address), `by_year` (messages per provider and UTC year) and
+  `by_attachment_kind` (count and known bytes per attached-to type and kind). A desktop app or script could get these
+  only by reading the file itself. They are plain grouped counts, so `store info` stays fast; the new keys are absent
+  for a file with no schema yet.
+
 ### Fixed
 
 - **A date range in a list query no longer takes in the first moment after its end** (WC-TIME-5). `timeBounds` returned the end of `time:[2026-10-01 TO 2026-10-31]` as midnight of 1 November, and of `… TO "<timestamp>"}` as the timestamp itself, while `search runs` and `contacts events` keep what starts at or before the end. A run or event at exactly that millisecond was listed. `until` is now the last millisecond inside the range; `meta.window.until` shows it (`2026-10-31T23:59:59.999Z`). The start is unchanged.
+- **`store info` opens the file read-only.** It used to open it for writing, which set the journal mode on a file it
+  only described. It now changes nothing, also on a store in another journal mode.
 
 ## 0.424.0 — 25.10.2026
 
