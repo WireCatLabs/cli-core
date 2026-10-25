@@ -20,8 +20,9 @@ import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
 import { syncsOneChat } from "../../ports/traits.js"
 import { isSealed, sealFile, unsealFile } from "../../sealed.js"
+import { fileSchemaOf, SPEAKS, writableBy } from "../../store/compatibility.js"
 import type { CacheDatabase } from "../../store/driver.js"
-import { MIGRATIONS, migrate } from "../../store/migrations.js"
+import { migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
 import { deleteCopy, type RepairReport, repairStore } from "../../store/repair.js"
@@ -31,7 +32,6 @@ import {
   fillStems,
   involvementStoreOver,
   noteIndexState,
-  openSqlite,
   openStore,
   orphanPointers,
   pendingNormalization,
@@ -39,35 +39,27 @@ import {
   resetNoteIndex,
   resetSearchIndex,
   resetStems,
-  rowCounts,
   searchIndexState,
   stemmerCache,
   stemsState,
-  storeContents,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { lineOf, nextStep } from "../steps.js"
+import { storeInfoCommand } from "../store-info.js"
 import { answerOf } from "./ask.js"
 import type { Messenger } from "./context.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
 import { servingProfiles } from "./serve-command.js"
 
-const SPEAKS = MIGRATIONS.at(-1)?.version ?? 0
 const SEARCH_INDEXES = ["messages_fts", "chats_fts", "identities_fts"]
 /** Contentless: it has no table to be compared with, only its own structure to check. */
 const WORD_INDEX = "message_words"
 
-/** An empty file is normal: `openStore` creates it before the first migration runs. */
 const schemaOf = (database: CacheDatabase) => {
-  const tracked = database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'schema_migrations'").get()
-  const row = tracked
-    ? database.prepare("SELECT version, min_compatible FROM schema_migrations ORDER BY version DESC LIMIT 1").get()
-    : undefined
-  const version = Number(row?.version ?? 0)
-  const minCompatible = Number(row?.min_compatible ?? 0)
-  return { version, minCompatible, writable: version <= SPEAKS || minCompatible <= SPEAKS }
+  const file = fileSchemaOf(database)
+  return { ...file, writable: writableBy(file) }
 }
 
 const count = (database: CacheDatabase, table: string) =>
@@ -84,16 +76,6 @@ const bytesOf = (path: string) => (existsSync(path) ? statSync(path).size : 0)
 /** Opens the file as it is. Migrating here would change what the caller asked to look at. */
 const reading = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
   const database = await openCache(path)
-  try {
-    return read(database)
-  } finally {
-    database.close()
-  }
-}
-
-/** For a command that only reads: the connection refuses writes, and opening sets no journal mode. */
-const readingOnly = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
-  const { database } = await openSqlite(path, { readOnly: true })
   try {
     return read(database)
   } finally {
@@ -127,7 +109,7 @@ const result = (command: Command, value: unknown, next: NextStep[] = []) =>
   renderAnswer(command, outputFor(command), itemOf(snakeKeys(value), { next }))
 
 export const storeMaintenanceCommands = (messenger: Messenger): Command[] => [
-  infoCommand(),
+  storeInfoCommand(),
   checkCommand(messenger),
   migrateCommand(messenger),
   reindexCommand(messenger),
@@ -213,35 +195,6 @@ const copiesCommand = (): Command =>
         result(this, { path, deleted })
       }),
   )
-
-const infoCommand = (): Command =>
-  annotate(new Command("info"), { output: { entity: "store_info" }, effects: LOCAL_READ })
-    .summary("the local archive's format, size and contents")
-    .description(
-      "the store file: where it is, its size, its schema and how many rows it holds, by provider, chat kind, account, year (UTC) and attachment kind, over every account; changes nothing",
-    )
-    .action(async function (this: Command) {
-      const path = storePath(environmentOf(this).env ?? process.env)
-      if (!existsSync(path)) {
-        result(this, { path, exists: false })
-        return
-      }
-      const read = readingOnly(path, (database) => {
-        const { version, minCompatible, writable } = schemaOf(database)
-        return {
-          path,
-          exists: true,
-          bytes: { file: bytesOf(path), wal: bytesOf(`${path}-wal`) },
-          schema: { version, minCompatible, speaks: SPEAKS, writable },
-          rows: version > 0 ? rowCounts(database) : {},
-          pendingNormalization: pendingIfKnown(database),
-          wordIndex: searchIndexState(database) ?? null,
-          stemIndex: stemsState(database) ?? null,
-          ...(version > 0 ? storeContents(database) : {}),
-        }
-      })
-      result(this, await read.catch((error) => ({ path, exists: true, opens: false, error: messageOf(error) })))
-    })
 
 /**
  * Reports and never repairs. The per-chat completeness is what tells "nothing was said" from "not
