@@ -400,6 +400,53 @@ source. `tsc` does not emit JavaScript it did not compile, so `pnpm build` copie
 `createStemmer` (`src/search/stem.ts`): it picks the stemmer by the script of a word, stems, then folds
 with `normalize()`, and its `identity` names what built an index.
 
+### Entities and source records
+
+The rules are in the cli-base handbook, [Data model](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)
+(WC-DATA) and [Architecture](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-21--a-cli-registers-its-provider-in-the-store-an-unknown-providers-rows-are-skipped-never-guessed)
+(WC-ARCH-21). This part says how the store follows them. The approved design is cli-private
+`plans/2026-10-24-open-cli-core-design.md` (Wave 3); what it adds is marked **not built yet**.
+
+**Two kinds of table.** An *entity* is the thing the owner means: `persons`, `events`, `event_series`, `documents`.
+A *source record* is one source's copy of it, keyed by `account_id` (or `provider`) and `external_id`: `identities`,
+`meetings`, `emails`, `messages`. A source record points at its entity (`meetings.event_id`); one entity may gather
+copies from several sources. `documents` still carries its source's columns (`account_id`, `external_id`, `url`,
+`front_matter`…, `schema.ts:945`); they stay for compatibility once `files` exists.
+
+**Core entities and a CLI's own tables.** A table more than one tool needs lives here, with its migration and its
+store area. A CLI's own bookkeeping never enters `wirecat.db`. **Not built yet:** a helper that opens a CLI's own
+SQLite file next to the shared store, with the CLI's own migrations (NEED-1737); it waits for the first CLI that
+needs one.
+
+**The provider registry.** cli-core no longer needs a release per provider. A CLI calls `registerProvider`
+(`src/store/providers.ts`, exported from `./store`) on every run; it writes `{ name, kind, aliases, command }` into
+`store_settings` under the key `providers` (`src/store/sqlite/providers.ts`). Every store handle loads the stored
+entries when it opens (`src/store/sqlite/open-store.ts:78`) on top of the built-ins (`PROVIDERS`,
+`src/domain/providers.ts:17`), so `kindOf` and `providerNamed` keep their signatures. Two entries with different
+kinds fail with both names. Searches skip the accounts of a provider nobody registered and list them under `skipped`
+(`UNKNOWN_PROVIDER`, `src/search/account-list.ts:258`).
+
+**Documents and files — not built yet.** A new `files` table holds one row per item in one place: a local file, a
+Drive file or folder, later a Notion page. A folder is a `files` row; children point at it with `parent_id`, and
+`path` / `path_folded` find a subtree by prefix (NEED-1739). A file joins a document by `account_id` + `external_id`,
+then by `content_hash` when exactly one live document matches; more than one goes to the review list. Drive files
+move from the stand-in `folder` account to a real `google-drive` account; folder accounts become `local` or
+`obsidian` (NEED-1738).
+
+**Calendar entries on the events hub — not built yet.** `calendars` and `calendar_entries` are a calendar's source
+records; `events` (`schema.ts:1087`) and `event_series` stay the entities that `meetings` already points at. An
+entry matches by its Google id, then by series slot, then by `ical_uid` across calendars, then by Zoom's join key
+with an overlapping time. Attendees are `calendar_entry_participants`; changed fields go to
+`calendar_entry_revisions`; a past occurrence deleted in Google keeps its event with `source_deleted_at`.
+
+**Contacts.** A contact is an `identities` row (`schema.ts:134`): one person as one source knows them, linked to a
+`persons` row through `identity_links`, every change logged in `identity_link_events` (`schema.ts:152-191`).
+**Not built yet:** an `identities.email` column, so contacts with one address join one person.
+
+**Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
+replaced by a rule. Today only contacts have that shape. **Not built yet:** `entity_link_events`, the same log for
+events and documents, and one review list of ambiguous pairs, shaped like `task_pairs` (`schema.ts:1468`).
+
 ### Migrations
 
 Store version 1 created the tables of [`docs/storage/schema.md`](../storage/schema.md) in the file `wirecat.db`, and
