@@ -60,7 +60,7 @@ export const configCommand = (
       )
 
       for (const issue of [
-        ...settings.configIssues,
+        ...(settings.configIssues ?? []),
         ...unknownPermissionIssues(this, settings, app.command, permissionKey),
       ])
         renderer.warn(`${issue.what}, so it is left out${issue.fix ? ` — \`${issue.fix}\` removes it` : ""}`)
@@ -140,7 +140,7 @@ export const configCommand = (
         !personal &&
         !bot &&
         settings.sources.profile !== "first word" &&
-        settings.configIssues.some((issue) => issue.fix === `${app.command} config unset ${setting}`)
+        (settings.configIssues ?? []).some((issue) => issue.fix === `${app.command} config unset ${setting}`)
       if (!root && !defaults && settings.sources.profile === NONE_NAMED)
         config.resolveSettings(this.optsWithGlobals(), { env, withIssues: true })
       if (personal && bot)

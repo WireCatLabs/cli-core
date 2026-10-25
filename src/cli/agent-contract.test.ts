@@ -263,6 +263,7 @@ it("refuses preview of denied source data and write paths before exposing target
     permissions,
     permissionSources: {},
     configPath: "/config.json",
+    profile: "work",
     savedPermissions: Object.keys(permissions).map((key) => ({
       key,
       at: ["profiles", "work", "permissions", key],

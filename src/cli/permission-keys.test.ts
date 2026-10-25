@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { WRITE_KEYS } from "../sends/permissions.js"
-import { knownBeside, knownPermissionKeys, unknownPermissionKeys } from "./permission-keys.js"
+import { knownBeside, knownPermissionKeys, unknownPermissionIssues, unknownPermissionKeys } from "./permission-keys.js"
 
 const sources = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -51,6 +51,21 @@ describe("the permission keys a file may name", () => {
     expect([...known]).toEqual(expect.arrayContaining(["messages.sync", "bot.messages", "bot.messages.sync"]))
     for (const key of ["conversations.show", "attachments.list", "conversations.links.add", "bot.store.fetch"])
       expect(known.has(key)).toBe(false)
+  })
+
+  it("**checks the keys in force when an app builds its settings without the saved ones**", () => {
+    const settings = {
+      configPath: "/app.json",
+      profile: "work",
+      permissions: { "messages.dlete": "deny", "messages.sedn": "deny" } as const,
+      permissionSources: { "messages.dlete": "config file", "messages.sedn": "flag" },
+    }
+    expect(unknownPermissionIssues(program(), settings, "app")).toEqual([
+      expect.objectContaining({
+        key: "permissions.messages.dlete",
+        fix: "app work config unset permissions.messages.dlete",
+      }),
+    ])
   })
 
   it("takes a CLI's own key for a command `keyForCommand` does not know", () => {

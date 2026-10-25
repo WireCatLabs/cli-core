@@ -191,7 +191,7 @@ const diagnose = async (
     path: settings.configPath,
     found: settings.configFound,
     issues: [
-      ...settings.configIssues,
+      ...(settings.configIssues ?? []),
       ...unknownPermissionIssues(command, settings, app.command, messenger.permissionKey),
     ],
   }

@@ -249,10 +249,16 @@ export interface Settings extends AISettings {
   /** This profile's entries and the shared defaults, for an adapter resolving its own fields with `first`. */
   configured: Scope
   shared: Scope
-  /** What is wrong in the file; empty unless resolved `withIssues`, which leaves those settings out. */
-  configIssues: ConfigIssue[]
-  /** Every permission key saved anywhere in the file, for the program to check against its commands. */
-  savedPermissions: { key: PermissionKey; at: string[] }[]
+  /**
+   * What is wrong in the file; empty unless resolved `withIssues`, which leaves those settings out. Optional for an
+   * app that builds `Settings` from a file of its own.
+   */
+  configIssues?: ConfigIssue[]
+  /**
+   * Every permission key saved anywhere in the file, for the program to check against its commands. An app that
+   * builds `Settings` itself leaves it out, and only the keys in force are checked.
+   */
+  savedPermissions?: { key: PermissionKey; at: string[] }[]
 }
 
 export interface ResolveOptions {
@@ -580,8 +586,12 @@ export const settingsFor = <T extends object = Record<never, never>>(
     return { ...settings, ...extra?.values, sources: { ...settings.sources, ...extra?.sources } } as Settings & T
   }
 
-  const configuredProfiles = (options: ResolveOptions = {}): string[] =>
-    namedProfiles(loadConfig(configPathFor(options)).config)
+  const configuredProfiles = (options: ResolveOptions = {}): string[] => {
+    const { config, issues } = loadConfig(configPathFor(options))
+    if (issues.length > 0 && !options.withIssues)
+      throw new CliError("configuration_error", issueMessage(issues.map(publicIssue)))
+    return namedProfiles(config)
+  }
 
   /**
    * `config set` and `config unset`, on the file as written, so they also run on a file with problems. A set is

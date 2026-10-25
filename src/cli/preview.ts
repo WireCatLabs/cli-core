@@ -11,7 +11,7 @@ export class PreviewComplete extends Error {}
 
 export const preview = (
   command: Command,
-  settings: Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions">,
+  settings: Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "profile">,
   tool: string,
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined,
 ) => {

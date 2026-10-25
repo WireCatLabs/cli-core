@@ -59,14 +59,19 @@ export const unknownPermissionKeys = (
 /** Every unknown permission key saved in the file, in every section and profile, with the unset that removes it. */
 export const unknownPermissionIssues = (
   command: Command,
-  settings: Pick<Settings, "configPath" | "savedPermissions">,
+  settings: Pick<Settings, "configPath" | "savedPermissions" | "permissions" | "permissionSources" | "profile">,
   tool: string,
   keyOf?: PermissionKeyOf,
-): ConfigIssue[] =>
-  permissionIssues(settings.savedPermissions, knownPermissionKeys(command, keyOf), {
-    file: settings.configPath,
-    tool,
-  }).map(publicIssue)
+): ConfigIssue[] => {
+  const saved =
+    settings.savedPermissions ??
+    Object.keys(settings.permissions)
+      .filter((key) => key !== CEILING_KEY && settings.permissionSources[key] !== "flag")
+      .map((key) => ({ key, at: ["profiles", settings.profile, "permissions", key] }))
+  return permissionIssues(saved, knownPermissionKeys(command, keyOf), { file: settings.configPath, tool }).map(
+    publicIssue,
+  )
+}
 
 /**
  * A saved key no command checks would do nothing, so the command refuses to run and names the unset that removes
@@ -74,7 +79,7 @@ export const unknownPermissionIssues = (
  */
 export const refuseUnknownPermissionKeys = (
   command: Command,
-  settings: Pick<Settings, "configPath" | "savedPermissions" | "permissions" | "permissionSources">,
+  settings: Pick<Settings, "configPath" | "savedPermissions" | "permissions" | "permissionSources" | "profile">,
   tool: string,
   keyOf?: PermissionKeyOf,
 ): void => {
