@@ -403,7 +403,7 @@ with `normalize()`, and its `identity` names what built an index.
 ### Entities and source records
 
 The rules are in the cli-base handbook, [Data model](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)
-(WC-DATA) and [Architecture](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md)
+(WC-DATA) and [Architecture](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-21--a-cli-registers-its-provider-in-the-store-an-unknown-providers-rows-are-skipped-never-guessed)
 (WC-ARCH-21). This part says how the store follows them. The approved design is cli-private
 `plans/2026-10-24-open-cli-core-design.md` (Wave 3); what it adds is marked **not built yet**.
 
