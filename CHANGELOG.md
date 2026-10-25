@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.430.0 — 25.10.2026
+
 ### Added
 
 - **Run records for a CLI with its own commander program** (`/cli`). `recordRuns(program, options)` gives a `startCli` tool WC-LIFE-15 in one call: `--record` and `--no-record`, a failed run for every failed command — a usage error before any action included, named by its command words and never an argument — and a run of every command when the flag or the saved `record` asks. `providerEvent(event)` and `providerRequest(operation)` put a provider call's operation, status and duration into the current command's run from anywhere in the program. `commandRuns(options)` keeps one command's run from a tool's own hooks under `run()`, and `runSettings(flag, saved)` is the rule both follow. zoom-cli, drive-cli and cli-memo replace their own copies with it. A run with no profile now leaves `profile` out rather than writing `""`.
