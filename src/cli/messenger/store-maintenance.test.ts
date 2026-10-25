@@ -594,12 +594,7 @@ describe("store reset", () => {
     ;(await seeded(env)).close()
     const path = String(env.MESSAGING_STORE)
 
-    const yesIsNotEnough = await call(["store", "reset", "--no-backup", "--yes", "--json"], env)
-    expect(yesIsNotEnough.code).not.toBe(0)
-    expect(yesIsNotEnough.stderr.join("\n")).toContain("add --allow-dangerous")
-    expect(await messagesIn(path)).toBe(2)
-
-    const { code, answer, stderr } = await call(["store", "reset", "--no-backup", "--allow-dangerous", "--json"], env)
+    const { code, answer, stderr } = await call(["store", "reset", "--no-backup", "--yes", "--json"], env)
     expect(code).toBe(0)
     expect(answer).toMatchObject({ path, reset: true, schema: latest, backup: null, backed_up: null })
     expect(stderr.join("\n")).toContain("there is no backup")

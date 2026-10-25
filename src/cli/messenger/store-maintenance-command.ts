@@ -32,6 +32,7 @@ import {
   fillStems,
   involvementStoreOver,
   noteIndexState,
+  openSqlite,
   openStore,
   orphanPointers,
   pendingNormalization,
@@ -77,6 +78,16 @@ const bytesOf = (path: string) => (existsSync(path) ? statSync(path).size : 0)
 /** Opens the file as it is. Migrating here would change what the caller asked to look at. */
 const reading = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
   const database = await openCache(path)
+  try {
+    return read(database)
+  } finally {
+    database.close()
+  }
+}
+
+/** For a command that only reads: the connection refuses writes, and opening sets no journal mode. */
+const readingOnly = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
+  const { database } = await openSqlite(path, { readOnly: true })
   try {
     return read(database)
   } finally {
@@ -722,13 +733,9 @@ const resetCommand = (messenger: Messenger): Command =>
     .description(
       "back the store up beside itself, then delete it and start an empty one at this build's schema; asks first, or --yes",
     )
-    .option("--no-backup", "delete the store without backing it up first; needs --allow-dangerous")
-    .option("--allow-dangerous", "yes, delete — with --no-backup nothing is kept, and it cannot be undone")
+    .option("--no-backup", "delete the store without backing it up first")
     .option("--dry-run", "list every table it would empty, with its rows, and delete nothing")
-    .action(async function (
-      this: Command,
-      { backup: keep, allowDangerous, dryRun }: { backup: boolean; allowDangerous?: boolean; dryRun?: boolean },
-    ) {
+    .action(async function (this: Command, { backup: keep, dryRun }: { backup: boolean; dryRun?: boolean }) {
       const { renderer } = outputFor(this)
       const { command } = messenger.app
       const env = environmentOf(this).env ?? process.env
@@ -744,16 +751,9 @@ const resetCommand = (messenger: Messenger): Command =>
         result(this, await resetPreview(path, messenger, env, keep))
         return
       }
-      if (!keep && allowDangerous !== true) {
-        throw new CliError(
-          "confirmation_required",
-          `--no-backup deletes the store at ${path} with no copy, and it cannot be undone — --dry-run lists what it ` +
-            "deletes; add --allow-dangerous to go ahead",
-        )
-      }
       refuseWhileServing(this, messenger)
-      if (allowDangerous !== true && this.optsWithGlobals<{ yes?: boolean }>().yes !== true) {
-        const what = `this deletes the store at ${path} and starts an empty one, after a backup beside it`
+      if (this.optsWithGlobals<{ yes?: boolean }>().yes !== true) {
+        const what = `this deletes the store at ${path} and starts an empty one, ${keep ? "after a backup beside it" : "with no backup"}`
         const answer = await answerOf(this, `${what}. Go ahead? [y/N] `)
         if (answer === null) throw new CliError("confirmation_required", `${what} — add --yes to go ahead`)
         if (!/^\s*y(es)?\s*$/i.test(answer)) throw new CliError("cancelled", "cancelled — the store is unchanged")

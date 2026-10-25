@@ -851,7 +851,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--all-in-chat` |  | decide a name in every undecided place of it in the same chat too |  | `mentions confirm`, `mentions reject` |
 | `--allow-any-file` |  | send a --file even from credential folders or the tool's own folders |  | `bot api` (planned), `bot messages send` (planned), `messages send` |
 | `--allow-chats` | `<ids>` | replace allowed chat ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
-| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate` (planned), `bot messages delete` (planned), `chats clear` (planned), `chats delete` (planned), `chats moderate`, `messages delete`, `store clear`, `store reset` |
+| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate` (planned), `bot messages delete` (planned), `chats clear` (planned), `chats delete` (planned), `chats moderate`, `messages delete`, `store clear` |
 | `--allow-people` | `<ids>` | replace allowed sender ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
 | `--allow-writes` |  | acknowledge that the profile offers writing tools when installing local MCP |  | `mcp add` |
 | `--analysis-provider` | `<provider>` | analysis: agent, openai or anthropic |  | `conversations links rebuild` |
