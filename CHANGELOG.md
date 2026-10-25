@@ -29,7 +29,7 @@ shape of this file.
 
 - **A vector goes once no text in the store uses it, by one rule for every kind.** Writing messages, images, notes,
   documents and their pictures, mail and meeting transcripts, and purging an account or a chat, each had their own
-  query; they now all call `dropUnusedVectors`, which drops every model's vector of a released hash that no chunk
+  query; they now all share one, which drops every model's vector of a released hash that no chunk
   holds any more, and keeps one a chunk of any kind still holds. Deleting a note, document, memory or email still
   goes through its delete trigger, which applies the same rule. Three writes left vectors behind and no longer do: an image whose
   picture changed, a meeting transcript whose text changed, and a purged chat (`store clear --left` and a chat
