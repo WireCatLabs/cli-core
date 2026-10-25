@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`--discover` finds messages for a question that ends with "?".** When the question planner left a question as written ("Why did we drop Manchester?", «Почему поменяли цену?»), its "?" parsed as a one-character wildcard and discovery fell back to strict search, which found nothing. In discovery, a "?" after a word and before a space or the end is now punctuation. Strict search is unchanged.
+
 ## 0.416.0 — 25.10.2026
 
 ### Fixed

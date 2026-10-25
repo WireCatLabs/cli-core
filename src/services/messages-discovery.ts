@@ -12,9 +12,14 @@ import { prepareLucene, searchLucene } from "./messages-search.js"
 export const searchDiscovery = async (
   store: MessageStore,
   account: AccountKey,
-  request: SearchQuery,
+  asked: SearchQuery,
   messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<SearchFound> => {
+  // A question's own "?" would parse as a one-character wildcard and send it to strict search (BUG-395).
+  const request =
+    asked.ast !== undefined || asked.exact || !asked.text
+      ? asked
+      : { ...asked, text: asked.text.replace(/(?<=\p{L})\?(?=\s|$)/gu, "") }
   const original = await prepareLucene(store, account, request, messenger)
   const text = request.text ?? ""
   const plan = planQuestion(text, request.ast !== undefined || !!request.exact || !!request.newest)
