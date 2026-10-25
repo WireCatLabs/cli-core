@@ -3,6 +3,7 @@ export type {
   ContextEvidencePage,
   ContextEvidenceReader,
   ContextEvidenceRequest,
+  ContextEvidenceSender,
   ContextSource,
 } from "../context/evidence.js"
 export {

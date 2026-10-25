@@ -35,6 +35,19 @@ export interface ContextEvidenceItem {
   timeKind: "sent" | "source-modified" | "stored-update" | "meeting-start"
   updatedAt: number
   revision: number | null
+  /** Who wrote a message or email, as stored; absent for documents and meeting cues. */
+  sender?: ContextEvidenceSender | null
+}
+export interface ContextEvidenceSender {
+  provider: string
+  /** The identity's id in its provider; an email address for mail. */
+  id: string
+  name: string | null
+  /** `person:<id>` when the store links the identity to a person. */
+  person: string | null
+  personName: string | null
+  /** The identity is the owner's: linked to the owner person, or the account's own. */
+  owner: boolean
 }
 export interface ContextEvidencePage {
   source: ContextSource

@@ -65,6 +65,7 @@ export type {
   ContextEvidencePage,
   ContextEvidenceReader,
   ContextEvidenceRequest,
+  ContextEvidenceSender,
   ContextIndex,
   ContextRecordReader,
   ContextSource,

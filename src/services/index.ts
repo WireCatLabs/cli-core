@@ -5,6 +5,7 @@ export type {
   ContextEvidencePage,
   ContextEvidenceReader,
   ContextEvidenceRequest,
+  ContextEvidenceSender,
   ContextIndex,
   ContextReadLimits,
   ContextReadUsage,
@@ -28,6 +29,7 @@ export {
 export type {
   ProjectEvidenceContext,
   ProjectEvidenceItem,
+  ProjectEvidencePerson,
   ProjectGathering,
   ProjectGatheringPorts,
   ProjectGatheringStop,

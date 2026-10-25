@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Project evidence says who wrote it.** `gatherProjectEvidence` returns `people`: who sent the run's message and mail items, person by person from the stored contacts (identities a person holds across messengers and mail count as one), with an item count split by context, the owner left out, at most 20 entries and `peopleOmitted` for the rest. It never matches names in the text. The context reader's message and mail items carry `sender` (identity, linked person, `owner`) to make that possible; project and meeting preparation items do not repeat it. See `docs/dev/PROJECT-GATHERING.md`.
+
 ## 0.417.0 — 25.10.2026
 
 ### Fixed

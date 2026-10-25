@@ -91,6 +91,18 @@ when reviewing an already-read document. It returns the same 200-character parag
 input-window validation, read limits and the decision to omit context in a brief view. A word match
 is a location hint, not evidence that the document supports a finding.
 
+## Who wrote the evidence
+
+`people` answers "who is involved in this project": everyone who wrote a message or email among this invocation's
+`items`, counted from the stored sender identity, never from names in the text. Identities the store links to one
+person are one entry, `person: "person:<id>"` with the person's `name`, and list every `identities` entry
+(`provider`, `account` it was read through, `id`) seen in the run; an identity linked to no person is an entry of its own
+with `person: null` and its stored name. `items` counts the items each wrote, and `contexts` splits that count by
+item `context`. The owner's own messages are left out: they say nothing about who else is involved. Documents,
+meeting cues, records with no stored sender and the `around` neighbours are not counted. Sorted by items, most first,
+at most 20 entries; `peopleOmitted` says how many more there were. Each invocation counts only its own new items: across resumed
+invocations the caller adds the counts up. Items themselves carry no sender, so the result stays the size it was.
+
 ## Other names in the evidence
 
 `findEvidenceMentions(store.knowledge, result, { exclude: "project:<id>" })` reads the project, tag and topic
