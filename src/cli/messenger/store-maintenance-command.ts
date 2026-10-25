@@ -31,6 +31,7 @@ import {
   fillStems,
   involvementStoreOver,
   noteIndexState,
+  openSqlite,
   openStore,
   orphanPointers,
   pendingNormalization,
@@ -38,9 +39,11 @@ import {
   resetNoteIndex,
   resetSearchIndex,
   resetStems,
+  rowCounts,
   searchIndexState,
   stemmerCache,
   stemsState,
+  storeContents,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
@@ -81,6 +84,16 @@ const bytesOf = (path: string) => (existsSync(path) ? statSync(path).size : 0)
 /** Opens the file as it is. Migrating here would change what the caller asked to look at. */
 const reading = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
   const database = await openCache(path)
+  try {
+    return read(database)
+  } finally {
+    database.close()
+  }
+}
+
+/** For a command that only reads: the connection refuses writes, and opening sets no journal mode. */
+const readingOnly = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
+  const { database } = await openSqlite(path, { readOnly: true })
   try {
     return read(database)
   } finally {
@@ -204,25 +217,27 @@ const copiesCommand = (): Command =>
 const infoCommand = (): Command =>
   annotate(new Command("info"), { output: { entity: "store_info" }, effects: LOCAL_READ })
     .summary("the local archive's format, size and contents")
-    .description("the store file: where it is, its size, its schema and how many rows it holds; changes nothing")
+    .description(
+      "the store file: where it is, its size, its schema and how many rows it holds, by provider, chat kind, account, year (UTC) and attachment kind, over every account; changes nothing",
+    )
     .action(async function (this: Command) {
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
         result(this, { path, exists: false })
         return
       }
-      const read = reading(path, (database) => {
+      const read = readingOnly(path, (database) => {
         const { version, minCompatible, writable } = schemaOf(database)
-        const tables = ["accounts", "chats", "messages", "attachments", "identities"]
         return {
           path,
           exists: true,
           bytes: { file: bytesOf(path), wal: bytesOf(`${path}-wal`) },
           schema: { version, minCompatible, speaks: SPEAKS, writable },
-          rows: version > 0 ? Object.fromEntries(tables.map((table) => [table, count(database, table)])) : {},
+          rows: version > 0 ? rowCounts(database) : {},
           pendingNormalization: pendingIfKnown(database),
           wordIndex: searchIndexState(database) ?? null,
           stemIndex: stemsState(database) ?? null,
+          ...(version > 0 ? storeContents(database) : {}),
         }
       })
       result(this, await read.catch((error) => ({ path, exists: true, opens: false, error: messageOf(error) })))

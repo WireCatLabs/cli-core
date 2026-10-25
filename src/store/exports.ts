@@ -53,6 +53,7 @@ export {
 } from "./sqlite/mentions.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
+export { openSqlite } from "./sqlite/open.js"
 export type {
   PersonPreparationRead,
   PreparationFact,
@@ -85,6 +86,7 @@ export {
   stemsState,
 } from "./sqlite/stems.js"
 export { fillStems, resetStems } from "./sqlite/stems-fill.js"
+export { rowCounts, storeContents } from "./sqlite/store-contents.js"
 export type { StoredTag, TagFilter, TagTarget, TaskTagTarget } from "./sqlite/tags.js"
 export { savedTaskCategories } from "./sqlite/task-category-settings.js"
 export { DEFAULT_AGENT_CLOSE, savedAgentClose } from "./sqlite/task-close.js"
