@@ -110,6 +110,7 @@ export {
   startRun,
 } from "../runs/run.js"
 export { currentRun, inRun, type RunScope, useAsProcessRun } from "../runs/scope.js"
+export { LANGUAGES } from "../search/languages.js"
 export { guardedApp, guardedPress, guardedStart, type Pressed } from "../sends/buttons.js"
 export { guardedClose, guardedCreatePoll, guardedVote } from "../sends/polls.js"
 export type { InboxReader } from "../services/inbox.js"
@@ -127,7 +128,6 @@ export {
   type Observation,
 } from "./agent-evaluation.js"
 export { answerEntity } from "./answer-entity.js"
-
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"
 export {
   apiFlagOf,
@@ -140,10 +140,8 @@ export {
   readApiBody,
 } from "./bot/api-input.js"
 export { prepareRpcApiBody, type RpcApiBody } from "./bot/api-rpc.js"
-
 export { type BotContext, botContext, botWords } from "./bot/context.js"
 export { type BotCopy, botCopy } from "./bot/copy.js"
-
 export { botCan, botIdOf } from "./bot/messages.js"
 export {
   BOT_ACTIONS,
@@ -249,7 +247,6 @@ export {
   asksAtStart,
   type FirstRun,
   type FirstRunIo,
-  LANGUAGES,
   setupAtStart,
   systemLanguage,
 } from "./first-run.js"

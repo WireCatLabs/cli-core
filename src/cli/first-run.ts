@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process"
 import { accessSync, constants, realpathSync } from "node:fs"
 import { delimiter, join } from "node:path"
 import { type Installer, installerOf, updateCommand } from "@wirecat/cli-base/update"
+import { LANGUAGES, type Language } from "../search/languages.js"
 import { DEFAULT_STEMMERS, type Stemmers } from "../search/stem.js"
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
@@ -21,12 +22,6 @@ import {
 } from "./setup-answers.js"
 
 /** The languages cli-core stems and has a dictionary for; each is one stemmer of its alphabet. */
-export const LANGUAGES = [
-  { name: "russian", code: "ru", label: "Russian", script: "cyrillic" },
-  { name: "english", code: "en", label: "English", script: "latin" },
-  { name: "spanish", code: "es", label: "Spanish", script: "latin" },
-] as const
-type Language = (typeof LANGUAGES)[number]["name"]
 
 export interface FirstRunIo {
   ask: (prompt: string) => Promise<string>

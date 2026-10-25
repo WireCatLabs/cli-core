@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The languages search stems are one table, `LANGUAGES`, and each entry now names its Hunspell dictionary** (`dictionary: "dictionary-ru"`). `LANGUAGES` from `/cli` keeps its other fields. `LATIN_STEMMERS` is now `english, spanish, none`, in the order the error for an unknown stemmer already printed, so the `allowed` list of a `stemmer.invalid` error comes in that order too. A caller that compared that list in order sorts it first.
+
 ## 0.421.0 — 25.10.2026
 
 ### Changed — may break callers
