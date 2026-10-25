@@ -19,9 +19,11 @@ permissions:
 
 jobs:
   ci:
-    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@3c1ec927befbf4c19844ece6430cce7a0bd3790a # v0.48.0
+    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@983fea6c5f62af1704d9035b2f63f64a52fe5e2e # cli-base#350, test-shards
     with:
       pack: ${{ inputs.pack || false }}
+      # 588 test files took 250 s on one runner (2026-10-25); `ci / coverage` merges the shards and holds the floor.
+      test-shards: 4
       checks: |
         pnpm docs:check
         pnpm schema:check
