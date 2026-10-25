@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Runs started by OpenClaw or Hermes Agent name that agent, and a Hermes run its session.** OpenClaw's agent sets
+  `OPENCLAW_SHELL=exec` in the commands it runs: such a run's `agent` is `openclaw`, with no session, since OpenClaw
+  gives none. `tui-local`, what the owner types in OpenClaw's terminal view, stays the owner's. A run started from a
+  chat message adds `from_chat: true`; the sender and chat ids OpenClaw passes in `OPENCLAW_CHANNEL_CONTEXT` are never
+  read into the record. Hermes was already named `hermes-agent` from `AI_AGENT`; its `HERMES_SESSION_ID` is now the
+  session, so a task claim from Hermes is held by `hermes-agent:<session>` as one from Claude Code is by its session.
+  A reader of `run.json` that refuses unknown keys must accept the optional `agent.from_chat`.
+
 ### Changed — may break callers
 
 - **cli-core needs `@wirecat/cli-base` 0.59.** The peer range moves from `>=0.57.0 <0.58.0` to `>=0.59.0 <0.60.0`. A
