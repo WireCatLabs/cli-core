@@ -9,8 +9,8 @@ import { environmentOf } from "./context.js"
 
 /** What the owner saved: `record` and `keep_runs_for_days`, read from the CLI's own config. */
 export interface SavedRunSettings {
-  record?: boolean
-  keepRunsForDays?: number
+  record?: boolean | undefined
+  keepRunsForDays?: number | undefined
 }
 
 export interface RunSettings {
