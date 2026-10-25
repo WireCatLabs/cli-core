@@ -1991,7 +1991,7 @@ export const conversationState = sqliteTable("conversation_state", {
   currentBuild: integer("current_build"),
 })
 
-/** One model's vector for one chunk text; no owner, so vectors outlive the builds and chunks that point at them. */
+/** One model's vector for one chunk text; no owner: chunks of any kind share it, and it goes once none holds the text. */
 export const embeddings = sqliteTable(
   "embeddings",
   {
