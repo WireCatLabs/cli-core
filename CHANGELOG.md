@@ -36,6 +36,10 @@ shape of this file.
 
 - **`store info` opens the store read-only.** It no longer sets the journal mode, and a store too new for this tool answers with its schema and empty `rows` instead of failing to count tables it may have renamed.
 
+### Security
+
+- **`doctor` reports a `config.json` or config folder that other users can read, with the `chmod` that fixes it.** The first config file is created `0600` in a `0700` folder, but cli-base up to 0.56 rewrote it as `0644` on the first `config set`, and older versions created the folder without `0700`, so on a machine used for a while both are often open. `files.problems` now lists the config file (wants `0600`) and its folder (wants `0700`), and stderr prints `to make it private: chmod 600 '<path>'`; nothing is changed on disk. The folder is checked even when `<APP>_CONFIG_DIR` names it, because the credential file falls back to it. Unlike before, `files` is also in the answer with no profile named and when the settings are refused. Windows is not checked, as before. Until cli-core moves to the cli-base release that saves the config `0600`, `config set` makes the file `0644` again and `doctor` will keep naming it.
+
 ## 0.426.0 — 25.10.2026
 
 ### Added
