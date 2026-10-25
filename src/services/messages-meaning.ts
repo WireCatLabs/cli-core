@@ -1,3 +1,4 @@
+import type { Embedder } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
@@ -11,7 +12,7 @@ import { plainWords } from "./pictures.js"
  */
 export const meaningLane =
   (deps: ModelDeps & Pick<ServiceDeps, "store">): MeaningLane =>
-  async (question, accounts) => {
+  async (question, accounts, shared) => {
     const target = embeddingTarget(deps, DEFAULT_TEXT_MODEL)
     const skipped = (reason: string, step?: "models.download" | "conversations.rebuild") => ({
       skipped: { reason, model: target.id, ...(step ? { step } : {}) },
@@ -26,7 +27,7 @@ export const meaningLane =
     try {
       const ranked: MeaningRanked = []
       if (words) {
-        await withEmbedder(deps, target, DEFAULT_TEXT_MODEL, {}, async (embedder) => {
+        const lookUp = async (embedder: Embedder) => {
           const [query] = await embedder.embed([words], "query")
           for (const one of ready) {
             const near = await store.vectors.nearestMessages(one, {
@@ -36,7 +37,9 @@ export const meaningLane =
             })
             for (const { chatId, messageId, score } of near) ranked.push({ ...one, chatId, id: messageId, score })
           }
-        })
+        }
+        if (shared && !deps.embedders) await lookUp(await shared.get(target.key, () => target.open()))
+        else await withEmbedder(deps, target, DEFAULT_TEXT_MODEL, {}, lookUp)
       }
       return {
         model: target.id,

@@ -8,6 +8,7 @@ import {
   isTextModelInstalled,
   openEmbedder,
   textModelsDirectory,
+  type WarmEmbedders,
 } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel, vectorModelKey } from "../embeddings/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
@@ -131,7 +132,14 @@ const withLocal = async <T>(
   directory: string,
   threads: number | undefined,
   work: (embedder: Embedder) => Promise<T>,
+  shared?: Pick<WarmEmbedders, "get">,
 ): Promise<T> => {
+  if (shared)
+    return work(
+      await shared.get(vectorModelKey(model), () =>
+        openEmbedder(model, directory, { threads: threads ?? defaultThreads() }),
+      ),
+    )
   const embedder = await openEmbedder(model, directory, { threads: threads ?? defaultThreads() })
   try {
     return await work(embedder)
@@ -206,12 +214,15 @@ export const nearestNotes = async (
     env,
     threads,
     command,
+    embedders,
   }: Omit<NotesEmbedOptions, "maxChunks"> & {
     limit: number
     folderIds?: string[]
     withInternal?: boolean
     source?: Note["source"]
     command?: string
+    /** The search's own, when another part of it loads the same model. */
+    embedders?: Pick<WarmEmbedders, "get">
   },
 ): Promise<NearestNote[]> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the notes")
@@ -223,7 +234,7 @@ export const nearestNotes = async (
   }
   if (!(await store.notes.embedded(key, scope)))
     throw new CliError("not_found", `nothing searched here has vectors of ${model.id} yet, so only words were matched`)
-  const [vector] = await withLocal(model, directory, threads, (embedder) => embedder.embed([query], "query"))
+  const [vector] = await withLocal(model, directory, threads, (embedder) => embedder.embed([query], "query"), embedders)
   const floor = meaningFloor(key)
   const nearest = await store.notes.nearest(key, vector as Float32Array, {
     limit,
@@ -296,6 +307,8 @@ export interface NotesQuery {
   env?: NodeJS.ProcessEnv
   /** The tool's command, named in the hint when the model is missing. */
   command?: string
+  /** The search's own models, when another part of it loads the same one. */
+  embedders?: Pick<WarmEmbedders, "get">
   /** Adds `pictures`, the documents whose picture the plain words describe, beside the hits. English words. */
   pictures?: boolean
   pictureLimit?: number
@@ -425,6 +438,7 @@ export const searchNotes = async (
     timezone,
     env,
     command,
+    embedders,
     pictures: withPictures = false,
     pictureLimit = 5,
     pictureEmbedder,
@@ -454,6 +468,7 @@ export const searchNotes = async (
         limit: Math.max(window, CANDIDATES),
         command,
         ...(env === undefined ? {} : { env }),
+        ...(embedders === undefined ? {} : { embedders }),
         ...(folderIds === undefined ? {} : { folderIds }),
         ...(withInternal ? { withInternal: true } : {}),
         ...(source === undefined ? {} : { source }),

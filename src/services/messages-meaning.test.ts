@@ -14,6 +14,7 @@ import { embeddingsService } from "./embeddings.js"
 import { messagesService } from "./messages.js"
 import { searchStore } from "./messages-archive-search.js"
 import { meaningLane } from "./messages-meaning.js"
+import { embedNotes } from "./notes-search.js"
 import { searchAll } from "./search-all.js"
 
 const tiny: TextModel = {
@@ -33,6 +34,18 @@ const tiny: TextModel = {
 vi.mock("../embeddings/models.js", async (original) => {
   const real = await original<typeof import("../embeddings/models.js")>()
   return { ...real, textModel: (id: string) => (id === "e5-small" ? tiny : real.textModel(id)) }
+})
+
+const opened = vi.hoisted(() => ({ models: 0 }))
+vi.mock("../embeddings/embed.js", async (original) => {
+  const real = await original<typeof import("../embeddings/embed.js")>()
+  return {
+    ...real,
+    openEmbedder: (...args: Parameters<typeof real.openEmbedder>) => {
+      opened.models++
+      return real.openEmbedder(...args)
+    },
+  }
 })
 
 const account = { provider: "test", account: "1" }
@@ -242,6 +255,21 @@ describe("search all by meaning", () => {
     download()
     expect((await all("cat")).messages?.meaningSkipped).toMatchObject({ step: "conversations.rebuild" })
     expect((await all("cat")).items.map(({ foundBy }) => foundBy)).toEqual([["words"]])
+  })
+
+  it("loads the model once for messages and notes alike", async () => {
+    download()
+    const { store, embeddings, all } = await setUp()
+    await embeddings.refresh({ threads: 1 })
+    await store.notes.addNote({ text: "kitten" })
+    await embedNotes(store, { threads: 1 })
+    opened.models = 0
+
+    const found = await all("cat", { only: ["messages", "notes"] })
+
+    expect(found.messages?.by).toBe("words and meaning")
+    expect(found.notes?.by).toBe("words and meaning")
+    expect(opened.models).toBe(1)
   })
 
   it("takes a lane built from a store and env alone, as memo has them", async () => {

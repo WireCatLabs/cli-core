@@ -3,6 +3,7 @@ import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
 import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
+import { runEmbedders } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { MESSAGE_PARSING } from "../search/lucene/types.js"
@@ -206,7 +207,7 @@ export const searchAll = async (
               model: DEFAULT_TEXT_MODEL,
             },
           }
-        : await meaning(request.text, read)
+        : await meaning(request.text, read, embedders)
     if ("skipped" in lane) {
       messagesBy = { by: "words", meaningSkipped: lane.skipped }
       return byWords
@@ -229,48 +230,55 @@ export const searchAll = async (
     return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
   }
 
-  for (const resource of only) {
-    try {
-      if (resource === "notes") {
-        const chosen = request.scope?.notes
-        const found = await searchNotes(store, request.text, {
-          limit: window,
-          command,
-          ...(chosen === undefined ? {} : notesScopeOf(chosen)),
-          ...(request.exact ? { exact: true } : {}),
-          ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
-          ...(request.env === undefined ? {} : { env: request.env }),
-        })
-        hasMore ||= found.has_more
-        notes = {
-          by: found.by,
-          ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
-        }
-        lists.push(
-          found.hits.map((hit) => ({
-            kind: hit.kind ?? "note",
-            ref: hit.ref,
-            provider: hit.provider ?? "notes",
-            account: hit.account ?? hit.folder_id ?? INTERNAL_NOTES,
-            ...(hit.url ? { url: hit.url } : {}),
-            title: hit.title,
-            timestamp: hit.updated_at,
-            text: hit.excerpt,
-            foundBy: hit.found_by,
-          })),
-        )
-        const read = chosen?.map(({ account }) => account) ?? [
-          INTERNAL_NOTES,
-          ...(await store.notes.folders()).map(({ id }) => id),
-          ...(await store.notes.documentsAccounts()).map(({ id }) => id),
-        ]
-        accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
-      } else lists.push(await messagesOf(resource))
-      searched.push(resource)
-    } catch (error) {
-      if (!skippable(error)) throw error
-      skipped.push({ resource, code: error.code, reason: error.message })
+  // Messages and notes both look up by meaning with the same model: loading it costs most of a second.
+  const embedders = runEmbedders()
+  try {
+    for (const resource of only) {
+      try {
+        if (resource === "notes") {
+          const chosen = request.scope?.notes
+          const found = await searchNotes(store, request.text, {
+            limit: window,
+            command,
+            embedders,
+            ...(chosen === undefined ? {} : notesScopeOf(chosen)),
+            ...(request.exact ? { exact: true } : {}),
+            ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
+            ...(request.env === undefined ? {} : { env: request.env }),
+          })
+          hasMore ||= found.has_more
+          notes = {
+            by: found.by,
+            ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
+          }
+          lists.push(
+            found.hits.map((hit) => ({
+              kind: hit.kind ?? "note",
+              ref: hit.ref,
+              provider: hit.provider ?? "notes",
+              account: hit.account ?? hit.folder_id ?? INTERNAL_NOTES,
+              ...(hit.url ? { url: hit.url } : {}),
+              title: hit.title,
+              timestamp: hit.updated_at,
+              text: hit.excerpt,
+              foundBy: hit.found_by,
+            })),
+          )
+          const read = chosen?.map(({ account }) => account) ?? [
+            INTERNAL_NOTES,
+            ...(await store.notes.folders()).map(({ id }) => id),
+            ...(await store.notes.documentsAccounts()).map(({ id }) => id),
+          ]
+          accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
+        } else lists.push(await messagesOf(resource))
+        searched.push(resource)
+      } catch (error) {
+        if (!skippable(error)) throw error
+        skipped.push({ resource, code: error.code, reason: error.message })
+      }
     }
+  } finally {
+    await embedders.close()
   }
 
   const ranked = new Map<string, { item: SearchAllItem; score: number }>()

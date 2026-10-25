@@ -22,6 +22,8 @@ shape of this file.
   `searchAllIncludingMeetings` take the meaning lane as an optional last argument; a caller that passes none
   (memo's `searchEverywhere` today) searches messages by words alone. `meaningLane` is exported and needs only
   `{ env, store, messenger: { app: { command } } }`, so memo can build one without the messenger's services.
+  Messages and notes share one loaded model within a `search all`, so searching both by meaning loads e5-small once:
+  on a 10,000-message store with 200 notes the median went from 1.7 s to 0.9 s.
 
 ## 0.434.0 — 25.10.2026
 

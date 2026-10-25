@@ -41,6 +41,21 @@ export const WARM_IDLE_MS = 10 * 60_000
 
 type Queue = ReturnType<typeof queue>
 
+/** One search's models, so the parts of a search that need the same model load it once; closed when it ends. */
+export const runEmbedders = (): Pick<WarmEmbedders, "get" | "close"> => {
+  const held = new Map<string, Promise<Embedder>>()
+  return {
+    get: (key, open) => {
+      const one = held.get(key) ?? open()
+      held.set(key, one)
+      return one
+    },
+    close: async () => {
+      await Promise.allSettled([...held.values()].map(async (one) => (await one).close()))
+    },
+  }
+}
+
 export const warmEmbedders = ({ idleMs = WARM_IDLE_MS }: { idleMs?: number } = {}): WarmEmbedders => {
   const held = new Map<string, Promise<{ close(): Promise<void> }>>()
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
