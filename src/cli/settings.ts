@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { CliError, configFilePath, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
@@ -20,11 +20,12 @@ import {
   type ConfigIssue,
   checkConfigText,
   issueMessage,
-  type LocatedIssue,
-  parseConfigText,
-  publicIssue,
+  readConfigFile,
+  readConfigText,
   savedPermissionKeys,
   schemaIssues,
+  settingPathOf,
+  withoutPath,
 } from "./config-issues.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
@@ -378,26 +379,12 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const readSchema = extension.schema ?? schema
   const context = (file: string) => ({ file, tool: app.command })
 
-  /** The file as written, `undefined` when there is none, or the issue that says it is not JSON. */
-  const readRaw = (path: string): { raw: unknown } | { issue: LocatedIssue } => {
-    let text: string
-    try {
-      text = readFileSync(path, "utf8")
-    } catch {
-      return { raw: undefined }
-    }
-    return parseConfigText(text, path)
-  }
-
   /** The file with every problem found; what loads is the file without the settings they name. */
   const loadConfig = (path: string): { config: Config; issues: ConfigIssue[] } => {
-    let text: string
-    try {
-      text = readFileSync(path, "utf8")
-    } catch {
-      return { config: { profiles: {} }, issues: [] }
-    }
-    const { config, issues } = checkConfigText(text, { file: path, tool: app.command, schema: readSchema })
+    const read = readConfigText(path)
+    if ("issue" in read) return { config: { profiles: {} }, issues: [read.issue] }
+    if (read.text === undefined) return { config: { profiles: {} }, issues: [] }
+    const { config, issues } = checkConfigText(read.text, { file: path, tool: app.command, schema: readSchema })
     return { config: (config ?? { profiles: {} }) as Config, issues }
   }
 
@@ -647,15 +634,15 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const level = name === "permissions" && rest.length > 0 ? rest.join(".") : undefined
     const modelField = /^models\.([a-z][a-z0-9-]*)\.(provider|model|base_url)$/.exec(setting)
     const known = allSettings.includes(setting) || level !== undefined || modelField !== null
-    const read = readRaw(path)
-    if ("issue" in read) throw new CliError("configuration_error", issueMessage([publicIssue(read.issue)]))
+    const read = readConfigFile(path)
+    if ("issue" in read) throw new CliError("configuration_error", issueMessage([read.issue]))
     const raw = read.raw === undefined ? {} : read.raw
     if (!isScope(raw)) throw new CliError("configuration_error", `${path}: the file has to be an object, in braces`)
     const scopePath = root
       ? []
       : [...(kind === undefined ? [] : [kind]), ...(profile === undefined ? ["defaults"] : ["profiles", profile])]
     const keyPath = root
-      ? setting.split(".")
+      ? settingPathOf(setting)
       : level !== undefined
         ? ["permissions", level]
         : modelField
@@ -672,9 +659,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         )
       if (!known && valueAt(raw, at) === undefined)
         throw new CliError("validation_error", `no setting called "${setting}" — one of: ${allSettings.join(", ")}`)
-      const changed = structuredClone(raw)
-      removeAt(changed, at)
-      saveConfigFile(path, changed)
+      saveConfigFile(path, withoutPath(raw, at).config)
       return null
     }
 
@@ -710,7 +695,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
 const isScope = (value: unknown): value is Scope => typeof value === "object" && value !== null && !Array.isArray(value)
 
 const valueAt = (node: unknown, path: readonly string[]): unknown =>
-  path.reduce<unknown>((at, key) => (isScope(at) ? at[key] : undefined), node)
+  path.reduce<unknown>((at, key) => (isScope(at) || Array.isArray(at) ? (at as Scope)[key] : undefined), node)
 
 const setAt = (node: Scope, path: readonly string[], value: unknown): void => {
   let at = node
@@ -719,20 +704,6 @@ const setAt = (node: Scope, path: readonly string[], value: unknown): void => {
     at = at[key] as Scope
   }
   at[path.at(-1) as string] = value
-}
-
-/** Removes the value and every section it leaves empty, so an unset leaves no `{}` behind. */
-const removeAt = (node: Scope, path: readonly string[]): void => {
-  const [key, ...rest] = path
-  if (key === undefined) return
-  if (rest.length === 0) {
-    delete node[key]
-    return
-  }
-  const child = node[key]
-  if (!isScope(child)) return
-  removeAt(child, rest)
-  if (Object.keys(child).length === 0) delete node[key]
 }
 
 /** Every profile the file names, in any section. */

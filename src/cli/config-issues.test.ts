@@ -1,6 +1,9 @@
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
-import { checkConfigText, issueMessage } from "./index.js"
+import { checkConfigText, issueMessage, readConfigFile, readConfigText, withoutSetting } from "./index.js"
 
 const file = "/config.json"
 
@@ -76,5 +79,102 @@ describe("checkConfigText", () => {
       "app config unset --defaults --bot colour",
       "app work config unset permissions.bogus.x",
     ])
+  })
+})
+
+const account = v.strictObject({ name: v.string(), address: v.optional(v.string()) })
+const memo = v.strictObject({
+  mail: v.optional(v.strictObject({ accounts: v.optional(v.array(account)) })),
+  notes: v.optional(v.strictObject({ folder: v.optional(v.string()) })),
+  lists: v.optional(v.array(v.array(account))),
+  permissions: v.optional(v.record(v.string(), v.picklist(["deny", "allow"]))),
+})
+const memoCheck = (raw: unknown) =>
+  checkConfigText(JSON.stringify(raw), { file, tool: "memo", schema: memo, knownPermissions: new Set(["mail"]) })
+
+describe("a setting inside a list item", () => {
+  it("**is removed alone**, so the rest loads and every issue is found in one pass", () => {
+    const { issues, config } = memoCheck({
+      mail: { accounts: [{ name: "home", address: "a@example.test", colour: "x" }] },
+      notes: { folder: "/notes" },
+      permissions: { "auto.start": "deny" },
+    })
+    expect(issues).toEqual([
+      expect.objectContaining({
+        kind: "unknown_setting",
+        key: "mail.accounts.0.colour",
+        fix: "memo config unset mail.accounts.0.colour",
+      }),
+      expect.objectContaining({
+        kind: "unknown_permission",
+        key: "permissions.auto.start",
+        fix: "memo config unset permissions.auto.start",
+      }),
+    ])
+    expect(config).toEqual({
+      mail: { accounts: [{ name: "home", address: "a@example.test" }] },
+      notes: { folder: "/notes" },
+      permissions: { "auto.start": "deny" },
+    })
+  })
+
+  it("**reaches into nested lists**, and names an item after a dropped one by its place in the file", () => {
+    const { issues, config } = memoCheck({
+      lists: [[{ name: "a", bad: 1 }], [5, { name: "b", colour: 1 }]],
+      mail: { accounts: [7, { name: "c", colour: 1 }] },
+    })
+    expect(issues.map(({ kind, key }) => `${kind} ${key}`).sort()).toEqual([
+      "invalid_value lists.1.0",
+      "invalid_value mail.accounts.0",
+      "unknown_setting lists.0.0.bad",
+      "unknown_setting lists.1.1.colour",
+      "unknown_setting mail.accounts.1.colour",
+    ])
+    expect(config).toEqual({ lists: [[{ name: "a" }], [{ name: "b" }]], mail: { accounts: [{ name: "c" }] } })
+  })
+
+  it("**is what `withoutSetting` removes**, leaving the item and the others where they were", () => {
+    const raw = {
+      mail: { accounts: [{ name: "home", colour: "x" }, { name: "work" }] },
+      permissions: { "a.b": "deny" },
+    }
+    expect(withoutSetting(raw, "mail.accounts.0.colour")).toEqual({
+      config: { mail: { accounts: [{ name: "home" }, { name: "work" }] }, permissions: { "a.b": "deny" } },
+      removed: true,
+    })
+    expect(withoutSetting(raw, "mail.accounts.1.name").config).toEqual({
+      mail: { accounts: [{ name: "home", colour: "x" }, {}] },
+      permissions: { "a.b": "deny" },
+    })
+    expect(withoutSetting(raw, "permissions.a.b").config).toEqual({ mail: raw.mail })
+    expect(withoutSetting(raw, "mail.accounts.4.name")).toEqual({ config: raw, removed: false })
+  })
+})
+
+describe("a file that is not a config object", () => {
+  it.each(["[]", "[1]", '"text"', "null", "3"])("**refuses %s as a whole**, with no key and no fix", (text) => {
+    expect(checkConfigText(text, { file, tool: "app", schema: flat })).toEqual({
+      issues: [{ kind: "invalid_value", file, what: "the file must hold a JSON object" }],
+      config: undefined,
+    })
+  })
+
+  it("**reports a folder at the path, or a file it may not read**, and no file as none", () => {
+    const root = mkdtempSync(join(tmpdir(), "config-read-"))
+    expect(readConfigText(join(root, "absent.json"))).toEqual({ text: undefined })
+    expect(readConfigFile(join(root, "absent.json"))).toEqual({ raw: undefined })
+    mkdirSync(join(root, "folder.json"))
+    expect(readConfigFile(join(root, "folder.json"))).toEqual({
+      issue: { kind: "invalid_value", file: join(root, "folder.json"), what: "the path is a folder, not a file" },
+    })
+    const locked = join(root, "locked.json")
+    writeFileSync(locked, "{}")
+    chmodSync(locked, 0o000)
+    // root reads any file, so the refusal only shows for an ordinary user.
+    if (process.getuid?.() !== 0)
+      expect(readConfigText(locked)).toEqual({
+        issue: { kind: "invalid_value", file: locked, what: "the file could not be read" },
+      })
+    chmodSync(locked, 0o600)
   })
 })

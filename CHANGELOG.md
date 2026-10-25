@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`readConfigText(path)`, `readConfigFile(path)`, `withoutSetting(raw, setting)` and `settingPathOf(setting)` from `/cli`**, for a tool with its own config file and `config unset`. `readConfigText` gives the text, `undefined` for no file, or an issue for a folder at the path or a file that cannot be read. `readConfigFile` adds the JSON parse. `withoutSetting` removes one setting at any depth, list items included (`mail.accounts.0.colour`, `permissions.messages.send`), and any object the removal leaves empty, but keeps a list item so the items after it keep their numbers.
+
+### Fixed
+
+- **A bad setting inside a list item is removed alone.** Before, `checkConfigText` could not reach into a list. It reported `mail.accounts.0.colour`, then loaded the rest of the file as empty, and missed issues elsewhere (an unknown permission key) until the next run. Now everything else loads, and every issue is found in one pass, in nested lists too. An item of the wrong type is dropped, and the items after it are still named by their place in the file. `config unset` with no profile reaches a path through a list.
+- **A config file that cannot be read is reported, not taken for no file.** A folder at the path gives `invalid_value` "the path is a folder, not a file"; a file this user may not read gives "the file could not be read". Neither has a `fix`. `loadSnakeCaseConfig` refuses both instead of using its fallback.
+- **A file holding a list, a string, a number or `null` is refused as a whole**: `invalid_value` "the file must hold a JSON object", with no `key` and no `fix`. Before, valibot read `[]` as `{}`.
+- **`privateFiles` suggests no file mode for a folder where a file should be**, or for a file where a folder should be: the config issue says what is wrong.
+
 ## 0.430.0 — 25.10.2026
 
 ### Added
