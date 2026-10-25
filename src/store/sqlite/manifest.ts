@@ -57,9 +57,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261025070402_version-31-drive-account", version: 31, minCompatible: 31 },
   { name: "20261025071848_version-32-files", version: 32, minCompatible: 32 },
   { name: "20261025071850_version-32-files-data", version: 32, minCompatible: 32 },
-  { name: "20261024234714_version-33-calendars", version: 33, minCompatible: 32 },
-  { name: "20261024234814_version-33-calendars-triggers", version: 33, minCompatible: 32 },
-  { name: "20261024234910_version-33-join-key-fill", version: 33, minCompatible: 32 },
+  { name: "20261025072643_version-33-calendars", version: 33, minCompatible: 32 },
+  { name: "20261025072644_version-33-calendars-triggers", version: 33, minCompatible: 32 },
 ]
 
 export const generatedMigrations = (

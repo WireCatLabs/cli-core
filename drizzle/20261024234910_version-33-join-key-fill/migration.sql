@@ -1,1 +1,0 @@
-CREATE INDEX `meetings_join_key_to_fill` ON `meetings` (`id`) WHERE join_url IS NOT NULL AND join_key IS NULL;

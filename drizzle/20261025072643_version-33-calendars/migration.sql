@@ -116,4 +116,5 @@ CREATE INDEX `calendar_entries_by_event_type_event_id` ON `calendar_entries` (`e
 CREATE INDEX `calendar_entries_by_organizer_identity_id` ON `calendar_entries` (`organizer_identity_id`);--> statement-breakpoint
 CREATE INDEX `calendar_entry_participants_by_identity_id` ON `calendar_entry_participants` (`identity_id`);--> statement-breakpoint
 CREATE INDEX `calendar_entry_revisions_by_entry_id_created_at` ON `calendar_entry_revisions` (`entry_id`,`created_at`);--> statement-breakpoint
-CREATE INDEX `meetings_by_join_key` ON `meetings` (`join_key`) WHERE join_key IS NOT NULL;
+CREATE INDEX `meetings_by_join_key` ON `meetings` (`join_key`) WHERE join_key IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `meetings_join_key_to_fill` ON `meetings` (`id`) WHERE join_url IS NOT NULL AND join_key IS NULL;
