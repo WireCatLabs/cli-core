@@ -6,6 +6,7 @@ import { normalizeVocabularyName, vocabularySimilarity } from "../../domain/voca
 import type { StoreContext } from "./open.js"
 import { tagConsolidationStoreOver } from "./tag-consolidation.js"
 import { tagCreationReview } from "./tag-creation.js"
+import { liveTagging } from "./tags.js"
 import { read, write } from "./transaction.js"
 
 export type VocabularyKind = "project" | "tag" | "topic"
@@ -214,7 +215,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
         entries.push(
           ...database
             .prepare(
-              `SELECT t.id,t.name,t.kind,(SELECT count(*) FROM (SELECT DISTINCT g.taggable_type,g.taggable_id FROM taggings g JOIN resolved_tags r ON r.id=g.tag_id WHERE r.canonical_id=t.id))+(SELECT count(*) FROM (SELECT DISTINCT l.from_type,l.from_id,l.anchor FROM links l JOIN resolved_tags r ON r.id=l.to_id WHERE l.to_type='tag' AND r.canonical_id=t.id AND l.kind='labelled')) AS uses FROM resolved_tags t WHERE ${whereTags} ORDER BY id`,
+              `SELECT t.id,t.name,t.kind,(SELECT count(*) FROM (SELECT DISTINCT g.taggable_type,g.taggable_id FROM taggings g JOIN resolved_tags r ON r.id=g.tag_id WHERE r.canonical_id=t.id AND ${liveTagging("g")}))+(SELECT count(*) FROM (SELECT DISTINCT l.from_type,l.from_id,l.anchor FROM links l JOIN resolved_tags r ON r.id=l.to_id WHERE l.to_type='tag' AND r.canonical_id=t.id AND l.kind='labelled')) AS uses FROM resolved_tags t WHERE ${whereTags} ORDER BY id`,
             )
             .all(tagKind, tagKind)
             .map((row) => ({

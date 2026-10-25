@@ -152,3 +152,18 @@ describe("the file a document shows", () => {
     expect(await rows(`SELECT pinned_file_id FROM documents WHERE id = ${note.id}`)).toEqual([{ pinned_file_id: null }])
   })
 })
+
+describe("a deleted document's tags", () => {
+  it("stay on it, and it is neither listed nor counted by them", async () => {
+    const { store } = await setup()
+    const folder = await store.notes.addFolder({ name: "Vault" })
+    const { note } = await store.notes.saveFileNote({ folderId: folder.id, path: "a.md", title: null, text: "a" })
+    await store.knowledge.addTags(null, { type: "document", id: note.id }, ["kept"])
+    await store.notes.deleteFileNotes(folder.id, ["a.md"])
+
+    expect((await store.notes.noteTags(note.ref)).map(({ tag }) => tag)).toEqual(["kept"])
+    expect((await store.knowledge.labelled(null, { tag: "kept" })).items).toEqual([])
+    const entry = (await store.knowledge.vocabulary()).entries.find(({ name }) => name === "kept")
+    expect(entry?.usageCount).toBe(0)
+  })
+})

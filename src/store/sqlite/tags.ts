@@ -282,6 +282,10 @@ export interface Label {
 }
 
 /** A thing's tags by name, with whether only a file states each. */
+/** A tagging of something still there: a deleted document keeps its tags but is not counted or listed by them. */
+export const liveTagging = (alias: string): string =>
+  `NOT (${alias}.taggable_type = 'document' AND EXISTS (SELECT 1 FROM documents dt WHERE dt.id = ${alias}.taggable_id AND dt.deleted_at IS NOT NULL))`
+
 export const labelsOf = (database: CacheDatabase, thing: Thing, tag?: string): Label[] =>
   database
     .prepare(

@@ -20,6 +20,7 @@ import {
   createTag,
   type Label,
   labelsOf,
+  liveTagging,
   removeTags as removeThingTags,
   setMainTopic,
   type TagKind,
@@ -594,7 +595,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         .prepare(
           "SELECT * FROM (" +
             "SELECT DISTINCT g.taggable_type AS type, g.taggable_id AS id, NULL AS path FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id " +
-            `WHERE g.taggable_type IN (${types.map(() => "?").join(",") || "NULL"}) AND (? IS NULL OR t.name = ?) ` +
+            `WHERE g.taggable_type IN (${types.map(() => "?").join(",") || "NULL"}) AND (? IS NULL OR t.name = ?) AND ${liveTagging("g")} ` +
             "UNION SELECT DISTINCT 'account' AS type, l.from_id AS id, l.anchor AS path FROM links l JOIN resolved_tags t ON t.id=l.to_id " +
             `WHERE ? = 1 AND l.from_type = 'account' AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND (? IS NULL OR t.name = ?)` +
             ") ORDER BY type = 'account', type, id, path LIMIT ? OFFSET ?",

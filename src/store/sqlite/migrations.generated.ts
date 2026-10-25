@@ -691,7 +691,8 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "UPDATE identities SET email = lower(trim(external_id)) WHERE provider = 'email' AND instr(external_id, '@') > 1;",
       "-- A document hard-deleted (a rename onto a gone note's path) takes its file row along; the rename writes its own.\nCREATE TRIGGER files_document_bd BEFORE DELETE ON documents BEGIN\n  DELETE FROM files WHERE document_id = old.id;\nEND;",
       "-- One `files` row per document is written in JS on open (`fillFiles`), from the document after this id.\nINSERT OR REPLACE INTO store_settings (key, value, at) VALUES ('files_backfill_after', '0', unixepoch() * 1000);",
-      "-- A mail contact's address is its external id; every writer of one gets the column filled the same way.\nCREATE TRIGGER identities_email_ai AFTER INSERT ON identities\n  WHEN new.provider = 'email' AND new.email IS NULL AND instr(new.external_id, '@') > 1 BEGIN\n  UPDATE identities SET email = lower(trim(new.external_id)) WHERE id = new.id;\nEND;"
+      "-- A mail contact's address is its external id; every writer of one gets the column filled the same way.\nCREATE TRIGGER identities_email_ai AFTER INSERT ON identities\n  WHEN new.provider = 'email' AND new.email IS NULL AND instr(new.external_id, '@') > 1 BEGIN\n  UPDATE identities SET email = lower(trim(new.external_id)) WHERE id = new.id;\nEND;",
+      "-- A deleted document keeps its tags: a file moved between folders is revived with them (owner's choice). Its tags go\n-- when the row itself does (`document_bd`), and readers leave out a deleted document's taggings.\nDROP TRIGGER document_tombstone;"
     ]
   },
   {

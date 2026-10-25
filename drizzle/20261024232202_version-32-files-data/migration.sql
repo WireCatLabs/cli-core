@@ -19,3 +19,7 @@ CREATE TRIGGER identities_email_ai AFTER INSERT ON identities
   WHEN new.provider = 'email' AND new.email IS NULL AND instr(new.external_id, '@') > 1 BEGIN
   UPDATE identities SET email = lower(trim(new.external_id)) WHERE id = new.id;
 END;
+--> statement-breakpoint
+-- A deleted document keeps its tags: a file moved between folders is revived with them (owner's choice). Its tags go
+-- when the row itself does (`document_bd`), and readers leave out a deleted document's taggings.
+DROP TRIGGER document_tombstone;
