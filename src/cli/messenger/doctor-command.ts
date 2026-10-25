@@ -18,7 +18,7 @@ import { NONE_NAMED } from "../settings.js"
 import { lineOf, nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { privateFiles, withSqliteSidecars } from "./private-files.js"
+import { type PrivateFiles, privateFiles, withSqliteSidecars } from "./private-files.js"
 import { buildReport, reportFileName } from "./report.js"
 import { storeSummary } from "./store-maintenance-command.js"
 
@@ -176,13 +176,16 @@ const diagnose = async (
   } catch (error) {
     // Not the file: a profile lock, a flag or an environment variable the settings refuse.
     const path = configFilePath(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
+    const files = privateFiles(configFiles(path))
     return {
+      fixes: fixesOf(files),
       report: {
         cli,
         config: { path, found: existsSync(path), issues: [] },
         settings: { error: messageOf(error) },
         store: snakeKeys(await storeSummary(env)),
         runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
+        files: filesReport(files),
       },
     }
   }
@@ -195,9 +198,12 @@ const diagnose = async (
       ...unknownPermissionIssues(command, settings, app.command, messenger.permissionKey),
     ],
   }
-  if (settings.sources.profile === NONE_NAMED)
+  const own = configFiles(settings.configPath)
+  if (settings.sources.profile === NONE_NAMED) {
+    const files = privateFiles(own)
     return {
       renderer,
+      fixes: fixesOf(files),
       report: {
         cli,
         profile: null,
@@ -205,23 +211,31 @@ const diagnose = async (
         store: snakeKeys(await storeSummary(env)),
         readers: engineStates(),
         runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
+        files: filesReport(files),
       },
     }
+  }
   const { profile } = settings
   const account = recalledAccount(app, provider, profile, env)
   const store = storePath(env)
   const sends = sendsPathFor(app, profile, env)
   const flood = floodPathFor(app, profile, env)
   const files = privateFiles({
-    files: [...withSqliteSidecars(store), sends, flood],
+    files: [...own.files, ...withSqliteSidecars(store), sends, flood],
     // A folder the owner chose with MESSAGING_STORE may rightly be shared, like the home folder itself.
-    dirs: [...(env.MESSAGING_STORE ? [] : [dirname(store)]), dirname(sends), dirname(flood), runsDirFor(app, env)],
+    dirs: [
+      ...own.dirs,
+      ...(env.MESSAGING_STORE ? [] : [dirname(store)]),
+      dirname(sends),
+      dirname(flood),
+      runsDirFor(app, env),
+    ],
   })
 
   return {
     renderer,
     profile,
-    fixes: files.checked ? files.problems.map((problem) => problem.fix) : [],
+    fixes: fixesOf(files),
     report: {
       cli,
       profile,
@@ -235,15 +249,24 @@ const diagnose = async (
       flood: floodState(new FloodMemory(flood)),
       runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
       // The messenger's own block keeps the keys it gives: some of them are file paths.
-      files: files.checked
-        ? { ...files, problems: files.problems.map(({ path, mode, want }) => ({ path, mode, want })) }
-        : files,
+      files: filesReport(files),
       [provider]: await (messenger.diagnose?.(command, context) ?? Promise.resolve({})).catch((error) => ({
         error: messageOf(error),
       })),
     },
   }
 }
+
+/**
+ * The config folder is checked even when `<APP>_CONFIG_DIR` names it: it is the tool's own folder, and the
+ * credential file falls back to it when there is no keyring.
+ */
+const configFiles = (path: string) => ({ files: [path], dirs: [dirname(path)] })
+
+const fixesOf = (files: PrivateFiles) => (files.checked ? files.problems.map((problem) => problem.fix) : [])
+
+const filesReport = (files: PrivateFiles) =>
+  files.checked ? { ...files, problems: files.problems.map(({ path, mode, want }) => ({ path, mode, want })) } : files
 
 /** What the messenger asked this profile to wait for, still in force — what the next command would be refused. */
 export const floodState = (memory: FloodMemory) => {

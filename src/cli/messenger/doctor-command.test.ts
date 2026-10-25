@@ -148,6 +148,33 @@ describe("doctor", () => {
     },
   )
 
+  it.skipIf(process.platform === "win32")(
+    "names a config file or config folder others can read, with or without a profile named",
+    async () => {
+      const { root, env } = setup()
+      await call(["chats", "list"], env, async () => connection)
+      const folder = join(root, "config")
+      const file = join(folder, "config.json")
+      chmodSync(file, 0o644)
+      chmodSync(folder, 0o775)
+      const wanted = [
+        { path: file, mode: "0644", want: "0600" },
+        { path: folder, mode: "0775", want: "0700" },
+      ]
+
+      const named = await call(["doctor", "--json"], env, refused)
+      expect(named.answer.files.problems).toEqual(wanted)
+      expect(named.stderr.join("\n")).toContain(`to make it private: chmod 600 '${file}'`)
+      expect(named.stderr.join("\n")).toContain(`to make it private: chmod 700 '${folder}'`)
+
+      const { CHAT_PROFILE: _, ...unnamed } = env
+      const none = await call(["doctor", "--json"], unnamed, refused)
+      expect(none.answer.profile).toBeNull()
+      expect(none.answer.files.problems).toEqual(wanted)
+      expect(none.stderr.join("\n")).toContain(`to make it private: chmod 600 '${file}'`)
+    },
+  )
+
   it("leaves alone the folder the owner chose for the store", async () => {
     const { root, env } = setup()
     await call(["chats", "list"], env, async () => connection)
