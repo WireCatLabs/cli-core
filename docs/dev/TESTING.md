@@ -20,7 +20,12 @@ Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli 
 ([WC-CI-5](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/ci.md#wc-ci-5--run-the-full-linux-validation-on-every-pull-request-and-keep-platform-suites-out)).
 On a pull request parity builds each CLI at the branch with the same name as the pull request's branch when
 that CLI has one, and at its `main` otherwise, so a change paired with adoption branches in the CLIs can pass
-before they merge ([`scripts/parity/app-ref.sh`](../../scripts/parity/app-ref.sh)). The step
+before they merge ([`scripts/parity/app-ref.sh`](../../scripts/parity/app-ref.sh)).
+A pull request that changes only `CHANGELOG.md` and `package.json`'s version against a `main` whose pull request
+passed every required check on the same tree (bin/release's fold and version pull requests) runs `pnpm docs:check`
+and the changelog shape test instead, and reports the other required checks as passed, saying why
+([`scripts/ci-unchanged.sh`](../../scripts/ci-unchanged.sh), [`scripts/ci-fingerprint.sh`](../../scripts/ci-fingerprint.sh)).
+The push to `main` that follows runs the full validation. The step
 `Build <cli>-cli <ref> against this cli-core` names the ref it built. A push to `main` and the monthly run build
 each CLI's `main`; a release builds `main` or the branch `bin/release --app-ref` names.
 The same full validation runs again on each push to `main`, in the release and in the monthly run.

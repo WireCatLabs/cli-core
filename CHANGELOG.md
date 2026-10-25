@@ -5,6 +5,26 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.59.** The peer range moves from `>=0.57.0 <0.58.0` to `>=0.59.0 <0.60.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.59 brings `skill install --for hermes`, which
+  gives Hermes Agent the skill, and a `hermes` entry in `skill status`; every CLI on cli-core gets both. cli-base 0.58
+  renames the release lock to `wirecat-release-<package>.lock` and drops `leemour` from the shared spelling list.
+
+## 0.436.0 — 26.10.2026
+
+### Fixed
+
+- **`--help-all` shows the profile with a command that takes one.** The example after "The first word is the profile
+  whenever it is not a command" skipped only cli-core's own profile-free commands, so a CLI whose first command was
+  marked `profileFree` (cli-template's `doctor`) printed `clidev personal doctor`. It now skips every command that
+  takes no profile, at every level: `clidev personal mcp`. A CLI where no command takes a profile no longer prints
+  the three profile sentences at all, instead of `personal <command>`. A messenger CLI's text is unchanged, so the
+  help snapshots in tg-cli, max-cli and whatsapp-cli change only if a CLI's first command is `profileFree`.
+
 ## 0.435.0 — 25.10.2026
 
 ### Added

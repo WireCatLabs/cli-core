@@ -42,7 +42,8 @@ nothing now.
 - **The release reuses its pull request's checks when it can.** `release.yml` skips full validation when the
   release commit is the squash of a merged pull request whose head has the same git tree, contains the commit
   `main` was at before the merge, and is green on every check `main`'s ruleset requires plus the checks of
-  `security.yml` (CodeQL, zizmor, gitleaks, which run on every pull request for this). It then only runs the npm
+  `security.yml` (CodeQL, zizmor, gitleaks, which run on every pull request for this; CodeQL for python, c-cpp
+  and java-kotlin only when a file of theirs changes, and otherwise reports them passed). It then only runs the npm
   audits, Parity and the package build. Anything else (no pull request, a different tree, a check missing,
   skipped or red, a dry run, `--app-ref` other than `main`) runs the full validation. The run summary names the
   path and the reason; `scripts/release-reuse.sh` decides. A `chore: release` pull request that `main` moved past

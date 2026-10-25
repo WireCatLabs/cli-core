@@ -102,13 +102,24 @@ export const rootOf = (command: Command): Command => {
   return root
 }
 
-/** A command this CLI really has, for an example: the first that takes a profile, down to its first leaf. */
+/**
+ * A command this CLI really has, for an example: the first path down to a leaf that takes a profile,
+ * skipping `PROFILE_FREE` and `profileFree` ones. Works on commands not yet added to the program.
+ */
 export const sampleCommand = (commands: readonly Command[]): string | undefined => {
-  const words: string[] = []
-  let command = commands.find((one) => !PROFILE_FREE.has(one.name()))
-  while (command) {
-    words.push(command.name())
-    command = command.commands.find((one) => one.name() !== "help")
+  const pathFrom = (command: Command): string[] | undefined => {
+    if (freeOfProfile.has(command)) return undefined
+    const children = command.commands.filter((one) => one.name() !== "help")
+    if (children.length === 0) return [command.name()]
+    for (const child of children) {
+      const rest = pathFrom(child)
+      if (rest) return [command.name(), ...rest]
+    }
+    return undefined
   }
-  return words.length ? words.join(" ") : undefined
+  for (const command of commands) {
+    const path = PROFILE_FREE.has(command.name()) ? undefined : pathFrom(command)
+    if (path) return path.join(" ")
+  }
+  return undefined
 }
