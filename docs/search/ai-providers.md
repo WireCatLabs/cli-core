@@ -26,7 +26,7 @@ Other non-OCR requests keep the no-copy policy, including ordinary replies.
 Options are validated by the selected adapter: unknown keys and wrong types
 are refused before any request. OpenAI supports temperature, top_p, presence_penalty,
 frequency_penalty, seed, stop, and response_format (text or json_object); Anthropic supports
-temperature, top_p, top_k and stop_sequences. Callers cannot override the model, messages,
+stop_sequences only, since its API refuses temperature, top_p and top_k. Callers cannot override the model, messages,
 credentials or token bound through options. The caller supplies a key resolver and a consent
 check; consent is checked before keys or network calls. Tests inject fake adapters and fetch.
 Gateway callers may supply an AbortSignal, combined with each adapter's request timeout.

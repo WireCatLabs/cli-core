@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs"
+import { readFileSync } from "node:fs"
 import { zipSync } from "fflate"
 import { describe, expect, it, vi } from "vitest"
 import { docx, pdf, zip } from "../testing/files.js"
@@ -82,14 +82,7 @@ describe("reading the text layer of a file", () => {
     expect(read).not.toHaveBeenCalled()
   })
   it("**reads a workbook row by row under its header, values as displayed**, and PDF page spans", async () => {
-    const workbook = new ExcelJS.Workbook()
-    const sheet = workbook.addWorksheet("Synthetic Budget")
-    sheet.addRow(["Item", "Amount", "Paid", "Share"])
-    sheet.addRow(["Rent", 1200, new Date(Date.UTC(2026, 2, 1)), 0.25])
-    sheet.addRow(["Heron food", 0.1 + 0.2, undefined, undefined])
-    sheet.getCell("D2").numFmt = "0%"
-    sheet.getCell("B4").value = { formula: "B2+B3", result: 1200.3 }
-    const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
+    const bytes = new Uint8Array(readFileSync(new URL("../testing/fixtures/budget.xlsx", import.meta.url)))
     const found = await extractText(bytes, hint("budget.xlsx"), importEngine)
     expect(found).toMatchObject({
       status: "extracted",

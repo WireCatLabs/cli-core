@@ -1,3 +1,4 @@
+// biome-ignore-all lint/plugin/no-sqlite-driver: cli-core owns the store, so it opens the driver itself
 // Checks that a runtime runs on the library given and that it can hold the store:
 //   bun packages/sqlite/probe.mjs <library> <version>      (Bun loads it itself)
 //   LD_LIBRARY_PATH=<dir> node packages/sqlite/probe.mjs - <version>

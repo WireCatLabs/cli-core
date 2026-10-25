@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **The Anthropic adapter takes only `stop_sequences` as an option.** `@anthropic-ai/sdk` 1.x sends API version
+  2026-10-21, which refuses `temperature`, `top_p` and `top_k` on every model, so the adapter now refuses them
+  before any request. The SDK also sends the key as `Authorization: Bearer` instead of `X-Api-Key`: a custom
+  Anthropic base URL whose gateway reads `X-Api-Key` must read `Authorization` instead.
+- **`@modelcontextprotocol/server` is `^2.4.0`** (was exactly 2.3.0), so a CLI on server 2.4.x shares one copy with cli-core.
+- **Dependencies moved to their latest majors:** `@anthropic-ai/sdk` 1.3, `sherpa-onnx` 2.0, `drizzle-orm` 1.0.0-rc.5.
+
 ## 0.432.0 — 25.10.2026
 
 ### Added
