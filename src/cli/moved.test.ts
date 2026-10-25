@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
-import { MOVED_TO_MEMO, movedPath, movedPointer } from "./moved.js"
+import { MOVED_TO_MEMO, movedCommandError, movedPath, movedPointer } from "./moved.js"
 import { run } from "./program.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "1.0.0" }
@@ -42,5 +42,20 @@ describe("a command that moved to memo", () => {
 
   it("names a memo command for every entry", () => {
     for (const path of Object.keys(MOVED_TO_MEMO)) expect(movedPointer(path)).toMatch(/then `memo [a-z]/)
+  })
+})
+
+describe("movedCommandError, for a CLI that parses without run", () => {
+  it("names the new path for a renamed one, and nothing for a path the program has", () => {
+    const program = new Command("drive")
+    program
+      .command("models")
+      .command("download")
+      .action(() => {})
+
+    expect(movedCommandError(program, ["models", "text", "download", "--json"])?.message).toBe(
+      "`drive models text download` is not here — use `models download`",
+    )
+    expect(movedCommandError(program, ["models", "download"])).toBeUndefined()
   })
 })

@@ -5,6 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`movedCommandError(program, args)` from `/cli`** answers a renamed or moved command path with the pointer `run` gives ("`drive models text download` is not here — use `models download`"), for a CLI that parses without `run`. drive is the one today.
+
 ## 0.414.0 — 25.10.2026
 
 ### Added

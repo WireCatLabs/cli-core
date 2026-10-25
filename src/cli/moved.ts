@@ -1,3 +1,7 @@
+import { CliError } from "@wirecat/cli-base"
+import type { Command } from "commander"
+import { commandAt } from "./steps.js"
+
 /**
  * Commands a source tool no longer has, each with the memo command that does the job
  * (docs/dev/TOOL-BOUNDARIES.md). The CLI and the MCP server answer with the pointer instead of
@@ -57,3 +61,22 @@ export const movedPath = (words: readonly string[], has: (path: string) => boole
     .filter((path) => path.split(" ").every((word, at) => words[at] === word))
     .sort((a, b) => b.length - a.length)
     .find((path) => !has(path))
+
+const mountedOrArgument = (program: Command, path: string): boolean => {
+  const words = path.split(" ")
+  return words.some((_, at) => {
+    const command = commandAt(program, words.slice(0, at + 1).join(" "))
+    return command !== undefined && (at === words.length - 1 || command.commands.length === 0)
+  })
+}
+
+/** The pointer for a moved or renamed path in `args`, for a CLI that parses without `run`. */
+export const movedCommandError = (program: Command, args: readonly string[]): CliError | undefined => {
+  const moved = movedPath(
+    args.filter((word) => !word.startsWith("-")),
+    (path) => mountedOrArgument(program, path),
+  )
+  return moved === undefined
+    ? undefined
+    : new CliError("validation_error", `\`${program.name()} ${moved}\` is not here — ${movedPointer(moved)}`)
+}
