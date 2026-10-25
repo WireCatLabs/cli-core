@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "./driver.js"
+import { lockedOutNotice, recordClient, refusalAdvice, storeClients } from "./sqlite/clients.js"
 import { generatedMigrations } from "./sqlite/manifest.js"
 
 export interface Migration {
@@ -59,9 +60,17 @@ export const migrate = (
     migrations = MIGRATIONS,
     now = Date.now,
     command,
+    version,
     ownTable = OWN_TABLE,
-  }: { migrations?: Migration[]; now?: () => number; command?: string; ownTable?: string | null } = {},
-): void => {
+  }: {
+    migrations?: Migration[]
+    now?: () => number
+    command?: string
+    /** The CLI's own version: with `command`, it is recorded so a later upgrade can name who it locks out. */
+    version?: string
+    ownTable?: string | null
+  } = {},
+): string | undefined => {
   const ours = latest(migrations)
   database.exec("BEGIN IMMEDIATE")
   try {
@@ -78,9 +87,20 @@ export const migrate = (
       throw new CliError(
         "configuration_error",
         `the message store was written by a newer version (schema ${file.version}, needs at least ` +
-          `${file.minCompatible}; this one speaks ${ours}) — upgrade this tool`,
+          `${file.minCompatible}; this one speaks ${ours}) — ${refusalAdvice(storeClients(database), command, file.version)}`,
       )
     }
+    const raisedTo = migrations
+      .filter((migration) => migration.version > file.version)
+      .reduce((highest, { minCompatible }) => Math.max(highest, minCompatible), file.minCompatible)
+    const notice =
+      file.version > 0 && raisedTo > file.minCompatible
+        ? lockedOutNotice(storeClients(database), {
+            ...(command ? { command } : {}),
+            schema: ours,
+            minCompatible: raisedTo,
+          })
+        : undefined
     for (const migration of migrations) {
       if (migration.version <= file.version) continue
       migration.before?.(database, now)
@@ -89,7 +109,9 @@ export const migrate = (
         .prepare("INSERT INTO schema_migrations (version, min_compatible, applied_at) VALUES (?, ?, ?)")
         .run(migration.version, migration.minCompatible, now())
     }
+    if (command && version) recordClient(database, { command, version, speaks: ours }, now())
     database.exec("COMMIT")
+    return notice
   } catch (error) {
     database.exec("ROLLBACK")
     if (error instanceof CliError) throw error

@@ -443,7 +443,7 @@ const migrateCommand = (messenger: Messenger): Command =>
       }
       const answer = await reading(path, (database) => {
         const from = schemaOf(database).version
-        migrate(database, { command: messenger.app.command })
+        migrate(database, { command: messenger.app.command, version: messenger.app.version })
         const { normalized, indexed, terms } = buildWordIndex(database, (note) => renderer.note(note))
         const stemmed = buildStems(database, (note) => renderer.note(note))
         const notes = buildNoteIndex(database, (note) => renderer.note(note))

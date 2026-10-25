@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 import { MIGRATIONS } from "../migrations.js"
+import { refusalAdvice, storeClients } from "./clients.js"
 
-export const assertReadCompatible = (database: CacheDatabase): void => {
+export const assertReadCompatible = (database: CacheDatabase, command?: string): void => {
   const ours = MIGRATIONS.at(-1)?.version ?? 0
   if (!database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'").get())
     throw new CliError(
@@ -30,6 +31,6 @@ export const assertReadCompatible = (database: CacheDatabase): void => {
   if (minCompatible > ours)
     throw new CliError(
       "configuration_error",
-      `The store requires schema ${minCompatible}, but this tool supports ${ours}; upgrade this tool`,
+      `The store requires schema ${minCompatible}, but this tool supports ${ours}; ${refusalAdvice(storeClients(database), command, version)}`,
     )
 }

@@ -216,7 +216,7 @@ export const createServer = (
       }),
   })
   const skill = messenger.skill ? skillResource(app, messenger.skill) : undefined
-  const log = agentLog(() => openStore({ env: context.env, command: app.command }))
+  const log = agentLog(() => openStore({ env: context.env, command: app.command, version: app.version }))
   const audit = async (call: ToolCall) => {
     if (!recalledAccount(app, provider, settings.profile, context.env)) return
     await log.record({ actor: { bot: `${app.command}-mcp` }, ...call })
