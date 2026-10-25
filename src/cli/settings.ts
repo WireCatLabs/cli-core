@@ -18,13 +18,13 @@ import { storePath } from "../store/path.js"
 import { sharedConfigPath } from "../store/shared-config.js"
 import {
   type ConfigIssue,
+  checkConfigText,
   issueMessage,
   type LocatedIssue,
   parseConfigText,
   publicIssue,
   savedPermissionKeys,
   schemaIssues,
-  withoutIssues,
 } from "./config-issues.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
@@ -390,13 +390,15 @@ export const settingsFor = <T extends object = Record<never, never>>(
   }
 
   /** The file with every problem found; what loads is the file without the settings they name. */
-  const loadConfig = (path: string): { config: Config; issues: LocatedIssue[]; raw: unknown } => {
-    const read = readRaw(path)
-    if ("issue" in read) return { config: { profiles: {} }, issues: [read.issue], raw: undefined }
-    if (read.raw === undefined) return { config: { profiles: {} }, issues: [], raw: undefined }
-    const issues = schemaIssues(read.raw, readSchema, context(path))
-    const parsed = v.safeParse(readSchema, withoutIssues(read.raw, issues))
-    return { config: (parsed.success ? parsed.output : { profiles: {} }) as Config, issues, raw: read.raw }
+  const loadConfig = (path: string): { config: Config; issues: ConfigIssue[] } => {
+    let text: string
+    try {
+      text = readFileSync(path, "utf8")
+    } catch {
+      return { config: { profiles: {} }, issues: [] }
+    }
+    const { config, issues } = checkConfigText(text, { file: path, tool: app.command, schema: readSchema })
+    return { config: (config ?? { profiles: {} }) as Config, issues }
   }
 
   /**
@@ -445,7 +447,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     }
     const loaded = loadConfig(configPath)
     if (loaded.issues.length > 0 && !options.withIssues)
-      throw new CliError("configuration_error", issueMessage(loaded.issues.map(publicIssue)))
+      throw new CliError("configuration_error", issueMessage(loaded.issues))
     const { config } = loaded
 
     const lock = given(env[PROFILE_LOCK])
@@ -594,7 +596,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       },
       configured,
       shared,
-      configIssues: loaded.issues.map(publicIssue),
+      configIssues: loaded.issues,
       savedPermissions: savedPermissionKeys(config),
     }
 
@@ -616,8 +618,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
 
   const configuredProfiles = (options: ResolveOptions = {}): string[] => {
     const { config, issues } = loadConfig(configPathFor(options))
-    if (issues.length > 0 && !options.withIssues)
-      throw new CliError("configuration_error", issueMessage(issues.map(publicIssue)))
+    if (issues.length > 0 && !options.withIssues) throw new CliError("configuration_error", issueMessage(issues))
     return namedProfiles(config)
   }
 
