@@ -182,7 +182,7 @@ export type { CommandAvailability, DiscoveredCommand } from "./command-availabil
 export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-contract.js"
 export { CONTRACT } from "./commands-command.js"
 export { refuseUnknownKey } from "./config-command.js"
-export type { ConfigIssue, ConfigIssueKind } from "./config-issues.js"
+export { type ConfigIssue, type ConfigIssueKind, checkConfigText, issueMessage } from "./config-issues.js"
 export { loadSnakeCaseConfig } from "./config-keys.js"
 export {
   type AgentRun,
@@ -361,7 +361,13 @@ export { storeSummary } from "./messenger/store-maintenance-command.js"
 export { type Saving, stored } from "./messenger/stored.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
 export { window, withPaging } from "./paging.js"
-export { knownBeside, knownPermissionKeys, type PermissionKeyOf, unknownPermissionKeys } from "./permission-keys.js"
+export {
+  knownBeside,
+  knownPermissionKeys,
+  type PermissionKeyOf,
+  unknownPermissionIssues,
+  unknownPermissionKeys,
+} from "./permission-keys.js"
 export { asFirstWord, commandWords, liftProfile, refuseCommandName, rootOf, usableProfileName } from "./profile.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
 export { fieldsOf, projectFields } from "./result-fields.js"

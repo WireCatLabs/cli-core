@@ -82,24 +82,90 @@ export const locate = (
   }
 }
 
-/** Node prints `(line 3 column 5)`, older runtimes only `position 41`, and Bun neither. */
-const placeOf = (message: string, text: string): { line?: number; column?: number } => {
-  const said = /line (\d+) column (\d+)/.exec(message)
-  if (said) return { line: Number(said[1]), column: Number(said[2]) }
-  const position = /position (\d+)/.exec(message)
-  if (!position) return {}
-  const before = text.slice(0, Number(position[1])).split("\n")
-  return { line: before.length, column: (before.at(-1)?.length ?? 0) + 1 }
+/**
+ * Where parsing stops, found by walking the JSON grammar: V8 names no position for "Unexpected token" or
+ * "Unexpected end of JSON input", and Bun names none at all. Where V8 does name one, this is the same offset.
+ */
+const failureOffset = (text: string): number => {
+  let at = 0
+  const fail = (): never => {
+    throw at
+  }
+  const space = () => {
+    while (/[ \t\n\r]/.test(text[at] ?? "")) at++
+  }
+  const expect = (char: string) => {
+    space()
+    if (text[at] !== char) fail()
+    at++
+  }
+  const string = () => {
+    expect('"')
+    while (text[at] !== '"') {
+      if (at >= text.length || text.charCodeAt(at) < 0x20) fail()
+      at += text[at] === "\\" ? 2 : 1
+    }
+    at++
+  }
+  const items = (close: string, item: () => void) => {
+    at++
+    space()
+    if (text[at] === close) {
+      at++
+      return
+    }
+    for (;;) {
+      item()
+      space()
+      if (text[at] === close) break
+      expect(",")
+    }
+    at++
+  }
+  const value = (): void => {
+    space()
+    const char = text[at] ?? ""
+    if (char === "{")
+      items("}", () => {
+        string()
+        expect(":")
+        value()
+      })
+    else if (char === "[") items("]", value)
+    else if (char === '"') string()
+    else {
+      const word = /^(true|false|null|-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?)/.exec(text.slice(at))
+      if (!word) fail()
+      at += word?.[0].length ?? 0
+    }
+  }
+  try {
+    value()
+    space()
+    return at
+  } catch (stopped) {
+    return typeof stopped === "number" ? stopped : at
+  }
 }
 
 /** The file's JSON, or the one issue that says where it stopped parsing. */
 export const parseConfigText = (text: string, file: string): { raw: unknown } | { issue: LocatedIssue } => {
   try {
     return { raw: JSON.parse(text) }
-  } catch (error) {
-    const place = placeOf(error instanceof Error ? error.message : "", text)
-    const where = place.line === undefined ? "" : ` at line ${place.line}, column ${place.column}`
-    return { issue: { kind: "invalid_json", file, ...place, what: `the file is not valid JSON${where}`, at: [] } }
+  } catch {
+    const before = text.slice(0, failureOffset(text)).split("\n")
+    const line = before.length
+    const column = (before.at(-1)?.length ?? 0) + 1
+    return {
+      issue: {
+        kind: "invalid_json",
+        file,
+        line,
+        column,
+        what: `the file is not valid JSON at line ${line}, column ${column}`,
+        at: [],
+      },
+    }
   }
 }
 
@@ -184,6 +250,8 @@ const scopes = (raw: unknown): [string[], Node][] => {
     if (isNode(section.profiles))
       for (const [name, scope] of Object.entries(section.profiles)) add([...path, "profiles", name], scope)
   }
+  // A flat file keeps `permissions` at the top; a file with profiles has none there once its schema has run.
+  add([], raw)
   addSection([], raw)
   for (const name of SECTIONS) addSection([name], raw[name])
   return out
@@ -221,14 +289,42 @@ export const withoutIssues = (raw: unknown, issues: readonly LocatedIssue[]): un
 /** The public shape: where in the file is the loader's own business. */
 export const publicIssue = ({ at: _, ...issue }: LocatedIssue): ConfigIssue => issue
 
-/** One line for a command that refuses to run on the file: the first problem, how to fix it, and how many more. */
-export const issueMessage = (issues: readonly ConfigIssue[]): string => {
+/**
+ * One line for a command that refuses to run on the file: the first problem, how to fix it, and how many more.
+ * `doctor` is the command that lists them all, as the reader types it.
+ */
+export const issueMessage = (issues: readonly ConfigIssue[], doctor = "doctor"): string => {
   const [first] = issues
   if (!first) return ""
   const more = issues.length - 1
   return (
     `${first.file}: ${first.what}` +
     (first.fix ? ` — remove it with \`${first.fix}\`` : "") +
-    (more === 0 ? "" : ` (and ${more} more problem${more === 1 ? "" : "s"} — \`doctor\` lists them all)`)
+    (more === 0 ? "" : ` (and ${more} more problem${more === 1 ? "" : "s"} — \`${doctor}\` lists them all)`)
   )
+}
+
+/**
+ * Every problem in a config file's text, and what of it still loads. Works for a file with profiles and sections
+ * and for a flat one: a fix names the profile and section flags only where the path has them. With
+ * `knownPermissions` (from `knownPermissionKeys`), each saved permission key outside it is an issue too, in every
+ * section.
+ */
+export const checkConfigText = <T extends v.GenericSchema>(
+  text: string,
+  {
+    file,
+    tool,
+    schema,
+    knownPermissions,
+  }: { file: string; tool: string; schema: T; knownPermissions?: ReadonlySet<string> },
+): { issues: ConfigIssue[]; config: v.InferOutput<T> | undefined } => {
+  const parsed = parseConfigText(text, file)
+  if ("issue" in parsed) return { issues: [publicIssue(parsed.issue)], config: undefined }
+  const context = { file, tool }
+  const located = schemaIssues(parsed.raw, schema, context)
+  const loaded = v.safeParse(schema, withoutIssues(parsed.raw, located))
+  const config = loaded.success ? loaded.output : undefined
+  const unknown = knownPermissions ? permissionIssues(savedPermissionKeys(config), knownPermissions, context) : []
+  return { issues: [...located, ...unknown].map(publicIssue), config }
 }
