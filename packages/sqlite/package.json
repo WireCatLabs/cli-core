@@ -1,7 +1,7 @@
 {
   "name": "@wirecat/cli-core-sqlite",
-  "version": "1.0.1",
-  "description": "SQLite 3.53.4 builds for @wirecat/cli-core where the runtime's own SQLite falls short",
+  "version": "1.1.0",
+  "description": "SQLite 3.53.4 builds and the sqlite-vec 0.1.9 extension for @wirecat/cli-core",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {

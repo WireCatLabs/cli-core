@@ -1,6 +1,6 @@
 name: SQLite
-# Builds @wirecat/cli-core-sqlite (packages/sqlite), checks every library on the systems it is
-# for, and publishes it when started by hand with `publish` — npm trusts this file by name.
+# Builds @wirecat/cli-core-sqlite (packages/sqlite) — SQLite and the sqlite-vec extension — checks every
+# library on the systems it is for, and publishes it when started by hand with `publish` — npm trusts this file by name.
 on:
   schedule:
     - cron: "37 3 1 * *"
@@ -54,6 +54,8 @@ jobs:
             packages/sqlite/build.sh ${{ matrix.target }}'
       - name: exports what Node imports
         run: packages/sqlite/check.sh packages/sqlite/lib/${{ matrix.target }}/libsqlite3.so.0 ${{ endsWith(matrix.target, 'gnu') && env.GLIBC_FLOOR || '' }}
+      - name: the extension exports its entry point
+        run: packages/sqlite/check.sh packages/sqlite/lib/${{ matrix.target }}/vec0.so ${{ endsWith(matrix.target, 'gnu') && env.GLIBC_FLOOR || '' }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.target }}
@@ -71,22 +73,46 @@ jobs:
       - run: packages/sqlite/build.sh darwin
       - name: loads on macOS 13 and later, both architectures, signed
         run: |
-          library=packages/sqlite/lib/darwin/libsqlite3.dylib
-          lipo -archs "$library" | grep -qw arm64
-          lipo -archs "$library" | grep -qw x86_64
-          for arch in arm64 x86_64; do
-            vtool -arch "$arch" -show-build "$library" | grep -q "minos 13.0"
+          for library in packages/sqlite/lib/darwin/libsqlite3.dylib packages/sqlite/lib/darwin/vec0.dylib; do
+            lipo -archs "$library" | grep -qw arm64
+            lipo -archs "$library" | grep -qw x86_64
+            for arch in arm64 x86_64; do
+              vtool -arch "$arch" -show-build "$library" | grep -q "minos 13.0"
+            done
+            codesign -v "$library"
           done
-          codesign -v "$library"
       - run: packages/sqlite/check.sh packages/sqlite/lib/darwin/libsqlite3.dylib
+      - run: packages/sqlite/check.sh packages/sqlite/lib/darwin/vec0.dylib
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: darwin
           path: packages/sqlite/lib/darwin
           if-no-files-found: error
 
+  # Only the extension: Node on Windows has SQLite built in. MinGW's gcc from the runner image, so one
+  # source and one build script serve every platform.
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: packages/sqlite/build.sh win32-x64
+      - name: Node loads it
+        run: node packages/sqlite/probe.mjs - "$(node -p process.versions.sqlite)" "$PWD/packages/sqlite/lib/win32-x64/vec0.dll"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: win32-x64
+          path: packages/sqlite/lib/win32-x64
+          if-no-files-found: error
+
   pack:
-    needs: [linux, darwin]
+    needs: [linux, darwin, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -124,7 +150,7 @@ jobs:
           name: package
       - run: tar -xzf wirecat-cli-core-sqlite-*.tgz
       - run: sw_vers -productVersion && uname -m
-      - run: bun packages/sqlite/probe.mjs "$PWD/package/lib/darwin/libsqlite3.dylib" "$SQLITE_VERSION"
+      - run: bun packages/sqlite/probe.mjs "$PWD/package/lib/darwin/libsqlite3.dylib" "$SQLITE_VERSION" "$PWD/package/lib/darwin/vec0.dylib"
 
   # A distribution's Node, which takes the system library, started on ours instead.
   distributions:
@@ -154,7 +180,7 @@ jobs:
             if command -v apk >/dev/null; then apk add --no-cache nodejs >/dev/null
             elif command -v dnf >/dev/null; then dnf install -y nodejs >/dev/null
             else apt-get update >/dev/null && apt-get install -y nodejs >/dev/null; fi
-            LD_LIBRARY_PATH=/w/package/lib/${{ matrix.target }} node packages/sqlite/probe.mjs - ${{ env.SQLITE_VERSION }}'
+            LD_LIBRARY_PATH=/w/package/lib/${{ matrix.target }} node packages/sqlite/probe.mjs - ${{ env.SQLITE_VERSION }} /w/package/lib/${{ matrix.target }}/vec0.so'
 
   publish:
     needs: [macos, distributions, security]
