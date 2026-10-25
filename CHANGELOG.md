@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.59.** The peer range moves from `>=0.57.0 <0.58.0` to `>=0.59.0 <0.60.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.59 brings `skill install --for hermes`, which
+  gives Hermes Agent the skill, and a `hermes` entry in `skill status`; every CLI on cli-core gets both. cli-base 0.58
+  renames the release lock to `wirecat-release-<package>.lock` and drops `leemour` from the shared spelling list.
+
 ## 0.436.0 — 26.10.2026
 
 ### Fixed
