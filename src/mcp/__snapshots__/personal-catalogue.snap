@@ -89,6 +89,7 @@ read  sends list
 read  server logs
 read  server status
 read  skill show
+read  skill status
 read  stats chats newcomers
 read  stats chats retention
 read  stats chats show

@@ -256,6 +256,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `tags` | collection | labels the owner puts on things |  |
 | `searches` | collection | the owner's saved searches |  |
 | `copies` | collection | tables kept aside by a repair |  |
+| `tables` | collection | the tables of the local store, with their kind, row count and size |  |
 | `attachments` | collection | files of stored messages |  |
 | `tasks` | collection | what waits on the owner |  |
 | `members` | collection | people in a chat |  |
@@ -749,6 +750,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `flag-synonym` | medium | option | an option is not another name for a vocabulary flag: `--max` and `--take` are `--limit` |
 | `identifier-name` | high | key | an identifier key is one from the glossary: `run_id`, never `execution_id` or `log_id` |
 | `log-attribute-key` | high | key | no log attribute key on the allow-list names message text, a token or a phone number |
+| `missing-run-log` | high | group | the CLI keeps a failed run and reads it back: `runs list`, `runs show`, global `--record` and `--no-record` |
 
 <!-- lint rules: end -->
 

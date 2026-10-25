@@ -825,6 +825,7 @@ describe("the MCP server", () => {
       "server logs",
       "server status",
       "skill show",
+      "skill status",
       "stats charts",
       "stats chats newcomers",
       "stats chats retention",
