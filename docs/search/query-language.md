@@ -57,9 +57,10 @@ Statistics reports also accept report predicates such as `message_kind:posts`, `
 заменяет его: обе приводятся к 0–1 на этих 50, итог = 0.3 · discovery + 0.7 · reranker; остальные
 идут после в прежнем порядке. `discovery.reranker_score` — собственная оценка модели. Включается
 сам, когда модель скачана: `tg models download mmarco` (136 MB). Другую модель или `off` задаёт
-настройка профиля `search_reranker` (`bge-reranker-v2-m3`, 588 MB, точнее, но ~7 с на 50 сообщений).
-Загрузка модели не входит в 2 с поиска, а оценка входит: если не успевает, порядок остаётся
-прежним. Без модели — заметка `not reranked: …` и шаг `models.download` в `--json`.
+настройка профиля `search_reranker` (`bge-reranker-v2-m3`, 588 MB, точнее, но в несколько раз
+медленнее). Загрузка и оценка не входят в 2 с поиска по словам; у оценки свои 10 с, и если она
+не успевает, порядок остаётся прежним, а поиск не падает. Без модели — заметка `not reranked: …`
+и шаг `models.download` в `--json`.
 
 ```sh
 tg search messages 'Во сколько ежедневная выгрузка проекта Маяк? chat:101' --discover --json

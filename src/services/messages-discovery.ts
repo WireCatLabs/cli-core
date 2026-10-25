@@ -19,6 +19,11 @@ export const RERANK_DEPTH = 50
 const RERANK_WEIGHT = 0.7
 /** Pairs scored between two looks at the clock. */
 const RERANK_CHUNK = 5
+/**
+ * Scoring has its own clock, not the word search's 2 s: 50 pairs are bounded work, and BGE on WebAssembly takes
+ * ~2–7 s of it (cli-testing performance/search/evidence-pipeline, "In Core").
+ */
+export const RERANK_MILLISECONDS = 10_000
 
 /** The reranker, opened; or why discovery keeps its own order. */
 export type RerankLane = () => Promise<
@@ -224,30 +229,38 @@ export const searchDiscovery = async (
   if (rerank && candidates.length > 1) {
     const opening = performance.now()
     const reranker = await rerank()
-    // Loading the model is not the search's time, as for meaning.
-    started += performance.now() - opening
     if ("skipped" in reranker) rerankSkipped = reranker.skipped
     else {
       const scoring = performance.now()
       try {
         const head = candidates.slice(0, RERANK_DEPTH)
-        const passages = head.map((m) => pairInput(m, parentByLocator.get(m.locator)))
+        // Telegram keeps only the id a reply answers: the parent is read from the store.
+        const parents = await Promise.all(
+          head.map(
+            async (m) =>
+              parentByLocator.get(m.locator) ??
+              m.replyTo ??
+              (m.replyToId === undefined
+                ? undefined
+                : await store.messages.message(accountOfHit(m), m.replyToId, { chatId: m.chatId })),
+          ),
+        )
+        const passages = head.map((m, i) => pairInput(m, parents[i]))
         let scores: number[] = []
         let chunk = 0
         while (scores.length < passages.length) {
           if (request.signal?.aborted)
             throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
           const now = performance.now()
-          if (now + chunk > started + QUERY_LIMITS.milliseconds) break
+          if (now + chunk > scoring + RERANK_MILLISECONDS) break
           scores = scores.concat(
             await reranker.score(text, passages.slice(scores.length, scores.length + RERANK_CHUNK)),
           )
           chunk = performance.now() - now
         }
-        if (scores.length < passages.length || performance.now() > started + QUERY_LIMITS.milliseconds) {
-          // A part of the hits rescored cannot be mixed with the rest; their time is given back to the search.
-          started += performance.now() - scoring
-          rerankSkipped = { reason: "it would take longer than the search may", model: reranker.model }
+        if (scores.length < passages.length || performance.now() > scoring + RERANK_MILLISECONDS) {
+          // A part of the hits rescored cannot be mixed with the rest.
+          rerankSkipped = { reason: "scoring would take longer than it may", model: reranker.model }
         } else {
           candidates = mixedWithReranker(head, scores).concat(candidates.slice(RERANK_DEPTH))
           reranked = { model: reranker.model, scored: head.length }
@@ -256,6 +269,8 @@ export const searchDiscovery = async (
         await reranker.done()
       }
     }
+    // Loading and scoring are not the word search's time, as loading is not for meaning.
+    started += performance.now() - opening
   }
   check()
   const items = await Promise.all(
@@ -362,11 +377,17 @@ const fusedWithMeaning = (
 type Ranked = FoundMessage & { fused: number }
 
 /** What the reranker reads of a hit, as the benchmark gave it: its reply parent first, each line headed by where, who and when. */
-const pairInput = (hit: FoundMessage, parent: FoundMessage | undefined): string => {
-  const line = (m: { senderName: string | null; timestamp: string | null; text: string }) =>
+type Said = { senderName: string | null; timestamp: string | null; text: string }
+
+const pairInput = (hit: FoundMessage, parent: Said | null | undefined): string => {
+  const line = (m: Said) =>
     `[${hit.chatTitle ?? hit.chatId} · ${m.senderName ?? "unknown"} · ${m.timestamp?.slice(0, 10) ?? "undated"}] ${m.text}`
-  const before = parent ?? hit.replyTo ?? undefined
-  return (before ? [before, hit] : [hit]).map(line).join("\n")
+  return (parent ? [parent, hit] : [hit]).map(line).join("\n")
+}
+
+const accountOfHit = (hit: FoundMessage): AccountKey => {
+  const { provider, account } = parseLocator(hit.locator)
+  return { provider, account }
 }
 
 const scaled = (values: number[]): number[] => {

@@ -55,7 +55,7 @@ const download = () => {
   )
 }
 
-const setUp = async (reranker?: string) => {
+const setUp = async (reranker?: string, replies: Record<string, string> = {}) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "discover-rerank-")), "m.db") })
   stores.push(store)
   await store.chats.saveChats(account, [
@@ -69,7 +69,8 @@ const setUp = async (reranker?: string) => {
       message("1", "cat dog kitten kitten kitten"),
       message("2", "dog kitten kitten kitten kitten kitten"),
       message("3", "dog"),
-    ],
+      message("4", "kitten"),
+    ].map((one) => (replies[one.id] ? { ...one, replyToId: replies[one.id] } : one)),
     { via: "history" },
   )
   await store.searchIndex.fillSearchIndex({})
@@ -121,6 +122,16 @@ describe("discovery's reranker", () => {
     ])
   })
 
+  it("reads the message a reply answers before it, also when the messenger kept only its id", async () => {
+    download()
+    const { discover } = await setUp(undefined, { "3": "4" })
+
+    const found = await discover("cat dog")
+
+    // The question's cat, and the parent's kitten.
+    expect(found.items.find(({ id }) => id === "3")?.discovery?.rerankerScore).toBe(2)
+  })
+
   it("is not used when the profile turned it off, and says nothing", async () => {
     download()
     const { discover } = await setUp("off")
@@ -141,14 +152,14 @@ describe("discovery's reranker", () => {
     expect(found.items.every(({ discovery }) => discovery?.rerankerScore === undefined)).toBe(true)
   })
 
-  it("**gives up the reranking, not the search,** when scoring would pass the time limit", async () => {
+  it("**gives up the reranking, not the search,** when scoring would pass its own time limit", async () => {
     const { discover } = await setUp()
     let now = 0
     vi.spyOn(performance, "now").mockImplementation(() => now)
     const slow: RerankLane = async () => ({
       model: "slow",
       score: async (_question, passages) => {
-        now += 3_000
+        now += 11_000
         return passages.map(() => 1)
       },
       done: async () => {},
@@ -157,6 +168,6 @@ describe("discovery's reranker", () => {
     const found = await discover("cat dog", {}, slow)
 
     expect(found.items.map(({ id }) => id)).toEqual(["1", "3", "2"])
-    expect(found.rerankSkipped).toEqual({ reason: "it would take longer than the search may", model: "slow" })
+    expect(found.rerankSkipped).toEqual({ reason: "scoring would take longer than it may", model: "slow" })
   })
 })
