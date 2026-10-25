@@ -17,7 +17,8 @@ export interface RunMetadata {
   runId: string
   /** As typed, without the arguments: `chats list`, `messages send`. */
   command: string
-  profile: string
+  /** Left out when the command named no profile. */
+  profile?: string
   startedAt: string
   completedAt?: string
   status: RunStatus | "running"
@@ -50,7 +51,7 @@ export interface RunMetadata {
 export interface StartRunOptions {
   runsDir: string
   command: string
-  profile: string
+  profile?: string
   /** The log record's `resource.service`: the program's own name, `tg` or `max`. */
   service: string
   cliVersion: string
@@ -148,7 +149,7 @@ export const startRun = (options: StartRunOptions): Run => {
   const metadata: RunMetadata = {
     runId: id,
     command: options.command,
-    profile: options.profile,
+    ...(options.profile === undefined ? {} : { profile: options.profile }),
     startedAt: startedAt.toISOString(),
     status: "running",
     cliVersion: options.cliVersion,

@@ -46,7 +46,14 @@ import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile, PROFILE_FREE, sampleCommand, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
-import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
+import {
+  type GlobalFlags,
+  NoProfileHere,
+  namedProfile,
+  type ResolveOptions,
+  type Settings,
+  settingsFor,
+} from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
 import { commandAt, lineOf, withLines } from "./steps.js"
 
@@ -61,7 +68,7 @@ export interface ProgramDefinition {
       flags?: GlobalFlags,
       options?: ResolveOptions,
     ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint"> &
-      Partial<Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions">>
+      Partial<Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "sources">>
   }
   configure?: (program: Command) => void
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
@@ -704,7 +711,7 @@ const keepFailure = async (
     {
       app: definition.app,
       command: `${options.agent ? "mcp " : ""}${path || definition.app.command}`,
-      profile: settings?.profile ?? profile ?? "default",
+      profile: settings ? namedProfile(settings) : profile,
       record: false,
       keepFailed: settings?.keepFailedRuns ?? !rest.includes("--no-record"),
       trace: false,
@@ -749,11 +756,12 @@ const failed = (
   settled: { settlementFailed?: true },
   debug: boolean,
 ): Failure => {
-  const failure =
-    settled.settlementFailed && isCliFailure(error)
-      ? new CliError(error.code, error.message, { ...error.details, settlement_failed: true })
-      : error
   const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  const told = error instanceof NoProfileHere && !commandAt(program, "setup") ? error.withoutSetup(path) : error
+  const failure =
+    settled.settlementFailed && isCliFailure(told)
+      ? new CliError(told.code, told.message, { ...told.details, settlement_failed: true })
+      : told
   const effects = judgedEffects(path ? metaOf(commandAt(program, path) ?? program).effects : undefined)
   const object = errorObjectOf(failure, {
     ...failureContext(app.errors),

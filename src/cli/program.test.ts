@@ -1061,3 +1061,63 @@ it("bounds an unresponsive failure handler while preserving the original error",
     vi.useRealTimers()
   }
 })
+
+describe("a run with no profile named", () => {
+  const program = (withSetup: boolean): ProgramDefinition => ({
+    app,
+    commands: () => [
+      new Command("chats").addCommand(
+        new Command("list").action(async function (this: Command) {
+          await baseContext(this, resolveSettings).run(async () => {})
+        }),
+      ),
+      ...(withSetup ? [new Command("setup").action(() => {})] : []),
+    ],
+  })
+  const sandbox = () => {
+    const root = mkdtempSync(join(tmpdir(), "no-profile-"))
+    const { APP_PROFILE: _, APP_PROFILE_LOCK: __, ...env } = process.env
+    return { ...env, APP_CONFIG_DIR: join(root, "config"), APP_STATE_DIR: join(root, "state") }
+  }
+  const go = async (argv: string[], withSetup: boolean, env: NodeJS.ProcessEnv) => {
+    const streams = captureStreams()
+    const code = await run(argv, program(withSetup), { streams, tty: false, env })
+    return { code, error: streams.stderr[0] ? JSON.parse(streams.stderr[0]).error : undefined }
+  }
+  const runs = (env: NodeJS.ProcessEnv) => listRuns(join(env.APP_STATE_DIR ?? "", "runs"))
+
+  it("**suggests `setup` only to a CLI that has it**, and otherwise the typed command with a profile", async () => {
+    const env = sandbox()
+
+    const withSetup = await go(["chats", "list"], true, env)
+    const without = await go(["chats", "list"], false, env)
+    const suggested = await go(["personal", "chats", "list", "--record"], false, env)
+
+    expect(withSetup.error.message).toBe(
+      "name a profile: there is none on this computer yet — create one with `app personal setup` " +
+        "(any name in place of personal)",
+    )
+    expect(without.code).toBe(2)
+    expect(without.error).toMatchObject({
+      code: "validation_error",
+      message:
+        "name a profile: there is none on this computer yet — any name works, such as `app personal chats list` " +
+        "(or set APP_PROFILE)",
+      details: { profiles: [] },
+    })
+    expect(suggested.code).toBe(0)
+  })
+
+  it("**records no profile for the owner** — not `default` — and the one named, even one called default", async () => {
+    const env = sandbox()
+
+    await go(["chats", "list"], false, env)
+    await go(["default", "chats", "list", "--record"], false, env)
+
+    const unnamed = runs(env).find((one) => one.status === "failed")
+    const named = runs(env).find((one) => one.status === "success")
+    expect(unnamed).toMatchObject({ command: "chats list" })
+    expect(unnamed).not.toHaveProperty("profile")
+    expect(named).toMatchObject({ command: "chats list", profile: "default" })
+  })
+})

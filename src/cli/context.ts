@@ -12,7 +12,7 @@ import type { SecretInput } from "../terminal/prompt.js"
 import { type Closeable, withDeadline } from "./deadline.js"
 import { withAbort } from "./execution.js"
 import { rootOf } from "./profile.js"
-import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
+import { type GlobalFlags, namedProfile, type ResolveOptions, type Settings } from "./settings.js"
 
 /** What every CLI's commands write to, when it is not the real terminal. A CLI adds its own fields. */
 export interface BaseEnvironment {
@@ -190,6 +190,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     ...(environment.tty === undefined ? {} : { tty: environment.tty }),
   })
   const closeables: Closeable[] = []
+  const ranFor = namedProfile(settings)
 
   return {
     settings,
@@ -207,7 +208,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
               app: environment.app,
               // An agent's run is named `mcp <command>`, so `search runs` and `sends list` tell it from the owner's.
               command: name ?? `${environment.agent ? "mcp " : ""}${commandPath(command)}`,
-              profile: settings.profile,
+              ...(ranFor === undefined ? {} : { profile: ranFor }),
               record: settings.record,
               keepFailed: settings.keepFailedRuns,
               trace: settings.trace,

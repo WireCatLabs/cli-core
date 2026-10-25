@@ -281,7 +281,9 @@ export const entryRunner = (registration: Registration): RunEntry => {
         ? startRecording({
             app,
             command,
-            profile: registration.defaults.settings.profile ?? "default",
+            ...(registration.defaults.settings.profile === undefined
+              ? {}
+              : { profile: registration.defaults.settings.profile }),
             env: registration.defaults.env,
             record: false,
             keepFailed: true,

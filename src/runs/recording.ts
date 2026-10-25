@@ -11,7 +11,8 @@ export interface RecordingOptions {
   app: AppIdentity
   /** As typed, without the arguments: `chats list`. It names the run directory. */
   command: string
-  profile: string
+  /** Unset when nothing named one: a run is never put down to a profile the owner did not choose. */
+  profile?: string
   record: boolean
   /** Keep the run if it fails, even though `record` is off. */
   keepFailed: boolean
@@ -46,7 +47,7 @@ export const recorded = async <T>(options: RecordingOptions, body: (events: Even
       runId: recording.runId,
       command: options.command,
       startedAt: Date.now(),
-      profile: options.profile,
+      ...(options.profile === undefined ? {} : { profile: options.profile }),
       ...(recording.traceId ? { traceId: recording.traceId } : {}),
     }
     if (options.processRun) useAsProcessRun(scope)
@@ -82,7 +83,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
       runsDir: options.runsDir ?? runsDirFor(options.app, options.env),
       runId,
       command: options.command,
-      profile: options.profile,
+      ...(options.profile === undefined ? {} : { profile: options.profile }),
       service: options.app.command,
       cliVersion: options.app.version,
       ...(traceId === undefined ? {} : { traceId }),
