@@ -204,13 +204,30 @@ EmbeddingGemma does better.
 
 ### 3 · The scan
 
-`conversations search "<query>"` turns the query into a vector with the same model, then reads every
-vector of the chats in scope and keeps each conversation's best chunk by **cosine** — how close two
-vectors point, from −1 to 1; vectors are stored at length one, so it is a plain dot product. No
-vector index: SQLite reads 5,000 rows at a time in the chunks' key order, and JavaScript does the
-arithmetic (`nearestChunks`, `src/store/sqlite/vectors.ts`). At the sizes measured a plain table was as
-fast as sqlite-vec, which would need a native extension per platform
-(research).
+`conversations search "<query>"` turns the query into a vector with the same model and keeps each
+conversation's best chunk by **cosine** — how close two vectors point, from −1 to 1; vectors are stored at length
+one, so it is a plain dot product.
+
+**The vector index** (store version 34, `src/store/sqlite/vector-index.ts`). Each embedding model has a sqlite-vec
+`vec0` table in the store, `vector_index_<id>` (listed in `vector_indexes`): one row per chunk with a vector of that
+model, rowid `chunks.id`, the chunk's hash beside it. `kind` (the chunk's type) and `account` are partition keys,
+`chat` and `occurred_at` metadata, so a KNN query filters on them before it ranks — exactly, since sqlite-vec 0.1.9
+compares every vector in the partition (no approximation). Triggers on `chunks`, `embeddings` and `messages` pass
+each changed chunk through `vector_index_redo`, and each model's trigger re-derives that chunk's row, in the same
+transaction as the write — whoever writes, including the schema's own delete triggers. A store that held vectors
+before version 34 is filled on its first writable open, in short batches; until a model's index is `ready` its
+searches scan.
+
+A search takes the nearest candidates from the index, runs the scan's own SQL on just those (hidden chats, deleted
+messages, old builds, the hash, so a reused chunk id is never taken for the old chunk), scores them with the same
+dot product, and asks vec0 for more (up to its limit of 4,096) until enough survive. When even 4,096 leave too few,
+or a filter the index cannot express is set (a person, a project, a scope, a list of conversations), the search
+scans: SQLite reads 5,000 rows at a time in the chunks' key order, and JavaScript does the arithmetic
+(`nearestChunks`, `src/store/sqlite/vectors.ts`). Messages (`nearestMessages`) and images (`nearestImages`) search
+the same way. Mail, notes, meeting transcripts and document pictures still scan. `store check` compares each ready
+index's row count with the vectors it should hold.
+
+Every store connection loads the extension (`src/store/vector-extension.ts`); without it the store does not open.
 
 A chat embedded only with another model cannot be searched by meaning with this one: the search names
 it on stderr and in a `missing` entry with the `conversations.embed` step, instead of leaving it out silently.
@@ -329,9 +346,9 @@ and the MCP search took 1.4 s.
 | embed, status, readiness, refresh, clear | `src/services/embeddings-maintenance.ts` |
 | search, related, the merge | `src/services/embeddings-search.ts` |
 | the vector tables and the scan | `src/store/sqlite/vectors.ts` |
+| the vector index | `src/store/sqlite/vector-index.ts`, `src/store/vector-extension.ts` |
 | the commands | `src/cli/messenger/conversations-command.ts` |
 | the MCP tools | generated from the commands (`src/mcp/agent.ts`) |
-
 
 
 ## Conversation quality and cosine floor
@@ -343,4 +360,4 @@ noise reduced at a small recall cost; it does not make scores probabilities or p
 `conversations related` retains neighbour-lookup semantics. Reproduce the scores and the 1M-vector
 scan with [the quality benchmark](../../bench/search-quality/README.md). The exact scan is sufficient
 at the measured smaller scale; ≥300k eligible chunks demonstrate the need for ANN under a proposed
-one-second scan budget. No vector-index dependency is introduced by this measurement.
+one-second scan budget. The vector index (store version 34, above) is the answer to that.

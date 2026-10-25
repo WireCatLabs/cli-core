@@ -1,4 +1,5 @@
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import { loadVectorExtension, vectorExtension } from "../vector-extension.js"
 
 interface BunStatement {
   run(...parameters: SqlValue[]): { changes: number }
@@ -9,6 +10,7 @@ interface BunStatement {
 export interface BunDatabase {
   exec(sql: string): void
   query(sql: string): BunStatement
+  loadExtension(path: string): void
   close(): void
 }
 
@@ -50,7 +52,21 @@ export const bunDatabase = async (): Promise<BunDatabaseClass> => {
 }
 
 export const openWithBunSqlite = async (path: string): Promise<CacheDatabase> =>
-  cacheOverBunSqlite(new (await bunDatabase())(path))
+  cacheOverBunSqlite(await bunClient(path))
+
+/** A connection with the vector extension loaded; it closes again when the extension does not load. */
+export const bunClient = async (path: string, options?: { readonly?: boolean; create?: boolean }) => {
+  const Database = await bunDatabase()
+  const extension = await vectorExtension()
+  const client = options ? new Database(path, options) : new Database(path)
+  try {
+    loadVectorExtension(client, extension)
+    return client
+  } catch (error) {
+    client.close()
+    throw error
+  }
+}
 
 export const cacheOverBunSqlite = (database: BunDatabase): CacheDatabase => {
   return {

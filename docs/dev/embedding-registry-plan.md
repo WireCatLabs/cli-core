@@ -71,7 +71,8 @@ dimensions, read in pages of 5,000 as the store does ([cli-testing performance/s
 
 The owner's store holds about 17,400 chunks today. Past about 100,000 in one scope, in this order: keep the vectors
 in memory in the MCP server (no page reads), store them as 8-bit numbers (a quarter of the bytes), then an
-approximate index such as `sqlite-vec`. None is needed now.
+approximate index. Store version 34 ranks by an exact sqlite-vec index
+([search-indexes.md](../storage/search-indexes.md#3--the-scan)).
 
 ## No vector column on a main table
 

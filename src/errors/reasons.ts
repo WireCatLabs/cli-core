@@ -63,6 +63,12 @@ const OTHERS: Entry[] = [
   ["state.invalid", "configuration_error", "the saved sync state is unreadable or invalid; it is kept, not reset"],
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
+  [
+    "store.vector-extension-missing",
+    "configuration_error",
+    "the install has no sqlite-vec extension for this platform; reinstall the CLI",
+  ],
+  ["store.vector-extension-failed", "configuration_error", "the sqlite-vec extension did not load; reinstall the CLI"],
   validation("catalog.scope-limit", "the selected catalog exceeds its entry limit"),
   validation("evidence.row-too-large", "one evidence row is over its size limit"),
   validation("index.not-ready", "the search index is still being built"),
