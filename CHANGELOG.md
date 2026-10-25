@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.425.0 — 25.10.2026
+
 ### Fixed
 
 - **A date range in a list query no longer takes in the first moment after its end** (WC-TIME-5). `timeBounds` returned the end of `time:[2026-10-01 TO 2026-10-31]` as midnight of 1 November, and of `… TO "<timestamp>"}` as the timestamp itself, while `search runs` and `contacts events` keep what starts at or before the end. A run or event at exactly that millisecond was listed. `until` is now the last millisecond inside the range; `meta.window.until` shows it (`2026-10-31T23:59:59.999Z`). The start is unchanged.
