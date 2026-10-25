@@ -74,10 +74,7 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
       reason: "oauth.missing",
     })
 
-  // A releaser removes the empty marker folder, so an acquirer racing it can find the folder gone: that is "busy" too.
-  const busy = (error: unknown) =>
-    (isCliError(error) && error.details.reason === "file.locked") ||
-    (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
+  const busy = (error: unknown) => isCliError(error) && error.details.reason === "file.locked"
   const acquire = async () => {
     const started = performance.now()
     let waiting = false
