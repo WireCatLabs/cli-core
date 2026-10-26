@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.449.0 — 26.10.2026
+
 ### Changed — may break callers
 
 - **cli-core needs `@wirecat/cli-base` 0.62.** The peer range moves from `>=0.59.0 <0.60.0` to `>=0.62.0 <0.63.0`. A
