@@ -15,6 +15,7 @@ export const LINK_KINDS = [
   "duplicate-of",
   "related-to",
   "assigned-to",
+  "attached",
 ] as const
 
 export type LinkKind = (typeof LINK_KINDS)[number]

@@ -34,6 +34,22 @@ export interface EntryParticipantInput {
   resource?: boolean
 }
 
+/** A Google Drive file attached to a calendar entry (Google's `attachments[]`). */
+export interface EntryAttachmentInput {
+  /** The Drive file's id: `files.external_id` of a stored Drive file. */
+  fileId: string
+  title?: string | null
+}
+
+/** A Drive file attached to an entry, and the document it is once Drive has stored it. */
+export interface EntryAttachment {
+  entryId: number
+  fileId: string
+  title: string | null
+  /** `null` while no Drive account holds the file, or while two do. */
+  documentId: number | null
+}
+
 export type EntryKind = "single" | "series" | "occurrence"
 export type EntryStatus = "confirmed" | "tentative" | "cancelled"
 
@@ -77,6 +93,11 @@ export interface EntryInput {
   externalUpdatedAt?: number | null
   /** Only the keys `ENTRY_METADATA_KEYS` names are kept. */
   metadata?: Record<string, unknown> | null
+  /**
+   * Its Drive files: each links the entry to the file's document, now or once Drive stores the file. Absent keeps the
+   * links the entry has; a list replaces them.
+   */
+  attachments?: EntryAttachmentInput[]
 }
 
 export interface StoredEntry {
@@ -144,6 +165,7 @@ export interface EventDetails {
   entries: StoredEntry[]
   participants: StoredParticipant[]
   revisions: EntryRevision[]
+  attachments: EntryAttachment[]
 }
 
 export interface EventFilter {

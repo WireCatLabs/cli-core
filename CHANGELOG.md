@@ -9,6 +9,12 @@ shape of this file.
 
 ### Added
 
+- **A calendar entry links the Drive files attached to it.** `EntryInput.attachments` takes Google's
+  `attachments[].fileId` (and its title). `saveEntries` links the entry to the document of that Drive file
+  (`links` of the new kind `attached`, source `calendar`). When Drive has not stored the file yet, the link waits,
+  named `google-drive:<file id>`, and is made when Drive stores it, in whichever order the two sync. When two Drive
+  accounts hold the file, no link is made. A list replaces the entry's links, and an entry saved without
+  `attachments` keeps them. `store.calendar.event(id)` answers them as `attachments`, each with its `documentId`.
 - **Calendar events are found by words.** `searchEvents(store, query, options)` and `store.calendar.search(query)`
   find events by their title, cleaned description, place and attendees' names, in the query language messages use;
   `date:` reads the event's start. The occurrences of one series are one hit, showing the matching occurrence

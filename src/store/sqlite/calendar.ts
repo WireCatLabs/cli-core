@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import {
   calendarText,
+  type EntryAttachment,
+  type EntryAttachmentInput,
   type EntryInput,
   type EntryParticipantInput,
   type EntryRevision,
@@ -17,7 +19,7 @@ import {
 } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { bool, eventOf, fromJson, int, str, toJson } from "./events.js"
-import { logFileLink } from "./files.js"
+import { driveDocumentOf, driveFileTarget, logFileLink } from "./files.js"
 import { identityOf } from "./identities.js"
 import { reviewLink } from "./link-reviews.js"
 import type { StoreContext } from "./open.js"
@@ -109,6 +111,13 @@ const reviewOf = (row: Row): LinkReview => ({
   decidedBy: str(row.decided_by),
   decidedAt: int(row.decided_at),
   createdAt: Number(row.created_at),
+})
+
+const attachmentOf = (row: Row): EntryAttachment => ({
+  entryId: Number(row.from_id),
+  fileId: String(row.target_text).slice(driveFileTarget("").length),
+  title: str(fromJson<{ title?: unknown } | null>(row.metadata)?.title),
+  documentId: int(row.to_id),
 })
 
 const TRACKED = ["title", "starts_at", "ends_at", "location", "status", "recurrence", "recurrence_ends_at"] as const
@@ -374,6 +383,34 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     for (const email of stale) drop.run(entryId, email)
   }
 
+  /** The entry's Drive files as `attached` links: the list given replaces the one held. */
+  const saveAttachments = (entryId: number, attachments: EntryAttachmentInput[], now: number) => {
+    const held = new Map(
+      database
+        .prepare(
+          "SELECT id, target_text FROM links WHERE from_type = 'calendar_entry' AND from_id = ? AND kind = 'attached'",
+        )
+        .all(entryId)
+        .map((row) => [String(row.target_text), Number(row.id)]),
+    )
+    const insert = database.prepare(
+      `INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, target_text, metadata, confirmed, author,
+         created_at, updated_at) VALUES ('calendar_entry', ?, 'document', ?, 'attached', 'calendar', ?, ?, 1, 'rule', ?, ?)`,
+    )
+    const retitle = database.prepare("UPDATE links SET metadata = ?, updated_at = ? WHERE id = ? AND metadata IS NOT ?")
+    for (const { fileId, title } of attachments) {
+      const target = driveFileTarget(fileId.trim())
+      if (target === driveFileTarget("")) continue
+      const metadata = title ? JSON.stringify({ title }) : null
+      const id = held.get(target)
+      if (id === undefined) insert.run(entryId, driveDocumentOf(database, fileId.trim()), target, metadata, now, now)
+      else retitle.run(metadata, now, id, metadata)
+      held.delete(target)
+    }
+    const drop = database.prepare("DELETE FROM links WHERE id = ?")
+    for (const id of held.values()) drop.run(id)
+  }
+
   /** Rules 1 and 2: the row this entry already is, if any. */
   const existingFor = (calendarId: number, input: EntryInput, seriesEntryId: number | null): Row | undefined => {
     const same = database
@@ -486,6 +523,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       )
     }
     if (input.participants) saveParticipants(id, input.participants, now)
+    if (input.attachments) saveAttachments(id, input.attachments, now)
     if (input.kind === "series")
       database
         .prepare(
@@ -671,6 +709,13 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
             )
             .all(ids)
             .map(revisionOf),
+          attachments: database
+            .prepare(
+              "SELECT from_id, target_text, to_id, metadata FROM links WHERE from_type = 'calendar_entry' AND kind = 'attached' " +
+                "AND from_id IN (SELECT value FROM json_each(?)) ORDER BY from_id, id",
+            )
+            .all(ids)
+            .map(attachmentOf),
         }
       }),
     linkEntry: async (entryId, eventId, now) =>

@@ -122,7 +122,7 @@
   "links": {
     "kind": "Type of connection: `links-to` (a note links to something), `about`, `member-of`, `related-to` or `assigned-to`.",
     "anchor": "The heading or block fragment the link points at inside its target, like `#Heading` or `#^block`; NULL for the whole target.",
-    "source": "Where the link came from: `file` (written in a note file), `owner` (added by the owner), `suggested` (proposed, not yet confirmed) or `message` (written in a stored message's text).",
+    "source": "Where the link came from: `file` (written in a note file), `owner` (added by the owner), `suggested` (proposed, not yet confirmed), `calendar` (attached to a calendar entry) or `message` (written in a stored message's text).",
     "target_text": "The target as written (e.g. a name in a note), kept while the link resolves to nobody; up to 500 characters.",
     "target_folded": "target_text case- and accent-folded with any leading `@` removed, matched against new person names and aliases to resolve the link.",
     "role": "The role the relation states, such as a job title in a `member-of` link; free text up to 200 characters.",
