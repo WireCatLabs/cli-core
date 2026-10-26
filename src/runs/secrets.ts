@@ -1,3 +1,4 @@
+// Single words, and pairs written together (`apikey`) or apart (`api_key`); after Yelp detect-secrets' keyword list.
 const SECRET_WORDS = new Set([
   "authorization",
   "cookie",
@@ -5,9 +6,23 @@ const SECRET_WORDS = new Set([
   "credentials",
   "passphrase",
   "password",
+  "passwd",
+  "pwd",
+  "pass",
+  "passcode",
+  "pin",
+  "otp",
+  "2fa",
   "secret",
   "token",
-  "apikey",
+  "contraseña",
+  "contrasena",
+  "clave",
+  "пароль",
+  "пин",
+  "код",
+  ...["api", "auth", "service", "account", "db", "database", "priv", "private", "client"].map((word) => `${word}key`),
+  ...["db", "database", "key"].map((word) => `${word}pass`),
 ])
 
 // Undeclared flags carry no mark, so the name is the only signal; CLIs take secrets at a prompt (WC-SECR-5) and this
@@ -17,7 +32,7 @@ export const secretNamed = (name: string): boolean => {
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .split(/[\s_.-]+/)
     .map((word) => word.toLowerCase())
-  return words.some((word, at) => SECRET_WORDS.has(word) || (word === "api" && words[at + 1] === "key"))
+  return words.some((word, at) => SECRET_WORDS.has(word) || SECRET_WORDS.has(word + (words[at + 1] ?? "")))
 }
 
 const START = "(?<![A-Za-z0-9_-])"
@@ -46,8 +61,9 @@ const PRIVATE_KEY = /-----BEGIN[A-Z ]* PRIVATE KEY-----[\s\S]*?(?:-----END[A-Z ]
 // Capitalised, as in a header, and not followed by a plain word: "the Basic plan" is somebody's words.
 const SCHEME = /(?<![A-Za-z])(Bearer|Basic)(\s+)(?![A-Z]?[a-z]+(?![A-Za-z0-9]))[A-Za-z0-9._~+/=-]{8,}/g
 
+// After a bare space only a value that is not a plain word: `pin 1234` is a secret, `pin this message` is not.
 const NAMED_PAIR =
-  /(?<![A-Za-z0-9])([A-Za-z0-9_.-]*(?:token|password|passphrase|secret|credential|cookie|authorization|api[_-]?key)[A-Za-z0-9_.-]*)(["']?\s*[:=]\s*["']?)((?:Bearer\s+|Basic\s+)?)([^\s"'&,;]+)/gi
+  /(?<![\p{L}\p{N}])([\p{L}\p{N}_.-]*(?:token|pass|pwd|pin|otp|2fa|secret|credential|cookie|authorization|key|contrase|clave|пароль|пин|код)[\p{L}\p{N}_.-]*)(["']?\s*(?:=>|[:=])\s*["']?|\s+(?![\p{L}]+(?![\p{L}\p{N}])))((?:Bearer\s+|Basic\s+)?)([^\s"'&,;]+)/giu
 
 /**
  * Whether a run of token characters is a random string rather than words: long, mixed case, high Shannon entropy,
@@ -78,8 +94,9 @@ const entropy = (text: string): number => {
 
 /**
  * Text with each secret inside it replaced by `mark` and the words around it kept: a token of a known vendor format,
- * a private key, a `Bearer`/`Basic` credential, the value of a secret-named `name=value` or `name: value`, and a
- * random-looking string of 20 or more printable characters (`looksRandom`).
+ * a private key, a `Bearer`/`Basic` credential, the value of a secret-named `name=value`, `name: value`, `name => value`
+ * or `name value`, a random-looking string of 20 or more printable characters (`looksRandom`), and a run of 20 or more
+ * lower-case hex characters with a Shannon entropy of 3 bits per character or more.
  */
 export const withoutSecrets = (text: string, mark = "[redacted]"): string =>
   text
@@ -93,7 +110,11 @@ export const withoutSecrets = (text: string, mark = "[redacted]"): string =>
       // A URL or a path is somebody's address, not a key; a credential in one is caught by the rules above.
       token.includes("://") || /^(?:\/|~\/|\.\.?\/)/.test(token)
         ? token
-        : token.replace(RUN, (run) => (looksRandom(run) ? mark : run)),
+        : token.replace(RUN, (run) =>
+            looksRandom(run) ? mark : run.replace(HEX, (hex) => (entropy(hex) >= 3 ? mark : hex)),
+          ),
     )
 
 const RUN = /(?<![A-Za-z0-9_+/-])[A-Za-z0-9_+/-]{20,}/g
+// Lower case only: WhatsApp message ids are upper-case hex of 20–32 characters. A dash ends a run, so a UUID stays.
+const HEX = /(?<![A-Za-z0-9])(?=[0-9]*[a-f])[0-9a-f]{20,}(?![A-Za-z0-9])/g

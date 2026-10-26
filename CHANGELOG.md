@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Security
+
+- **Run records hide more secrets: hex keys, and a password written after its name with a space.** A run of 20 or
+  more lower-case hex characters (`0-9a-f`) is hidden when it looks random (3 bits per character or more, the limit
+  Yelp's detect-secrets uses). This hides hex keys and also full commit hashes; a short hash (7–12 characters), a
+  UUID and an upper-case WhatsApp message id stay. The list of secret names grows by detect-secrets' keyword list
+  (`passwd`, `pwd`, `auth_key`, `private_key`, `db_pass`, `contraseña` and others) and by `pass`, `passcode`, `pin`,
+  `otp`, `2fa`, `clave`, `пароль`, `пин`, `код`, in any letter case. The value after such a name is hidden when it
+  follows `=`, `:`, `=>` or a space (`password hunter2`, `pin 1234`, `код 123456`); after a space only a value that
+  is not a plain word, so `pin this message` stays. A flag or argument with such a name (`--pin <chat>`) now has its
+  value hidden in a run record that keeps what was typed.
+
 ## 0.443.0 — 26.10.2026
 
 ### Added
