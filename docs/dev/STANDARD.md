@@ -426,7 +426,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--operation-id` | `<id>` | id | the write attempt this repeats, from an unknown outcome; a retry with it cannot write twice |  |
 | `--port` | `<port>` | number | the local port for --http |  |
 | `--public-url` | `<url>` | string | the public https address of the tunnel |  |
-| `--record` |  | switch | keep this run under runs: ids and timings, never content |  |
+| `--record` |  | switch | keep this run, with the command as typed and secrets hidden; record_input false leaves the typed words out |  |
 | `--regex` |  | switch | the words are one regular expression |  |
 | `--silent` |  | switch | deliver without a notification |  |
 | `--thread` |  | switch | the stored reply chain instead of time neighbours |  |

@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.62.** The peer range moves from `>=0.59.0 <0.60.0` to `>=0.62.0 <0.63.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.62 checks shared commands about twice as fast,
+  which shortens every command's setup: in tg a warm `run(["--version"])` went from 49 to 29 ms. cli-base 0.61 says in
+  its handbook that a run record keeps the command line as typed, with secrets still hidden; a CLI whose tests or
+  documents say otherwise follows its changelog.
+
 ## 0.448.0 — 26.10.2026
 
 ### Added
