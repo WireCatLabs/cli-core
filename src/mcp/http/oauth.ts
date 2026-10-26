@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto"
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import {
   type AuthInfo,
@@ -8,9 +8,8 @@ import {
   type OAuthMetadata,
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server"
+import { ACCESS_SECONDS, type StoredClient as Client, REFRESH_SECONDS, readStored, type Stored } from "./state.js"
 
-const ACCESS_SECONDS = 60 * 60
-const REFRESH_SECONDS = 30 * 24 * 60 * 60
 const AUTH_CODE_MS = 60 * 1000
 const LOGIN_CODE_MS = 10 * 60 * 1000
 const WRONG_TRIES = 5
@@ -19,28 +18,7 @@ const MAX_CLIENTS = 10
 // biome-ignore lint/security/noSecrets: pairing-code alphabet, not a key
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-type AuthMethod = "none" | "client_secret_post" | "client_secret_basic"
-
-interface Client {
-  id: string
-  name?: string
-  secretHash?: string
-  redirectUris: string[]
-  authMethod: AuthMethod
-  issuedAt: number
-}
-
-interface StoredToken {
-  hash: string
-  kind: "access" | "refresh"
-  clientId: string
-  expiresAt: number
-}
-
-interface Stored {
-  clients: Client[]
-  tokens: StoredToken[]
-}
+type AuthMethod = Client["authMethod"]
 
 interface AuthCode {
   clientId: string
@@ -59,8 +37,7 @@ const same = (given: string, expected: string) => {
 
 /** Only hashes reach the disk: the file is worth nothing to someone who copies it. */
 const tokenFile = (path: string) => ({
-  read: (): Stored =>
-    existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as Stored) : { clients: [], tokens: [] },
+  read: (): Stored => readStored(path),
   write: (stored: Stored) => {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     const temporary = `${path}.${randomBytes(16).toString("hex")}.tmp`
@@ -100,6 +77,7 @@ export interface OwnerLogin {
   verifier: OAuthTokenVerifier
   /** Answers the login routes; `undefined` for any other path. */
   handle(request: Request): Promise<Response | undefined>
+  close(): void
 }
 
 /**
@@ -119,7 +97,7 @@ export const ownerLogin = ({
   resource: URL
   file: string
   appName: string
-  /** Shown to the owner on stderr: the code for the next login. */
+  /** The code for the next login, for the owner's eyes only: their terminal, or the server's status file. */
   onCode: (code: string, expires: Date) => void
   now?: () => number
 }): OwnerLogin => {
@@ -129,9 +107,14 @@ export const ownerLogin = ({
   let wrong = 0
   let retryAt = 0
 
+  let renewal: NodeJS.Timeout | undefined
+  // Renewed when it runs out, not only when someone tries it: a code read from the status file must still work.
   const freshCode = () => {
     const part = () => Array.from({ length: 4 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join("")
     login = { value: `${part()}-${part()}`, expires: now() + LOGIN_CODE_MS }
+    clearTimeout(renewal)
+    renewal = setTimeout(freshCode, LOGIN_CODE_MS)
+    renewal.unref()
     onCode(login.value, new Date(login.expires))
   }
   freshCode()
@@ -227,7 +210,7 @@ export const ownerLogin = ({
       .join("")
     const who = escapeHtml(client.name ?? "an application")
     const target = new URL(params.get("redirect_uri") ?? "")
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(appName)} login</title><style>body{font:16px system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#1d2430}input[type=text]{font:20px ui-monospace,monospace;letter-spacing:.1em;width:100%;padding:.5rem;margin:.5rem 0 1rem;box-sizing:border-box}button{font:inherit;padding:.5rem 1rem}.error{color:#b42318}</style></head><body><h1>${escapeHtml(appName)}</h1><p>An app that calls itself <strong>${who}</strong> asks to reach your messages through <code>${escapeHtml(appName)} mcp --http</code>.</p><p>After you allow it, the login goes to <strong>${escapeHtml(target.host)}</strong>. Allow only if that is the app you are connecting, such as chatgpt.com or claude.ai.</p><p>Type the code shown in the terminal where it runs. If you did not start this login, close this page.</p>${message ? `<p class="error">${escapeHtml(message)}</p>` : ""}<form method="post" action="/authorize">${hidden}<label>Code from the terminal<input type="text" name="login_code" autocomplete="off" autofocus required></label><button type="submit">Allow</button></form></body></html>`
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(appName)} login</title><style>body{font:16px system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#1d2430}input[type=text]{font:20px ui-monospace,monospace;letter-spacing:.1em;width:100%;padding:.5rem;margin:.5rem 0 1rem;box-sizing:border-box}button{font:inherit;padding:.5rem 1rem}.error{color:#b42318}</style></head><body><h1>${escapeHtml(appName)}</h1><p>An app that calls itself <strong>${who}</strong> asks to reach your messages through <code>${escapeHtml(appName)} mcp --http</code>.</p><p>After you allow it, the login goes to <strong>${escapeHtml(target.host)}</strong>. Allow only if that is the app you are connecting, such as chatgpt.com or claude.ai.</p><p>Type the code shown in WireCat Desktop, or in the terminal where the server runs. If you did not start this login, close this page.</p>${message ? `<p class="error">${escapeHtml(message)}</p>` : ""}<form method="post" action="/authorize">${hidden}<label>Login code<input type="text" name="login_code" autocomplete="off" autofocus required></label><button type="submit">Allow</button></form></body></html>`
     return new Response(html, {
       status: message ? 400 : 200,
       headers: {
@@ -258,7 +241,7 @@ export const ownerLogin = ({
       return new Response("This server needs response_type=code and PKCE with S256.", { status: 400 })
     if (request.method !== "POST") return page(params, client)
     const throttled = () =>
-      new Response("Too many wrong codes. Wait before trying the new terminal code.", {
+      new Response("Too many wrong codes. Wait, then try the new code.", {
         status: 429,
         headers: { "retry-after": String(Math.ceil((retryAt - now()) / 1000)) },
       })
@@ -271,7 +254,7 @@ export const ownerLogin = ({
     const typed = (params.get("login_code") ?? "").trim().toUpperCase()
     if (login.expires < now()) {
       freshCode()
-      return page(params, client, "The code expired. A new one is shown in the terminal.")
+      return page(params, client, "The code expired. A new one is shown in WireCat Desktop and in the terminal.")
     }
     if (!same(typed, login.value)) {
       wrong += 1
@@ -356,6 +339,7 @@ export const ownerLogin = ({
 
   return {
     code: () => login.value,
+    close: () => clearTimeout(renewal),
     metadata,
     verifier,
     handle: async (request) => {

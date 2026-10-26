@@ -6,11 +6,14 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { installerOf } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
+import type { ServerSystem } from "../../background/system.js"
 import { portOf, publicUrlOf } from "../../http/public-url.js"
+import { httpLockFile } from "../../mcp/http/state.js"
 import { type AppIdentity, envName } from "../../ports/app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
+import { MCP_HTTP_DEFAULT_PORT, mcpServerCommand } from "../mcp-server-command.js"
 import { rootOf } from "../profile.js"
 import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
@@ -19,6 +22,7 @@ import { type Messenger, messengerContext } from "./context.js"
 /** Where the running CLI really lives; a test hands in its own. */
 export interface McpEnvironment extends BaseEnvironment {
   mcp?: { scriptPath?: string; execPath?: string }
+  system?: ServerSystem
 }
 
 export interface McpFlags {
@@ -29,7 +33,7 @@ export interface McpFlags {
   revoke?: boolean
 }
 
-const DEFAULT_PORT = 8765
+const DEFAULT_PORT = MCP_HTTP_DEFAULT_PORT
 
 /** Where `mcp --http` keeps the hashes of the tokens it issued — per profile, in the state folder. */
 export const httpTokenFile = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>
@@ -73,6 +77,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
         reaches: `the browser apps reach ${app.command}`,
       })
       const { serveOverHttpUntilStopped } = await import("../../mcp/server.js")
+      const tokenFile = httpTokenFile(app, context.settings.profile, context.env)
       await serveOverHttpUntilStopped(
         this,
         context,
@@ -81,7 +86,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
         {
           publicUrl,
           port: portOf(flags.port, DEFAULT_PORT),
-          tokenFile: httpTokenFile(app, context.settings.profile, context.env),
+          tokenFile,
+          lockFile: httpLockFile(tokenFile),
+          version: app.version,
         },
       )
       return
@@ -91,6 +98,27 @@ export const mcpCommand = (messenger: Messenger): Command => {
     await serveOverStdio(this, context, messenger, {})
   })
 
+  command.addCommand(
+    mcpServerCommand({
+      example: `${app.command} personal`,
+      target: (self) => {
+        const { settings, env } = messengerContext(self, messenger)
+        return {
+          invocation: `${app.command} ${settings.profile}`,
+          profile: settings.profile,
+          envPrefix: app.envPrefix,
+          env,
+          tokenFile: httpTokenFile(app, settings.profile, env),
+          argv: ["mcp", "--http"],
+          childEnv: { [`${app.envPrefix}_PROFILE`]: settings.profile },
+          version: app.version,
+        }
+      },
+      answer: (self, item, lines) =>
+        renderAnswer(self, messengerContext(self, messenger), itemOf(item), () => lines.join("\n")),
+      system: (self) => environmentOf<McpEnvironment>(self).system,
+    }),
+  )
   command.addCommand(
     withFlags(
       annotate(new Command("config"), {

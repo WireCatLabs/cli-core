@@ -341,6 +341,12 @@ export {
   unfilteredQuery,
   withQuery,
 } from "./list-query.js"
+export {
+  MCP_HTTP_DEFAULT_PORT,
+  type McpServerOptions,
+  type McpServerTarget,
+  mcpServerCommand,
+} from "./mcp-server-command.js"
 export { formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
 export { meetingEvidenceItem, meetingPersonContextItem } from "./meeting-evidence-answer.js"
 export { parseEvidenceFindingsJson, parseMeetingFindingsJson } from "./meeting-findings-input.js"

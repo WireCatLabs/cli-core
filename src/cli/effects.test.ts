@@ -123,6 +123,8 @@ describe("command effects", () => {
         "conversations embeddings clear",
         "conversations rebuild",
         "doctor reports create",
+        "mcp server start",
+        "mcp server stop",
         "mentions rebuild",
         "server restart",
         "server start",

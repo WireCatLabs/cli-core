@@ -567,6 +567,13 @@ token for `/mcp`, and sends 2025-era requests to per-session servers bound to th
 stateless server forgets the form capability a client declared in `initialize`. Writes over HTTP follow the
 profile's permissions exactly as over stdio; no form is forced (NEED-774, which replaced NEED-593).
 
+Given a `lockFile` (`httpLockFile(tokenFile)`, beside the token file), `serveOverHttp` keeps one server per token
+file and writes into that lock, mode 600, its port, address and the current login code, renewed when it runs out.
+`mcp server start|stop|status` (`src/cli/mcp-server-command.ts`) reads it: `start` runs `mcp --http` apart from the
+shell with `<PREFIX>_MCP_HTTP=<profile>` in its environment, and `stop` signals only a process that carries it, as
+`server` does for `serve`. `status` adds the apps holding a live token, by the name each gave itself. A server started
+that way prints no login code to its log. A CLI with its own `mcp` (drive, memo) mounts `mcpServerCommand`.
+
 ## The serve relay
 
 A messenger that allows one connection per account — WhatsApp drops the first when a second opens — sets

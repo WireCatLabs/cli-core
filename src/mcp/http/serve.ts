@@ -10,8 +10,10 @@ import {
   requireBearerAuth,
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server"
+import { CliError } from "@wirecat/cli-base"
 import { type Listening, listen } from "../../http/listen.js"
 import { ownerLogin } from "./oauth.js"
+import { httpLock } from "./state.js"
 
 export const MCP_PATH = "/mcp"
 const LOCAL = ["localhost", "127.0.0.1"]
@@ -86,6 +88,12 @@ export interface HttpOptions {
   onCode: (code: string, expires: Date) => void
   onError?: (error: Error) => void
   now?: () => number
+  /**
+   * `httpLockFile(tokenFile)`: one server per token file, and what `mcp server status` reads — the
+   * port, the address and the current login code. Without it nothing is written.
+   */
+  lockFile?: string
+  version?: string
 }
 
 /**
@@ -94,10 +102,34 @@ export interface HttpOptions {
  * the owner's browser cannot reach the port through a rebound DNS name.
  */
 export const serveOverHttp = async (build: () => McpServer, options: HttpOptions): Promise<Listening> => {
-  const { publicUrl, port, tokenFile, appName, onCode, onError, now } = options
+  const { publicUrl, port, tokenFile, appName, onCode, onError, now, lockFile, version } = options
+  const lock = lockFile
+    ? httpLock(lockFile, {
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+        port,
+        publicUrl: publicUrl.href,
+        ...(version ? { version } : {}),
+      })
+    : undefined
+  if (lock?.held)
+    throw new CliError(
+      "validation_error",
+      `${appName} already serves MCP over HTTP for this profile on port ${lock.held.port} (PID ${lock.held.pid}, since ${lock.held.startedAt})`,
+    )
   const issuer = new URL(publicUrl.origin)
   const resource = new URL(MCP_PATH, issuer)
-  const login = ownerLogin({ issuer, resource, file: tokenFile, appName, onCode, ...(now ? { now } : {}) })
+  const login = ownerLogin({
+    issuer,
+    resource,
+    file: tokenFile,
+    appName,
+    onCode: (code, expires) => {
+      lock?.update({ loginCode: code, loginCodeExpiresAt: expires.toISOString() })
+      onCode(code, expires)
+    },
+    ...(now ? { now } : {}),
+  })
   const insecure = issuer.protocol === "http:" && LOCAL.includes(issuer.hostname)
   const mcp = createMcpHandler(build, { legacy: "reject", ...(onError ? { onerror: onError } : {}) })
   const legacy = legacySessions(build, now ?? Date.now)
@@ -135,13 +167,23 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
       return (await isLegacyRequest(request)) ? legacy.handle(request, auth) : mcp.fetch(request, { authInfo: auth })
     },
     { host: "127.0.0.1", port },
-  )
+  ).catch((error: unknown) => {
+    login.close()
+    lock?.release()
+    throw error
+  })
+  lock?.update({ listeningAt: new Date().toISOString() })
   return {
     url: listening.url,
     close: async () => {
-      await listening.close()
-      await legacy.close()
-      await mcp.close()
+      login.close()
+      try {
+        await listening.close()
+        await legacy.close()
+        await mcp.close()
+      } finally {
+        lock?.release()
+      }
     },
   }
 }
