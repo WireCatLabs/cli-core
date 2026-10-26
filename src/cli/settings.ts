@@ -227,8 +227,11 @@ export interface Settings extends AISettings {
    */
   commandTimeoutMs: number | undefined
   record: boolean
-  /** A run record keeps the words typed, secrets hidden; off masks every value that may be content. */
-  recordInput: boolean
+  /**
+   * A run record keeps the words typed, secrets hidden; off masks every value that may be content. Optional so a CLI
+   * with settings of its own need not return it: left out, the words are kept.
+   */
+  recordInput?: boolean
   /** A failed run is kept even unrecorded, unless recording was turned off by name. */
   keepFailedRuns: boolean
   keepRunsForDays: number

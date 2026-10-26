@@ -221,7 +221,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
             program: rootOf(command),
             ...(environment.argv ? { argv: environment.argv } : {}),
             env,
-            recordInput: settings.recordInput,
+            recordInput: settings.recordInput !== false,
           }),
           ...(ranFor === undefined ? {} : { profile: ranFor }),
           record: settings.record,
