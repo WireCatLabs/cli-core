@@ -5,6 +5,18 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Security
+
+- **A first word refused as a profile no longer reaches the run log.** When the first word could not be a profile
+  (`app "runs list"`, two words in one argument) or a profile lock refused it, the failed run's record kept it as
+  `profile` while its `argv` showed `[redacted]` — so whatever was typed first, possibly message text or a person's
+  name, was stored in the clear. Such a run now records no profile, as a run that names none does; a valid profile
+  the settings accepted is recorded as before. The lock's refusal quotes the refused word, so a kept error masks it,
+  and a bare first word with no command after it suggests `<tool> <word> account show` only when the word can be a
+  profile and the CLI has an `account show` command — that suggestion repeated the word unmasked in the kept error.
+
 ## 0.437.0 — 26.10.2026
 
 ### Added

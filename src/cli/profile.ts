@@ -11,8 +11,10 @@ export const asFirstWord = (profile: string): string => `${profile} `
  */
 const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
+export const isProfileName = (word: string): boolean => PLAIN_NAME.test(word)
+
 export const usableProfileName = (profile: string): string => {
-  if (!PLAIN_NAME.test(profile)) {
+  if (!isProfileName(profile)) {
     throw new CliError(
       "validation_error",
       `"${profile}" cannot be a profile name — letters, digits, dot, dash and underscore only, ` +
