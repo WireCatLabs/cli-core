@@ -46,11 +46,33 @@ describe("withoutSecrets", () => {
     expect(withoutSecrets("tokenizer=bert keyboard=us")).toBe("tokenizer=bert keyboard=us")
   })
 
+  it("hides the one word after a secret name written with a space or `=>`, in any case and language", () => {
+    expect(withoutSecrets("password hunter2 then")).toBe("password [redacted] then")
+    expect(withoutSecrets("ПАРОЛЬ: hunter2")).toBe("ПАРОЛЬ: [redacted]")
+    expect(withoutSecrets("PIN 1234, ok")).toBe("PIN [redacted], ok")
+    expect(withoutSecrets("код 123456")).toBe("код [redacted]")
+    expect(withoutSecrets("contraseña=abc1 clave abc2")).toBe("contraseña=[redacted] clave [redacted]")
+    expect(withoutSecrets('{ db_pass => "abc1" }')).toBe('{ db_pass => "[redacted]" }')
+    expect(withoutSecrets("private_key: abc1 OTP 998877 2fa 123")).toBe(
+      "private_key: [redacted] OTP [redacted] 2fa [redacted]",
+    )
+    expect(withoutSecrets("pin this message, the код ошибки")).toBe("pin this message, the код ошибки")
+  })
+
   it("hides a random-looking string of twenty characters or more", () => {
     expect(withoutSecrets(random20)).toBe("[redacted]")
     expect(withoutSecrets(`key=${random20}`)).toBe("key=[redacted]")
     expect(withoutSecrets(`(${random20})`)).toBe("([redacted])")
     expect(withoutSecrets("Kz9v/Q2mX+7pL4nR8tW1yB==")).toBe("[redacted]==")
+  })
+
+  it("hides a lower-case hex run of twenty characters or more, and keeps short hashes, UUIDs and upper-case ids", () => {
+    const hex = "0123456789abcdef".repeat(2)
+    expect(withoutSecrets(`commit ${hex.slice(0, 20)} and ${hex}`)).toBe("commit [redacted] and [redacted]")
+    expect(withoutSecrets(`sha256:${hex}${hex}`)).toBe("sha256:[redacted]")
+    expect(withoutSecrets("a".repeat(24))).toBe("a".repeat(24))
+    const kept = ["a81f2c9d3e4b", "550e8400-e29b-41d4-a716-446655440000", "3EB0C767D26A1D8F5E2C6B", "1".repeat(24)]
+    for (const text of kept) expect(withoutSecrets(text)).toBe(text)
   })
 
   it("keeps words, names, ids, hashes, paths and URLs", () => {
@@ -68,7 +90,6 @@ describe("withoutSecrets", () => {
       "550E8400-E29B-41D4-A716-446655440000",
       "3EB0C767D26A1D8F5E2C6B",
       "a81f2c9",
-      "0123456789abcdef0123456789abcdef012345",
       "20260920T084431Z-chats-list-a81f2c",
       "2026-01-03T09:05:12.000Z",
       "/home/anna/Projects/AI/cli-core-wt-secret-detect/src/runs/run-context.ts",
