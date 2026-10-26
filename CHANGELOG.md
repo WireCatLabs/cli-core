@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.443.0 — 26.10.2026
+
 ### Added
 
 - **`signInSteps` and `answerStdinOption` (`@wirecat/cli-core/cli`): a sign-in a window can drive.** With `--json`, a
