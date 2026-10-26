@@ -158,7 +158,7 @@ describe("what a run says about how it was started", () => {
     return { metadata, raw: readFileSync(join(runsDir, String(found)), "utf8") }
   }
 
-  it("**keeps the whole command and its arguments as typed**", async () => {
+  it("**keeps the whole command and its arguments as typed**, a phone number hidden", async () => {
     const { runsDir } = await call(
       ["messages", "send", PHONE, BODY, "--caption", TITLE, "--limit", "5", "--record"],
       undefined,
@@ -169,7 +169,7 @@ describe("what a run says about how it was started", () => {
     expect(JSON.parse(runFile(runsDir).raw)).toMatchObject({
       command: "messages send",
       cli_command: "app messages send",
-      argv: ["messages", "send", PHONE, BODY, "--caption", TITLE, "--limit", "5", "--record"],
+      argv: ["messages", "send", "[redacted]", BODY, "--caption", TITLE, "--limit", "5", "--record"],
       agent: { kind: "claude-code", session_id: "6f1c2a9e-session" },
     })
   })

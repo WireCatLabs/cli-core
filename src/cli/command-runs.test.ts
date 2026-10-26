@@ -52,7 +52,6 @@ const cli = async (
   })
   recordRuns(program, {
     app,
-    content: "note content",
     settings: () => ({}),
     env,
     streams: captureStreams(),

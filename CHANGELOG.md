@@ -7,6 +7,33 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A CLI's own command can keep its command line in its run record.** A command the CLI records itself with
+  `recorded` or `startRecording` kept no `argv` and no agent, since only cli-core's own commands built that part of the
+  record. `runContextOf` and the `RunContext` type are now exported from `@wirecat/cli-core/cli`. To adopt, pass
+  `context: runContextOf({ bin, command, program: rootOf(command), argv: environmentOf(command).argv, env,
+  recordInput: settings.recordInput !== false })` to the call; a CLI with its own program passes its own root command
+  and the words it parsed. Left out, `recordInput` masks every value that may be content.
+
+### Changed — may break callers
+
+- **`--record` help says what a run keeps now.** It read "ids and timings, never content", which stopped being true
+  in 0.439.0; it now reads "keep this run, with the command as typed and secrets hidden; record_input false leaves the
+  typed words out". Every CLI's help snapshot and `docs/commands.md` change with it. `recordRuns` no longer takes
+  `content`, which only that line used.
+- **`contacts lookup` declares a `[phone]` argument**, which it still refuses. Its usage line and its command contract
+  show it, so a help snapshot or a contract check changes. A CLI that declared the same argument on its own copy no
+  longer needs a contract override for it.
+
+### Security
+
+- **A phone number no longer reaches a run record.** Since 0.439.0 a run keeps the words as typed, so a number typed
+  after `contacts lookup`, which the command refuses, was kept in `argv` in the clear. Every word typed there is now
+  `[redacted]`. A phone number typed anywhere else, message text included, is replaced by `[redacted]` inside the word,
+  the rest kept: one written with its "+" and country code, or 11 to 15 digits in a row, the shapes a kept error
+  already masks. A number with no "+" written in groups (`8 912 345-67-89`) is not recognised.
+
 ## 0.439.0 — 26.10.2026
 
 ### Changed — may break callers

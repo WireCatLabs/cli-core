@@ -189,9 +189,12 @@ const isHelpExit = (error: unknown): boolean => {
  * on. Call it after the program's other `parseAsync` wrappers, so its own is the outermost and sees how the parse
  * really ended; a refusal in an earlier `preAction` hook is then kept under the words read from the line.
  */
-export const recordRuns = (program: Command, options: CommandRunOptions & { content: string }): void => {
+export const recordRuns = (program: Command, options: CommandRunOptions): void => {
   program
-    .option("--record", `keep this run — ids and timings, never ${options.content}`)
+    .option(
+      "--record",
+      "keep this run, with the command as typed and secrets hidden; record_input false leaves the typed words out",
+    )
     .option("--no-record", "do not keep this run, even if it fails")
   program.hook("preAction", (_root, action) => {
     const parse = parses.getStore()
