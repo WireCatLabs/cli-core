@@ -1,6 +1,6 @@
-import { Command, Option } from "commander"
+import { Argument, Command, Option } from "commander"
 import { describe, expect, it } from "vitest"
-import { agentOf, maskArgv } from "./run-context.js"
+import { agentOf, maskArgv, secretInput } from "./run-context.js"
 
 const program = () => {
   const root = new Command("max").option("--json").option("--timeout <duration>").option("--profile <name>")
@@ -110,6 +110,62 @@ describe("maskArgv", () => {
     })
     expect(maskArgv(program(), ["work", "send mom hi"]).unknownCommand).toBe("[redacted]")
     expect(maskArgv(program(), ["call me at +7916"]).argv).toEqual(["[redacted]"])
+  })
+})
+
+describe("maskArgv with keep, as `record_input` is by default", () => {
+  const keep = { keep: true }
+
+  it("keeps every word as typed: text, a chat by title, a phone, after -- and a mistyped command", () => {
+    const typed = ["work", "messages", "send", "Mom", "see you at 5", "--caption=beach", "--", "--not-a-flag"]
+    expect(maskArgv(program(), typed, keep).argv).toEqual(typed)
+    expect(maskArgv(program(), ["contacts", "add", "79161234567"], keep).argv).toEqual([
+      "contacts",
+      "add",
+      "79161234567",
+    ])
+    expect(maskArgv(program(), ["work", "mesages", "hi there"], keep)).toEqual({
+      argv: ["work", "mesages", "hi there"],
+      unknownCommand: "mesages",
+    })
+  })
+
+  it("hides a marked input, one named for a secret, and a word shaped like a credential", () => {
+    const root = program()
+    root.addOption(secretInput(new Option("--pin <code>")))
+    root.command("login").addArgument(secretInput(new Argument("<code>")))
+    const opaque = "A".repeat(20) + "1".repeat(20)
+
+    expect(maskArgv(root, ["login", "12345", "--pin", "4321"], keep).argv).toEqual([
+      "login",
+      "[redacted]",
+      "--pin",
+      "[redacted]",
+    ])
+    expect(
+      maskArgv(root, ["messages", "list", "--access-token=t", "--password", "p", "--api-key=k", "--secret", "s"], keep)
+        .argv,
+    ).toEqual([
+      "messages",
+      "list",
+      "--access-token=[redacted]",
+      "--password",
+      "[redacted]",
+      "--api-key=[redacted]",
+      "--secret",
+      "[redacted]",
+    ])
+    expect(maskArgv(root, ["messages", "list", "socks5://me:hunter2@host:1080"], keep).argv).toEqual([
+      "messages",
+      "list",
+      "[redacted]",
+    ])
+    expect(maskArgv(root, ["messages", "send", "777", opaque], keep).argv).toEqual([
+      "messages",
+      "send",
+      "777",
+      "[redacted]",
+    ])
   })
 })
 

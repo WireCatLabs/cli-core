@@ -24,6 +24,7 @@ describe("redactText", () => {
       "call [number] or [number], chat -1001234567890",
     )
     expect(redactText("Authorization: Bearer abc.def")).toBe("Authorization: Bearer [redacted]")
+    expect(redactText("unknown option '--token=hunter2'")).toBe("unknown option '--token=[redacted]'")
     expect(redactText("GET https://x.io/a?token=1&b=2 failed")).toBe("GET https://x.io/a?[redacted] failed")
     expect(redactText(`ENOENT: ${homedir()}/notes/x.md`)).toBe("ENOENT: ~/notes/x.md")
   })

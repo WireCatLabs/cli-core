@@ -69,7 +69,12 @@ export interface ProgramDefinition {
       flags?: GlobalFlags,
       options?: ResolveOptions,
     ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint"> &
-      Partial<Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "sources">>
+      Partial<
+        Pick<
+          Settings,
+          "recordInput" | "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "sources"
+        >
+      >
   }
   configure?: (program: Command) => void
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
@@ -703,7 +708,8 @@ const settleFailure = async (failure: unknown, state: Failed): Promise<{ settlem
 /**
  * **Every failure is kept as a run** — a usage error, a configuration that will not load, a command
  * that never opens a run — unless recording was turned off. One its own run already kept is skipped.
- * Its arguments are kept masked (`maskArgv`): a value that can be a message never is.
+ * Its words are kept as `record_input` says (`maskArgv`); a configuration that did not load masks them, since it may
+ * be the one that turned recording input off.
  */
 const keepFailure = async (
   failure: unknown,
@@ -733,6 +739,7 @@ const keepFailure = async (
         program,
         argv,
         env,
+        recordInput: settings ? settings.recordInput !== false : false,
       }),
       // Settings that did not load never accepted the word, which may be a refused name or somebody's words.
       profile: settings ? namedProfile(settings) : undefined,

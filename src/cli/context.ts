@@ -63,7 +63,7 @@ export interface BaseEnvironment {
   handled?: (event: MessageEvent) => void
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
-  /** Set by `run()`: the words it was given, which a run keeps masked (`maskArgv`). */
+  /** Set by `run()`: the words it was given, which a run keeps as `record_input` says (`maskArgv`). */
   argv?: readonly string[]
   /**
    * Set by `run()`: the rest of the command has no default deadline, and Ctrl-C, SIGTERM, a cancel or an explicit
@@ -221,6 +221,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
             program: rootOf(command),
             ...(environment.argv ? { argv: environment.argv } : {}),
             env,
+            recordInput: settings.recordInput !== false,
           }),
           ...(ranFor === undefined ? {} : { profile: ranFor }),
           record: settings.record,

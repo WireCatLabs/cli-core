@@ -98,6 +98,7 @@ const SHARED_PROFILE_ENTRIES = {
   color: v.optional(flag),
   sender_colors: v.optional(flag),
   record: v.optional(flag),
+  record_input: v.optional(flag),
   keep_runs_for_days: v.optional(count),
   permissions: v.optional(permissionLevels),
   sends_per_hour: v.optional(count),
@@ -226,6 +227,11 @@ export interface Settings extends AISettings {
    */
   commandTimeoutMs: number | undefined
   record: boolean
+  /**
+   * A run record keeps the words typed, secrets hidden; off masks every value that may be content. Optional so a CLI
+   * with settings of its own need not return it: left out, the words are kept.
+   */
+  recordInput?: boolean
   /** A failed run is kept even unrecorded, unless recording was turned off by name. */
   keepFailedRuns: boolean
   keepRunsForDays: number
@@ -489,6 +495,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const searchCatchUp = fromLayers("search_catch_up", false)
     const pictureSearch = fromLayers("picture_search", false)
     const searchReranker = fromLayers<string>("search_reranker", DEFAULT_RERANK_MODEL)
+    const recordInput = fromLayers("record_input", true)
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = readOnlyLockOf(app, env)
@@ -559,6 +566,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
           ? undefined
           : (extension.parseDuration ?? parseDuration)(timeout.value, timeout.from === TIMEOUT ? TIMEOUT : "--timeout"),
       record: record.value,
+      recordInput: recordInput.value,
       keepFailedRuns: record.value || record.from === "default",
       keepRunsForDays: keepRunsForDays.value,
       ...(readOnlyLock ? { readOnlyLock } : {}),
@@ -586,6 +594,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         pictureSearch: pictureSearch.from,
         searchReranker: searchReranker.from,
         record: record.from,
+        recordInput: recordInput.from,
         keepRunsForDays: keepRunsForDays.from,
         sendsPerHour: sendsPerHour.from,
         requestsPerMinute: requestsPerMinute.from,
