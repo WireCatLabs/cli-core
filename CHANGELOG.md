@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.437.0 — 26.10.2026
+
 ### Added
 
 - **Runs started by OpenClaw or Hermes Agent name that agent, and a Hermes run its session.** OpenClaw's agent sets
