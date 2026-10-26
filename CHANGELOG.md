@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **gcal joins the WireCat tools list.** Every CLI's first screen (`--help`) shows `gcal` under "Works with", and
+  `setup` offers to install `@wirecat/gcal-cli`, beside drive. A CLI whose test pins its first screen gains that line.
+
 ## 0.481.0 — 29.10.2026
 
 ### Added
