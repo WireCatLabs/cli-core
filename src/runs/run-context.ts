@@ -2,6 +2,7 @@ import { isContentKey } from "@wirecat/cli-base/standards"
 import type { Argument, Command, Option } from "commander"
 import { BARE_PHONE, INTERNATIONAL_PHONE } from "./error-detail.js"
 import type { RunContext } from "./run.js"
+import { secretNamed, withoutSecrets } from "./secrets.js"
 
 export const REDACTED = "[redacted]"
 
@@ -75,28 +76,6 @@ export const secretInput = <T extends Option | Argument | Command>(input: T): T 
   return input
 }
 
-const SECRET_WORDS = new Set([
-  "authorization",
-  "cookie",
-  "credential",
-  "credentials",
-  "passphrase",
-  "password",
-  "secret",
-  "token",
-  "apikey",
-])
-
-// Undeclared flags carry no mark, so the name is the only signal; CLIs take secrets at a prompt (WC-SECR-5) and this
-// catches the one typed anyway.
-const secretNamed = (name: string): boolean => {
-  const words = name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .split(/[\s_.-]+/)
-    .map((word) => word.toLowerCase())
-  return words.some((word, at) => SECRET_WORDS.has(word) || (word === "api" && words[at + 1] === "key"))
-}
-
 // A password inside a URL, or one unbroken run of 40 token characters, is a credential wherever it was typed.
 const secretShaped = (word: string): boolean =>
   /:\/\/[^/@\s:]+:[^/@\s]+@/.test(word) || /(^|[^A-Za-z0-9_-])[A-Za-z0-9_-]{40,}($|[^A-Za-z0-9_-])/.test(word)
@@ -121,7 +100,7 @@ export const maskArgv = (program: Command, words: readonly string[], { keep = fa
   let profileSeen = false
   let lost = false
 
-  const raw = (word: string) => (keep && !secretShaped(word) ? withoutPhones(word) : REDACTED)
+  const raw = (word: string) => (keep && !secretShaped(word) ? withoutPhones(withoutSecrets(word, REDACTED)) : REDACTED)
   const keptValue = (name: string, value: string, input?: Option | Argument): string =>
     keep
       ? (input && secretInputs.has(input)) || secretNamed(name)
@@ -185,7 +164,9 @@ export const maskArgv = (program: Command, words: readonly string[], { keep = fa
       }
       if (current === program && !profileSeen) {
         profileSeen = true
-        argv.push(keep ? raw(word) : PROFILE.test(word) && withoutPhones(word) === word ? word : REDACTED)
+        argv.push(
+          keep ? raw(word) : PROFILE.test(word) && withoutPhones(withoutSecrets(word)) === word ? word : REDACTED,
+        )
         continue
       }
       if (current.commands.length > 0 && current.registeredArguments.length === 0) {
@@ -207,7 +188,8 @@ const NUMBER = /^-?\d+(\.\d+)?$/
 const PROFILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 /** A mistyped command word is kept so the typo can be seen; anything shaped like a sentence or an address is not. */
-const commandLike = (word: string): string => (/^[a-z][a-z0-9-]{0,31}$/i.test(word) ? word : REDACTED)
+const commandLike = (word: string): string =>
+  /^[a-z][a-z0-9-]{0,31}$/i.test(word) && withoutSecrets(word) === word ? word : REDACTED
 
 const maskedValue = (name: string, value: string, choices: readonly string[] | undefined): string => {
   if (isContentKey(name)) return REDACTED

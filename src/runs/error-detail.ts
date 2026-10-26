@@ -1,6 +1,7 @@
 import { homedir } from "node:os"
 import { isCliFailure } from "../errors/failures.js"
 import { providerErrorKey, type RequestEvent } from "./events.js"
+import { withoutSecrets } from "./secrets.js"
 
 /**
  * What went wrong, for the owner reading a failed run: the class, the code, the sentence with anything that can be
@@ -138,14 +139,14 @@ export const BARE_PHONE = /(^|[^\w-])\d{11,15}\b/.source
 
 /**
  * An error's sentence with what could be somebody's words or a secret taken out: anything in quotes, an email, a
- * phone number, a bot token, a bearer or a long opaque string, a URL's query, the home directory. A second line of
- * defence — errors here are written to name things, not quote them — so it errs toward masking.
+ * phone number, a secret `withoutSecrets` finds, a bot token, a bearer or a long opaque string, a URL's query, the
+ * home directory. A second line of defence — errors here are written to name things, not quote them — so it errs
+ * toward masking.
  */
 export const redactText = (text: string): string => {
   const home = homedir()
   let out = home && home !== "/" ? text.split(home).join("~") : text
-  out = out
-    .replace(/"[^"\n]*"|“[^”\n]*”|«[^»\n]*»/g, '"[redacted]"')
+  out = withoutSecrets(out.replace(/"[^"\n]*"|“[^”\n]*”|«[^»\n]*»/g, '"[redacted]"'))
     .replace(/\b(bearer|basic|token|key|password|secret)(\s*[:=]\s*|\s+)[^\s'"]+/gi, "$1$2[redacted]")
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[email]")
     .replace(new RegExp(INTERNATIONAL_PHONE, "g"), "[number]")

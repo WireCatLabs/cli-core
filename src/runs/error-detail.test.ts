@@ -27,6 +27,9 @@ describe("redactText", () => {
     expect(redactText("unknown option '--token=hunter2'")).toBe("unknown option '--token=[redacted]'")
     expect(redactText("GET https://x.io/a?token=1&b=2 failed")).toBe("GET https://x.io/a?[redacted] failed")
     expect(redactText(`ENOENT: ${homedir()}/notes/x.md`)).toBe("ENOENT: ~/notes/x.md")
+    expect(redactText(`401 for npm_${"x".repeat(36)}: client_secret:abc`)).toBe(
+      "401 for [redacted]: client_secret:[redacted]",
+    )
   })
 })
 

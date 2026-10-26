@@ -170,6 +170,30 @@ describe("maskArgv with keep, as `record_input` is by default", () => {
     ])
   })
 
+  it("hides a secret found by its content inside the typed words and keeps the rest", () => {
+    const slack = `xoxb-${"x".repeat(12)}`
+    expect(
+      maskArgv(
+        program(),
+        ["messages", "send", "777", `token ${slack} and password=hunter2`, "--caption", "API_KEY=k"],
+        keep,
+      ).argv,
+    ).toEqual([
+      "messages",
+      "send",
+      "777",
+      "token [redacted] and password=[redacted]",
+      "--caption",
+      "API_KEY=[redacted]",
+    ])
+    expect(maskArgv(program(), [`ghp_${"x".repeat(36)}`, "messages", "list"]).argv).toEqual([
+      "[redacted]",
+      "messages",
+      "list",
+    ])
+    expect(maskArgv(program(), ["work", "Kz9vQ2mX7pL4nR8tW1yB"]).unknownCommand).toBe("[redacted]")
+  })
+
   it("hides a phone number wherever it is typed and keeps the words around it", () => {
     expect(maskArgv(program(), ["contacts", "add", "79161234567"], keep).argv).toEqual([
       "contacts",
