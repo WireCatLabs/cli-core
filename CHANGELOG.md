@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.441.0 — 26.10.2026
 
 ### Security
 
@@ -24,8 +24,6 @@ shape of this file.
 
   A profile name or a mistyped command word that looks like a secret is now `[redacted]` even with `record_input`
   off.
-
-## 0.441.0 — 26.10.2026
 
 ### Added
 
