@@ -55,15 +55,30 @@ export const BUSY_ONLY_VISIBILITIES = ["private", "confidential"] as const
 
 const sqlList = (values: readonly string[]) => values.map((value) => `'${value}'`).join(", ")
 
+/** A calendar copy `ce` that may be searched: of a searchable type, and not a busy-only slot. */
+const SEARCHABLE_COPY =
+  `(ce.event_type IS NULL OR ce.event_type NOT IN (${sqlList(UNSEARCHED_EVENT_TYPES)})) ` +
+  `AND NOT (coalesce(ce.visibility, '') IN (${sqlList(BUSY_ONLY_VISIBILITIES)}) AND trim(coalesce(ce.title, '')) = '' ` +
+  "AND trim(coalesce(ce.description, '')) = '' AND trim(coalesce(ce.location, '')) = '')"
+
+/**
+ * Whether the event `event` (an SQL expression of its id) has a searchable calendar copy, and with `account` one in
+ * those accounts (an SQL condition over `c.account_id`). Only live copies count, unless none is: an event its
+ * calendars deleted keeps its past copies as history.
+ */
+export const searchableCopy = (event: string, account?: string): string =>
+  `EXISTS (SELECT 1 FROM calendar_entries ce${account ? " JOIN calendars c ON c.id = ce.calendar_id" : ""} ` +
+  `WHERE ce.event_id = ${event} AND ${SEARCHABLE_COPY}${account ? ` AND ${account}` : ""} ` +
+  `AND (ce.deleted_at IS NULL OR NOT EXISTS (SELECT 1 FROM calendar_entries l WHERE l.event_id = ${event} ` +
+  "AND l.deleted_at IS NULL)))"
+
 /**
  * Whether an event `e` is searched at all: by words, by meaning and in `search all`. The one place that names what
- * is left out.
+ * is left out. An event no calendar holds (a Zoom meeting's own) is searched; a cancelled one is not.
  */
 export const EVENT_LIVE =
-  "(e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id " +
-  `AND ce.deleted_at IS NULL AND (ce.event_type IN (${sqlList(UNSEARCHED_EVENT_TYPES)}) ` +
-  `OR (ce.visibility IN (${sqlList(BUSY_ONLY_VISIBILITIES)}) AND trim(coalesce(ce.title, '')) = '' ` +
-  "AND trim(coalesce(ce.description, '')) = '' AND trim(coalesce(ce.location, '')) = ''))))"
+  "(e.deleted_at IS NULL AND coalesce(e.status, '') <> 'cancelled' AND " +
+  `(NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id) OR ${searchableCopy("e.id")}))`
 
 export const CORPORA = {
   document: {

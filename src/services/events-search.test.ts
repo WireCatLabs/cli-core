@@ -64,6 +64,26 @@ const calendarStore = async (entries: EntryInput[], account = "owner-1") => {
   return store
 }
 
+/** A second calendar account in the same store, with its own calendar; returns the calendar's id. */
+const secondCalendar = async (store: MessageStore, account = "owner-2") => {
+  const accountId = await store.accounts.saveAccount({ provider: "google-calendar", account }, { name: null })
+  const [calendar] = await store.calendar.saveCalendars(
+    accountId,
+    [{ externalId: "primary", title: "Home", timezone: "UTC", accessRole: "owner", primary: true }],
+    1,
+  )
+  return calendar?.id as number
+}
+
+const firstCalendar = async (store: MessageStore) =>
+  (
+    await store.calendar.calendars(
+      (
+        await store.accounts.storedAccount({ provider: "google-calendar", account: "owner-1" })
+      ).id,
+    )
+  )[0]?.id as number
+
 describe("searchEvents", () => {
   it("finds an event by its title, description, place and attendees' names", async () => {
     const store = await calendarStore([
@@ -232,5 +252,102 @@ describe("search all reads calendar events", () => {
 
   it("sends in:events from a message search to search all", () => {
     expect(() => sourceOf("in:", "events", ["telegram"])).toThrow("search all --source events does")
+  })
+})
+
+describe("which calendar copies make an event searchable", () => {
+  it("keeps an event found while one of its copies is a busy-only slot, and only in the copy's account that has text", async () => {
+    const store = await calendarStore([entry("a", "Board meeting", NOW + DAY, { icalUid: "uid-1" })])
+    const busy = await secondCalendar(store)
+    await store.calendar.saveEntries(
+      busy,
+      [entry("b", "", NOW + DAY, { title: null, visibility: "private", icalUid: "uid-1" })],
+      2,
+    )
+    const owner = (account: string) => [{ provider: "google-calendar", account }]
+
+    expect((await searchEvents(store, "board")).hits.map(({ title }) => title)).toEqual(["Board meeting"])
+    expect((await searchEvents(store, "board", { accounts: owner("owner-1") })).hits).toHaveLength(1)
+    expect((await searchEvents(store, "board", { accounts: owner("owner-2") })).hits).toEqual([])
+  })
+
+  it("keeps the title of the copy with text when a busy-only copy changed later", async () => {
+    const store = await calendarStore([
+      entry("a", "Board meeting", NOW + DAY, { icalUid: "uid-1", externalUpdatedAt: 1 }),
+    ])
+    const busy = await secondCalendar(store)
+    const [copy] = await store.calendar.saveEntries(
+      busy,
+      [entry("b", "", NOW + DAY, { title: null, visibility: "private", icalUid: "uid-1", externalUpdatedAt: 9 })],
+      2,
+    )
+
+    expect((await store.calendar.event(copy?.eventId as number))?.event.title).toBe("Board meeting")
+  })
+
+  it("finds an event no calendar holds, such as a Zoom meeting's own", async () => {
+    const store = await calendarStore([])
+    const database = await openCache(lastPath)
+    database
+      .prepare(
+        "INSERT INTO events (title, starts_at, origin, created_at, updated_at) VALUES ('Zoom retro', ?, 'auto', 1, 1)",
+      )
+      .run(NOW)
+    database.close()
+
+    expect((await searchEvents(store, "retro")).hits).toEqual([
+      expect.objectContaining({ title: "Zoom retro", account: null }),
+    ])
+  })
+})
+
+describe("an event deleted in Google", () => {
+  it("is gone from search, search all and the upcoming list when it was still to come, and stays when it had passed", async () => {
+    const store = await calendarStore([
+      entry("past", "Offsite", NOW - DAY, { participants: [{ email: "ana@x.com", name: "Ana" }] }),
+      entry("next", "Offsite", NOW + DAY, { participants: [{ email: "ana@x.com", name: "Ana" }] }),
+    ])
+    const calendar = await firstCalendar(store)
+
+    await store.calendar.markUnseen(calendar, NOW, { from: NOW - 30 * DAY, to: NOW + 30 * DAY }, NOW)
+
+    const found = await searchEvents(store, "offsite")
+    expect(found.hits.map(({ starts_at }) => starts_at)).toEqual([new Date(NOW - DAY).toISOString()])
+    expect(found.hits[0]?.account).toBe("owner-1")
+    const all = await searchAllWithMeetings(
+      store,
+      { provider: "telegram", account: "500" },
+      { text: "offsite", limit: 20, only: ["events"] },
+    )
+    expect(all.items.map(({ timestamp }) => timestamp)).toEqual([new Date(NOW - DAY).toISOString()])
+    const upcoming = await store.calendar.events({ from: NOW })
+    expect(upcoming.map(({ status }) => status)).toEqual(["cancelled"])
+  })
+
+  it("is gone when Google sends it back cancelled before its time", async () => {
+    const store = await calendarStore([entry("next", "Offsite", NOW + DAY)])
+    await store.calendar.saveEntries(
+      await firstCalendar(store),
+      [entry("next", "Offsite", NOW + DAY, { status: "cancelled" })],
+      2,
+    )
+
+    expect((await searchEvents(store, "offsite")).hits).toEqual([])
+  })
+})
+
+describe("a search past what one search reads", () => {
+  it("says it stopped rather than promising pages it cannot fill", async () => {
+    const store = await calendarStore([
+      entry("a", "Standup", NOW),
+      entry("b", "Standup", NOW + DAY),
+      entry("c", "Standup", NOW + 2 * DAY),
+    ])
+
+    const found = await searchEvents(store, "standup", { candidates: 2 })
+
+    expect(found.hits).toHaveLength(2)
+    expect(found.has_more).toBe(false)
+    expect(found.truncated).toBe(true)
   })
 })

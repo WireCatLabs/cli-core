@@ -17,6 +17,8 @@ export interface EventsQuery {
   /** For `date:`, which reads an event's start — the zone a bare day is read in. */
   timezone?: string
   signal?: AbortSignal
+  /** How many matching events are read before grouping; for tests. */
+  candidates?: number
 }
 
 export interface FoundEvent {
@@ -47,6 +49,8 @@ export interface EventsFound {
   query: string
   hits: FoundEvent[]
   has_more: boolean
+  /** More events matched than one search reads (50,000); the later ones were not read — narrow the query. */
+  truncated?: true
   next_offset?: number
 }
 
@@ -93,7 +97,7 @@ export const foundEvent = (hit: EventHit, query: string, foundBy: FoundEvent["fo
 export const searchEvents = async (
   store: MessageStore,
   query: string,
-  { limit = 20, offset = 0, accounts, exact, newest, timezone, signal }: EventsQuery = {},
+  { limit = 20, offset = 0, accounts, exact, newest, timezone, signal, candidates }: EventsQuery = {},
 ): Promise<EventsFound> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the events")
   const { root, stemmer } = await storeQuery(store, query, {
@@ -110,6 +114,7 @@ export const searchEvents = async (
     ...(newest ? { newest: true } : {}),
     ...(stemmer ? { stemmer } : {}),
     ...(signal ? { signal } : {}),
+    ...(candidates === undefined ? {} : { candidates }),
   })
   const window = offset + limit
   return {
@@ -117,5 +122,6 @@ export const searchEvents = async (
     hits: found.items.map((hit) => foundEvent(hit, query, ["words"])),
     has_more: found.hasMore,
     ...(found.hasMore && window <= MAX_EVENTS_OFFSET ? { next_offset: window } : {}),
+    ...(found.truncated ? { truncated: true as const } : {}),
   }
 }

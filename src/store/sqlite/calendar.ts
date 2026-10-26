@@ -270,18 +270,34 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     setEntity(entry, newEntity(entry, now), "new", "rules", now)
   }
 
-  /** The event's fields from its preferred entry: the owner's copy when the owner organizes, else the latest. */
+  /**
+   * The event's fields from its preferred entry: a copy with text before one without (a busy-only slot), then the
+   * owner's copy when the owner organizes, then the latest. With no live copy left, a past event stays as history
+   * and a future one is cancelled.
+   */
   const refreshEvent = (eventId: number, now: number) => {
+    // Search reads the event's status and its copies' visibility, which no index trigger watches.
+    database.prepare("INSERT OR IGNORE INTO event_index_pending (indexable_type, id) VALUES ('event', ?)").run(eventId)
     const entries = database
       .prepare(
         `SELECT ce.*, EXISTS (SELECT 1 FROM calendar_entry_participants p WHERE p.entry_id = ce.id AND p.self = 1
            AND p.organizer = 1) AS own FROM calendar_entries ce WHERE ce.event_id = ? AND ce.deleted_at IS NULL
-         ORDER BY own DESC, coalesce(ce.external_updated_at, ce.updated_at) DESC, ce.id DESC`,
+         ORDER BY trim(coalesce(ce.title, '') || coalesce(ce.description, '') || coalesce(ce.location, '')) <> '' DESC,
+           own DESC, coalesce(ce.external_updated_at, ce.updated_at) DESC, ce.id DESC`,
       )
       .all(eventId)
     const preferred = entries[0]
-    if (!preferred) return
     const event = database.prepare("SELECT * FROM events WHERE id = ?").get(eventId) as Row
+    if (!preferred) {
+      if (!event || !database.prepare("SELECT 1 FROM calendar_entries WHERE event_id = ?").get(eventId)) return
+      const startsAt = int(event.starts_at)
+      if (startsAt !== null && startsAt < now)
+        database
+          .prepare("UPDATE events SET source_deleted_at = coalesce(source_deleted_at, ?), updated_at = ? WHERE id = ?")
+          .run(now, now, eventId)
+      else database.prepare("UPDATE events SET status = 'cancelled', updated_at = ? WHERE id = ?").run(now, eventId)
+      return
+    }
     const cancelled = entries.every((row) => row.status === "cancelled")
     const series = preferred.series_entry_id == null ? null : entryRow(Number(preferred.series_entry_id))
     const startsAt = int(preferred.starts_at) ?? int(event.starts_at)
@@ -577,17 +593,19 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
         return entries.map((input) => entryOf(entryRow(ids.get(input) as number)))
       }),
     markUnseen: async (calendarId, seenBefore, window, now) =>
-      write(
-        database,
-        () =>
-          database
-            .prepare(
-              `UPDATE calendar_entries SET deleted_at = ?, updated_at = ? WHERE calendar_id = ? AND deleted_at IS NULL
-                 AND (seen_at IS NULL OR seen_at < ?)
-                 AND (kind <> 'occurrence' OR exception = 1 OR (original_starts_at >= ? AND original_starts_at < ?))`,
-            )
-            .run(now, now, calendarId, seenBefore, window.from, window.to).changes,
-      ),
+      write(database, () => {
+        const marked = database
+          .prepare(
+            `UPDATE calendar_entries SET deleted_at = ?, updated_at = ? WHERE calendar_id = ? AND deleted_at IS NULL
+               AND (seen_at IS NULL OR seen_at < ?)
+               AND (kind <> 'occurrence' OR exception = 1 OR (original_starts_at >= ? AND original_starts_at < ?))
+             RETURNING event_id`,
+          )
+          .all(now, now, calendarId, seenBefore, window.from, window.to)
+        for (const eventId of new Set(marked.map((row) => int(row.event_id))))
+          if (eventId !== null) refreshEvent(eventId, now)
+        return marked.length
+      }),
     events: async (filter: EventFilter = {}) => {
       const clauses = ["e.deleted_at IS NULL"]
       const params: (string | number)[] = []

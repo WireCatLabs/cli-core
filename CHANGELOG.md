@@ -12,13 +12,15 @@ shape of this file.
 - **Calendar events are found by words.** `searchEvents(store, query, options)` and `store.calendar.search(query)`
   find events by their title, cleaned description, place and attendees' names, in the query language messages use;
   `date:` reads the event's start. The occurrences of one series are one hit, showing the matching occurrence
-  nearest now, with `occurrences` counting them. Working location, focus time, out of office, birthdays
-  (`UNSEARCHED_EVENT_TYPES`) and busy-only private or confidential slots with no text are never found. A hit's reference is `event:<id>`, a new kind of reference. Indexing an event also writes its pieces for
-  search by meaning (`chunks` of type `event`); the occurrences of a series hold the same text, so they share one
-  vector once embedded.
-- **A person's context lists their calendar events.** `personContext` (`contacts context`) answers `events.upcoming`
-  and `events.recent`: the events any contact linked to them is invited to, one occurrence per series, none
-  cancelled. `ContextOptions.now` sets what counts as upcoming. `EventFilter.newest` lists events latest first.
+  nearest now, with `occurrences` counting them. A hit's reference is `event:<id>`, a new kind of reference. An event
+  is searched while it is not cancelled and either no calendar holds it (a Zoom meeting's own) or one of its copies
+  is of a searchable type and not a busy-only slot: working location, focus time, out of office and birthdays
+  (`UNSEARCHED_EVENT_TYPES`), and private or confidential copies with no text, are never found. `--source` reads an
+  event only through such a copy in the accounts it names. Past 50,000 matching events a search stops and says so
+  (`truncated`). Indexing an event also writes its pieces for search by meaning (`chunks` of type `event`); the
+  occurrences of a series hold the same text, so they share one vector once embedded.
+- **`ContextOptions.now`** sets what counts as an upcoming event, and **`EventFilter.newest`** lists events latest
+  first.
 
 ### Changed — may break callers
 
@@ -28,6 +30,17 @@ shape of this file.
   store with no calendar answers as before. `RESOURCES_SEARCHED` and `SOURCE_SEARCHED` gain `events`, the `hit`
   entity's `kind` gains `event`, and `in:events` in a message search now points to `search all --source events`.
   A caller that lists every resource or every hit kind adds the new one.
+- **`MessageStore.calendar` is `EventStore & EventSearch`.** It gains `search` and `eventIndexState`; a fake store or
+  a test double that builds `calendar` adds them.
+- **`PersonContext.events` is required.** `personContext` (`contacts context`) answers `events.upcoming` and
+  `events.recent`: the events any contact linked to the person is invited to, one occurrence per series, none
+  cancelled. Code that builds a `PersonContext` adds `events: { upcoming: [], recent: [] }`; the `contact_context`
+  entity takes it as optional, so older answers still validate.
+- **An event takes its fields from a copy with text first.** When a busy-only copy of an event changed last, the
+  event keeps the title, description and place of a copy that has them, instead of losing them.
+- **An event deleted in Google before its time is cancelled.** When `markUnseen` leaves an event no live calendar
+  copy, a future event becomes `cancelled` and drops out of search, `search all` and a person's upcoming events; a
+  past one keeps its status and gets `source_deleted_at`, as history.
 
 ## 0.452.0 — 27.10.2026
 

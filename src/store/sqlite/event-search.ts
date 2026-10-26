@@ -1,11 +1,19 @@
 import type { Event } from "../../meetings/index.js"
 import { QUERY_LIMITS } from "../../search/lucene/types.js"
 import { eventOf } from "./events.js"
-import { CORPORA, corpusIndexState, drainCorpus, EVENT_LIVE, EVENT_TEXT, type NoteIndexState } from "./note-index.js"
+import {
+  CORPORA,
+  corpusIndexState,
+  drainCorpus,
+  EVENT_LIVE,
+  EVENT_TEXT,
+  type NoteIndexState,
+  searchableCopy,
+} from "./note-index.js"
 import { type Corpus, type CorpusQuery, searchCorpus } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
-import { read } from "./transaction.js"
+import { read as inTransaction } from "./transaction.js"
 
 /** The fields an event has; a message or note field is refused rather than matching nothing. */
 export const EVENT_FIELDS = ["text", "exact", "body", "title", "date", "in"] as const
@@ -21,16 +29,17 @@ const EVENT_CORPUS: Corpus = {
   stems: "event_stems",
   live: "n.live = 1",
   inAccounts: (ids) => ({
-    sql:
-      "EXISTS (SELECT 1 FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id WHERE ce.event_id = n.id " +
-      "AND ce.deleted_at IS NULL AND c.account_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)))",
+    sql: searchableCopy("n.id", "c.account_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))"),
     params: [ids],
     exact: true,
   }),
 }
 
-/** `accountIds` are stored account ids; `limit` and `offset` count hits, one per series. */
-export type EventQuery = CorpusQuery
+/**
+ * `accountIds` are stored account ids; `limit` and `offset` count hits, one per series. `candidates` is how many
+ * matching events are read before they are grouped (50,000 by default).
+ */
+export type EventQuery = CorpusQuery & { candidates?: number }
 
 export interface EventHit {
   /** `event:<id>`, of the occurrence shown. */
@@ -52,7 +61,12 @@ export interface EventHit {
 
 export interface EventSearch {
   /** Indexes what was written since, then searches: the occurrences of one series are one hit. */
-  search(query: EventQuery): Promise<{ items: EventHit[]; hasMore: boolean }>
+  search(query: EventQuery): Promise<{
+    items: EventHit[]
+    hasMore: boolean
+    /** More events matched than `candidates`: the ones past it were not read, so the last page may not be the end. */
+    truncated: boolean
+  }>
   eventIndexState(): Promise<NoteIndexState>
 }
 
@@ -65,8 +79,11 @@ export const eventSearchOver = (context: StoreContext): EventSearch => {
     search: async (query) => {
       drainCorpus(database, CORPORA.event, stemmerFor)
       const offset = query.offset ?? 0
-      const rows = searchCorpus(context, { ...query, limit: QUERY_LIMITS.candidates, offset: 0 }, EVENT_CORPUS)
-      return read(database, () => {
+      const candidates = query.candidates ?? QUERY_LIMITS.candidates
+      const read = searchCorpus(context, { ...query, limit: candidates, offset: 0 }, EVENT_CORPUS)
+      const truncated = read.length > candidates
+      const rows = truncated ? read.slice(0, candidates) : read
+      return inTransaction(database, () => {
         const facts = new Map(
           database
             .prepare(
@@ -96,8 +113,8 @@ export const eventSearchOver = (context: StoreContext): EventSearch => {
         const place = database.prepare(
           "SELECT a.provider, a.external_id AS account, ce.url FROM calendar_entries ce " +
             "JOIN calendars c ON c.id = ce.calendar_id JOIN accounts a ON a.id = c.account_id " +
-            "WHERE ce.event_id = ? AND ce.deleted_at IS NULL " +
-            "ORDER BY c.account_id NOT IN (SELECT CAST(value AS INTEGER) FROM json_each(?)), ce.id LIMIT 1",
+            "WHERE ce.event_id = ? " +
+            "ORDER BY c.account_id NOT IN (SELECT CAST(value AS INTEGER) FROM json_each(?)), ce.deleted_at IS NOT NULL, ce.id LIMIT 1",
         )
         const chosen = JSON.stringify(query.accountIds ?? [])
         const page = [...groups.values()].slice(offset, offset + query.limit)
@@ -117,7 +134,8 @@ export const eventSearchOver = (context: StoreContext): EventSearch => {
               url: at?.url == null ? null : String(at.url),
             }
           }),
-          hasMore: groups.size > offset + query.limit || rows.length > QUERY_LIMITS.candidates,
+          hasMore: groups.size > offset + query.limit,
+          truncated,
         }
       })
     },

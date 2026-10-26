@@ -238,6 +238,11 @@ describe("contacts context", () => {
     ])
     expect(found.events.recent.map(({ title }) => title)).toEqual(["Kick-off"])
     expect(found.events.upcoming[0]?.ref).toMatch(/^event:\d+$/)
+
+    await store.calendar.markUnseen(calendar?.id as number, now, { from: now - 30 * day, to: now + 30 * day }, now)
+    const after = await people().context("11", { now })
+    expect(after.events.upcoming).toEqual([])
+    expect(after.events.recent.map(({ title }) => title)).toEqual(["Kick-off"])
   })
 
   it("keeps a renamed person's history and key", async () => {
