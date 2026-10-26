@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Text models and rerankers run on native ONNX Runtime on Linux (glibc, x64 and arm64) and Apple-silicon Macs**,
+  2–3× faster than WebAssembly: on one real archive `search messages --discover` went from 4.6 s to 3.2 s with the
+  same answers. `models download` of a text model or reranker now also fetches Microsoft's ONNX Runtime 1.30.0
+  library for the system (10–42 MB, checked by sha256) into `models/runtime/`; an install that already has its
+  models gets it on its next `models download`. Windows, Intel Macs, musl, picture models, and any library that
+  does not load keep running through WebAssembly. Needs `@wirecat/cli-core-onnx` 1.1.0.
+
 ## 0.447.0 — 26.10.2026
 
 ### Added

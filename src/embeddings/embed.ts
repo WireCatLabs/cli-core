@@ -3,6 +3,7 @@ import { availableParallelism } from "node:os"
 import { basename, join } from "node:path"
 import { filesPresent, sharedModelsDirectory } from "../speech/install.js"
 import type { TextModel } from "./models.js"
+import { onnxRuntime } from "./onnx-runtime.js"
 import type { Reranker } from "./rerank.js"
 
 export const textModelsDirectory = (env: NodeJS.ProcessEnv = process.env): string => sharedModelsDirectory("text", env)
@@ -174,19 +175,31 @@ export const loadModel = async (
   directory: string,
   threads: number,
 ) => {
-  const [{ Tokenizer }, ort] = await Promise.all([import("@huggingface/tokenizers"), import("@wirecat/cli-core-onnx")])
+  const [{ Tokenizer }, runtime] = await Promise.all([import("@huggingface/tokenizers"), onnxRuntime()])
   const path = (name: string) => join(directory, model.id, name)
   const tokenizer = new Tokenizer(
     JSON.parse(readFileSync(path("tokenizer.json"), "utf8")),
     JSON.parse(readFileSync(path("tokenizer_config.json"), "utf8")),
   )
+  const bytes = readFileSync(path(model.onnx))
+  const external = model.externalData
+    ? { externalData: [{ path: basename(model.externalData), data: readFileSync(path(model.externalData)) }] }
+    : {}
+  if (runtime.native) {
+    try {
+      const session = await runtime.ort.InferenceSession.create(bytes, {
+        ...external,
+        intraOpNumThreads: threads,
+        interOpNumThreads: 1,
+      })
+      return { ort: runtime.ort, tokenizer, session }
+    } catch {
+      // A model the native runtime will not open still runs through WebAssembly.
+    }
+  }
+  const ort = await import("@wirecat/cli-core-onnx")
   ort.env.wasm.numThreads = threads
-  const session = await ort.InferenceSession.create(
-    readFileSync(path(model.onnx)),
-    model.externalData
-      ? { externalData: [{ path: basename(model.externalData), data: readFileSync(path(model.externalData)) }] }
-      : {},
-  )
+  const session = await ort.InferenceSession.create(bytes, external)
   return { ort, tokenizer, session }
 }
 

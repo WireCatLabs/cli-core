@@ -33,8 +33,8 @@ importers:
         specifier: 1.8.0
         version: 1.8.0(valibot@1.5.0(typescript@7.0.2))
       '@wirecat/cli-core-onnx':
-        specifier: 1.0.1
-        version: 1.0.1
+        specifier: 1.1.0
+        version: 1.1.0
       '@wirecat/cli-core-sqlite':
         specifier: 1.1.0
         version: 1.1.0
@@ -1338,6 +1338,9 @@ packages:
 
   '@wirecat/cli-core-onnx@1.0.1':
     resolution: {integrity: sha512-4oLtnyhm8W69oCWYqCWYtUQEhaJYitivQmgLkKHAsPOCEJlZG8+IUzchEgGyq3X1rWFs66wRw6uVnKHjYRMyyQ==}
+
+  '@wirecat/cli-core-onnx@1.1.0':
+    resolution: {integrity: sha512-U274J90rLZ30SzODy9/re1cSw9e7LMGChJ/8a1e4qZ3MwoOan7XtXKd9wd5AuxEnzZuYUSF6TWPAwJ1sHlVOCw==}
 
   '@wirecat/cli-core-sqlite@1.0.1':
     resolution: {integrity: sha512-dFkTE3+XdvZwrt7bZZEd2fzdqR2vFgnnGPOhmBKGNa7uKQHjOdqJL8Q9O5cajIjy5o8Gl0LVn0OZbYajhLvQ1A==}
@@ -3552,6 +3555,10 @@ snapshots:
       - typescript
 
   '@wirecat/cli-core-onnx@1.0.1':
+    dependencies:
+      onnxruntime-common: 1.30.0
+
+  '@wirecat/cli-core-onnx@1.1.0':
     dependencies:
       onnxruntime-common: 1.30.0
 

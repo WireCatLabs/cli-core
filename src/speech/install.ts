@@ -9,8 +9,10 @@ import { wirecatDirectory } from "../store/path.js"
 import { type ModelFile, type SpeechModel, VAD } from "./models.js"
 
 /** Shared by every CLI of the family, whatever it talks to: a model is hundreds of MB and is downloaded once. */
-export const sharedModelsDirectory = (kind: "audio" | "text" | "image", env: NodeJS.ProcessEnv = process.env): string =>
-  join(wirecatDirectory(env), "models", kind)
+export const sharedModelsDirectory = (
+  kind: "audio" | "text" | "image" | "runtime",
+  env: NodeJS.ProcessEnv = process.env,
+): string => join(wirecatDirectory(env), "models", kind)
 
 export const modelsDirectory = (env: NodeJS.ProcessEnv = process.env): string => sharedModelsDirectory("audio", env)
 

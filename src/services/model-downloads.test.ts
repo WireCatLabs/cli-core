@@ -33,6 +33,15 @@ vi.mock("../speech/install.js", async (original) => ({
   },
 }))
 
+const runtime = vi.hoisted(() => ({ fails: false, calls: 0 }))
+vi.mock("../embeddings/onnx-runtime.js", () => ({
+  installNativeRuntime: async () => {
+    runtime.calls++
+    if (runtime.fails) throw new Error("HTTP 503")
+    return undefined
+  },
+}))
+
 /** A sparse file at the pinned size — what the installed check reads — without writing hundreds of MB. */
 const sized = (path: string, bytes: number) => {
   mkdirSync(dirname(path), { recursive: true })
@@ -44,6 +53,8 @@ const freshEnv = () => ({ WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "model-d
 
 beforeEach(() => {
   fetched.length = 0
+  runtime.fails = false
+  runtime.calls = 0
   dims = { text: textModel("e5-small").dims, image: imageModel("clip-b32").dims }
 })
 
@@ -60,6 +71,17 @@ describe("downloadTextModel", () => {
     fetched.length = 0
     await downloadTextModel("e5-small", { env })
     expect(fetched).toEqual([])
+  })
+
+  it("also fetches the native ONNX Runtime, and still installs the model when that fails", async () => {
+    runtime.fails = true
+    const progress = vi.fn()
+
+    const { model } = await downloadTextModel("e5-small", { env: freshEnv(), progress })
+
+    expect(model.id).toBe("e5-small")
+    expect(runtime.calls).toBe(1)
+    expect(progress).toHaveBeenCalledWith("ONNX Runtime not installed (HTTP 503); models run through WebAssembly")
   })
 
   it("refuses a model with its own terms until they are accepted, before fetching anything", async () => {
