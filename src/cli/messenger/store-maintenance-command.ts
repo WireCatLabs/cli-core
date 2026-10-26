@@ -20,17 +20,20 @@ import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
 import { syncsOneChat } from "../../ports/traits.js"
 import { isSealed, sealFile, unsealFile } from "../../sealed.js"
+import { fileSchemaOf, SPEAKS, writableBy } from "../../store/compatibility.js"
 import type { CacheDatabase } from "../../store/driver.js"
-import { MIGRATIONS, migrate } from "../../store/migrations.js"
+import { migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
 import { deleteCopy, type RepairReport, repairStore } from "../../store/repair.js"
 import {
   drainNoteIndex,
+  dropAllUnusedVectors,
   fillSearchIndex,
   fillStems,
   involvementStoreOver,
   noteIndexState,
+  openSqlite,
   openStore,
   orphanPointers,
   pendingNormalization,
@@ -41,30 +44,26 @@ import {
   searchIndexState,
   stemmerCache,
   stemsState,
+  vectorIndexCounts,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { lineOf, nextStep } from "../steps.js"
+import { storeInfoCommand } from "../store-info.js"
 import { answerOf } from "./ask.js"
 import type { Messenger } from "./context.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
 import { servingProfiles } from "./serve-command.js"
+import { storeTablesCommand } from "./store-tables-command.js"
 
-const SPEAKS = MIGRATIONS.at(-1)?.version ?? 0
 const SEARCH_INDEXES = ["messages_fts", "chats_fts", "identities_fts"]
 /** Contentless: it has no table to be compared with, only its own structure to check. */
 const WORD_INDEX = "message_words"
 
-/** An empty file is normal: `openStore` creates it before the first migration runs. */
 const schemaOf = (database: CacheDatabase) => {
-  const tracked = database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'schema_migrations'").get()
-  const row = tracked
-    ? database.prepare("SELECT version, min_compatible FROM schema_migrations ORDER BY version DESC LIMIT 1").get()
-    : undefined
-  const version = Number(row?.version ?? 0)
-  const minCompatible = Number(row?.min_compatible ?? 0)
-  return { version, minCompatible, writable: version <= SPEAKS || minCompatible <= SPEAKS }
+  const file = fileSchemaOf(database)
+  return { ...file, writable: writableBy(file) }
 }
 
 const count = (database: CacheDatabase, table: string) =>
@@ -81,6 +80,16 @@ const bytesOf = (path: string) => (existsSync(path) ? statSync(path).size : 0)
 /** Opens the file as it is. Migrating here would change what the caller asked to look at. */
 const reading = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
   const database = await openCache(path)
+  try {
+    return read(database)
+  } finally {
+    database.close()
+  }
+}
+
+/** For a command that only reads: the connection refuses writes, and opening sets no journal mode. */
+const readingOnly = async <T>(path: string, read: (database: CacheDatabase) => T): Promise<T> => {
+  const { database } = await openSqlite(path, { readOnly: true })
   try {
     return read(database)
   } finally {
@@ -114,7 +123,7 @@ const result = (command: Command, value: unknown, next: NextStep[] = []) =>
   renderAnswer(command, outputFor(command), itemOf(snakeKeys(value), { next }))
 
 export const storeMaintenanceCommands = (messenger: Messenger): Command[] => [
-  infoCommand(),
+  storeInfoCommand(),
   checkCommand(messenger),
   migrateCommand(messenger),
   reindexCommand(messenger),
@@ -124,6 +133,7 @@ export const storeMaintenanceCommands = (messenger: Messenger): Command[] => [
   repairCommand(messenger),
   resetCommand(messenger),
   copiesCommand(),
+  storeTablesCommand(messenger),
 ]
 
 /** Renaming tables under a running `serve` would pull them from under its statements. */
@@ -201,33 +211,6 @@ const copiesCommand = (): Command =>
       }),
   )
 
-const infoCommand = (): Command =>
-  annotate(new Command("info"), { output: { entity: "store_info" }, effects: LOCAL_READ })
-    .summary("the local archive's format, size and contents")
-    .description("the store file: where it is, its size, its schema and how many rows it holds; changes nothing")
-    .action(async function (this: Command) {
-      const path = storePath(environmentOf(this).env ?? process.env)
-      if (!existsSync(path)) {
-        result(this, { path, exists: false })
-        return
-      }
-      const read = reading(path, (database) => {
-        const { version, minCompatible, writable } = schemaOf(database)
-        const tables = ["accounts", "chats", "messages", "attachments", "identities"]
-        return {
-          path,
-          exists: true,
-          bytes: { file: bytesOf(path), wal: bytesOf(`${path}-wal`) },
-          schema: { version, minCompatible, speaks: SPEAKS, writable },
-          rows: version > 0 ? Object.fromEntries(tables.map((table) => [table, count(database, table)])) : {},
-          pendingNormalization: pendingIfKnown(database),
-          wordIndex: searchIndexState(database) ?? null,
-          stemIndex: stemsState(database) ?? null,
-        }
-      })
-      result(this, await read.catch((error) => ({ path, exists: true, opens: false, error: messageOf(error) })))
-    })
-
 /**
  * Reports and never repairs. The per-chat completeness is what tells "nothing was said" from "not
  * fetched" (NEED-399 A). Times are the chat's newest message by the messenger's list against the
@@ -285,6 +268,10 @@ const checkCommand = (messenger: Messenger): Command =>
         renderer.note(
           `${orphans} pointers name a row that is gone or a type the store does not know — see orphan_pointers`,
         )
+      if (answer.vectors && answer.vectors.unused > 0)
+        renderer.note(
+          `${answer.vectors.unused} vectors belong to no text the store still holds — \`${command} store rebuild\` drops them`,
+        )
       const older = answer.conversations.filter((chat) => chat.provider === messenger.provider && !chat.current).length
       if (older > 0) {
         renderer.note(
@@ -313,11 +300,14 @@ const inspect = (path: string) =>
     const { bavail, bsize } = statfsSync(dirname(path))
     const free = Number(bavail) * Number(bsize)
     const behind = schema.version > 0 ? chatsBehind(database) : []
+    const vectorIndexes = schema.version >= 34 ? vectorIndexCounts(database) : []
     const checks = {
       schema: schema.version >= SPEAKS && schema.writable,
       integrity: integrity.length === 1 && integrity[0] === "ok",
       foreignKeys: foreignKeys === 0,
       searchIndexes: Object.values(searchIndexes).every((state) => state === "ok"),
+      // One that is still filling is short by design; a ready one must hold exactly the rows its sources give.
+      vectorIndexes: vectorIndexes.every(({ ready, missing, extra }) => !ready || missing + extra === 0),
       // A backup or a VACUUM needs about as much again.
       disk: free >= size,
     }
@@ -340,7 +330,7 @@ const inspect = (path: string) =>
       orphanPointers: schema.version > 0 ? orphanPointers(database) : [],
       conversations: conversationsBuilt(database),
       vectors: vectorsHeld(database),
-      notApplicable: { extensions: "SQLite needs none" },
+      vectorIndexes,
     }
   })
 
@@ -355,8 +345,8 @@ const indexIntegrity = (database: CacheDatabase, index: string, rank = 1): strin
 }
 
 /**
- * Vectors per model, and how many no chunk of any build points at any more — a rebuild that changed a
- * conversation's text leaves its old vector behind until `conversations embed clear` (phase 5).
+ * Vectors per model, and how many no chunk points at any more. Each write that drops chunks drops those
+ * (`dropUnusedVectors`), so a count above zero was most likely left by an older build; `store rebuild` drops them.
  */
 const vectorsHeld = (database: CacheDatabase) => {
   const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'embeddings'").get()
@@ -502,7 +492,7 @@ const reindexCommand = (messenger: Messenger): Command =>
 
     .summary("rebuild the local archive's search indexes")
     .description(
-      "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored; loses nothing",
+      "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored, and drop the vectors no stored text uses; loses nothing",
     )
     .action(async function (this: Command) {
       const { renderer } = outputFor(this)
@@ -537,6 +527,7 @@ const reindexCommand = (messenger: Messenger): Command =>
           ...buildStems(database, (note) => renderer.note(note), { force: true }),
           ...buildNoteIndex(database, (note) => renderer.note(note), { reset: true }),
           involvements: involvementStoreOver({ database, now: Date.now }).rebuild(),
+          unusedVectorsDropped: dropAllUnusedVectors(database),
         }
       })
       result(this, answer)
@@ -741,8 +732,10 @@ const quiesce = async (
 }
 
 /**
- * For a store this build cannot migrate: a backup beside it, then an empty store at this build's
- * schema. The backup is made before anything is deleted, and its path is said before the delete.
+ * For a store this build cannot migrate, or one the owner wants empty: a backup beside it, then an empty
+ * store at this build's schema. The backup is made before anything is deleted, and its path is said before
+ * the delete. A new file rather than `DELETE FROM` every table: deleted rows would stay readable in free
+ * pages until a VACUUM, and every table comes back in this build's shape.
  */
 const resetCommand = (messenger: Messenger): Command =>
   annotate(new Command("reset"), { output: { entity: "store_reset" }, effects: LOCAL_WRITE })
@@ -751,15 +744,21 @@ const resetCommand = (messenger: Messenger): Command =>
       "back the store up beside itself, then delete it and start an empty one at this build's schema; asks first, or --yes",
     )
     .option("--no-backup", "delete the store without backing it up first")
-    .action(async function (this: Command, { backup: keep }: { backup: boolean }) {
+    .option("--dry-run", "list every table it would empty, with its rows, and delete nothing")
+    .action(async function (this: Command, { backup: keep, dryRun }: { backup: boolean; dryRun?: boolean }) {
       const { renderer } = outputFor(this)
       const { command } = messenger.app
-      const path = storePath(environmentOf(this).env ?? process.env)
+      const env = environmentOf(this).env ?? process.env
+      const path = storePath(env)
       if (!existsSync(path)) {
         result(this, { path, exists: false, reset: false })
         renderer.note(
           `no store at ${path} — nothing to reset; the first \`${command}\` command that reads a chat creates it`,
         )
+        return
+      }
+      if (dryRun) {
+        result(this, await resetPreview(path, messenger, env, keep))
         return
       }
       refuseWhileServing(this, messenger)
@@ -792,7 +791,7 @@ const resetCommand = (messenger: Messenger): Command =>
         renderer.note(`backed the store up to ${backup}`)
       }
 
-      for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path}${suffix}`, { force: true })
+      for (const suffix of STORE_PARTS) rmSync(`${path}${suffix}`, { force: true })
       await (await openStore({ path, command })).close()
       const schema = await reading(path, (database) => schemaOf(database).version)
 
@@ -803,6 +802,47 @@ const resetCommand = (messenger: Messenger): Command =>
           : `the store is empty at schema ${schema}; there is no backup`,
       )
     })
+
+const STORE_PARTS = ["", "-wal", "-shm"]
+
+/**
+ * What a reset would delete, read without a write lock so it answers while a sync runs. `in_use` is what the
+ * real run would refuse over now; `null` where this system cannot say who has the file open.
+ */
+const resetPreview = async (path: string, messenger: Messenger, env: NodeJS.ProcessEnv, keep: boolean) => {
+  const files = STORE_PARTS.map((suffix) => `${path}${suffix}`).filter((file) => existsSync(file))
+  const holders = holdersOf(files.map((file) => realpathSync(file)))
+  const serving = servingProfiles(messenger.app, env).length > 0
+  const read = await readingOnly(path, (database) => ({
+    schema: schemaOf(database).version,
+    tables: emptiedTables(database),
+  }))
+  return {
+    path,
+    exists: true,
+    reset: false,
+    dryRun: true,
+    files,
+    bytes: files.reduce((sum, file) => sum + bytesOf(file), 0),
+    schema: read.schema,
+    tables: read.tables,
+    backupFirst: keep,
+    inUse: serving || (holders === undefined ? null : holders.length > 0),
+  }
+}
+
+/** The tables that hold data; a search index and its shadow tables are rebuilt from them, so they are left out. */
+const emptiedTables = (database: CacheDatabase) => {
+  const all = database
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all()
+    .map((row) => ({ name: String(row.name), virtual: /^\s*CREATE\s+VIRTUAL/i.test(String(row.sql)) }))
+  const indexes = all.filter((table) => table.virtual).map((table) => `${table.name}_`)
+  return all
+    .filter((table) => !table.virtual && table.name !== "schema_migrations")
+    .filter((table) => !indexes.some((prefix) => table.name.startsWith(prefix)))
+    .map((table) => ({ name: table.name, rows: count(database, `"${table.name}"`) }))
+}
 
 const isoOf = (value: unknown) => new Date(Number(value)).toISOString()
 

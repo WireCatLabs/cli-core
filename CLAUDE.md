@@ -51,11 +51,16 @@ already taken it moves to the next free one and renames the changelog heading wi
 ## Development check budget
 
 Local commits check only staged lint and secrets. There is no pre-push check.
-Every pull request runs two checks. The fast standards job (`standards.yml`) checks config integrity,
+Every pull request runs three checks. The fast standards job (`standards.yml`) checks config integrity,
 lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
 The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
-with the coverage floor, build, `docs:check`, the schema and dist checks, Bun, old Node, the SQLite restart
-and parity, which builds tg-cli, max-cli, whatsapp-cli and cli-template against the branch. The same `ci.yml`
-runs again on each merge to `main` (no publishing).
+on two runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
+dist checks, Bun, old Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli and
+cli-template against the branch. The security checks (`security.yml`) run CodeQL, zizmor and gitleaks; CodeQL
+analyses python, c-cpp and java-kotlin only when a file of theirs changes.
+A pull request that changes only `CHANGELOG.md` and the version against a `main` already proven green (bin/release's
+fold and version pull requests) runs only `docs:check` and the changelog shape test, and reports the other required
+checks as passed ([`docs/dev/TESTING.md`](docs/dev/TESTING.md)). The same `ci.yml` runs again in full on each merge
+to `main` (no publishing).
 Browser and platform suites run for releases, explicit manual validation, and monthly nonpublishing validation. See the
 [shared policy](https://github.com/WireCatLabs/community/blob/main/standards/README.md#ci-and-hooks).

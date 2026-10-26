@@ -8,6 +8,7 @@ import { codeOf } from "../sends/guarded.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { SearchFound, SearchQuery } from "./messages.js"
 import { MAX_SEARCH_OFFSET } from "./messages-archive-search.js"
+import type { MeaningLane } from "./messages-discovery.js"
 import { RRF_K } from "./notes-search.js"
 import {
   RESOURCES_SEARCHED,
@@ -200,6 +201,7 @@ export const searchAllIncludingMeetings = async (
   request: SearchAllIncludingMeetingsRequest,
   messenger: SearchAllMessenger = {},
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
+  meaning?: MeaningLane,
 ): Promise<SearchAllIncludingMeetingsFound> => {
   whole(request.limit, 1, 1000, "limit")
   if (request.maxMeetings !== "all") whole(request.maxMeetings ?? 100, 1, Number.MAX_SAFE_INTEGER, "maxMeetings")
@@ -219,14 +221,21 @@ export const searchAllIncludingMeetings = async (
   cancelled(request.signal)
   const others = { ...request, only: only.filter((one): one is SearchedResource => one !== "meetings") }
   if (!only.includes("meetings")) {
-    const found = await searchAll(store, account, others, messenger, searchMessages)
+    const found = await searchAll(store, account, others, messenger, searchMessages, meaning)
     cancelled(request.signal)
     return found
   }
   // Meetings rank with the rest, so a later page is the same merge read deeper, then cut.
   const offset = request.offset ?? 0
   const window = offset + request.limit
-  const legacy = await searchAll(store, account, { ...others, offset: 0, limit: window }, messenger, searchMessages)
+  const legacy = await searchAll(
+    store,
+    account,
+    { ...others, offset: 0, limit: window },
+    messenger,
+    searchMessages,
+    meaning,
+  )
   cancelled(request.signal)
   const compiled = meetingQuery(request.text, request.exact)
   if ("reason" in compiled)
@@ -300,9 +309,10 @@ export const searchAllWithMeetings = async (
   request: SearchAllWithMeetingsRequest,
   messenger: SearchAllMessenger = {},
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
+  meaning?: MeaningLane,
 ): Promise<SearchAllIncludingMeetingsFound> => {
   if (request.source !== undefined)
-    return searchAllOfSource(store, account, request.source, request, messenger, searchMessages)
+    return searchAllOfSource(store, account, request.source, request, messenger, searchMessages, meaning)
   const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
   if (only.length === 1 && only[0] === "meetings")
     throw new CliError("validation_error", `--only meetings: ${MEETINGS_UNNAMED}`)
@@ -313,6 +323,7 @@ export const searchAllWithMeetings = async (
     { ...request, only: only.filter((resource): resource is SearchedResource => resource !== "meetings") },
     messenger,
     searchMessages,
+    meaning,
   )
   return only.includes("meetings")
     ? {
@@ -340,6 +351,7 @@ const searchAllOfSource = async (
   request: SearchAllWithMeetingsRequest,
   messenger: SearchAllMessenger,
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
+  meaning?: MeaningLane,
 ): Promise<SearchAllIncludingMeetingsFound> => {
   const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
   const entries = entriesOfList(source, await listContextOf(store, account, messenger.app))
@@ -379,6 +391,7 @@ const searchAllOfSource = async (
     },
     messenger,
     searchMessages,
+    meaning,
   )
   const unnamed = only
     .filter((resource) => !read.includes(resource))

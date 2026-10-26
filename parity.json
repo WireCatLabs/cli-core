@@ -822,7 +822,7 @@
       "meaning": "why a task was closed, kept with it — no-reply-needed, for example"
     },
     "--record": {
-      "meaning": "keep this run under `runs` — ids and timings, never message content",
+      "meaning": "keep this run under `runs`, with the command as typed and secrets hidden; record_input false leaves the typed words out",
       "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
     },
     "--remind-time": {
@@ -4207,6 +4207,12 @@
       }
     },
     "skill show": {
+      "in": "all",
+      "options": {
+        "--for": "all"
+      }
+    },
+    "skill status": {
       "in": "all"
     },
     "stats": {
@@ -4605,6 +4611,7 @@
     "store reset": {
       "in": "all",
       "options": {
+        "--dry-run": "all",
         "--no-backup": "all"
       }
     },
@@ -4612,6 +4619,12 @@
       "in": "all"
     },
     "store status": {
+      "in": "all"
+    },
+    "store tables": {
+      "in": "all"
+    },
+    "store tables list": {
       "in": "all"
     },
     "tags": {

@@ -19,7 +19,7 @@ import { RULES_VERSION } from "../../conversations/link.js"
 import { DEFAULT_TASK_CATEGORIES } from "../../domain/task-categories.js"
 import { ENTITIES } from "../../entities/index.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
-import { openCache } from "../../store/open.js"
+import { openCache, openFile } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { configCommand } from "../config-command.js"
 import { run } from "../program.js"
@@ -120,7 +120,8 @@ describe("store info", () => {
   it("says there is no file rather than creating one", async () => {
     const env = envFor()
     const { answer } = await call(["store", "info", "--json"], env)
-    expect(answer).toEqual({ path: env.MESSAGING_STORE, exists: false })
+    expect(answer).toMatchObject({ path: env.MESSAGING_STORE, exists: false, schema: { reason: "missing" } })
+    expect(existsSync(String(env.MESSAGING_STORE))).toBe(false)
   })
 
   it("reads a baseline file without changing its normalization state", async () => {
@@ -134,6 +135,62 @@ describe("store info", () => {
       pending_normalization: 2,
     })
     expect((await call(["store", "info", "--json"], env)).answer.schema.version).toBe(latest)
+  })
+})
+
+describe("store info contents", () => {
+  it("**breaks the rows down by provider, chat kind, account, UTC year and attachment kind, over every account**", async () => {
+    const env = envFor()
+    const database = await seeded(env)
+    database.exec(`
+      INSERT INTO accounts (id, provider, external_id, name, created_at, updated_at)
+        VALUES (2, 'email', 'synthetic@example.com', NULL, 0, 0);
+      INSERT INTO email_threads (id, account_id, external_id, created_at, updated_at) VALUES (1, 2, 't1', 0, 0);
+      INSERT INTO emails (id, account_id, email_thread_id, external_id, created_at, updated_at)
+        VALUES (1, 2, 1, 'e1', 0, 0), (2, 2, 1, 'e2', 0, 0);
+      INSERT INTO messages (chat_id, account_id, external_id, sent_at, text, created_at, source, updated_at)
+        VALUES (1, 1, '2', ${Date.UTC(2023, 11, 31, 23, 30)}, 'Synthetic', 0, 'fetch', 0);
+      INSERT INTO attachments (attachable_type, attachable_id, position, kind, size, created_at, updated_at)
+        VALUES ('message', 1, 0, 'photo', 100, 0, 0), ('message', 2, 0, 'photo', NULL, 0, 0),
+               ('email', 1, 0, 'file', 7, 0, 0);
+    `)
+    database.close()
+
+    const { answer } = await call(["store", "info", "--json"], env)
+    expect(answer.rows).toMatchObject({ accounts: 2, messages: 3, emails: 2, documents: 0, meetings: 0, events: 0 })
+    expect(answer.by_provider).toEqual([
+      { provider: "chat", accounts: 1, chats: 2, messages: 3, emails: 0, documents: 0, meetings: 0 },
+      { provider: "email", accounts: 1, chats: 0, messages: 0, emails: 2, documents: 0, meetings: 0 },
+    ])
+    expect(answer.by_chat_kind).toEqual([
+      { provider: "chat", kind: "group", chats: 1, messages: 2 },
+      { provider: "chat", kind: "private", chats: 1, messages: 1 },
+    ])
+    expect(answer.by_account).toEqual([
+      { provider: "chat", account_id: 1, name: null, chats: 2, messages: 3, emails: 0, documents: 0, meetings: 0 },
+      { provider: "email", account_id: 2, name: null, chats: 0, messages: 0, emails: 2, documents: 0, meetings: 0 },
+    ])
+    expect(JSON.stringify(answer)).not.toContain("synthetic@example.com")
+    expect(answer.by_year).toEqual([
+      { provider: "chat", year: 1970, messages: 2 },
+      { provider: "chat", year: 2023, messages: 1 },
+    ])
+    expect(answer.by_attachment_kind).toEqual([
+      { type: "email", kind: "file", count: 1, bytes: 7 },
+      { type: "message", kind: "photo", count: 2, bytes: 100 },
+    ])
+  })
+
+  it("opens the file read-only, leaving a store in rollback journal mode as it was", async () => {
+    const env = envFor()
+    const database = await seeded(env)
+    database.exec("PRAGMA journal_mode = DELETE")
+    database.close()
+
+    expect((await call(["store", "info", "--json"], env)).code).toBe(0)
+    const after = await openFile(String(env.MESSAGING_STORE))
+    expect(after.prepare("PRAGMA journal_mode").get()?.journal_mode).toBe("delete")
+    after.close()
   })
 })
 
@@ -334,6 +391,7 @@ describe("the word index", () => {
       stemmed: 2,
       notes_indexed: 0,
       involvements: 0,
+      unused_vectors_dropped: 0,
     })
     expect(await words(env, "hola")).toBe(1)
     const { answer: info } = await call(["store", "info", "--json"], env)
@@ -368,6 +426,31 @@ describe("the word index", () => {
 
     await call(["store", "migrate", "--json"], env)
     expect((await call(["store", "check", "--json"], env)).answer.word_index).toMatchObject({ terms_ready: true })
+  })
+
+  it("`store check` names the vectors no text uses, and `store rebuild` drops them and keeps used ones", async () => {
+    const env = envFor()
+    const database = await seeded(env)
+    database.exec(
+      `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, created_at, updated_at)
+       VALUES ('message', 1, 0, 0, 4, 'used', 0, 0)`,
+    )
+    database.exec(
+      `INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at)
+       VALUES ('m:x:1', 'used', 1, x'0000803f', 0, 0), ('m:x:1', 'unused', 1, x'0000803f', 0, 0),
+         ('m:y:1', 'unused', 1, x'0000803f', 0, 0)`,
+    )
+    database.close()
+
+    const checked = await call(["store", "check"], env)
+    expect(checked.stderr.join("")).toContain(
+      "2 vectors belong to no text the store still holds — `chat store rebuild`",
+    )
+    expect((await call(["store", "rebuild", "--json"], env)).answer.unused_vectors_dropped).toBe(2)
+    expect((await call(["store", "check", "--json"], env)).answer.vectors).toEqual({
+      models: { "m:x:1": 1 },
+      unused: 0,
+    })
   })
 
   it("`store rebuild` refuses a file requiring a newer build", async () => {
@@ -543,6 +626,43 @@ describe("store reset", () => {
     expect(stderr.join("\n")).toContain("there is no backup")
     expect(readdirSync(dirname(path)).some((name) => name.includes(".backup-"))).toBe(false)
     expect(await messagesIn(path)).toBe(0)
+  })
+
+  it("**--dry-run lists every table it would empty, with its rows**, and deletes nothing", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const path = String(env.MESSAGING_STORE)
+
+    const { code, answer } = await call(["store", "reset", "--no-backup", "--dry-run", "--json"], env)
+    expect(code).toBe(0)
+    expect(answer).toMatchObject({ path, reset: false, dry_run: true, schema: latest, backup_first: false })
+    expect(answer.files).toContain(path)
+    expect(answer.bytes).toBeGreaterThan(0)
+    const tables = Object.fromEntries(
+      answer.tables.map((table: { name: string; rows: number }) => [table.name, table.rows]),
+    )
+    expect(tables).toMatchObject({ accounts: 1, chats: 2, messages: 2 })
+    expect(Object.keys(tables).some((name) => name.startsWith("messages_fts") || name === "schema_migrations")).toBe(
+      false,
+    )
+    expect(await messagesIn(path)).toBe(2)
+    expect(readdirSync(dirname(path)).some((name) => name.includes(".backup-"))).toBe(false)
+  })
+
+  it("**--dry-run answers while a write is under way**, which the real reset would wait out", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const writer = await openCache(String(env.MESSAGING_STORE))
+    writer.exec("BEGIN IMMEDIATE")
+    try {
+      const { code, answer } = await call(["store", "reset", "--dry-run", "--json"], env, 10)
+      expect(code).toBe(0)
+      expect(answer.backup_first).toBe(true)
+      if (process.platform === "linux") expect(answer.in_use).toBe(false)
+    } finally {
+      writer.exec("ROLLBACK")
+      writer.close()
+    }
   })
 
   it("**a migration that fails names `store reset`**, keeping SQLite's own words", async () => {

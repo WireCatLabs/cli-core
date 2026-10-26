@@ -19,9 +19,12 @@ permissions:
 
 jobs:
   ci:
-    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@3c1ec927befbf4c19844ece6430cce7a0bd3790a # v0.48.0
+    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@3d9c7a5e9b790447005b1d20932c1f198ae60d93 # cli-base#350 merge, test-shards
     with:
       pack: ${{ inputs.pack || false }}
+      # 588 test files took 250 s on one runner; `ci / coverage` merges the shards and holds the floor. Two, not four:
+      # the Free plan runs 20 jobs at once across the account, and every extra shard makes other pull requests wait.
+      test-shards: 2
       checks: |
         pnpm docs:check
         pnpm schema:check

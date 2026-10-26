@@ -217,8 +217,8 @@ they deliberately differ. A rule changes in its own pull request, before the cod
 - **The tool never picks an account.** Every account command names its profile — the first word in tg, max and
   wa, an option such as `--account` or `--profile` in the others; without one, the command stops and lists the
   choices — even when there is only one.
-- **Run records keep ids and timings, never content.** A failure is kept by default, so `runs show` can explain it
-  without anyone sending a log full of messages.
+- **Run records keep the command as typed, never a secret.** A failure is kept by default, so `runs show` can explain
+  it; a token, a password or a phone number is hidden, and `record_input: false` leaves the typed words out too.
 - **Tests that cannot touch real data.** A sandbox keeps every test away from the owner's store, and no test may
   sleep. A coverage floor: 92% of lines, and at least half of every file.
 - **Contract cases for every adapter.** `contractCases` turns the port's promises into cases any test runner can run,

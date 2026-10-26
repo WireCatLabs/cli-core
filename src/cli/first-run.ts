@@ -4,13 +4,8 @@ import { delimiter, join } from "node:path"
 import { type Installer, installerOf, updateCommand } from "@wirecat/cli-base/update"
 import { LANGUAGES, type Language } from "../search/languages.js"
 import { DEFAULT_STEMMERS, type Stemmers } from "../search/stem.js"
-import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
 import { sharedConfigPath } from "../store/shared-config.js"
-import { openStore } from "../store/store.js"
-import { readSecret } from "../terminal/prompt.js"
-import { WIRECAT_TOOLS } from "./help/first-screen.js"
-import { buildStems } from "./messenger/store-maintenance-command.js"
 import {
   type PermissionAnswer,
   QUESTIONS,
@@ -136,6 +131,8 @@ const suggested = (env: NodeJS.ProcessEnv, contentLanguages: readonly string[] |
 }
 
 const askLanguages = async ({ command, env, io, contentLanguages }: FirstRun) => {
+  // The store and its maintenance are most of cli-core; every command runs this file, few ever ask.
+  const { openStore } = await import("../store/store.js")
   const store = await openStore({ env })
   let rebuild = false
   try {
@@ -169,6 +166,10 @@ const askLanguages = async ({ command, env, io, contentLanguages }: FirstRun) =>
     await store.close()
   }
   if (!rebuild) return
+  const [{ openCache }, { buildStems }] = await Promise.all([
+    import("../store/open.js"),
+    import("./messenger/store-maintenance-command.js"),
+  ])
   const database = await openCache(storePath(env))
   try {
     buildStems(database, (note) => io.say(`  ${note}`), { force: true })
@@ -180,6 +181,7 @@ const askLanguages = async ({ command, env, io, contentLanguages }: FirstRun) =>
 const askTools = async (run: FirstRun) => {
   const { command, env, io } = run
   const installed = run.installed ?? ((name: string) => onPath(name, env))
+  const { WIRECAT_TOOLS } = await import("./help/first-screen.js")
   const others = WIRECAT_TOOLS.filter((tool) => tool.command !== command)
   const missing = others.filter((tool) => !installed(tool.command))
   io.say("Other WireCat tools — they share this store, so one search finds everything:")
@@ -272,7 +274,7 @@ export const setupAtStart = async (start: {
     contentLanguages: start.contentLanguages,
     all: start.path[0] === "setup",
     io: {
-      ask: (prompt) => readSecret(prompt, { input, echo: true }),
+      ask: async (prompt) => (await import("../terminal/prompt.js")).readSecret(prompt, { input, echo: true }),
       say: (text) => process.stderr.write(`${text}\n`),
     },
   }).catch((error: unknown) => {

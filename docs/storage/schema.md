@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-105 tables, 23 full-text indexes.
+107 tables, 23 full-text indexes.
 
 ## Conventions
 
@@ -2182,6 +2182,26 @@ Texts written or edited since their mentions were found: triggers enqueue, the s
 | `source_id` | integer | not null |  | the row in the `source_type` table |
 
 *Keys and indexes:* `PRIMARY KEY (source_type, source_id)`
+
+### `vector_indexes`
+
+One sqlite-vec `vec0` table per embedding model, `vector_index_<id>`: a row per chunk with a vector of that model, rowid `chunks.id`, kept in step by triggers. Searches by meaning rank there before they read the chunks.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `model` | text | not null, unique |  | the `embeddings.model` it indexes |
+| `dims` | integer | not null |  |  |
+| `ready` | integer | not null |  | 1 once it holds every vector; until then searches scan |
+| `filled_through` | text | not null |  | the last `content_hash` the fill of older vectors reached |
+
+### `vector_index_redo`
+
+Always empty: a trigger inserts each changed chunk's id here, every model's index re-derives that chunk's row, and the same trigger empties it.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `chunk_id` | integer | not null |  |  |
 
 ## Store
 

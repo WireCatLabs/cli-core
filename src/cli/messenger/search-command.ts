@@ -12,7 +12,14 @@ import { commandAt } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { conversationsSearchCommand } from "./conversations-command.js"
 import { messagesSearchCommand } from "./messages-search-command.js"
-import { allAnswer, notesAnswer, offsetOf, SOURCE_SEARCHED, type SourceSearched } from "./search-answers.js"
+import {
+  allAnswer,
+  meaningNote,
+  notesAnswer,
+  offsetOf,
+  SOURCE_SEARCHED,
+  type SourceSearched,
+} from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { topicsSearchCommand } from "./topics-command.js"
 
@@ -128,6 +135,8 @@ const allCommand = (messenger: Messenger): Command => {
     for (const { resource, source, reason } of found.skipped)
       context.renderer.note(`${resource ?? source} not searched: ${reason}`)
     if (found.notes?.meaningSkipped) context.renderer.note(`notes by words only: ${found.notes.meaningSkipped}`)
+    if (found.messages?.meaningSkipped)
+      context.renderer.note(`messages: ${meaningNote(found.messages.meaningSkipped, messenger.app.command)}`)
     const again = {
       query: words.join(" "),
       ...(only === undefined ? {} : { only: only.join(",") }),

@@ -14,7 +14,57 @@ permissions:
   contents: read
 
 jobs:
+  # actions and javascript-typescript on every pull request; python, c-cpp and java-kotlin (a few scripts and
+  # fixtures that do not ship) only when a file of theirs changes. The release and the monthly run analyse all.
+  languages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      analyze: ${{ steps.pick.outputs.analyze }}
+      unchanged: ${{ steps.pick.outputs.unchanged }}
+      reuse: ${{ steps.decide.outputs.reuse }}
+      base: ${{ steps.decide.outputs.base }}
+      fingerprint: ${{ steps.decide.outputs.fingerprint }}
+      pr: ${{ steps.decide.outputs.pr }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      # Only CHANGELOG.md and the version changed against a main proven green: nothing to analyse, as in pr.yml.
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CAN_REPORT: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        run: bash scripts/ci-unchanged.sh
+      - id: pick
+        env:
+          # Their token cannot write check runs, so they analyse everything.
+          CAN_REPORT: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        run: |
+          # The checkout is the merge of the head into the base, so this is exactly what the pull request changes.
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          analyze='"actions","javascript-typescript"' unchanged=""
+          pick() {
+            if [ "$CAN_REPORT" != true ] || grep -q '^\.github/' <<<"$changed" || grep -qE "$2" <<<"$changed"; then
+              analyze="$analyze,\"$1\""
+            else
+              unchanged="$unchanged${unchanged:+,}\"$1\""
+            fi
+          }
+          pick python '\.pyi?$'
+          pick c-cpp '\.(c|h|cc|cpp|cxx|hh|hpp|hxx|inl|ipp)$'
+          pick java-kotlin '\.(java|kts?)$'
+          echo "analyze=[$analyze]" >>"$GITHUB_OUTPUT"
+          echo "unchanged=[$unchanged]" >>"$GITHUB_OUTPUT"
+          echo "analyse [$analyze]; unchanged [$unchanged]"
+
   security:
+    needs: languages
+    if: needs.languages.outputs.reuse != 'true'
     permissions:
       contents: read
       actions: read
@@ -22,4 +72,37 @@ jobs:
     uses: WireCatLabs/cli-base/.github/workflows/release-checks.yml@c187075303a8d2096ded5faf8b5871572c35e8a4 # High production findings and fresh npm resolution
     with:
       dependencies: false
-      languages: '["actions","javascript-typescript","python","c-cpp","java-kotlin"]'
+      languages: ${{ needs.languages.outputs.analyze }}
+
+  # The ruleset requires a source check per language; the languages this pull request does not touch pass here.
+  not-analysed:
+    needs: languages
+    if: needs.languages.outputs.reuse == 'true' || needs.languages.outputs.unchanged != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          UNCHANGED: ${{ needs.languages.outputs.unchanged }}
+          TITLE: Not analysed — no file of this language changed
+          SUMMARY: >-
+            This pull request changes no file of this language, so CodeQL did not analyse it here.
+            The release and the monthly validation analyse every language.
+        if: needs.languages.outputs.reuse != 'true'
+        run: jq -r '.[] | "security / source (\(.))"' <<<"$UNCHANGED" | bash scripts/ci-pass-checks.sh
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REQUIRED_PREFIX: "security / "
+          TITLE: Not run — only CHANGELOG.md and the version changed
+          SUMMARY: >-
+            Apart from CHANGELOG.md and package.json's version, this pull request's tree is
+            ${{ needs.languages.outputs.fingerprint }}, the same as main at ${{ needs.languages.outputs.base }},
+            whose pull request #${{ needs.languages.outputs.pr }} passed every required check on that tree.
+        if: needs.languages.outputs.reuse == 'true'
+        run: bash scripts/ci-pass-checks.sh

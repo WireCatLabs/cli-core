@@ -13,7 +13,7 @@ import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { messagesAnswer, offsetOf } from "./search-answers.js"
+import { meaningNote, messagesAnswer, offsetOf } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { syncOptions, syncRequest, syncsFirst } from "./search-sync-options.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
@@ -54,7 +54,8 @@ export const messagesSearchCommand = (messenger: Messenger): Command => {
     .option("--context <n>", "messages before and after each hit; 2 in the terminal, 0 otherwise", wholeCount)
     .option(
       "--discover",
-      "find partial lexical matches and eligible replies in the local archive; results are evidence, not confirmed answers",
+      "find partial word matches, eligible replies and, once messages have vectors, messages close in meaning in the " +
+        "local archive; results are evidence, not confirmed answers",
     )
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
     .addHelpText("after", SAVE_HELP)
@@ -168,6 +169,12 @@ const searchAction = (messenger: Messenger) =>
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
     for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
+    if (found.meaningSkipped) context.renderer.note(meaningNote(found.meaningSkipped, command))
+    const rerank = found.rerankSkipped
+    if (rerank)
+      context.renderer.note(
+        `not reranked: ${rerank.reason}${rerank.step === "models.download" ? ` — \`${command} models download ${rerank.model}\`` : ""}`,
+      )
     if (found.picturesSkipped && found.picturesModel === undefined)
       context.renderer.note(`pictures not searched: ${found.picturesSkipped}`)
     const stemming = found.query?.stemming

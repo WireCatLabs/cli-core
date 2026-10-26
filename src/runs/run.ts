@@ -3,21 +3,25 @@ import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFile
 import { join } from "node:path"
 import { createRecordLog, type Logger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../ports/app.js"
+import type { RunError } from "./error-detail.js"
 import { LOG_ATTRIBUTES } from "./log-attributes.js"
 import { fromLogAttributes, logAttributes, snakeLogger } from "./log-keys.js"
+import type { RunAgent } from "./run-context.js"
 
 export type RunStatus = "success" | "failed" | "partial"
 
 /**
- * What a run was, and how it ended. **It never says what was read or sent** — a command, a profile
- * and a count, and the `errorCode` a script branches on rather than the sentence a person reads,
- * because a messenger's refusal can quote the payload back.
+ * What a run was, and how it ended. **It never says what was read or sent** — a command, a profile,
+ * a count, the arguments with every value that may be content masked, and the `errorCode` a script
+ * branches on. The sentence a person reads is kept only in `error`, masked, because a messenger's
+ * refusal can quote the payload back.
  */
 export interface RunMetadata {
   runId: string
   /** As typed, without the arguments: `chats list`, `messages send`. */
   command: string
-  profile: string
+  /** Left out when the command named no profile. */
+  profile?: string
   startedAt: string
   completedAt?: string
   status: RunStatus | "running"
@@ -45,12 +49,25 @@ export interface RunMetadata {
   codes?: string[]
   /** The caller's trace: the MCP client's, or the schedule's or job's that started it. */
   traceId?: string
+  /** The whole command with the program's name, `max messages list`; `command` stays the run's short name. */
+  cliCommand?: string
+  /** The words after the program's name, a secret `[redacted]`; with `record_input` off, any value that may be content too (`maskArgv`). */
+  argv?: string[]
+  /** The word that named no command, when that is why the run failed. */
+  unknownCommand?: string
+  /** The coding agent that started it, when one did. */
+  agent?: RunAgent
+  /** How a failed run failed (`errorDetailOf`). */
+  error?: RunError
 }
+
+/** Who started a run and with what, known before it starts. */
+export type RunContext = Pick<RunMetadata, "cliCommand" | "argv" | "unknownCommand" | "agent">
 
 export interface StartRunOptions {
   runsDir: string
   command: string
-  profile: string
+  profile?: string
   /** The log record's `resource.service`: the program's own name, `tg` or `max`. */
   service: string
   cliVersion: string
@@ -62,6 +79,7 @@ export interface StartRunOptions {
   startedAt?: Date
   /** The caller's trace, written on every record as `trace_id`. */
   traceId?: string
+  context?: RunContext
   /** The log file could not be opened or written; the run goes on unrecorded from here. */
   onError?: (error: Error) => void
 }
@@ -148,7 +166,7 @@ export const startRun = (options: StartRunOptions): Run => {
   const metadata: RunMetadata = {
     runId: id,
     command: options.command,
-    profile: options.profile,
+    ...(options.profile === undefined ? {} : { profile: options.profile }),
     startedAt: startedAt.toISOString(),
     status: "running",
     cliVersion: options.cliVersion,
@@ -156,6 +174,7 @@ export const startRun = (options: StartRunOptions): Run => {
     platform: process.platform,
     arch: process.arch,
     ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
+    ...options.context,
   }
   writeRunFile(dir, metadata)
 

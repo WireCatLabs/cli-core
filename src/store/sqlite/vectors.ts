@@ -1,6 +1,7 @@
 import { chunkHash, chunkTextOf, type TextRange } from "../../conversations/chunks.js"
 import { type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
+import { ensureVectorIndex, searchIndex, unitVector } from "./vector-index.js"
 
 /** A chunk of the chat's current build: its hash, and the messages its text is cut from. */
 export interface ChunkToEmbed {
@@ -176,15 +177,21 @@ export const conversationVectors = (
   return { chunks: rows.length, vectors }
 }
 
-/** A vector already there for the same model and text is kept: the same text gives the same vector. */
+/**
+ * A vector already there for the same model and text is kept: the same text gives the same vector. Each is stored at
+ * length one; a zero or non-finite vector is refused.
+ */
 export const saveVectors = (
-  { orm, now }: StoreContext,
+  { orm, now, database }: StoreContext,
   model: string,
   dims: number,
   vectors: { hash: string; vector: Float32Array }[],
 ): void => {
+  if (vectors.length === 0) return
+  ensureVectorIndex(database, model, dims)
   const at = now()
-  for (const { hash, vector } of vectors) {
+  for (const { hash, vector: given } of vectors) {
+    const vector = unitVector(given)
     orm.run(
       sql`INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at)
         VALUES (${model}, ${hash}, ${dims}, ${Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength)}, ${at}, ${at})
@@ -204,18 +211,21 @@ export const vectorStatus = ({ orm }: StoreContext, chatKey: number, model: stri
 }
 
 /**
- * Drops the vectors of the chat's chunks, or only one model's — but not one another chat's chunk still
- * points at: the same text in two chats has one vector. Messages are never touched.
+ * Drops the vectors of the chat's conversation and message chunks, or only one model's — but not one a chunk outside
+ * the chat still points at: the same text in two chats has one vector. The chunks themselves stay, to be embedded again.
  */
 export const clearVectors = ({ orm }: StoreContext, chatKey: number, model: string | undefined): number =>
   orm.all<{ n: number }>(
-    sql`DELETE FROM embeddings
+    sql`WITH mine(id) AS (
+        SELECT k.id FROM chunks k JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id
+          WHERE c.chat_id = ${chatKey}
+        UNION ALL SELECT k.id FROM chunks k JOIN messages m ON k.chunkable_type = 'message' AND m.id = k.chunkable_id
+          WHERE m.chat_id = ${chatKey})
+      DELETE FROM embeddings
       WHERE ${model === undefined ? sql`1` : sql`model = ${model}`}
-        AND content_hash IN (SELECT k.content_hash FROM chunks k
-          JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id WHERE c.chat_id = ${chatKey})
-        AND content_hash NOT IN (SELECT k.content_hash FROM chunks k
-          LEFT JOIN conversations c ON k.chunkable_type = 'conversation' AND c.id = k.chunkable_id
-          WHERE c.id IS NULL OR c.chat_id <> ${chatKey})
+        AND content_hash IN (SELECT content_hash FROM chunks WHERE id IN (SELECT id FROM mine))
+        AND NOT EXISTS (SELECT 1 FROM chunks o WHERE o.content_hash = embeddings.content_hash
+          AND o.id NOT IN (SELECT id FROM mine))
       RETURNING 1 AS n`,
   ).length
 
@@ -233,7 +243,11 @@ export interface NearestChunk {
 const SCAN_PAGE = 5_000
 
 export const dot = (query: Float32Array, blob: Uint8Array): number => {
-  const vector = new Float32Array(blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength))
+  // A view, not a copy: copying every blob cost more than the scoring itself (cli-testing vector-index).
+  const vector =
+    blob.byteOffset % 4 === 0
+      ? new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4)
+      : new Float32Array(blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength))
   let sum = 0
   for (let index = 0; index < query.length; index++) sum += (query[index] as number) * (vector[index] as number)
   return sum
@@ -244,21 +258,9 @@ export const dot = (query: Float32Array, blob: Uint8Array): number => {
  * best chunk. Vectors are unit length, so the dot product is the cosine (phase 5 E3).
  */
 export const nearestChunks = (
-  { orm }: StoreContext,
+  context: StoreContext,
   accountPk: number,
-  {
-    chatKey,
-    model,
-    since,
-    limit,
-    query,
-    exclude,
-    conversations,
-    scope,
-    projectId,
-    before,
-    personId,
-  }: {
+  filter: {
     chatKey?: number
     model: string
     since?: number
@@ -272,10 +274,11 @@ export const nearestChunks = (
     personId?: number
   },
 ): NearestChunk[] => {
-  const best = new Map<number, NearestChunk>()
-  let after = { conversation: 0, ordinal: -1 }
-  for (;;) {
-    const rows = orm.all<{
+  const { orm } = context
+  const { chatKey, model, since, limit, query, exclude, conversations, scope, projectId, before, personId } = filter
+  const rows = (page: { after: { conversation: number; ordinal: number } } | { ids: number[] }) =>
+    orm.all<{
+      id: number
       conversation: number
       ordinal: number
       first: number
@@ -287,7 +290,7 @@ export const nearestChunks = (
     }>(
       // CROSS JOIN keeps the chunks first, so each page walks their key; led by the vectors, SQLite re-read and
       // sorted every one of them per page — 1.3 s against 140 ms at 42k chunks (bench/embeddings/README.md).
-      sql`SELECT k.chunkable_id AS conversation, k.position AS ordinal, r.first_message_id AS first, r.last_message_id AS last,
+      sql`SELECT k.id, k.chunkable_id AS conversation, k.position AS ordinal, r.first_message_id AS first, r.last_message_id AS last,
           r.text_start AS start, r.text_end AS end, k.content_hash AS hash, v.vector FROM chunks k
         CROSS JOIN conversations c ON c.id = k.chunkable_id
         JOIN chunk_messages r ON r.chunk_id = k.id
@@ -303,29 +306,68 @@ export const nearestChunks = (
           ${since === undefined ? sql`` : sql`AND k.occurred_at >= ${since}`}
           ${exclude === undefined ? sql`` : sql`AND c.id <> ${exclude}`}
           ${conversations === undefined ? sql`` : sql`AND c.id IN (SELECT value FROM json_each(${JSON.stringify(conversations)}))`}
-          AND (k.chunkable_id, k.position) > (${after.conversation}, ${after.ordinal})
-        ORDER BY k.chunkable_id, k.position LIMIT ${SCAN_PAGE}`,
+          ${
+            "ids" in page
+              ? sql`AND k.id IN (SELECT value FROM json_each(${JSON.stringify(page.ids)}))
+                  ORDER BY k.chunkable_id, k.position`
+              : sql`AND (k.chunkable_id, k.position) > (${page.after.conversation}, ${page.after.ordinal})
+                  ORDER BY k.chunkable_id, k.position LIMIT ${SCAN_PAGE}`
+          }`,
     )
-    for (const row of rows) {
-      const score = dot(query, row.vector)
-      const held = best.get(row.conversation)
-      if (!held || score > held.score) {
-        const range = rangeOf(row.start, row.end)
-        best.set(row.conversation, {
-          conversationPk: row.conversation,
-          firstMessagePk: row.first,
-          lastMessagePk: row.last,
-          ...(range ? { range } : {}),
-          hash: row.hash,
-          score,
-        })
-      }
-    }
-    const last = rows.at(-1)
-    if (!last || rows.length < SCAN_PAGE) break
+  const keepBest = (best: Map<number, NearestChunk & { id: number }>, row: ReturnType<typeof rows>[number]) => {
+    const score = dot(query, row.vector)
+    const held = best.get(row.conversation)
+    if (held && score <= held.score) return
+    const range = rangeOf(row.start, row.end)
+    best.set(row.conversation, {
+      id: row.id,
+      conversationPk: row.conversation,
+      firstMessagePk: row.first,
+      lastMessagePk: row.last,
+      ...(range ? { range } : {}),
+      hash: row.hash,
+      score,
+    })
+  }
+  // Stable, so equal scores keep the scan's order, by conversation.
+  const ranked = (found: (NearestChunk & { id: number })[]) => found.sort((a, b) => b.score - a.score).slice(0, limit)
+  const plain = (found: (NearestChunk & { id: number })[]) => found.map(({ id: _, ...chunk }) => chunk)
+  // The index has no person, project, scope or conversation list; with one of those the scan stays.
+  const indexable =
+    personId === undefined && projectId === undefined && scope === undefined && conversations === undefined
+  const indexed =
+    indexable &&
+    searchIndex(
+      context.database,
+      model,
+      {
+        kind: "conversation",
+        account: accountPk,
+        ...(chatKey === undefined ? {} : { chat: chatKey }),
+        ...(since === undefined ? {} : { since }),
+        ...(before === undefined ? {} : { before }),
+      },
+      query,
+      limit,
+      (candidates) => {
+        const hashes = new Map(candidates.map(({ id, hash }) => [id, hash]))
+        const best = new Map<number, NearestChunk & { id: number }>()
+        for (const row of rows({ ids: [...hashes.keys()] })) if (hashes.get(row.id) === row.hash) keepBest(best, row)
+        const results = ranked([...best.values()])
+        return { results, best: results.map(({ id }) => id) }
+      },
+    )
+  if (indexed) return plain(indexed)
+  const best = new Map<number, NearestChunk & { id: number }>()
+  let after = { conversation: 0, ordinal: -1 }
+  for (;;) {
+    const page = rows({ after })
+    for (const row of page) keepBest(best, row)
+    const last = page.at(-1)
+    if (!last || page.length < SCAN_PAGE) break
     after = { conversation: last.conversation, ordinal: last.ordinal }
   }
-  return [...best.values()].sort((a, b) => b.score - a.score).slice(0, limit)
+  return plain(ranked([...best.values()]))
 }
 
 const hasVectorOf = (models: ReturnType<typeof sql>) => sql`EXISTS (SELECT 1 FROM chunks k

@@ -55,6 +55,10 @@ export const message = v.strictObject({
       matched_terms: v.array(text),
       missing_terms: v.array(text),
       parent: v.optional(reference),
+      /** Present when meaning was searched too: which of the two lists found it. */
+      found_by: v.optional(v.array(v.picklist(["words", "meaning"]))),
+      /** Present when the reranker read it: its own score, higher is better. It ordered the first hits with `score`. */
+      reranker_score: v.optional(v.number()),
     }),
   ),
   /** The messages around a search hit, or its thread, oldest first; the hit itself is among them. */

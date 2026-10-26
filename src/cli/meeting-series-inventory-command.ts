@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
-import { REMOTE_READ } from "./effects.js"
+import { previewFlag, REMOTE_READ } from "./effects.js"
 import { type MeetingSeriesInventoryReader, readMeetingSeriesInventory } from "./meeting-series-inventory-read.js"
 
 const integer = (value: string) => {
@@ -52,7 +52,7 @@ export const addMeetingSeriesInventoryCommand = (
       effects: REMOTE_READ,
       offline: false,
       output: { entity: "meeting_series_inventory" },
-      examples: [`${program.name()} meetings scheduled --json`],
+      examples: [`${program.name()} meetings scheduled${previewFlag(program)} --json`],
     },
   )
 }

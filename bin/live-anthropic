@@ -1,0 +1,60 @@
+#!/usr/bin/env sh
+# A live check of the Anthropic adapter on SDK 1.x: one request through the adapter, and one raw request
+# with `temperature` to see whether the API really refuses it. Prints statuses only, never the key.
+#
+#   bin/live-anthropic
+#
+# The key comes from ANTHROPIC_API_KEY, else the keyring account `embeddings:anthropic` of the first
+# CLI that has one (keyring services cli-memo, max-cli, tg, zm). Run `pnpm build` first.
+set -eu
+
+cd "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+key="${ANTHROPIC_API_KEY:-}"
+if [ -z "$key" ]; then
+  for service in cli-memo max-cli tg zm; do
+    for account in embeddings:anthropic anthropic; do
+      key="$(secret-tool lookup service "$service" account "$account" 2>/dev/null || true)"
+      [ -n "$key" ] && break 2
+    done
+  done
+fi
+if [ -z "$key" ]; then
+  echo "no Anthropic key in ANTHROPIC_API_KEY or the keyring (account embeddings:anthropic)" >&2
+  exit 1
+fi
+
+LIVE_ANTHROPIC_KEY="$key" node --input-type=module <<'EOF'
+import Anthropic from "@anthropic-ai/sdk"
+import { anthropic } from "./dist/models/anthropic.js"
+
+const key = process.env.LIVE_ANTHROPIC_KEY
+const model = process.env.LIVE_ANTHROPIC_MODEL ?? "claude-haiku-5-5"
+const target = { model, baseUrl: "https://api.anthropic.com" }
+const redact = (text) => String(text).split(key).join("[key]").slice(0, 300)
+
+try {
+  const result = await anthropic.complete(
+    target,
+    { purpose: "analysis", system: "Answer in one word.", prompt: "Say OK.", maxTokens: 16 },
+    {},
+    key,
+    fetch,
+  )
+  console.log(`adapter: ok, ${result.tokens} tokens, text ${JSON.stringify(result.text.slice(0, 20))}`)
+} catch (error) {
+  console.log(`adapter: FAILED ${error?.status ?? ""} ${redact(error?.message)}`)
+}
+
+try {
+  const client = new Anthropic({ apiKey: key, maxRetries: 0 })
+  await client.messages.create({
+    model,
+    max_tokens: 16,
+    temperature: 0.5,
+    messages: [{ role: "user", content: "Say OK." }],
+  })
+  console.log("temperature: accepted (the adapter's comment that the API refuses it is wrong)")
+} catch (error) {
+  console.log(`temperature: refused ${error?.status ?? ""} ${redact(error?.message)}`)
+}
+EOF

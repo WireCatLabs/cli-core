@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
+import { secretInput } from "../../runs/run-context.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { apiFlagOf, apiOptionKey, readApiBody } from "./api-input.js"
 
@@ -50,7 +51,8 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       command.addOption(parameter.required && parameter.in !== "body" ? option.makeOptionMandatory() : option)
     }
     if (operation.request) {
-      command.option("--body <json>", "the request body as JSON; - reads it from stdin")
+      // A field the schema marks secret may ride in an inline body, and the flags never see it.
+      command.addOption(secretInput(new Option("--body <json>", "the request body as JSON; - reads it from stdin")))
       command.option("--body-file <path>", "the request body from a JSON file; - is stdin")
     }
     annotate(command, {

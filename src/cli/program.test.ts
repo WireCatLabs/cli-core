@@ -9,6 +9,7 @@ import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
 import { writesInFlight } from "../sends/guarded.js"
 import { baseContext, environmentOf } from "./context.js"
+import * as cli from "./index.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
 
@@ -1060,4 +1061,153 @@ it("bounds an unresponsive failure handler while preserving the original error",
   } finally {
     vi.useRealTimers()
   }
+})
+
+describe("a run with no profile named", () => {
+  const program = (withSetup: boolean): ProgramDefinition => ({
+    app,
+    commands: () => [
+      new Command("chats").addCommand(
+        new Command("list").action(async function (this: Command) {
+          await baseContext(this, resolveSettings).run(async () => {})
+        }),
+      ),
+      ...(withSetup ? [new Command("setup").action(() => {})] : []),
+    ],
+  })
+  const sandbox = () => {
+    const root = mkdtempSync(join(tmpdir(), "no-profile-"))
+    const { APP_PROFILE: _, APP_PROFILE_LOCK: __, ...env } = process.env
+    return { ...env, APP_CONFIG_DIR: join(root, "config"), APP_STATE_DIR: join(root, "state") }
+  }
+  const go = async (argv: string[], withSetup: boolean, env: NodeJS.ProcessEnv) => {
+    const streams = captureStreams()
+    const code = await run(argv, program(withSetup), { streams, tty: false, env })
+    return { code, error: streams.stderr[0] ? JSON.parse(streams.stderr[0]).error : undefined }
+  }
+  const runs = (env: NodeJS.ProcessEnv) => listRuns(join(env.APP_STATE_DIR ?? "", "runs"))
+
+  it("**suggests `setup` only to a CLI that has it**, and otherwise the typed command with a profile", async () => {
+    const env = sandbox()
+
+    const withSetup = await go(["chats", "list"], true, env)
+    const without = await go(["chats", "list"], false, env)
+    const suggested = await go(["personal", "chats", "list", "--record"], false, env)
+
+    expect(withSetup.error.message).toBe(
+      "name a profile: there is none on this computer yet — create one with `app personal setup` " +
+        "(any name in place of personal)",
+    )
+    expect(without.code).toBe(2)
+    expect(without.error).toMatchObject({
+      code: "validation_error",
+      message:
+        "name a profile: there is none on this computer yet — any name works, such as `app personal chats list` " +
+        "(or set APP_PROFILE)",
+      details: { profiles: [] },
+    })
+    expect(suggested.code).toBe(0)
+  })
+
+  it("**records no profile for the owner** — not `default` — and the one named, even one called default", async () => {
+    const env = sandbox()
+
+    await go(["chats", "list"], false, env)
+    await go(["default", "chats", "list", "--record"], false, env)
+
+    const unnamed = runs(env).find((one) => one.status === "failed")
+    const named = runs(env).find((one) => one.status === "success")
+    expect(unnamed).toMatchObject({ command: "chats list" })
+    expect(unnamed).not.toHaveProperty("profile")
+    expect(named).toMatchObject({ command: "chats list", profile: "default" })
+  })
+
+  it.each([
+    [["runs list"], {}],
+    [["Jane Doe", "chats", "list"], {}],
+    [["Jane Doe", "nope"], {}],
+    [["Jane Doe", "chats", "list"], { APP_PROFILE_LOCK: "work" }],
+    [["alice", "chats", "list"], { APP_PROFILE_LOCK: "work" }],
+  ])("**records no profile for a refused first word** — %j %j", async (argv, extra) => {
+    const env = { ...sandbox(), ...extra }
+
+    await go(argv, false, env)
+
+    const [kept] = runs(env)
+    const dir = join(env.APP_STATE_DIR ?? "", "runs")
+    const files = readdirSync(dir, { recursive: true, withFileTypes: true }).filter((one) => one.isFile())
+    expect(kept).toMatchObject({ status: "failed" })
+    expect(kept).not.toHaveProperty("profile")
+    for (const file of files)
+      expect(readFileSync(join(file.parentPath, file.name), "utf8")).not.toContain(
+        argv[0] === "alice" ? '"profile"' : argv[0],
+      )
+  })
+
+  it("**suggests `account show` for a bare word only to a CLI that has it**, and only for a word that can be a profile", async () => {
+    const withAccount: ProgramDefinition = {
+      app,
+      commands: () => [new Command("account").addCommand(new Command("show").action(() => {}))],
+    }
+    const bare = async (word: string, definition: ProgramDefinition) => {
+      const streams = captureStreams()
+      await run([word], definition, { streams, tty: false, env: sandbox() })
+      return JSON.parse(streams.stderr[0] ?? "{}").error.message
+    }
+
+    expect(await bare("work", withAccount)).toContain('or `app work account show` if "work" is your profile')
+    expect(await bare("runs list", withAccount)).toMatch(/Run `app --help` for the commands\.$/)
+    expect(await bare("work", program(false))).toMatch(/Run `app --help` for the commands\.$/)
+  })
+})
+
+describe("a CLI's own command", () => {
+  const notes = (recordInput: boolean): ProgramDefinition => ({
+    app,
+    commands: () => [
+      new Command("notes").addCommand(
+        new Command("add")
+          .argument("<text>")
+          .option("--token <token>")
+          .action(async function (this: Command) {
+            const { argv, env = process.env } = cli.environmentOf(this)
+            await cli.recorded(
+              {
+                app,
+                command: "notes add",
+                record: true,
+                keepFailed: true,
+                trace: false,
+                format: "json",
+                env,
+                context: cli.runContextOf({
+                  bin: app.command,
+                  command: "notes add",
+                  program: cli.rootOf(this),
+                  ...(argv ? { argv } : {}),
+                  env,
+                  recordInput,
+                }),
+              },
+              async () => {},
+            )
+          }),
+      ),
+    ],
+  })
+  const recordedArgv = async (recordInput: boolean) => {
+    const state = mkdtempSync(join(tmpdir(), "own-command-"))
+    const env = { ...process.env, APP_PROFILE: "work", APP_STATE_DIR: state, APP_CONFIG_DIR: join(state, "config") }
+    const typed = ["notes", "add", "Fake typed note", "--token=fake-token-value"]
+    expect(await run(typed, notes(recordInput), { streams: captureStreams(), tty: false, env })).toBe(0)
+    const [file] = readdirSync(join(state, "runs"), { recursive: true, withFileTypes: true }).filter(
+      (one) => one.name === "run.json",
+    )
+    return JSON.parse(readFileSync(join(file?.parentPath ?? "", "run.json"), "utf8")).argv
+  }
+
+  it("**keeps its typed command line on success** through the exported runContextOf, secrets hidden", async () => {
+    expect(await recordedArgv(true)).toEqual(["notes", "add", "Fake typed note", "--token=[redacted]"])
+    expect(await recordedArgv(false)).toEqual(["notes", "add", "[redacted]", "--token=[redacted]"])
+  })
 })

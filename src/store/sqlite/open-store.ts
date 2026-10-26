@@ -15,6 +15,7 @@ import { loadProviders } from "./providers.js"
 import { assertReadCompatible } from "./read-compatibility.js"
 import { stemsState } from "./stems.js"
 import { fillStems, followDefaultStemmers } from "./stems-fill.js"
+import { fillVectorIndexes } from "./vector-index.js"
 
 export interface StoreOptions {
   /** Open an existing compatible store without maintenance; SQLite refuses writes. */
@@ -85,6 +86,10 @@ export const openStoreContext = async ({
       )
         fillStems(database, { now })
       logPruner(database, now)()
+      fillVectorIndexes(database, {
+        notice: (model) =>
+          warn(`indexing the stored vectors of ${model} for search by meaning — once; a large archive takes minutes`),
+      })
     }
     loadProviders(database)
     return { ...opened, now, sharedConfig: sharedConfigPath(file, env ?? process.env) }

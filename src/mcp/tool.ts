@@ -24,6 +24,7 @@ import { type AppErrors, failureContext } from "../errors/reasons.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { partialOutcome, startRecording } from "../runs/recording.js"
 import { newRunId } from "../runs/run.js"
+import { runContextOf } from "../runs/run-context.js"
 import { inRun } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
 import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
@@ -54,7 +55,7 @@ export const WRITE: ToolAnnotations = {
   openWorldHint: true,
 }
 
-export { UNTRUSTED } from "./text.js"
+export { UNTRUSTED, UNTRUSTED_NEUTRAL } from "./text.js"
 
 type Input = v.ObjectSchema<v.ObjectEntries, undefined> | v.StrictObjectSchema<v.ObjectEntries, undefined>
 
@@ -72,7 +73,7 @@ export interface Defaults {
   guard: SendGuard
   /** The profile's own entries, for a tool reading a setting of its own — `transcribeWith`. */
   settings: Pick<Settings, "configured" | "shared" | "profile"> &
-    Partial<Pick<Settings, "permissions" | "searchCatchUp" | "pictureSearch" | "offline">> &
+    Partial<Pick<Settings, "permissions" | "searchCatchUp" | "pictureSearch" | "searchReranker" | "offline">> &
     AISettings
   env: NodeJS.ProcessEnv
   keyring?: KeyringStore
@@ -281,12 +282,15 @@ export const entryRunner = (registration: Registration): RunEntry => {
         ? startRecording({
             app,
             command,
-            profile: registration.defaults.settings.profile ?? "default",
+            ...(registration.defaults.settings.profile === undefined
+              ? {}
+              : { profile: registration.defaults.settings.profile }),
             env: registration.defaults.env,
             record: false,
             keepFailed: true,
             trace: false,
             format: "json",
+            context: runContextOf({ bin: app.command, command, env: registration.defaults.env ?? process.env }),
             ...(traceId === undefined ? {} : { traceId }),
           })
         : undefined
@@ -347,6 +351,7 @@ const callRunner = ({
     profile: defaults.settings.profile,
     env: defaults.env,
     pictures: defaults.settings.pictureSearch,
+    reranker: defaults.settings.searchReranker,
   }
   return async (key, definition, args, ctx) => {
     const path = commandOf(key, definition).split(" ")

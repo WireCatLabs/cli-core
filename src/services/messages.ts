@@ -25,6 +25,9 @@ import type {
 import { crossAccount, fromStore, PUSHED, type ServiceDeps } from "./deps.js"
 import { readChatId, storedChatId } from "./message-resolution.js"
 import { accountOf, keyOf, searchStore, statsStore, topUp } from "./messages-archive-search.js"
+import type { MeaningSkipped, RerankSkipped } from "./messages-discovery.js"
+import { meaningLane } from "./messages-meaning.js"
+import { rerankLane } from "./messages-rerank.js"
 import type { MessageStats, QueryMetadata, SearchCoverage, StatsGrouping } from "./messages-search.js"
 import type { PictureHit } from "./pictures.js"
 import { type SearchAllFound, type SearchAllRequest, searchAll } from "./search-all.js"
@@ -103,7 +106,16 @@ export interface SearchQuery {
 }
 
 export type FoundMessage = StoredHit & {
-  discovery?: { coverage: number; matchedTerms: string[]; missingTerms: string[]; parent?: string }
+  discovery?: {
+    coverage: number
+    matchedTerms: string[]
+    missingTerms: string[]
+    parent?: string
+    /** Only when meaning was searched too: which of the two lists found it. */
+    foundBy?: ("words" | "meaning")[]
+    /** Only when the reranker read it: the cross-encoder's own score, higher is better. */
+    rerankerScore?: number
+  }
   match?: "words" | "beginnings" | "corrected"
   /** The garbled spellings a `corrected` hit's transcript holds, per query word. */
   corrections?: { from: string; to: string[] }[]
@@ -130,6 +142,10 @@ export interface SearchFound extends Page<FoundMessage> {
   corrections: { from: string; to: string[] }[]
   /** Per chat of the page: how much of its history the store holds. */
   completeness: (ChatCompleteness & AccountKey)[]
+  /** `--discover` searched by words alone: why meaning was not searched, and the step that would enable it. */
+  meaningSkipped?: MeaningSkipped
+  /** `--discover` kept its own order: why the reranker did not read the hits, and the step that would let it. */
+  rerankSkipped?: RerankSkipped
   /** `false` while the word index is being built. */
   wordsReady: boolean
   /** The same for the stems, in strict search: `false` until a stemmed search may run. */
@@ -277,7 +293,14 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
             return { ...account, chatId, id }
           })
         : undefined
-    const found = await searchStore(store, account, only ? { ...query, only } : query, deps.messenger)
+    const found = await searchStore(
+      store,
+      account,
+      only ? { ...query, only } : query,
+      deps.messenger,
+      query.discover && query.kind !== "mail" ? meaningLane(deps) : undefined,
+      query.discover && query.kind !== "mail" ? rerankLane(deps) : undefined,
+    )
     return { found, server }
   }
 
@@ -547,11 +570,20 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     },
 
     searchAll: (request) =>
-      inStore((store, account) => searchAll(store, account, request, deps.messenger, unifiedMessages(store, account))),
+      inStore((store, account) =>
+        searchAll(store, account, request, deps.messenger, unifiedMessages(store, account), meaningLane(deps)),
+      ),
 
     searchAllWithMeetings: (request) =>
       inStore((store, account) =>
-        searchAllWithMeetings(store, account, request, deps.messenger, unifiedMessages(store, account)),
+        searchAllWithMeetings(
+          store,
+          account,
+          request,
+          deps.messenger,
+          unifiedMessages(store, account),
+          meaningLane(deps),
+        ),
       ),
 
     stats: (query) =>

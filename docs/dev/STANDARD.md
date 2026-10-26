@@ -256,6 +256,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `tags` | collection | labels the owner puts on things |  |
 | `searches` | collection | the owner's saved searches |  |
 | `copies` | collection | tables kept aside by a repair |  |
+| `tables` | collection | the tables of the local store, with their kind, row count and size |  |
 | `attachments` | collection | files of stored messages |  |
 | `tasks` | collection | what waits on the owner |  |
 | `members` | collection | people in a chat |  |
@@ -749,6 +750,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `flag-synonym` | medium | option | an option is not another name for a vocabulary flag: `--max` and `--take` are `--limit` |
 | `identifier-name` | high | key | an identifier key is one from the glossary: `run_id`, never `execution_id` or `log_id` |
 | `log-attribute-key` | high | key | no log attribute key on the allow-list names message text, a token or a phone number |
+| `missing-run-log` | high | group | the CLI keeps a failed run and reads it back: `runs list`, `runs show`, global `--record` and `--no-record` |
 
 <!-- lint rules: end -->
 
@@ -921,7 +923,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--do` | `<actions>` | actions: reply, task, or both, comma-separated |  | `replies edit` |
 | `--download` |  | first save, from the messenger, the files no download saved yet |  | `attachments extract` |
 | `--draft` |  | save the text as a draft for the owner to review and send |  | `messages send` (planned) |
-| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `tags rebuild` |
+| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `store reset`, `tags rebuild` |
 | `--due` | `<time>` | when a task must be done: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks update` |
 | `--due-within` | `<duration>` | list tasks due within this: 30m, 2h, 1d | `1d` | `tasks agenda` |
 | `--embedding-provider` | `<provider>` | embedding provider: local or openai; flags override profile settings |  | `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations related`, `conversations status`, `search conversations` |
@@ -941,7 +943,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--find-by-phone` | `<who>` | who finds the account by its number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--fingerprint` | `<hash>` | refuse if the inspected coverage plan changed |  | `store gaps repair` |
 | `--first-name` | `<name>` | your first name |  | `account update` |
-| `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install` |
+| `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install`, `skill show` |
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
 | `--from` | `<who>` | sender to match in `bot search messages` |  | `bot search messages` (planned) |
@@ -1050,7 +1052,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--quiz` |  | a quiz: one answer is right, and a vote is final |  | `polls create` (tg-only) |
 | `--read-receipts` | `<on\|off>` | send read receipts |  | `account privacy set` (planned) |
 | `--reason` | `<text>` | why a task was closed, kept with it — no-reply-needed, for example |  | `tasks close` |
-| `--record` |  | keep this run under `runs` — ids and timings, never message content. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
+| `--record` |  | keep this run under `runs`, with the command as typed and secrets hidden; record_input false leaves the typed words out. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--remind-time` | `<time>` | when to look at it again: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks update` |
 | `--remove` | `<chat>` | take a chat out of a folder; repeat it for more |  | `chats folders update` |
 | `--remove-photo` |  | take a group's photo away; not with --photo |  | `chats update` (planned) |
@@ -1417,8 +1419,8 @@ drop. Flipped early, the row fails that CLI's `parity:check` on its next upgrade
 blocks the upgrade.
 
 **This repository checks every tool's `main` against its own manifest** (`.github/workflows/parity.yml`):
-by hand, and inside full validation (`ci.yml`), which each push to `main`, the release and the monthly
-run start. It does not run on pull requests, and there is no daily run. It
+by hand, and inside full validation (`ci.yml`), which each pull request, each push to `main`, the release and
+the monthly run start. There is no daily run. It
 builds tg-cli, max-cli and whatsapp-cli from their `main` and runs the same check, so a row flipped early fails
 here, before the release that would carry it — not weeks later, when a CLI upgrades. The wording job compares
 max and tg only, until wa's own `setup --method` says what theirs says. The published

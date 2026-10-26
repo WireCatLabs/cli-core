@@ -1,17 +1,19 @@
 import { processStreams, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import { isCliFailure } from "../errors/failures.js"
 import type { AppIdentity } from "../ports/app.js"
-import { type DiagnosticEvent, type EventSink, providerErrorKey, renderEvent } from "./events.js"
+import { endpointTemplate, errorDetailOf, framesOf } from "./error-detail.js"
+import { type DiagnosticEvent, type EventSink, providerErrorKey, type RequestEvent, renderEvent } from "./events.js"
 import { DIAGNOSTIC_LOG_EVENTS } from "./log-events.js"
 import { logAttributes } from "./log-keys.js"
-import { newRunId, type Run, runsDirFor, startRun } from "./run.js"
+import { newRunId, type Run, type RunContext, runsDirFor, startRun } from "./run.js"
 import { enclosingTraceId, inRun, type RunScope, traceOf, useAsProcessRun } from "./scope.js"
 
 export interface RecordingOptions {
   app: AppIdentity
   /** As typed, without the arguments: `chats list`. It names the run directory. */
   command: string
-  profile: string
+  /** Unset when nothing named one: a run is never put down to a profile the owner did not choose. */
+  profile?: string
   record: boolean
   /** Keep the run if it fails, even though `record` is off. */
   keepFailed: boolean
@@ -30,6 +32,8 @@ export interface RecordingOptions {
    * that answer's `meta.run_id` name the run `runs show` finds. Never in a server, where runs overlap.
    */
   processRun?: boolean
+  /** The whole command, its masked arguments and the agent that started it. */
+  context?: RunContext
 }
 
 /**
@@ -46,7 +50,7 @@ export const recorded = async <T>(options: RecordingOptions, body: (events: Even
       runId: recording.runId,
       command: options.command,
       startedAt: Date.now(),
-      profile: options.profile,
+      ...(options.profile === undefined ? {} : { profile: options.profile }),
       ...(recording.traceId ? { traceId: recording.traceId } : {}),
     }
     if (options.processRun) useAsProcessRun(scope)
@@ -82,10 +86,11 @@ export const startRecording = (options: RecordingOptions): Recording => {
       runsDir: options.runsDir ?? runsDirFor(options.app, options.env),
       runId,
       command: options.command,
-      profile: options.profile,
+      ...(options.profile === undefined ? {} : { profile: options.profile }),
       service: options.app.command,
       cliVersion: options.app.version,
       ...(traceId === undefined ? {} : { traceId }),
+      ...(options.context ? { context: options.context } : {}),
       // The operation has happened or is under way, and failing the command now invites a retry
       // that sends twice.
       onError: (error) => {
@@ -101,9 +106,11 @@ export const startRecording = (options: RecordingOptions): Recording => {
   // Unrecorded, the newest events are held until the outcome is known, so a failure can still be kept.
   const held: DiagnosticEvent[] | undefined = !run && options.keepFailed ? [] : undefined
   let requests = 0
+  let refused: RequestEvent | undefined
 
   const events: EventSink = (event) => {
     if (event.event === "request") requests += 1
+    if (event.event === "response" && event.outcome === "error") refused = event
     if (options.trace)
       streams.diagnostic(options.format === "pretty" ? renderEvent(event) : JSON.stringify(logAttributes(event)))
     if (run) logEvent(run, event)
@@ -129,6 +136,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
         await failed.finish("failed", {
           requests,
           ...outcomeOf(error),
+          error: errorDetailOf(error, refused),
           ...(run ? {} : { keptBecauseFailed: true }),
         })
       }
@@ -150,7 +158,13 @@ const keep = (run: Run, events: DiagnosticEvent[]): Run => {
 }
 
 const logEvent = (run: Run, event: DiagnosticEvent): void => {
-  const record = { ...event, event: DIAGNOSTIC_LOG_EVENTS[event.event] }
+  const record = {
+    ...event,
+    event: DIAGNOSTIC_LOG_EVENTS[event.event],
+    ...("endpointTemplate" in event && event.endpointTemplate !== undefined
+      ? { endpointTemplate: endpointTemplate(event.endpointTemplate) }
+      : {}),
+  }
   if (event.event === "warning") run.logger.warn(record)
   else if (event.event !== "cache" && event.outcome === "error") run.logger.error(record)
   else run.logger.info(record)
@@ -164,24 +178,14 @@ const outcomeOf = (error: unknown): { errorCode: string; providerError?: string 
 
 /**
  * Where a crash happened, not what it said: the class and up to ten frames as `function file:line`,
- * paths cut to what follows `dist/` or `src/`. **Never `message`** — it can hold whatever the
- * failing line was handling.
+ * paths cut to the package's own (`framesOf`). **Never `message`** in an event — it can hold whatever the
+ * failing line was handling; run.json's `error` keeps it, masked.
  */
-export const crashOf = (error: unknown): { event: "command.crashed"; errorClass: string; frames: string[] } => {
-  const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : ""
-  const frames = stack
-    .split("\n")
-    .filter((line) => line.trimStart().startsWith("at "))
-    .slice(0, 10)
-    .map((line) => {
-      const match = /^\s*at (?:(.+?) \()?(.+?):(\d+):\d+\)?$/.exec(line)
-      if (!match) return "?"
-      const [, fn, path = "", lineNumber] = match
-      const file = /(?:^|\/)(?:dist|src)\/(.+)$/.exec(path)?.[1] ?? path.split("/").at(-1)
-      return `${fn ?? "<anonymous>"} ${file}:${lineNumber}`
-    })
-  return { event: "command.crashed", errorClass: error instanceof Error ? error.name : typeof error, frames }
-}
+export const crashOf = (error: unknown): { event: "command.crashed"; errorClass: string; frames: string[] } => ({
+  event: "command.crashed",
+  errorClass: error instanceof Error ? error.name : typeof error,
+  frames: framesOf(error, 10),
+})
 
 export const partialOutcome = (answer: unknown): import("./run.js").RunMetadata["partial"] => {
   if (!answer || typeof answer !== "object") return undefined

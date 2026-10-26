@@ -134,7 +134,8 @@ describe("model gateway", () => {
     ["openai", { temperature: 3 }, "temperature"],
     ["openai", { max_tokens: 999 }, "max_tokens"],
     ["anthropic", { seed: 1 }, "seed"],
-    ["anthropic", { top_k: 0 }, "top_k"],
+    ["anthropic", { temperature: 1 }, "temperature"],
+    ["anthropic", { top_k: 3 }, "top_k"],
     ["anthropic", { stop_sequences: 1 }, "stop_sequences"],
   ])("refuses %s options before any request", async (provider, options, field) => {
     const network = vi.fn(() => {
@@ -160,9 +161,7 @@ describe("model gateway", () => {
         frequency_penalty: 0,
       }),
     ).toMatchObject({ seed: 1 })
-    expect(anthropic.validate({ top_k: 3, stop_sequences: ["end"], temperature: 0.2, top_p: 0.5 })).toMatchObject({
-      top_k: 3,
-    })
+    expect(anthropic.validate({ stop_sequences: ["end"] })).toMatchObject({ stop_sequences: ["end"] })
     const gateway = modelGateway({
       resolve: () => ({ provider: "fake", model: "fake-model" }),
       consent: () => true,

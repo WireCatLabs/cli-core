@@ -1079,7 +1079,7 @@ describe("chats create, join and leave", () => {
 
     expect(empty.code).toBe(2)
     expect(JSON.parse(empty.stderr.at(-1) ?? "").error.message).toBe(
-      "name a profile: there is none on this computer yet — create one with `chat personal setup` (any name in place of personal)",
+      "name a profile: there is none on this computer yet — any name works, such as `chat personal account show` (or set CHAT_PROFILE)",
     )
     expect(JSON.parse(one.stderr.at(-1) ?? "").error).toMatchObject({
       code: "validation_error",

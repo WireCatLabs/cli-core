@@ -11,8 +11,10 @@ export const asFirstWord = (profile: string): string => `${profile} `
  */
 const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
+export const isProfileName = (word: string): boolean => PLAIN_NAME.test(word)
+
 export const usableProfileName = (profile: string): string => {
-  if (!PLAIN_NAME.test(profile)) {
+  if (!isProfileName(profile)) {
     throw new CliError(
       "validation_error",
       `"${profile}" cannot be a profile name — letters, digits, dot, dash and underscore only, ` +
@@ -24,6 +26,27 @@ export const usableProfileName = (profile: string): string => {
 
 /** The top-level commands that never read a profile; every other one is `<tool> <profile> …`. */
 export const PROFILE_FREE: ReadonlySet<string> = new Set(["commands", "complete", "guide", "help", "skill", "upgrade"])
+
+const freeOfProfile = new WeakSet<Command>()
+
+/**
+ * Marks a command, and every command under it, as one that reads no profile, so help shows it without one:
+ * `drive doctor`, not `drive personal doctor`. Which commands those are is the CLI's to say.
+ */
+export const profileFree = <T extends Command>(command: T): T => {
+  freeOfProfile.add(command)
+  return command
+}
+
+/** Whether the command line puts a profile before this command: not for `PROFILE_FREE` or a `profileFree` one. */
+export const takesProfile = (command: Command): boolean => {
+  let top: Command | undefined
+  for (let at: Command | null = command; at?.parent; at = at.parent) {
+    if (freeOfProfile.has(at)) return false
+    top = at
+  }
+  return top !== undefined && !PROFILE_FREE.has(top.name())
+}
 
 /**
  * Every word that means a command at the top level. Taken off the built program rather than
@@ -81,13 +104,24 @@ export const rootOf = (command: Command): Command => {
   return root
 }
 
-/** A command this CLI really has, for an example: the first that takes a profile, down to its first leaf. */
+/**
+ * A command this CLI really has, for an example: the first path down to a leaf that takes a profile,
+ * skipping `PROFILE_FREE` and `profileFree` ones. Works on commands not yet added to the program.
+ */
 export const sampleCommand = (commands: readonly Command[]): string | undefined => {
-  const words: string[] = []
-  let command = commands.find((one) => !PROFILE_FREE.has(one.name()))
-  while (command) {
-    words.push(command.name())
-    command = command.commands.find((one) => one.name() !== "help")
+  const pathFrom = (command: Command): string[] | undefined => {
+    if (freeOfProfile.has(command)) return undefined
+    const children = command.commands.filter((one) => one.name() !== "help")
+    if (children.length === 0) return [command.name()]
+    for (const child of children) {
+      const rest = pathFrom(child)
+      if (rest) return [command.name(), ...rest]
+    }
+    return undefined
   }
-  return words.length ? words.join(" ") : undefined
+  for (const command of commands) {
+    const path = PROFILE_FREE.has(command.name()) ? undefined : pathFrom(command)
+    if (path) return path.join(" ")
+  }
+  return undefined
 }

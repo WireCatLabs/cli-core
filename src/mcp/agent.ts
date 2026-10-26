@@ -226,8 +226,8 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
   return flatten(commands)
     .filter(
       (info) =>
-        // Only a group that declares effects can run without a leaf.
-        (info.commands.length === 0 || info.effects !== undefined) &&
+        // A group is offered only when it runs on its own; without an action it only prints its help.
+        (info.commands.length === 0 || info.runnable === true) &&
         info.path.length > root.length &&
         startsWith(info.path, root) &&
         !exclude.some((skipped) => startsWith(info.path.slice(root.length), skipped)) &&
@@ -293,8 +293,7 @@ export const runCommandForAgent = async (
 ): Promise<AgentAnswer> => {
   try {
     const info = flatten(program.commands).find((one) => one.path.length === path.length && startsWith(one.path, path))
-    // Runnable groups declare effects, as `toolsFromCommands` offers them.
-    if (!info || (info.commands.length > 0 && info.effects === undefined))
+    if (!info || (info.commands.length > 0 && info.runnable !== true))
       throw new CliError("validation_error", `no command "${path.join(" ")}" to run`)
     if (info.lifetime)
       throw new CliError("validation_error", `"${path.join(" ")}" runs until it is stopped; an agent call must return`)

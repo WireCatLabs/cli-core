@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../embeddings/embed.js"
-import { type TextModel, textModel } from "../embeddings/models.js"
+import { type RerankModel, rerankModel, type TextModel, textModel } from "../embeddings/models.js"
 import {
   type ImageModel,
   imageModel,
@@ -53,6 +53,28 @@ export const downloadTextModel = async (
       throw new CliError("invalid_response", `${model.id} gave a vector of the wrong size`)
   } finally {
     await embedder.close()
+  }
+  return { model, directory }
+}
+
+/** A reranker, the same way as {@link downloadTextModel}, into the same folder. */
+export const downloadRerankModel = async (
+  id: string,
+  { env, progress = () => {} }: ModelDownloadOptions,
+): Promise<DownloadedModel<RerankModel>> => {
+  const model = rerankModel(id)
+  const directory = textModelsDirectory(env)
+  if (!isTextModelInstalled(model, directory)) {
+    progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
+    await installFiles(placedText(model, directory), { progress })
+  }
+  progress(`${model.id}: loading it once to check it works`)
+  const { openReranker } = await import("../embeddings/rerank.js")
+  const reranker = await openReranker(model, directory)
+  try {
+    await reranker.score("check", ["check"])
+  } finally {
+    await reranker.close()
   }
   return { model, directory }
 }

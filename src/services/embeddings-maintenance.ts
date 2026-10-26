@@ -23,6 +23,16 @@ import { storedChatId } from "./message-resolution.js"
 /** How much one run without `--chat` does at most, by default. */
 export const REFRESH_BOUNDS = { maxChats: 20, maxChunks: 2_000 }
 
+/** Messages read per page while looking for those without a current vector. */
+const MESSAGE_PAGE = 5_000
+
+interface MessageVector {
+  messagePk: number
+  text: string
+  hash: string
+  occurredAt: number
+}
+
 /** Chunks per batch for one local session; one short transaction writes each batch. */
 const PER_SESSION = 8
 /** Texts per remote request; `concurrency` of them run at once. */
@@ -30,7 +40,10 @@ const PER_REQUEST = 256
 /** e5's tokenizer reads ~3.7 characters a token in Russian; 3 keeps the bound above the real count. */
 const CHARS_PER_TOKEN_AT_LEAST = 3
 
-const notDownloaded = (deps: ServiceDeps, id: string) =>
+/** Enough of the deps to find a local model and name the command that downloads it. */
+export type ModelDeps = Pick<ServiceDeps, "env" | "embedders"> & { messenger: { app: { command: string } } }
+
+const notDownloaded = (deps: ModelDeps, id: string) =>
   new CliError(
     "not_found",
     `${id} is not downloaded — \`${typedCommand(deps.messenger.app.command, `models download ${id}`)}\``,
@@ -46,7 +59,7 @@ export const notBuiltError = (deps: ServiceDeps, chatId: Id) =>
     `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations links rebuild --chat ${chatId}`)}\``,
   )
 
-export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT_TEXT_MODEL) => {
+export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = DEFAULT_TEXT_MODEL) => {
   if (typeof choice !== "string") {
     const { remote, apiKey, concurrency = 4 } = choice
     return {
@@ -106,7 +119,7 @@ type EmbeddingTarget = ReturnType<typeof embeddingTarget>
 
 /** The server's warm model when there is one, kept open after; otherwise opened here and closed. */
 export const withEmbedder = async <T>(
-  deps: ServiceDeps,
+  deps: ModelDeps,
   target: EmbeddingTarget,
   choice: ModelChoice | undefined,
   { threads }: { threads?: number | undefined },
@@ -261,6 +274,69 @@ export const embeddingsMaintenance = (
     return missing.length
   }
 
+  /**
+   * The messages of the account, or of one chat, whose own vector is missing or older than their text: at most
+   * `budget` of them in hand, and how many more there are. Gone messages lose their chunks first.
+   */
+  const messagesToEmbed = async (chatId: Id | undefined, model: string, budget: number, check?: () => void) => {
+    const store = await deps.store()
+    const account = await deps.account()
+    await store.vectors.dropGoneMessages(account)
+    const items: MessageVector[] = []
+    let beyond = 0
+    let after = 0
+    for (;;) {
+      check?.()
+      const page = await store.vectors.messagesToEmbed(account, {
+        ...(chatId === undefined ? {} : { chatId }),
+        model,
+        after,
+        limit: MESSAGE_PAGE,
+      })
+      const last = page.at(-1)
+      if (!last) break
+      after = last.messagePk
+      for (const { messagePk, text, sentAt, hash: held, embedded } of page) {
+        const hash = chunkHash(text)
+        if (hash === held && embedded) continue
+        if (items.length < budget) items.push({ messagePk, text, hash, occurredAt: sentAt })
+        else beyond++
+      }
+    }
+    return { items, beyond }
+  }
+
+  const embedMessages = async (
+    items: MessageVector[],
+    target: EmbeddingTarget,
+    embedder: Embedder,
+    check: (() => void) | undefined,
+  ): Promise<number> => {
+    const store = await deps.store()
+    const account = await deps.account()
+    for (let at = 0; at < items.length; at += target.perBatch) {
+      check?.()
+      const batch = items.slice(at, at + target.perBatch)
+      const vectors = await embedder.embed(
+        batch.map(({ text }) => text),
+        "passage",
+      )
+      await store.vectors.saveMessageVectors(
+        account,
+        target.key,
+        target.dims,
+        batch.map(({ messagePk, hash, text, occurredAt }, index) => ({
+          messagePk,
+          hash,
+          length: text.length,
+          occurredAt,
+          vector: vectors[index] as Float32Array,
+        })),
+      )
+    }
+    return items.length
+  }
+
   return {
     status: async (chat, choice) => {
       const { store, account, chatId } = await found(chat)
@@ -312,6 +388,7 @@ export const embeddingsMaintenance = (
       progress,
       maxMessages,
       check,
+      messages = true,
     }) => {
       check?.()
       const store = await deps.store()
@@ -344,13 +421,16 @@ export const embeddingsMaintenance = (
       }
 
       const embedded: Embedded[] = []
+      const wantsMessages = embed && messages && target.installed && choice === DEFAULT_TEXT_MODEL
+      const toEmbed = wantsMessages ? await messagesToEmbed(chatId, target.key, maxChunks, check) : undefined
+      let messagesEmbedded = 0
       if (embed && target.installed) {
         const fresh = new Set(built.map(({ chat }) => chat))
         const queue = (await scan()).chats
           .filter(needsEmbed)
           .sort((a, b) => Number(fresh.has(b.chat)) - Number(fresh.has(a.chat)))
           .slice(0, maxChats)
-        if (queue.length > 0) {
+        if (queue.length > 0 || toEmbed?.items.length) {
           await withEmbedder(deps, target, choice, { threads }, async (embedder) => {
             let budget = maxChunks
             for (const { chat } of queue) {
@@ -360,6 +440,10 @@ export const embeddingsMaintenance = (
               budget -= done.embedded + done.skipped
               embedded.push(done)
               progress?.(`chat ${chat}: ${done.embedded} chunks embedded with ${target.id}`)
+            }
+            if (toEmbed?.items.length && budget > 0) {
+              messagesEmbedded = await embedMessages(toEmbed.items.slice(0, budget), target, embedder, check)
+              progress?.(`${messagesEmbedded} messages embedded with ${target.id}`)
             }
           })
         }
@@ -381,6 +465,14 @@ export const embeddingsMaintenance = (
                 .map(({ chat }) => ({ chat, needs: "embed" as const }))
             : []),
         ],
+        ...(toEmbed
+          ? {
+              messages: {
+                embedded: messagesEmbedded,
+                left: toEmbed.items.length + toEmbed.beyond - messagesEmbedded,
+              },
+            }
+          : {}),
       }
     },
 

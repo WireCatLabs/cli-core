@@ -152,13 +152,20 @@ export const createBotServer = (options: BotServerOptions) => {
         )
       },
     }
-    registerCommands(server, `${command}_bot`, commands, undefined, (asked) => {
-      const lock = readOnlyLockOf(bot.app, env)
-      const one = flatten(program.commands).find(
-        (info) => info.path[0] === "bot" && normal(info.path.slice(1).join(" ")) === asked,
-      )
-      if (lock && one && changesMessenger(one)) throw readOnlyRefusal(lock, MESSENGER_CHANGE_REFUSAL)
-    })
+    registerCommands(
+      server,
+      `${command}_bot`,
+      commands,
+      undefined,
+      (asked) => {
+        const lock = readOnlyLockOf(bot.app, env)
+        const one = flatten(program.commands).find(
+          (info) => info.path[0] === "bot" && normal(info.path.slice(1).join(" ")) === asked,
+        )
+        if (lock && one && changesMessenger(one)) throw readOnlyRefusal(lock, MESSENGER_CHANGE_REFUSAL)
+      },
+      bot.app.messenger,
+    )
     return server
   }
   return { build, tools, offered: tools.map((tool) => tool.command) }

@@ -3,7 +3,7 @@ import { parseLocator } from "../domain/locator.js"
 import type { AccountKey, MessageStore, StoredHit } from "../store/store.js"
 import type { Saved } from "./message-resolution.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
-import { searchDiscovery } from "./messages-discovery.js"
+import { type MeaningLane, type RerankLane, searchDiscovery } from "./messages-discovery.js"
 import { type MessageStats, type StatsGrouping, searchLucene, statsLucene } from "./messages-search.js"
 import { readThreadContext, threadBounds } from "./thread-context.js"
 
@@ -61,11 +61,20 @@ export const searchStore = async (
   account: AccountKey,
   request: SearchQuery,
   messenger: Saved = {},
+  meaning?: MeaningLane,
+  rerank?: RerankLane,
 ): Promise<SearchFound> => {
   const offset = request.offset ?? 0
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
-  const found = await searchPage(store, account, { ...request, limit: request.limit + offset }, messenger)
+  const found = await searchPage(
+    store,
+    account,
+    { ...request, limit: request.limit + offset },
+    messenger,
+    meaning,
+    rerank,
+  )
   return {
     ...found,
     items: found.items.slice(offset),
@@ -78,6 +87,8 @@ const searchPage = async (
   account: AccountKey,
   request: SearchQuery,
   messenger: Saved,
+  meaning: MeaningLane | undefined,
+  rerank: RerankLane | undefined,
 ): Promise<SearchFound> => {
   if (request.signal?.aborted)
     throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
@@ -88,7 +99,7 @@ const searchPage = async (
     throw new CliError("validation_error", "discovery searches the local archive; use backend archive")
   await topUp(store)
   const found = request.discover
-    ? await searchDiscovery(store, account, { ...request, thread: undefined }, messenger)
+    ? await searchDiscovery(store, account, { ...request, thread: undefined }, messenger, meaning, rerank)
     : await searchLucene(store, account, request, messenger)
   return withThreads(store, found, request)
 }

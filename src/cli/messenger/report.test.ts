@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { buildDoctorReport, doctorReportFileName } from "../index.js"
 
@@ -94,5 +95,34 @@ describe("public diagnostic reports", () => {
     expect(recorded?.chat_id).toEqual((recorded?.ids as Record<string, string> | undefined)?.chat)
     expect(JSON.stringify(recorded)).not.toContain("SYNTHETIC-CONTENT")
     expect(JSON.stringify(recorded)).not.toContain("synthetic-chat")
+  })
+
+  it("masks the words a run kept as typed, since a report leaves the machine", () => {
+    const options = report()
+    const dir = join(options.runsDir, "2026-10-24", "typed-run")
+    mkdirSync(dir, { recursive: true })
+    const typed = ["messages", "send", "Mom", "SYNTHETIC-CONTENT", "--limit", "5"]
+    writeFileSync(
+      join(dir, "run.json"),
+      JSON.stringify({
+        run_id: "typed-run",
+        command: "messages send",
+        status: "failed",
+        started_at: "2026-10-24T12:00:00.000Z",
+        argv: typed,
+      }),
+    )
+    const program = new Command("example")
+    program.command("messages").command("send").argument("<chat>").argument("<text>").option("--limit <n>")
+
+    expect(buildDoctorReport({ ...options, program }).run?.metadata.argv).toEqual([
+      "messages",
+      "send",
+      "[redacted]",
+      "[redacted]",
+      "--limit",
+      "5",
+    ])
+    expect(JSON.stringify(buildDoctorReport(options))).not.toContain("SYNTHETIC-CONTENT")
   })
 })

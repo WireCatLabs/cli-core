@@ -148,6 +148,33 @@ describe("doctor", () => {
     },
   )
 
+  it.skipIf(process.platform === "win32")(
+    "names a config file or config folder others can read, with or without a profile named",
+    async () => {
+      const { root, env } = setup()
+      await call(["chats", "list"], env, async () => connection)
+      const folder = join(root, "config")
+      const file = join(folder, "config.json")
+      chmodSync(file, 0o644)
+      chmodSync(folder, 0o775)
+      const wanted = [
+        { path: file, mode: "0644", want: "0600" },
+        { path: folder, mode: "0775", want: "0700" },
+      ]
+
+      const named = await call(["doctor", "--json"], env, refused)
+      expect(named.answer.files.problems).toEqual(wanted)
+      expect(named.stderr.join("\n")).toContain(`to make it private: chmod 600 '${file}'`)
+      expect(named.stderr.join("\n")).toContain(`to make it private: chmod 700 '${folder}'`)
+
+      const { CHAT_PROFILE: _, ...unnamed } = env
+      const none = await call(["doctor", "--json"], unnamed, refused)
+      expect(none.answer.profile).toBeNull()
+      expect(none.answer.files.problems).toEqual(wanted)
+      expect(none.stderr.join("\n")).toContain(`to make it private: chmod 600 '${file}'`)
+    },
+  )
+
   it("leaves alone the folder the owner chose for the store", async () => {
     const { root, env } = setup()
     await call(["chats", "list"], env, async () => connection)
@@ -186,6 +213,26 @@ describe("doctor", () => {
     expect(answer.store).toBeDefined()
     expect(answer.profile).toBe("default")
   })
+
+  it.each([
+    ["a folder", (path: string) => mkdirSync(path), "the path is a folder, not a file"],
+    ["a list", (path: string) => writeFileSync(path, "[]"), "the file must hold a JSON object"],
+  ])(
+    "**reports %s at the config path** as a whole-file problem, which other commands refuse",
+    async (_, make, what) => {
+      const { root, env } = setup()
+      mkdirSync(join(root, "config"), { recursive: true })
+      const file = join(root, "config", "config.json")
+      make(file)
+
+      const { code, answer } = await call(["doctor", "--json"], env, refused)
+      expect(code).toBe(0)
+      expect(answer.config.issues).toEqual([{ kind: "invalid_value", file, what }])
+      const listed = await call(["chats", "list", "--json"], env, refused)
+      expect(listed.code).toBe(3)
+      expect(listed.stderr.join("\n")).toContain(`${file}: ${what}`)
+    },
+  )
 
   const configured = (env: NodeJS.ProcessEnv, root: string, contents: unknown) => {
     mkdirSync(join(root, "config"), { recursive: true })

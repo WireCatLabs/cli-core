@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
+import { secretInput } from "../../runs/run-context.js"
 import { levelFor } from "../../sends/permissions.js"
 import { phoneOf } from "../../services/index.js"
 import { dateWindow } from "../../services/moment.js"
@@ -384,7 +385,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
    * ⚠ **The number is asked for or piped, never an argument**: argv is read by `ps` and kept by shell
    * history, and a phone number is personal data.
    */
-  annotate(contacts.command("lookup"), { effects: REMOTE_READ, output: { entity: "contact_lookup" } })
+  annotate(secretInput(contacts.command("lookup")), { effects: REMOTE_READ, output: { entity: "contact_lookup" } })
     .summary("find an account by a phone number")
     .description("who has this phone number — asks for it, or reads it from stdin; never an argument")
     // Commander's own refusal would repeat the number on stderr.

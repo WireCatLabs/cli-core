@@ -5,13 +5,14 @@
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { checkCliEntry } from "./check-cli-entry.ts"
+import { checkCliEntry, checkStartEntry } from "./check-cli-entry.ts"
 import { checkFileLeases } from "./check-file-leases.ts"
 import { checkRecordingPartials } from "./check-recording-partials.ts"
 import { checkRecordingPublication } from "./check-recording-publication.ts"
 
 const root = join(import.meta.dirname, "../dist")
 checkCliEntry(root)
+checkStartEntry(root)
 await checkFileLeases(root)
 await checkRecordingPartials(root)
 await checkRecordingPublication(root)

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import * as v from "valibot"
 
 export type ConfigIssueKind =
@@ -82,24 +83,90 @@ export const locate = (
   }
 }
 
-/** Node prints `(line 3 column 5)`, older runtimes only `position 41`, and Bun neither. */
-const placeOf = (message: string, text: string): { line?: number; column?: number } => {
-  const said = /line (\d+) column (\d+)/.exec(message)
-  if (said) return { line: Number(said[1]), column: Number(said[2]) }
-  const position = /position (\d+)/.exec(message)
-  if (!position) return {}
-  const before = text.slice(0, Number(position[1])).split("\n")
-  return { line: before.length, column: (before.at(-1)?.length ?? 0) + 1 }
+/**
+ * Where parsing stops, found by walking the JSON grammar: V8 names no position for "Unexpected token" or
+ * "Unexpected end of JSON input", and Bun names none at all. Where V8 does name one, this is the same offset.
+ */
+const failureOffset = (text: string): number => {
+  let at = 0
+  const fail = (): never => {
+    throw at
+  }
+  const space = () => {
+    while (/[ \t\n\r]/.test(text[at] ?? "")) at++
+  }
+  const expect = (char: string) => {
+    space()
+    if (text[at] !== char) fail()
+    at++
+  }
+  const string = () => {
+    expect('"')
+    while (text[at] !== '"') {
+      if (at >= text.length || text.charCodeAt(at) < 0x20) fail()
+      at += text[at] === "\\" ? 2 : 1
+    }
+    at++
+  }
+  const items = (close: string, item: () => void) => {
+    at++
+    space()
+    if (text[at] === close) {
+      at++
+      return
+    }
+    for (;;) {
+      item()
+      space()
+      if (text[at] === close) break
+      expect(",")
+    }
+    at++
+  }
+  const value = (): void => {
+    space()
+    const char = text[at] ?? ""
+    if (char === "{")
+      items("}", () => {
+        string()
+        expect(":")
+        value()
+      })
+    else if (char === "[") items("]", value)
+    else if (char === '"') string()
+    else {
+      const word = /^(true|false|null|-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?)/.exec(text.slice(at))
+      if (!word) fail()
+      at += word?.[0].length ?? 0
+    }
+  }
+  try {
+    value()
+    space()
+    return at
+  } catch (stopped) {
+    return typeof stopped === "number" ? stopped : at
+  }
 }
 
 /** The file's JSON, or the one issue that says where it stopped parsing. */
 export const parseConfigText = (text: string, file: string): { raw: unknown } | { issue: LocatedIssue } => {
   try {
     return { raw: JSON.parse(text) }
-  } catch (error) {
-    const place = placeOf(error instanceof Error ? error.message : "", text)
-    const where = place.line === undefined ? "" : ` at line ${place.line}, column ${place.column}`
-    return { issue: { kind: "invalid_json", file, ...place, what: `the file is not valid JSON${where}`, at: [] } }
+  } catch {
+    const before = text.slice(0, failureOffset(text)).split("\n")
+    const line = before.length
+    const column = (before.at(-1)?.length ?? 0) + 1
+    return {
+      issue: {
+        kind: "invalid_json",
+        file,
+        line,
+        column,
+        what: `the file is not valid JSON at line ${line}, column ${column}`,
+        at: [],
+      },
+    }
   }
 }
 
@@ -134,11 +201,16 @@ const ruleOf = (issue: v.BaseIssue<unknown>): string => {
 }
 
 /** One pass of the schema: valibot names only the first unknown key of each object. */
-const onePass = (raw: unknown, schema: v.GenericSchema, context: { file: string; tool: string }): LocatedIssue[] => {
+const onePass = (
+  raw: unknown,
+  schema: v.GenericSchema,
+  context: { file: string; tool: string },
+  original: (path: readonly string[]) => string[],
+): LocatedIssue[] => {
   const result = v.safeParse(schema, raw)
   if (result.success) return []
   return result.issues.map((issue) => {
-    const at = keyOfPath(issue)
+    const at = original(keyOfPath(issue))
     const located = isPermissionKey(issue, at)
       ? locate("unknown_permission", at, context, (key) => `${key} names no command`)
       : isUnknownKey(issue)
@@ -149,6 +221,7 @@ const onePass = (raw: unknown, schema: v.GenericSchema, context: { file: string;
               at.length === 0 ? "the file has to be an object, in braces" : `setting ${key} ${ruleOf(issue)}`,
             )
     if (located.kind === "missing_setting" || at.length === 0) delete located.fix
+    if (at.length === 0) delete located.key
     return located
   })
 }
@@ -161,9 +234,11 @@ export const schemaIssues = (
 ): LocatedIssue[] => {
   const found = new Map<string, LocatedIssue>()
   for (;;) {
-    const fresh = onePass(withoutIssues(raw, [...found.values()]), schema, context).filter(
-      (issue) => !found.has(issue.at.join("\u0000")),
+    const { pruned, original } = prune(
+      raw,
+      [...found.values()].map(({ at }) => at),
     )
+    const fresh = onePass(pruned, schema, context, original).filter((issue) => !found.has(issue.at.join("\u0000")))
     if (fresh.length === 0) return [...found.values()]
     for (const issue of fresh) found.set(issue.at.join("\u0000"), issue)
     // A missing setting cannot be removed, so another pass would find it again.
@@ -184,6 +259,8 @@ const scopes = (raw: unknown): [string[], Node][] => {
     if (isNode(section.profiles))
       for (const [name, scope] of Object.entries(section.profiles)) add([...path, "profiles", name], scope)
   }
+  // A flat file keeps `permissions` at the top; a file with profiles has none there once its schema has run.
+  add([], raw)
   addSection([], raw)
   for (const name of SECTIONS) addSection([name], raw[name])
   return out
@@ -207,28 +284,141 @@ export const permissionIssues = (
     .filter(({ key }) => !known.has(key))
     .map(({ at }) => locate("unknown_permission", at, context, (key) => `${key} names no command`))
 
-/** The file without the settings the issues name: what still loads, and what `config unset` would leave. */
-export const withoutIssues = (raw: unknown, issues: readonly LocatedIssue[]): unknown => {
-  if (issues.some((issue) => issue.at.length === 0)) return {}
-  const copy = structuredClone(raw)
-  for (const { at } of issues) {
-    const parent = at.slice(0, -1).reduce<unknown>((node, key) => (isNode(node) ? node[key] : undefined), copy)
-    if (isNode(parent)) delete parent[at.at(-1) as string]
+const pathId = (path: readonly string[]) => path.join("\u0000")
+
+/**
+ * The file without the parts at `paths`, through objects and lists alike, and a map from a path in what is left
+ * back to the file: a list that lost an item numbers the rest differently.
+ */
+const prune = (raw: unknown, paths: readonly (readonly string[])[]) => {
+  const drop = new Set(paths.map(pathId))
+  const kept = new Map<string, number[]>()
+  const walk = (node: unknown, at: string[]): unknown => {
+    if (Array.isArray(node)) {
+      const indices = node.flatMap((_, index) => (drop.has(pathId([...at, String(index)])) ? [] : [index]))
+      kept.set(pathId(at), indices)
+      return indices.map((index) => walk(node[index], [...at, String(index)]))
+    }
+    if (!isNode(node)) return node
+    return Object.fromEntries(
+      Object.entries(node).flatMap(([key, item]) =>
+        drop.has(pathId([...at, key])) ? [] : [[key, walk(item, [...at, key])]],
+      ),
+    )
   }
-  return copy
+  const pruned = drop.has("") ? {} : walk(raw, [])
+  const original = (path: readonly string[]): string[] => {
+    const at: string[] = []
+    for (const part of path) {
+      const indices = kept.get(pathId(at))
+      at.push(indices ? String(indices[Number(part)] ?? part) : part)
+    }
+    return at
+  }
+  return { pruned, original }
 }
+
+/** The file without the settings the issues name: what still loads, and what `config unset` would leave. */
+export const withoutIssues = (raw: unknown, issues: readonly LocatedIssue[]): unknown =>
+  prune(
+    raw,
+    issues.map(({ at }) => at),
+  ).pruned
+
+/** The path `config unset <setting>` names: a permission key keeps its dots; a number is a list item. */
+export const settingPathOf = (setting: string): string[] =>
+  setting.startsWith("permissions.") ? ["permissions", setting.slice("permissions.".length)] : setting.split(".")
+
+/**
+ * The file without one setting, at any depth and inside list items, and without any object the removal left empty
+ * — a list item stays, so the items after it keep their numbers. `removed` is false when nothing was there.
+ */
+export const withoutPath = (raw: unknown, at: readonly string[]): { config: unknown; removed: boolean } => {
+  const valueAt = (path: readonly string[]) =>
+    path.reduce<unknown>((node, key) => (isNode(node) || Array.isArray(node) ? (node as Node)[key] : undefined), raw)
+  if (at.length === 0 || valueAt(at) === undefined) return { config: raw, removed: false }
+  let gone = [...at]
+  for (let parent = at.slice(0, -1); parent.length > 0; parent = parent.slice(0, -1)) {
+    if (Array.isArray(valueAt(parent.slice(0, -1)))) break
+    const node = valueAt(parent)
+    if (!isNode(node) || Object.keys(node).some((key) => pathId([...parent, key]) !== pathId(gone))) break
+    gone = parent
+  }
+  return { config: prune(raw, [gone]).pruned, removed: true }
+}
+
+/** `withoutPath` for a setting as `config unset` takes it: `mail.accounts.0.colour`, `permissions.messages.send`. */
+export const withoutSetting = (raw: unknown, setting: string) => withoutPath(raw, settingPathOf(setting))
 
 /** The public shape: where in the file is the loader's own business. */
 export const publicIssue = ({ at: _, ...issue }: LocatedIssue): ConfigIssue => issue
 
-/** One line for a command that refuses to run on the file: the first problem, how to fix it, and how many more. */
-export const issueMessage = (issues: readonly ConfigIssue[]): string => {
+/**
+ * One line for a command that refuses to run on the file: the first problem, how to fix it, and how many more.
+ * `doctor` is the command that lists them all, as the reader types it.
+ */
+export const issueMessage = (issues: readonly ConfigIssue[], doctor = "doctor"): string => {
   const [first] = issues
   if (!first) return ""
   const more = issues.length - 1
   return (
     `${first.file}: ${first.what}` +
     (first.fix ? ` — remove it with \`${first.fix}\`` : "") +
-    (more === 0 ? "" : ` (and ${more} more problem${more === 1 ? "" : "s"} — \`doctor\` lists them all)`)
+    (more === 0 ? "" : ` (and ${more} more problem${more === 1 ? "" : "s"} — \`${doctor}\` lists them all)`)
   )
+}
+
+/**
+ * Every problem in a config file's text, and what of it still loads. Works for a file with profiles and sections
+ * and for a flat one: a fix names the profile and section flags only where the path has them. With
+ * `knownPermissions` (from `knownPermissionKeys`), each saved permission key outside it is an issue too, in every
+ * section.
+ */
+export const checkConfigText = <T extends v.GenericSchema>(
+  text: string,
+  {
+    file,
+    tool,
+    schema,
+    knownPermissions,
+  }: { file: string; tool: string; schema: T; knownPermissions?: ReadonlySet<string> },
+): { issues: ConfigIssue[]; config: v.InferOutput<T> | undefined } => {
+  const parsed = parseConfigText(text, file)
+  if ("issue" in parsed) return { issues: [publicIssue(parsed.issue)], config: undefined }
+  // valibot reads a list as an object, so `[]` would pass for `{}`.
+  if (!isNode(parsed.raw)) return { issues: [wholeFile(file, "the file must hold a JSON object")], config: undefined }
+  const context = { file, tool }
+  const located = schemaIssues(parsed.raw, schema, context)
+  const loaded = v.safeParse(schema, withoutIssues(parsed.raw, located))
+  const config = loaded.success ? loaded.output : undefined
+  const unknown = knownPermissions ? permissionIssues(savedPermissionKeys(config), knownPermissions, context) : []
+  return { issues: [...located, ...unknown].map(publicIssue), config }
+}
+
+/** A problem with the file as a whole: no setting to name, and no `config unset` to remove it. */
+const wholeFile = (file: string, what: string): ConfigIssue => ({ kind: "invalid_value", file, what })
+
+/**
+ * A config file's text, `undefined` when there is no file, or the issue when one is there and cannot be read: a
+ * folder at the path, or a file this user may not read. Neither has a fix `config` could run.
+ */
+export const readConfigText = (path: string): { text: string | undefined } | { issue: ConfigIssue } => {
+  try {
+    return { text: readFileSync(path, "utf8") }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === "ENOENT") return { text: undefined }
+    return {
+      issue: wholeFile(path, code === "EISDIR" ? "the path is a folder, not a file" : "the file could not be read"),
+    }
+  }
+}
+
+/** A config file as written, `raw: undefined` when there is none, or the one issue that stops it being read. */
+export const readConfigFile = (path: string): { raw: unknown } | { issue: ConfigIssue } => {
+  const read = readConfigText(path)
+  if ("issue" in read) return read
+  if (read.text === undefined) return { raw: undefined }
+  const parsed = parseConfigText(read.text, path)
+  return "issue" in parsed ? { issue: publicIssue(parsed.issue) } : parsed
 }

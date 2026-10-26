@@ -7,12 +7,13 @@ import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { EventSink } from "../runs/events.js"
 import { recorded } from "../runs/recording.js"
+import { runContextOf } from "../runs/run-context.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
 import type { SecretInput } from "../terminal/prompt.js"
 import { type Closeable, withDeadline } from "./deadline.js"
 import { withAbort } from "./execution.js"
 import { rootOf } from "./profile.js"
-import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
+import { type GlobalFlags, namedProfile, type ResolveOptions, type Settings } from "./settings.js"
 
 /** What every CLI's commands write to, when it is not the real terminal. A CLI adds its own fields. */
 export interface BaseEnvironment {
@@ -62,6 +63,8 @@ export interface BaseEnvironment {
   handled?: (event: MessageEvent) => void
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
+  /** Set by `run()`: the words it was given, which a run keeps as `record_input` says (`maskArgv`). */
+  argv?: readonly string[]
   /**
    * Set by `run()`: the rest of the command has no default deadline, and Ctrl-C, SIGTERM, a cancel or an explicit
    * `--timeout` aborts the signal it returns instead of the command, which then ends as it says — exit 0 with what it
@@ -190,6 +193,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     ...(environment.tty === undefined ? {} : { tty: environment.tty }),
   })
   const closeables: Closeable[] = []
+  const ranFor = namedProfile(settings)
 
   return {
     settings,
@@ -200,31 +204,41 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     env,
     ...(environment.keyring ? { keyring: environment.keyring } : {}),
     // The deadline inside the record, so a timeout finishes the run as failed rather than leaving it running.
-    run: (body, { unbounded = false, name } = {}) =>
-      environment.app
-        ? recorded(
-            {
-              app: environment.app,
-              // An agent's run is named `mcp <command>`, so `search runs` and `sends list` tell it from the owner's.
-              command: name ?? `${environment.agent ? "mcp " : ""}${commandPath(command)}`,
-              profile: settings.profile,
-              record: settings.record,
-              keepFailed: settings.keepFailedRuns,
-              trace: settings.trace,
-              keepDays: settings.keepRunsForDays,
-              processRun: !environment.agent,
-              format,
-              streams,
-              env,
-            },
-            (events) =>
-              withAbort(environment.commandSignal, () =>
-                withDeadline(unbounded ? undefined : settings.commandTimeoutMs, closeables, () => body(events)),
-              ),
-          )
-        : withAbort(environment.commandSignal, () =>
-            withDeadline(unbounded ? undefined : settings.commandTimeoutMs, closeables, () => body(() => {})),
+    run: (body, { unbounded = false, name } = {}) => {
+      if (!environment.app)
+        return withAbort(environment.commandSignal, () =>
+          withDeadline(unbounded ? undefined : settings.commandTimeoutMs, closeables, () => body(() => {})),
+        )
+      // An agent's run is named `mcp <command>`, so `search runs` and `sends list` tell it from the owner's.
+      const runName = name ?? `${environment.agent ? "mcp " : ""}${commandPath(command)}`
+      return recorded(
+        {
+          app: environment.app,
+          command: runName,
+          context: runContextOf({
+            bin: environment.app.command,
+            command: runName,
+            program: rootOf(command),
+            ...(environment.argv ? { argv: environment.argv } : {}),
+            env,
+            recordInput: settings.recordInput !== false,
+          }),
+          ...(ranFor === undefined ? {} : { profile: ranFor }),
+          record: settings.record,
+          keepFailed: settings.keepFailedRuns,
+          trace: settings.trace,
+          keepDays: settings.keepRunsForDays,
+          processRun: !environment.agent,
+          format,
+          streams,
+          env,
+        },
+        (events) =>
+          withAbort(environment.commandSignal, () =>
+            withDeadline(unbounded ? undefined : settings.commandTimeoutMs, closeables, () => body(events)),
           ),
+      )
+    },
     track: (closeable) => {
       closeables.push(closeable)
       environment.trackCloseable?.(closeable)

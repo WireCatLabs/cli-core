@@ -25,9 +25,9 @@ None open.
 
 - **CORE-36** · P2 · 🚧 `fix/shared-contract-audit` Enforce shared command contracts by default; exact, reasoned overrides only. Export actual schemas/reasons for complete cross-CLI audits.
 
-- **CORE-39** · P2 · One run-recording helper for a CLI with its own command program (zoom-cli, drive-cli and
-  cli-memo each carry a `src/run-recording.ts` that already differs). Start after their `feat/runs` pull requests merge,
-  then replace the three copies (owner, 2026-10-25). Rule: cli-base WC-LIFE-15.
+- **CORE-40** · P2 · 🚩 Start a command without loading every command: `./cli` still loads ~880 files (~400 ms) for
+  any command but a bare `--version`, and no single cut frees more than 119 of them. Owner chooses: lazy action bodies
+  in waves, or a per-tool bundle. [Evidence and the two options](BACKLOG-NOTES.md#core-40).
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
 - **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,

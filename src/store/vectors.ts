@@ -3,6 +3,7 @@ import { keysOver } from "./keys.js"
 import * as conversationQueries from "./sqlite/conversations.js"
 import { type MailStore, threadConversation } from "./sqlite/emails.js"
 import * as imageChunks from "./sqlite/image-chunks.js"
+import * as messageChunks from "./sqlite/message-chunks.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { write } from "./sqlite/transaction.js"
 import type { ChunkToEmbed } from "./sqlite/vectors.js"
@@ -43,6 +44,30 @@ export interface AccountVectors {
   nearestPictures(
     key: AccountKey,
     options: { chatId?: Id; model: string; since?: string; limit: number; query: Float32Array },
+  ): Promise<{ chatId: Id; messageId: Id; score: number }[]>
+  /** Live messages with text after pk `after`, with the chunk and vector each has; `chatId` narrows it. */
+  messagesToEmbed(
+    key: AccountKey,
+    options: { chatId?: Id; model: string; after: number; limit: number },
+  ): Promise<messageChunks.MessageToEmbed[]>
+  /** Keeps each message's vector of `model` and makes its hash the message's chunk. */
+  saveMessageVectors(
+    key: AccountKey,
+    model: string,
+    dims: number,
+    messages: { messagePk: number; hash: string; length: number; occurredAt: number; vector: Float32Array }[],
+  ): Promise<void>
+  /** Drops the chunks of messages gone, deleted or emptied, and the vectors only they used; how many. */
+  dropGoneMessages(key: AccountKey): Promise<number>
+  /** Whether any message of the account has a vector of `model`. */
+  hasMessageVectors(key: AccountKey, model: string): Promise<boolean>
+  /**
+   * The messages nearest in meaning to `query` by their own vector of `model`, best first. The one place
+   * message vectors are read, so their storage can change behind it.
+   */
+  nearestMessages(
+    key: AccountKey,
+    options: { chatId?: Id; model: string; since?: string; before?: string; limit: number; query: Float32Array },
   ): Promise<{ chatId: Id; messageId: Id; score: number }[]>
   /** The current build's distinct chunks, and how many have a vector of `model`. */
   vectorStatus(key: AccountKey, chatId: Id, model: string): Promise<{ chunks: number; embedded: number }>
@@ -183,6 +208,63 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
         limit,
         query,
         position: imageChunks.PICTURE_POSITION,
+      })
+    },
+
+    messagesToEmbed: async (key, { chatId, model, after, limit }) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return []
+      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
+      if (chatId !== undefined && chatKey === undefined) return []
+      return messageChunks.messagesToEmbed(context, accountPk, {
+        ...(chatKey === undefined ? {} : { chatKey }),
+        model,
+        after,
+        limit,
+      })
+    },
+
+    saveMessageVectors: async (key, model, dims, messages) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return
+      write(database, () => {
+        vectors.saveVectors(
+          context,
+          model,
+          dims,
+          messages.map(({ hash, vector }) => ({ hash, vector })),
+        )
+        messageChunks.saveMessageChunks(context, accountPk, messages)
+      })
+    },
+
+    dropGoneMessages: async (key) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return 0
+      let dropped = 0
+      write(database, () => {
+        dropped = messageChunks.dropGoneMessageChunks(context, accountPk)
+      })
+      return dropped
+    },
+
+    hasMessageVectors: async (key, model) => {
+      const accountPk = findAccountPk(key)
+      return accountPk !== undefined && messageChunks.hasMessageVectors(context, accountPk, model)
+    },
+
+    nearestMessages: async (key, { chatId, model, since, before, limit, query }) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return []
+      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
+      if (chatId !== undefined && chatKey === undefined) return []
+      return messageChunks.nearestMessages(context, accountPk, {
+        ...(chatKey === undefined ? {} : { chatKey }),
+        ...(since === undefined ? {} : { since: Date.parse(since) }),
+        ...(before === undefined ? {} : { before: Date.parse(before) }),
+        model,
+        limit,
+        query,
       })
     },
 

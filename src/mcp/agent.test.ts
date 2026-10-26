@@ -5,7 +5,14 @@ import { toJsonSchema } from "@valibot/to-json-schema"
 import { annotate, annotateOption, describeProgram } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
 import { describe, expect, it, vi } from "vitest"
-import { changesAuthorityAt, grantsAuthority, LOCAL_WRITE, REMOTE_READ, REMOTE_WRITE } from "../cli/effects.js"
+import {
+  changesAuthorityAt,
+  grantsAuthority,
+  LOCAL_READ,
+  LOCAL_WRITE,
+  REMOTE_READ,
+  REMOTE_WRITE,
+} from "../cli/effects.js"
 import { rememberAccount } from "../cli/messenger/accounts.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import { messagesCommand } from "../cli/messenger/messages-command.js"
@@ -358,6 +365,17 @@ describe("toolsFromCommands", () => {
     )
 
     expect(offered).toEqual({ "chats list": true, "chats inspect": false, "chats folders list": false })
+  })
+
+  it("**offers a group only when it runs on its own**, whatever effects it declares", () => {
+    const root = new Command("x")
+    const config = annotate(root.command("config"), { effects: LOCAL_READ })
+    annotate(config.command("show"), { effects: LOCAL_READ })
+    const watch = annotate(root.command("watch"), { effects: REMOTE_READ }).action(() => {})
+    annotate(watch.command("status"), { effects: LOCAL_READ })
+    const offered = toolsFromCommands(describeProgram(root)).map((tool) => tool.command)
+
+    expect(offered.sort()).toEqual(["config show", "watch", "watch status"])
   })
 })
 

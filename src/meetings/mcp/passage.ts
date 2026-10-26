@@ -1,11 +1,11 @@
 import { CliError, errorObjectOf, type FailureContext, isCliError, mcpErrorResult } from "@wirecat/cli-base"
 import { type MeetingPassageReader, validateMeetingPassage } from "../passage.js"
-import { agentResult, UNTRUSTED } from "./agent-text.js"
+import { agentResult, UNTRUSTED_NEUTRAL } from "./agent-text.js"
 
 const count = { type: "integer", minimum: 0, maximum: 999 }
 export const meetingPassageTool = {
   name: "meeting_passage",
-  description: `Read a retained cue with bounded surrounding context, citations, revision and explicit coverage; account is fixed by the host. ${UNTRUSTED}`,
+  description: `Read a retained cue with bounded surrounding context, citations, revision and explicit coverage; account is fixed by the host. ${UNTRUSTED_NEUTRAL}`,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     type: "object" as const,

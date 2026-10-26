@@ -1991,7 +1991,7 @@ export const conversationState = sqliteTable("conversation_state", {
   currentBuild: integer("current_build"),
 })
 
-/** One model's vector for one chunk text; no owner, so vectors outlive the builds and chunks that point at them. */
+/** One model's vector for one chunk text; no owner: chunks of any kind share it, and it goes once none holds the text. */
 export const embeddings = sqliteTable(
   "embeddings",
   {
@@ -2154,6 +2154,25 @@ export const mentionPending = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.sourceType, table.sourceId] })],
 )
+
+/**
+ * One sqlite-vec `vec0` table per embedding model, `vector_index_<id>`, created at run time with its trigger since
+ * its width is the model's: a row per chunk with a vector of that model, rowid `chunks.id` (`vector-index.ts`).
+ */
+export const vectorIndexes = sqliteTable("vector_indexes", {
+  id: integer("id").primaryKey(),
+  model: text("model").notNull().unique(),
+  dims: integer("dims").notNull(),
+  /** 1 once it holds every vector; until then searches scan. */
+  ready: integer("ready").notNull(),
+  /** The last `content_hash` the fill of older vectors reached. */
+  filledThrough: text("filled_through").notNull(),
+})
+
+/** Always empty: each changed chunk's id passes through it so that every model's index re-derives its row. */
+export const vectorIndexRedo = sqliteTable("vector_index_redo", {
+  chunkId: integer("chunk_id").notNull(),
+})
 
 /** Settings of the store file itself, shared by every profile, tg and MAX — unlike a profile's config file. */
 export const storeSettings = sqliteTable("store_settings", {

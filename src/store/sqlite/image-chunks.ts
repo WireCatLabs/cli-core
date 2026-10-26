@@ -1,5 +1,6 @@
 import { type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
+import { dropUnusedVectors, searchIndex } from "./vector-index.js"
 import { dot } from "./vectors.js"
 
 const IS_IMAGE = sql`(a.kind = 'photo' OR a.mime LIKE 'image/%')`
@@ -94,7 +95,7 @@ export interface ImageChunk {
  * deleted, with the vectors nothing else uses any more.
  */
 export const saveImageChunks = (
-  { orm, now }: StoreContext,
+  { orm, now, database }: StoreContext,
   accountPk: number,
   chatKey: number,
   chunks: ImageChunk[],
@@ -126,9 +127,7 @@ export const saveImageChunks = (
         VALUES ('image', ${attachmentPk}, 0, 0, ${length}, ${hash}, ${scope}, ${accountPk}, ${occurredAt}, ${at}, ${at})`,
     )
   }
-  for (const hash of old)
-    orm.run(sql`DELETE FROM embeddings WHERE content_hash = ${hash}
-      AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash})`)
+  dropUnusedVectors(database, old)
 }
 
 /** The hashes among these that already have a vector of `model`. */
@@ -152,12 +151,37 @@ export interface NearestImage {
 
 const SCAN_PAGE = 5_000
 
+type ImageFilter = { chatKey?: number; model: string; since?: number; position: number }
+
+/** The scan's rows: one page after `after`, or the `ids` the index picked. */
+const imageRows = (
+  { orm }: StoreContext,
+  accountPk: number,
+  { chatKey, model, since, position }: ImageFilter,
+  rows: { after: number } | { ids: number[] },
+) =>
+  orm.all<{ id: number; hash: string; chatId: string; messageId: string; vector: Uint8Array }>(
+    sql`SELECT k.id, k.content_hash AS hash, ch.external_id AS chatId, m.external_id AS messageId, v.vector
+      FROM chunks k CROSS JOIN attachments a ON a.id = k.chunkable_id AND a.attachable_type = 'message'
+        JOIN messages m ON m.id = a.attachable_id AND m.deleted_at IS NULL
+        JOIN chats ch ON ch.id = m.chat_id
+        JOIN embeddings v ON v.model = ${model} AND v.content_hash = k.content_hash
+      WHERE k.chunkable_type = 'image' AND k.position = ${position} AND ch.account_id = ${accountPk}
+        ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND m.chat_id = ${chatKey}`}
+        ${since === undefined ? sql`` : sql`AND k.occurred_at >= ${since}`}
+        ${
+          "ids" in rows
+            ? sql`AND k.id IN (SELECT value FROM json_each(${JSON.stringify(rows.ids)})) ORDER BY k.id`
+            : sql`AND k.id > ${rows.after} ORDER BY k.id LIMIT ${SCAN_PAGE}`
+        }`,
+  )
+
 /**
  * The images of the account nearest to `query` by the vector of `model`, best first. Position 0 of an image is
  * its context text, position 1 its picture (`PICTURE_POSITION`): a model's vectors only ever sit at one.
  */
 export const nearestImages = (
-  { orm }: StoreContext,
+  context: StoreContext,
   accountPk: number,
   {
     chatKey,
@@ -168,27 +192,54 @@ export const nearestImages = (
     position = 0,
   }: { chatKey?: number; model: string; since?: number; limit: number; query: Float32Array; position?: number },
 ): NearestImage[] => {
-  const found: NearestImage[] = []
+  const filter: ImageFilter = {
+    model,
+    position,
+    ...(chatKey === undefined ? {} : { chatKey }),
+    ...(since === undefined ? {} : { since }),
+  }
+  const score = (row: { id: number; chatId: string; messageId: string; vector: Uint8Array }) => ({
+    id: row.id,
+    chatId: row.chatId,
+    messageId: row.messageId,
+    score: dot(query, row.vector),
+  })
+  // Stable, so equal scores keep the scan's order, by chunk id.
+  const best = (found: (NearestImage & { id: number })[]) => found.sort((a, b) => b.score - a.score).slice(0, limit)
+  const indexed = searchIndex(
+    context.database,
+    model,
+    {
+      kind: "image",
+      account: accountPk,
+      ...(chatKey === undefined ? {} : { chat: chatKey }),
+      ...(since === undefined ? {} : { since }),
+    },
+    query,
+    limit,
+    (candidates) => {
+      const hashes = new Map(candidates.map(({ id, hash }) => [id, hash]))
+      const results = best(
+        imageRows(context, accountPk, filter, { ids: [...hashes.keys()] })
+          .filter((row) => hashes.get(row.id) === row.hash)
+          .map(score),
+      )
+      return { results, best: results.map(({ id }) => id) }
+    },
+  )
+  const plain = (found: (NearestImage & { id: number })[]) =>
+    found.map(({ chatId, messageId, score }) => ({ chatId, messageId, score }))
+  if (indexed) return plain(indexed)
+  const found: (NearestImage & { id: number })[] = []
   let after = 0
   for (;;) {
-    const rows = orm.all<{ id: number; chatId: string; messageId: string; vector: Uint8Array }>(
-      sql`SELECT k.id, ch.external_id AS chatId, m.external_id AS messageId, v.vector
-        FROM chunks k CROSS JOIN attachments a ON a.id = k.chunkable_id AND a.attachable_type = 'message'
-          JOIN messages m ON m.id = a.attachable_id AND m.deleted_at IS NULL
-          JOIN chats ch ON ch.id = m.chat_id
-          JOIN embeddings v ON v.model = ${model} AND v.content_hash = k.content_hash
-        WHERE k.chunkable_type = 'image' AND k.position = ${position} AND ch.account_id = ${accountPk}
-          AND k.id > ${after}
-          ${chatKey === undefined ? sql`AND ch.searchable = 1` : sql`AND m.chat_id = ${chatKey}`}
-          ${since === undefined ? sql`` : sql`AND k.occurred_at >= ${since}`}
-        ORDER BY k.id LIMIT ${SCAN_PAGE}`,
-    )
-    for (const row of rows) found.push({ chatId: row.chatId, messageId: row.messageId, score: dot(query, row.vector) })
+    const rows = imageRows(context, accountPk, filter, { after })
+    for (const row of rows) found.push(score(row))
     const last = rows.at(-1)
     if (!last || rows.length < SCAN_PAGE) break
     after = last.id
   }
-  return found.sort((a, b) => b.score - a.score).slice(0, limit)
+  return plain(best(found))
 }
 
 /** An image's own vector is its chunk at this position; position 0 is the text around it. */
@@ -227,7 +278,7 @@ export const picturesToEmbed = (
 
 /** Makes each hash the picture chunk of its image; the vectors are saved apart, by `saveVectors`. */
 export const savePictureChunks = (
-  { orm, now }: StoreContext,
+  { orm, now, database }: StoreContext,
   accountPk: number,
   pictures: { attachmentPk: number; hash: string; bytes: number; occurredAt: number }[],
 ): void => {
@@ -238,16 +289,13 @@ export const savePictureChunks = (
   const gone = sql`chunkable_type = 'image' AND position = ${PICTURE_POSITION} AND account_id = ${accountPk}
     AND NOT EXISTS (SELECT 1 FROM attachments a JOIN messages m ON a.attachable_type = 'message'
       AND m.id = a.attachable_id WHERE a.id = chunkable_id AND m.deleted_at IS NULL)`
-  const dropped = orm.all<{ hash: string }>(sql`SELECT content_hash AS hash FROM chunks WHERE ${gone}`)
-  orm.run(sql`DELETE FROM chunks WHERE ${gone}`)
-  for (const { hash } of dropped)
-    orm.run(sql`DELETE FROM embeddings WHERE content_hash = ${hash}
-      AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash})`)
+  const released = orm.all<{ hash: string }>(sql`DELETE FROM chunks WHERE ${gone} RETURNING content_hash AS hash`)
   for (const { attachmentPk, hash, bytes, occurredAt } of pictures) {
-    orm.run(
+    const replaced = orm.get<{ hash: string }>(
       sql`DELETE FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = ${attachmentPk}
-        AND position = ${PICTURE_POSITION}`,
+        AND position = ${PICTURE_POSITION} RETURNING content_hash AS hash`,
     )
+    if (replaced) released.push(replaced)
     orm.run(
       sql`INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope,
           account_id, occurred_at, created_at, updated_at)
@@ -255,4 +303,8 @@ export const savePictureChunks = (
           ${occurredAt}, ${at}, ${at})`,
     )
   }
+  dropUnusedVectors(
+    database,
+    released.map(({ hash }) => hash),
+  )
 }

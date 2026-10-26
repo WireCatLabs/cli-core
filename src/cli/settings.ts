@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { CliError, configFilePath, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
 import { parseDuration } from "../domain/duration.js"
+import { DEFAULT_RERANK_MODEL, RERANK_MODELS } from "../embeddings/models.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import {
   assertOverridesTighten,
@@ -18,13 +19,14 @@ import { storePath } from "../store/path.js"
 import { sharedConfigPath } from "../store/shared-config.js"
 import {
   type ConfigIssue,
+  checkConfigText,
   issueMessage,
-  type LocatedIssue,
-  parseConfigText,
-  publicIssue,
+  readConfigFile,
+  readConfigText,
   savedPermissionKeys,
   schemaIssues,
-  withoutIssues,
+  settingPathOf,
+  withoutPath,
 } from "./config-issues.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
@@ -96,6 +98,7 @@ const SHARED_PROFILE_ENTRIES = {
   color: v.optional(flag),
   sender_colors: v.optional(flag),
   record: v.optional(flag),
+  record_input: v.optional(flag),
   keep_runs_for_days: v.optional(count),
   permissions: v.optional(permissionLevels),
   sends_per_hour: v.optional(count),
@@ -104,6 +107,12 @@ const SHARED_PROFILE_ENTRIES = {
   speech_model: v.optional(v.string(plain("has to be a model id from `models list`, in quotes"))),
   search_catch_up: v.optional(flag),
   picture_search: v.optional(flag),
+  search_reranker: v.optional(
+    v.picklist(
+      [...RERANK_MODELS.map((model) => model.id), "off"],
+      plain(`has to be off or a reranker id: ${RERANK_MODELS.map((model) => model.id).join(", ")}`),
+    ),
+  ),
   ...AI_ENTRIES,
 }
 
@@ -203,6 +212,8 @@ export interface Settings extends AISettings {
   searchCatchUp?: boolean
   /** Search and `images embed` read the pictures themselves, with a model on this machine. Off until set. */
   pictureSearch?: boolean
+  /** The reranker that orders `search messages --discover`'s first hits once it is downloaded, or `off`. */
+  searchReranker?: string
   limit: number
   /** Which page, 1-based. Per invocation only — a page number in a file is a setting nobody wants twice. */
   page: number
@@ -216,6 +227,11 @@ export interface Settings extends AISettings {
    */
   commandTimeoutMs: number | undefined
   record: boolean
+  /**
+   * A run record keeps the words typed, secrets hidden; off masks every value that may be content. Optional so a CLI
+   * with settings of its own need not return it: left out, the words are kept.
+   */
+  recordInput?: boolean
   /** A failed run is kept even unrecorded, unless recording was turned off by name. */
   keepFailedRuns: boolean
   keepRunsForDays: number
@@ -286,6 +302,36 @@ export const NONE_NAMED = "none named"
 /** A name for a command that speaks for no account; never chosen for one that does. */
 const NO_PROFILE = "default"
 
+/** The profile a run is for: none when nothing named one, even though `Settings.profile` holds a placeholder. */
+export const namedProfile = (settings: Pick<Settings, "profile"> & Partial<Pick<Settings, "sources">>) =>
+  settings.sources?.profile === NONE_NAMED ? undefined : settings.profile
+
+/**
+ * No profile named and none on this computer. The settings cannot see the program, so the program swaps the
+ * `setup` this suggests for `withoutSetup` when it has no such command.
+ */
+export class NoProfileHere extends CliError {
+  constructor(private readonly app: AppIdentity) {
+    super(
+      "validation_error",
+      `name a profile: there is none on this computer yet — create one with \`${app.command} personal setup\` ` +
+        "(any name in place of personal)",
+      { profiles: [] },
+    )
+  }
+
+  /** `words`: the command that was typed, without its arguments, so the suggestion runs as written. */
+  withoutSetup(words: string): CliError {
+    const command = words ? `${this.app.command} personal ${words}` : `${this.app.command} personal …`
+    return new CliError(
+      "validation_error",
+      `name a profile: there is none on this computer yet — any name works, such as \`${command}\` ` +
+        `(or set ${envName(this.app, "PROFILE")})`,
+      { profiles: [] },
+    )
+  }
+}
+
 /** The first candidate that is set, and which layer it came from. */
 export const first = <T>(candidates: [Source, T | undefined][], fallback: T): { value: T; from: Source } => {
   for (const [from, value] of candidates) if (value !== undefined) return { value, from }
@@ -348,25 +394,13 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const readSchema = extension.schema ?? schema
   const context = (file: string) => ({ file, tool: app.command })
 
-  /** The file as written, `undefined` when there is none, or the issue that says it is not JSON. */
-  const readRaw = (path: string): { raw: unknown } | { issue: LocatedIssue } => {
-    let text: string
-    try {
-      text = readFileSync(path, "utf8")
-    } catch {
-      return { raw: undefined }
-    }
-    return parseConfigText(text, path)
-  }
-
   /** The file with every problem found; what loads is the file without the settings they name. */
-  const loadConfig = (path: string): { config: Config; issues: LocatedIssue[]; raw: unknown } => {
-    const read = readRaw(path)
-    if ("issue" in read) return { config: { profiles: {} }, issues: [read.issue], raw: undefined }
-    if (read.raw === undefined) return { config: { profiles: {} }, issues: [], raw: undefined }
-    const issues = schemaIssues(read.raw, readSchema, context(path))
-    const parsed = v.safeParse(readSchema, withoutIssues(read.raw, issues))
-    return { config: (parsed.success ? parsed.output : { profiles: {} }) as Config, issues, raw: read.raw }
+  const loadConfig = (path: string): { config: Config; issues: ConfigIssue[] } => {
+    const read = readConfigText(path)
+    if ("issue" in read) return { config: { profiles: {} }, issues: [read.issue] }
+    if (read.text === undefined) return { config: { profiles: {} }, issues: [] }
+    const { config, issues } = checkConfigText(read.text, { file: path, tool: app.command, schema: readSchema })
+    return { config: (config ?? { profiles: {} }) as Config, issues }
   }
 
   /**
@@ -381,7 +415,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     if (profile.from === "first word" || profile.from === PROFILE) {
       throw new CliError(
         "permission_error",
-        `this process is locked to profile ${lock} (${PROFILE_LOCK}) — profile ${profile.value} is refused`,
+        `this process is locked to profile ${lock} (${PROFILE_LOCK}) — profile "${profile.value}" is refused`,
       )
     }
     return { value: lock, from: PROFILE_LOCK }
@@ -394,12 +428,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const unnamed = (config: Config, env: NodeJS.ProcessEnv, needed: boolean): { value: string; from: Source } => {
     if (!needed) return { value: NO_PROFILE, from: NONE_NAMED }
     const here = profilesOf(config, env)
+    if (here.length === 0) throw new NoProfileHere(app)
     throw new CliError(
       "validation_error",
-      here.length === 0
-        ? `name a profile: there is none on this computer yet — create one with \`${app.command} personal setup\` ` +
-            "(any name in place of personal)"
-        : `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
+      `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
       { profiles: here },
     )
   }
@@ -417,7 +449,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     }
     const loaded = loadConfig(configPath)
     if (loaded.issues.length > 0 && !options.withIssues)
-      throw new CliError("configuration_error", issueMessage(loaded.issues.map(publicIssue)))
+      throw new CliError("configuration_error", issueMessage(loaded.issues))
     const { config } = loaded
 
     const lock = given(env[PROFILE_LOCK])
@@ -462,6 +494,8 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const senderColors = fromLayers("sender_colors", false)
     const searchCatchUp = fromLayers("search_catch_up", false)
     const pictureSearch = fromLayers("picture_search", false)
+    const searchReranker = fromLayers<string>("search_reranker", DEFAULT_RERANK_MODEL)
+    const recordInput = fromLayers("record_input", true)
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = readOnlyLockOf(app, env)
@@ -522,6 +556,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       senderColors: senderColors.value,
       searchCatchUp: searchCatchUp.value,
       pictureSearch: pictureSearch.value,
+      searchReranker: searchReranker.value,
       limit: limit.value,
       page: flags.page ?? 1,
       all: flags.all === true,
@@ -531,6 +566,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
           ? undefined
           : (extension.parseDuration ?? parseDuration)(timeout.value, timeout.from === TIMEOUT ? TIMEOUT : "--timeout"),
       record: record.value,
+      recordInput: recordInput.value,
       keepFailedRuns: record.value || record.from === "default",
       keepRunsForDays: keepRunsForDays.value,
       ...(readOnlyLock ? { readOnlyLock } : {}),
@@ -556,7 +592,9 @@ export const settingsFor = <T extends object = Record<never, never>>(
         senderColors: senderColors.from,
         searchCatchUp: searchCatchUp.from,
         pictureSearch: pictureSearch.from,
+        searchReranker: searchReranker.from,
         record: record.from,
+        recordInput: recordInput.from,
         keepRunsForDays: keepRunsForDays.from,
         sendsPerHour: sendsPerHour.from,
         requestsPerMinute: requestsPerMinute.from,
@@ -566,7 +604,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       },
       configured,
       shared,
-      configIssues: loaded.issues.map(publicIssue),
+      configIssues: loaded.issues,
       savedPermissions: savedPermissionKeys(config),
     }
 
@@ -588,8 +626,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
 
   const configuredProfiles = (options: ResolveOptions = {}): string[] => {
     const { config, issues } = loadConfig(configPathFor(options))
-    if (issues.length > 0 && !options.withIssues)
-      throw new CliError("configuration_error", issueMessage(issues.map(publicIssue)))
+    if (issues.length > 0 && !options.withIssues) throw new CliError("configuration_error", issueMessage(issues))
     return namedProfiles(config)
   }
 
@@ -618,15 +655,15 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const level = name === "permissions" && rest.length > 0 ? rest.join(".") : undefined
     const modelField = /^models\.([a-z][a-z0-9-]*)\.(provider|model|base_url)$/.exec(setting)
     const known = allSettings.includes(setting) || level !== undefined || modelField !== null
-    const read = readRaw(path)
-    if ("issue" in read) throw new CliError("configuration_error", issueMessage([publicIssue(read.issue)]))
+    const read = readConfigFile(path)
+    if ("issue" in read) throw new CliError("configuration_error", issueMessage([read.issue]))
     const raw = read.raw === undefined ? {} : read.raw
     if (!isScope(raw)) throw new CliError("configuration_error", `${path}: the file has to be an object, in braces`)
     const scopePath = root
       ? []
       : [...(kind === undefined ? [] : [kind]), ...(profile === undefined ? ["defaults"] : ["profiles", profile])]
     const keyPath = root
-      ? setting.split(".")
+      ? settingPathOf(setting)
       : level !== undefined
         ? ["permissions", level]
         : modelField
@@ -643,9 +680,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         )
       if (!known && valueAt(raw, at) === undefined)
         throw new CliError("validation_error", `no setting called "${setting}" — one of: ${allSettings.join(", ")}`)
-      const changed = structuredClone(raw)
-      removeAt(changed, at)
-      saveConfigFile(path, changed)
+      saveConfigFile(path, withoutPath(raw, at).config)
       return null
     }
 
@@ -681,7 +716,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
 const isScope = (value: unknown): value is Scope => typeof value === "object" && value !== null && !Array.isArray(value)
 
 const valueAt = (node: unknown, path: readonly string[]): unknown =>
-  path.reduce<unknown>((at, key) => (isScope(at) ? at[key] : undefined), node)
+  path.reduce<unknown>((at, key) => (isScope(at) || Array.isArray(at) ? (at as Scope)[key] : undefined), node)
 
 const setAt = (node: Scope, path: readonly string[], value: unknown): void => {
   let at = node
@@ -690,20 +725,6 @@ const setAt = (node: Scope, path: readonly string[], value: unknown): void => {
     at = at[key] as Scope
   }
   at[path.at(-1) as string] = value
-}
-
-/** Removes the value and every section it leaves empty, so an unset leaves no `{}` behind. */
-const removeAt = (node: Scope, path: readonly string[]): void => {
-  const [key, ...rest] = path
-  if (key === undefined) return
-  if (rest.length === 0) {
-    delete node[key]
-    return
-  }
-  const child = node[key]
-  if (!isScope(child)) return
-  removeAt(child, rest)
-  if (Object.keys(child).length === 0) delete node[key]
 }
 
 /** Every profile the file names, in any section. */
