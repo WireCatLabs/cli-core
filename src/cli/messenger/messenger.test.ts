@@ -5351,6 +5351,16 @@ describe("the guard, account and mcp config commands", () => {
     expect(phones).toEqual(["34600123456"])
     expect([typo.code, inArgv.code]).toEqual([2, 2])
     expect(inArgv.stderr.join("\n")).not.toContain("600123456")
+
+    const spaced = await call(["contacts", "lookup", "+34", "600", "123", "456"], async () => finder, env, piped(""))
+    expect(spaced.code).toBe(2)
+    const kept = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? kept(join(dir, entry.name)) : [readFileSync(join(dir, entry.name), "utf8")],
+      )
+    const records = kept(join(env.CHAT_STATE_DIR ?? "", "runs")).join("\n")
+    expect(records).toContain('"argv":["contacts","lookup","[redacted]","[redacted]","[redacted]","[redacted]"]')
+    expect(records).not.toMatch(/600|34600123456/)
   })
 
   it("**contacts sync** keeps the contact list in the store and counts what was new or changed", async () => {

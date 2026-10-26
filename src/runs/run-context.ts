@@ -1,5 +1,6 @@
 import { isContentKey } from "@wirecat/cli-base/standards"
 import type { Argument, Command, Option } from "commander"
+import { BARE_PHONE, INTERNATIONAL_PHONE } from "./error-detail.js"
 import type { RunContext } from "./run.js"
 
 export const REDACTED = "[redacted]"
@@ -63,10 +64,13 @@ export interface MaskedArgv {
   unknownCommand?: string
 }
 
-const secretInputs = new WeakSet<Option | Argument>()
+const secretInputs = new WeakSet<Option | Argument | Command>()
 
-/** Marks an option or argument whose value a run record never keeps, whatever the owner's `record_input`. */
-export const secretInput = <T extends Option | Argument>(input: T): T => {
+/**
+ * Marks an option or argument whose value a run record never keeps, whatever the owner's `record_input`; on a command,
+ * every word typed after it that is not an option.
+ */
+export const secretInput = <T extends Option | Argument | Command>(input: T): T => {
   secretInputs.add(input)
   return input
 }
@@ -97,10 +101,14 @@ const secretNamed = (name: string): boolean => {
 const secretShaped = (word: string): boolean =>
   /:\/\/[^/@\s:]+:[^/@\s]+@/.test(word) || /(^|[^A-Za-z0-9_-])[A-Za-z0-9_-]{40,}($|[^A-Za-z0-9_-])/.test(word)
 
+// Messaging CLIs promise a phone number reaches no log, so it goes even from text the record otherwise keeps.
+const withoutPhones = (word: string): string =>
+  word.replace(new RegExp(INTERNATIONAL_PHONE, "g"), REDACTED).replace(new RegExp(BARE_PHONE, "g"), `$1${REDACTED}`)
+
 /**
  * The command line for a run record. With `keep` (the owner's `record_input`, on unless turned off) every word stays
- * as typed except a secret: a value of an input marked `secretInput` or named for one (`--token`), and a word shaped
- * like a credential. With `keep` off, command words, flag names and the profile stay; a value stays only when its
+ * as typed except a secret: a value of an input marked `secretInput` or named for one (`--token`), a word shaped
+ * like a credential, and a phone number inside any word. With `keep` off, command words, flag names and the profile stay; a value stays only when its
  * shape cannot be somebody's words — a number short of a phone's length, a duration, a date, `true`, one of the
  * option's declared choices — and its option or argument is not named for content (`--text`, `<phone>`). Anything
  * else, a positional after `--` or an argument no command declares, is `[redacted]`: a chat is often typed by title.
@@ -113,7 +121,7 @@ export const maskArgv = (program: Command, words: readonly string[], { keep = fa
   let profileSeen = false
   let lost = false
 
-  const raw = (word: string) => (keep && !secretShaped(word) ? word : REDACTED)
+  const raw = (word: string) => (keep && !secretShaped(word) ? withoutPhones(word) : REDACTED)
   const keptValue = (name: string, value: string, input?: Option | Argument): string =>
     keep
       ? (input && secretInputs.has(input)) || secretNamed(name)
@@ -177,7 +185,7 @@ export const maskArgv = (program: Command, words: readonly string[], { keep = fa
       }
       if (current === program && !profileSeen) {
         profileSeen = true
-        argv.push(keep ? raw(word) : PROFILE.test(word) ? word : REDACTED)
+        argv.push(keep ? raw(word) : PROFILE.test(word) && withoutPhones(word) === word ? word : REDACTED)
         continue
       }
       if (current.commands.length > 0 && current.registeredArguments.length === 0) {
@@ -190,7 +198,7 @@ export const maskArgv = (program: Command, words: readonly string[], { keep = fa
     const declared = lost ? undefined : current.registeredArguments
     const argument = declared?.[Math.min(positional, declared.length - 1)]
     positional += 1
-    argv.push(argument ? keptValue(argument.name(), word, argument) : raw(word))
+    argv.push(secretInputs.has(current) ? REDACTED : argument ? keptValue(argument.name(), word, argument) : raw(word))
   }
   return { argv, ...(unknownCommand === undefined ? {} : { unknownCommand }) }
 }
@@ -218,7 +226,11 @@ const safeShape = (value: string): boolean =>
   value === "true" ||
   value === "false"
 
-/** A run's context from the parsed program: `max messages list` and its words, or the word that named nothing. */
+/**
+ * A run's context from the parsed program: `max messages list` and its words, or the word that named nothing. A CLI
+ * that calls `recorded` or `startRecording` for a command of its own passes this as `context`; without it the run
+ * keeps no command line and no agent.
+ */
 export const runContextOf = ({
   bin,
   command,

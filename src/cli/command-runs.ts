@@ -5,12 +5,16 @@ import type { AppIdentity } from "../ports/app.js"
 import type { RequestEvent } from "../runs/events.js"
 import { type Recording, startRecording, wasSettled } from "../runs/recording.js"
 import { KEEP_RUNS_FOR_DAYS } from "../runs/run.js"
+import { runContextOf } from "../runs/run-context.js"
 import { environmentOf } from "./context.js"
+import { rootOf } from "./profile.js"
 
 /** What the owner saved: `record` and `keep_runs_for_days`, read from the CLI's own config. */
 export interface SavedRunSettings {
   record?: boolean | undefined
   keepRunsForDays?: number | undefined
+  /** `record_input`: left out, the typed words are kept, secrets hidden. */
+  recordInput?: boolean | undefined
 }
 
 export interface RunSettings {
@@ -91,9 +95,10 @@ const tracker = (options: CommandRunOptions): Tracker => {
     const agent = options.agent ?? environment.agent !== undefined
     const streams = options.streams ?? environment.streams
     const env = options.env ?? environment.env
+    const command = `${agent ? "mcp " : ""}${words.join(" ") || options.app.command}`
     recording = startRecording({
       app: options.app,
-      command: `${agent ? "mcp " : ""}${words.join(" ") || options.app.command}`,
+      command,
       ...(profile === undefined ? {} : { profile }),
       record: settings.record,
       keepFailed: settings.keepFailedRuns,
@@ -102,6 +107,14 @@ const tracker = (options: CommandRunOptions): Tracker => {
       format,
       ...(streams ? { streams } : {}),
       ...(env ? { env } : {}),
+      context: runContextOf({
+        bin: options.app.command,
+        command: words.length > 0 ? command : "",
+        program: rootOf(program),
+        ...(environment.argv ? { argv: environment.argv } : {}),
+        env: env ?? process.env,
+        recordInput: saved.recordInput !== false,
+      }),
     })
   }
 
@@ -189,9 +202,12 @@ const isHelpExit = (error: unknown): boolean => {
  * on. Call it after the program's other `parseAsync` wrappers, so its own is the outermost and sees how the parse
  * really ended; a refusal in an earlier `preAction` hook is then kept under the words read from the line.
  */
-export const recordRuns = (program: Command, options: CommandRunOptions & { content: string }): void => {
+export const recordRuns = (program: Command, options: CommandRunOptions): void => {
   program
-    .option("--record", `keep this run — ids and timings, never ${options.content}`)
+    .option(
+      "--record",
+      "keep this run, with the command as typed and secrets hidden; record_input false leaves the typed words out",
+    )
     .option("--no-record", "do not keep this run, even if it fails")
   program.hook("preAction", (_root, action) => {
     const parse = parses.getStore()

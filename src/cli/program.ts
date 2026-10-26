@@ -135,7 +135,10 @@ export const createProgram = (
     .option("--full", `${found} with their whole text and every provider field`)
     .option("--dry-run", "preview parsed arguments and permissions before running the action")
     .option("--yes", "go ahead without the question an ask level puts before a write")
-    .option("--record", `keep this run — ids and timings, never ${content}`)
+    .option(
+      "--record",
+      "keep this run, with the command as typed and secrets hidden; record_input false leaves the typed words out",
+    )
     .option("--no-record", "do not keep it, whatever the configuration says")
     .showHelpAfterError()
 

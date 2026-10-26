@@ -132,6 +132,10 @@ export const endpointTemplate = (raw: string): string => {
   return `${scheme}${segments.join("/")}`.slice(0, 300)
 }
 
+/** A phone number as people type it with its country code, and one written as digits only without the "+". */
+export const INTERNATIONAL_PHONE = /\+\d[\d\s()-]{6,}\d/.source
+export const BARE_PHONE = /(^|[^\w-])\d{11,15}\b/.source
+
 /**
  * An error's sentence with what could be somebody's words or a secret taken out: anything in quotes, an email, a
  * phone number, a bot token, a bearer or a long opaque string, a URL's query, the home directory. A second line of
@@ -144,8 +148,8 @@ export const redactText = (text: string): string => {
     .replace(/"[^"\n]*"|“[^”\n]*”|«[^»\n]*»/g, '"[redacted]"')
     .replace(/\b(bearer|basic|token|key|password|secret)(\s*[:=]\s*|\s+)[^\s'"]+/gi, "$1$2[redacted]")
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[email]")
-    .replace(/\+\d[\d\s()-]{6,}\d/g, "[number]")
-    .replace(/(^|[^\w-])\d{11,15}\b/g, "$1[number]")
+    .replace(new RegExp(INTERNATIONAL_PHONE, "g"), "[number]")
+    .replace(new RegExp(BARE_PHONE, "g"), "$1[number]")
     .replace(/\bbot\d+:[\w-]+/g, "bot[token]")
     .replace(/\b\d{6,}:[\w-]{20,}\b/g, "[token]")
     .replace(/(\?|&)[^\s#]*/g, "$1[redacted]")

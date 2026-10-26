@@ -9,6 +9,7 @@ import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
 import { writesInFlight } from "../sends/guarded.js"
 import { baseContext, environmentOf } from "./context.js"
+import * as cli from "./index.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
 
@@ -1157,5 +1158,56 @@ describe("a run with no profile named", () => {
     expect(await bare("work", withAccount)).toContain('or `app work account show` if "work" is your profile')
     expect(await bare("runs list", withAccount)).toMatch(/Run `app --help` for the commands\.$/)
     expect(await bare("work", program(false))).toMatch(/Run `app --help` for the commands\.$/)
+  })
+})
+
+describe("a CLI's own command", () => {
+  const notes = (recordInput: boolean): ProgramDefinition => ({
+    app,
+    commands: () => [
+      new Command("notes").addCommand(
+        new Command("add")
+          .argument("<text>")
+          .option("--token <token>")
+          .action(async function (this: Command) {
+            const { argv, env = process.env } = cli.environmentOf(this)
+            await cli.recorded(
+              {
+                app,
+                command: "notes add",
+                record: true,
+                keepFailed: true,
+                trace: false,
+                format: "json",
+                env,
+                context: cli.runContextOf({
+                  bin: app.command,
+                  command: "notes add",
+                  program: cli.rootOf(this),
+                  ...(argv ? { argv } : {}),
+                  env,
+                  recordInput,
+                }),
+              },
+              async () => {},
+            )
+          }),
+      ),
+    ],
+  })
+  const recordedArgv = async (recordInput: boolean) => {
+    const state = mkdtempSync(join(tmpdir(), "own-command-"))
+    const env = { ...process.env, APP_PROFILE: "work", APP_STATE_DIR: state, APP_CONFIG_DIR: join(state, "config") }
+    const typed = ["notes", "add", "Fake typed note", "--token=fake-token-value"]
+    expect(await run(typed, notes(recordInput), { streams: captureStreams(), tty: false, env })).toBe(0)
+    const [file] = readdirSync(join(state, "runs"), { recursive: true, withFileTypes: true }).filter(
+      (one) => one.name === "run.json",
+    )
+    return JSON.parse(readFileSync(join(file?.parentPath ?? "", "run.json"), "utf8")).argv
+  }
+
+  it("**keeps its typed command line on success** through the exported runContextOf, secrets hidden", async () => {
+    expect(await recordedArgv(true)).toEqual(["notes", "add", "Fake typed note", "--token=[redacted]"])
+    expect(await recordedArgv(false)).toEqual(["notes", "add", "[redacted]", "--token=[redacted]"])
   })
 })

@@ -7,6 +7,37 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A CLI's own command can keep its command line in its run record.** A command the CLI records itself with
+  `recorded` or `startRecording` kept no `argv` and no agent, since only cli-core's own commands built that part of the
+  record. `runContextOf` and the `RunContext` type are now exported from `@wirecat/cli-core/cli`. To adopt, pass
+  `context: runContextOf({ bin, command, program: rootOf(command), argv: environmentOf(command).argv, env,
+  recordInput: settings.recordInput !== false })` to the call; a CLI with its own program passes its own root command
+  and the words it parsed. Left out, `recordInput` masks every value that may be content. A CLI that records through
+  `commandRuns` under `run()` gets the command line with no change; its `settings()` may return `recordInput`, and when
+  it does not, the typed words are kept with secrets hidden.
+- **`secretInput` also marks a whole command**: every word typed after it that is not an option is `[redacted]` in a
+  run record. For a command that refuses its arguments, such as one that asks for a phone number instead of taking it,
+  this hides what was typed without declaring an argument, so its usage line and contract stay the same.
+
+### Changed — may break callers
+
+- **`--record` help says what a run keeps now.** It read "ids and timings, never content", which stopped being true
+  in 0.439.0; it now reads "keep this run, with the command as typed and secrets hidden; record_input false leaves the
+  typed words out". Every CLI's help snapshot and `docs/commands.md` change with it. `recordRuns` no longer takes
+  `content`, which only that line used.
+
+### Security
+
+- **A phone number no longer reaches a run record.** Since 0.439.0 a run keeps the words as typed, so a number typed
+  after `contacts lookup`, which the command refuses, was kept in `argv` in the clear. The command is now marked with
+  `secretInput`, so every word typed after it is `[redacted]`. A phone number typed anywhere else, message text included, is replaced by `[redacted]` inside the word,
+  the rest kept: one written with its "+" and country code, or 11 to 15 digits in a row, the shapes a kept error
+  already masks. A positive id of 11 to 15 digits, such as an 11-digit Zoom meeting id or a time in milliseconds, is
+  hidden as well; a negative chat id is kept. A number with no "+" written in groups (`8 912 345-67-89`) is not
+  recognised.
+
 ## 0.439.0 — 26.10.2026
 
 ### Changed — may break callers
