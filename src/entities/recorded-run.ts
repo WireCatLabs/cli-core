@@ -32,7 +32,9 @@ export const recordedRun = v.strictObject({
   cli_command: v.optional(text),
   argv: v.optional(v.array(text)),
   unknown_command: v.optional(text),
-  agent: v.optional(v.strictObject({ kind: text, session_id: v.nullable(text) })),
+  agent: v.optional(
+    v.strictObject({ kind: text, session_id: v.nullable(text), from_chat: v.optional(v.literal(true)) }),
+  ),
   error: v.optional(
     v.strictObject({
       class: text,
