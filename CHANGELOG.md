@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`--discover`'s reranker reads only the first 300 characters of the message a hit replies to.** The parent came
+  first in full, and a long one filled the reranker's 512 tokens, so the hit itself was cut off and the model scored
+  the parent instead (18 of 119 replies in one real chat). With the parent cut, the six known questions on that
+  chat kept every answer in the first five, and the reranker does about 40% less work.
+
 ## 0.446.0 — 26.10.2026
 
 ### Fixed

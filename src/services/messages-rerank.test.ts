@@ -10,7 +10,7 @@ import type { SendGuard } from "../sends/guard.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { storedDeps } from "./deps.js"
 import { searchStore } from "./messages-archive-search.js"
-import type { RerankLane } from "./messages-discovery.js"
+import { pairInput, type RerankLane } from "./messages-discovery.js"
 import { rerankLane } from "./messages-rerank.js"
 
 const tiny: RerankModel = {
@@ -130,6 +130,17 @@ describe("discovery's reranker", () => {
 
     // The question's cat, and the parent's kitten.
     expect(found.items.find(({ id }) => id === "3")?.discovery?.rerankerScore).toBe(2)
+  })
+
+  it("reads only the start of a long parent, so the reply itself always fits", () => {
+    const reply = { ...message("3", "the answer"), chatTitle: "Chat 9" } as Parameters<typeof pairInput>[0]
+    const parent = message("2", "context ".repeat(400))
+
+    const [before, after] = pairInput(reply, parent).split("\n")
+
+    expect(before).toHaveLength(300)
+    expect(before).toMatch(/^\[Chat 9 · unknown · 2026-10-01\] context/)
+    expect(after).toBe("[Chat 9 · unknown · 2026-10-01] the answer")
   })
 
   it("is not used when the profile turned it off, and says nothing", async () => {
