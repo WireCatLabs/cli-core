@@ -37,6 +37,8 @@ export interface McpServerTarget {
 export interface McpServerOptions {
   /** How help shows the CLI before `mcp`: `tg personal`. */
   example: string
+  /** The CLI's own `mcp --http` default, when it is not 8765. */
+  defaultPort?: number
   target: (self: Command) => McpServerTarget
   /** The CLI's own answer: the item in `--json`, else the lines. */
   answer: (self: Command, item: object, lines: string[]) => void
@@ -91,7 +93,13 @@ const clientLines = (clients: ReturnType<typeof signedInClients>) =>
  * survives the shell that started it, and `stop` ends only a process that carries this CLI's marker.
  * None of it is offered over MCP: status holds a live login code.
  */
-export const mcpServerCommand = ({ example, target, answer, system }: McpServerOptions): Command => {
+export const mcpServerCommand = ({
+  example,
+  defaultPort = MCP_HTTP_DEFAULT_PORT,
+  target,
+  answer,
+  system,
+}: McpServerOptions): Command => {
   const command = annotate(new Command("server"), { mcp: false })
     .summary("run the HTTP MCP server in the background")
     .description("start, stop and check `mcp --http` in the background; status shows the login code for a browser app")
@@ -106,7 +114,7 @@ export const mcpServerCommand = ({ example, target, answer, system }: McpServerO
   )
     .summary("start the HTTP MCP server in the background")
     .description("start `mcp --http` apart from this shell and answer once it listens, with its login code")
-    .option("--port <port>", `the local port (default ${MCP_HTTP_DEFAULT_PORT})`)
+    .option("--port <port>", `the local port (default ${defaultPort})`)
     .option("--public-url <url>", "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net")
     .option(
       "--permission <key=level>",
@@ -118,7 +126,7 @@ export const mcpServerCommand = ({ example, target, answer, system }: McpServerO
       const flags = this.optsWithGlobals<{ port?: string; publicUrl?: string; permission?: string[] }>()
       const one = target(this)
       const url = publicUrlOf(flags.publicUrl, { missing: "mcp server start", reaches: "the browser apps reach it" })
-      const port = portOf(flags.port, MCP_HTTP_DEFAULT_PORT)
+      const port = portOf(flags.port, defaultPort)
       const lockFile = httpLockFile(one.tokenFile)
       const before = readHttpLock(lockFile)
       if (before && alive(before.pid)) {
