@@ -3179,6 +3179,23 @@
         }
       }
     },
+    "mcp server": {
+      "in": "all"
+    },
+    "mcp server start": {
+      "in": "all",
+      "options": {
+        "--permission": "all",
+        "--port": "all",
+        "--public-url": "all"
+      }
+    },
+    "mcp server status": {
+      "in": "all"
+    },
+    "mcp server stop": {
+      "in": "all"
+    },
     "mentions": {
       "in": "all"
     },

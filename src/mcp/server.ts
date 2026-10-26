@@ -28,6 +28,7 @@ import { openStore } from "../store/store.js"
 import { type AgentAnswer, type AgentProgram, type AgentTool, runCommandForAgent, toolsFromCommands } from "./agent.js"
 import { agentLog } from "./agent-log.js"
 import type { HttpOptions } from "./http/serve.js"
+import { mcpHttpMarker } from "./http/state.js"
 import { instructions } from "./instructions.js"
 import { registerPrompts } from "./prompts.js"
 import { registerResources } from "./resources.js"
@@ -538,12 +539,16 @@ export const serveOverHttpUntilStopped = async (
   const { session, embedders, build, log } = createServer(command, context, messenger, options)
   const { serveOverHttp } = await import("./http/serve.js")
   const appName = messenger.app.command
+  const appEnvPrefix = messenger.app.envPrefix
   const listening = await serveOverHttp(build, {
     ...http,
     appName,
+    // In the background its log is a file; the code goes only to the lock that `mcp server status` reads.
     onCode: (code, expires) =>
       context.renderer.note(
-        `login code for a new browser app: ${code} (until ${expires.toTimeString().slice(0, 5)}; a new one after each login)`,
+        context.env[mcpHttpMarker(appEnvPrefix)] === undefined
+          ? `login code for a new browser app: ${code} (until ${expires.toTimeString().slice(0, 5)}; a new one after each login)`
+          : `a new login code for a browser app: \`${appName} ${context.settings.profile} mcp server status\``,
       ),
     onError: (error) => context.renderer.note(`mcp: ${error.message}`),
   }).catch(async (error: unknown) => {

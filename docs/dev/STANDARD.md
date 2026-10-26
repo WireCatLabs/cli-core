@@ -1036,17 +1036,17 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `attachments download`, `bot messages sync` (max, tg only), `messages download`, `messages sync`, `store gaps repair` |
 | `--per-chat` | `<limit>` | at most this many per chat, such as 1/12h |  | `replies edit` |
 | `--per-person` | `<limit>` | at most this many per person, such as 1/1d |  | `replies edit` |
-| `--permission` | `<key=level>` | make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys |  | `mcp`, `mcp add`, `mcp check`, `mcp config` |
+| `--permission` | `<key=level>` | make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys |  | `mcp`, `mcp add`, `mcp check`, `mcp config`, `mcp server start` |
 | `--personal` |  | the personal account's section of the profile's settings |  | `config set`, `config unset` |
 | `--phone-number` | `<who>` | who sees the number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--photo` | `<file>` | an image file — a profile photo in `account update`, a group's photo in `chats update`, a photo to send in `messages send` |  | `account update` — WhatsApp accepts JPEG (.jpg or .jpeg) profile photos; help names each messenger's accepted image formats (WC-CMD-25)., `bot messages send` (planned), `chats update` (planned), `messages send` |
 | `--pin` | `<chat>` | pin this chat at the top of the folder; repeat it for more |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--pinned` | `<on\|off>` | on pins a forum topic at the top of the list, off unpins it |  | `topics edit` (tg-only) |
-| `--port` | `<port>` | the local port behind the tunnel, for mcp --http or bot watch --public-url |  | `bot watch`, `mcp` |
+| `--port` | `<port>` | the local port behind the tunnel, for mcp --http or bot watch --public-url |  | `bot watch`, `mcp`, `mcp server start` |
 | `--priority` | `<n>` | task priority from 0 (urgent) through 4 (low) |  | `tasks update` |
 | `--problems` |  | only failed responses, warnings and crashes |  | `runs show` |
 | `--profile-photo` | `<who>` | who sees the profile photo: everyone, contacts or nobody |  | `account privacy set` (planned) |
-| `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp` |
+| `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp`, `mcp server start` |
 | `--question` |  | match only questions |  | `replies edit` |
 | `--quiet` |  | diagnostics off. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--quiz` |  | a quiz: one answer is right, and a vote is final |  | `polls create` (tg-only) |

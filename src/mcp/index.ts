@@ -14,4 +14,5 @@ export {
 export { type BotServerOptions, createBotServer, type RunBotCommand } from "./bot/server.js"
 export { revokeAll } from "./http/oauth.js"
 export { type HttpOptions, MCP_PATH, serveOverHttp } from "./http/serve.js"
+export { httpLockFile } from "./http/state.js"
 export { type McpCommand, registerCommands } from "./surface.js"

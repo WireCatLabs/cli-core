@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`mcp server start|stop|status` runs the HTTP MCP server in the background** (WireCat Desktop step 3). `start`
+  takes `--public-url`, `--port` and `--permission` as `mcp --http` does and answers once it listens; `stop` ends
+  only a server `start` started; `status --json` gives the port, the connector address, the login code for a new
+  browser app with when it runs out, and the apps logged in, by the name each gave itself. `mcp --http` now keeps a
+  lock beside its token file, so a second one for the same profile is refused. A CLI with its own `mcp` mounts
+  `mcpServerCommand` and passes `lockFile: httpLockFile(tokenFile)` to `serveOverHttp`.
+
+### Fixed
+
+- **The login code is renewed when it runs out**, not only when someone types a wrong or late one, and the login
+  page says it is shown in WireCat Desktop or the terminal.
+
 ## 0.444.0 — 26.10.2026
 
 ### Security
