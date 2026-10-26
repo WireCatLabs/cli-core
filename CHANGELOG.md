@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.446.0 — 26.10.2026
+
 ### Fixed
 
 - **`checkGuide` accepts a step that runs a group with an action of its own**, such as `mcp` now that it has
