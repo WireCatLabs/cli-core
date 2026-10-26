@@ -9,6 +9,9 @@ describe("authorOf", () => {
     expect(authorOf({ GEMINI_CLI: "1" })).toBe("gemini-cli")
     expect(authorOf({ CURSOR_AGENT: "1" })).toBe("cursor")
     expect(authorOf({ OPENCODE: "1" })).toBe("opencode")
+    expect(authorOf({ AI_AGENT: "hermes-agent" })).toBe("hermes-agent")
+    expect(authorOf({ OPENCLAW_SHELL: "exec" })).toBe("openclaw")
+    expect(authorOf({ OPENCLAW_SHELL: "tui-local" })).toBe("owner")
     expect(authorOf({})).toBe("owner")
     expect(authorOf({ CODEX_THREAD_ID: "019a-thread" }, true)).toBe("owner")
   })
@@ -24,6 +27,10 @@ describe("holderOf", () => {
     expect(holderOf({ CODEX_THREAD_ID: "019a-thread" })).toBe("codex:019a-thread")
     expect(holderOf({ OPENCODE: "1", OPENCODE_SESSION_ID: "ses_1" })).toBe("opencode:ses_1")
     expect(holderOf({ GEMINI_CLI: "1" })).toBe("gemini-cli")
+    expect(holderOf({ AI_AGENT: "hermes-agent", HERMES_SESSION_ID: "20260901_015036_21865a" })).toBe(
+      "hermes-agent:20260901_015036_21865a",
+    )
+    expect(holderOf({ OPENCLAW_SHELL: "exec", OPENCLAW_CHANNEL_CONTEXT: '{"chat":{"id":"c"}}' })).toBe("openclaw")
     expect(holderOf({})).toBe("owner")
   })
 })

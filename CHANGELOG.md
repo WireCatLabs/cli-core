@@ -5,7 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.437.0 — 26.10.2026
+
+### Added
+
+- **Runs started by OpenClaw or Hermes Agent name that agent, and a Hermes run its session.** OpenClaw's agent sets
+  `OPENCLAW_SHELL=exec` in the commands it runs: such a run's `agent` is `openclaw`, with no session, since OpenClaw
+  gives none. `tui-local`, what the owner types in OpenClaw's terminal view, stays the owner's. A run started from a
+  chat message adds `from_chat: true`; the sender and chat ids OpenClaw passes in `OPENCLAW_CHANNEL_CONTEXT` are never
+  read into the record. Hermes was already named `hermes-agent` from `AI_AGENT`; its `HERMES_SESSION_ID` is now the
+  session, so a task claim from Hermes is held by `hermes-agent:<session>` as one from Claude Code is by its session.
+  A reader of `run.json` that refuses unknown keys must accept the optional `agent.from_chat`.
+- **`validateSkill` accepts OpenClaw's declarations as a mapping at `metadata.openclaw`.** OpenClaw and ClawHub read a
+  skill's required programs and its install entry (`requires.bins`, `install: [{ kind: node, package, bins }]`) only
+  from an object under that key, so a tool's SKILL.md can now carry them and still pass its own skill check. Every
+  other metadata key stays a string, as the Agent Skills specification asks; `openclaw` as a list, a string or null is
+  still refused.
 
 ### Changed — may break callers
 
