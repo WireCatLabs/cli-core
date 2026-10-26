@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../embeddings/embed.js"
 import { type RerankModel, rerankModel, type TextModel, textModel } from "../embeddings/models.js"
+import { installNativeRuntime } from "../embeddings/onnx-runtime.js"
 import {
   type ImageModel,
   imageModel,
@@ -25,6 +26,20 @@ const bytesOf = (model: { files: readonly { bytes: number }[] }) =>
   model.files.reduce((sum, file) => sum + file.bytes, 0)
 
 /**
+ * The native ONNX Runtime beside the text models, where this system has one. It only makes them faster, so a
+ * failed download says why and the model is still installed, to run through WebAssembly.
+ */
+const nativeRuntime = async ({ env, progress = () => {} }: ModelDownloadOptions): Promise<void> => {
+  try {
+    await installNativeRuntime({ env, progress })
+  } catch (error) {
+    progress(
+      `ONNX Runtime not installed (${error instanceof Error ? error.message : String(error)}); models run through WebAssembly`,
+    )
+  }
+}
+
+/**
  * The text embedding model into the shared models folder, checked against the sha256 this version expects and
  * loaded once on a word. Nothing is downloaded when it is already there; it is still loaded.
  */
@@ -44,6 +59,7 @@ export const downloadTextModel = async (
     progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
     await installFiles(placedText(model, directory), { progress })
   }
+  await nativeRuntime({ env, progress })
   progress(`${model.id}: loading it once to check it works`)
   const { openEmbedder } = await import("../embeddings/embed.js")
   const embedder = await openEmbedder(model, directory)
@@ -68,6 +84,7 @@ export const downloadRerankModel = async (
     progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
     await installFiles(placedText(model, directory), { progress })
   }
+  await nativeRuntime({ env, progress })
   progress(`${model.id}: loading it once to check it works`)
   const { openReranker } = await import("../embeddings/rerank.js")
   const reranker = await openReranker(model, directory)

@@ -150,7 +150,7 @@ export const RERANK_MODELS: RerankModel[] = [
     languages: "about 100 languages, Russian and English among them",
     licence: "Apache-2.0",
     maxTokens: 512,
-    // The x86 name is the quantizer's target; Core runs every model as WebAssembly, on any processor.
+    // The x86 name is the quantizer's target; WebAssembly and native ONNX Runtime both run it on any processor.
     onnx: "onnx/model_quint8_avx2.onnx",
     files: [
       {

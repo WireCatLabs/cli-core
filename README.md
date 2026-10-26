@@ -130,8 +130,9 @@ code and its document must agree. A search plan that reads an index once per mes
   pattern can hang the search.
 - **Presets for what people actually look for.** `preset:password`, `api-key`, `card`, `phone`, `email`, `url` and
   seven more find candidates, labelled as candidates.
-- **Search by meaning, opt in.** Conversations are split into chunks and embedded locally by a WebAssembly ONNX
-  runtime, the same on Node and Bun — e5-small by default, or any OpenAI-compatible API with your own key, after
+- **Search by meaning, opt in.** Conversations are split into chunks and embedded locally by ONNX Runtime — native
+  on Linux (glibc) and Apple-silicon Macs once `models download` has fetched it, WebAssembly elsewhere, on Node and
+  Bun alike — e5-small by default, or any OpenAI-compatible API with your own key, after
   you see the cost. Results by meaning and by words are merged by reciprocal rank fusion.
 - **The archive and the server together.** `--backend both` also asks the messenger's own search; its hits are saved
   and filtered by the same query, so nothing is counted twice. `--thread` brings the reply thread around a hit.

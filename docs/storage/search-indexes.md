@@ -195,8 +195,18 @@ should take. A chunk whose messages changed after the build waits for the next b
 | EmbeddingGemma | 768 | ~220 MB | 100+, better on chat | about 7× slower |
 | an API: OpenAI `text-embedding-3-small`, or any server with OpenAI's `/v1/embeddings` (`--base-url`) | the model's | — | the model's | the API's |
 
-They run in our own WebAssembly build of ONNX Runtime (`@wirecat/cli-core-onnx`) — no native
-code, the same on Node and Bun. An API model needs the user's key (`models keys set`), says
+They run in ONNX Runtime 1.30.0 (`@wirecat/cli-core-onnx`), on Node and Bun alike:
+
+- **Native** on Linux x64 and arm64 (glibc) and macOS arm64, 2–3× faster. `models download` of a text model or
+  reranker also fetches Microsoft's release archive of the library for the system (10–42 MB, checked by sha256),
+  and places the library beside a copy of the binding `@wirecat/cli-core-onnx` carries, in
+  `models/runtime/onnxruntime-1.30.0-<system>/`. A search never downloads it.
+- **WebAssembly** everywhere else — Windows (its binding needs the DirectML build of `onnxruntime.dll`, not in
+  Microsoft's release), Intel Macs, musl — before that download, and whenever the native library does not load or
+  will not open a model. Picture models stay on WebAssembly.
+
+The two give slightly different numbers for the same text (8-bit kernels differ); vectors built by one search well
+with questions embedded by the other. An API model needs the user's key (`models keys set`), says
 how many chunks, tokens and dollars at most before chat text leaves the machine, and waits for a yes.
 
 e5-small is weak across languages: an English chat did not answer the same question asked in Russian.
