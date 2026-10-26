@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`skill show`, `skill status` and `skill install` answer `--json` in the one-thing envelope**
+  ([WC-OUT-4](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-4--answer-every-json-request-with-one-envelope-a-list-or-one-thing)),
+  `{ item, meta }`, and `--jsonl` as one item line and the end line, like every other command and as their declared
+  output schema already said; they printed the bare object. MCP tool answers change the same way. `commands --json`
+  does not change. A caller reads the old fields under `item`: the `install/windows.ps1` installers of tg-cli, max-cli
+  and whatsapp-cli read `$skill.written`, and tests in tg-cli (`src/archive.test.ts`), max-cli
+  (`src/commands/skill.test.ts`) and cli-template (`src/roots.test.ts`) read the bare shape.
+
 ### Fixed
 
 - **An empty `messages` search no longer suggests `messages sync --all --background`.** `coverage.next` and the

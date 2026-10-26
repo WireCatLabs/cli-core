@@ -4,6 +4,7 @@ import type { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
 import { environmentOf, outputFor } from "./context.js"
 import { grantsAuthority } from "./effects.js"
+import { printItem } from "./envelope.js"
 
 /**
  * `skill show` and `skill install`. `skill` is the CLI's own SKILL.md, shipped beside `dist/` in the
@@ -15,7 +16,10 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
     skill,
     (command) => {
       const { env } = environmentOf(command)
-      return { ...outputFor(command), ...(env ? { env } : {}) }
+      const output = outputFor(command)
+      // cli-base prints each answer bare; the envelope is cli-core's.
+      const renderer = { ...output.renderer, result: (value: unknown) => printItem(output, value) }
+      return { ...output, renderer, ...(env ? { env } : {}) }
     },
     SHARED_SKILLS,
   )
