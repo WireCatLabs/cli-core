@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.444.0 — 26.10.2026
 
 ### Added
 
@@ -20,8 +20,6 @@ shape of this file.
 
 - **The login code is renewed when it runs out**, not only when someone types a wrong or late one, and the login
   page says it is shown in WireCat Desktop or the terminal.
-
-## 0.444.0 — 26.10.2026
 
 ### Security
 
