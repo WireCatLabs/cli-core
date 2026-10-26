@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.61.** The peer range moves from `>=0.59.0 <0.60.0` to `>=0.61.0 <0.62.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.60.0 to 0.61.3 bring the handbook fixes from the
+  cli-template 0.6.0 audit, the rule that a run record keeps the command line as typed (which cli-core already does
+  since 0.440.0), and `--record`'s help line from cli-core, which the shared option catalogue in
+  [`docs/dev/STANDARD.md`](docs/dev/STANDARD.md) now shows.
+
 ### Fixed
 
 - **`--discover`'s reranker reads only the first 300 characters of the message a hit replies to.** The parent came
