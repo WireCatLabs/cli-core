@@ -136,6 +136,7 @@ const allCommand = (messenger: Messenger): Command => {
     for (const { resource, source, reason } of found.skipped)
       context.renderer.note(`${resource ?? source} not searched: ${reason}`)
     if (found.notes?.meaningSkipped) context.renderer.note(`notes by words only: ${found.notes.meaningSkipped}`)
+    if (found.events?.meaningSkipped) context.renderer.note(`events by words only: ${found.events.meaningSkipped}`)
     if (found.messages?.meaningSkipped)
       context.renderer.note(`messages: ${meaningNote(found.messages.meaningSkipped, messenger.app.command)}`)
     const again = {

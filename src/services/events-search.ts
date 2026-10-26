@@ -1,9 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { kindIn } from "../domain/providers.js"
-import type { EventHit } from "../store/index.js"
+import type { WarmEmbedders } from "../embeddings/embed.js"
+import { meaningFloor } from "../embeddings/models.js"
+import type { EventHit, NearestEvent } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
-import { storeQuery } from "./notes-search.js"
+import { localModel, RRF_K, storeQuery, withLocal } from "./notes-search.js"
+import { plainQueryWords } from "./notes-title-tier.js"
 
 export interface EventsQuery {
   limit?: number
@@ -19,6 +22,11 @@ export interface EventsQuery {
   signal?: AbortSignal
   /** How many matching events are read before grouping; for tests. */
   candidates?: number
+  env?: NodeJS.ProcessEnv
+  /** The tool's command, named in the hint when the model is missing. */
+  command?: string
+  /** The search's own models, when another part of it loads the same one. */
+  embedders?: Pick<WarmEmbedders, "get">
 }
 
 export interface FoundEvent {
@@ -47,6 +55,10 @@ export interface FoundEvent {
 
 export interface EventsFound {
   query: string
+  /** Words and word stems always; meaning too when the model is there and the query is plain words. */
+  by: "words" | "words and meaning"
+  /** Why meaning was not searched, when it was not. */
+  meaning_skipped?: string
   hits: FoundEvent[]
   has_more: boolean
   /** More events matched than one search reads (50,000); the later ones were not read — narrow the query. */
@@ -72,7 +84,11 @@ export const calendarAccounts = async (store: MessageStore): Promise<AccountKey[
     .filter(({ provider }) => kindIn(provider) === "events")
     .map(({ provider, account }) => ({ provider, account }))
 
-export const foundEvent = (hit: EventHit, query: string, foundBy: FoundEvent["found_by"]): FoundEvent => ({
+export const foundEvent = (
+  hit: Omit<EventHit, "relevance">,
+  query: string,
+  foundBy: FoundEvent["found_by"],
+): FoundEvent => ({
   ref: hit.ref,
   provider: hit.account?.provider ?? null,
   account: hit.account?.account ?? null,
@@ -89,15 +105,62 @@ export const foundEvent = (hit: EventHit, query: string, foundBy: FoundEvent["fo
   found_by: foundBy,
 })
 
+/** How deep each half is read before the two are merged. */
+const CANDIDATES = 50
+
+/** Events nearest in meaning to plain words, one per series, best first; only events already embedded are found. */
+const nearestEvents = async (
+  store: MessageStore,
+  words: string,
+  {
+    limit,
+    accountIds,
+    env,
+    command,
+    embedders,
+  }: Pick<EventsQuery, "env" | "command" | "embedders"> & { limit: number; accountIds?: string[] },
+): Promise<NearestEvent[]> => {
+  const { model, directory, key } = localModel(undefined, env, command)
+  if (!(await store.calendar.embedded(key, accountIds ? { accountIds } : {})))
+    throw new CliError("not_found", `no event has vectors of ${model.id} yet, so only words were matched`)
+  const [vector] = await withLocal(
+    model,
+    directory,
+    undefined,
+    (embedder) => embedder.embed([words], "query"),
+    embedders,
+  )
+  const floor = meaningFloor(key)
+  return (
+    await store.calendar.nearest(key, vector as Float32Array, { limit, ...(accountIds ? { accountIds } : {}) })
+  ).filter(({ score }) => score > floor)
+}
+
+/** One hit per series, whichever half found it. */
+const keyOf = ({ event }: { event: EventHit["event"] }) =>
+  event.eventSeriesId === null ? `e${event.id}` : `s${event.eventSeriesId}`
+
 /**
- * Calendar events by words, in the query language messages use: title, cleaned description, place and attendees'
- * names. The occurrences of one series are one hit. Working location, focus time, out of office and birthdays are
- * never found.
+ * Calendar events by words and, when the local text model is there and the query is plain words, by meaning, merged
+ * by reciprocal rank: title, cleaned description, place and attendees' names. The occurrences of one series are one
+ * hit. Working location, focus time, out of office, birthdays and busy-only slots are never found.
  */
 export const searchEvents = async (
   store: MessageStore,
   query: string,
-  { limit = 20, offset = 0, accounts, exact, newest, timezone, signal, candidates }: EventsQuery = {},
+  {
+    limit = 20,
+    offset = 0,
+    accounts,
+    exact,
+    newest,
+    timezone,
+    signal,
+    candidates,
+    env,
+    command,
+    embedders,
+  }: EventsQuery = {},
 ): Promise<EventsFound> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the events")
   const { root, stemmer } = await storeQuery(store, query, {
@@ -105,23 +168,68 @@ export const searchEvents = async (
     ...(timezone === undefined ? {} : { timezone }),
   })
   const accountIds = accounts === undefined ? undefined : await accountIdsOf(store, accounts)
-  if (accountIds?.length === 0) return { query, hits: [], has_more: false }
+  if (accountIds?.length === 0) return { query, by: "words", hits: [], has_more: false }
+  const words = plainQueryWords(query)
+  const window = offset + limit
+  let meaningSkipped: string | undefined
+  let meaning: NearestEvent[] | undefined
+  if (exact) meaningSkipped = "--exact searches words as written"
+  else if (newest) meaningSkipped = "newest first orders by time"
+  else if (words === undefined) meaningSkipped = "the query has fields or operators, which meaning cannot follow"
+  else
+    try {
+      meaning = await nearestEvents(store, words, {
+        limit: Math.max(window, CANDIDATES),
+        ...(accountIds ? { accountIds } : {}),
+        ...(env === undefined ? {} : { env }),
+        ...(command === undefined ? {} : { command }),
+        ...(embedders === undefined ? {} : { embedders }),
+      })
+    } catch (error) {
+      if (!(error instanceof CliError && error.code === "not_found")) throw error
+      meaningSkipped = error.message
+    }
   const found = await store.calendar.search({
     root,
-    limit,
-    offset,
+    limit: meaning === undefined ? limit : Math.max(window, CANDIDATES),
+    offset: meaning === undefined ? offset : 0,
     ...(accountIds === undefined ? {} : { accountIds }),
     ...(newest ? { newest: true } : {}),
     ...(stemmer ? { stemmer } : {}),
     ...(signal ? { signal } : {}),
     ...(candidates === undefined ? {} : { candidates }),
   })
-  const window = offset + limit
+  const truncated = found.truncated ? { truncated: true as const } : {}
+  const by = meaning === undefined ? "words" : "words and meaning"
+  const skipped = meaningSkipped === undefined ? {} : { meaning_skipped: meaningSkipped }
+  if (meaning === undefined)
+    return {
+      query,
+      by,
+      ...skipped,
+      hits: found.items.map((hit) => foundEvent(hit, query, ["words"])),
+      has_more: found.hasMore,
+      ...(found.hasMore && window <= MAX_EVENTS_OFFSET ? { next_offset: window } : {}),
+      ...truncated,
+    }
+  const ranked = new Map<string, { hit: Omit<EventHit, "relevance">; score: number; by: FoundEvent["found_by"] }>()
+  const add = (list: Omit<EventHit, "relevance">[], half: "words" | "meaning") =>
+    list.forEach((hit, rank) => {
+      const held = ranked.get(keyOf(hit)) ?? { hit, score: 0, by: [] }
+      held.score += 1 / (RRF_K + rank + 1)
+      held.by.push(half)
+      ranked.set(keyOf(hit), held)
+    })
+  add(found.items, "words")
+  add(meaning, "meaning")
+  const ordered = [...ranked.values()].sort((a, b) => b.score - a.score)
+  const hasMore = ordered.length > window || found.hasMore
   return {
     query,
-    hits: found.items.map((hit) => foundEvent(hit, query, ["words"])),
-    has_more: found.hasMore,
-    ...(found.hasMore && window <= MAX_EVENTS_OFFSET ? { next_offset: window } : {}),
-    ...(found.truncated ? { truncated: true as const } : {}),
+    by,
+    hits: ordered.slice(offset, window).map(({ hit, by: halves }) => foundEvent(hit, query, halves)),
+    has_more: hasMore,
+    ...(hasMore && window <= MAX_EVENTS_OFFSET ? { next_offset: window } : {}),
+    ...truncated,
   }
 }

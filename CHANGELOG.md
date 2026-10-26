@@ -22,6 +22,14 @@ shape of this file.
 - **`ContextOptions.now`** sets what counts as an upcoming event, and **`EventFilter.newest`** lists events latest
   first.
 
+- **Calendar events are found by meaning too.** `embedEvents(store, options)` embeds the events' pieces with the
+  default text model, as `embedNotes` does; a calendar CLI calls it after a sync. The occurrences of a series share one
+  text and so one vector: a weekly meeting held a year is embedded once. `searchEvents` then ranks words and meaning
+  together by reciprocal rank, each hit saying which found it (`found_by`), and answers `by` and, when meaning was
+  left out, `meaning_skipped`: no model, no vectors yet, `--exact`, or a query with fields or operators.
+  `store.calendar` gains `chunksToEmbed`, `embedded` and `nearest`; `search all` answers `events.by` and prints
+  `events by words only: …` when meaning was left out.
+
 ### Changed — may break callers
 
 - **`search all` reads calendar events** when the store holds a calendar (an account whose provider is of the

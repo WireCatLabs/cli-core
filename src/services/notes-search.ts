@@ -130,7 +130,11 @@ const downloadHint = (model: string, command: string | undefined) =>
     ? `install it with a WireCat CLI that has \`models download\` (tg, max or wa); they share the model folder`
     : `\`${command} models download ${model}\``
 
-const localModel = (choice: string | undefined, env: NodeJS.ProcessEnv | undefined, command: string | undefined) => {
+export const localModel = (
+  choice: string | undefined,
+  env: NodeJS.ProcessEnv | undefined,
+  command: string | undefined,
+) => {
   const model = textModel(choice ?? DEFAULT_TEXT_MODEL)
   const directory = textModelsDirectory(env)
   if (!isTextModelInstalled(model, directory))
@@ -141,7 +145,7 @@ const localModel = (choice: string | undefined, env: NodeJS.ProcessEnv | undefin
   return { model, directory, key: vectorModelKey(model) }
 }
 
-const withLocal = async <T>(
+export const withLocal = async <T>(
   model: TextModel,
   directory: string,
   threads: number | undefined,
@@ -169,7 +173,7 @@ const withLocal = async <T>(
  */
 const embedChunks = async (
   store: MessageStore,
-  source: Pick<MessageStore["notes"], "chunksToEmbed">,
+  source: Pick<MessageStore["notes"] | MessageStore["calendar"], "chunksToEmbed">,
   {
     model: choice,
     maxChunks = Number.POSITIVE_INFINITY,
@@ -210,6 +214,10 @@ const embedChunks = async (
 
 export const embedNotes = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>
   embedChunks(store, store.notes, options)
+
+/** Embeds calendar events' pieces as notes' are embedded; the occurrences of a series share one vector. */
+export const embedEvents = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>
+  embedChunks(store, store.calendar, options)
 
 /** Embeds mail's chunks as notes' are embedded: same model and key, so search by meaning reads both. */
 export const embedMail = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>

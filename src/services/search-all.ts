@@ -67,6 +67,8 @@ export interface SearchAllFound {
   skipped: Skipped<SearchedResource>[]
   /** How the notes were searched, when they were. */
   notes?: { by: "words" | "words and meaning"; meaningSkipped?: string }
+  /** How calendar events were searched, when they were. */
+  events?: { by: "words" | "words and meaning"; meaningSkipped?: string }
   /** How the messages were searched, when they were; never by meaning with `exact` or the server alone. */
   messages?: { by: "words" | "words and meaning"; meaningSkipped?: MeaningSkipped }
   /** The messenger's server step for messages, as `search messages` reports it. */
@@ -146,6 +148,7 @@ export const searchAll = async (
   const skipped: SearchAllFound["skipped"] = []
   let hasMore = false
   let notes: SearchAllFound["notes"]
+  let events: SearchAllFound["events"]
   let messagesBy: SearchAllFound["messages"]
   let server: ServerSearched | undefined
 
@@ -231,7 +234,7 @@ export const searchAll = async (
     return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
   }
 
-  // Messages and notes both look up by meaning with the same model: loading it costs most of a second.
+  // Messages, notes and events all look up by meaning with the same model: loading it costs most of a second.
   const embedders = runEmbedders()
   try {
     for (const resource of only) {
@@ -277,11 +280,18 @@ export const searchAll = async (
           const found = await searchEvents(store, request.text, {
             limit: window,
             accounts: read,
+            embedders,
+            ...(command === undefined ? {} : { command }),
+            ...(request.env === undefined ? {} : { env: request.env }),
             ...(request.exact ? { exact: true } : {}),
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
           })
           hasMore ||= found.has_more
+          events = {
+            by: found.by,
+            ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
+          }
           lists.push(
             found.hits.map((hit) => ({
               kind: "event",
@@ -325,6 +335,7 @@ export const searchAll = async (
     accounts,
     skipped,
     ...(notes === undefined ? {} : { notes }),
+    ...(events === undefined ? {} : { events }),
     ...(messagesBy === undefined ? {} : { messages: messagesBy }),
     ...(server === undefined ? {} : { server }),
   }
