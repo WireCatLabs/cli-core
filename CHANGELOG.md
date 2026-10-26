@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.448.0 — 26.10.2026
+
 ### Added
 
 - **Text models and rerankers run on native ONNX Runtime on Linux (glibc, x64 and arm64) and Apple-silicon Macs**,
