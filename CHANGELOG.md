@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.438.0 — 26.10.2026
+
 ### Security
 
 - **A first word refused as a profile no longer reaches the run log.** When the first word could not be a profile
