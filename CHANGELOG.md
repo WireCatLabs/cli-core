@@ -34,7 +34,9 @@ shape of this file.
   after `contacts lookup`, which the command refuses, was kept in `argv` in the clear. Every word typed there is now
   `[redacted]`. A phone number typed anywhere else, message text included, is replaced by `[redacted]` inside the word,
   the rest kept: one written with its "+" and country code, or 11 to 15 digits in a row, the shapes a kept error
-  already masks. A number with no "+" written in groups (`8 912 345-67-89`) is not recognised.
+  already masks. A positive id of 11 to 15 digits, such as an 11-digit Zoom meeting id or a time in milliseconds, is
+  hidden as well; a negative chat id is kept. A number with no "+" written in groups (`8 912 345-67-89`) is not
+  recognised.
 
 ## 0.439.0 — 26.10.2026
 
