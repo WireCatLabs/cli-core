@@ -384,10 +384,16 @@ type Ranked = FoundMessage & { fused: number }
 /** What the reranker reads of a hit, as the benchmark gave it: its reply parent first, each line headed by where, who and when. */
 type Said = { senderName: string | null; timestamp: string | null; text: string }
 
-const pairInput = (hit: FoundMessage, parent: Said | null | undefined): string => {
+/**
+ * Only the start of the parent: whole, a long one filled the model's 512 tokens and cut off the hit it was scoring
+ * (18 of 119 replies in one real chat). Cut to 300 characters, every answer on the six known questions stayed.
+ */
+const PARENT_CHARACTERS = 300
+
+export const pairInput = (hit: FoundMessage, parent: Said | null | undefined): string => {
   const line = (m: Said) =>
     `[${hit.chatTitle ?? hit.chatId} · ${m.senderName ?? "unknown"} · ${m.timestamp?.slice(0, 10) ?? "undated"}] ${m.text}`
-  return (parent ? [parent, hit] : [hit]).map(line).join("\n")
+  return (parent ? [line(parent).slice(0, PARENT_CHARACTERS), line(hit)] : [line(hit)]).join("\n")
 }
 
 const accountOfHit = (hit: FoundMessage): AccountKey => {
