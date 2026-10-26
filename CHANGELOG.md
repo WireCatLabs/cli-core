@@ -16,7 +16,7 @@ shape of this file.
   lock beside its token file, so a second one for the same profile is refused. A CLI with its own `mcp` mounts
   `mcpServerCommand` and passes `lockFile: httpLockFile(tokenFile)` to `serveOverHttp`.
 
-### Changed
+### Fixed
 
 - **The login code is renewed when it runs out**, not only when someone types a wrong or late one, and the login
   page says it is shown in WireCat Desktop or the terminal.
