@@ -7,6 +7,24 @@ shape of this file.
 
 ## Unreleased
 
+### Security
+
+- **A run record and a kept error message now find a secret by what it looks like, not only by the flag's name.**
+  The secret is replaced by `[redacted]` inside the word and the words around it stay:
+  - a token in a known format: GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), OpenAI and
+    Anthropic (`sk-`), Slack (`xoxb-` and the like), an AWS access key id (`AKIA`, `ASIA`), a Google API key
+    (`AIza`), a Stripe secret or restricted key (`sk_live_`, `rk_live_` and the `_test_` ones; a `pk_` key is public
+    and stays), an npm token (`npm_`), a Telegram bot token, a JWT, and a PEM private key block;
+  - a `Bearer` or `Basic` credential;
+  - the value of a pair whose name says it is a secret, `password=…`, `API_TOKEN=…`, `client_secret:…`,
+    `"accessToken":"…"`, the name kept;
+  - a random-looking string of 20 or more characters: mixed upper and lower case with a digit or symbol, entropy of
+    at least 3.5 bits a character, case changing often and cut into short pieces. Words, camelCase names, UUIDs,
+    hex hashes, run ids, dates, paths and URLs without a password in them stay.
+
+  A profile name or a mistyped command word that looks like a secret is now `[redacted]` even with `record_input`
+  off.
+
 ## 0.441.0 — 26.10.2026
 
 ### Added
