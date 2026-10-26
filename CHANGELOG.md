@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.445.0 — 26.10.2026
+
 ### Added
 
 - **`mcp server start|stop|status` runs the HTTP MCP server in the background** (WireCat Desktop step 3). `start`
