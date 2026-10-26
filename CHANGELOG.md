@@ -11,6 +11,8 @@ shape of this file.
 
 - **`checkGuide` accepts a step that runs a group with an action of its own**, such as `mcp` now that it has
   `mcp server`; before, it asked for one of the group's subcommands.
+- **The `mcp server` group states its effects** (reads locally), as a CLI that requires effects on every command
+  expects.
 
 ## 0.445.0 — 26.10.2026
 

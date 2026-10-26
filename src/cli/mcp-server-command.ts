@@ -100,7 +100,7 @@ export const mcpServerCommand = ({
   answer,
   system,
 }: McpServerOptions): Command => {
-  const command = annotate(new Command("server"), { mcp: false })
+  const command = annotate(new Command("server"), { effects: LOCAL_READ, mcp: false })
     .summary("run the HTTP MCP server in the background")
     .description("start, stop and check `mcp --http` in the background; status shows the login code for a browser app")
   const machine = (self: Command) => system?.(self) ?? thisMachine()
