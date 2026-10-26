@@ -116,14 +116,9 @@ describe("maskArgv", () => {
 describe("maskArgv with keep, as `record_input` is by default", () => {
   const keep = { keep: true }
 
-  it("keeps every word as typed: text, a chat by title, a phone, after -- and a mistyped command", () => {
+  it("keeps every word as typed: text, a chat by title, after -- and a mistyped command", () => {
     const typed = ["work", "messages", "send", "Mom", "see you at 5", "--caption=beach", "--", "--not-a-flag"]
     expect(maskArgv(program(), typed, keep).argv).toEqual(typed)
-    expect(maskArgv(program(), ["contacts", "add", "79161234567"], keep).argv).toEqual([
-      "contacts",
-      "add",
-      "79161234567",
-    ])
     expect(maskArgv(program(), ["work", "mesages", "hi there"], keep)).toEqual({
       argv: ["work", "mesages", "hi there"],
       unknownCommand: "mesages",
@@ -165,6 +160,23 @@ describe("maskArgv with keep, as `record_input` is by default", () => {
       "send",
       "777",
       "[redacted]",
+    ])
+  })
+
+  it("hides a phone number wherever it is typed and keeps the words around it", () => {
+    expect(maskArgv(program(), ["contacts", "add", "79161234567"], keep).argv).toEqual([
+      "contacts",
+      "add",
+      "[redacted]",
+    ])
+    expect(
+      maskArgv(program(), ["messages", "send", "-1001234567890", "call +7 (916) 123-45-67 or 79161234567 at 5"], keep)
+        .argv,
+    ).toEqual(["messages", "send", "-1001234567890", "call [redacted] or [redacted] at 5"])
+    expect(maskArgv(program(), ["79161234567", "messages", "list"], keep).argv).toEqual([
+      "[redacted]",
+      "messages",
+      "list",
     ])
   })
 })
