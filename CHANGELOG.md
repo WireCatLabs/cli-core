@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.439.0 — 26.10.2026
+
 ### Changed — may break callers
 
 - **A run record keeps the command line as typed.** `argv` in `run.json` and `runs show` now holds the words the person
