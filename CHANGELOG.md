@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The parity manifest knows `session start --answer-stdin`**, in tg and max: the flag that lets WireCat Desktop
+  answer a sign-in's questions on stdin (`signInSteps`, 0.443.0). WhatsApp's QR sign-in asks nothing, so wa does not
+  take it yet.
+
 ### Fixed
 
 - **`--discover`'s reranker reads only the first 300 characters of the message a hit replies to.** The parent came

@@ -858,6 +858,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--analyze` |  | link conversation batches using the configured analysis provider, with remembered chat/provider consent |  | `conversations links rebuild` |
 | `--anonymous` |  | nobody sees who voted for what |  | `polls create` (max, tg only) |
 | `--answer-model` | `<model>` | only the stored answers this model gave |  | `conversations links clear` |
+| `--answer-stdin` |  | with --json and no terminal: print each question as a `needs` line on stderr and read its answer, one line, from stdin |  | `session start` (tg, max only) |
 | `--answerer` | `<person>` | stored name, alias, @username, ID or scoped person locator; ambiguous names require a choice; repeat it for more |  | `stats chats newcomers`, `stats contacts responses`, `stats messages unanswered` |
 | `--app` | `<how>` | the first time only: how to get this profile's app from my.telegram.org | `browser` | `session start` (tg-only), `setup` (tg-only) |
 | `--append` |  | keep existing entries and add the explicitly named one beside them |  | `bot webhooks set` (max-only) |

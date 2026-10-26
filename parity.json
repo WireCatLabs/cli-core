@@ -68,6 +68,9 @@
       "value": "<model>",
       "meaning": "only the stored answers this model gave"
     },
+    "--answer-stdin": {
+      "meaning": "with --json and no terminal: print each question as a `needs` line on stderr and read its answer, one line, from stdin"
+    },
     "--answerer": {
       "value": "<person>",
       "meaning": "stored name, alias, @username, ID or scoped person locator; ambiguous names require a choice; repeat it for more"
@@ -4193,6 +4196,10 @@
     "session start": {
       "in": "all",
       "options": {
+        "--answer-stdin": {
+          "in": ["tg", "max"],
+          "reason": "only tg and max ask questions during sign-in (app keys, codes, a 2FA or cloud password); WhatsApp's QR sign-in asks nothing, and its phone login is not ported to signInSteps yet"
+        },
         "--app": {
           "in": ["tg"],
           "reason": "Telegram asks each client for its own app from my.telegram.org; MAX has no such step; WhatsApp has no application registration"
