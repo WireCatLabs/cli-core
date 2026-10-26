@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.447.0 — 26.10.2026
+
 ### Added
 
 - **The parity manifest knows `session start --answer-stdin`**, in tg and max: the flag that lets WireCat Desktop
