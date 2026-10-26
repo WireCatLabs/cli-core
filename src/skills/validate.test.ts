@@ -36,6 +36,14 @@ describe("portable skill validation", () => {
       expect(validateSkill(source(front))).not.toEqual([])
     expect(validateSkill(source(), { folder: "other", version: "1.2.3" })).toHaveLength(2)
   })
+  it("accepts OpenClaw's declarations as a mapping at metadata.openclaw, and only there", () => {
+    const openclaw =
+      "metadata:\n  version: '1.2.3'\n  openclaw:\n    requires:\n      bins: [fixture]\n    install:\n" +
+      "      - kind: node\n        package: '@wirecat/fixture'\n        bins: [fixture]"
+    expect(validateSkill(source(`name: fixture\ndescription: test\n${openclaw}`), { version: "1.2.3" })).toEqual([])
+    for (const metadata of ["  author: [a]", "  openclaw: []", "  openclaw: '{}'", "  openclaw: null"])
+      expect(validateSkill(source(`name: fixture\ndescription: test\nmetadata:\n${metadata}`))).not.toEqual([])
+  })
   it("checks local references and real command paths without executing examples", () => {
     const root = new Command("fixture").addCommand(
       new Command("stats").addCommand(new Command("messages").addCommand(new Command("show").argument("[text]"))),
