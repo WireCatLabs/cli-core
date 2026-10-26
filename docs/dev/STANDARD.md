@@ -1419,8 +1419,8 @@ drop. Flipped early, the row fails that CLI's `parity:check` on its next upgrade
 blocks the upgrade.
 
 **This repository checks every tool's `main` against its own manifest** (`.github/workflows/parity.yml`):
-by hand, and inside full validation (`ci.yml`), which each push to `main`, the release and the monthly
-run start. It does not run on pull requests, and there is no daily run. It
+by hand, and inside full validation (`ci.yml`), which each pull request, each push to `main`, the release and
+the monthly run start. There is no daily run. It
 builds tg-cli, max-cli and whatsapp-cli from their `main` and runs the same check, so a row flipped early fails
 here, before the release that would carry it — not weeks later, when a CLI upgrades. The wording job compares
 max and tg only, until wa's own `setup --method` says what theirs says. The published
