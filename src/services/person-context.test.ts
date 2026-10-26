@@ -158,6 +158,37 @@ describe("contacts context", () => {
     expect(texts(alone.recent.direct)).not.toContain("from Ana on MAX")
   })
 
+  it("links a calendar attendee's email contact to a Telegram person", async () => {
+    const calendarAccount = await store.accounts.saveAccount(
+      { provider: "google-calendar", account: "owner-1" },
+      { name: null },
+    )
+    const [calendar] = await store.calendar.saveCalendars(
+      calendarAccount,
+      [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+      1,
+    )
+    await store.calendar.saveEntries(
+      calendar?.id as number,
+      [
+        {
+          externalId: "g1",
+          kind: "single",
+          status: "confirmed",
+          title: "Planning",
+          startsAt: 1,
+          endsAt: 2,
+          participants: [{ email: "Ana@X.com", name: "Ana from the calendar" }],
+        },
+      ],
+      1,
+    )
+
+    const linked = await people().link("11", "email:ana@x.com")
+
+    expect(linked.identities.map((one) => `${one.provider}:${one.id}`)).toEqual(["email:ana@x.com", "telegram:11"])
+  })
+
   it("keeps a renamed person's history and key", async () => {
     const before = await people().context("11")
     await store.people.savePeople(tg, [{ id: "11", name: "Ana María" }])
