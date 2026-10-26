@@ -17,6 +17,9 @@ shape of this file.
   and the words it parsed. Left out, `recordInput` masks every value that may be content. A CLI that records through
   `commandRuns` under `run()` gets the command line with no change; its `settings()` may return `recordInput`, and when
   it does not, the typed words are kept with secrets hidden.
+- **`secretInput` also marks a whole command**: every word typed after it that is not an option is `[redacted]` in a
+  run record. For a command that refuses its arguments, such as one that asks for a phone number instead of taking it,
+  this hides what was typed without declaring an argument, so its usage line and contract stay the same.
 
 ### Changed — may break callers
 
@@ -24,15 +27,12 @@ shape of this file.
   in 0.439.0; it now reads "keep this run, with the command as typed and secrets hidden; record_input false leaves the
   typed words out". Every CLI's help snapshot and `docs/commands.md` change with it. `recordRuns` no longer takes
   `content`, which only that line used.
-- **`contacts lookup` declares a `[phone]` argument**, which it still refuses. Its usage line and its command contract
-  show it, so a help snapshot or a contract check changes. A CLI that declared the same argument on its own copy no
-  longer needs a contract override for it.
 
 ### Security
 
 - **A phone number no longer reaches a run record.** Since 0.439.0 a run keeps the words as typed, so a number typed
-  after `contacts lookup`, which the command refuses, was kept in `argv` in the clear. Every word typed there is now
-  `[redacted]`. A phone number typed anywhere else, message text included, is replaced by `[redacted]` inside the word,
+  after `contacts lookup`, which the command refuses, was kept in `argv` in the clear. The command is now marked with
+  `secretInput`, so every word typed after it is `[redacted]`. A phone number typed anywhere else, message text included, is replaced by `[redacted]` inside the word,
   the rest kept: one written with its "+" and country code, or 11 to 15 digits in a row, the shapes a kept error
   already masks. A positive id of 11 to 15 digits, such as an 11-digit Zoom meeting id or a time in milliseconds, is
   hidden as well; a negative chat id is kept. A number with no "+" written in groups (`8 912 345-67-89`) is not

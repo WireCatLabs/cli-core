@@ -125,12 +125,19 @@ describe("maskArgv with keep, as `record_input` is by default", () => {
     })
   })
 
-  it("hides a marked input, one named for a secret, and a word shaped like a credential", () => {
+  it("hides a marked input or command, one named for a secret, and a word shaped like a credential", () => {
     const root = program()
     root.addOption(secretInput(new Option("--pin <code>")))
     root.command("login").addArgument(secretInput(new Argument("<code>")))
     const opaque = "A".repeat(20) + "1".repeat(20)
 
+    root.addCommand(secretInput(new Command("lookup")).allowExcessArguments())
+    expect(maskArgv(root, ["lookup", "+1", "202", "--json"], keep).argv).toEqual([
+      "lookup",
+      "[redacted]",
+      "[redacted]",
+      "--json",
+    ])
     expect(maskArgv(root, ["login", "12345", "--pin", "4321"], keep).argv).toEqual([
       "login",
       "[redacted]",

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery } from "@wirecat/cli-base/query"
-import { Argument, Command } from "commander"
+import { Command } from "commander"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { secretInput } from "../../runs/run-context.js"
 import { levelFor } from "../../sends/permissions.js"
@@ -385,11 +385,9 @@ export const contactsCommand = (messenger: Messenger): Command => {
    * ⚠ **The number is asked for or piped, never an argument**: argv is read by `ps` and kept by shell
    * history, and a phone number is personal data.
    */
-  annotate(contacts.command("lookup"), { effects: REMOTE_READ, output: { entity: "contact_lookup" } })
+  annotate(secretInput(contacts.command("lookup")), { effects: REMOTE_READ, output: { entity: "contact_lookup" } })
     .summary("find an account by a phone number")
     .description("who has this phone number — asks for it, or reads it from stdin; never an argument")
-    // Declared only so a number typed here anyway, every word of it, stays out of the run record.
-    .addArgument(secretInput(new Argument("[phone]", "refused: the number is asked for, never typed here")))
     // Commander's own refusal would repeat the number on stderr.
     .allowExcessArguments()
     .action(async function (this: Command) {

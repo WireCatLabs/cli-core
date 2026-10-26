@@ -64,10 +64,13 @@ export interface MaskedArgv {
   unknownCommand?: string
 }
 
-const secretInputs = new WeakSet<Option | Argument>()
+const secretInputs = new WeakSet<Option | Argument | Command>()
 
-/** Marks an option or argument whose value a run record never keeps, whatever the owner's `record_input`. */
-export const secretInput = <T extends Option | Argument>(input: T): T => {
+/**
+ * Marks an option or argument whose value a run record never keeps, whatever the owner's `record_input`; on a command,
+ * every word typed after it that is not an option.
+ */
+export const secretInput = <T extends Option | Argument | Command>(input: T): T => {
   secretInputs.add(input)
   return input
 }
@@ -195,7 +198,7 @@ export const maskArgv = (program: Command, words: readonly string[], { keep = fa
     const declared = lost ? undefined : current.registeredArguments
     const argument = declared?.[Math.min(positional, declared.length - 1)]
     positional += 1
-    argv.push(argument ? keptValue(argument.name(), word, argument) : raw(word))
+    argv.push(secretInputs.has(current) ? REDACTED : argument ? keptValue(argument.name(), word, argument) : raw(word))
   }
   return { argv, ...(unknownCommand === undefined ? {} : { unknownCommand }) }
 }
