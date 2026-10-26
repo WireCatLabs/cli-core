@@ -1,6 +1,7 @@
 name: ONNX
 # Builds @wirecat/cli-core-onnx (packages/onnx), runs a model through it on every system under
-# Node and Bun, and publishes it when started by hand with `publish` — npm trusts this file by name.
+# Node and Bun, through WebAssembly and natively beside Microsoft's library, and publishes it when
+# started by hand with `publish` — npm trusts this file by name.
 on:
   schedule:
     - cron: "27 3 1 * *"
@@ -70,12 +71,18 @@ jobs:
         run: |
           echo '{"type":"module"}' > package.json
           npm install --no-audit --no-fund ./wirecat-cli-core-onnx-*.tgz
-          cp ../packages/onnx/probe.mjs .
+          cp ../packages/onnx/probe.mjs ../packages/onnx/probe-native.mjs .
           mkdir test && cp ../packages/onnx/test/multiply.onnx test/
       - working-directory: probe
         run: node probe.mjs
       - working-directory: probe
         run: bun probe.mjs
+      - if: runner.os != 'Windows'
+        working-directory: probe
+        run: node probe-native.mjs
+      - if: runner.os != 'Windows'
+        working-directory: probe
+        run: bun probe-native.mjs
 
   publish:
     needs: [probe, security]

@@ -1,7 +1,7 @@
 {
   "name": "@wirecat/cli-core-onnx",
-  "version": "1.0.1",
-  "description": "ONNX Runtime 1.30.0 for Node and Bun, WebAssembly only — the three files @wirecat/cli-core runs its local models with",
+  "version": "1.1.0",
+  "description": "ONNX Runtime 1.30.0 for Node and Bun: the WebAssembly build @wirecat/cli-core runs its local models with, and the native binding of each platform for the library it downloads",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {
@@ -23,6 +23,7 @@
     "index.js",
     "index.d.ts",
     "dist/",
+    "native/",
     "LICENSE-onnxruntime",
     "README.md"
   ]

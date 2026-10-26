@@ -10,6 +10,7 @@ coverage/
 .claude/settings.local.json
 packages/sqlite/lib/
 packages/sqlite/*.tgz
+packages/onnx/native/
 /.live/
 
 # Internal working files: kept on the machine, not published.
