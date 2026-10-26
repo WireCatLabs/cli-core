@@ -126,6 +126,7 @@ describe("checkGuide", () => {
     "chat messages list -h",
     "chat messages --help",
     "chat personal messages list Team",
+    "chat personal mcp --http --public-url https://laptop.example.ts.net",
   ])("accepts %s", (line) => {
     expect(checkStep(createProgram(sharedProgram), line)).toEqual([])
   })

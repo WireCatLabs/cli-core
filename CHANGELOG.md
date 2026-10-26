@@ -5,6 +5,13 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`checkGuide` accepts a step that runs a group with an action of its own**, such as `mcp` now that it has
+  `mcp server`; before, it asked for one of the group's subcommands.
+
 ## 0.445.0 — 26.10.2026
 
 ### Added
