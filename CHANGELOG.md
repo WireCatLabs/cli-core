@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.444.0 — 26.10.2026
+
 ### Security
 
 - **Run records hide more secrets: hex keys, and a password written after its name with a space.** A run of 20 or
