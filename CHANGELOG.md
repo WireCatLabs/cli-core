@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.440.0 — 26.10.2026
+
 ### Added
 
 - **A CLI's own command can keep its command line in its run record.** A command the CLI records itself with
