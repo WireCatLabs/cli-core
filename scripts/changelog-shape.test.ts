@@ -25,7 +25,3 @@ describe("changelogProblems", () => {
     ])
   })
 })
-
-it("probe: a broken test must fail its shard and the coverage job (do not merge)", () => {
-  throw new Error("deliberately broken")
-})
