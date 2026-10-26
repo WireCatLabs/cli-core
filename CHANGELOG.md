@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.442.0 — 26.10.2026
+
 ### Security
 
 - **A run record and a kept error message now find a secret by what it looks like, not only by the flag's name.**
