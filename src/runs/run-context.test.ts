@@ -133,6 +133,27 @@ describe("agentOf", () => {
     expect(agentOf({})).toBeUndefined()
   })
 
+  it("reads Hermes's session, as Hermes names it for every command it runs", () => {
+    expect(agentOf({ AI_AGENT: "hermes-agent", HERMES_SESSION_ID: "20260901_015036_21865a" })).toEqual({
+      kind: "hermes-agent",
+      session_id: "20260901_015036_21865a",
+    })
+    expect(agentOf({ AI_AGENT: "hermes-agent" })).toEqual({ kind: "hermes-agent", session_id: null })
+    expect(agentOf({ HERMES_SESSION_ID: "20260901_015036_21865a" })).toBeUndefined()
+  })
+
+  it("names OpenClaw only for its agent's commands, and keeps that a chat started one but never who sent it", () => {
+    expect(agentOf({ OPENCLAW_SHELL: "exec" })).toEqual({ kind: "openclaw", session_id: null })
+    const fromChat = agentOf({
+      OPENCLAW_SHELL: "exec",
+      OPENCLAW_CHANNEL_CONTEXT: '{"sender":{"id":"sender-1"},"chat":{"id":"chat-1"}}',
+    })
+    expect(fromChat).toEqual({ kind: "openclaw", session_id: null, from_chat: true })
+    expect(JSON.stringify(fromChat)).not.toMatch(/sender-1|chat-1/)
+    expect(agentOf({ OPENCLAW_SHELL: "tui-local" })).toBeUndefined()
+    expect(agentOf({ OPENCLAW_SHELL: "exec", CLAUDECODE: "1" })).toEqual({ kind: "claude-code", session_id: null })
+  })
+
   it("drops a session id that is not shaped like one", () => {
     expect(agentOf({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "a b; rm -rf" })).toEqual({
       kind: "claude-code",

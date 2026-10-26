@@ -8,13 +8,16 @@ export const REDACTED = "[redacted]"
 export interface RunAgent {
   kind: string
   session_id: string | null
+  /** Set, and only `true`, when a chat message started the agent's turn; who sent it is never kept. */
+  from_chat?: true
 }
 
 /**
  * The agent is read from what each one sets in the processes it starts: Claude Code `CLAUDECODE` and
- * `CLAUDE_CODE_SESSION_ID`, Codex `CODEX_THREAD_ID`, OpenCode `OPENCODE` and `OPENCODE_SESSION_ID`, Gemini CLI
- * `GEMINI_CLI`, Cursor `CURSOR_AGENT` — the last two give their commands no session id. `AI_AGENT` (Claude Code,
- * OpenCode) carries a version, `claude-code_2-1-296_agent`, so only the name before it is kept.
+ * `CLAUDE_CODE_SESSION_ID`, Codex `CODEX_THREAD_ID`, OpenCode `OPENCODE` and `OPENCODE_SESSION_ID`, Hermes
+ * `AI_AGENT=hermes-agent` and `HERMES_SESSION_ID`, Gemini CLI `GEMINI_CLI`, Cursor `CURSOR_AGENT`, OpenClaw
+ * `OPENCLAW_SHELL=exec` — the last three give their commands no session id. `AI_AGENT` (Claude Code, OpenCode, Hermes)
+ * carries a version, `claude-code_2-1-296_agent`, so only the name before it is kept.
  */
 export const agentOf = (env: NodeJS.ProcessEnv): RunAgent | undefined => {
   const named = env.AI_AGENT?.trim().split("_")[0]
@@ -24,24 +27,31 @@ export const agentOf = (env: NodeJS.ProcessEnv): RunAgent | undefined => {
     (env.CODEX_THREAD_ID || env.CODEX_SESSION_ID || env.CODEX_SANDBOX ? "codex" : undefined) ??
     (env.GEMINI_CLI ? "gemini-cli" : undefined) ??
     (env.OPENCODE ? "opencode" : undefined) ??
-    (env.CURSOR_AGENT ? "cursor" : undefined)
+    (env.CURSOR_AGENT ? "cursor" : undefined) ??
+    // Only `exec` is the agent's own command: OpenClaw also sets `tui-local` for what the owner types in its TUI.
+    (env.OPENCLAW_SHELL?.trim() === "exec" ? "openclaw" : undefined)
   if (!kind) return undefined
   const session = sessionOf(kind, env)
-  return { kind, session_id: session && SESSION.test(session) ? session : null }
+  return {
+    kind,
+    session_id: session && SESSION.test(session) ? session : null,
+    // OpenClaw passes the sender and chat ids of a chat-started run in this variable; only its presence is kept.
+    ...(kind === "openclaw" && env.OPENCLAW_CHANNEL_CONTEXT?.trim() ? { from_chat: true as const } : {}),
+  }
 }
 
 const SESSION = /^[A-Za-z0-9._:-]{1,128}$/
 
+const SESSION_VARIABLE: Readonly<Record<string, string>> = {
+  "claude-code": "CLAUDE_CODE_SESSION_ID",
+  codex: "CODEX_THREAD_ID",
+  opencode: "OPENCODE_SESSION_ID",
+  "hermes-agent": "HERMES_SESSION_ID",
+}
+
 const sessionOf = (kind: string, env: NodeJS.ProcessEnv): string | undefined => {
-  const value =
-    kind === "claude-code"
-      ? env.CLAUDE_CODE_SESSION_ID
-      : kind === "codex"
-        ? env.CODEX_THREAD_ID
-        : kind === "opencode"
-          ? env.OPENCODE_SESSION_ID
-          : undefined
-  return value?.trim() || undefined
+  const variable = SESSION_VARIABLE[kind]
+  return (variable === undefined ? undefined : env[variable]?.trim()) || undefined
 }
 
 const plainWord = (word: string) => /^[A-Za-z][A-Za-z0-9.-]{0,39}$/.test(word)

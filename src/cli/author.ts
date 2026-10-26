@@ -13,7 +13,7 @@ export const authorOf = (env: NodeJS.ProcessEnv, asOwner?: boolean): string =>
 /**
  * Who holds a task claim — one agent session, not the agent's name, so two sessions of one agent do not share one
  * claim (owner, NEED-1119). `--holder`, then `WIRECAT_HOLDER`, then the agent's own session id where it sets one
- * (Claude Code, Codex, OpenCode), else the agent's name.
+ * (Claude Code, Codex, OpenCode, Hermes), else the agent's name.
  */
 export const holderOf = (env: NodeJS.ProcessEnv, flag?: string): string => {
   const given = flag?.trim() || env.WIRECAT_HOLDER?.trim()

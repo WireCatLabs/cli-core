@@ -10,6 +10,11 @@ export interface SkillValidation {
   program?: Command
 }
 
+// The Agent Skills specification asks for string values; OpenClaw and ClawHub read their install and requirement
+// declarations only from an object at `metadata.openclaw`, so that one key is a mapping.
+const isMap = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
 export const validateSkill = (content: string, options: SkillValidation = {}): string[] => {
   const problems: string[] = []
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)
@@ -40,12 +45,12 @@ export const validateSkill = (content: string, options: SkillValidation = {}): s
   for (const key of Object.keys(fields)) if (!known.has(key)) problems.push(`unsupported frontmatter field: ${key}`)
   if (
     fields.metadata !== undefined &&
-    (!fields.metadata ||
-      typeof fields.metadata !== "object" ||
-      Array.isArray(fields.metadata) ||
-      Object.values(fields.metadata).some((value) => typeof value !== "string"))
+    (!isMap(fields.metadata) ||
+      Object.entries(fields.metadata).some(([key, value]) =>
+        key === "openclaw" ? !isMap(value) : typeof value !== "string",
+      ))
   )
-    problems.push("skill metadata must contain string values")
+    problems.push("skill metadata must contain string values, and metadata.openclaw a mapping")
   if (options.version && (fields.metadata as Record<string, unknown> | undefined)?.version !== options.version)
     problems.push("emitted skill version must match the binary")
 

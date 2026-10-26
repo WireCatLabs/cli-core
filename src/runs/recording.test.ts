@@ -172,6 +172,17 @@ describe("what a run says about how it was started", () => {
     expect(everythingUnder(runsDir)).not.toContain(TITLE)
   })
 
+  it("keeps that an OpenClaw run came from a chat, and never who sent it or from which chat", async () => {
+    const { runsDir } = await call(["messages", "list", "--record"], undefined, undefined, {
+      OPENCLAW_SHELL: "exec",
+      OPENCLAW_CHANNEL_CONTEXT: '{"sender":{"id":"sender-77"},"chat":{"id":"chat-88"}}',
+    })
+
+    const { raw } = runFile(runsDir)
+    expect(JSON.parse(raw).agent).toEqual({ kind: "openclaw", session_id: null, from_chat: true })
+    expect(everythingUnder(runsDir)).not.toMatch(/sender-77|chat-88/)
+  })
+
   it("names the word that was no command, and keeps the profile", async () => {
     const { runsDir } = await call(["work", "mesages", "list", BODY])
 
