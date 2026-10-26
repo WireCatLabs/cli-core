@@ -41,7 +41,7 @@ grep -qF 'require(require("./location.js").binding());' native/binding.js
 cp location.cjs native/location.js
 echo '{"type":"commonjs"}' > native/package.json
 grep -qF "exports.version = '$VERSION';" native/version.js
-for target in linux/x64 linux/arm64 darwin/arm64 win32/x64; do
+for target in linux/x64 linux/arm64 darwin/arm64; do
   mkdir -p "native/$(echo "$target" | tr / -)"
   cp "$from/bin/napi-v6/$target/onnxruntime_binding.node" "native/$(echo "$target" | tr / -)/"
 done

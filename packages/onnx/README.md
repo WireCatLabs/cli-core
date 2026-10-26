@@ -4,10 +4,11 @@
 
 - **WebAssembly**, on every system: the Node build of `onnxruntime-web` and the one WebAssembly module it loads,
   about 15 MB instead of the 145 MB package that also carries every browser build.
-- **Native**, 2–3× faster, on Linux x64 and arm64 (glibc), macOS arm64 and Windows x64: `onnxruntime-node`'s
+- **Native**, 2–3× faster, on Linux x64 and arm64 (glibc) and macOS arm64: `onnxruntime-node`'s
   JavaScript and the 0.3–0.4 MB binding of each of those systems, without its libraries. `@wirecat/cli-core`
   downloads the library of Microsoft's release of the same version beside a copy of the binding, which loads it from
-  its own folder.
+  its own folder. Windows stays on WebAssembly: its binding needs the DirectML build of `onnxruntime.dll`, which
+  Microsoft's release does not carry.
 
 ```js
 import { env, InferenceSession, Tensor } from "@wirecat/cli-core-onnx" // WebAssembly

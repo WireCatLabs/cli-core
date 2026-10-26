@@ -77,9 +77,11 @@ jobs:
         run: node probe.mjs
       - working-directory: probe
         run: bun probe.mjs
-      - working-directory: probe
+      - if: runner.os != 'Windows'
+        working-directory: probe
         run: node probe-native.mjs
-      - working-directory: probe
+      - if: runner.os != 'Windows'
+        working-directory: probe
         run: bun probe-native.mjs
 
   publish:

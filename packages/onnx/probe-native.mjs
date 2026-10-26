@@ -27,12 +27,6 @@ const archives = {
     "./onnxruntime-osx-arm64-1.30.0/lib/libonnxruntime.1.30.0.dylib",
     "libonnxruntime.1.dylib",
   ],
-  "win32-x64": [
-    "onnxruntime-win-x64-1.30.0.zip",
-    "c6ba983baf5681af108599675d2a89c2d145512d02de28aed0bff177cd0ba949",
-    "onnxruntime-win-x64-1.30.0/lib/onnxruntime.dll",
-    "onnxruntime.dll",
-  ],
 }
 const target = `${process.platform}-${process.arch}`
 const [name, sha256, member, library] = archives[target] ?? []
@@ -45,9 +39,7 @@ const archive = Buffer.from(await (await fetch(`${release}/${name}`)).arrayBuffe
 const actual = createHash("sha256").update(archive).digest("hex")
 if (actual !== sha256) throw new Error(`${name} is not the file expected (sha256 ${actual})`)
 writeFileSync(join(work, name), archive)
-// Windows' own tar.exe (bsdtar) reads zip as well; Git Bash's GNU tar does not.
-const tar = process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar"
-execFileSync(tar, ["-xf", name, member], { cwd: work })
+execFileSync("tar", ["-xf", name, member], { cwd: work })
 const folder = mkdtempSync(join(tmpdir(), "onnx-runtime-"))
 copyFileSync(join(work, member), join(folder, library))
 copyFileSync(binding, join(folder, "onnxruntime_binding.node"))
