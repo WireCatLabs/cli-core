@@ -123,6 +123,13 @@ export { unanswered } from "../services/questions.js"
 export { openRequestTask } from "../services/task-rules.js"
 export { TASK_PAIR_QUERY, TASK_QUERY } from "../services/tasks.js"
 export {
+  answerStdinOption,
+  type Need,
+  type SignInSteps,
+  type SignInStepsOptions,
+  signInSteps,
+} from "../terminal/sign-in-steps.js"
+export {
   type AgentPolicy,
   type AgentTask,
   type EvaluationResult,

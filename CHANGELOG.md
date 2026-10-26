@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`signInSteps` and `answerStdinOption` (`@wirecat/cli-core/cli`): a sign-in a window can drive.** With `--json`, a
+  tool prints each step of its sign-in as one JSON line on stderr: `open_url` (a page to open), `pairing_code` (a code
+  to type into the phone), `progress`, and `needs` (`field`, `secret`, `prompt`, `hint`), whose answer is one line on
+  stdin. A QR code stays `loginQr`'s `qr` line. Reading answers is opt-in, `--answer-stdin`, and needs `--json`:
+  without it a run with no terminal still refuses, so an agent's shell never waits on a question. One reader serves
+  the whole run, a question can be withdrawn when the answer came another way (a browser callback), stdin is let go
+  between questions so the tool ends with its work, and an answer is never printed or kept in a run record.
+
 ## 0.442.0 — 26.10.2026
 
 ### Security
