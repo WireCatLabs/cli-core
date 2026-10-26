@@ -103,13 +103,14 @@ export {
   KEEP_RUNS_FOR_DAYS,
   listRuns,
   pruneRuns,
+  type RunContext,
   type RunMetadata,
   readEvents,
   runsDirFor,
   runtime,
   startRun,
 } from "../runs/run.js"
-export { secretInput } from "../runs/run-context.js"
+export { runContextOf, secretInput } from "../runs/run-context.js"
 export { currentRun, inRun, type RunScope, useAsProcessRun } from "../runs/scope.js"
 export { LANGUAGES } from "../search/languages.js"
 export { guardedApp, guardedPress, guardedStart, type Pressed } from "../sends/buttons.js"

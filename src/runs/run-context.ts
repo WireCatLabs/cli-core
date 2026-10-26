@@ -223,7 +223,11 @@ const safeShape = (value: string): boolean =>
   value === "true" ||
   value === "false"
 
-/** A run's context from the parsed program: `max messages list` and its words, or the word that named nothing. */
+/**
+ * A run's context from the parsed program: `max messages list` and its words, or the word that named nothing. A CLI
+ * that calls `recorded` or `startRecording` for a command of its own passes this as `context`; without it the run
+ * keeps no command line and no agent.
+ */
 export const runContextOf = ({
   bin,
   command,
