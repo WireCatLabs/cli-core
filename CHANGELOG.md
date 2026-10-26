@@ -12,8 +12,8 @@ shape of this file.
 - **Calendar events are found by words.** `searchEvents(store, query, options)` and `store.calendar.search(query)`
   find events by their title, cleaned description, place and attendees' names, in the query language messages use;
   `date:` reads the event's start. The occurrences of one series are one hit, showing the matching occurrence
-  nearest now, with `occurrences` counting them. Working location, focus time, out of office and birthdays are never
-  found. A hit's reference is `event:<id>`, a new kind of reference. Indexing an event also writes its pieces for
+  nearest now, with `occurrences` counting them. Working location, focus time, out of office, birthdays
+  (`UNSEARCHED_EVENT_TYPES`) and busy-only private or confidential slots with no text are never found. A hit's reference is `event:<id>`, a new kind of reference. Indexing an event also writes its pieces for
   search by meaning (`chunks` of type `event`); the occurrences of a series hold the same text, so they share one
   vector once embedded.
 - **A person's context lists their calendar events.** `personContext` (`contacts context`) answers `events.upcoming`

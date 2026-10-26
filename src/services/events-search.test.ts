@@ -126,6 +126,18 @@ describe("searchEvents", () => {
     expect((await searchEvents(store, "valencia")).hits.map(({ title }) => title)).toEqual(["Valencia trip"])
   })
 
+  it("never returns a busy-only private slot, even to a query of filters alone", async () => {
+    const store = await calendarStore([
+      entry("p1", "", NOW, { title: null, visibility: "private" }),
+      entry("p2", "Dentist", NOW, { visibility: "private" }),
+      entry("c1", "", NOW, { title: null, visibility: "confidential" }),
+    ])
+
+    const found = await searchEvents(store, "in:events date:[2026-10-01 TO 2026-11-30]", { timezone: "UTC" })
+
+    expect(found.hits.map(({ title }) => title)).toEqual(["Dentist"])
+  })
+
   it("reads date: as the event's start", async () => {
     const store = await calendarStore([entry("a", "Retro", NOW - 10 * DAY), entry("b", "Retro", NOW + 10 * DAY)])
 

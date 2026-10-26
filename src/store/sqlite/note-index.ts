@@ -47,10 +47,23 @@ export const EVENT_TEXT =
   "SELECT group_concat(p.name, ' ') FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id " +
   "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL AND p.resource = 0 AND p.name IS NOT NULL), ''))"
 
-// Working location, focus time, out of office and birthdays are listed, never searched (requirements 3.4).
+/** Calendar entry types that are listed, never searched (requirements 3.4). */
+export const UNSEARCHED_EVENT_TYPES = ["workingLocation", "focusTime", "outOfOffice", "birthday"] as const
+
+/** Visibilities whose entry, when it carries no text, is a busy-only slot: stored, never searched (requirements 3.4). */
+export const BUSY_ONLY_VISIBILITIES = ["private", "confidential"] as const
+
+const sqlList = (values: readonly string[]) => values.map((value) => `'${value}'`).join(", ")
+
+/**
+ * Whether an event `e` is searched at all: by words, by meaning and in `search all`. The one place that names what
+ * is left out.
+ */
 export const EVENT_LIVE =
   "(e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id " +
-  "AND ce.deleted_at IS NULL AND ce.event_type IN ('workingLocation', 'focusTime', 'outOfOffice', 'birthday')))"
+  `AND ce.deleted_at IS NULL AND (ce.event_type IN (${sqlList(UNSEARCHED_EVENT_TYPES)}) ` +
+  `OR (ce.visibility IN (${sqlList(BUSY_ONLY_VISIBILITIES)}) AND trim(coalesce(ce.title, '')) = '' ` +
+  "AND trim(coalesce(ce.description, '')) = '' AND trim(coalesce(ce.location, '')) = ''))))"
 
 export const CORPORA = {
   document: {
