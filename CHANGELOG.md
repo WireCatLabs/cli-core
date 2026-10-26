@@ -7,6 +7,25 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A run record keeps the command line as typed.** `argv` in `run.json` and `runs show` now holds the words the person
+  typed — a chat's title, a search, message text — so the history of what was run can be read back. A secret is
+  still always `[redacted]`: the value of an option or argument a CLI marks with the new `secretInput(...)` (exported
+  from `@wirecat/cli-core/cli`), one whose name says token, password, secret, credential, cookie, authorization or
+  API key, a password inside a URL, and a long opaque string. `bot api … --body` is marked secret, since a field the
+  API marks secret can ride in it. The new per-profile setting `record_input: false` (`config set record_input false`)
+  brings back the previous masking exactly. A configuration that will not load also masks, since it may be the one
+  that turned recording off. A CLI with its own `resolveSettings` may return `recordInput`; when it does not, typed
+  words are kept. `doctor reports create` still masks the run's words as before, since the report is sent to other
+  people. `config set` and `config show` list `record_input`, so a CLI's help snapshot changes. A test or document
+  that says a run never holds what was typed needs updating.
+
+### Security
+
+- **An error that quotes `--token=…` or `password=…` no longer keeps the value.** A kept error masked such a value
+  only when a space followed the `=` or `:`; Commander's `unknown option '--token=…'` kept it whole.
+
 ## 0.438.0 — 26.10.2026
 
 ### Security

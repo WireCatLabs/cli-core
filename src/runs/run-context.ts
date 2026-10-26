@@ -1,5 +1,5 @@
 import { isContentKey } from "@wirecat/cli-base/standards"
-import type { Command, Option } from "commander"
+import type { Argument, Command, Option } from "commander"
 import type { RunContext } from "./run.js"
 
 export const REDACTED = "[redacted]"
@@ -57,25 +57,69 @@ const sessionOf = (kind: string, env: NodeJS.ProcessEnv): string | undefined => 
 const plainWord = (word: string) => /^[A-Za-z][A-Za-z0-9.-]{0,39}$/.test(word)
 
 export interface MaskedArgv {
-  /** The words after the binary, every value that may be content or a secret replaced by `[redacted]`. */
+  /** The words after the binary; a secret is `[redacted]`, and with `keep` off so is every value that may be content. */
   argv: string[]
   /** The first word that names no command where one was expected. */
   unknownCommand?: string
 }
 
+const secretInputs = new WeakSet<Option | Argument>()
+
+/** Marks an option or argument whose value a run record never keeps, whatever the owner's `record_input`. */
+export const secretInput = <T extends Option | Argument>(input: T): T => {
+  secretInputs.add(input)
+  return input
+}
+
+const SECRET_WORDS = new Set([
+  "authorization",
+  "cookie",
+  "credential",
+  "credentials",
+  "passphrase",
+  "password",
+  "secret",
+  "token",
+  "apikey",
+])
+
+// Undeclared flags carry no mark, so the name is the only signal; CLIs take secrets at a prompt (WC-SECR-5) and this
+// catches the one typed anyway.
+const secretNamed = (name: string): boolean => {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[\s_.-]+/)
+    .map((word) => word.toLowerCase())
+  return words.some((word, at) => SECRET_WORDS.has(word) || (word === "api" && words[at + 1] === "key"))
+}
+
+// A password inside a URL, or one unbroken run of 40 token characters, is a credential wherever it was typed.
+const secretShaped = (word: string): boolean =>
+  /:\/\/[^/@\s:]+:[^/@\s]+@/.test(word) || /(^|[^A-Za-z0-9_-])[A-Za-z0-9_-]{40,}($|[^A-Za-z0-9_-])/.test(word)
+
 /**
- * The command line as typed, safe to keep. Command words, flag names and the profile stay; a value stays only when
- * its shape cannot be somebody's words — a number short of a phone's length, a duration, a date, `true`, one of the
+ * The command line for a run record. With `keep` (the owner's `record_input`, on unless turned off) every word stays
+ * as typed except a secret: a value of an input marked `secretInput` or named for one (`--token`), and a word shaped
+ * like a credential. With `keep` off, command words, flag names and the profile stay; a value stays only when its
+ * shape cannot be somebody's words — a number short of a phone's length, a duration, a date, `true`, one of the
  * option's declared choices — and its option or argument is not named for content (`--text`, `<phone>`). Anything
  * else, a positional after `--` or an argument no command declares, is `[redacted]`: a chat is often typed by title.
  */
-export const maskArgv = (program: Command, words: readonly string[]): MaskedArgv => {
+export const maskArgv = (program: Command, words: readonly string[], { keep = false } = {}): MaskedArgv => {
   const argv: string[] = []
   let unknownCommand: string | undefined
   let current = program
   let positional = 0
   let profileSeen = false
   let lost = false
+
+  const raw = (word: string) => (keep && !secretShaped(word) ? word : REDACTED)
+  const keptValue = (name: string, value: string, input?: Option | Argument): string =>
+    keep
+      ? (input && secretInputs.has(input)) || secretNamed(name)
+        ? REDACTED
+        : raw(value)
+      : maskedValue(name, value, input?.argChoices)
 
   const optionFor = (flag: string): Option | undefined => {
     for (let at: Command | null = current; at; at = at.parent) {
@@ -89,32 +133,37 @@ export const maskArgv = (program: Command, words: readonly string[]): MaskedArgv
     const word = words[at] as string
     if (word === "--") {
       argv.push("--")
-      for (let after = at + 1; after < words.length; after++) argv.push(REDACTED)
+      for (let after = at + 1; after < words.length; after++) argv.push(raw(words[after] as string))
       break
     }
     if (word.startsWith("-") && word.length > 1 && !NUMBER.test(word)) {
       const equals = word.indexOf("=")
       const flag = equals > 0 ? word.slice(0, equals) : word
       if (!/^--?[A-Za-z0-9][A-Za-z0-9-]*$/.test(flag)) {
-        argv.push(REDACTED)
+        argv.push(raw(word))
         continue
       }
       const option = optionFor(flag)
       const name = option?.attributeName() ?? flag.replace(/^-+/, "")
       if (equals > 0) {
-        argv.push(`${flag}=${maskedValue(name, word.slice(equals + 1), option?.argChoices)}`)
+        argv.push(`${flag}=${keptValue(name, word.slice(equals + 1), option)}`)
         continue
       }
       argv.push(flag)
+      if (!option && keep && secretNamed(name) && words[at + 1] !== undefined && !words[at + 1]?.startsWith("-")) {
+        at += 1
+        argv.push(REDACTED)
+        continue
+      }
       if (!option || !(option.required || option.optional)) continue
       const takes = (next: string | undefined) =>
         next !== undefined && (option.required || !next.startsWith("-") || NUMBER.test(next))
       if (takes(words[at + 1])) {
         at += 1
-        argv.push(maskedValue(name, words[at] as string, option.argChoices))
+        argv.push(keptValue(name, words[at] as string, option))
         while (option.variadic && words[at + 1] !== undefined && !(words[at + 1] as string).startsWith("-")) {
           at += 1
-          argv.push(maskedValue(name, words[at] as string, option.argChoices))
+          argv.push(keptValue(name, words[at] as string, option))
         }
       }
       continue
@@ -128,20 +177,20 @@ export const maskArgv = (program: Command, words: readonly string[]): MaskedArgv
       }
       if (current === program && !profileSeen) {
         profileSeen = true
-        argv.push(PROFILE.test(word) ? word : REDACTED)
+        argv.push(keep ? raw(word) : PROFILE.test(word) ? word : REDACTED)
         continue
       }
       if (current.commands.length > 0 && current.registeredArguments.length === 0) {
         lost = true
         unknownCommand = commandLike(word)
-        argv.push(unknownCommand)
+        argv.push(keep ? raw(word) : unknownCommand)
         continue
       }
     }
     const declared = lost ? undefined : current.registeredArguments
     const argument = declared?.[Math.min(positional, declared.length - 1)]
     positional += 1
-    argv.push(argument ? maskedValue(argument.name(), word, argument.argChoices) : REDACTED)
+    argv.push(argument ? keptValue(argument.name(), word, argument) : raw(word))
   }
   return { argv, ...(unknownCommand === undefined ? {} : { unknownCommand }) }
 }
@@ -169,13 +218,14 @@ const safeShape = (value: string): boolean =>
   value === "true" ||
   value === "false"
 
-/** A run's context from the parsed program: `max messages list` and its masked words, or the word that named nothing. */
+/** A run's context from the parsed program: `max messages list` and its words, or the word that named nothing. */
 export const runContextOf = ({
   bin,
   command,
   program,
   argv,
   env,
+  recordInput = false,
 }: {
   bin: string
   /** The run's own name, `messages list` or `mcp messages list`; empty when no command was recognised. */
@@ -183,8 +233,10 @@ export const runContextOf = ({
   program?: Command
   argv?: readonly string[]
   env: NodeJS.ProcessEnv
+  /** The owner's `record_input`; left out, every value that may be content is masked. */
+  recordInput?: boolean
 }): RunContext => {
-  const masked = program && argv ? maskArgv(program, argv) : undefined
+  const masked = program && argv ? maskArgv(program, argv, { keep: recordInput }) : undefined
   const agent = agentOf(env)
   return {
     cliCommand: command ? `${bin} ${command}` : bin,

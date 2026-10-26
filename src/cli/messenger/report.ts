@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import { Command } from "commander"
 import { LOG_ATTRIBUTES } from "../../runs/log-attributes.js"
 import { findRun, listRuns, type RunMetadata, readEvents } from "../../runs/run.js"
+import { maskArgv } from "../../runs/run-context.js"
 import type { SendEntry } from "../../sends/journal.js"
 
 const RECENT_SENDS = 20
@@ -58,6 +60,7 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
   home,
   context,
   eventFields = "report",
+  program,
 }: {
   doctor: Doctor
   runsDir: string
@@ -70,6 +73,8 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
   context?: Context
   /** Retain allowlisted recorded fields, including time and severity, for an existing consumer contract. */
   eventFields?: "report" | "recorded"
+  /** The CLI's program, which tells a flag's value from a command word when the run's words are masked. */
+  program?: Command
 }): Report<Doctor> & Omit<Context, keyof Report> => {
   const chosen = runId === undefined ? newestFailed(runsDir) : findRun(runsDir, runId)
   if (runId !== undefined && !chosen)
@@ -84,11 +89,20 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
       ...doctor,
       ...(account?.remembered ? { account: { ...account, remembered: label(account.remembered) } } : {}),
     },
-    run: chosen ? { metadata: chosen.metadata, events: readEvents(chosen.dir).map(eventOf(label, eventFields)) } : null,
+    run: chosen
+      ? {
+          metadata: maskedRun(chosen.metadata, program),
+          events: readEvents(chosen.dir).map(eventOf(label, eventFields)),
+        }
+      : null,
     sends: sends.slice(-RECENT_SENDS).map((entry) => labelled(entry, label)),
   }
   return JSON.parse(hideHome(JSON.stringify(report), home)) as Report<Doctor> & Omit<Context, keyof Report>
 }
+
+// A report leaves the machine, so it masks the typed words as `record_input: false` would.
+const maskedRun = (metadata: RunMetadata, program = new Command()): RunMetadata =>
+  metadata.argv ? { ...metadata, argv: maskArgv(program, metadata.argv).argv } : metadata
 
 /**
  * Every field of a journal line that names a chat, a message or a write. A send's `operationId` is

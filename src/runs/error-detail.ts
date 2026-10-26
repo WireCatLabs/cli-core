@@ -142,7 +142,7 @@ export const redactText = (text: string): string => {
   let out = home && home !== "/" ? text.split(home).join("~") : text
   out = out
     .replace(/"[^"\n]*"|“[^”\n]*”|«[^»\n]*»/g, '"[redacted]"')
-    .replace(/\b(bearer|basic|token|key|password|secret)(\s*[:=]?\s+)\S+/gi, "$1$2[redacted]")
+    .replace(/\b(bearer|basic|token|key|password|secret)(\s*[:=]\s*|\s+)[^\s'"]+/gi, "$1$2[redacted]")
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[email]")
     .replace(/\+\d[\d\s()-]{6,}\d/g, "[number]")
     .replace(/(^|[^\w-])\d{11,15}\b/g, "$1[number]")

@@ -51,7 +51,7 @@ export interface RunMetadata {
   traceId?: string
   /** The whole command with the program's name, `max messages list`; `command` stays the run's short name. */
   cliCommand?: string
-  /** The words after the program's name, every value that may be content or a secret `[redacted]` (`maskArgv`). */
+  /** The words after the program's name, a secret `[redacted]`; with `record_input` off, any value that may be content too (`maskArgv`). */
   argv?: string[]
   /** The word that named no command, when that is why the run failed. */
   unknownCommand?: string

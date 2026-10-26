@@ -15,7 +15,7 @@ import { destroysNothing, LOCAL_WRITE, NO_EFFECTS, REMOTE_READ } from "../effect
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { unknownPermissionIssues } from "../permission-keys.js"
 import { NONE_NAMED } from "../settings.js"
-import { lineOf, nextStep } from "../steps.js"
+import { lineOf, nextStep, rootOf } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { type PrivateFiles, privateFiles, withSqliteSidecars } from "./private-files.js"
@@ -118,6 +118,7 @@ const reportCommand = (messenger: Messenger): Command => {
         sends: profile ? new SendJournal(sendsPathFor(app, profile, env)).entries() : [],
         now,
         home: env.HOME ?? env.USERPROFILE,
+        program: rootOf(this),
         ...(options.run === undefined ? {} : { runId: options.run }),
       })
       const path = resolve(options.output ?? reportFileName(app.command, now))
