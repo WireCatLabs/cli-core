@@ -54,7 +54,7 @@ Local commits check only staged lint and secrets. There is no pre-push check.
 Every pull request runs three checks. The fast standards job (`standards.yml`) checks config integrity,
 lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
 The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
-on four runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
+on two runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
 dist checks, Bun, old Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli and
 cli-template against the branch. The security checks (`security.yml`) run CodeQL, zizmor and gitleaks; CodeQL
 analyses python, c-cpp and java-kotlin only when a file of theirs changes.
