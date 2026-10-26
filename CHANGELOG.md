@@ -14,7 +14,9 @@ shape of this file.
   record. `runContextOf` and the `RunContext` type are now exported from `@wirecat/cli-core/cli`. To adopt, pass
   `context: runContextOf({ bin, command, program: rootOf(command), argv: environmentOf(command).argv, env,
   recordInput: settings.recordInput !== false })` to the call; a CLI with its own program passes its own root command
-  and the words it parsed. Left out, `recordInput` masks every value that may be content.
+  and the words it parsed. Left out, `recordInput` masks every value that may be content. A CLI that records through
+  `commandRuns` under `run()` gets the command line with no change; its `settings()` may return `recordInput`, and when
+  it does not, the typed words are kept with secrets hidden.
 
 ### Changed — may break callers
 

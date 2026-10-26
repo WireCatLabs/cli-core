@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest"
 import { wasSettled } from "../runs/recording.js"
 import { findRun, KEEP_RUNS_FOR_DAYS, listRuns, readEvents, runsDirFor } from "../runs/run.js"
 import { type CommandRunOptions, commandRuns, providerRequest, recordRuns, runSettings } from "./command-runs.js"
+import { run } from "./program.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.2.3" }
 
@@ -210,6 +211,35 @@ describe("commandRuns", () => {
     ])
     await runs.succeed()
     expect(kept(env)).toHaveLength(1)
+  })
+
+  it("**keeps the command line as typed under run()**, a secret hidden, and masks it when record_input is off", async () => {
+    const argvKept = async (recordInput?: boolean) => {
+      const env = { ...sandbox(), APP_PROFILE: "work" }
+      const runs = commandRuns({ app, settings: () => ({ record: true, recordInput }), env })
+      const definition = {
+        app,
+        commands: () => [
+          new Command("meetings").addCommand(
+            new Command("search")
+              .argument("<words>")
+              .option("--token <token>")
+              .action(async function (this: Command) {
+                runs.start(this)
+                await runs.succeed()
+              }),
+          ),
+        ],
+      }
+      const typed = ["meetings", "search", "Fake planning call", "--token=fake-token-value"]
+      expect(await run(typed, definition, { streams: captureStreams(), tty: false, env })).toBe(0)
+      const dir = runsDirFor(app, env)
+      const [file] = readdirSync(dir, { recursive: true }).filter((one) => String(one).endsWith("run.json"))
+      return JSON.parse(readFileSync(join(dir, String(file)), "utf8")).argv
+    }
+
+    expect(await argvKept()).toEqual(["meetings", "search", "Fake planning call", "--token=[redacted]"])
+    expect(await argvKept(false)).toEqual(["meetings", "search", "[redacted]", "--token=[redacted]"])
   })
 })
 
