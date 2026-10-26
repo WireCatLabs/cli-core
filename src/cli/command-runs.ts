@@ -35,7 +35,10 @@ export const runSettings = (flag: boolean | undefined, saved: SavedRunSettings =
 
 export interface CommandRunOptions {
   app: AppIdentity
-  /** The owner's saved choice. One that throws — a config that will not load — leaves the defaults. */
+  /**
+   * The owner's saved choice. One that throws — a config that will not load — leaves the defaults, except that the
+   * typed words are masked: the broken config may be the one that says `record_input: false`.
+   */
   settings: () => SavedRunSettings
   /**
    * The profile the command runs for; one that throws or is empty leaves the run without one. Given only by a CLI
@@ -75,7 +78,7 @@ type Tracker = CommandRuns & {
   open(program: Command, words: string[], flag: boolean | undefined, format: RenderFormat): void
 }
 
-const tracker = (options: CommandRunOptions): Tracker => {
+const tracker = (options: CommandRunOptions, typed?: readonly string[]): Tracker => {
   let recording: Recording | undefined
 
   const open: Tracker["open"] = (program, words, flag, format) => {
@@ -86,7 +89,9 @@ const tracker = (options: CommandRunOptions): Tracker => {
     let saved: SavedRunSettings = {}
     try {
       saved = options.settings()
-    } catch {}
+    } catch {
+      saved = { recordInput: false }
+    }
     let profile: string | undefined
     try {
       profile = options.profile?.() || undefined
@@ -111,7 +116,7 @@ const tracker = (options: CommandRunOptions): Tracker => {
         bin: options.app.command,
         command: words.length > 0 ? command : "",
         program: rootOf(program),
-        ...(environment.argv ? { argv: environment.argv } : {}),
+        ...((environment.argv ?? typed) ? { argv: environment.argv ?? typed } : {}),
         env: env ?? process.env,
         recordInput: saved.recordInput !== false,
       }),
@@ -217,7 +222,8 @@ export const recordRuns = (program: Command, options: CommandRunOptions): void =
   })
   const parseAsync = program.parseAsync.bind(program)
   program.parseAsync = (argv, settings) => {
-    const parse: Parse = { runs: tracker(options), started: false }
+    const args = settings?.from === "user" ? (argv ?? []) : (argv ?? process.argv).slice(2)
+    const parse: Parse = { runs: tracker(options, args), started: false }
     return parses.run(parse, async () => {
       try {
         const parsed = await parseAsync(argv, settings)
@@ -227,7 +233,6 @@ export const recordRuns = (program: Command, options: CommandRunOptions): void =
         if (!isHelpExit(error) && !wasSettled(error)) {
           try {
             if (!parse.started) {
-              const args = settings?.from === "user" ? (argv ?? []) : (argv ?? process.argv).slice(2)
               const flag = args.includes("--no-record") ? false : args.includes("--record") ? true : undefined
               const json = args.some((arg) => arg === "--json" || arg.startsWith("--json=") || arg === "--jsonl")
               const words = pathFromArgs(program, args, options.profile !== undefined)

@@ -69,6 +69,22 @@ const failing = async () => {
 }
 
 describe("recordRuns", () => {
+  it("keeps the words typed to a CLI's own program, and masks them when the config will not load", async () => {
+    const argvOf = async (settings: CommandRunOptions["settings"]) => {
+      const env = sandbox()
+      await cli(env, ["notes", "show", "Fake meeting notes"], { settings }, failing)
+      const dir = runsDirFor(app, env)
+      const [file] = readdirSync(dir, { recursive: true }).filter((one) => String(one).endsWith("run.json"))
+      return JSON.parse(readFileSync(join(dir, String(file)), "utf8")).argv
+    }
+    const broken = () => {
+      throw new Error("unknown key no_such_key")
+    }
+
+    expect(await argvOf(() => ({}))).toEqual(["notes", "show", "Fake meeting notes"])
+    expect(await argvOf(broken)).toEqual(["notes", "show", "[redacted]"])
+  })
+
   it("keeps a failed command without being asked, and a successful one only under --record", async () => {
     const env = sandbox()
     await cli(env, ["notes", "show", "note:1"])
@@ -105,13 +121,18 @@ describe("recordRuns", () => {
     expect(kept(env).map(({ status }) => status)).toEqual(["failed", "success"])
   })
 
-  it("keeps a usage mistake under the words that name a command, never its arguments", async () => {
+  it("names a usage mistake's run by the words that name a command; its arguments stay only in argv", async () => {
     const env = sandbox()
     const failure = await cli(env, ["notes", "show", "Family Secrets", "--no-such-flag"])
     expect(failure).toMatchObject({ code: "commander.unknownOption" })
     await cli(env, ["notes", "nonsense-word"])
     expect(kept(env).map(({ command }) => command)).toEqual(["notes", "notes show"])
-    expect(JSON.stringify(listRuns(runsDirFor(app, env)))).not.toContain("Family Secrets")
+    expect(listRuns(runsDirFor(app, env)).find(({ command }) => command === "notes show")?.argv).toEqual([
+      "notes",
+      "show",
+      "Family Secrets",
+      "--no-such-flag",
+    ])
   })
 
   it("skips a leading profile word when the CLI takes one, and names the run for the selected profile", async () => {

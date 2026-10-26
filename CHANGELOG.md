@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## 0.441.0 — 26.10.2026
+## Unreleased
 
 ### Security
 
@@ -24,6 +24,19 @@ shape of this file.
 
   A profile name or a mistyped command word that looks like a secret is now `[redacted]` even with `record_input`
   off.
+
+- **A config that will not load no longer lets a run record keep the typed words.** When `recordRuns` or
+  `commandRuns` could not read the CLI's settings, it fell back to the defaults, so `record_input` counted as on and
+  the command line was kept as typed, even from a config that says `record_input: false`. A failed settings read now
+  masks every value that may be content, as cli-core's own commands already did.
+
+### Changed — may break callers
+
+- **`recordRuns` keeps the command line in the run record by itself.** A CLI with its own program (cli-memo,
+  drive-cli) kept no `argv` unless it passed the typed words through `run()`; the words its `parseAsync` is given are
+  now kept, secrets hidden, and masked when `settings()` returns `recordInput: false`.
+
+## 0.441.0 — 26.10.2026
 
 ### Added
 
