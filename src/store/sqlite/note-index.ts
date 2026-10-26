@@ -41,6 +41,17 @@ export interface Corpus {
   terms?: (text: string, stemmer: Stemmer) => { words: string; stems: string }
 }
 
+/** What an event `e` is searched by besides its title: the cleaned description, the place and the attendees' names. */
+export const EVENT_TEXT =
+  "trim(coalesce(e.description, '') || ' ' || coalesce(e.location, '') || ' ' || coalesce((" +
+  "SELECT group_concat(p.name, ' ') FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id " +
+  "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL AND p.resource = 0 AND p.name IS NOT NULL), ''))"
+
+// Working location, focus time, out of office and birthdays are listed, never searched (requirements 3.4).
+export const EVENT_LIVE =
+  "(e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id " +
+  "AND ce.deleted_at IS NULL AND ce.event_type IN ('workingLocation', 'focusTime', 'outOfOffice', 'birthday')))"
+
 export const CORPORA = {
   document: {
     type: "document",
@@ -96,16 +107,12 @@ export const CORPORA = {
     type: "event",
     index: "event_index",
     table: "events",
-    // Working location, focus time, out of office and birthdays are listed, never searched (requirements 3.4).
     read:
-      "SELECT e.title, trim(coalesce(e.description, '') || ' ' || coalesce(e.location, '') || ' ' || coalesce((" +
-      "SELECT group_concat(p.name, ' ') FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id " +
-      "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL AND p.resource = 0 AND p.name IS NOT NULL), '')) AS body, " +
-      "e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id " +
-      "AND ce.deleted_at IS NULL AND ce.event_type IN ('workingLocation', 'focusTime', 'outOfOffice', 'birthday')) AS live, " +
+      `SELECT e.title, ${EVENT_TEXT} AS body, ${EVENT_LIVE} AS live, ` +
       "coalesce((SELECT a.scope FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id " +
-      "JOIN accounts a ON a.id = c.account_id WHERE ce.event_id = e.id LIMIT 1), 'personal') AS scope FROM events e WHERE e.id = ?",
-    pieces: false,
+      "JOIN accounts a ON a.id = c.account_id WHERE ce.event_id = e.id LIMIT 1), 'personal') AS scope, " +
+      "(SELECT c.account_id FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id " +
+      "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL ORDER BY ce.id LIMIT 1) AS account_id FROM events e WHERE e.id = ?",
   },
 } as const satisfies Record<string, Corpus>
 

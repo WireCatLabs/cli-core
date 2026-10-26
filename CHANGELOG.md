@@ -7,6 +7,28 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Calendar events are found by words.** `searchEvents(store, query, options)` and `store.calendar.search(query)`
+  find events by their title, cleaned description, place and attendees' names, in the query language messages use;
+  `date:` reads the event's start. The occurrences of one series are one hit, showing the matching occurrence
+  nearest now, with `occurrences` counting them. Working location, focus time, out of office and birthdays are never
+  found. A hit's reference is `event:<id>`, a new kind of reference. Indexing an event also writes its pieces for
+  search by meaning (`chunks` of type `event`); the occurrences of a series hold the same text, so they share one
+  vector once embedded.
+- **A person's context lists their calendar events.** `personContext` (`contacts context`) answers `events.upcoming`
+  and `events.recent`: the events any contact linked to them is invited to, one occurrence per series, none
+  cancelled. `ContextOptions.now` sets what counts as upcoming. `EventFilter.newest` lists events latest first.
+
+### Changed — may break callers
+
+- **`search all` reads calendar events** when the store holds a calendar (an account whose provider is of the
+  `events` kind, as gcal registers `google-calendar`). Hits of kind `event` join the merged list, `searched` and
+  `accounts` name `events`, `--only` takes `events`, and `--source` takes a calendar account, `gcal` or `events`. A
+  store with no calendar answers as before. `RESOURCES_SEARCHED` and `SOURCE_SEARCHED` gain `events`, the `hit`
+  entity's `kind` gains `event`, and `in:events` in a message search now points to `search all --source events`.
+  A caller that lists every resource or every hit kind adds the new one.
+
 ## 0.452.0 — 27.10.2026
 
 ### Added

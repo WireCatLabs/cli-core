@@ -26,6 +26,15 @@ const sharedChat = v.strictObject({
   kind: chat.entries.kind,
   last_message_at: v.nullable(time),
 })
+const contextEvent = v.strictObject({
+  ref: reference,
+  title: v.nullable(text),
+  starts_at: v.nullable(time),
+  ends_at: v.nullable(time),
+  all_day: v.boolean(),
+  location: v.nullable(text),
+  status: v.nullable(text),
+})
 const context = v.strictObject({
   person: contextPerson,
   shared: v.array(sharedChat),
@@ -36,6 +45,8 @@ const context = v.strictObject({
   }),
   recent: v.strictObject({ direct: v.array(contextMessage), groups: v.array(contextMessage) }),
   mentions: v.array(contextMessage),
+  /** Calendar events they are invited to, one occurrence per series. */
+  events: v.optional(v.strictObject({ upcoming: v.array(contextEvent), recent: v.array(contextEvent) })),
   limits: v.strictObject({ messages: count, bytes: count }),
   complete: v.boolean(),
   not_read: v.array(

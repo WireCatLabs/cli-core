@@ -155,6 +155,8 @@ export interface EventFilter {
   calendarId?: number
   /** Events whose entries list one of this person's contacts. */
   personId?: number
+  /** Latest start first; earliest first when absent. */
+  newest?: boolean
   limit?: number
   offset?: number
 }

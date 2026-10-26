@@ -623,7 +623,9 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000 || !Number.isInteger(offset) || offset < 0)
         throw new CliError("validation_error", "limit takes 1–1000 and offset 0 or more")
       return database
-        .prepare(`SELECT e.* FROM events e WHERE ${clauses.join(" AND ")} ORDER BY e.starts_at, e.id LIMIT ? OFFSET ?`)
+        .prepare(
+          `SELECT e.* FROM events e WHERE ${clauses.join(" AND ")} ORDER BY ${filter.newest ? "e.starts_at DESC, e.id DESC" : "e.starts_at, e.id"} LIMIT ? OFFSET ?`,
+        )
         .all(...params, limit, offset)
         .map(eventOf)
     },

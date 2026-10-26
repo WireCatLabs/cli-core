@@ -82,23 +82,37 @@ const combine = (parts: Fragment[], operator: "AND" | "OR"): Fragment => ({
   params: parts.flatMap(({ params }) => params),
   exact: parts.every(({ exact }) => exact),
 })
-/** Files in notes folders and the notes the owner wrote: the same fields, each in its own table and index. */
-interface Corpus {
-  type: "document" | "note"
-  /** The rows as `n`, with the columns the query reads under one set of names. */
+/**
+ * Files in notes folders, the notes the owner wrote and calendar events: one query language, each in its own table
+ * and index.
+ */
+export interface Corpus {
+  type: "document" | "note" | "event"
+  /** What a hit is called in an error and in `in:` (`in:notes`, `in:events`). */
+  noun: "note" | "event"
+  fields: readonly string[]
+  /** The rows as `n`, with the columns the query reads under one set of names; `at` is the time `date:` reads. */
   view: string
   words: string
   stems: string
+  /** The rows a search may return at all, besides `deleted_at`. */
+  live?: string
+  /** The rows of these accounts, as a JSON list of ids. */
+  inAccounts?: (ids: string) => Fragment
   /** The tagged rows; a document is also labelled through its folder or a subfolder of it. */
-  tagged: (tag: string) => Fragment
+  tagged?: (tag: string) => Fragment
 }
 
 const CORPORA: Corpus[] = [
   {
     type: "document",
-    view: "(SELECT id, account_id AS folder_id, external_id AS path, title, coalesce(body, '') AS text, metadata, updated_at, deleted_at FROM documents)",
+    noun: "note",
+    fields: NOTE_FIELDS,
+    view: "(SELECT id, account_id AS folder_id, external_id AS path, title, coalesce(body, '') AS text, metadata, updated_at AS at, deleted_at FROM documents)",
     words: "document_words",
     stems: "document_stems",
+    live: "coalesce(json_extract(n.metadata, '$.catalog.active'), 1)=1",
+    inAccounts: (ids) => bound("n.folder_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))", ids),
     tagged: (tag) =>
       bound(
         "(n.id IN (SELECT g.taggable_id FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id WHERE t.name = ? AND g.taggable_type = 'document') " +
@@ -112,7 +126,9 @@ const CORPORA: Corpus[] = [
   },
   {
     type: "note",
-    view: "(SELECT id, NULL AS folder_id, NULL AS path, title, body AS text, NULL AS metadata, updated_at, deleted_at FROM notes)",
+    noun: "note",
+    fields: NOTE_FIELDS,
+    view: "(SELECT id, NULL AS folder_id, NULL AS path, title, body AS text, NULL AS metadata, updated_at AS at, deleted_at FROM notes)",
     words: "note_words",
     stems: "note_stems",
     tagged: (tag) =>
@@ -123,12 +139,18 @@ const CORPORA: Corpus[] = [
   },
 ]
 
-interface CorpusRow {
+export interface CorpusRow {
   type: Corpus["type"]
   id: number
-  updatedAt: number
+  /** The time `date:` reads: a note's last change, an event's start. */
+  at: number | null
   relevance: number | null
   exact?: boolean
+}
+
+/** What one corpus is searched by; `accountIds` narrows a corpus that has accounts. */
+export type CorpusQuery = Pick<NoteQuery, "root" | "limit" | "offset" | "newest" | "stemmer" | "signal"> & {
+  accountIds?: string[]
 }
 
 /** Notes matching a parsed query, by the same language as messages: files and written notes, merged. */
@@ -139,15 +161,17 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
       (query.source === undefined || (query.source === "file") === (type === "document")) &&
       (!query.folderIds?.length || query.withInternal === true || type === "document"),
   )
-  const rows = chosen.flatMap((corpus) => searchCorpus(context, query, corpus))
+  const rows = chosen.flatMap((corpus) =>
+    searchCorpus(context, { ...query, ...(query.folderIds ? { accountIds: query.folderIds } : {}) }, corpus),
+  )
   const exactFirst = rows.some((row) => row.exact !== undefined)
   rows.sort((a, b) =>
     query.newest
-      ? b.updatedAt - a.updatedAt || a.id - b.id
+      ? (b.at ?? 0) - (a.at ?? 0) || a.id - b.id
       : (exactFirst ? Number(b.exact === true) - Number(a.exact === true) : 0) ||
         Number(a.relevance === null) - Number(b.relevance === null) ||
         (a.relevance ?? 0) - (b.relevance ?? 0) ||
-        b.updatedAt - a.updatedAt ||
+        (b.at ?? 0) - (a.at ?? 0) ||
         a.id - b.id,
   )
   const read = {
@@ -156,7 +180,7 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
   }
   return {
     items: rows.slice(offset, offset + query.limit).map((row) => {
-      const found = read[row.type].get(row.id) as Record<string, unknown>
+      const found = read[row.type === "document" ? "document" : "note"].get(row.id) as Record<string, unknown>
       const note = row.type === "document" ? documentOf(found) : noteOf(found)
       return {
         ref: note.ref,
@@ -169,7 +193,7 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
   }
 }
 
-const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): CorpusRow[] => {
+export const searchCorpus = (context: StoreContext, query: CorpusQuery, corpus: Corpus): CorpusRow[] => {
   const { database } = context
   const wordMatch = (match: string): Fragment => ({
     sql: `n.id IN (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)`,
@@ -198,11 +222,11 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
 
   const leaf = (node: ResolvedPredicate): Fragment => {
     const { field, operator, value } = node
-    if (!(NOTE_FIELDS as readonly string[]).includes(field))
+    if (!corpus.fields.includes(field))
       searchError(
         "query.unsupported-field",
         node.span,
-        `${field}: is not a note field — notes take ${NOTE_FIELDS.join(", ")}`,
+        `${field}: is not ${corpus.noun === "event" ? "an" : "a"} ${corpus.noun} field — ${corpus.noun}s take ${corpus.fields.join(", ")}`,
       )
     if ((field === "text" || field === "exact") && value === "") return bound("0")
     if (isStemmed(node)) {
@@ -250,7 +274,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       const tag = tagOf(value)
       if (tag === undefined) searchError("query.invalid-tag", node.span)
       // A label on a folder or subfolder labels every note under it, at any depth.
-      return corpus.tagged(canonicalTagNamed(database, tag)?.name ?? tag)
+      return corpus.tagged?.(canonicalTagNamed(database, tag)?.name ?? tag) ?? bound("0")
     }
     if (field === "source")
       return bound(value.toLowerCase() === (corpus.type === "note" ? "internal" : "file") ? "1" : "0")
@@ -284,17 +308,13 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       if (!range) searchError("query.invalid-ast", node.span)
       return combine(
         [
-          ...(range.lower === undefined
-            ? []
-            : [bound(`n.updated_at ${range.lower_inclusive ? ">=" : ">"} ?`, range.lower)]),
-          ...(range.upper === undefined
-            ? []
-            : [bound(`n.updated_at ${range.upper_inclusive ? "<=" : "<"} ?`, range.upper)]),
+          ...(range.lower === undefined ? [] : [bound(`n.at ${range.lower_inclusive ? ">=" : ">"} ?`, range.lower)]),
+          ...(range.upper === undefined ? [] : [bound(`n.at ${range.upper_inclusive ? "<=" : "<"} ?`, range.upper)]),
         ],
         "AND",
       )
     }
-    return bound(["notes", "note"].includes(value.toLowerCase()) ? "1" : "0")
+    return bound([corpus.noun, `${corpus.noun}s`].includes(value.toLowerCase()) ? "1" : "0")
   }
 
   const compile = (node: ResolvedNode): Fragment => {
@@ -336,10 +356,8 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     const scope = combine(
       [
         bound("n.deleted_at IS NULL"),
-        ...(corpus.type === "document" ? [bound("coalesce(json_extract(n.metadata, '$.catalog.active'), 1)=1")] : []),
-        ...(query.folderIds?.length && corpus.type === "document"
-          ? [bound("n.folder_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))", JSON.stringify(query.folderIds))]
-          : []),
+        ...(corpus.live ? [bound(corpus.live)] : []),
+        ...(query.accountIds?.length && corpus.inAccounts ? [corpus.inAccounts(JSON.stringify(query.accountIds))] : []),
       ],
       "AND",
     )
@@ -360,8 +378,8 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       cteParams.push(`normalized_text : (${exactTier})`)
     }
     const order = query.newest
-      ? "n.updated_at DESC, n.id"
-      : `${exactTier ? "exact DESC, " : ""}${ranking ? "f.rank IS NULL, f.rank, " : ""}n.updated_at DESC, n.id`
+      ? "n.at DESC, n.id"
+      : `${exactTier ? "exact DESC, " : ""}${ranking ? "f.rank IS NULL, f.rank, " : ""}n.at DESC, n.id`
     const offset = query.offset ?? 0
     // With a JS test the SQL only names candidates: every leaf's SQL answer comes along, so the test sees it.
     const leaves = [...fragments.entries()].filter(([node]) => !tests.has(node))
@@ -408,7 +426,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     return matched.map((row) => ({
       type: corpus.type,
       id: Number(row.id),
-      updatedAt: Number(row.updated_at),
+      at: row.at == null ? null : Number(row.at),
       relevance: row.relevance === null || row.relevance === undefined ? null : Number(row.relevance),
       ...(exactTier ? { exact: Number(row.exact) === 1 } : {}),
     }))

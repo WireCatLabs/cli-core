@@ -210,7 +210,7 @@ export const searchAllIncludingMeetings = async (
     !only.length ||
     only.some((resource) => !(RESOURCES_SEARCHED_WITH_MEETINGS as readonly string[]).includes(resource))
   )
-    throw new CliError("validation_error", "only takes messages, mail, notes and meetings")
+    throw new CliError("validation_error", "only takes messages, mail, notes, events and meetings")
   if (request.meetingCursor) {
     if (only.length !== 1 || only[0] !== "meetings")
       throw new CliError("validation_error", "meeting cursor requires only: [meetings]")
@@ -386,7 +386,12 @@ const searchAllOfSource = async (
     {
       ...request,
       only: read,
-      scope: { messages: named("messages"), mail: named("mail"), notes: named("notes") },
+      scope: {
+        messages: named("messages"),
+        mail: named("mail"),
+        notes: named("notes"),
+        events: named("events"),
+      },
       ...(meetings[0] ? { meetingAccount: meetings[0] } : {}),
     },
     messenger,

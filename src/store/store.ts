@@ -29,6 +29,7 @@ import { eventStoreOver } from "./sqlite/calendar.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
+import { type EventSearch, eventSearchOver } from "./sqlite/event-search.js"
 import { evidenceFindingsStoreOver } from "./sqlite/evidence-findings.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import { type FilesStore, filesStoreOver } from "./sqlite/files.js"
@@ -101,7 +102,7 @@ export interface MessageStore {
   /** Where each document is kept: its files, their folders and paths. */
   readonly files: FilesStore
   /** Calendars and their entries, the source records of events: the `EventStore` a calendar CLI writes through. */
-  readonly calendar: EventStore
+  readonly calendar: EventStore & EventSearch
   /** Choices that hold until replaced, each with its evidence. */
   readonly meetingFindings: MeetingFindingsStore
   /** Cited facts and follow-ups about one project from stored messages, mail and documents, for review. */
@@ -209,7 +210,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
   const catalog = once(() => catalogStoreOver(context))
   const files = once(() => filesStoreOver(context))
-  const calendar = once(() => eventStoreOver(context))
+  const calendar = once(() => ({ ...eventStoreOver(context), ...eventSearchOver(context) }))
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
   const facts = once(() => factsStoreOver(context))
