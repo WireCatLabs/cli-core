@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.441.0 — 26.10.2026
+
 ### Added
 
 - **`tasks list claimed_by:<holder>` lists the tasks a holder has claimed**, and `claimed_by:*` every claimed task.
