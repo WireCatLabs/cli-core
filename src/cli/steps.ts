@@ -8,6 +8,7 @@ import {
   writes,
 } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import { IMAGE_MODELS } from "../images/picture/models.js"
 import { typedCommand } from "../runs/scope.js"
 import { judgedTargets } from "./effects.js"
 
@@ -265,6 +266,26 @@ export const runnable = (root: Command, steps: readonly NextStep[] | undefined):
       .slice(0, MAX_NEXT_STEPS),
     judgedTargets(root),
   )
+
+/**
+ * The step a failure names, where its reason has one and this CLI has the command: a model that is not downloaded
+ * names its download only in a CLI with `models`. A step the error already carries is kept, also only if runnable.
+ */
+export const failureSteps = (
+  root: Command,
+  error: { reason?: string; details?: Record<string, unknown>; next?: readonly NextStep[] },
+): NextStep[] => {
+  const model = error.details?.model
+  const own =
+    error.reason === "model.not-downloaded" && typeof model === "string"
+      ? [
+          nextStep(IMAGE_MODELS.some((one) => one.id === model) ? "models.download-image" : "models.download", {
+            args: { model },
+          }),
+        ]
+      : []
+  return runnable(root, [...(error.next ?? []), ...own])
+}
 
 /** Each command step judged by its command's effects: safe to run unasked only when it writes nothing remotely. */
 export const withSafety = (steps: readonly NextStep[], targets: Targets): NextStep[] =>

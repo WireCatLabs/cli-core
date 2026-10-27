@@ -81,6 +81,40 @@ export const changesStore = <T extends Command>(command: T): T => {
   return command
 }
 
+/** A download or a folder to write into: files outside the store, which the owner places, not an agent. */
+const savesFiles = (command: Command): boolean =>
+  command.name() === "download" ||
+  [...command.options.map((option) => option.attributeName()), ...command.registeredArguments.map((one) => one.name())]
+    .map((name) => name.toLowerCase())
+    .some((name) => name === "dir" || name.endsWith("dir") || name === "output")
+
+/**
+ * Reads the provider and only keeps what it read in the owner's store — a sync, a list that refreshes it. An MCP server
+ * offers it through the read tool (owner ruling, 2026-10-27; WC-CMD-17): it changes nothing at the provider or for
+ * other people. A local edit (`changesStore`), an authority change, a call to another service (`reachesOtherService`,
+ * a model download) and a command that saves files (a download, a folder to write into) stay writes.
+ */
+export const fetchesOnly = (command: Command): boolean => {
+  const effects = metaOf(command).effects
+  return (
+    effects?.remote === "read" &&
+    effects.local === "write" &&
+    !STORE_WRITES.has(command) &&
+    !changesAuthority(command) &&
+    !OTHER_SERVICE.has(command) &&
+    !savesFiles(command)
+  )
+}
+
+/** `fetchesOnly` by command path under `root`, as an MCP catalogue asks it; an unknown path is not one. */
+export const fetchesOnlyAt =
+  (root: Command) =>
+  (path: readonly string[]): boolean => {
+    let at: Command | undefined = root
+    for (const word of path) at = at?.commands.find((one) => one.name() === word)
+    return at !== undefined && fetchesOnly(at)
+  }
+
 /**
  * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
  * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)

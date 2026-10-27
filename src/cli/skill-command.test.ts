@@ -10,16 +10,16 @@ import { skillCommand } from "./skill-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test CLI", version: "1.0.0" }
 
-const show = async (argv: string[]) => {
+const show = async (argv: string[], tool: typeof app & { messenger?: boolean } = app) => {
   const file = join(mkdtempSync(join(tmpdir(), "skill-")), "SKILL.md")
   writeFileSync(file, "---\nname: chat-cli\n---\n\n# chat\n\n")
   const streams = captureStreams()
   const code = await run(
     argv,
-    { app, commands: () => [skillCommand(app, pathToFileURL(file))] },
+    { app: tool, commands: () => [skillCommand(tool, pathToFileURL(file))] },
     { streams, tty: false },
   )
-  return { code, stdout: streams.stdout }
+  return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 
 describe("skill show", () => {
@@ -46,6 +46,16 @@ describe("skill show", () => {
       { type: "item", data: { name: "chat-cli", content: "---\nname: chat-cli\n---\n\n# chat" } },
       expect.objectContaining({ type: "end", complete: true }),
     ])
+  })
+
+  it("**a CLI that is not a messenger offers no messenger skill**", async () => {
+    const tool = { ...app, messenger: false }
+    for (const name of ["follow-ups", "link-conversations"]) {
+      const { code, stdout } = await show(["skill", "show", name], tool)
+      expect(code).not.toBe(0)
+      expect(stdout).toEqual([])
+    }
+    expect((await show(["skill", "show"], tool)).code).toBe(0)
   })
 
   it("**prints the shared link-conversations skill** with this CLI's command in it", async () => {

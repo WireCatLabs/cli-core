@@ -10,7 +10,7 @@ import * as v from "valibot"
 import { findCommand } from "../cli/command-contract.js"
 import { environmentOf } from "../cli/context.js"
 import { refuseWriteBeforeConnecting } from "../cli/early-refusal.js"
-import { changesAuthorityAt, judgedTargets } from "../cli/effects.js"
+import { changesAuthorityAt, fetchesOnlyAt, judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
@@ -156,6 +156,7 @@ export const createServer = (
     readOnly: readOnlyLockOf(app, context.env) !== undefined,
     keyOf,
     authority,
+    fetchOnly: fetchesOnlyAt(root),
     offline: true,
     stdin,
   }).map((one) =>

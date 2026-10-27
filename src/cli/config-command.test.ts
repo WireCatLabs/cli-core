@@ -18,6 +18,36 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
 }
 
 describe("config", () => {
+  it("**a CLI that is not a messenger offers no messenger setting**, and refuses one", async () => {
+    const tool = { ...app, messenger: false }
+    const own = settingsFor(tool)
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const offered = (
+      configCommand(tool, own).commands.find((one) => one.name() === "set")?.registeredArguments[0]?.description ?? ""
+    )
+      .replace("one of: ", "")
+      .split(", ")
+    expect(offered).toEqual(expect.arrayContaining(["limit", "search_stemmers.latin"]))
+    for (const setting of ["sends_per_hour", "sender_colors", "phone_countries", "task_agent_close", "read_other_bots"])
+      expect(offered).not.toContain(setting)
+    expect(offered.some((setting) => setting.startsWith("task_") || setting.startsWith("account_groups"))).toBe(false)
+
+    for (const [setting, value] of [
+      ["sends_per_hour", "5"],
+      ["phone_countries", "ES"],
+    ]) {
+      const streams = captureStreams()
+      const code = await run(
+        ["work", "config", "set", setting as string, value as string, "--json"],
+        { app: tool, commands: () => [configCommand(tool, own)] },
+        { streams, tty: false, env },
+      )
+      expect(code).toBe(2)
+      expect(JSON.parse(streams.stderr[0] ?? "{}").error.message).toContain(`no setting called "${setting}"`)
+    }
+  })
+
   it("**saves a setting, shows where it came from, and removes it again** — a messenger's own included", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }

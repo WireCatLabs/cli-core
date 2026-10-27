@@ -35,6 +35,8 @@ export interface BotServerOptions {
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
   /** Whether a command changes what a later run may do; such a command requires `mcp.authority` to execute. */
   authority?: (path: readonly string[]) => boolean
+  /** Whether a command only fetches into this machine (`fetchesOnlyAt`): offered through the read tool. */
+  fetchOnly?: (path: readonly string[]) => boolean
   env: NodeJS.ProcessEnv
   skill?: URL
 }
@@ -60,6 +62,7 @@ export const createBotServer = (options: BotServerOptions) => {
     readOnly: readOnlyLockOf(bot.app, env) !== undefined,
     ...(options.keyOf ? { keyOf: options.keyOf } : {}),
     authority,
+    ...(options.fetchOnly ? { fetchOnly: options.fetchOnly } : {}),
     offline: true,
     // Another bot's copy is this bot's to read only where `read_other_bots` says so.
     ...(settings.readOtherBots ? {} : { omit: ["all_bots", "bots"] }),

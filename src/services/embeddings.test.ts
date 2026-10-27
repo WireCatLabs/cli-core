@@ -179,7 +179,10 @@ describe("embeddings", () => {
     await conversationsService(
       storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard),
     ).build("9")
-    await expect(embeddings.embed("9", { model: "e5-small" })).rejects.toThrow("chat models download e5-small")
+    await expect(embeddings.embed("9", { model: "e5-small" })).rejects.toMatchObject({
+      message: "e5-small is not downloaded on this machine",
+      details: { reason: "model.not-downloaded", model: "e5-small" },
+    })
     await store.close()
   })
 })
@@ -616,7 +619,9 @@ describe("catching up without --chat", () => {
       { chat: "9", needs: "embed" },
       { chat: "10", needs: "embed" },
     ])
-    await expect(embeddings.refresh({ build: false })).rejects.toThrow("models download e5-small")
+    await expect(embeddings.refresh({ build: false })).rejects.toMatchObject({
+      details: { reason: "model.not-downloaded", model: "e5-small" },
+    })
     await store.close()
   })
 

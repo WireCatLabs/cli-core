@@ -60,6 +60,16 @@ export const STORE_SETTINGS = [
 
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
 
+/**
+ * The store settings a CLI offers. Phone countries, task rules and account groups belong to messages; a CLI that is
+ * not a messenger would change them for tg and MAX without reading them itself.
+ */
+export const storeSettingsOf = (app: Pick<AppIdentity, "messenger">): string[] =>
+  app.messenger === false ? Object.keys(SCRIPTS) : [...STORE_SETTINGS, `${GROUP_PREFIX}<name>`]
+
+export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting: string): boolean =>
+  app.messenger !== false || setting in SCRIPTS
+
 export const isStoreSetting = (setting: string): boolean =>
   setting in SCRIPTS ||
   setting === PHONE_COUNTRIES ||

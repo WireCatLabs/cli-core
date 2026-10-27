@@ -3,7 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { environmentOf } from "../context.js"
-import { changesAuthorityAt, LOCAL_READ, REMOTE_WRITE } from "../effects.js"
+import { changesAuthorityAt, fetchesOnlyAt, LOCAL_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { type McpEnvironment, serverEntry } from "../messenger/mcp-command.js"
 import { nextStep, rootOf } from "../steps.js"
@@ -48,6 +48,7 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
             bot,
             program: { run, commands: describeProgram(rootOf(this)) },
             authority: changesAuthorityAt(rootOf(this)),
+            fetchOnly: fetchesOnlyAt(rootOf(this)),
             settings: context.settings,
             levels: () => bot.resolveSettings(this.optsWithGlobals(), { env: context.env, kind: "bot" }).permissions,
             env: context.env,

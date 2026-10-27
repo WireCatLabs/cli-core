@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { StepDefinition } from "@wirecat/cli-base/standards"
-import type { Command } from "commander"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { REASONS } from "../errors/reasons.js"
 import { expected, type Manifest } from "../parity/manifest.js"
@@ -21,7 +22,7 @@ import { modelsCommand } from "./messenger/models-command.js"
 import { reviewCommand } from "./messenger/review.js"
 import { serverCommand } from "./messenger/server-command.js"
 import { commandWords, liftProfile } from "./profile.js"
-import { createProgram } from "./program.js"
+import { createProgram, run } from "./program.js"
 import { settingsFor } from "./settings.js"
 import { type CommandStep, commandAt, nextStep, runnable, STEPS, stepLine } from "./steps.js"
 
@@ -130,6 +131,30 @@ describe("the next-step registry", () => {
     expect(runnable(bare, [download])).toEqual([])
     expect(runnable(program, [download, download, download])).toHaveLength(2)
     expect(stepLine(program, download)).toBe("chat models download e5-small")
+  })
+
+  it("**a model that is not downloaded names its download only where the CLI has it**, with the profile", async () => {
+    const failing = () =>
+      new Command("look").action(() => {
+        throw new CliError("not_found", "e5-small is not downloaded on this machine", {
+          reason: "model.not-downloaded",
+          model: "e5-small",
+        })
+      })
+    const errorOf = async (commands: () => Command[]) => {
+      const streams = captureStreams()
+      await run(["work", "look", "--json"], { app, commands }, { streams, tty: false, env: {} })
+      return JSON.parse(streams.stderr[0] ?? "{}").error
+    }
+
+    expect(await errorOf(() => [failing()])).not.toHaveProperty("next")
+    expect((await errorOf(() => [failing(), modelsCommand(messenger)])).next).toEqual([
+      expect.objectContaining({
+        command: "models download",
+        args: { model: "e5-small" },
+        line: "chat work models download e5-small",
+      }),
+    ])
   })
 
   it("names the profile the command ran with, so the printed step runs as pasted", () => {
