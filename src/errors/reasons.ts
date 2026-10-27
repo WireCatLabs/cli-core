@@ -66,7 +66,7 @@ const OTHERS: Entry[] = [
   validation("event.notify-required", "the event has other attendees; say whether to notify them"),
   validation("event.repeat-invalid", "the repeat rule is outside the RFC 5545 subset the calendars take"),
   validation("event.repeat-kind", "the series' rule holds a date or a time of the kind the event is leaving"),
-  validation("calendars.none-synced", "no calendar syncs yet; name one, or turn one's sync on"),
+  validation("busy.no-calendars", "no calendar syncs and no person was named, so there is nobody to ask"),
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [

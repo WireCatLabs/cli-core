@@ -66,7 +66,7 @@ export const busyQuery = async (
     : (await context.store.calendars(context.accountId)).filter(({ synced, deletedAt }) => synced && !deletedAt)
   if (asked.length === 0 && people.size === 0)
     throw new CliError("validation_error", "no calendar syncs yet; name one with calendar:<id>, or a person:<email>", {
-      reason: "calendars.none-synced",
+      reason: "busy.no-calendars",
     })
   if (asked.length + people.size > MOST)
     throw new CliError("validation_error", `at most ${MOST} calendars and people at once`)
