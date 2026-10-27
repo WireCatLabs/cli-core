@@ -301,7 +301,7 @@ export const mcpServerCommand = ({
   if (profiles)
     for (const one of command.commands)
       one.option(
-        "--profiles <names>",
+        "--profiles <names|all>",
         "the server of several profiles that `mcp serve --profiles` serves: names, comma-separated, or all",
       )
   return command

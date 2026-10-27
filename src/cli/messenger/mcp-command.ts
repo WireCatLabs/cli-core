@@ -118,7 +118,7 @@ export const servedProfiles = (
 
 const withProfiles = (command: Command): Command =>
   command.option(
-    "--profiles <names>",
+    "--profiles <names|all>",
     "serve several profiles from one server instead of one: names, comma-separated, or all for every profile",
   )
 

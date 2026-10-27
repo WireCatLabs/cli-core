@@ -1,11 +1,5 @@
 [
   "bot search messages --from",
-  "mcp config --profiles",
-  "mcp revoke --profiles",
-  "mcp serve --profiles",
-  "mcp server start --profiles",
-  "mcp server status --profiles",
-  "mcp server stop --profiles",
   "replies audience --reply",
   "replies edit --as-reply",
   "replies edit --contacts-only",
