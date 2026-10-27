@@ -1,3 +1,5 @@
+import { appDoctorCommand as appDoctorCommandDefinition } from "./app-doctor-command.js"
+import { appMcpCommand as appMcpCommandDefinition } from "./app-mcp-command.js"
 import {
   botAdminsCommand as botAdminsCommandDefinition,
   botMembersCommand as botMembersCommandDefinition,
@@ -75,6 +77,8 @@ import { upgradeCommand as upgradeCommandDefinition } from "./upgrade-command.js
 
 const sharedCommand: typeof protectedCommand = (factory) => honoursDryRun(protectedCommand(factory))
 
+export const appDoctorCommand = sharedCommand(appDoctorCommandDefinition)
+export const appMcpCommand = sharedCommand(appMcpCommandDefinition)
 export const botAdminsCommand = sharedCommand(botAdminsCommandDefinition)
 export const botMembersCommand = sharedCommand(botMembersCommandDefinition)
 export const generatedApiCommand = sharedCommand(generatedApiCommandDefinition)

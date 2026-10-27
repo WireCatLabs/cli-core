@@ -29,6 +29,29 @@ shape of this file.
   still running without `upgrade` is not recognised by `mcp server stop --profiles all` (its marker changed) and is
   stopped by its PID.
 
+### Added
+
+- **`appMcpCommand(app, configuration, { name, untrusted, permissionExample, skill?, signedIn? })` — the shared
+  `mcp` for a CLI that is not a messenger** (gcal, drive and zoom each had their own): `mcp serve | revoke | server
+  start|stop|status | config | add | check`, the same commands, flags and answers as a messenger's `mcpCommand`,
+  with `--profiles <names|all>` (no profile is ever picked), `--http`, `--port`, `--public-url` and `--permission`
+  (a key no command checks is refused). Every command of the program is a tool behind `<cli>_tools_search`,
+  `<cli>_read` and `<cli>_write`, run in this process through the CLI's own `run`, under the profile's permissions
+  and its `configuration.permissions` keys; `mcp` itself is left out. The instructions come from the new
+  `appInstructions`, which requires the kinds of text other people wrote (`untrusted`, WC-MCP-11). Both kinds of
+  CLI now build the group from one `mcpGroup(host: McpHost)`.
+- **`appDoctorCommand(app, configuration, { oauthClient? })` — the shared `doctor` for a CLI that is not a
+  messenger**: version, runtime, paths, `store: { path, exists }`, `oauth_client` (`wirecat` or `own`, or the
+  error), `read_only`, `profile_lock`, the config file with its issues — permission keys no command checks
+  included — the profiles and the config file's modes. It opens no keyring, store or network. `appDoctorReport` is
+  the same report for a CLI that renders its own.
+
+### Fixed
+
+- **Each MCP call has its own `run_id`.** A command an agent ran through `<cli>_read` or `<cli>_write`
+  (`runCommandForAgent`) answered with the server process's run id, so two calls of one session had the same
+  `meta.run_id`. Each call now runs in a run of its own, `mcp <command>`, keeping the caller's trace.
+
 ## 0.469.0 — 27.10.2026
 
 ### Changed — may break callers

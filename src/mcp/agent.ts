@@ -20,7 +20,9 @@ import { lentConnection } from "../cli/messenger/serve-relay.js"
 import type { RunOptions } from "../cli/program.js"
 import type { StdinField } from "../cli/stdin-field.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
+import { newRunId } from "../runs/run.js"
 import type { RunCaller } from "../runs/run-context.js"
+import { enclosingTraceId, inRun, traceOf } from "../runs/scope.js"
 import { authorityAllowed, botApiAllowed, type Level, type PermissionKey } from "../sends/permissions.js"
 import { currentCaller } from "./caller.js"
 
@@ -343,37 +345,49 @@ export const runCommandForAgent = async (
     let result: unknown
     let failure: ErrorObject | undefined
     const streams = captureStreams()
-    const code = await program.run(argv, {
-      ...ctx.environment,
-      streams,
-      tty: false,
-      ...(ctx.env ? { env: ctx.env } : {}),
-      stdin: Readable.from(stdin === undefined ? [] : [stdin]),
-      answer: () => null,
-      agent: {
-        result: (value) => {
-          answered = true
-          result = value
+    const command = `mcp ${path.join(" ")}`
+    const traceId = enclosingTraceId() ?? traceOf(ctx.env ?? {}).traceId
+    // Its own run for each call: outside one, every answer of a server would name the server process's run.
+    const scope = {
+      runId: newRunId(new Date(), command),
+      command,
+      startedAt: Date.now(),
+      profile: ctx.profile,
+      ...(traceId === undefined ? {} : { traceId }),
+    }
+    const code = await inRun(scope, () =>
+      program.run(argv, {
+        ...ctx.environment,
+        streams,
+        tty: false,
+        ...(ctx.env ? { env: ctx.env } : {}),
+        stdin: Readable.from(stdin === undefined ? [] : [stdin]),
+        answer: () => null,
+        agent: {
+          result: (value) => {
+            answered = true
+            result = value
+          },
+          failure: (object) => {
+            failure = object
+          },
+          ...(ctx.overrides?.length ? { overrides: ctx.overrides } : {}),
+          authority: levels !== undefined && authorityAllowed(levels),
+          botApi: levels !== undefined && botApiAllowed(levels),
+          ...((ctx.caller ?? currentCaller()) ? { caller: ctx.caller ?? currentCaller() } : {}),
         },
-        failure: (object) => {
-          failure = object
-        },
-        ...(ctx.overrides?.length ? { overrides: ctx.overrides } : {}),
-        authority: levels !== undefined && authorityAllowed(levels),
-        botApi: levels !== undefined && botApiAllowed(levels),
-        ...((ctx.caller ?? currentCaller()) ? { caller: ctx.caller ?? currentCaller() } : {}),
-      },
-      // Opened only when the command asks: a read the store answers never connects.
-      ...(lend
-        ? {
-            relayed: {
-              profile: ctx.profile,
-              cwd: process.cwd(),
-              connection: () => (borrowed ??= lend().then((adapter) => lentConnection(adapter))),
-            },
-          }
-        : {}),
-    })
+        // Opened only when the command asks: a read the store answers never connects.
+        ...(lend
+          ? {
+              relayed: {
+                profile: ctx.profile,
+                cwd: process.cwd(),
+                connection: () => (borrowed ??= lend().then((adapter) => lentConnection(adapter))),
+              },
+            }
+          : {}),
+      }),
+    )
     if (failure) return { error: failure }
     if (answered) return { result }
     if (code !== 0) throw new CliError("invalid_response", `the command exited with ${code} and said nothing`)

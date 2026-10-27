@@ -146,6 +146,8 @@ export {
   type Observation,
 } from "./agent-evaluation.js"
 export { answerEntity } from "./answer-entity.js"
+export { type AppDoctorOptions, appDoctorReport } from "./app-doctor-command.js"
+export type { AppMcpOptions } from "./app-mcp-command.js"
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"
 export {
   apiFlagOf,
@@ -387,7 +389,7 @@ export {
   type StoredMessages,
 } from "./messenger/context.js"
 export { COMMAND_NEEDS } from "./messenger/lacks.js"
-export { httpTokenFile, type McpEnvironment, serverEntry } from "./messenger/mcp-command.js"
+export { httpTokenFile, type McpEnvironment, type McpHost, serverEntry } from "./messenger/mcp-command.js"
 export { type MessageItem, messageItem, type ReadMessage } from "./messenger/message-items.js"
 export { type ModeProblem, type PrivateFiles, privateFiles, withSqliteSidecars } from "./messenger/private-files.js"
 export {
@@ -465,6 +467,8 @@ export {
   addMeetingPreparationCommand,
   addMeetingProjectCandidatesCommand,
   addMeetingSeriesInventoryCommand,
+  appDoctorCommand,
+  appMcpCommand,
   attachmentsCommand,
   botAdminsCommand,
   botCommand,

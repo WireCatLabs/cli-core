@@ -9,14 +9,15 @@ import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
 import type { ServerSystem } from "../../background/system.js"
 import { mcpUrlOf, portOf, publicUrlOf } from "../../http/public-url.js"
+import type { HttpOptions } from "../../mcp/http/serve.js"
 import { httpLockFile } from "../../mcp/http/state.js"
 import { type AppIdentity, envName } from "../../ports/app.js"
-import { type BaseEnvironment, environmentOf } from "../context.js"
+import { type BaseContext, type BaseEnvironment, environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { MCP_HTTP_DEFAULT_PORT, mcpServerCommand } from "../mcp-server-command.js"
 import { rootOf } from "../profile.js"
-import { NoProfileHere, namedProfile, type Settings } from "../settings.js"
+import { type GlobalFlags, NoProfileHere, namedProfile, type ResolveOptions, type Settings } from "../settings.js"
 import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
@@ -60,7 +61,7 @@ export interface ProfileSet {
  */
 export const servedProfiles = (
   self: Command,
-  messenger: Messenger,
+  messenger: Pick<Messenger, "app" | "resolveSettings">,
   { settings, env }: { settings: Pick<Settings, "profile" | "sources" | "profilesHere">; env: NodeJS.ProcessEnv },
   given: string | undefined,
   words: string,
@@ -126,15 +127,74 @@ const withProfiles = (command: Command): Command =>
 export const httpTokenFile = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "mcp-http", `${profile}.json`)
 
-const withFlags = (command: Command): Command =>
+const withFlags = (command: Command, example: string): Command =>
   command.option(
     "--permission <key=level>",
-    "make a permission stricter for this server only, like messages.send=deny; it never loosens the profile; repeat for more keys",
+    `make a permission stricter for this server only, like ${example}; it never loosens the profile; repeat for more keys`,
     (value: string, previous: string[] = []) => [...previous, value],
   )
 
-export const mcpCommand = (messenger: Messenger): Command => {
-  const { app } = messenger
+/**
+ * What the `mcp` group needs of the CLI it serves. A messenger serves through its one connection (`messengerHost`);
+ * a CLI that is not a messenger through its own program (`appMcpCommand`). The commands, flags and answers are the
+ * same in both, so every WireCat CLI has one `mcp`.
+ */
+export interface McpHost {
+  app: AppIdentity
+  /** `Telegram`, `Google Calendar`: what the instructions call the service. */
+  name: string
+  resolveSettings: (flags: GlobalFlags, options?: ResolveOptions) => Settings
+  context: (self: Command, options?: { needsProfile?: boolean }) => BaseContext
+  /** A permission key of this CLI for `--permission`'s help: `messages.send=deny`. */
+  permissionExample: string
+  serveStdio: (self: Command, context: BaseContext) => Promise<void>
+  serveHttp: (
+    self: Command,
+    context: BaseContext,
+    http: Omit<HttpOptions, "onCode" | "onError" | "appName">,
+  ) => Promise<void>
+  /** The instructions of the server of several profiles, whose tools each take `profile`. */
+  instructions: (profiles: readonly string[]) => string | Promise<string>
+  /** Whether the profile can reach the service; `undefined` where the CLI cannot tell without connecting. */
+  signedIn: (self: Command, profile: string, env: NodeJS.ProcessEnv) => boolean | undefined
+  /** A profile that is a bot, or not signed in here; the server of several profiles leaves bots out. */
+  profileState?: Messenger["profileState"]
+}
+
+const messengerHost = (messenger: Messenger): McpHost => ({
+  app: messenger.app,
+  name: messenger.name ?? messenger.app.command,
+  resolveSettings: messenger.resolveSettings,
+  ...(messenger.profileState ? { profileState: messenger.profileState } : {}),
+  context: (self, options) => messengerContext(self, messenger, options),
+  permissionExample: "messages.send=deny",
+  serveStdio: async (self, context) => {
+    // Loaded here, not at the top: every other command would otherwise pay for the SDK.
+    const { serveOverStdio } = await import("../../mcp/server.js")
+    await serveOverStdio(self, context as MessengerContext, messenger, {})
+  },
+  serveHttp: async (self, context, http) => {
+    const { serveOverHttpUntilStopped } = await import("../../mcp/server.js")
+    await serveOverHttpUntilStopped(self, context as MessengerContext, messenger, {}, http)
+  },
+  instructions: async (profiles) => {
+    const { instructions } = await import("../../mcp/instructions.js")
+    return instructions({
+      command: messenger.app.command,
+      name: messenger.name ?? messenger.app.command,
+      profile: profiles,
+      writes: [],
+    })
+  },
+  signedIn: (self, profile, env) =>
+    (messenger.accountOf?.(self) ?? recalledAccount(messenger.app, messenger.provider, profile, env)) !== undefined,
+})
+
+export const mcpCommand = (messenger: Messenger): Command => mcpGroup(messengerHost(messenger))
+
+export const mcpGroup = (host: McpHost): Command => {
+  const { app } = host
+  const flagged = (command: Command) => withFlags(command, host.permissionExample)
   const command = annotate(new Command("mcp"), { effects: LOCAL_READ, mcp: false })
     .summary("serve this profile's commands to an AI agent, and set that up")
     .description(
@@ -142,7 +202,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
     )
   command.addCommand(
     withProfiles(
-      withFlags(
+      flagged(
         annotate(new Command("serve"), {
           effects: REMOTE_WRITE,
           lifetime: "persistent",
@@ -170,9 +230,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
       )
       .action(async function (this: Command) {
         const flags = this.optsWithGlobals<McpFlags>()
-        const context = messengerContext(this, messenger, { needsProfile: false })
-        const served = servedProfiles(this, messenger, context, flags.profiles, "mcp serve")
-        if ("set" in served) return serveProfiles(this, context, messenger, flags, served.set)
+        const context = host.context(this, { needsProfile: false })
+        const served = servedProfiles(this, host, context, flags.profiles, "mcp serve")
+        if ("set" in served) return serveProfiles(this, context, host, flags, served.set)
         const { profile } = served
         if (flags.http) {
           const publicUrl = publicUrlOf(flags.publicUrl, {
@@ -180,26 +240,17 @@ export const mcpCommand = (messenger: Messenger): Command => {
             reaches: `the browser apps reach ${app.command}`,
             path: true,
           })
-          const { serveOverHttpUntilStopped } = await import("../../mcp/server.js")
           const tokenFile = httpTokenFile(app, profile, context.env)
-          await serveOverHttpUntilStopped(
-            this,
-            context,
-            messenger,
-            {},
-            {
-              publicUrl,
-              port: portOf(flags.port, DEFAULT_PORT),
-              tokenFile,
-              lockFile: httpLockFile(tokenFile),
-              version: app.version,
-            },
-          )
+          await host.serveHttp(this, context, {
+            publicUrl,
+            port: portOf(flags.port, DEFAULT_PORT),
+            tokenFile,
+            lockFile: httpLockFile(tokenFile),
+            version: app.version,
+          })
           return
         }
-        // Loaded here, not at the top: every other command would otherwise pay for the SDK.
-        const { serveOverStdio } = await import("../../mcp/server.js")
-        await serveOverStdio(this, context, messenger, {})
+        await host.serveStdio(this, context)
       }),
   )
 
@@ -215,8 +266,8 @@ export const mcpCommand = (messenger: Messenger): Command => {
           "forget every login `mcp serve --http` gave a browser app, of this profile or of the server `--profiles` names; each app must log in again",
         ),
     ).action(async function (this: Command) {
-      const context = messengerContext(this, messenger, { needsProfile: false })
-      const served = servedProfiles(this, messenger, context, this.opts<McpFlags>().profiles, "mcp revoke")
+      const context = host.context(this, { needsProfile: false })
+      const served = servedProfiles(this, host, context, this.opts<McpFlags>().profiles, "mcp revoke")
       const { revokeAll } = await import("../../mcp/http/oauth.js")
       revokeAll(httpTokenFile(app, "set" in served ? served.set.key : served.profile, context.env))
       renderAnswer(
@@ -236,15 +287,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
       permission: true,
       profiles: true,
       target: (self) => {
-        const context = messengerContext(self, messenger, { needsProfile: false })
+        const context = host.context(self, { needsProfile: false })
         const { env } = context
-        const served = servedProfiles(
-          self,
-          messenger,
-          context,
-          self.opts<McpFlags>().profiles,
-          `mcp server ${self.name()}`,
-        )
+        const served = servedProfiles(self, host, context, self.opts<McpFlags>().profiles, `mcp server ${self.name()}`)
         if ("set" in served) {
           const { set } = served
           return {
@@ -270,15 +315,13 @@ export const mcpCommand = (messenger: Messenger): Command => {
         }
       },
       answer: (self, item, lines) =>
-        renderAnswer(self, messengerContext(self, messenger, { needsProfile: false }), itemOf(item), () =>
-          lines.join("\n"),
-        ),
+        renderAnswer(self, host.context(self, { needsProfile: false }), itemOf(item), () => lines.join("\n")),
       system: (self) => environmentOf<McpEnvironment>(self).system,
     }),
   )
   command.addCommand(
     withProfiles(
-      withFlags(
+      flagged(
         annotate(new Command("config"), {
           effects: LOCAL_READ,
           examples: [`${app.command} personal mcp config`, `${app.command} mcp config --profiles all`],
@@ -290,10 +333,10 @@ export const mcpCommand = (messenger: Messenger): Command => {
       ),
     ).action(async function (this: Command) {
       const flags = this.optsWithGlobals<McpFlags>()
-      const context = messengerContext(this, messenger, { needsProfile: false })
+      const context = host.context(this, { needsProfile: false })
       const { env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
-      const served = servedProfiles(this, messenger, context, flags.profiles, "mcp config")
+      const served = servedProfiles(this, host, context, flags.profiles, "mcp config")
       const entry = serverEntry(app, {
         ...("set" in served ? { profiles: served.set.option } : { profile: served.profile }),
         flags,
@@ -318,7 +361,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
     }),
   )
   command.addCommand(
-    withFlags(
+    flagged(
       grantsAuthority(
         annotate(new Command("add"), {
           effects: LOCAL_WRITE,
@@ -331,7 +374,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
     ).action(async function (this: Command, client: string) {
       if (client !== "codex" && client !== "claude-code")
         throw new CliError("validation_error", "choose codex or claude-code")
-      const context = messengerContext(this, messenger)
+      const context = host.context(this)
       const { settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
       const configuration = serverEntry(app, {
@@ -362,13 +405,13 @@ export const mcpCommand = (messenger: Messenger): Command => {
     }),
   )
   command.addCommand(
-    withFlags(
+    flagged(
       annotate(new Command("check"), {
         effects: LOCAL_READ,
         examples: [`${app.command} personal mcp check`],
       }).description("check this profile's local MCP handshake and tool list"),
     ).action(async function (this: Command) {
-      const context = messengerContext(this, messenger)
+      const context = host.context(this)
       const { settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
       const configuration = serverEntry(app, {
@@ -386,8 +429,8 @@ export const mcpCommand = (messenger: Messenger): Command => {
         const { tools, potentialWrites } = await probeStdio(entry as Parameters<typeof probeStdio>[0], {
           start: stderr.start,
         })
-        const account = messenger.accountOf?.(this) ?? recalledAccount(app, messenger.provider, settings.profile, env)
-        if (!account) {
+        const signedIn = host.signedIn(this, settings.profile, env)
+        if (signedIn === false) {
           const setup = rootOf(this).commands.some((one) => one.name() === "setup")
             ? ` — log in with \`${app.command} ${settings.profile} setup\``
             : ""
@@ -400,9 +443,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
           this,
           context,
           itemOf({
-            healthy: account !== undefined,
+            healthy: signedIn !== false,
             profile: settings.profile,
-            signed_in: account !== undefined,
+            signed_in: signedIn ?? null,
             tools: tools.length,
             potential_writes: potentialWrites.length,
           }),
@@ -432,17 +475,11 @@ export const profileSetLabel = (set: ProfileSet): string => {
  * `<tool> <profile> mcp serve` (`src/mcp/all-profiles.ts`). Nothing picks a profile: each tool takes one, and the
  * agent is told to ask.
  */
-const serveProfiles = async (
-  self: Command,
-  context: MessengerContext,
-  messenger: Messenger,
-  flags: McpFlags,
-  set: ProfileSet,
-) => {
-  const { app } = messenger
+const serveProfiles = async (self: Command, context: BaseContext, host: McpHost, flags: McpFlags, set: ProfileSet) => {
+  const { app } = host
   const { env } = context
   const tokenFile = httpTokenFile(app, set.key, env)
-  const state = (profile: string) => messenger.profileState?.(profile, env) ?? "signed-in"
+  const state = (profile: string) => host.profileState?.(profile, env) ?? "signed-in"
   const bots = set.option === EVERY_PROFILE ? [] : set.profiles().filter((profile) => state(profile) === "bot")
   if (bots.length > 0)
     throw new CliError(
@@ -460,23 +497,17 @@ const serveProfiles = async (
   const execPath = given.execPath ?? process.execPath
   const scriptPath = given.scriptPath ?? realpathSync(process.argv[1] ?? "")
   const tightened = (flags.permission ?? []).flatMap((entry) => ["--permission", entry])
-  const { instructions } = await import("../../mcp/instructions.js")
   const options = {
     command: app.command,
     version: app.version,
-    name: messenger.name ?? app.command,
+    name: host.name,
     profiles,
     signedIn: (profile: string) => state(profile) === "signed-in",
     signIn: (profile: string) =>
       `profile ${profile} is not signed in — run \`${app.command} ${profile} setup\`, or sign in from WireCat Desktop, ` +
       "then try again. If the owner did not choose this profile, ask which one.",
     child: (profile: string) => ({ command: execPath, args: [scriptPath, profile, "mcp", "serve", ...tightened], env }),
-    instructions: instructions({
-      command: app.command,
-      name: messenger.name ?? app.command,
-      profile: profiles(),
-      writes: [],
-    }),
+    instructions: await host.instructions(profiles()),
     note: (line: string) => context.renderer.note(line),
   }
   if (flags.http) {
