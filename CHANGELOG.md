@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.464.0 — 27.10.2026
+
 ### Added
 
 - **`upgrade` restarts the HTTP MCP server and names the stdio MCP sessions still on the old version**, in every
