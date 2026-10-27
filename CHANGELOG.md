@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.461.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **The shared calendar commands mark the text whoever sent an invitation wrote.** `addCalendarCommands` answers
