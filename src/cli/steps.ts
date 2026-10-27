@@ -199,7 +199,7 @@ export const STEPS = defineSteps([
   {
     id: "mcp.config",
     command: "mcp config",
-    args: [],
+    args: [{ name: "profiles", required: false }],
     why: "the entry names one Node version's path; after switching or upgrading Node, print it again",
   },
   {

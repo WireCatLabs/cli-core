@@ -305,7 +305,14 @@ export const mcpCommand = (messenger: Messenger): Command => {
       renderAnswer(
         this,
         context,
-        itemOf({ config: entry.config }, { next: entry.nodeBound ? [nextStep("mcp.config", { args: {} })] : [] }),
+        itemOf(
+          { config: entry.config },
+          {
+            next: entry.nodeBound
+              ? [nextStep("mcp.config", { args: { profiles: "set" in served ? served.set.option : undefined } })]
+              : [],
+          },
+        ),
         () => JSON.stringify(entry.config, null, 2),
       )
     }),
