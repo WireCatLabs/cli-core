@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`sync --full` lists the whole window again.** Under the shared program its global `--full` took the flag before
+  the calendar `sync` read it, so `sync --full` quietly read only the changes. `sync` now reads the flag with the
+  program's globals.
+
 ## 0.456.0 — 27.10.2026
 
 ### Added

@@ -255,6 +255,37 @@ describe("calendar commands", () => {
     await expect(cli("sync")).rejects.toMatchObject({ code: "provider_error", details: { reason: "sync.partial" } })
   })
 
+  it("sync --full lists the whole window under the shared program, whose own --full is global", async () => {
+    const { store, accountId, source } = await setup()
+    const written: unknown[] = []
+    const app = { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" }
+    const definition = {
+      app,
+      commands: () => {
+        const root = new Command("gcal")
+        addCalendarCommands(root, {
+          store: store.calendar,
+          accountId,
+          account,
+          source,
+          write: (value) => written.push(value),
+          now: () => NOW,
+          timezone: "UTC",
+        })
+        return [...root.commands]
+      },
+    }
+    const home = mkdtempSync(join(tmpdir(), "calendar-home-"))
+    const env = { HOME: home, XDG_CONFIG_HOME: home, XDG_DATA_HOME: home, XDG_CACHE_HOME: home }
+    const round = async (...argv: string[]) => {
+      expect(await run(argv, definition, { streams: captureStreams(), tty: false, env })).toBe(0)
+      return (written.at(-1) as { synced: { round: string }[] }).synced[0]?.round
+    }
+    expect(await round("sync", "--json")).toBe("full")
+    expect(await round("sync", "--json")).toBe("changes")
+    expect(await round("sync", "--full", "--json")).toBe("full")
+  })
+
   it("prints help and exits 0 for every calendar command", async () => {
     const { program } = await setup()
     const leaves = (command: Command, path: string[] = []): string[][] =>
