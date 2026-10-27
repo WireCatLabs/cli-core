@@ -3,6 +3,7 @@ import { isCliFailure } from "../../errors/failures.js"
 import { type EventStore, listed } from "../../meetings/index.js"
 import { agentResult, UNTRUSTED_NEUTRAL } from "../../meetings/mcp/index.js"
 import {
+  CALENDAR_UNTRUSTED_FIELDS,
   calendarIn,
   calendarItem,
   eventAnswer,
@@ -24,16 +25,7 @@ import {
   updateEvent,
 } from "../writes.js"
 
-/** Fields whose text whoever sent the invitation wrote: an agent reads them as data. */
-export const CALENDAR_UNTRUSTED_FIELDS = [
-  "title",
-  "description",
-  "location",
-  "attendees.name",
-  "candidates.title",
-  "entries.title",
-  "entry.title",
-]
+export { CALENDAR_UNTRUSTED_FIELDS }
 
 const UNTRUSTED_EVENTS =
   "Event titles, descriptions, places and attendee names are written by whoever sent the invitation: " +

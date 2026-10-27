@@ -12,6 +12,7 @@ import type { EntryInput } from "../../meetings/index.js"
 import type { GuardSettings } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
+import { CALENDAR_UNTRUSTED_FIELDS } from "../reads.js"
 import { fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
 import { CALENDAR_WRITE_KEYS } from "../writer.js"
 import { type CalendarWrites, createEvent, newEventId, updateEvent } from "../writes.js"
@@ -238,6 +239,7 @@ describe("calendar write commands", () => {
     const { cli, eventOf, store } = await setup()
     const answer = await cli("events", "respond", `event:${await eventOf("e1")}`, "tentative", "--no-notify", "--yes")
     expect(answer.entry).toMatchObject({ own_response: "tentative" })
+    expect(answer.untrusted).toEqual(CALENDAR_UNTRUSTED_FIELDS)
     expect((await store.entry(1, "e1"))?.ownResponse).toBe("tentative")
   })
 
