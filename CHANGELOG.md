@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.467.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **Every run is now recorded by default, successes too** — before, only failures were kept unless `--record` or
