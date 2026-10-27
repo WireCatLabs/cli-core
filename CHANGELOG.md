@@ -11,6 +11,30 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **An MCP server offers a command that only fetches into the store through its read tool.** A command that reads
+  the provider and only keeps what it read in the owner's store (`effects: { remote: "read", local: "write" }`,
+  `FETCH`) — `contacts sync`, `metadata sync`, `chats members fetch`, a calendar's `sync` and `calendars list` — is
+  now `writes: false` in the catalogue and runs with `<cli>_read`; `<cli>_write` refuses it and names `_read` (owner
+  ruling, 2026-10-27; WC-CMD-17). These stay writes: a local edit (`changesStore`, `tags rebuild`), an authority
+  change (`grantsAuthority`, `recipients add`), a call to another service (`reachesOtherService`), a command that
+  saves files (named `download`, or with a folder to write into: `messages download`, `models download`,
+  `attachments extract --output-dir`), and anything that changes the provider. Permissions do not change: a
+  `readonly` level still refuses a fetch. New `fetchesOnly(command)` and `fetchesOnlyAt(root)`; `toolsFromCommands`
+  takes `fetchOnly`, and without it every write stays one (a CLI with its own server passes
+  `fetchOnly: fetchesOnlyAt(program)`). A CLI's `contracts/mcp-catalogue.json` changes where it has such commands.
+- **A CLI that is not a messenger (`AppIdentity.messenger: false`) no longer offers messenger settings.** `config
+  set|unset` lists and takes neither `sends_per_hour`, `sender_colors`, `transcribe_with`, `search_catch_up` and
+  `read_other_bots` (`settingsFor(...).allSettings` leaves them out; a file that has one is still read) nor the store
+  settings of messages — `phone_countries`, `task_*` and `account_groups.<name>` — which it would have changed for
+  tg and MAX. `search_stemmers.*` stays. `config show` leaves the same profile settings out.
+- **A model that is not downloaded names its download as the error's `next` step, only in a CLI that has the
+  command.** The `model.not-downloaded` error of a text model said `` `<cli> models download <id>` `` in its message,
+  also in a CLI without `models` (gcal). Its message is now `<id> is not downloaded on this machine`; the step
+  (`models.download`, or `models.download-image` for a picture model) comes as `error.next` with its `line`, the
+  profile in it, and only where the program has the command. Any error's `next` is now dropped when it names a
+  command the program lacks.
+- **`skill show` offers `follow-ups` and `link-conversations` only in a messenger CLI.** Both work on chats.
+
 - **Every run is now recorded by default, successes too** — before, only failures were kept unless `--record` or
   `record: true`. Successful runs are kept 7 days (`keep_successful_runs_for_days`), failures 30
   (`keep_runs_for_days`), and the runs folder stays under `runs_size_limit_mb` (200; the oldest successes go
@@ -62,32 +86,6 @@ shape of this file.
 - **The MCP login page says why a code that just worked is now wrong.** Each login code works once; after an app
   logs in, the server shows a new one. The wrong-code message now says so and points to WireCat Desktop and
   `<cli> mcp server status`, where the new code is.
-
-### Changed — may break callers
-
-- **An MCP server offers a command that only fetches into the store through its read tool.** A command that reads
-  the provider and only keeps what it read in the owner's store (`effects: { remote: "read", local: "write" }`,
-  `FETCH`) — `contacts sync`, `metadata sync`, `chats members fetch`, a calendar's `sync` and `calendars list` — is
-  now `writes: false` in the catalogue and runs with `<cli>_read`; `<cli>_write` refuses it and names `_read` (owner
-  ruling, 2026-10-27; WC-CMD-17). These stay writes: a local edit (`changesStore`, `tags rebuild`), an authority
-  change (`grantsAuthority`, `recipients add`), a call to another service (`reachesOtherService`), a command that
-  saves files (named `download`, or with a folder to write into: `messages download`, `models download`,
-  `attachments extract --output-dir`), and anything that changes the provider. Permissions do not change: a
-  `readonly` level still refuses a fetch. New `fetchesOnly(command)` and `fetchesOnlyAt(root)`; `toolsFromCommands`
-  takes `fetchOnly`, and without it every write stays one (a CLI with its own server passes
-  `fetchOnly: fetchesOnlyAt(program)`). A CLI's `contracts/mcp-catalogue.json` changes where it has such commands.
-- **A CLI that is not a messenger (`AppIdentity.messenger: false`) no longer offers messenger settings.** `config
-  set|unset` lists and takes neither `sends_per_hour`, `sender_colors`, `transcribe_with`, `search_catch_up` and
-  `read_other_bots` (`settingsFor(...).allSettings` leaves them out; a file that has one is still read) nor the store
-  settings of messages — `phone_countries`, `task_*` and `account_groups.<name>` — which it would have changed for
-  tg and MAX. `search_stemmers.*` stays. `config show` leaves the same profile settings out.
-- **A model that is not downloaded names its download as the error's `next` step, only in a CLI that has the
-  command.** The `model.not-downloaded` error of a text model said `` `<cli> models download <id>` `` in its message,
-  also in a CLI without `models` (gcal). Its message is now `<id> is not downloaded on this machine`; the step
-  (`models.download`, or `models.download-image` for a picture model) comes as `error.next` with its `line`, the
-  profile in it, and only where the program has the command. Any error's `next` is now dropped when it names a
-  command the program lacks.
-- **`skill show` offers `follow-ups` and `link-conversations` only in a messenger CLI.** Both work on chats.
 
 ## 0.465.0 — 27.10.2026
 
