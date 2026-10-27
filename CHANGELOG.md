@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.459.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **A calendar event id is Google's base32hex: 5 to 1024 of `a-v` and `0-9`.** `events create --id` and
