@@ -53,7 +53,7 @@ shape of this file.
   (`tool`, `request_id`, `connection_id`, `proxied`) and `agent.client` (`name`, `version`, and over HTTP `id`, the
   first 8 hex of the SHA-256 of the OAuth client id). Over HTTP the agent is `mcp-client` with the
   `Mcp-Session-Id` as its session, never the environment of whoever started `mcp --http`: such runs were credited to
-  that agent before. The every-profile server names the real caller to the profile server in
+  that agent before. The `run`, `run.details` and `run.hit` answer shapes declare the new fields. The every-profile server names the real caller to the profile server in
   `_meta["wirecat.dev/caller"]`; a profile server trusts it only on a connection that server opened.
 - **Request events gain `level`, `transport`, `attempt` and `wait_ms`**, and `requests` counts wire calls when a
   transport logs them, otherwise operations. `providerRequest` takes a third argument with the call's method, path

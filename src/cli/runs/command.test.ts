@@ -147,3 +147,33 @@ it("filters run metadata before paging and preserves the query in continuation",
   expect(invalid.code).toBe(2)
   expect(invalid.stderr).toContain("query.unsupported-field")
 })
+
+it("answers runs list and runs show in their declared shape for a run with its caller, and for an index-only success", async () => {
+  const state = mkdtempSync(join(tmpdir(), "runs-command-"))
+  const env = { ...process.env, APP_STATE_DIR: state }
+  const app = { command: "tg", appName: "app-cli", envPrefix: "APP", description: "Synthetic CLI", version: "1.0.0" }
+  const dir = runsDirFor(app, env)
+  const called = startRun({
+    runsDir: dir,
+    command: "mcp chats list",
+    service: "tg",
+    cliVersion: app.version,
+    context: {
+      via: "mcp-http",
+      agent: { kind: "mcp-client", session_id: "s-1", client: { name: "claude.ai", version: "1", id: "0a1b2c3d" } },
+      mcp: { tool: "chats_list", request_id: "4", connection_id: "s-1", proxied: true },
+    },
+  })
+  called.logger.info({ event: "request", operation: "chats.list", level: "wire", transport: "http", attempt: 2 })
+  await called.finish("success", { eventsDropped: 3 })
+  const quiet = startRun({ runsDir: dir, command: "chats list", service: "tg", cliVersion: app.version, lazy: true })
+  await quiet.finish("success")
+  const answer = async (argv: string[]) => {
+    const streams = captureStreams()
+    expect(await run(argv, { app, commands: () => [runsCommand(app)] }, { streams, env, tty: false })).toBe(0)
+    return JSON.parse(streams.stdout[0] ?? "")
+  }
+  for (const item of (await answer(["runs", "list", "--json"])).items) v.parse(ENTITIES.run, item)
+  for (const id of [called.id, quiet.id])
+    v.parse(ENTITIES["run.details"], (await answer(["runs", "show", id, "--json"])).item)
+})
