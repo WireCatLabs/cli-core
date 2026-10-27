@@ -110,7 +110,8 @@ describe("the native ONNX Runtime", () => {
     expect(nativeRuntimeFor({ platform: "linux", arch: "x64", musl: false })?.library.name).toBe("libonnxruntime.so.1")
     expect(nativeRuntimeFor({ platform: "linux", arch: "x64", musl: true })).toBeUndefined()
     expect(nativeRuntimeFor({ platform: "darwin", arch: "x64" })).toBeUndefined()
-    expect(nativeRuntimeFor({ platform: "win32", arch: "x64" })).toBeUndefined()
+    expect(nativeRuntimeFor({ platform: "win32", arch: "x64" })?.library.name).toBe("onnxruntime.dll")
+    expect(nativeRuntimeFor({ platform: "win32", arch: "ia32" })).toBeUndefined()
   })
 
   it("leaves the models on WebAssembly when the installed binding does not load", async () => {

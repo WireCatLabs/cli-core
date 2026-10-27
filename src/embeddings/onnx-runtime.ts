@@ -17,7 +17,7 @@ import type { ModelFile } from "../speech/models.js"
 
 export const ONNX_RUNTIME_VERSION = "1.30.0"
 
-/** The library of Microsoft's release, in its archive, and the name the binding looks for beside itself. */
+/** The library in the archive it comes in, and the name the binding looks for beside itself. */
 export interface NativeRuntime {
   readonly target: string
   readonly archive: ModelFile
@@ -33,9 +33,17 @@ const release = (name: string, sha256: string, bytes: number): ModelFile => ({
 })
 
 /**
- * The systems the ONNX workflow runs natively; everywhere else, and on musl, the models run through WebAssembly.
- * Windows too: its binding needs the DirectML build of onnxruntime.dll, which Microsoft's release does not carry.
+ * onnxruntime-node's own npm tarball, for Windows: its binding imports the DirectML build of onnxruntime.dll by
+ * ordinal, which Microsoft's CPU release lacks; DirectML.dll is loaded only when used, so the DLL alone runs on CPU.
  */
+const npmTarball: ModelFile = {
+  name: `onnxruntime-node-${ONNX_RUNTIME_VERSION}.tgz`,
+  url: `https://registry.npmjs.org/onnxruntime-node/-/onnxruntime-node-${ONNX_RUNTIME_VERSION}.tgz`,
+  sha256: "6e3390d6b783e7be946fad629292799da28d0b42f84856e50d2c1b0383291e75",
+  bytes: 113_507_888,
+}
+
+/** The systems the native-runtime workflow runs natively; elsewhere, and on musl, the models run through WebAssembly. */
 const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
   "linux-x64": {
     archive: release(
@@ -74,6 +82,24 @@ const NATIVE: Record<string, Omit<NativeRuntime, "target">> = {
       name: "libonnxruntime.1.dylib",
       sha256: "bcc9110f9d638a119de2db7afb3ba9a1da8085f0cb3401e1c48ae1caf450b6fa",
       bytes: 43_879_424,
+    },
+  },
+  "win32-x64": {
+    archive: npmTarball,
+    member: "package/bin/napi-v6/win32/x64/onnxruntime.dll",
+    library: {
+      name: "onnxruntime.dll",
+      sha256: "508c362f5673483dd3a086379c392795b2e42d10d5e6f3f90ebd7ac21c97af67",
+      bytes: 28_754_232,
+    },
+  },
+  "win32-arm64": {
+    archive: npmTarball,
+    member: "package/bin/napi-v6/win32/arm64/onnxruntime.dll",
+    library: {
+      name: "onnxruntime.dll",
+      sha256: "6c3a2abf5c6aca11c48a0d338a91af309f2266f25ce2e4084e6a87bbcb0fbfd0",
+      bytes: 29_815_136,
     },
   },
 }

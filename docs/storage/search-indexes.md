@@ -197,13 +197,15 @@ should take. A chunk whose messages changed after the build waits for the next b
 
 They run in ONNX Runtime 1.30.0 (`@wirecat/cli-core-onnx`), on Node and Bun alike:
 
-- **Native** on Linux x64 and arm64 (glibc) and macOS arm64, 2–3× faster. `models download` of a text model or
-  reranker also fetches Microsoft's release archive of the library for the system (10–42 MB, checked by sha256),
-  and places the library beside a copy of the binding `@wirecat/cli-core-onnx` carries, in
-  `models/runtime/onnxruntime-1.30.0-<system>/`. A search never downloads it.
-- **WebAssembly** everywhere else — Windows (its binding needs the DirectML build of `onnxruntime.dll`, not in
-  Microsoft's release), Intel Macs, musl — before that download, and whenever the native library does not load or
-  will not open a model. Picture models (CLIP, SigLIP2) take the same path.
+- **Native** on Linux x64 and arm64 (glibc), macOS arm64 and Windows x64 and arm64, 2–3× faster. `models download`
+  of a text model or reranker also fetches the library for the system, checked by sha256, and places it beside a copy
+  of the binding `@wirecat/cli-core-onnx` carries, in `models/runtime/onnxruntime-1.30.0-<system>/`: from Microsoft's
+  release archive on Linux and macOS (10–42 MB), and on Windows `onnxruntime.dll` out of `onnxruntime-node`'s own npm
+  tarball (113.5 MB, once), because the Windows binding needs that DirectML build of the DLL, which Microsoft's
+  release lacks. A search never downloads it. The native-runtime workflow checks this path on every one of those
+  systems.
+- **WebAssembly** everywhere else — Intel Macs, musl — before that download, and whenever the native library does
+  not load or will not open a model. Picture models (CLIP, SigLIP2) take the same path.
 
 The two give slightly different numbers for the same text (8-bit kernels differ); vectors built by one search well
 with questions embedded by the other. An API model needs the user's key (`models keys set`), says

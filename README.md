@@ -131,8 +131,8 @@ code and its document must agree. A search plan that reads an index once per mes
 - **Presets for what people actually look for.** `preset:password`, `api-key`, `card`, `phone`, `email`, `url` and
   seven more find candidates, labelled as candidates.
 - **Search by meaning, opt in.** Conversations are split into chunks and embedded locally by ONNX Runtime — native
-  on Linux (glibc) and Apple-silicon Macs once `models download` has fetched it, WebAssembly elsewhere, on Node and
-  Bun alike — e5-small by default, or any OpenAI-compatible API with your own key, after
+  on Linux (glibc), Apple-silicon Macs and Windows once `models download` has fetched it, WebAssembly elsewhere, on
+  Node and Bun alike — e5-small by default, or any OpenAI-compatible API with your own key, after
   you see the cost. Results by meaning and by words are merged by reciprocal rank fusion.
 - **The archive and the server together.** `--backend both` also asks the messenger's own search; its hits are saved
   and filtered by the same query, so nothing is counted twice. `--thread` brings the reply thread around a hit.
@@ -226,9 +226,11 @@ they deliberately differ. A rule changes in its own pull request, before the cod
   over an in-memory fake or a real client.
 - **Checked across tools and runtimes.** CI runs on Linux: the test suite on Node 24, smoke checks on Bun and on
   Node 22.16, a parity workflow that builds the Telegram, MAX and WhatsApp CLIs against this repository, and
-  gitleaks over the full history. macOS and Windows run only three workflows: the SQLite library build (macOS) and
-  the ONNX runtime probe (macOS and Windows) run monthly and when started by hand; the scheduler test (macOS and
-  Windows) runs only when started by hand. The rest of the suite does not run on macOS or Windows.
+  gitleaks over the full history. macOS and Windows run only four workflows: the SQLite library build (macOS) and
+  the ONNX runtime probe (macOS and Windows) run monthly and when started by hand; the native-runtime check (Linux,
+  macOS and Windows, x64 and arm64, and Alpine) runs monthly and on every pull request that changes how models
+  load; the scheduler test (macOS and Windows) runs only when started by hand. The rest of the suite does not run on
+  macOS or Windows.
 - **One shared toolchain.** Biome, markdownlint, CSpell and Lefthook configs come from the
   [WireCat standards](https://github.com/WireCatLabs/community/blob/main/standards/README.md), and CI fails when a
   copy drifts.
