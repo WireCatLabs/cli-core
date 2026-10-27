@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The calendar `sync` starts over with `--rescan`, not `--full`**, the start-over flag WC-LIFE-13 names and drive's
+  `sync --rescan` uses. `--full` is the shared program's output flag; `sync --full` is now refused with a message
+  that names `--rescan`, rather than quietly reading only the changes.
+
 ## 0.464.0 — 27.10.2026
 
 ### Added

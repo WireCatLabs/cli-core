@@ -215,38 +215,39 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         cooperative: true,
         partial: true,
       }).description(
-        "bring the synced calendars up to date: what changed since the last sync, or everything with --full; a run " +
+        "bring the synced calendars up to date: what changed since the last sync, or everything with --rescan; a run " +
           "stops before its deadline or --max-pages and the next one goes on from there",
       ),
       "sync",
-      "sync --full --embed",
+      "sync --rescan --embed",
       "sync --timeout 2m",
     ),
   )
-    .option("--full", "list every synced calendar's window again, dropping a round in progress")
+    .option("--rescan", "list every synced calendar's window again, dropping a round in progress")
     .option(
       "--max-pages <pages>",
       "at most this many requests to the provider in this run; as many as fit the deadline if not given",
       integer,
     )
     .option("--embed", "also index new events for meaning search, with a model already downloaded")
-    .action(async (opts: { embed?: boolean; maxPages?: number }, command: Command) => {
-      // The shared program has a global --full of its own, which claims the flag before this command sees it.
-      const full = command.optsWithGlobals<{ full?: boolean }>().full === true
+    .action(async (opts: { embed?: boolean; maxPages?: number; rescan?: boolean }, command: Command) => {
+      // --full is the shared program's output flag; it used to start the round over here, and silently would not now.
+      if (command.optsWithGlobals<{ full?: boolean }>().full)
+        throw new CliError("validation_error", "sync starts over with --rescan; --full only widens output")
       const { signal } = environmentOf(command)
       const report = await syncCalendars(source(), deps.store, {
         accountId: deps.accountId,
         now: now(),
         budget: runBudgetOf(command, opts.maxPages),
         ...(signal ? { signal } : {}),
-        ...(full ? { full: true } : {}),
+        ...(opts.rescan ? { full: true } : {}),
         ...(deps.expand ? { expand: deps.expand } : {}),
       })
       if (opts.embed && !deps.embed) throw new CliError("configuration_error", "this tool cannot embed events")
       // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
       const embeddings = opts.embed && !report.stopped ? await deps.embed?.(EMBED_MAX) : undefined
       const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
-      // The same command again, never --full: that would drop the round this run leaves in progress. A run that moved
+      // The same command again, never --rescan: that would drop the round this run leaves in progress. A run that moved
       // nothing on would only repeat itself, so it gets no step an agent may run unasked.
       const stuck = report.state === "partial" && report.progress.steps === 0 && !report.synced.some((one) => one.error)
       const next =
