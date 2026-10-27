@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.460.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **A `search all` event hit carries `untrusted: ["title", "excerpt"]`.** An event's title and the text its excerpt
