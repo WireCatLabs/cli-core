@@ -13,6 +13,11 @@ shape of this file.
   pictures in 0.5 s against 1.1 s through WebAssembly, and text queries in 0.15 s against 0.26 s, with vectors at
   cosine 0.99 or more to WebAssembly's, so pictures embedded before still match. `openSession` in
   `src/embeddings/onnx-runtime.ts` is now the one place that picks the runtime and falls back per model.
+- **Text models and rerankers run natively on Windows too** (x64 and arm64): `models download` fetches
+  `onnxruntime.dll` out of `onnxruntime-node`'s npm tarball (113.5 MB once, checked by sha256), because the Windows
+  binding needs its DirectML build, which Microsoft's release archive lacks. Needs `@wirecat/cli-core-onnx` 1.2.0.
+  A new native-runtime workflow downloads and runs the tiny test models natively on Linux x64 and arm64, macOS,
+  and Windows x64 and arm64, and checks that Alpine stays on WebAssembly.
 
 ### Fixed
 
