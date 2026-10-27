@@ -370,11 +370,9 @@ export const coverageOf = async (
   const completeness: (ChatCompleteness & AccountKey)[] = []
   const stats = new Map<string, ChatStats>()
   let inventoryComplete = scopeAccounts.length > 0
-  let ownInventory = true
   for (const selected of scopeAccounts) {
     if (!(await store.sync.syncState(selected, CHAT_LIST_KEY))) {
       inventoryComplete = false
-      if (messenger.provider === undefined || selected.provider === messenger.provider) ownInventory = false
     }
     const chatIds = selectedChat
       ? selected.provider === selectedChat.account.provider && selected.account === selectedChat.account.account
@@ -407,16 +405,12 @@ export const coverageOf = async (
   const behindCount = own.filter(behind).length
   // A chat held back to a window stays partial for good, so only what a fetch would change is advised.
   const command = messenger.app?.command
+  // One named chat, never `--all`: a download is the owner's call and stays bounded to what they approve.
+  const syncChat = selectedChat ? (neverFetched || behindCount ? selectedChat : null) : (attention[0] ?? null)
   const next =
-    command === undefined
+    command === undefined || !syncChat || !syncsOneChat(messenger)
       ? null
-      : selectedChat
-        ? (neverFetched || behindCount) && syncsOneChat(messenger)
-          ? `${command} messages sync ${selectedChat.chatId}`
-          : null
-        : (neverFetched || behindCount || !ownInventory) && messenger.history !== "store"
-          ? `${command} messages sync --all --background`
-          : null
+      : `${command} messages sync ${syncChat.chatId}`
   const state =
     selectedChat && completeness.length > 0 && completeness.every(({ state }) => state === "complete")
       ? "complete"

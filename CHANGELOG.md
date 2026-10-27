@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **An empty `messages` search no longer suggests `messages sync --all --background`.** `coverage.next` and the
+  `messages.sync` step now name one chat (`<cli> messages sync <chat>`: the selected chat, or the most active one
+  that was never fetched or is behind), and the search help says to offer it and run it only after the owner
+  approves. A sync downloads from the owner's account, so an agent must not start an unbounded one on its own.
+
 ## 0.461.0 — 27.10.2026
 
 ### Changed — may break callers

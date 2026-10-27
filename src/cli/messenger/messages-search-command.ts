@@ -63,9 +63,9 @@ export const messagesSearchCommand = (messenger: Messenger): Command => {
       "after",
       `${
         syncsFirst(messenger)
-          ? `Search reads the local archive: a chat never fetched is not searched. Prepare it once with
-\`${messenger.app.command} messages sync --all --background\` (the last 90 days of every chat); the answer's
-coverage says what was searched and coverage.next what would improve it.`
+          ? `Search reads the local archive: a chat never fetched is not searched. The answer's coverage says what was
+searched and coverage.next names one chat that would improve it. A sync downloads from the owner's account, so
+offer \`${messenger.app.command} messages sync <chat>\` and run it only once the owner approves.`
           : `Search reads the local archive: what \`${messenger.app.command} serve\` has kept since the account was linked.
 Keep serve running so new messages are searchable.`
       } Notes are

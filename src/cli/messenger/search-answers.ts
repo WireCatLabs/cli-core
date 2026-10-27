@@ -100,12 +100,9 @@ export const coverageGaps = (
   const coverage = found.coverage
   const stale = found.refreshed?.complete === false
   if (!coverage?.next && !stale) return { next: [], missing: [] }
+  const chat = coverage?.chat ?? coverage?.attention[0]?.chatId
   return {
-    next: [
-      nextStep("messages.sync", {
-        args: coverage?.chat === undefined ? { all: true, background: true } : { chat: coverage.chat },
-      }),
-    ],
+    next: chat === undefined ? [] : [nextStep("messages.sync", { args: { chat } })],
     missing: [
       {
         field: "coverage",
