@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.467.0 — 27.10.2026
-
 ### Changed — may break callers
 
 - **An MCP server offers a command that only fetches into the store through its read tool.** A command that reads
@@ -34,6 +32,10 @@ shape of this file.
   profile in it, and only where the program has the command. Any error's `next` is now dropped when it names a
   command the program lacks.
 - **`skill show` offers `follow-ups` and `link-conversations` only in a messenger CLI.** Both work on chats.
+
+## 0.467.0 — 27.10.2026
+
+### Changed — may break callers
 
 - **Every run is now recorded by default, successes too** — before, only failures were kept unless `--record` or
   `record: true`. Successful runs are kept 7 days (`keep_successful_runs_for_days`), failures 30
