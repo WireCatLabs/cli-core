@@ -56,6 +56,9 @@ shape of this file.
   tests now cover it per kind. `search conversations` and `search runs` are unchanged: their hits hold ids, counts
   and diagnostics, no one's text.
 - **`WriteContext.names` gains `repeat`**, how the caller spells the rule in a hint (`--repeat`, MCP `repeat`).
+- **The contract kits check more.** `calendarWriterContract` gains three cases (a rule on create, a rule changed on the
+  series, the timed/all-day switch both ways) and `calendarSourceContract` one for a source with `freeBusy`: an
+  adapter that runs the kits gets tests that can fail until it supports them.
 
 ## 0.463.0 — 27.10.2026
 

@@ -12,7 +12,7 @@ Words, any order:
   person:<email>          someone else, by email address; repeat for more
 Without a time word: this week. Without calendar:, every calendar that syncs.`
 
-/** Google's `calendarExpansionMax` tops out at 50; Graph's getSchedule takes 100. */
+/** Google answers for 50 calendars at most (`calendarExpansionMax`, reference/freebusy/query). */
 const MOST = 50
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u
 const HOURS = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)$/u
