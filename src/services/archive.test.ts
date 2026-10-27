@@ -278,7 +278,7 @@ describe("what a search says about the archive", () => {
       coveredChats: 2,
       chats: { complete: 1, neverFetched: 1 },
       attention: [{ chatId: "8", title: "Quiet", state: "unknown" }],
-      next: "chat messages sync --all --background",
+      next: "chat messages sync 8",
     })
     expect(one.coverage?.next).toBe("chat messages sync 8")
     expect(fetched.coverage).toMatchObject({ messages: 5, attention: [], next: null })

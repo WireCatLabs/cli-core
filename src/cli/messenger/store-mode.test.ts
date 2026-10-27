@@ -361,7 +361,8 @@ describe("a messenger whose history is read from the store", () => {
     expect(pushed).toContain("what `chat serve` has kept")
     const fetched = await help()
     expect(fetched).toContain("--sync-first")
-    expect(fetched).toContain("chat messages sync --all --background")
+    expect(fetched).toContain("chat messages sync <chat>")
+    expect(fetched).not.toContain("sync --all")
   })
 
   it("**UX-59: `store check` names `messages sync` only as this messenger can run it**", async () => {
