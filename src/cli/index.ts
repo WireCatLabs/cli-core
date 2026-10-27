@@ -360,6 +360,7 @@ export { readMeetingProjectCandidates } from "./meeting-project-candidates-read.
 export { meetingResultItem } from "./meeting-results.js"
 export { type MeetingSeriesInventoryReader, readMeetingSeriesInventory } from "./meeting-series-inventory-read.js"
 export { accountFileFor, profilesHere, rememberAccount } from "./messenger/accounts.js"
+export { terminalAsker } from "./messenger/ask.js"
 export type { CompletionOptions } from "./messenger/complete-command.js"
 export {
   type ConnectOptions,
@@ -406,6 +407,7 @@ export {
   knownPermissionKeys,
   type PermissionKeyOf,
   type PermissionKeySource,
+  refuseUnknownPermissionKeys,
   unknownPermissionIssues,
   unknownPermissionKeys,
 } from "./permission-keys.js"

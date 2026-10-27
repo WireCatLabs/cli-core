@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A CLI that is not a messenger reuses the shared permission helpers.** `./cli` exports `terminalAsker(command)`,
+  the guard's question at a terminal, and `refuseUnknownPermissionKeys`, the unknown-key refusal for a command the
+  shared check does not key (`api call`, `mcp`). `guardFor` takes `permissionDefaults` on its settings, so a key
+  the CLI defaults to `ask` asks instead of being allowed; without them it keeps the messenger defaults.
+  `terminalAsker`'s `confirmation_required` now names the key in `details.permission`.
+
 ## 0.454.0 — 27.10.2026
 
 ### Added

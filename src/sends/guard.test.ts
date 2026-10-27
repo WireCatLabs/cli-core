@@ -556,6 +556,20 @@ describe("a send the messenger asked to hold off on", () => {
   })
 })
 
+describe("guardFor with a CLI's own permission defaults", () => {
+  const settings = { profile: "own-defaults", permissions: {}, permissionSources: {}, sendsPerHour: Infinity }
+  const request = { chatId: null, kind: "edit" as const, key: "api.events.insert" }
+
+  it("asks for a key the CLI defaults to ask", () => {
+    const guard = guardFor(app, { ...settings, permissionDefaults: { "api.events.insert": "ask" } }, () => {}, env)
+    expect(() => guard.check(request)).toThrow("api.events.insert asks before it acts, and it was not asked")
+  })
+
+  it("keeps the messenger defaults without them, under which such a key is allowed", () => {
+    expect(() => guardFor(app, settings, () => {}, env).check(request)).not.toThrow()
+  })
+})
+
 describe("a read-only lock", () => {
   it("refuses every write while a config file and a --permission flag both allow it", () => {
     const configDir = mkdtempSync(join(tmpdir(), "app-lock-"))
