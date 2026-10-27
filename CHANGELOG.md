@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.465.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **The calendar `sync` starts over with `--rescan`, not `--full`**, the start-over flag WC-LIFE-13 names and drive's
