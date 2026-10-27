@@ -26,6 +26,7 @@ export const CALENDAR_UNTRUSTED_FIELDS = [
   "candidates.title",
   "entries.title",
   "entry.title",
+  "ended.title",
   "history.title",
   "history.location",
   "attachments.title",

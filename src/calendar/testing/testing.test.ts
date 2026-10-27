@@ -117,6 +117,7 @@ describe("fake calendar writer", () => {
       loseNextAnswer: () => writer.loseNextAnswer(),
       notified: () => writer.calls.map(({ notify }) => notify),
       at: NOW + 24 * HOUR,
+      target: { ...calendar, id: 2, externalId: "family", title: "Example family", primary: false },
     }
   }))
     it(c.name, c.run)

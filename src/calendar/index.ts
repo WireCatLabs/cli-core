@@ -54,6 +54,7 @@ export {
   type EventDraft,
   type EventPatch,
   type EventResponse,
+  type FollowingScope,
   type WriteScope,
 } from "./writer.js"
 export type { CalendarWrites } from "./writes.js"

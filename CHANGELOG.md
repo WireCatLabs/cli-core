@@ -7,6 +7,35 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Changing or deleting "this and all following" occurrences.** `events update <occurrence> --following` (MCP
+  `following: true`) ends the series with UNTIL just before the occurrence and starts a new series there with the
+  change. The new series keeps the attendees, and the EXDATE and RDATE dates from the split on. It is built from the
+  writer's `create` and `update`, so no adapter needs code for it. The new series is made first, under an id
+  journaled before the call; if ending the old series then fails, the error names that id, and a retry with `--id`
+  finds the series instead of making a second one. A COUNT series needs `--repeat` for the new part
+  (`event.repeat-count`). `events delete <occurrence> --following` only ends the series. `WriteScope` stays
+  `this | series` for writers; `FollowingScope` adds `following`.
+- **Moving an event to another calendar of the same account.** `CalendarWriter` gains an optional
+  `move(calendar, externalId, target, { etag, notify })`. With it, `events move <event> --to-calendar <id>` (MCP
+  `event_move`, `to_calendar`) moves the event with its id. Its key is `events.move`, plus `extraKeys("move")`;
+  `CalendarWrite` gains `move`. It refuses a calendar of another account, the same calendar, a read-only calendar
+  (`calendar.read-only`), an event type other than `default` (`event.unmovable`), and an occurrence without
+  `--series`. The store cancels the old copy and saves the new one under the same UID.
+- **The contract kits cover both.** `calendarWriterContract` runs the "following" split over `memoryEventStore`
+  (earlier slots kept, the new series from the occurrence, no second series on a retry after a lost answer). With
+  `CalendarWriterFixture.target` and a writer that has `move`, it also checks a move: id kept, old etag a conflict,
+  retry finds the event. `fakeCalendarWriter` moves.
+
+### Changed — may break callers
+
+- **Calendar writes that are easy to undo go ahead by default, as tg's and drive's writes do.** In
+  `CALENDAR_WRITE_DEFAULTS`, `events.create`, `events.update`, `events.respond` and the new `events.move` are
+  `allow` (were `ask`). `events.delete` stays `ask`, and it also covers `--following`. `events.delete.series` and
+  `events.notify` stay `deny`, so mailing attendees still needs the owner's yes. A profile that wants a question
+  first sets the key to `ask`.
+
 ## 0.488.0 — 30.10.2026
 
 ### Added
@@ -382,6 +411,7 @@ shape of this file.
 - **The MCP login page says why a code that just worked is now wrong.** Each login code works once; after an app
   logs in, the server shows a new one. The wrong-code message now says so and points to WireCat Desktop and
   `<cli> mcp server status`, where the new code is.
+||||||| parent of 113a11c1 (feat(calendar)!: move events, change or delete "this and all following", writes allowed by default)
 
 ## 0.465.0 — 27.10.2026
 

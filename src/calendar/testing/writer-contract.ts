@@ -4,8 +4,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { isCliError } from "@wirecat/cli-base"
 import type { ContractCase, EntryInput, StoredCalendar } from "../../meetings/index.js"
+import type { GuardSettings } from "../../sends/guard.js"
+import { ruleEnd } from "../recurrence.js"
 import type { CalendarWriter, EventDraft } from "../writer.js"
-import { createEvent } from "../writes.js"
+import { createEvent, deleteEvent, updateEvent, type WriteContext } from "../writes.js"
 import { memoryEventStore } from "./memory.js"
 
 /** One writer over recorded or held responses, fresh for each case. */
@@ -22,6 +24,8 @@ export interface CalendarWriterFixture {
   notified: () => boolean[]
   /** A time the provider accepts for a new event; the contract creates one-hour events from it. */
   at: number
+  /** A second calendar of the same account, for a writer with `move`; its cases are skipped without one. */
+  target?: StoredCalendar
 }
 
 const reasonOf = (error: unknown) => (isCliError(error) ? error.details.reason : undefined)
@@ -37,7 +41,10 @@ const rejectsWith = async (promise: Promise<unknown>, check: (error: unknown) =>
 }
 
 const ID = "contract0sample0id0001"
+const NEW_ID = "contract0sample0id0002"
+const WEEK = 7 * 86_400_000
 const WEEKLY = "RRULE:FREQ=WEEKLY;COUNT=3"
+const WEEKLY_OPEN = "RRULE:FREQ=WEEKLY"
 const DAILY = "RRULE:FREQ=DAILY;INTERVAL=2;COUNT=5"
 
 /**
@@ -46,6 +53,67 @@ const DAILY = "RRULE:FREQ=DAILY;INTERVAL=2;COUNT=5"
  * switches to all-day and back; `notify: false` mails nobody, and a profile that keeps `events.notify` at its
  * default never reaches the provider with a write that would.
  */
+const contextOver = async (
+  f: CalendarWriterFixture,
+  permissions: GuardSettings["permissions"],
+): Promise<WriteContext & { calendarId: number }> => {
+  const store = memoryEventStore()
+  const [calendar] = await store.saveCalendars(1, [{ ...f.calendar, syncByDefault: true }], f.at)
+  const home = mkdtempSync(join(tmpdir(), "calendar-writer-contract-"))
+  return {
+    calendarId: calendar?.id as number,
+    store,
+    accountId: 1,
+    writes: {
+      writer: f.writer,
+      app: { command: "example", appName: "example-cli", envPrefix: "EXAMPLE", description: "", version: "0" },
+      settings: () => ({ profile: "work", permissions, permissionSources: {}, sendsPerHour: 30 }),
+      env: { HOME: home, XDG_DATA_HOME: home, EXAMPLE_STATE_DIR: home },
+    },
+    ask: async () => {},
+    now: f.at,
+    zone: "UTC",
+    names: {
+      notify: "notify",
+      id: "id",
+      calendar: "calendar",
+      series: "series",
+      following: "following",
+      repeat: "repeat",
+    },
+  }
+}
+
+/** A weekly series the writer made, stored with its second occurrence as a sync would store it. */
+const storedSeries = async (f: CalendarWriterFixture, context: WriteContext & { calendarId: number }) => {
+  const series = await f.writer.create(
+    f.calendar,
+    { title: "Example planning", startsAt: f.at, endsAt: f.at + 3_600_000, timezone: "UTC", recurrence: [WEEKLY_OPEN] },
+    { id: ID, notify: false },
+  )
+  const [, second] = await context.store.saveEntries(
+    context.calendarId,
+    [
+      series,
+      {
+        externalId: `${ID}_second`,
+        kind: "occurrence",
+        seriesExternalId: ID,
+        originalStartsAt: f.at + WEEK,
+        status: "confirmed",
+        title: "Example planning",
+        startsAt: f.at + WEEK,
+        endsAt: f.at + WEEK + 3_600_000,
+        timezone: "UTC",
+      },
+    ],
+    f.at,
+  )
+  return `event:${second?.eventId}`
+}
+
+const SPLIT = { "events.create": "allow", "events.update": "allow", "events.delete.series": "allow" } as const
+
 export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Promise<CalendarWriterFixture>) => {
   const draft = (at: number, extra: Partial<EventDraft> = {}): EventDraft => ({
     title: "Example planning",
@@ -188,38 +256,12 @@ export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Pr
       name: "with events.notify at its default, a create that would mail attendees is refused before the provider",
       run: async () => {
         const f = await fixture()
-        const store = memoryEventStore()
-        const [calendar] = await store.saveCalendars(1, [{ ...f.calendar, syncByDefault: true }], f.at)
-        const home = mkdtempSync(join(tmpdir(), "calendar-writer-contract-"))
+        const context = await contextOver(f, { events: "allow" })
         const before = f.notified().length
         await rejectsWith(
           createEvent(
-            {
-              store,
-              accountId: 1,
-              writes: {
-                writer: f.writer,
-                app: {
-                  command: "example",
-                  appName: "example-cli",
-                  envPrefix: "EXAMPLE",
-                  description: "",
-                  version: "0",
-                },
-                settings: () => ({
-                  profile: "work",
-                  permissions: { events: "allow" },
-                  permissionSources: {},
-                  sendsPerHour: 30,
-                }),
-                env: { HOME: home, XDG_DATA_HOME: home, EXAMPLE_STATE_DIR: home },
-              },
-              ask: async () => {},
-              now: f.at,
-              zone: "UTC",
-              names: { notify: "notify", id: "id", calendar: "calendar", series: "series", repeat: "repeat" },
-            },
-            String(calendar?.id),
+            context,
+            String(context.calendarId),
             {
               title: "Example planning",
               startTime: new Date(f.at).toISOString(),
@@ -234,6 +276,127 @@ export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Pr
         assert.equal(f.notified().length, before, "the provider was not called")
       },
     },
+    {
+      name: "following: the series ends before the occurrence, and a new one starts there with the change",
+      run: async () => {
+        const f = await fixture()
+        const context = await contextOver(f, SPLIT)
+        const occurrence = await storedSeries(f, context)
+        const answer = (await updateEvent(
+          context,
+          occurrence,
+          { title: "Example planning (later)" },
+          {
+            following: true,
+            notify: false,
+            id: NEW_ID,
+          },
+        )) as { entry: { external_id: string } | null }
+        const old = await context.store.entry(context.calendarId, ID)
+        const ends = ruleEnd(old?.recurrence?.[0] ?? "", "UTC")
+        assert.ok(
+          ends !== undefined && ends >= f.at && ends < f.at + WEEK,
+          "the first occurrence stays, the second goes",
+        )
+        const made = await context.store.entry(context.calendarId, NEW_ID)
+        assert.equal(answer.entry?.external_id, NEW_ID)
+        assert.equal(made?.kind, "series")
+        assert.equal(made?.title, "Example planning (later)")
+        assert.equal(made?.startsAt, f.at + WEEK)
+        assert.deepEqual(made?.recurrence, [WEEKLY_OPEN])
+      },
+    },
+    {
+      name: "following: a retry with the id after a lost answer finds the new series instead of making a second",
+      run: async () => {
+        const f = await fixture()
+        const context = await contextOver(f, SPLIT)
+        const occurrence = await storedSeries(f, context)
+        const change = { title: "Example planning (later)" }
+        f.loseNextAnswer()
+        let named: unknown
+        await rejectsWith(
+          updateEvent(context, occurrence, change, { following: true, notify: false }),
+          (error) => {
+            named = isCliError(error) ? error.details.operation_id : undefined
+            return isCliError(error) && error.code === "outcome_unknown" && typeof named === "string"
+          },
+          "a lost answer is outcome_unknown naming the new series' id",
+        )
+        const again = (await updateEvent(context, occurrence, change, {
+          following: true,
+          notify: false,
+          id: named as string,
+        })) as { entry: { external_id: string } | null; ended: object | null }
+        assert.equal(again.entry?.external_id, named)
+        assert.ok(again.ended, "the old series is ended on the retry")
+        const ends = ruleEnd((await context.store.entry(context.calendarId, ID))?.recurrence?.[0] ?? "", "UTC")
+        assert.ok(ends !== undefined && ends < f.at + WEEK)
+      },
+    },
+    {
+      name: "following: a deletion ends the series before the occurrence and makes nothing",
+      run: async () => {
+        const f = await fixture()
+        const context = await contextOver(f, SPLIT)
+        const occurrence = await storedSeries(f, context)
+        await deleteEvent(context, occurrence, { following: true, notify: false })
+        const ends = ruleEnd((await context.store.entry(context.calendarId, ID))?.recurrence?.[0] ?? "", "UTC")
+        assert.ok(ends !== undefined && ends >= f.at && ends < f.at + WEEK)
+      },
+    },
+    ...moveCases(fixture),
   ]
   return cases
+}
+
+const moveCases = (fixture: () => CalendarWriterFixture | Promise<CalendarWriterFixture>): ContractCase[] => {
+  const ready = async () => {
+    const f = await fixture()
+    return f.writer.move && f.target ? { ...f, move: f.writer.move.bind(f.writer), target: f.target } : undefined
+  }
+  return [
+    {
+      name: "move: the event keeps its id on the other calendar, with a new etag",
+      run: async () => {
+        const f = await ready()
+        if (!f) return
+        const moved = await f.move(f.calendar, f.existing.externalId, f.target, {
+          etag: f.existing.etag as string,
+          notify: false,
+        })
+        assert.equal(moved.externalId, f.existing.externalId)
+        assert.equal(typeof moved.etag, "string")
+      },
+    },
+    {
+      name: "move: an old etag is a conflict, and the event stays",
+      run: async () => {
+        const f = await ready()
+        if (!f) return
+        await f.changeBehind()
+        await rejectsWith(
+          f.move(f.calendar, f.existing.externalId, f.target, { etag: f.existing.etag as string, notify: false }),
+          (error) => reasonOf(error) === "event.conflict",
+          "a stale etag is a calendarConflict()",
+        )
+      },
+    },
+    {
+      name: "move: a retry after a lost answer finds the event on the other calendar",
+      run: async () => {
+        const f = await ready()
+        if (!f) return
+        const options = { etag: f.existing.etag as string, notify: false }
+        f.loseNextAnswer()
+        await rejectsWith(
+          f.move(f.calendar, f.existing.externalId, f.target, options),
+          (error) => isCliError(error) && error.code === "outcome_unknown",
+          "a lost answer is outcome_unknown",
+        )
+        const found = await f.move(f.calendar, f.existing.externalId, f.target, options)
+        assert.equal(found.externalId, f.existing.externalId)
+      },
+    },
+  ]
 }

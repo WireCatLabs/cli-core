@@ -98,8 +98,8 @@ as drive calls `embedNotes`, because the engine knows only the `EventStore` port
 
 ## Commands and MCP tools
 
-`addCalendarCommands(program, deps)` (`./calendar/cli`) mounts the shared commands, read only: no command writes an
-event. `deps` names the profile's account twice (`accountId` in the event store, `account` in the shared store);
+`addCalendarCommands(program, deps)` (`./calendar/cli`) mounts the shared commands. Without `deps.writes` no
+command writes an event. `deps` names the profile's account twice (`accountId` in the event store, `account` in the shared store);
 nothing is read from another account. Rule 3 joins one meeting's copies in two accounts into one event; a command
 shows the event's own fields (title, time) and only this account's copies, attendees, files and history.
 
@@ -126,6 +126,45 @@ switch its kind: the patch carries the new kind only, and the adapter clears the
 from the event as fetched, since `events.patch` cannot clear `dateTime` without a `null`). A series whose UNTIL,
 EXDATE or RDATE holds the old kind is refused (`event.repeat-kind`), unless a new rule replaces an UNTIL. A write
 that changes a rule saves only the series, and its answer says `hint: "sync to store its occurrences"`.
+
+**This and all following.** `events update <occurrence> --following` (MCP `following: true`) is built in cli-core
+from the writer's `create` and `update`, so every adapter has it without code of its own. The occurrence's slot as
+first scheduled (`originalStartsAt`) is the split. The new series is made first, with the change applied, under a
+client-chosen id journaled before the call. It keeps the old series' rule, the attendees other than the owner, and
+the EXDATE and RDATE dates from the split on. Then the old series is changed: its rule ends with UNTIL just before
+the split (one second before for a timed event, the day before for an all-day one), COUNT gives way to that UNTIL,
+and it keeps the dates before the split. Google documents the same split
+([recurring events](https://developers.google.com/workspace/calendar/api/guides/recurringevents#modifying_all_following_instances)).
+The order is chosen for retries:
+
+- A conflict on the old series (its `etag` is old) comes after the new series exists. The error names the new
+  series' id; after `sync`, the owner repeats with `--id <id>`. The create finds that series and the old one ends.
+- Until then, later slots show twice, never not at all.
+- A series already ending before the split is not split again: the command refuses, or with `--id` only finds the
+  new series.
+
+The split refuses three things:
+
+- a COUNT series without `--repeat`: only the provider knows how many slots are left (`event.repeat-count`);
+- a switch between timed and all-day: use `--series`;
+- an EXDATE or RDATE value it cannot read, such as a period (`event.repeat-split`).
+
+On the series' first occurrence, `--following` is the same as `--series`. The new series carries what `EventDraft`
+names; a Meet link, Drive files and reminders of the old series are not copied. `events delete <occurrence>
+--following` is the old series' UNTIL change alone, checked against `events.delete`, which asks by default. `--following` and
+`--series` do not go together. Both answers say `hint` to sync, which stores the occurrences of both series.
+
+**Moving an event.** With a writer that has the optional `move`, `events move <event> --to-calendar <id>` (MCP
+`event_move`, `to_calendar`) moves the event, keeping its id, to another calendar of the same account. It refuses:
+
+- a calendar of another account: `calendarIn` reads only this one;
+- the same calendar;
+- a calendar the account only reads (`calendar.read-only`);
+- an event type other than `default` (`event.unmovable`; Google's
+  [events.move](https://developers.google.com/workspace/calendar/api/v3/reference/events/move) moves only those).
+
+An occurrence moves only with its series (`--series`). The store cancels the old copy and saves the new one with the
+same UID, so the event's rules join it to the same event. The key is `events.move`, plus `extraKeys("move")`.
 
 Each command's permission key is its path (`calendars.sync`, `people.link`), as `commandPermissions` reads it. The
 command lint's vocabulary has no `calendars`, `people`, `unsync`, `review` or `resolve` yet, and `events list` takes
@@ -155,7 +194,10 @@ for (const { name, run } of calendarSourceContract(make)) it(name, run)
 that no meeting secret is in the output, a cancelled slot, a dead cursor, with `changed` a second round, and for a
 source with `freeBusy` that each id is answered once inside the window and an unknown person is an error.
 `calendarWriterContract` checks a stale etag, a retried create, notify, a repeat rule on create and on the series,
-and a timed event switched to all-day and back.
+a timed event switched to all-day and back, and over `memoryEventStore` the "following" split. That covers three
+things: the earlier slots stay, the new series starts at the occurrence, and a retry with the id after a lost answer
+makes no second series. A fixture with `target`, a second calendar, and a writer with `move` also gets the move
+cases: the id is kept, an old etag is a conflict, and a retry after a lost answer finds the event.
 `calendarSyncContract(make)` runs the engine over `fakeCalendarSource` for each of the twelve trait combinations, a
 run the budget stops and the reruns that finish it with the store one whole run gives, a near deadline, and a page
 token that expired between runs (`expirePages()`); cli-core
