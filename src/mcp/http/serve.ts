@@ -16,6 +16,7 @@ import { ownerLogin } from "./oauth.js"
 import { httpLock } from "./state.js"
 
 export const MCP_PATH = "/mcp"
+const AS_METADATA = "/.well-known/oauth-authorization-server"
 const LOCAL = ["localhost", "127.0.0.1"]
 const MAX_SESSIONS = 20
 const MAX_LOGIN_BODY = 64 * 1024
@@ -78,8 +79,25 @@ const legacySessions = (build: () => McpServer, now: () => number) => {
   }
 }
 
+/**
+ * The SDK answers the issuer's metadata only at the bare `/.well-known/oauth-authorization-server`; the path-inserted
+ * form a path issuer is found at is the same document. Only GET and OPTIONS reach it, so no body is carried over.
+ */
+const metadataRequest = (request: Request, path: string, base: string): Request => {
+  const url = new URL(request.url)
+  const inserted = base && path === `${AS_METADATA}${base}`
+  if (!inserted && url.pathname === path) return request
+  url.pathname = inserted ? AS_METADATA : path
+  return new Request(url, { method: request.method, headers: request.headers })
+}
+
 export interface HttpOptions {
-  /** The tunnel's address, as the browser apps reach it — `https://name.ts.net`. */
+  /**
+   * The tunnel's address, as the browser apps reach it — `https://name.ts.net`, or under a path when tools share
+   * one address, `https://name.ts.net/tg`. Under a path the issuer carries it too, so RFC 8414 puts the issuer's
+   * metadata at the root, `/.well-known/oauth-authorization-server/tg`, and the resource's at
+   * `/.well-known/oauth-protected-resource/tg/mcp` (RFC 9728): the tunnel routes both here, as well as `/tg`.
+   */
   publicUrl: URL
   port: number
   /** Where the hashes of issued tokens and registered clients are kept. */
@@ -117,8 +135,13 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
       "validation_error",
       `${appName} already serves MCP over HTTP for this profile on port ${lock.held.port} (PID ${lock.held.pid}, since ${lock.held.startedAt})`,
     )
-  const issuer = new URL(publicUrl.origin)
-  const resource = new URL(MCP_PATH, issuer)
+  const base = publicUrl.pathname === "/" ? "" : publicUrl.pathname.replace(/\/+$/, "")
+  const issuer = new URL(`${publicUrl.origin}${base}`)
+  const resource = new URL(`${base}${MCP_PATH}`, publicUrl.origin)
+  const mcpPath = resource.pathname
+  // A tunnel that drops the path on the way (`--set-path /tg http://127.0.0.1:<port>`) hands over `/mcp`.
+  const publicPath = (path: string) =>
+    base && path !== base && !path.startsWith(`${base}/`) && !path.startsWith("/.well-known/") ? `${base}${path}` : path
   const login = ownerLogin({
     issuer,
     resource,
@@ -144,24 +167,22 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
     async (request) => {
       const refused = hostHeaderValidationResponse(request, allowedHosts)
       if (refused) return refused
-      const discovery = oauthMetadataResponse(request, {
+      const path = publicPath(new URL(request.url).pathname)
+      const discovery = oauthMetadataResponse(metadataRequest(request, path, base), {
         oauthMetadata: login.metadata,
         resourceServerUrl: resource,
         resourceName: appName,
         ...(insecure ? { dangerouslyAllowInsecureIssuerUrl: true } : {}),
       })
       if (discovery) return discovery
-      if (
-        Number(request.headers.get("content-length") ?? 0) > MAX_LOGIN_BODY &&
-        new URL(request.url).pathname !== MCP_PATH
-      )
+      if (Number(request.headers.get("content-length") ?? 0) > MAX_LOGIN_BODY && path !== mcpPath)
         return new Response("Request too large", { status: 413 })
       const origin = request.headers.get("origin")
       // The apps call from their servers, with no Origin; a page in some browser tab carries its own.
       if (origin && !allowedOrigins.includes(origin)) return new Response("Origin not allowed", { status: 403 })
-      const answered = await login.handle(request)
+      const answered = await login.handle(request, path)
       if (answered) return answered
-      if (new URL(request.url).pathname !== MCP_PATH) return new Response("Not found", { status: 404 })
+      if (path !== mcpPath) return new Response("Not found", { status: 404 })
       const auth = await bearer(request)
       if (auth instanceof Response) return auth
       return (await isLegacyRequest(request)) ? legacy.handle(request, auth) : mcp.fetch(request, { authInfo: auth })

@@ -2496,6 +2496,14 @@ describe("the MCP server", () => {
       skill: skillResource(app, new URL("file:///SKILL.md")).instruction,
     })
     expect(text.length).toBeLessThanOrEqual(2048)
+    const every = instructions({
+      command: "chat",
+      name: "Chat",
+      profile: ["personal", "work", "family", "a-long-profile-name"],
+      writes: [],
+      skill: skillResource(app, new URL("file:///SKILL.md")).instruction,
+    })
+    expect(every.length).toBeLessThanOrEqual(2048)
   })
 })
 
@@ -4372,6 +4380,12 @@ describe("mcp config", () => {
     const { config } = serverEntry(app, { profile: "default", execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
 
     expect(config).toMatchObject({ mcpServers: { "chat-default": { args: [PNPM, "default", "mcp"] } } })
+  })
+
+  it("with no profile, names the server of every profile after the tool alone", () => {
+    const { config } = serverEntry(app, { execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
+
+    expect(config).toEqual({ mcpServers: { chat: { type: "stdio", command: "/usr/bin/node", args: [PNPM, "mcp"] } } })
   })
 
   it("refuses npx, whose cache is cleared, and marks a path bound to a Node version manager", () => {

@@ -7,6 +7,23 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`<tool> mcp` with no profile serves every profile**, on stdio and with `--http`: one connector per tool in an AI
+  app instead of one per profile. Its tools are the ones `<tool> <profile> mcp` shows, each with a required `profile`
+  (every profile on this computer, no default), and the instructions tell the agent to ask when the owner did not name
+  the account. A call runs in that profile's own `<tool> <profile> mcp`, started as a child on first use and closed
+  after 10 idle minutes, so its permissions, keyring, store and audit log apply as before; `--permission` reaches
+  every child. `mcp --revoke`, `mcp config` and `mcp server start|stop|status` work without a profile too, with their
+  own login (`mcp-http/_all.json`). `<tool> <profile> mcp` is unchanged. drive and zoom wire the same module from
+  `@wirecat/cli-core/mcp`: `serveAllProfilesOverStdio`, `serveAllProfilesOverHttp`.
+- **`mcp --http --public-url` takes a path**, `https://<name>.ts.net/tg`, so tools share one tunnel address with a
+  path each. The issuer, the login routes and the connector address (`…/tg/mcp`) carry the path; the issuer's
+  metadata is at `/.well-known/oauth-authorization-server/tg` and the resource's at
+  `/.well-known/oauth-protected-resource/tg/mcp`, where RFC 8414 and RFC 9728 put them, so the tunnel routes those
+  two paths to the server as well as `/tg` (with Tailscale: `--set-path <path> http://127.0.0.1:<port><path>` for
+  each). Without a path nothing changes.
+
 ### Changed — may break callers
 
 - **cli-core needs `@wirecat/cli-base` 0.63.** The peer range moves from `>=0.62.0 <0.63.0` to `>=0.63.0 <0.64.0`. A

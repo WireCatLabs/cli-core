@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { alive, carries } from "../background/processes.js"
 import { type ServerSystem, thisMachine } from "../background/system.js"
 import { readableLog, tail } from "../background/units.js"
-import { portOf, publicUrlOf } from "../http/public-url.js"
+import { mcpUrlOf, portOf, publicUrlOf } from "../http/public-url.js"
 import {
   type HttpLock,
   httpLockFile,
@@ -51,7 +51,7 @@ const clock = (iso: string) => {
   return when.toDateString() === new Date().toDateString() ? time : `${when.toLocaleDateString("sv-SE")} ${time}`
 }
 
-const connectorUrl = (lock: HttpLock) => new URL("/mcp", lock.publicUrl).href
+const connectorUrl = (lock: HttpLock) => mcpUrlOf(new URL(lock.publicUrl)).href
 
 const liveCode = (lock: HttpLock, now: number) =>
   lock.loginCode && lock.loginCodeExpiresAt && Date.parse(lock.loginCodeExpiresAt) > now
@@ -115,7 +115,10 @@ export const mcpServerCommand = ({
     .summary("start the HTTP MCP server in the background")
     .description("start `mcp --http` apart from this shell and answer once it listens, with its login code")
     .option("--port <port>", `the local port (default ${defaultPort})`)
-    .option("--public-url <url>", "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net")
+    .option(
+      "--public-url <url>",
+      "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net or https://<name>.ts.net/tg",
+    )
     .option(
       "--permission <key=level>",
       "make a permission stricter for this server only; repeat for more keys",
@@ -125,7 +128,11 @@ export const mcpServerCommand = ({
       // A CLI whose `mcp` takes the same flags reads them first, so they are looked up on both.
       const flags = this.optsWithGlobals<{ port?: string; publicUrl?: string; permission?: string[] }>()
       const one = target(this)
-      const url = publicUrlOf(flags.publicUrl, { missing: "mcp server start", reaches: "the browser apps reach it" })
+      const url = publicUrlOf(flags.publicUrl, {
+        missing: "mcp server start",
+        reaches: "the browser apps reach it",
+        path: true,
+      })
       const port = portOf(flags.port, defaultPort)
       const lockFile = httpLockFile(one.tokenFile)
       const before = readHttpLock(lockFile)
@@ -148,7 +155,7 @@ export const mcpServerCommand = ({
           "--port",
           String(port),
           "--public-url",
-          url.origin,
+          url.pathname === "/" ? url.origin : url.href,
           ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
         ],
         { ...inherited, ...one.childEnv, [mcpHttpMarker(one.envPrefix)]: one.profile ?? "default" },

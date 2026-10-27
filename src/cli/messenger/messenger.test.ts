@@ -5080,8 +5080,8 @@ describe("the guard, account and mcp config commands", () => {
       async () => fake,
       sandbox(),
     )
-    const withPath = await call(
-      ["mcp", "--http", "--public-url", "https://name.ts.net/mcp", "--json"],
+    const withQuery = await call(
+      ["mcp", "--http", "--public-url", "https://name.ts.net/tg?x=1", "--json"],
       async () => fake,
       sandbox(),
     )
@@ -5089,7 +5089,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(json(missing.stderr).error).toMatchObject({ code: "configuration_error" })
     expect(missing.stderr.join("\n")).toContain("--public-url https://")
     expect(json(plain.stderr).error.message).toContain("must be https")
-    expect(json(withPath.stderr).error.message).toContain("without a path")
+    expect(json(withQuery.stderr).error.message).toContain("without a query")
   })
 
   it("**mcp --revoke forgets every browser login** of the profile", async () => {

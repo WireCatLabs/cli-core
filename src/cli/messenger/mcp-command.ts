@@ -1,13 +1,14 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
 import { realpathSync } from "node:fs"
 import { join } from "node:path"
+import type { Readable, Writable } from "node:stream"
 import { CliError, resolvePaths, visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { installerOf } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
 import type { ServerSystem } from "../../background/system.js"
-import { portOf, publicUrlOf } from "../../http/public-url.js"
+import { mcpUrlOf, portOf, publicUrlOf } from "../../http/public-url.js"
 import { httpLockFile } from "../../mcp/http/state.js"
 import { type AppIdentity, envName } from "../../ports/app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
@@ -15,9 +16,10 @@ import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effec
 import { itemOf, renderAnswer } from "../envelope.js"
 import { MCP_HTTP_DEFAULT_PORT, mcpServerCommand } from "../mcp-server-command.js"
 import { rootOf } from "../profile.js"
+import { namedProfile } from "../settings.js"
 import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
-import { type Messenger, messengerContext } from "./context.js"
+import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 
 /** Where the running CLI really lives; a test hands in its own. */
 export interface McpEnvironment extends BaseEnvironment {
@@ -34,6 +36,9 @@ export interface McpFlags {
 }
 
 const DEFAULT_PORT = MCP_HTTP_DEFAULT_PORT
+
+/** The token file of `<tool> mcp --http` for every profile: no profile name can start with `_`. */
+export const ALL_PROFILES = "_all"
 
 /** Where `mcp --http` keeps the hashes of the tokens it issued — per profile, in the state folder. */
 export const httpTokenFile = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>
@@ -52,7 +57,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
     annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent", mcp: false })
       .summary("serve this profile's commands to an AI agent")
       .description(
-        `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp\``,
+        `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp\`; with no profile, \`${app.command} mcp\` serves every profile and each tool asks which`,
       ),
   )
     .option(
@@ -60,11 +65,15 @@ export const mcpCommand = (messenger: Messenger): Command => {
       "serve over HTTP on 127.0.0.1 for ChatGPT and Claude in the browser, behind your tunnel; the profile's permissions decide",
     )
     .option("--port <port>", `the local port for --http (default ${DEFAULT_PORT})`)
-    .option("--public-url <url>", "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net")
+    .option(
+      "--public-url <url>",
+      "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net or https://<name>.ts.net/tg",
+    )
     .option("--revoke", "forget every login given to a browser app; each must log in again")
   command.action(async function (this: Command) {
     const flags = this.optsWithGlobals<McpFlags>()
-    const context = messengerContext(this, messenger)
+    const context = messengerContext(this, messenger, { needsProfile: false })
+    if (namedProfile(context.settings) === undefined) return serveEveryProfile(this, context, messenger, flags)
     if (flags.revoke) {
       const { revokeAll } = await import("../../mcp/http/oauth.js")
       revokeAll(httpTokenFile(app, context.settings.profile, context.env))
@@ -75,6 +84,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
       const publicUrl = publicUrlOf(flags.publicUrl, {
         missing: "--http",
         reaches: `the browser apps reach ${app.command}`,
+        path: true,
       })
       const { serveOverHttpUntilStopped } = await import("../../mcp/server.js")
       const tokenFile = httpTokenFile(app, context.settings.profile, context.env)
@@ -102,7 +112,16 @@ export const mcpCommand = (messenger: Messenger): Command => {
     mcpServerCommand({
       example: `${app.command} personal`,
       target: (self) => {
-        const { settings, env } = messengerContext(self, messenger)
+        const { settings, env } = messengerContext(self, messenger, { needsProfile: false })
+        if (namedProfile(settings) === undefined)
+          return {
+            invocation: app.command,
+            envPrefix: app.envPrefix,
+            env,
+            tokenFile: httpTokenFile(app, ALL_PROFILES, env),
+            argv: ["mcp", "--http"],
+            version: app.version,
+          }
         return {
           invocation: `${app.command} ${settings.profile}`,
           profile: settings.profile,
@@ -115,7 +134,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
         }
       },
       answer: (self, item, lines) =>
-        renderAnswer(self, messengerContext(self, messenger), itemOf(item), () => lines.join("\n")),
+        renderAnswer(self, messengerContext(self, messenger, { needsProfile: false }), itemOf(item), () =>
+          lines.join("\n"),
+        ),
       system: (self) => environmentOf<McpEnvironment>(self).system,
     }),
   )
@@ -125,17 +146,18 @@ export const mcpCommand = (messenger: Messenger): Command => {
         effects: LOCAL_READ,
         examples: [`${app.command} personal mcp config`],
       })
-        .summary("print this profile's local MCP configuration")
+        .summary("print the local MCP configuration, of this profile or of every profile")
         .description(
           "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
         ),
     ).action(async function (this: Command) {
       const flags = this.optsWithGlobals<McpFlags>()
-      const context = messengerContext(this, messenger)
+      const context = messengerContext(this, messenger, { needsProfile: false })
       const { settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
+      const named = namedProfile(settings)
       const entry = serverEntry(app, {
-        profile: settings.profile,
+        ...(named === undefined ? {} : { profile: named }),
         flags,
         execPath: given.execPath ?? process.execPath,
         scriptPath: given.scriptPath ?? realpathSync(process.argv[1] ?? ""),
@@ -253,6 +275,91 @@ export const mcpCommand = (messenger: Messenger): Command => {
   return command
 }
 
+/**
+ * `<tool> mcp` with no profile: every profile on this computer, each call in that profile's own `<tool> <profile> mcp`
+ * (`src/mcp/all-profiles.ts`). Nothing picks a profile: each tool takes one, and the agent is told to ask.
+ */
+const serveEveryProfile = async (self: Command, context: MessengerContext, messenger: Messenger, flags: McpFlags) => {
+  const { app } = messenger
+  const { env } = context
+  const tokenFile = httpTokenFile(app, ALL_PROFILES, env)
+  if (flags.revoke) {
+    const { revokeAll } = await import("../../mcp/http/oauth.js")
+    revokeAll(tokenFile)
+    renderAnswer(self, context, itemOf({ revoked: true, profile: null }))
+    return
+  }
+  const profiles = () =>
+    messenger.resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true }).profilesHere
+  if (profiles().length === 0)
+    throw new CliError(
+      "configuration_error",
+      `no ${app.command} profile on this computer yet — set one up, then run \`${app.command} mcp\` again`,
+    )
+  const given = environmentOf<McpEnvironment>(self).mcp ?? {}
+  const execPath = given.execPath ?? process.execPath
+  const scriptPath = given.scriptPath ?? realpathSync(process.argv[1] ?? "")
+  const tightened = (flags.permission ?? []).flatMap((entry) => ["--permission", entry])
+  const { instructions } = await import("../../mcp/instructions.js")
+  const options = {
+    command: app.command,
+    version: app.version,
+    name: messenger.name ?? app.command,
+    profiles,
+    child: (profile: string) => ({ command: execPath, args: [scriptPath, profile, "mcp", ...tightened], env }),
+    instructions: instructions({
+      command: app.command,
+      name: messenger.name ?? app.command,
+      profile: profiles(),
+      writes: [],
+    }),
+    note: (line: string) => context.renderer.note(line),
+  }
+  if (flags.http) {
+    const publicUrl = publicUrlOf(flags.publicUrl, {
+      missing: "--http",
+      reaches: `the browser apps reach ${app.command}`,
+      path: true,
+    })
+    const { serveAllProfilesOverHttp } = await import("../../mcp/all-profiles.js")
+    const { mcpHttpMarker } = await import("../../mcp/http/state.js")
+    const port = portOf(flags.port, DEFAULT_PORT)
+    const listening = await serveAllProfilesOverHttp(options, {
+      publicUrl,
+      port,
+      tokenFile,
+      lockFile: httpLockFile(tokenFile),
+      version: app.version,
+      onCode: (code, expires) =>
+        context.renderer.note(
+          env[mcpHttpMarker(app.envPrefix)] === undefined
+            ? `login code for a new browser app: ${code} (until ${expires.toTimeString().slice(0, 5)}; a new one after each login)`
+            : `a new login code for a browser app: \`${app.command} mcp server status\``,
+        ),
+    }).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === "EADDRINUSE")
+        throw new CliError("configuration_error", `port ${port} is in use — pass another with --port`)
+      throw error
+    })
+    context.renderer.note(
+      `serving every profile on ${listening.url.href} — point your tunnel at it; connectors use ${mcpUrlOf(publicUrl).href}`,
+    )
+    await new Promise<void>((resolve) => {
+      process.once("SIGINT", resolve)
+      process.once("SIGTERM", resolve)
+    })
+    await listening.close()
+    return
+  }
+  const { serveAllProfilesOverStdio } = await import("../../mcp/all-profiles.js")
+  const { stdin, stdout, signal } = environmentOf(self)
+  await serveAllProfilesOverStdio(options, {
+    ...(stdin ? { stdin: stdin as Readable } : {}),
+    ...(stdout ? { stdout: stdout as Writable } : {}),
+    ...(signal ? { signal } : {}),
+  })
+}
+
 const TAIL_LINES = 20
 const TAIL_BYTES = 2_000
 const TAIL_WAIT_MS = 500
@@ -314,13 +421,20 @@ export const serverEntry = (
     execPath,
     scriptPath,
     env,
-  }: { profile: string; flags?: McpFlags; execPath: string; scriptPath: string; env: NodeJS.ProcessEnv },
+  }: {
+    /** Left out, the entry is `<tool> mcp`, the server of every profile. */
+    profile?: string
+    flags?: McpFlags
+    execPath: string
+    scriptPath: string
+    env: NodeJS.ProcessEnv
+  },
 ): { config: { mcpServers: Record<string, object> }; nodeBound: boolean } => {
   if (installerOf(scriptPath) === "npx") {
     throw new CliError(
       "validation_error",
       `this ${app.command} runs from npx's cache, which gets cleared, and the path would stop working — ` +
-        `install it globally, then run \`${app.command} ${profile} mcp config\` again`,
+        `install it globally, then run \`${app.command} ${profile === undefined ? "" : `${profile} `}mcp config\` again`,
     )
   }
   const names = [
@@ -333,11 +447,16 @@ export const serverEntry = (
   const server = {
     type: "stdio",
     command: execPath,
-    args: [scriptPath, profile, "mcp", ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry])],
+    args: [
+      scriptPath,
+      ...(profile === undefined ? [] : [profile]),
+      "mcp",
+      ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
+    ],
     ...(Object.keys(directories).length > 0 ? { env: directories } : {}),
   }
   return {
-    config: { mcpServers: { [`${app.command}-${profile}`]: server } },
+    config: { mcpServers: { [profile === undefined ? app.command : `${app.command}-${profile}`]: server } },
     /** The path belongs to one Node version of a version manager; switching Node breaks the entry. */
     nodeBound: VERSION_MANAGER.test(execPath),
   }

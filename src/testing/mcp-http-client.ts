@@ -34,11 +34,15 @@ export const mcpHttpClient = async (
   }: {
     era?: "legacy" | "modern"
     form?: (message: string) => ElicitResult
-    /** As in production: the client knows only the tunnel's address, which leads to `base`. */
+    /**
+     * As in production: the client knows only the tunnel's address, which leads to `base` with every path kept —
+     * a path in it is the tool's share of one address (`--set-path /tg http://127.0.0.1:<port>/tg`).
+     */
     publicUrl?: URL
   } = {},
 ) => {
-  const endpoint = new URL("/mcp", publicUrl ?? base)
+  const at = publicUrl ?? base
+  const endpoint = new URL(`${at.pathname.replace(/\/+$/, "")}/mcp`, at.origin)
   // Every address the client meets — the tunnel's, the issuer's — leads to the one local port.
   const tunnel: typeof fetch = (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
@@ -102,7 +106,11 @@ export const mcpHttpClient = async (
   if (!saved.consentAt) throw new Error("the server did not ask the client to log in")
   const typed = new URLSearchParams(saved.consentAt.searchParams)
   typed.set("login_code", loginCode())
-  const answer = await fetch(new URL("/authorize", base), { method: "POST", body: typed, redirect: "manual" })
+  const answer = await fetch(new URL(saved.consentAt.pathname, base), {
+    method: "POST",
+    body: typed,
+    redirect: "manual",
+  })
   const location = answer.headers.get("location")
   if (answer.status !== 302 || !location) throw new Error(`consent refused: ${answer.status}`)
   await first.finishAuth(new URL(location).searchParams.get("code") ?? "")
