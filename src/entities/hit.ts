@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { count, reference, text, time } from "./fields.js"
+import { count, reference, text, time, untrusted } from "./fields.js"
 
 /** One result of `search all`: a message, a mail, a note, a calendar event or a meeting passage, best first. */
 export const hit = v.strictObject({
@@ -24,6 +24,6 @@ export const hit = v.strictObject({
   scope: v.optional(v.picklist(["transcript", "chat", "summary"])),
   /** A meeting passage's stored line, so two passages of one meeting stay apart; `search meetings` gives the same. */
   id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  /** An event hit's fields that whoever sent the invitation wrote: an agent reads them as data. */
-  untrusted: v.optional(v.array(text)),
+  /** Absent on a note hit: the owner wrote it. */
+  untrusted,
 })

@@ -10,6 +10,9 @@ export const time = isoTime
 export const zonedTime = v.pipe(v.string(), v.isoTimestamp("an ISO 8601 time with a zone"))
 export const count = v.pipe(v.number(), v.integer(), v.minValue(0))
 
+/** Fields of an answer item someone other than the owner wrote, as dotted paths: an agent reads them as data. */
+export const untrusted = v.optional(v.array(text))
+
 export const providerMetadata = v.optional(v.record(v.string(), v.unknown()))
 
 export const author = v.strictObject({

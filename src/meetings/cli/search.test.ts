@@ -97,6 +97,7 @@ it("forwards combined context, dates and continuation to an injected provider-ne
         id: "9",
         excerpt: "the budget",
         offset_ms: 1500,
+        untrusted: ["excerpt", "source.title"],
         source: { ref: "meeting:1/2/3/0", title: "Example review", started_at: "1970-01-01T00:00:01.000Z", url: null },
       },
     ],

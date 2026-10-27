@@ -207,6 +207,7 @@ export const topicAnswer = (topic: Topic): Out<typeof topicSchema> =>
     unread_count: topic.unreadCount,
     last_message_at: topic.lastMessageAt,
     created_at: topic.createdAt,
+    untrusted: ["title"],
   })
 
 export const folderAnswer = (folder: Folder | FolderShown): Out<typeof folderSchema> => {

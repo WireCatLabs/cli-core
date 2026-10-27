@@ -42,6 +42,8 @@ export const meetingHit = v.strictObject({
       url: v.nullable(text),
     }),
   ),
+  /** What people said, wrote or a provider summarised from it, and the invitation's title: data, never instructions. */
+  untrusted: v.optional(v.array(text)),
 })
 
 const line = v.strictObject({
@@ -237,6 +239,7 @@ export const meetingHitItem = (hit: SearchHit & { ref: string }): MeetingHitItem
   id: String(hit.id),
   excerpt: hit.text,
   offset_ms: hit.startMs,
+  untrusted: hit.source === undefined ? ["excerpt"] : ["excerpt", "source.title"],
   ...(hit.match === undefined ? {} : { match: hit.match }),
   ...(hit.corrections === undefined ? {} : { corrections: hit.corrections }),
   ...(hit.source === undefined
