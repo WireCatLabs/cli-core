@@ -2,13 +2,13 @@
  * The built package opens the store through bundled Drizzle, never through `node_modules`, where
  * `drizzle-orm` is only a development dependency. Run after `pnpm build`, under Node and under Bun.
  */
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { checkCliEntry, checkStartEntry } from "./check-cli-entry.ts"
 import { checkFileLeases } from "./check-file-leases.ts"
 import { checkRecordingPartials } from "./check-recording-partials.ts"
 import { checkRecordingPublication } from "./check-recording-publication.ts"
+import { scratch } from "./scratch.ts"
 
 const root = join(import.meta.dirname, "../dist")
 checkCliEntry(root)
@@ -35,7 +35,7 @@ store.database.close()
 if (rows.length !== 1) throw new Error(`bundled Drizzle read ${rows.length} rows, not 1`)
 
 const { openStore } = await import(join(root, "store/index.js"))
-const messages = await openStore({ path: join(mkdtempSync(join(tmpdir(), "cli-messaging-dist-")), "messages.db") })
+const messages = await openStore({ path: join(scratch("cli-messaging-dist-"), "messages.db") })
 const key = { provider: "telegram", account: "1" }
 const message = {
   id: "3",
@@ -105,7 +105,7 @@ if (!late.startsWith("the embedding process stopped")) throw new Error(`a closed
 console.log("dist: the embedding process answers, and refuses once closed")
 
 const speech = await import("@wirecat/cli-core/speech")
-const speechCache = join(mkdtempSync(join(tmpdir(), "speech-export-dist-")), "common")
+const speechCache = join(scratch("speech-export-dist-"), "common")
 const speechDirectory = speech.modelsDirectory({ WIRECAT_STATE_DIR: speechCache })
 if (speechDirectory !== join(speechCache, "models", "audio"))
   throw new Error("./speech ignores the common cache override")
@@ -143,7 +143,7 @@ console.log("dist: ./charts renders dark PNG with the bundled Cyrillic font")
 
 const { openOrdinaryFile, syncDirectory } = await import("@wirecat/cli-core/files")
 const { preflightWavAudio, openWavAudio } = await import("@wirecat/cli-core/speech/wav")
-const mediaFolder = mkdtempSync(join(tmpdir(), "cli-messaging-dist-media-"))
+const mediaFolder = scratch("cli-messaging-dist-media-")
 const mediaPath = join(mediaFolder, "AliceExample.wav")
 const pcm = Buffer.alloc(44 + 32000)
 pcm.write("RIFF", 0)

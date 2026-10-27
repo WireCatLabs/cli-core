@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto"
-import { mkdtemp, readFile, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import { scratch } from "./scratch.ts"
 
 export const checkRecordingPublication = async (dist: string): Promise<void> => {
   const { NativeRecordingPublication } = await import(join(dist, "persistence/native/index.js"))
-  const root = await mkdtemp(join(tmpdir(), "core-dist-publication-"))
+  const root = scratch("core-dist-publication-")
   const locator = { provider: "example-calls", account: "alice", occurrenceId: "weekly", assetId: "audio" }
   const evidence = { size: 6, sha256: createHash("sha256").update("abcdef").digest("hex"), validator: '"v1"' }
   const publication = new NativeRecordingPublication(root, locator, {

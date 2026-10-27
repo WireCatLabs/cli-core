@@ -1,10 +1,9 @@
-import { mkdtemp } from "node:fs/promises"
-import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { scratch } from "./scratch.ts"
 
 export const checkFileLeases = async (dist: string): Promise<void> => {
   const { nativeWriterLeaseStore } = await import(join(dist, "files/index.js"))
-  const destination = await mkdtemp(join(tmpdir(), "core-dist-writer-lease-"))
+  const destination = scratch("core-dist-writer-lease-")
   const leases = nativeWriterLeaseStore({ markerDirectory: ".example-provider-writers" })
   const controller = new AbortController()
   const held = await leases.acquire(destination, { signal: controller.signal })

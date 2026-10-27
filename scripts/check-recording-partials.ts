@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto"
-import { appendFile, mkdtemp, readFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { appendFile, readFile } from "node:fs/promises"
 import { join } from "node:path"
+import { scratch } from "./scratch.ts"
 
 export const checkRecordingPartials = async (dist: string): Promise<void> => {
   const { NativeRecordingPartialStore } = await import(join(dist, "persistence/native/index.js"))
   const { transferRecording } = await import(join(dist, "meetings/index.js"))
-  const folder = await mkdtemp(join(tmpdir(), "core-dist-partial-"))
+  const folder = scratch("core-dist-partial-")
   const locator = { provider: "example-calls", account: "alice", occurrenceId: "weekly", assetId: "audio" }
   const settings = { prefix: ".example-partial-", persistent: true, maxBytes: 100 }
   const first = new NativeRecordingPartialStore(folder, locator, settings)

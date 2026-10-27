@@ -4,8 +4,6 @@
  *
  *   bun run scripts/smoke.ts
  */
-import { mkdtempSync } from "node:fs"
-import { tmpdir } from "node:os"
 import { join } from "node:path"
 import iconv from "iconv-lite"
 import { decodeText } from "../src/attachments/encoding.js"
@@ -22,6 +20,7 @@ import { openSqlite } from "../src/store/sqlite/open.js"
 import { rankQuery } from "../src/store/sqlite/rankings.js"
 import { accounts } from "../src/store/sqlite/schema.js"
 import { officeFixture } from "../src/testing/office-files.js"
+import { scratch } from "./scratch.js"
 import { smokeContextEvidence } from "./smoke-context-evidence.js"
 import { smokeMeetingPreparation } from "./smoke-meeting-preparation.js"
 import { smokeReadOnlyStore } from "./smoke-read-only-store.js"
@@ -33,7 +32,7 @@ const check = (what: string, condition: boolean) => {
   if (!condition) failures.push(what)
 }
 
-const database = await openCache(join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "smoke.db"))
+const database = await openCache(join(scratch("cli-messaging-smoke-"), "smoke.db"))
 database.exec("CREATE VIRTUAL TABLE t USING fts5(text, tokenize='trigram')")
 database.prepare("INSERT INTO t (text) VALUES (?)").run("Иван Петров")
 check(
@@ -53,11 +52,11 @@ check("an empty feed renders", renderMessages([]) === "(nothing)")
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0" }
 const settings = settingsFor(app).resolveSettings(
   { timeout: "2s", profile: "personal" },
-  { env: {}, configDir: mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")) },
+  { env: {}, configDir: scratch("cli-messaging-smoke-") },
 )
 check("settings resolve with no file", settings.profile === "personal" && settings.commandTimeoutMs === 2000)
 
-const runsDir = join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "runs")
+const runsDir = join(scratch("cli-messaging-smoke-"), "runs")
 const recording = { app, command: "chats list", profile: "default", keepFailed: false, trace: false } as const
 await recorded({ ...recording, record: true, format: "json", runsDir }, async (events) => {
   events({ event: "request", operation: "chats.list" })
@@ -69,7 +68,7 @@ check(
   readEvents(join(runsDir, kept?.startedAt.slice(0, 10) ?? "", kept?.runId ?? "")).length === 1,
 )
 
-const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "messages.db") })
+const store = await openStore({ path: join(scratch("cli-messaging-smoke-"), "messages.db") })
 const account = { provider: "telegram", account: "1" }
 const stored = {
   id: "3",
@@ -95,7 +94,7 @@ check(
   (await store.messages.search("Петр", { limit: 5 })).items.length === 1,
 )
 await store.close()
-const sqlite = await openSqlite(join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "messages.db"))
+const sqlite = await openSqlite(join(scratch("cli-messaging-smoke-"), "messages.db"))
 migrate(sqlite.database)
 sqlite.database
   .prepare("INSERT INTO accounts (provider, external_id, created_at, updated_at) VALUES ('telegram', '1', 0, 0)")
@@ -147,7 +146,7 @@ check(
   ).items[0]?.value === 3,
 )
 sqlite.database.close()
-const tasksFile = join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "messages.db")
+const tasksFile = join(scratch("cli-messaging-smoke-"), "messages.db")
 const withTasks = await openStore({ path: tasksFile })
 await withTasks.tasks.insert({
   id: "t1",
@@ -189,9 +188,7 @@ for (const kind of ["odt", "ods", "xlsx", "pptx", "epub"] as const) {
 
 let missingChecked = false
 for (const { name, run } of meetingStoreContract(async () => {
-  const { database: meetings, orm } = await openSqlite(
-    join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "m.db"),
-  )
+  const { database: meetings, orm } = await openSqlite(join(scratch("cli-messaging-smoke-"), "m.db"))
   migrate(meetings)
   const account = meetings.prepare(
     "INSERT INTO accounts (id, provider, external_id, name, created_at, updated_at) VALUES (?, 'example', ?, ?, 1, 1)",

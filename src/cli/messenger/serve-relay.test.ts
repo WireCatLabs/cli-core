@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { globSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { connect } from "node:net"
 import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
@@ -483,7 +483,7 @@ describe("commands through serve's relay", () => {
   })
 
   it("says a write's outcome is unknown when serve stops before answering", async () => {
-    const { env } = setup()
+    const { env, root } = setup()
     const serve = await startServe(env)
     serve.holdSends()
 
@@ -497,6 +497,15 @@ describe("commands through serve's relay", () => {
     expect(answer.stderr.join("\n")).toContain("outcome_unknown")
     expect(answer.code).not.toBe(0)
     await serve.done
+    // serve's own run for the relayed send ends after serve does, and would write into a folder the sandbox removed.
+    await vi.waitFor(
+      () => {
+        const runs = globSync("state/runs/*/*/run.json", { cwd: root })
+        expect(runs).toHaveLength(2)
+        for (const file of runs) expect(JSON.parse(readFileSync(join(root, file), "utf8")).status).not.toBe("running")
+      },
+      { interval: 5 },
+    )
   })
 
   it("connects on its own when no serve holds the profile", async () => {
