@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.468.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **An MCP server offers a command that only fetches into the store through its read tool.** A command that reads
