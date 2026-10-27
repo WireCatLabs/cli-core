@@ -7,28 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.470.0 — 27.10.2026
-
-### Changed — may break callers
-
-- **An MCP server serves only the profiles it is told**, the owner's choice written in the agent's config
-  ([WC-MCP-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-9--a-server-serves-the-profiles-it-is-told-with-one-connection-for-each)).
-  `<cli> mcp serve` with no profile no longer serves every profile: it exits 2 with `validation_error` and lists the
-  profiles here. Name one (`<cli> work mcp serve`), a list (`<cli> mcp serve --profiles work,personal`, each name
-  must exist) or every profile (`--profiles all`); the startup line on stderr names the profiles served. A first word
-  with `--profiles` is refused; under `<PREFIX>_PROFILE_LOCK`, `--profiles` may name the locked profile only
-  (`permission_error`). `all` alone is the keyword and is refused inside a list; a profile named `all` is served as
-  `<cli> all mcp serve`. The same choice applies to `--http`, `mcp server start|stop|status`, `mcp revoke` and
-  `mcp config`; the entry `mcp config --profiles all` prints runs `mcp serve --profiles all`. A list's HTTP server
-  has its own login (`mcp-http/_<names>.json`), so its login never opens a wider server; `--profiles all` keeps
-  `_all.json`. For callers: `serverEntry` takes `profile` or `profiles` and refuses neither;
-  `mcpServerCommand` takes `profiles: true` to give `start|stop|status` the option, and `McpServerTarget.profiles`
-  names the set. A client entry from 0.463.0–0.469.0 that runs `<cli> mcp serve` with no profile stops working: print
-  it again with `mcp config --profiles all`. A background server of every profile started by those versions: `upgrade`
-  stops it and the new version refuses to start it, so start it again with `mcp server start --profiles all`; one
-  still running without `upgrade` is not recognised by `mcp server stop --profiles all` (its marker changed) and is
-  stopped by its PID.
-
 ### Added
 
 - **`appMcpCommand(app, configuration, { name, untrusted, permissionExample, skill?, signedIn? })` — the shared
@@ -51,6 +29,28 @@ shape of this file.
 - **Each MCP call has its own `run_id`.** A command an agent ran through `<cli>_read` or `<cli>_write`
   (`runCommandForAgent`) answered with the server process's run id, so two calls of one session had the same
   `meta.run_id`. Each call now runs in a run of its own, `mcp <command>`, keeping the caller's trace.
+
+## 0.470.0 — 27.10.2026
+
+### Changed — may break callers
+
+- **An MCP server serves only the profiles it is told**, the owner's choice written in the agent's config
+  ([WC-MCP-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-9--a-server-serves-the-profiles-it-is-told-with-one-connection-for-each)).
+  `<cli> mcp serve` with no profile no longer serves every profile: it exits 2 with `validation_error` and lists the
+  profiles here. Name one (`<cli> work mcp serve`), a list (`<cli> mcp serve --profiles work,personal`, each name
+  must exist) or every profile (`--profiles all`); the startup line on stderr names the profiles served. A first word
+  with `--profiles` is refused; under `<PREFIX>_PROFILE_LOCK`, `--profiles` may name the locked profile only
+  (`permission_error`). `all` alone is the keyword and is refused inside a list; a profile named `all` is served as
+  `<cli> all mcp serve`. The same choice applies to `--http`, `mcp server start|stop|status`, `mcp revoke` and
+  `mcp config`; the entry `mcp config --profiles all` prints runs `mcp serve --profiles all`. A list's HTTP server
+  has its own login (`mcp-http/_<names>.json`), so its login never opens a wider server; `--profiles all` keeps
+  `_all.json`. For callers: `serverEntry` takes `profile` or `profiles` and refuses neither;
+  `mcpServerCommand` takes `profiles: true` to give `start|stop|status` the option, and `McpServerTarget.profiles`
+  names the set. A client entry from 0.463.0–0.469.0 that runs `<cli> mcp serve` with no profile stops working: print
+  it again with `mcp config --profiles all`. A background server of every profile started by those versions: `upgrade`
+  stops it and the new version refuses to start it, so start it again with `mcp server start --profiles all`; one
+  still running without `upgrade` is not recognised by `mcp server stop --profiles all` (its marker changed) and is
+  stopped by its PID.
 
 ## 0.469.0 — 27.10.2026
 
