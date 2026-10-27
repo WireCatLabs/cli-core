@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.453.0 — 27.10.2026
+
 ### Added
 
 - **A calendar entry links the Drive files attached to it.** `EntryInput.attachments` takes Google's
