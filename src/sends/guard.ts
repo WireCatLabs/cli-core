@@ -414,6 +414,8 @@ export interface GuardSettings {
   readOnlyLock?: string
   permissions: Readonly<Record<PermissionKey, Level>>
   permissionSources: Readonly<Record<PermissionKey, string>>
+  /** A CLI's own defaults (`commandPermissions`); without them a key falls back to the messenger's. */
+  permissionDefaults?: Readonly<Record<PermissionKey, Level>>
   sendsPerHour: number
 }
 
@@ -434,6 +436,7 @@ export const guardFor = (
     ...(settings.readOnlyLock ? { readOnlyLock: settings.readOnlyLock } : {}),
     permissions: () => settings.permissions,
     permissionSources: settings.permissionSources,
+    ...(settings.permissionDefaults ? { permissionDefaults: settings.permissionDefaults } : {}),
     ...(ask ? { ask } : {}),
     sendsPerHour: settings.sendsPerHour,
     journal: new SendJournal(sendsPathFor(app, settings.profile, env), { service: app.command, version: app.version }),
