@@ -155,6 +155,7 @@ export const entryItem = (entry: StoredEntry) => ({
   calendar_id: String(entry.calendarId),
   external_id: entry.externalId,
   kind: entry.kind,
+  title: entry.title,
   status: entry.status,
   event_type: entry.eventType,
   own_response: entry.ownResponse,

@@ -127,9 +127,12 @@ const optionKind = (option: OptionInfo, long: string): ValueKind => {
   return /\.\.\.[>\]]/.test(option.flags) ? "variadic" : "text"
 }
 
-const optionField = (option: OptionInfo, long: string, negatable = false): Field => {
+// The command line's own promise: `--location ""` clears the field, so an agent may send "" too.
+const CLEARS = /\bempty clears\b/
+
+const optionField = (option: OptionInfo, long: string, negated?: OptionInfo): Field => {
   const kind = optionKind(option, long)
-  const about = option.description
+  const about = negated ? `${option.description}; false: ${negated.description}` : option.description
   const schema =
     kind === "switch"
       ? v.pipe(v.boolean(), v.description(about))
@@ -148,7 +151,9 @@ const optionField = (option: OptionInfo, long: string, negatable = false): Field
                 : kind === "json"
                   ? // A next step hands back the object an answer gave; the command takes it as JSON text.
                     v.pipe(v.union([v.string(), v.record(v.string(), v.unknown())]), v.description(about))
-                  : text(about)
+                  : CLEARS.test(about)
+                    ? v.pipe(v.string(), v.regex(/^(?!-$)/, "not only -"), v.description(about))
+                    : text(about)
   return {
     name: snake(long.slice(2)),
     required: option.mandatory,
@@ -156,7 +161,7 @@ const optionField = (option: OptionInfo, long: string, negatable = false): Field
     positional: false,
     argv: (value) => {
       // `approval: false` where the command has `--no-approval` says so; elsewhere false is leaving the switch off.
-      if (kind === "switch") return value === true ? [long] : negatable ? [`--no-${long.slice(2)}`] : []
+      if (kind === "switch") return value === true ? [long] : negated ? [`--no-${long.slice(2)}`] : []
       if (kind === "variadic") return (value as unknown[]).map((one) => `${long}=${String(one)}`)
       if (kind === "repeat") return (Array.isArray(value) ? value : [value]).map((one) => `${long}=${String(one)}`)
       if (kind === "list") return [`${long}=${Array.isArray(value) ? value.map(String).join(",") : String(value)}`]
@@ -206,11 +211,14 @@ const fieldsOf = (
   const fields: Field[] = info.arguments.map(argumentField)
   const read = stdin?.(info.path)
   if (read) fields.push(stdinField(read))
-  const longs = new Set(info.options.map(longOf))
+  const switches = new Map(info.options.filter((one) => !one.takes_value).map((one) => [longOf(one), one]))
   for (const option of info.options) {
     const long = longOf(option)
     if (!long || option.mcp === false) continue
-    const field = optionField(option, long, longs.has(`--no-${long.slice(2)}`))
+    // `--x` false already says `--no-x`: one boolean, not two that could disagree.
+    const positive = long.startsWith("--no-") ? switches.get(`--${long.slice(5)}`) : undefined
+    if (positive && positive.mcp !== false) continue
+    const field = optionField(option, long, option.takes_value ? undefined : switches.get(`--no-${long.slice(2)}`))
     // A positional and its flag alternative share one MCP input; emitting both supplies the value twice.
     if (!fields.some((existing) => existing.name === field.name)) fields.push(field)
   }

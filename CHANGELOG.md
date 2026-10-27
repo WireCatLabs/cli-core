@@ -7,6 +7,28 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A calendar event id is Google's base32hex: 5 to 1024 of `a-v` and `0-9`.** `events create --id` and
+  `event_create`'s `id` refused only characters outside `a-z0-9`, so an id with `w`-`z` reached Google and was refused
+  there ([Google's rule](https://developers.google.com/workspace/calendar/api/v3/reference/events#id)). The ids
+  cli-core mints were already valid. `calendarWriterContract` creates with `contract0sample0id0001` instead of an id
+  with `x`, so a writer that checks the rule itself passes it.
+- **A command tool has one boolean for a `--x` / `--no-x` pair.** `toolsFromCommands` offered both `x` and `no_x`;
+  `no_x` is gone, and `x: false` passes `--no-x`, as it already did. A host that sends `no_notify` (or any other
+  `no_*` with its `--x` beside it) gets `no argument "no_notify"`; send `notify: false`.
+
+### Fixed
+
+- **An agent's `events create` and `events update` tools take what the command line takes.** `attendee` is a list
+  (it was one string, so one invitee per create); `location` and `description` take `""`, which clears them as
+  `--location ""` does (they needed one character); `notify` is one boolean, required by the command when the event
+  has attendees other than the owner. Generally: a single-value option whose help says "empty clears" takes `""`
+  (except `-`, stdin), so `replies edit --words` now does too; the comma-separated lists still need a value.
+- **A write's answer names the event's title.** `entry` (and each of `events show`'s `entries`) carries `title`; it
+  is written by whoever sent the invitation, so `callCalendarTool`'s `untrusted` names `entry.title` and
+  `entries.title`.
+
 ## 0.458.0 — 27.10.2026
 
 ### Added

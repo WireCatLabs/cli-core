@@ -1,17 +1,20 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, errorObjectOf } from "@wirecat/cli-base"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { commandPermissions, knownPermissionKeys } from "../../cli/permission-keys.js"
+import { type AgentProgram, runCommandForAgent, toolsFromCommands } from "../../mcp/agent.js"
 import type { EntryInput } from "../../meetings/index.js"
 import type { GuardSettings } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
 import { CALENDAR_WRITE_KEYS } from "../writer.js"
-import { type CalendarWrites, updateEvent } from "../writes.js"
+import { type CalendarWrites, createEvent, newEventId, updateEvent } from "../writes.js"
 import { addCalendarCommands } from "./index.js"
 
 const HOUR = 3_600_000
@@ -80,7 +83,7 @@ const setup = async (
     ...(options.lock ? { readOnlyLock: options.lock } : {}),
   })
   const written: Record<string, unknown>[] = []
-  const cli = async (...args: string[]) => {
+  const program = () => {
     const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
     root.option("--yes").option("--dry-run")
     addCalendarCommands(root, {
@@ -92,13 +95,17 @@ const setup = async (
       timezone: "UTC",
       writes: { writer, app, settings, env, ...(options.extraKeys ? { extraKeys: options.extraKeys } : {}) },
     })
-    await root.parseAsync([...args, "--json"], { from: "user" })
+    return root
+  }
+  const parse = async (args: string[]) => {
+    await program().parseAsync(args, { from: "user" })
     return written.at(-1) as Record<string, unknown>
   }
+  const cli = (...args: string[]) => parse([...args, "--json"])
   const journal = () => new SendJournal(sendsPathFor(app, "work", env)).entries()
   const eventOf = async (externalId: string) =>
     (await store.entry(calendar?.id as number, externalId))?.eventId as number
-  return { store, writer, cli, journal, eventOf, calendarId: calendar?.id as number }
+  return { store, writer, cli, parse, program, journal, eventOf, calendarId: calendar?.id as number }
 }
 
 // A broader `events: allow` would not lift the built-in asks (WC-PERM-7): each key is named.
@@ -300,6 +307,85 @@ describe("calendar write commands", () => {
       cli(...create, "--start-time", "2026-11-02T11:00", "--end-time", "2026-11-02T10:00"),
     ).rejects.toMatchObject({
       code: "validation_error",
+    })
+  })
+})
+
+describe("calendar writes through an agent's command tools", () => {
+  const agent = async () => {
+    const at = await setup({ permissions: { ...ALLOW, "events.notify": "allow" } })
+    const program: AgentProgram = {
+      commands: describeProgram(at.program()),
+      run: async (argv, environment) => {
+        try {
+          environment.agent?.result(await at.parse(argv.slice(1)))
+          return 0
+        } catch (error) {
+          environment.agent?.failure(errorObjectOf(error))
+          return 1
+        }
+      },
+    }
+    const tool = (command: string) => toolsFromCommands(program.commands).find((one) => one.command === command)
+    const call = (command: string, input: Record<string, unknown>) =>
+      runCommandForAgent(program, command.split(" "), input, { profile: "work" })
+    return { ...at, tool, call }
+  }
+  const times = { start_time: "2026-11-02T10:00", end_time: "2026-11-02T11:00" }
+
+  it("take several attendees, and one notify that says --no-notify when false", async () => {
+    const { tool, call, writer } = await agent()
+    const create = tool("events create")
+    expect(Object.keys(create?.input.entries ?? {})).not.toContain("no_notify")
+    const input = { calendar: "primary", title: "Example planning", ...times, notify: false }
+    const attendee = ["ana@example.com", "bob@example.com"]
+    expect(v.safeParse(create?.input as v.GenericSchema, { ...input, attendee }).success).toBe(true)
+    const made = await call("events create", { ...input, attendee })
+    expect(made).toMatchObject({ result: { entry: { title: "Example planning" } } })
+    const id = (made as { result: { operation_id: string } }).result.operation_id
+    expect(writer.calls.at(-1)).toMatchObject({ write: "create", notify: false })
+    expect(writer.held("primary").find((one) => one.externalId === id)?.participants).toEqual([
+      expect.objectContaining({ email: "ana@example.com" }),
+      expect.objectContaining({ email: "bob@example.com" }),
+    ])
+  })
+
+  it("clear a place and details with empty text, and leave the attendees alone when none are given", async () => {
+    const { tool, call, writer, eventOf, store } = await agent()
+    const update = tool("events update")
+    const input = { event: `event:${await eventOf("e1")}`, location: "", description: "", notify: false }
+    expect(v.safeParse(update?.input as v.GenericSchema, input).success).toBe(true)
+    expect(v.safeParse(update?.input as v.GenericSchema, { ...input, location: "-" }).success).toBe(false)
+    expect(await call("events update", { ...input, location: "Room 2" })).toMatchObject({ result: {} })
+    expect(await store.entry(1, "e1")).toMatchObject({ location: "Room 2" })
+    expect(await call("events update", input)).toMatchObject({ result: { entry: { title: "Example review" } } })
+    expect(await store.entry(1, "e1")).toMatchObject({ location: null, description: null })
+    expect(writer.held("primary").find((one) => one.externalId === "e1")?.participants).toHaveLength(2)
+  })
+})
+
+describe("event ids", () => {
+  it("are minted and taken in Google's base32hex: a-v and 0-9, 5 to 1024 of them", async () => {
+    expect(newEventId()).toMatch(/^[a-v0-9]{5,1024}$/u)
+    const { store, writer } = await setup({ permissions: ALLOW })
+    const context = {
+      store,
+      accountId: 1,
+      writes: {
+        writer,
+        app,
+        settings: () => ({ profile: "work", permissions: ALLOW, permissionSources: {}, sendsPerHour: 30 }),
+      },
+      ask: async () => {},
+      now: NOW,
+      zone: "UTC",
+      names: { notify: "--notify", id: "--id", calendar: "--calendar", series: "--series" },
+    }
+    const fields = { title: "Example planning", startTime: "2026-11-02T10:00", endTime: "2026-11-02T11:00" }
+    for (const id of ["example0id0w", "abcd", "ABCDEF123"])
+      await expect(createEvent(context, "primary", fields, { id })).rejects.toMatchObject({ code: "validation_error" })
+    expect(await createEvent(context, "primary", fields, { id: "abcdefghijklmnopqrstuv0123" })).toMatchObject({
+      operation_id: "abcdefghijklmnopqrstuv0123",
     })
   })
 })

@@ -337,8 +337,12 @@ const addEventWrites = (
   // Left out on purpose: with other attendees the owner must choose, so neither switch is the default.
   const notify = (command: Command) =>
     command
-      .option("--notify", "the provider mails the other attendees; needs events.notify allowed")
-      .option("--no-notify", "the provider mails nobody; one of the two is required when there are other attendees")
+      .option(
+        "--notify",
+        "the provider mails the other attendees; needs events.notify allowed; this or --no-notify is required " +
+          "when there are other attendees",
+      )
+      .option("--no-notify", "the provider mails nobody")
   const fields = (command: Command, replacing: boolean) =>
     command
       .option("--title <title>", "the event's title")
@@ -348,11 +352,17 @@ const addEventWrites = (
       .option("--end-date <date>", "the last day of an all-day event")
       .option("--location <text>", "where; empty clears it")
       .option("--description <text>", "the details; empty clears it")
-      .option("--attendee <email>", `an attendee; repeat for each${replacing ? ", replacing the list" : ""}`, collect)
+      // The empty default marks the flag as repeatable, so an agent's tool takes a list; empty is "not given".
+      .option(
+        "--attendee <email>",
+        `an attendee; repeat for each${replacing ? ", replacing the list" : ""}`,
+        collect,
+        [] as string[],
+      )
   type FieldOptions = Omit<EventFields, "attendees"> & { attendee?: string[] }
   const fieldsOf = ({ attendee, ...given }: FieldOptions): EventFields => ({
     ...Object.fromEntries(Object.entries(given).filter(([, value]) => value !== undefined)),
-    ...(attendee === undefined ? {} : { attendees: attendee }),
+    ...(attendee === undefined || attendee.length === 0 ? {} : { attendees: attendee }),
   })
   type Choices = { calendar?: string; series?: boolean; notify?: boolean }
   const choicesOf = ({ calendar, series, notify }: Choices) => ({
