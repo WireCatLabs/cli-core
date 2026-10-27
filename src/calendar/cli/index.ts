@@ -10,6 +10,7 @@ import { searchEvents } from "../../services/events-search.js"
 import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import {
+  CALENDAR_UNTRUSTED_FIELDS,
   calendarIn,
   calendarItem,
   EVENTS_QUERY_HELP,
@@ -66,6 +67,17 @@ const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 const GROUP: Effects = { remote: "none", local: "none" }
 /** How many pieces one `sync --embed` embeds, as drive's. */
 const EMBED_MAX = 600
+
+// A list's marker goes on each item: a host's list envelope is strict and `--jsonl` prints only the items.
+const EVENT_ITEM_UNTRUSTED = ["title", "description", "location"]
+const ATTENDEE_UNTRUSTED = ["name"]
+const REVIEW_UNTRUSTED = ["candidates.title"]
+const SEARCH_UNTRUSTED = ["hits.title", "hits.location", "hits.excerpt"]
+
+const eachMarked = <T extends { items: object[] }>(answer: T, untrusted: string[]) => ({
+  ...answer,
+  items: answer.items.map((item) => ({ ...item, untrusted })),
+})
 
 const integer = (text: string) => {
   if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text)))
@@ -189,7 +201,10 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         now: now(),
         personOf: personId,
       })
-      print(await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }), command)
+      print(
+        eachMarked(await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }), EVENT_ITEM_UNTRUSTED),
+        command,
+      )
     })
   output(
     example(
@@ -199,7 +214,8 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       "events show event:42 --json",
     ),
   ).action(async (reference: string, _opts: unknown, command: Command) => {
-    print(await eventAnswer(await eventOf(deps.store, deps.accountId, eventIdOf(reference)), personOfEmail), command)
+    const shown = await eventAnswer(await eventOf(deps.store, deps.accountId, eventIdOf(reference)), personOfEmail)
+    print({ ...shown, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
   })
 
   output(
@@ -220,18 +236,16 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean },
         command: Command,
       ) => {
-        print(
-          await searchEvents(messages("search"), words.join(" "), {
-            accounts: [deps.account],
-            limit: opts.limit,
-            offset: opts.cursor,
-            timezone: zone(),
-            command: program.name(),
-            ...(opts.exact ? { exact: true } : {}),
-            ...(opts.newest ? { newest: true } : {}),
-          }),
-          command,
-        )
+        const found = await searchEvents(messages("search"), words.join(" "), {
+          accounts: [deps.account],
+          limit: opts.limit,
+          offset: opts.cursor,
+          timezone: zone(),
+          command: program.name(),
+          ...(opts.exact ? { exact: true } : {}),
+          ...(opts.newest ? { newest: true } : {}),
+        })
+        print({ ...found, untrusted: SEARCH_UNTRUSTED }, command)
       },
     )
 
@@ -254,14 +268,12 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       event === undefined
         ? await eventsFilter(["week"], { store: deps.store, accountId: deps.accountId, zone: zone(), now: now() })
         : undefined
-    print(
-      await peopleAnswer(deps.store, deps.accountId, {
-        ...(event === undefined ? {} : { event }),
-        ...(filter ? { filter } : {}),
-        ...(personOfEmail ? { personOf: personOfEmail } : {}),
-      }),
-      command,
-    )
+    const people = await peopleAnswer(deps.store, deps.accountId, {
+      ...(event === undefined ? {} : { event }),
+      ...(filter ? { filter } : {}),
+      ...(personOfEmail ? { personOf: personOfEmail } : {}),
+    })
+    print(eachMarked(people, ATTENDEE_UNTRUSTED), command)
   })
   output(
     example(
@@ -294,7 +306,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       "links review --json",
     ),
   ).action(async (_opts: unknown, command: Command) => {
-    print(await reviewsAnswer(deps.store), command)
+    print(eachMarked(await reviewsAnswer(deps.store), REVIEW_UNTRUSTED), command)
   })
   output(
     example(
@@ -334,6 +346,8 @@ const addEventWrites = (
     zone: zone(),
     names: { notify: "--notify or --no-notify", id: "--id", calendar: "--calendar", series: "--series" },
   })
+  const printWritten = (value: object, command: Command) =>
+    print({ ...value, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
   // Left out on purpose: with other attendees the owner must choose, so neither switch is the default.
   const notify = (command: Command) =>
     command
@@ -389,7 +403,7 @@ const addEventWrites = (
     ),
   ).action(async (calendar: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
     const { notify: choice, id, ...rest } = opts
-    print(
+    printWritten(
       await createEvent(context(command), calendar, fieldsOf(rest), {
         ...(choice === undefined ? {} : { notify: choice }),
         ...(id === undefined ? {} : { id }),
@@ -408,7 +422,7 @@ const addEventWrites = (
     ),
   ).action(async (reference: string, opts: FieldOptions & Choices, command: Command) => {
     const { calendar: _calendar, series: _series, notify: _notify, ...rest } = opts
-    print(await updateEvent(context(command), reference, fieldsOf(rest), choicesOf(opts)), command)
+    printWritten(await updateEvent(context(command), reference, fieldsOf(rest), choicesOf(opts)), command)
   })
   output(
     example(
@@ -420,7 +434,7 @@ const addEventWrites = (
       "events delete event:42 --no-notify",
     ),
   ).action(async (reference: string, opts: Choices, command: Command) => {
-    print(await deleteEvent(context(command), reference, choicesOf(opts)), command)
+    printWritten(await deleteEvent(context(command), reference, choicesOf(opts)), command)
   })
   output(
     example(
@@ -432,7 +446,7 @@ const addEventWrites = (
       "events respond event:42 accepted --notify",
     ),
   ).action(async (reference: string, response: EventResponse, opts: Choices, command: Command) => {
-    print(await respondToEvent(context(command), reference, response, choicesOf(opts)), command)
+    printWritten(await respondToEvent(context(command), reference, response, choicesOf(opts)), command)
   })
 }
 

@@ -225,6 +225,8 @@ export const event = v.strictObject({
   deleted_at: v.nullable(isoTime),
   created_at: isoTime,
   updated_at: isoTime,
+  /** The fields whoever sent the invitation wrote, on a calendar CLI's `events list`: an agent reads them as data. */
+  untrusted: v.optional(v.array(text)),
 })
 
 export const eventItem = (one: Event): v.InferOutput<typeof event> => ({

@@ -17,6 +17,20 @@ const iso = (at: number | null) => (at === null ? null : new Date(at).toISOStrin
 /** Who looks a person up: the shared store's `people.personOf`, for an attendee's `email` contact. */
 export type PersonOfEmail = (email: string) => Promise<string | null>
 
+/** Fields whose text whoever sent the invitation wrote: an agent reads them as data. */
+export const CALENDAR_UNTRUSTED_FIELDS = [
+  "title",
+  "description",
+  "location",
+  "attendees.name",
+  "candidates.title",
+  "entries.title",
+  "entry.title",
+  "history.title",
+  "history.location",
+  "attachments.title",
+]
+
 export const calendarItem = (one: StoredCalendar) => ({
   id: String(one.id),
   external_id: one.externalId,

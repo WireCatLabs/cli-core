@@ -79,6 +79,7 @@ each answer lists the fields others wrote in `untrusted` and has its control cha
 A CLI on cli-core's three-tool MCP server reaches the commands instead; that server wraps a command's answer and
 serialises it with the same escaping (`answered` in `src/mcp/tool.ts`), and its tool descriptions carry the same line.
 An event hit of `search all` names its invitation text in its own `untrusted`: `title` and `excerpt`.
+The shared commands mark the same text in their answers, so a CLI serving them over MCP passes the marker on: `events show`, `search` and the write commands name the fields in a top-level `untrusted` (`search`: `hits.title`, `hits.location`, `hits.excerpt`); `events list`, `people list` and `links review` put it on each item, because a host's list envelope is strict and `--jsonl` prints only the items.
 
 ## Testing an adapter
 

@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The shared calendar commands mark the text whoever sent an invitation wrote.** `addCalendarCommands` answers
+  carry `untrusted`, the field names an agent reads as data, as `callCalendarTool`'s answers and `search all`'s
+  event hits already do
+  ([WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)).
+  `events show` and `events create|update|delete|respond` give `CALENDAR_UNTRUSTED_FIELDS` at the top level, and
+  `search` gives `["hits.title", "hits.location", "hits.excerpt"]`. `events list`, `people list` and `links review`
+  put it on each item (`["title", "description", "location"]`, `["name"]`, `["candidates.title"]`), since a host's
+  list envelope is strict: a host that tells a list from one value by its keys still sees a list. The `event` entity
+  gains an optional `untrusted`, so a caller that checks events against an older copy of it refuses the new field.
+- **`CALENDAR_UNTRUSTED_FIELDS` also names `history.title`, `history.location` and `attachments.title`.** An event's
+  past titles and places and its Drive files' titles come from the invitation too; `event_show` returned them
+  unmarked. It now lives in the calendar reads and is still exported from `./calendar/mcp`.
+
 ## 0.460.0 — 27.10.2026
 
 ### Changed — may break callers
