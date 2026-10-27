@@ -26,7 +26,8 @@ shape of this file.
   default text model, as `embedNotes` does; a calendar CLI calls it after a sync. The occurrences of a series share one
   text and so one vector: a weekly meeting held a year is embedded once. `searchEvents` then ranks words and meaning
   together by reciprocal rank, each hit saying which found it (`found_by`), and answers `by` and, when meaning was
-  left out, `meaning_skipped`: no model, no vectors yet, `--exact`, or a query with fields or operators.
+  left out, `meaning_skipped`: no model, no vectors yet, `--exact`, or a query with fields or operators. Meaning
+  follows `--source` as words do: an event is found through any account holding a searchable copy of it.
   `store.calendar` gains `chunksToEmbed`, `embedded` and `nearest`; `search all` answers `events.by` and prints
   `events by words only: …` when meaning was left out.
 

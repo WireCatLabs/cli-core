@@ -132,6 +132,29 @@ describe("calendar events by meaning", () => {
     expect(await embedEvents(store, { threads: 1 })).toMatchObject({ embedded: 0 })
   })
 
+  it("finds an event through any account holding a searchable copy, not only the first copy's", async () => {
+    download()
+    const store = await calendarStore([
+      entry("busy", "", NOW + DAY, { title: null, visibility: "private", icalUid: "u" }),
+    ])
+    const other = await store.accounts.saveAccount({ provider: "google-calendar", account: "owner-2" }, { name: null })
+    const [calendar] = await store.calendar.saveCalendars(
+      other,
+      [{ externalId: "primary", title: "Home", timezone: "UTC", accessRole: "owner", primary: true }],
+      2,
+    )
+    await store.calendar.saveEntries(calendar?.id as number, [entry("text", "cat", NOW + DAY, { icalUid: "u" })], 2)
+    await embedEvents(store, { threads: 1 })
+    const meaning = async (account?: string) =>
+      (
+        await searchEvents(store, "kitten", account ? { accounts: [{ provider: "google-calendar", account }] } : {})
+      ).hits.map(({ title, found_by }) => [title, found_by])
+
+    expect(await meaning()).toEqual([["cat", ["meaning"]]])
+    expect(await meaning("owner-2")).toEqual([["cat", ["meaning"]]])
+    expect(await meaning("owner-1")).toEqual([])
+  })
+
   it("tells search all how events were searched", async () => {
     download()
     const store = await calendarStore([entry("a", "cat", NOW)])

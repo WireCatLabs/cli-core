@@ -21,6 +21,14 @@ import { dot } from "./vectors.js"
 /** The fields an event has; a message or note field is refused rather than matching nothing. */
 export const EVENT_FIELDS = ["text", "exact", "body", "title", "date", "in"] as const
 
+/**
+ * Whether the event `event` (an SQL expression of its id) has a searchable copy in the accounts of the one parameter,
+ * a JSON list of stored account ids. Words and meaning both filter by it, so an event held in several accounts is
+ * found through each of them.
+ */
+const inEventAccounts = (event: string) =>
+  searchableCopy(event, "c.account_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))")
+
 const EVENT_CORPUS: Corpus = {
   type: "event",
   noun: "event",
@@ -32,7 +40,7 @@ const EVENT_CORPUS: Corpus = {
   stems: "event_stems",
   live: "n.live = 1",
   inAccounts: (ids) => ({
-    sql: searchableCopy("n.id", "c.account_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))"),
+    sql: inEventAccounts("n.id"),
     params: [ids],
     exact: true,
   }),
@@ -83,7 +91,7 @@ export interface EventSearch {
   eventIndexState(): Promise<NoteIndexState>
   /** Live events' pieces with no vector of `model`, by hash from `after`, each with its text cut again. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<EventChunkToEmbed[]>
-  /** Whether any live event of these accounts has a vector of `model`. */
+  /** Whether any live event with a searchable copy in these accounts has a vector of `model`. */
   embedded(model: string, options?: { accountIds?: string[] }): Promise<boolean>
   /** Events nearest in meaning to `query`, one hit per series, best first. Vectors are unit length. */
   nearest(
@@ -102,15 +110,12 @@ export const eventSearchOver = (context: StoreContext): EventSearch => {
   const stemmerFor = stemmerCache()
   const drain = () => drainCorpus(database, CORPORA.event, stemmerFor)
 
-  /** The live event pieces of these accounts, as SQL over chunks `k`. */
+  /** The live event pieces with a searchable copy in these accounts, as SQL over chunks `k`. */
   const live = (accountIds: string[] | undefined) => {
-    const ids = accountIds?.length ? JSON.stringify(accountIds) : null
-    return {
-      sql:
-        ` AND k.chunkable_type = 'event' AND EXISTS (SELECT 1 FROM events e WHERE e.id = k.chunkable_id AND ${EVENT_LIVE})` +
-        " AND (? IS NULL OR k.account_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)))",
-      params: [ids, ids] as SqlValue[],
-    }
+    const sql = ` AND k.chunkable_type = 'event' AND EXISTS (SELECT 1 FROM events e WHERE e.id = k.chunkable_id AND ${EVENT_LIVE})`
+    return accountIds?.length
+      ? { sql: `${sql} AND ${inEventAccounts("k.chunkable_id")}`, params: [JSON.stringify(accountIds)] as SqlValue[] }
+      : { sql, params: [] as SqlValue[] }
   }
 
   /** Events in rank order, as hits: one per series, at its occurrence nearest now that is not cancelled. */
