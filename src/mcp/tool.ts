@@ -22,15 +22,16 @@ import type { WarmEmbedders } from "../embeddings/embed.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
 import { type AppErrors, failureContext } from "../errors/reasons.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
-import { partialOutcome, startRecording } from "../runs/recording.js"
+import { startRecording } from "../runs/recording.js"
 import { newRunId } from "../runs/run.js"
-import { runContextOf } from "../runs/run-context.js"
+import { keepsSuccess, runContextOf } from "../runs/run-context.js"
 import { inRun } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
 import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
 import { onlineDeps, storeModeDeps } from "../services/deps.js"
 import { type Services, servicesFor } from "../services/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { type CallerSource, callerOf, currentCaller, withCaller } from "./caller.js"
 import type { MessengerSession } from "./session.js"
 import { agentJson } from "./text.js"
 
@@ -73,7 +74,21 @@ export interface Defaults {
   guard: SendGuard
   /** The profile's own entries, for a tool reading a setting of its own — `transcribeWith`. */
   settings: Pick<Settings, "configured" | "shared" | "profile"> &
-    Partial<Pick<Settings, "permissions" | "searchCatchUp" | "pictureSearch" | "searchReranker" | "offline">> &
+    Partial<
+      Pick<
+        Settings,
+        | "permissions"
+        | "searchCatchUp"
+        | "pictureSearch"
+        | "searchReranker"
+        | "offline"
+        | "record"
+        | "keepFailedRuns"
+        | "keepRunsForDays"
+        | "keepSuccessfulRunsForDays"
+        | "runsSizeLimitMb"
+      >
+    > &
     AISettings
   env: NodeJS.ProcessEnv
   keyring?: KeyringStore
@@ -176,6 +191,8 @@ export interface Registration {
   log?: (call: ToolCall) => Promise<void>
   /** The CLI's commands, by which an answer's next steps are judged safe to run unasked. */
   targets?: NonNullable<StepInput["targets"]>
+  /** How a call's caller is worked out on this connection (`callerOf`); without it the environment's agent is kept. */
+  callers?: CallerSource
 }
 
 export type ToolTier = "read" | "draft" | "write-private" | "write-public" | "destructive" | "admin"
@@ -277,20 +294,26 @@ export const entryRunner = (registration: Registration): RunEntry => {
     const command = `mcp ${commandOf(key, definition)}`
     const traceId = traceIdOf(ctx?.mcpReq?._meta?.traceparent)
     const app = registration.messenger?.app
+    const caller = registration.callers ? callerOf(ctx, key, registration.callers) : currentCaller()
+    const env = registration.defaults.env ?? process.env
+    const settings = registration.defaults.settings
     const recording =
-      key !== "runs_search" && registration.defaults.history !== false && app?.appName
+      key !== "runs_search" && settings.keepFailedRuns !== false && app?.appName
         ? startRecording({
             app,
             command,
-            ...(registration.defaults.settings.profile === undefined
-              ? {}
-              : { profile: registration.defaults.settings.profile }),
-            env: registration.defaults.env,
-            record: false,
+            ...(settings.profile === undefined ? {} : { profile: settings.profile }),
+            env,
+            record: keepsSuccess({ record: settings.record ?? true, fromFlag: false, env, caller }),
             keepFailed: true,
             trace: false,
             format: "json",
-            context: runContextOf({ bin: app.command, command, env: registration.defaults.env ?? process.env }),
+            context: runContextOf({ bin: app.command, command, env, caller }),
+            ...(settings.keepRunsForDays === undefined ? {} : { keepDays: settings.keepRunsForDays }),
+            ...(settings.keepSuccessfulRunsForDays === undefined
+              ? {}
+              : { keepSuccessDays: settings.keepSuccessfulRunsForDays }),
+            ...(settings.runsSizeLimitMb === undefined ? {} : { maxBytes: settings.runsSizeLimitMb * 1024 * 1024 }),
             ...(traceId === undefined ? {} : { traceId }),
           })
         : undefined
@@ -301,20 +324,24 @@ export const entryRunner = (registration: Registration): RunEntry => {
       startedAt,
       ...(profile === undefined ? {} : { profile }),
       ...(traceId === undefined ? {} : { traceId }),
+      ...(recording ? { events: recording.events } : {}),
     }
-    const result = await inRun(scope, () => {
-      const input = inputOf(definition, syncAllowedFor(key, registration.defaults))
-      const parsed = v.safeParse(input, args)
-      return parsed.success
-        ? run(key, definition, parsed.output, ctx)
-        : failed(
-            new CliError("validation_error", `${commandOf(key, definition)}: ${v.summarize(parsed.issues)}`, {
-              arguments: toJsonSchema(input),
-            }),
-            app?.errors,
-          )
-    })
-    if (recording && (result.isError || partialOutcome(result.structuredContent))) {
+    const work = () =>
+      inRun(scope, () => {
+        const input = inputOf(definition, syncAllowedFor(key, registration.defaults))
+        const parsed = v.safeParse(input, args)
+        return parsed.success
+          ? run(key, definition, parsed.output, ctx)
+          : failed(
+              new CliError("validation_error", `${commandOf(key, definition)}: ${v.summarize(parsed.issues)}`, {
+                arguments: toJsonSchema(input),
+              }),
+              app?.errors,
+            )
+      })
+    // The connection a session opens for this call is recorded under the same caller.
+    const result = await (caller ? withCaller(caller, work) : work())
+    if (recording) {
       if (result.isError) {
         const error = (result.structuredContent as { error?: { code?: string; message?: string } } | undefined)?.error
         const code =

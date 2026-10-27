@@ -33,8 +33,23 @@ export const recordedRun = v.strictObject({
   argv: v.optional(v.array(text)),
   unknown_command: v.optional(text),
   agent: v.optional(
-    v.strictObject({ kind: text, session_id: v.nullable(text), from_chat: v.optional(v.literal(true)) }),
+    v.strictObject({
+      kind: text,
+      session_id: v.nullable(text),
+      from_chat: v.optional(v.literal(true)),
+      client: v.optional(v.strictObject({ name: text, version: v.optional(text), id: v.optional(text) })),
+    }),
   ),
+  via: v.optional(v.picklist(["cli", "mcp-stdio", "mcp-http", "desktop"])),
+  mcp: v.optional(
+    v.strictObject({
+      tool: text,
+      request_id: v.optional(text),
+      connection_id: v.optional(text),
+      proxied: v.optional(v.literal(true)),
+    }),
+  ),
+  events_dropped: v.optional(count),
   error: v.optional(
     v.strictObject({
       class: text,

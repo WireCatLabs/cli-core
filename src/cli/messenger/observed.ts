@@ -15,18 +15,26 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
     const write = currentOperation()
     const marked = (part: Named = {}): Named =>
       write === undefined ? part : { ...part, ids: { ...part.ids, operation: write } }
-    events({ event: "request", operation, ...marked(named) })
+    events({ event: "request", operation, level: "operation", ...marked(named) })
     const started = performance.now()
     const durationMs = () => Math.round(performance.now() - started)
     try {
       const answer = await work()
-      events({ event: "response", operation, durationMs: durationMs(), outcome: "ok", ...marked(after?.(answer)) })
+      events({
+        event: "response",
+        operation,
+        level: "operation",
+        durationMs: durationMs(),
+        outcome: "ok",
+        ...marked(after?.(answer)),
+      })
       return answer
     } catch (error) {
       const providerError = isCliFailure(error) ? providerErrorKey(error.details?.provider_error) : undefined
       events({
         event: "response",
         operation,
+        level: "operation",
         durationMs: durationMs(),
         outcome: "error",
         errorCode: isCliFailure(error) ? error.code : "generic_failure",

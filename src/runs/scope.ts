@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 import { randomBytes } from "node:crypto"
 import { traceIdOf } from "@wirecat/cli-base/standards"
+import type { EventSink } from "./events.js"
 import { newRunId } from "./run.js"
 
 export interface RunScope {
@@ -12,6 +13,8 @@ export interface RunScope {
   traceId?: string
   /** The profile the run is for, so a hint deep in a service can name the command with it. */
   profile?: string
+  /** The run's event sink, for a transport far below the command (a wire middleware) that is not handed one. */
+  events?: EventSink
 }
 
 const scopes = new AsyncLocalStorage<RunScope>()
@@ -35,6 +38,9 @@ export const currentRun = (): RunScope => {
 }
 
 export const inRun = <T>(scope: RunScope, body: () => T): T => scopes.run(scope, body)
+
+/** One event into the run under way, or nowhere: outside a run, or in a run that keeps nothing. */
+export const runEvent: EventSink = (event) => scopes.getStore()?.events?.(event)
 
 /**
  * A command as a person types it: `max personal store migrate`. A hint without the profile fails when copied,
@@ -73,3 +79,15 @@ export const childTrace = (): { traceId: string; traceparent: string } => {
   const traceId = hex(16)
   return { traceId, traceparent: `00-${traceId}-${hex(8)}-01` }
 }
+
+export interface Attempt {
+  attempt: number
+  waitMs?: number
+}
+
+const attempts = new AsyncLocalStorage<Attempt>()
+
+/** Marks the calls made under it as one try of a retried call: a wire event without its own attempt takes this one. */
+export const withAttempt = <T>(attempt: Attempt, work: () => T): T => attempts.run(attempt, work)
+
+export const currentAttempt = (): Attempt | undefined => attempts.getStore()

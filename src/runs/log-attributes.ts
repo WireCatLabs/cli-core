@@ -21,6 +21,10 @@ const diagnostic: Record<KeysOf<DiagnosticEvent>, true> = {
   outcome: true,
   errorCode: true,
   providerError: true,
+  level: true,
+  transport: true,
+  attempt: true,
+  waitMs: true,
   code: true,
   detail: true,
   reason: true,
@@ -72,13 +76,16 @@ const background = [
 /** A crash: where it happened, never what it said. */
 const crash = ["errorClass", "frames"]
 
+/** What a capped run did not write: how many, by operation. */
+const dropped = ["dropped"]
+
 /**
  * Every attribute key cli-core's writers log, as written: snake_case (`logAttributes`). `createRecordLog`
  * blanks any other, cli-base's own camelCase list included.
  */
 export const LOG_ATTRIBUTES: readonly string[] = [
   ...new Set(
-    [...Object.keys(diagnostic), ...Object.keys(send), ...background, ...crash].map(
+    [...Object.keys(diagnostic), ...Object.keys(send), ...background, ...crash, ...dropped].map(
       (key) => Object.keys(logAttributes({ [key]: true }))[0] as string,
     ),
   ),

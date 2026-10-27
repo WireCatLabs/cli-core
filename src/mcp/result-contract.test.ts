@@ -127,11 +127,11 @@ it("keeps partial MCP identifiers without payloads and honors explicitly disable
   const ctx = { mcpReq: { signal: new AbortController().signal } } as unknown as ServerContext
   const registration = {
     messenger,
-    defaults: { env, settings: { profile: "work" }, history: false },
+    defaults: { env, settings: { profile: "work", keepFailedRuns: false } },
   } as unknown as Registration
   await entryRunner(registration)("attachments_show", fixture, { message: "m1" }, ctx)
   expect(listRuns(runsDirFor(app, env))).toEqual([])
-  registration.defaults.history = true
+  registration.defaults.settings.keepFailedRuns = true
   await entryRunner(registration)("attachments_show", fixture, { message: "m1" }, ctx)
   const [metadata] = listRuns(runsDirFor(app, env))
   expect(metadata).toMatchObject({

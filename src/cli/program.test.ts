@@ -843,7 +843,7 @@ describe("consumer lifecycle in the shared shell", () => {
     )
     expect(code).toBe(2)
     expect(finished).toBe(true)
-    expect(readdirSync(join(state, "runs"))).toHaveLength(1)
+    expect(readdirSync(join(state, "runs")).filter((name) => !name.startsWith("."))).toHaveLength(1)
     expect(streams.stdout).toEqual([])
     expect(JSON.parse(streams.stderr[0] ?? "").error.code).toBe("validation_error")
   })
@@ -1234,10 +1234,7 @@ describe("a CLI's own command", () => {
     const env = { ...process.env, APP_PROFILE: "work", APP_STATE_DIR: state, APP_CONFIG_DIR: join(state, "config") }
     const typed = ["notes", "add", "Fake typed note", "--token=fake-token-value"]
     expect(await run(typed, notes(recordInput), { streams: captureStreams(), tty: false, env })).toBe(0)
-    const [file] = readdirSync(join(state, "runs"), { recursive: true, withFileTypes: true }).filter(
-      (one) => one.name === "run.json",
-    )
-    return JSON.parse(readFileSync(join(file?.parentPath ?? "", "run.json"), "utf8")).argv
+    return listRuns(join(state, "runs"))[0]?.argv
   }
 
   it("**keeps its typed command line on success** through the exported runContextOf, secrets hidden", async () => {

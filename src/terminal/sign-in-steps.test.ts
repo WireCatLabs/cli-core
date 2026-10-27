@@ -132,7 +132,7 @@ describe("an answer read from stdin", () => {
     await program.parseAsync(["--json", "login", "--answer-stdin", "--record"], { from: "user" }).catch(() => {})
 
     const files = filesUnder(state)
-    expect(files.some((path) => path.endsWith("run.json"))).toBe(true)
+    expect(files.some((path) => path.endsWith("index.jsonl"))).toBe(true)
     for (const path of files) expect(readFileSync(path, "utf8"), path).not.toContain("s3cret-answer")
   })
 })

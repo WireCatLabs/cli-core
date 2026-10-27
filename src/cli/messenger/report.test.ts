@@ -125,4 +125,40 @@ describe("public diagnostic reports", () => {
     ])
     expect(JSON.stringify(buildDoctorReport(options))).not.toContain("SYNTHETIC-CONTENT")
   })
+
+  it("labels every id a run's metadata keeps: session, app, connection, request, trace and a failed chat", () => {
+    const options = report()
+    const dir = join(options.runsDir, "2026-10-24", "ids-run")
+    mkdirSync(dir, { recursive: true })
+    const ids = [
+      "synthetic-session-77",
+      "a1b2c3d4",
+      "conn-uuid-55",
+      "req-9",
+      "4bf92f3577b34da6a3ce929d0e0e4736",
+      "-100777",
+    ]
+    writeFileSync(
+      join(dir, "run.json"),
+      JSON.stringify({
+        run_id: "ids-run",
+        command: "messages send",
+        status: "failed",
+        started_at: "2026-10-24T12:00:00.000Z",
+        cli_version: "1",
+        trace_id: ids[4],
+        via: "mcp-http",
+        agent: { kind: "mcp-client", session_id: ids[0], client: { name: "claude.ai", id: ids[1] } },
+        mcp: { tool: "messages_send", connection_id: ids[2], request_id: ids[3] },
+        partial: { failed: 1, failures: [{ id: ids[5], stage: "send", error_code: "timeout" }] },
+      }),
+    )
+    const result = buildDoctorReport({ ...options, runId: "ids-run" })
+    const sent = JSON.stringify(result)
+    for (const id of ids) expect(sent).not.toContain(id)
+    expect(result.run?.metadata).toMatchObject({
+      via: "mcp-http",
+      agent: { kind: "mcp-client", client: { name: "claude.ai" } },
+    })
+  })
 })

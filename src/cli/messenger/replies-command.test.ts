@@ -188,7 +188,12 @@ describe("replies test", () => {
     ])
     expect(away.skipped).toEqual({ "the person's limit is reached": 1 })
     expect(answer.bot_unknown).toBe(1)
-    expect(readdirSync(env.CHAT_STATE_DIR).sort()).toEqual(before)
+    // Its own run record is the one thing written: every run is kept.
+    expect(
+      readdirSync(env.CHAT_STATE_DIR)
+        .filter((name) => name !== "runs")
+        .sort(),
+    ).toEqual(before)
   })
 
   it("refuses a rule it does not have, naming the ones it has", async () => {

@@ -88,7 +88,7 @@ describe("observed watch", () => {
 
     expect(handed).toHaveLength(2)
     expect(recorded).toEqual([
-      { event: "request", operation: "messages.watch" },
+      { event: "request", operation: "messages.watch", level: "operation" },
       expect.objectContaining({
         event: "response",
         operation: "messages.watch",

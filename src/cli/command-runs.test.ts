@@ -5,7 +5,15 @@ import { CliError, captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { wasSettled } from "../runs/recording.js"
-import { findRun, KEEP_RUNS_FOR_DAYS, listRuns, readEvents, runsDirFor } from "../runs/run.js"
+import {
+  findRun,
+  KEEP_RUNS_FOR_DAYS,
+  KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+  listRuns,
+  RUNS_SIZE_LIMIT_MB,
+  readEvents,
+  runsDirFor,
+} from "../runs/run.js"
 import { type CommandRunOptions, commandRuns, providerRequest, recordRuns, runSettings } from "./command-runs.js"
 import { run } from "./program.js"
 
@@ -85,24 +93,38 @@ describe("recordRuns", () => {
     expect(await argvOf(broken)).toEqual(["notes", "show", "[redacted]"])
   })
 
-  it("keeps a failed command without being asked, and a successful one only under --record", async () => {
+  it("keeps every command without being asked, a success with no events as an index line only", async () => {
     const env = sandbox()
     await cli(env, ["notes", "show", "note:1"])
-    expect(kept(env)).toEqual([])
-    await cli(env, ["notes", "show", "note:1", "--record"])
     await cli(env, ["notes", "show", "note:9"], {}, failing)
     expect(kept(env)).toEqual([
       { command: "notes show", status: "failed", profile: undefined },
       { command: "notes show", status: "success", profile: undefined },
     ])
+    const dir = runsDirFor(app, env)
+    const success = listRuns(dir).find((one) => one.status === "success")
+    expect(readdirSync(dir, { recursive: true }).filter((one) => String(one).endsWith("run.json"))).toHaveLength(1)
+    expect(findRun(dir, success?.runId ?? "")?.metadata).toMatchObject({ command: "notes show", status: "success" })
   })
 
-  it("keeps nothing under --no-record or a saved record: false, even a failure", async () => {
+  it("keeps only failures under a saved record: false, and nothing under --no-record", async () => {
     const env = sandbox()
     await cli(env, ["notes", "show", "note:9", "--no-record"], {}, failing)
-    await cli(env, ["notes", "show", "note:9"], { settings: () => ({ record: false }) }, failing)
     await cli(env, ["notes", "nonsense", "--no-record"])
     expect(kept(env)).toEqual([])
+    await cli(env, ["notes", "show", "note:1"], { settings: () => ({ record: false }) })
+    await cli(env, ["notes", "show", "note:9"], { settings: () => ({ record: false }) }, failing)
+    expect(kept(env)).toEqual([{ command: "notes show", status: "failed", profile: undefined }])
+  })
+
+  it("keeps only failures of the commands WireCat Desktop runs for its own pages, unless --record", async () => {
+    const env = { ...sandbox(), WIRECAT_CALLER: "desktop" }
+    await cli(env, ["notes", "show", "note:1"])
+    await cli(env, ["notes", "show", "note:9"], {}, failing)
+    expect(kept(env)).toEqual([{ command: "notes show", status: "failed", profile: undefined }])
+    expect(listRuns(runsDirFor(app, env))[0]?.via).toBe("desktop")
+    await cli(env, ["notes", "show", "note:1", "--record"])
+    expect(kept(env)).toHaveLength(2)
   })
 
   it("keeps every command when the config says record, and the defaults when it will not load", async () => {
@@ -254,9 +276,7 @@ describe("commandRuns", () => {
       }
       const typed = ["meetings", "search", "Fake planning call", "--token=fake-token-value"]
       expect(await run(typed, definition, { streams: captureStreams(), tty: false, env })).toBe(0)
-      const dir = runsDirFor(app, env)
-      const [file] = readdirSync(dir, { recursive: true }).filter((one) => String(one).endsWith("run.json"))
-      return JSON.parse(readFileSync(join(dir, String(file)), "utf8")).argv
+      return listRuns(runsDirFor(app, env))[0]?.argv
     }
 
     expect(await argvKept()).toEqual(["meetings", "search", "Fake planning call", "--token=[redacted]"])
@@ -265,19 +285,23 @@ describe("commandRuns", () => {
 })
 
 describe("runSettings", () => {
-  it("takes the flag first, then the config; keeps a failure unless either says no", () => {
-    const days = KEEP_RUNS_FOR_DAYS
-    expect(runSettings(undefined)).toEqual({ record: false, keepFailedRuns: true, keepRunsForDays: days })
-    expect(runSettings(true, { record: false })).toEqual({ record: true, keepFailedRuns: true, keepRunsForDays: days })
-    expect(runSettings(false, { record: true })).toEqual({
+  it("takes the flag first, then the config; keeps every run unless one says no, and failures unless --no-record", () => {
+    const kept = {
+      keepRunsForDays: KEEP_RUNS_FOR_DAYS,
+      keepSuccessfulRunsForDays: KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+      runsSizeLimitMb: RUNS_SIZE_LIMIT_MB,
+    }
+    expect(runSettings(undefined)).toEqual({ record: true, keepFailedRuns: true, ...kept })
+    expect(runSettings(true, { record: false })).toEqual({ record: true, keepFailedRuns: true, ...kept })
+    expect(runSettings(false, { record: true })).toEqual({ record: false, keepFailedRuns: false, ...kept })
+    expect(
+      runSettings(undefined, { record: false, keepRunsForDays: 9, keepSuccessfulRunsForDays: 2, runsSizeLimitMb: 5 }),
+    ).toEqual({
       record: false,
-      keepFailedRuns: false,
-      keepRunsForDays: days,
-    })
-    expect(runSettings(undefined, { record: false, keepRunsForDays: 7 })).toEqual({
-      record: false,
-      keepFailedRuns: false,
-      keepRunsForDays: 7,
+      keepFailedRuns: true,
+      keepRunsForDays: 9,
+      keepSuccessfulRunsForDays: 2,
+      runsSizeLimitMb: 5,
     })
     expect(runSettings(undefined, { record: true })).toMatchObject({ record: true, keepFailedRuns: true })
   })

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server"
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError } from "@wirecat/cli-base"
@@ -7,6 +8,7 @@ import { answerSchema, listOf } from "../cli/envelope.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
 import type { AppErrors } from "../errors/reasons.js"
 import type { CommandAvailability } from "./agent.js"
+import { type CallerSource, callerOf, currentCaller, withCaller } from "./caller.js"
 import { agentArguments } from "./text.js"
 import {
   type AnyTool,
@@ -174,6 +176,12 @@ export const registerCommands = (
     },
   )
 
+  // A CLI's own server runs in its own process: its environment names the agent that started it on stdio.
+  const callers: CallerSource = {
+    env: process.env,
+    client: () => server.server.getClientVersion(),
+    connectionId: randomUUID(),
+  }
   const runner =
     (writing: boolean) =>
     async (
@@ -197,14 +205,19 @@ export const registerCommands = (
             `"${command}" ${writing ? "only reads" : "writes"}: call it with ${prefix}_${writing ? "read" : "write"}`,
           )
         const args = writing ? agentArguments(given ?? {}) : (given ?? {})
-        if (one.checked) return runnableOnly(await one.run(args, ctx), (named) => byNormal.has(normal(named)))
+        const caller = currentCaller() ?? callerOf(ctx, command.replace(/[ -]/g, "_"), callers)
+        if (one.checked)
+          return runnableOnly(await withCaller(caller, () => one.run(args, ctx)), (named) =>
+            byNormal.has(normal(named)),
+          )
         const parsed = v.safeParse(v.strictObject(one.input.entries), args)
         if (!parsed.success)
           throw new CliError("validation_error", `${command}: ${v.summarize(parsed.issues)}`, {
             arguments: toJsonSchema(one.input),
           })
-        return runnableOnly(await one.run(parsed.output as Record<string, unknown>, ctx), (named) =>
-          byNormal.has(normal(named)),
+        return runnableOnly(
+          await withCaller(caller, () => one.run(parsed.output as Record<string, unknown>, ctx)),
+          (named) => byNormal.has(normal(named)),
         )
       } catch (error) {
         return failed(error, errors)

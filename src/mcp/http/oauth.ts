@@ -330,15 +330,19 @@ export const ownerLogin = ({
   const verifier: OAuthTokenVerifier = {
     verifyAccessToken: async (presented) => {
       const seconds = Math.floor(now() / 1000)
-      const found = store.read().tokens.find((one) => one.kind === "access" && one.hash === hash(presented))
+      const stored = store.read()
+      const found = stored.tokens.find((one) => one.kind === "access" && one.hash === hash(presented))
       if (!found || found.expiresAt <= seconds)
         throw new OAuthError(OAuthErrorCode.InvalidToken, "the token is unknown or expired")
+      // The name the app registered with, so a run can say which app called; the id itself never leaves here unhashed.
+      const clientName = stored.clients.find((one) => one.id === found.clientId)?.name
       return {
         token: presented,
         clientId: found.clientId,
         scopes: [],
         expiresAt: found.expiresAt,
         resource,
+        ...(clientName ? { extra: { clientName } } : {}),
       } satisfies AuthInfo
     },
   }
