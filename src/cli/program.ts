@@ -308,6 +308,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           changesAuthorityAt(program),
           readOnlyLockOf(definition.app, env) !== undefined,
           options.agent !== undefined,
+          definition.configuration?.permissions,
         )
       } catch {
         // Help must still work when the configuration needs repair.

@@ -12,6 +12,7 @@ import { VOCABULARY } from "@wirecat/cli-base/standards/tables"
 import * as v from "valibot"
 import { type CommandAvailability, commandAvailability } from "../cli/command-availability.js"
 import { changesMessenger } from "../cli/effects.js"
+import type { CommandPermissions } from "../cli/permission-keys.js"
 
 export type { CommandAvailability } from "../cli/command-availability.js"
 
@@ -37,6 +38,8 @@ export interface AgentContext {
   overrides?: readonly string[]
   /** The key a CLI's own command is checked against, when `keyForCommand` does not know it. */
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
+  /** A declared CLI's keys and defaults (`configuration.permissions`); in place of `keyOf`. */
+  permissions?: CommandPermissions | undefined
   authority?: CatalogueOptions["authority"]
   /** The server's one open connection. The command borrows it: it cannot close it, and never opens its own. */
   connection?: () => Promise<MessengerAdapter>
@@ -74,6 +77,8 @@ export interface CatalogueOptions {
   /** Whether a read-only lock currently blocks messenger changes. */
   readOnly?: boolean
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
+  /** A declared CLI's keys and defaults (`configuration.permissions`); in place of `keyOf`. */
+  permissions?: CommandPermissions | undefined
   /** Whether a command changes what a later run may do (`grantsAuthority`): execution requires `mcp.authority`. */
   authority?: (path: readonly string[]) => boolean
   /** Arguments left out of every tool, by name. */
@@ -222,7 +227,7 @@ const startsWith = (path: readonly string[], prefix: readonly string[]) => prefi
 
 /** Build the discoverable command catalogue; profile permissions annotate availability. */
 export const toolsFromCommands = (commands: readonly CommandInfo[], options: CatalogueOptions = {}): AgentTool[] => {
-  const { root = [], exclude = [], levels, keyOf, authority, readOnly = false } = options
+  const { root = [], exclude = [], levels, keyOf, authority, readOnly = false, permissions } = options
   return flatten(commands)
     .filter(
       (info) =>
@@ -235,11 +240,21 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
         info.lifetime === undefined &&
         (options.includeUnavailable === true ||
           (!(readOnly && (changesMessenger(info) || authority?.(info.path))) &&
-            (levels === undefined || commandAvailability(info, levels, keyOf, authority).available))),
+            (levels === undefined && !(readOnly && permissions)
+              ? true
+              : commandAvailability(info, levels ?? {}, keyOf, authority, readOnly, true, permissions).available))),
     )
     .map((info) => ({
       availability: () =>
-        commandAvailability(info, options.currentLevels?.() ?? levels ?? {}, keyOf, authority, readOnly),
+        commandAvailability(
+          info,
+          options.currentLevels?.() ?? levels ?? {},
+          keyOf,
+          authority,
+          readOnly,
+          true,
+          permissions,
+        ),
       command: info.path.slice(root.length).join(" "),
       path: info.path,
       title: info.summary ?? info.description,
@@ -299,7 +314,8 @@ export const runCommandForAgent = async (
       throw new CliError("validation_error", `"${path.join(" ")}" runs until it is stopped; an agent call must return`)
     const levels = ctx.levels?.()
     const availability =
-      (levels || ctx.readOnly) && commandAvailability(info, levels ?? {}, ctx.keyOf, ctx.authority, ctx.readOnly)
+      (levels || ctx.readOnly || ctx.permissions) &&
+      commandAvailability(info, levels ?? {}, ctx.keyOf, ctx.authority, ctx.readOnly, true, ctx.permissions)
     if (availability && !availability.available)
       throw new CliError("permission_error", `${path.join(" ")}: ${availability.reason}`, {
         sent: false,
