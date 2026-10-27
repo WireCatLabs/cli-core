@@ -6,8 +6,10 @@ import { join } from "node:path"
 import { McpServer } from "@modelcontextprotocol/server"
 import { afterEach, describe, expect, it } from "vitest"
 import { freePort, mcpHttpClient } from "../../testing/mcp-http-client.js"
+import { httpActivityFile } from "./activity.js"
 import { revokeAll } from "./oauth.js"
 import { serveOverHttp } from "./serve.js"
+import { signedInClients } from "./state.js"
 
 const closers: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -96,6 +98,31 @@ const start = async ({ now, publicUrl }: { now?: () => number; publicUrl?: URL }
 }
 
 describe("mcp --http and its owner login", () => {
+  it("records which tool a logged-in app called and when, never the arguments", async () => {
+    const { at, login, tokenFile } = await start()
+    const { tokens } = await login()
+    await fetch(at("/mcp"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "tg_read", arguments: { chat: "Secret chat" } },
+      }),
+    })
+
+    const [client] = signedInClients(tokenFile)
+
+    expect(client).toMatchObject({ claimedName: "App", lastTool: "tg_read", toolCallsToday: 1 })
+    expect(Date.parse(client?.lastToolAt ?? "")).toBeGreaterThan(Date.now() - 60_000)
+    expect(readFileSync(httpActivityFile(tokenFile), "utf8")).not.toMatch(/Secret chat|chat/)
+  })
+
   it("answers MCP without a token with 401 and where to log in", async () => {
     const { mcp } = await start()
     const response = await mcp()

@@ -82,7 +82,7 @@ const clientLines = (clients: ReturnType<typeof signedInClients>) =>
         `Logged-in apps (names are what each app calls itself): ${clients
           .map(
             (one) =>
-              `${one.claimedName === null ? "no name" : JSON.stringify(one.claimedName)} (${clock(one.lastLoginAt)})`,
+              `${one.claimedName === null ? "no name" : JSON.stringify(one.claimedName)} (${clock(one.lastLoginAt)}${one.lastTool && one.lastToolAt ? `; last call ${one.lastTool} at ${clock(one.lastToolAt)}, ${one.toolCallsToday} today` : ""})`,
           )
           .join(", ")}.`,
       ]
@@ -243,6 +243,10 @@ export const mcpServerCommand = ({
           clients: clients.map((client) => ({
             claimed_name: client.claimedName,
             last_login_at: client.lastLoginAt,
+            last_request_at: client.lastRequestAt,
+            last_tool: client.lastTool,
+            last_tool_at: client.lastToolAt,
+            tool_calls_today: client.toolCallsToday,
           })),
           log: httpLogFile(one.tokenFile),
         },
