@@ -537,7 +537,8 @@ const updateFollowing = async (
               .slice(0, 10),
           }
         : { startsAt: split.at, endsAt: split.at + (target.endsAt ?? 0) - (target.startsAt ?? 0) }),
-    timezone: patch.timezone ?? target.timezone ?? null,
+    // A repeating event needs its zone at Google; the caller's stands in for a series stored without one.
+    timezone: patch.timezone ?? target.timezone ?? context.zone,
     location: patch.location === undefined ? target.location : patch.location,
     description: patch.description === undefined ? target.description : patch.description,
     attendees:
