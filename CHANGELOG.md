@@ -37,6 +37,11 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **cli-core needs `@wirecat/cli-base` 0.64.** The peer range moves from `>=0.63.0 <0.64.0` to `>=0.64.0 <0.65.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.64 adds `cli-dev bundle`, the shared build that
+  ships a CLI's bin as an esbuild bundle (tg-cli's, moved), and calendar words in the command vocabulary; nothing
+  cli-core uses changed. Its changelog lists the lint baseline entries and overrides that go stale in zoom, drive,
+  memo and gcal.
 - **Every search hit marks the text someone other than the owner wrote.** As `search all` event hits did since
   0.460.0, each hit carries `untrusted`, the field names an agent reads as data
   ([WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)):
@@ -64,11 +69,6 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **cli-core needs `@wirecat/cli-base` 0.64.** The peer range moves from `>=0.63.0 <0.64.0` to `>=0.64.0 <0.65.0`. A
-  CLI that pins cli-base moves its pin with this release. cli-base 0.64 adds `cli-dev bundle`, the shared build that
-  ships a CLI's bin as an esbuild bundle (tg-cli's, moved), and calendar words in the command vocabulary; nothing
-  cli-core uses changed. Its changelog lists the lint baseline entries and overrides that go stale in zoom, drive,
-  memo and gcal.
 - **The MCP server is `mcp serve`; `mcp` alone only shows its commands**
   ([WC-CMD-3](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-3--give-a-group-without-a-leaf-only-its-help-never-a-hidden-default-action)).
   `mcpCommand` gives the `mcp` group with `serve`, `revoke`, `config`, `add`, `check` and `server`; `--http`, `--port`,
