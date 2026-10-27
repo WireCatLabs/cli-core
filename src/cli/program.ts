@@ -27,7 +27,7 @@ import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
-import { refuseWriteBeforeConnecting } from "./early-refusal.js"
+import { refuseByCommandPermissions, refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
   changesAuthorityAt,
   changesAuthorityNow,
@@ -44,6 +44,7 @@ import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
+import type { CommandPermissions } from "./permission-keys.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, isProfileName, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
 import { absolutePaths, relayTarget } from "./relay-route.js"
@@ -65,6 +66,8 @@ export interface ProgramDefinition {
   /** The CLI's own settings, for keeping a failure that happened before its command could; plain ones without. */
   configuration?: {
     permissionKey?: (path: readonly string[]) => string | null | undefined
+    /** A CLI's own keys (`commandPermissions`), from `settingsFor`: its commands are refused by them before they run. */
+    permissions?: CommandPermissions | undefined
     resolveSettings: (
       flags?: GlobalFlags,
       options?: ResolveOptions,
@@ -301,7 +304,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         return commandAvailability(
           info,
           settings.permissions,
-          definition.configuration?.permissionKey,
+          definition.configuration?.permissionKey ?? definition.configuration?.permissions?.keyOf,
           changesAuthorityAt(program),
           readOnlyLockOf(definition.app, env) !== undefined,
           options.agent !== undefined,
@@ -390,6 +393,13 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       dryRun: flags.dryRun === true,
       ...(definition.configuration ? { resolve: definition.configuration.resolveSettings } : {}),
     })
+    if (definition.configuration?.permissions)
+      refuseByCommandPermissions(action, definition.configuration.permissions, {
+        app: definition.app,
+        env: commandEnv,
+        dryRun: flags.dryRun === true,
+        resolve: definition.configuration.resolveSettings,
+      })
     // A client older than the relay's refusal to forward a login still sends one; on serve it would log out serve.
     if (options.relayed && isLogin(action))
       throw new CliError(
@@ -520,7 +530,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           ...(resolved.savedPermissions ? { savedPermissions: resolved.savedPermissions } : {}),
         },
         command,
-        definition.configuration?.permissionKey,
+        definition.configuration?.permissionKey ?? definition.configuration?.permissions,
         definition.app.messenger !== false,
       )
       renderAnswer(action, outputFor(action), itemOf(snakeKeys(previewed)))

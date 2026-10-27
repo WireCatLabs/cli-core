@@ -1,12 +1,16 @@
-import type { CliError } from "@wirecat/cli-base"
+import { CliError } from "@wirecat/cli-base"
+import { metaOf } from "@wirecat/cli-base/commands"
+import { writes } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { type AppIdentity, MESSENGER_CHANGE_REFUSAL, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
-import { levelRefusal } from "../sends/guard.js"
+import { ceilingRefusal, levelRefusal } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
-import { keyForCommand, levelFor, writeOfKey } from "../sends/permissions.js"
+import { CEILING_KEY, keyForCommand, levelFor, writeOfKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { commandPathOf } from "./command-contract.js"
+import { environmentOf } from "./context.js"
 import { changesMessenger } from "./effects.js"
+import { type CommandPermissions, refuseUnknownPermissionKeys } from "./permission-keys.js"
 import { NONE_NAMED, type Settings, settingsFor } from "./settings.js"
 
 type Resolve = (flags: object, options: { env: NodeJS.ProcessEnv; needsProfile: false; readOnly: true }) => object
@@ -71,4 +75,50 @@ export const refuseWriteBeforeConnecting = (
     })
   }
   throw refusal
+}
+
+/**
+ * A command of a CLI that declares its own keys (`commandPermissions`), refused by its key before anything connects:
+ * `deny` stops it, `readonly` stops a write, and the read-only lock stops a write to the service. `ask` is left to
+ * the write guard, which can put the question. A saved or `--permission` key that names no command stops every keyed
+ * command; housekeeping still runs, so `config unset` can remove it.
+ */
+export const refuseByCommandPermissions = (
+  action: Command,
+  permissions: CommandPermissions,
+  { app, env, dryRun, resolve }: { app: AppIdentity; env: NodeJS.ProcessEnv; dryRun: boolean; resolve: Resolve },
+): void => {
+  const key = permissions.keyOf(commandPathOf(action))
+  if (!key) return
+  const { effects } = metaOf(action)
+  const lock = readOnlyLockOf(app, env)
+  if (lock && effects?.remote === "write") throw readOnlyRefusal(lock, `run ${commandPathOf(action).join(" ")}`)
+  const flags = action.optsWithGlobals<{ permission?: string[] }>()
+  const overrides = environmentOf(action).agent?.overrides ?? []
+  const settings = resolve(
+    overrides.length > 0 ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
+    { env, needsProfile: false, readOnly: true },
+  ) as Pick<Settings, "profile" | "permissions" | "permissionSources" | "configPath"> &
+    Partial<Pick<Settings, "savedPermissions" | "sources">>
+  refuseUnknownPermissionKeys(action, settings, app.command, permissions)
+  if (dryRun || settings.sources?.profile === NONE_NAMED) return
+  const { level, key: named } = levelFor(settings.permissions, key, permissions.defaults)
+  if (level === "deny") {
+    if (named === CEILING_KEY) throw ceilingRefusal(key, app.command)
+    throw new CliError(
+      "permission_error",
+      `profile ${settings.profile} denies ${key} (permissions.${named} is deny, from the ` +
+        `${settings.permissionSources[named ?? ""] ?? "default"})`,
+      { permission: key },
+    )
+  }
+  if (level === "readonly" && effects !== undefined && writes(effects))
+    throw levelRefusal({
+      profile: settings.profile,
+      command: app.command,
+      key,
+      level,
+      named,
+      permissionSources: settings.permissionSources,
+    })
 }

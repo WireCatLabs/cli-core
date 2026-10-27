@@ -8,11 +8,13 @@ import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import {
   assertOverridesTighten,
   CEILING_KEY,
+  COMMAND_PATH_KEY,
   LEVELS,
   type Level,
   layerPermissions,
   type PermissionKey,
   permissionOverrides,
+  RESOURCE_KEY,
   RESOURCES,
 } from "../sends/permissions.js"
 import { storePath } from "../store/path.js"
@@ -30,6 +32,7 @@ import {
 } from "./config-issues.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
+import type { CommandPermissions } from "./permission-keys.js"
 import { usableProfileName } from "./profile.js"
 import { permissionCeiling } from "./setup-answers.js"
 
@@ -68,16 +71,28 @@ const wholeOrZero = (text: string, name: string): number => {
     throw new CliError("validation_error", `${name} has to be a whole number, 0 or more`)
   return value
 }
-const permissionLevels = v.record(
+const levelsOf = (key: v.GenericSchema<string>, example: string) =>
+  v.record(
+    key,
+    v.picklist(LEVELS, (issue) => `has to be one of ${LEVELS.join(", ")}, not ${issue.received}`),
+    plain(`has to be an object of command paths and levels, like {"${example}": "ask"}`),
+  )
+const permissionLevels = levelsOf(
   v.pipe(
     v.string(),
     v.regex(
-      new RegExp(`^(${RESOURCES.join("|")})(\\.[a-z][a-z-]*)*$`),
+      RESOURCE_KEY,
       (issue) => `${issue.input} is not a command path — it starts with one of ${RESOURCES.join(", ")}`,
     ),
   ),
-  v.picklist(LEVELS, (issue) => `has to be one of ${LEVELS.join(", ")}, not ${issue.received}`),
-  plain('has to be an object of command paths and levels, like {"messages.delete": "ask"}'),
+  "messages.delete",
+)
+const commandPathLevels = levelsOf(
+  v.pipe(
+    v.string(),
+    v.regex(COMMAND_PATH_KEY, (issue) => `${issue.input} is not a command path, like api or events.delete`),
+  ),
+  "events.delete",
 )
 
 /** valibot's own words ("Expected never but received …") mean nothing to someone editing a file. */
@@ -149,6 +164,11 @@ export interface SettingsExtension<T extends object = Record<never, never>> {
   defaults?: v.ObjectEntries
   /** Profiles this messenger keeps in files of its own, beyond the config file and the remembered accounts. */
   profiles?: (env: NodeJS.ProcessEnv) => string[]
+  /**
+   * A CLI that is not a messenger declares its own permission keys (`commandPermissions`): `permissions` and
+   * `--permission` then take any command path, which the program checks against its commands.
+   */
+  permissions?: CommandPermissions
 }
 
 export interface SettingsExtensionContext {
@@ -357,7 +377,12 @@ export const settingsFor = <T extends object = Record<never, never>>(
   app: AppIdentity,
   extension: SettingsExtension<T> = {},
 ) => {
-  const profileEntries = { ...SHARED_PROFILE_ENTRIES, ...extension.profile }
+  const declared = extension.permissions
+  const profileEntries = {
+    ...SHARED_PROFILE_ENTRIES,
+    ...(declared ? { permissions: v.optional(commandPathLevels) } : {}),
+    ...extension.profile,
+  }
   const defaultsOnly = { ...SHARED_DEFAULTS_ONLY, ...extension.defaults }
   const defaultsEntries = { ...profileEntries, ...defaultsOnly }
   const strictOf = <E extends v.ObjectEntries>(entries: E) => v.strictObject(entries, objectMessage)
@@ -518,8 +543,8 @@ export const settingsFor = <T extends object = Record<never, never>>(
       from,
       scope?.permissions as Record<PermissionKey, Level> | undefined,
     ])
-    const overrides = permissionOverrides(flags.permission)
-    assertOverridesTighten(overrides, layerPermissions(fileLayers).levels)
+    const overrides = permissionOverrides(flags.permission, declared ? COMMAND_PATH_KEY : RESOURCE_KEY)
+    assertOverridesTighten(overrides, layerPermissions(fileLayers).levels, declared?.defaults)
     const permissions = withCeiling(layerPermissions([["flag", overrides], ...fileLayers]), env)
     const updateCheck = first(
       [
@@ -710,7 +735,15 @@ export const settingsFor = <T extends object = Record<never, never>>(
     return valueAt(checked.success ? checked.output : changed, at) ?? null
   }
 
-  return { resolveSettings, configuredProfiles, changeSetting, allSettings, defaultsOnlyKeys, schema }
+  return {
+    resolveSettings,
+    configuredProfiles,
+    changeSetting,
+    allSettings,
+    defaultsOnlyKeys,
+    schema,
+    ...(declared ? { permissions: declared } : {}),
+  }
 }
 
 const isScope = (value: unknown): value is Scope => typeof value === "object" && value !== null && !Array.isArray(value)

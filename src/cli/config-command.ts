@@ -6,7 +6,12 @@ import { AUTHORITY_KEY, BOT_API_KEY } from "../sends/permissions.js"
 import { baseContext, environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
-import { knownBeside, knownPermissionKeys, type PermissionKeyOf, unknownPermissionIssues } from "./permission-keys.js"
+import {
+  knownBeside,
+  knownPermissionKeys,
+  type PermissionKeySource,
+  unknownPermissionIssues,
+} from "./permission-keys.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
 import { nextStep } from "./steps.js"
 import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
@@ -22,7 +27,7 @@ const shownSettings = (app: AppIdentity, config: Configuration): string[] =>
 export const configCommand = (
   app: AppIdentity,
   config: Configuration,
-  { permissionKey }: { permissionKey?: PermissionKeyOf } = {},
+  { permissionKey = config.permissions }: { permissionKey?: PermissionKeySource | undefined } = {},
 ): Command => {
   const command = new Command("config").description("the settings in force, and where each one came from")
 
@@ -187,7 +192,7 @@ export const refuseUnknownKey = (
   command: Command,
   setting: string,
   value: string,
-  permissionKey?: PermissionKeyOf,
+  permissionKey?: PermissionKeySource,
 ): void => {
   const keys = setting.startsWith("permissions.")
     ? [setting.slice("permissions.".length)]

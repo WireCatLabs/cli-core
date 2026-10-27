@@ -399,9 +399,13 @@ export { type Saving, stored } from "./messenger/stored.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
 export { window, withPaging } from "./paging.js"
 export {
+  type CommandPermissions,
+  commandPathKey,
+  commandPermissions,
   knownBeside,
   knownPermissionKeys,
   type PermissionKeyOf,
+  type PermissionKeySource,
   unknownPermissionIssues,
   unknownPermissionKeys,
 } from "./permission-keys.js"
