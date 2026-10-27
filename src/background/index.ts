@@ -1,4 +1,15 @@
 export {
+  type BudgetStop,
+  DEADLINE_MARGIN_MS,
+  DEADLINE_MARGIN_SHARE,
+  DEFAULT_REQUEST_MS,
+  type Deadline,
+  deadlineMargin,
+  type RunBudget,
+  requestsFor,
+  runBudget,
+} from "./budget.js"
+export {
   type Checkpoint,
   checkpointPath,
   clearCheckpoint,

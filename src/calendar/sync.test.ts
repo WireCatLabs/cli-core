@@ -53,7 +53,11 @@ describe("syncCalendars", () => {
     await store.setCursor(calendar?.id as number, "not json", NOW)
     const report = await syncCalendars(source, store, { accountId: 1, now: NOW })
     expect(report.synced[0]?.round).toBe("full")
-    expect(parseCalendarCursor(await store.cursor(calendar?.id as number))).toMatchObject({ v: 1, fullAt: NOW })
+    expect(parseCalendarCursor(await store.cursor(calendar?.id as number))).toMatchObject({
+      v: 2,
+      fullAt: NOW,
+      round: null,
+    })
   })
 
   it("lists every calendar again once a day, so every series is asked for its slots", async () => {

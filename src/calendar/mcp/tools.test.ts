@@ -71,6 +71,22 @@ describe("calendar MCP tools", () => {
     expect((one.items as { external_id: string }[]).map(({ external_id }) => external_id)).toEqual(["cal-2"])
   })
 
+  it("status answers each account's synced calendars in the shared progress shape", async () => {
+    const { store } = await setup()
+    const status = body(
+      await callCalendarTool(
+        store,
+        "status",
+        {},
+        { accountIds: [1, 2], now: NOW, profileOf: (id) => (id === 1 ? "personal" : "work") },
+      ),
+    )
+    expect(status.items).toMatchObject([
+      { external_id: "cal-1", profile: "personal", state: "partial", done: 0, total: null, cursor_age_ms: null },
+      { external_id: "cal-2", profile: "work", state: "partial" },
+    ])
+  })
+
   it("marks the fields others wrote and escapes their control characters", async () => {
     const { store, ids } = await setup()
     const result = await callCalendarTool(store, "event_show", { event: `event:${ids[0]}` }, { accountIds: [1, 2] })

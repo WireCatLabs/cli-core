@@ -26,6 +26,8 @@ export interface FakeCalendarSource extends CalendarSource {
   setOccurrences(seriesExternalId: string, entries: EntryInput[]): void
   /** Every cursor given out so far is dead: the next round with one gets `{ reset: true }`. */
   expireCursors(): void
+  /** Every page token given out so far is dead, as one held too long: asking for it gets `{ reset: true }`. */
+  expirePages(): void
   /** The `changes()` call after this many more succeeds throws once. */
   failAfter(calls: number): void
   /** A person's busy times, or the provider's refusal to say; a person never set is `notFound`. */
@@ -62,6 +64,7 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
   const people = new Map<string, SyncWindow[] | { error: string }>()
   let version = 0
   let deadBefore = 0
+  let pages = 0
   let failIn: number | null = null
   const calls: FakeCalendarSource["calls"] = { changes: [], occurrences: [] }
 
@@ -100,13 +103,15 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
         entries = [...changed.values()].filter(({ externalId }) => !removed.includes(externalId))
       }
       if (cursor === null || traits.fullListOnly) entries = entries.filter((entry) => inside(entry, window))
-      const from = page === undefined ? 0 : Number(page)
+      const [, generation, offset] = /^p(\d+):(\d+)$/u.exec(page ?? `p${pages}:0`) ?? []
+      if (Number(generation) !== pages) return { reset: true }
+      const from = Number(offset)
       const slice = entries.slice(from, from + pageSize)
       const more = from + pageSize < entries.length
       return {
         entries: slice.map((entry) => structuredClone(entry)),
         removed: from === 0 ? removed : [],
-        ...(more ? { nextPage: String(from + pageSize) } : { cursor: token(window) }),
+        ...(more ? { nextPage: `p${pages}:${from + pageSize}` } : { cursor: token(window) }),
       }
     },
     ...(traits.expands === "on-request"
@@ -163,6 +168,9 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
     },
     setOccurrences(seriesExternalId, entries) {
       occurrences.set(seriesExternalId, entries)
+    },
+    expirePages() {
+      pages += 1
     },
     expireCursors() {
       deadBefore = ++version

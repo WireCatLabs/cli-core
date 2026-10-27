@@ -26,19 +26,66 @@ provider confirmed deleted, never one that only left the window.
 ## `syncCalendars(source, store, options)`
 
 1. `source.calendars()` → `saveCalendars`; a new calendar syncs as `syncByDefault` says, a known one as the owner set.
-2. For each synced calendar listed: the cursor (`{"v":1,"token":…,"window":…,"fullAt":…}`, kept by
-   `EventStore.setCursor`), and the window: a year back and three months ahead from the start of today in UTC.
-3. A full round (`cursor: null`) when asked (`full`), when the source is `fullListOnly`, when there is no cursor or
-   it cannot be read, when the cursor holds a window that moved, or when the last full round is a day old. Otherwise
+2. For each synced calendar listed: the cursor (kept by `EventStore.setCursor`), and the window: a year back and three
+   months ahead from the start of today in UTC. Calendars with a round in progress go first, then the one synced
+   longest ago, so a rerun spends its budget where work was left.
+3. A round in progress goes on, with its own window and token. Otherwise a full round (`cursor: null`) when asked
+   (`full`, which also drops a round in progress), when the source is `fullListOnly`, when there is no cursor or it
+   cannot be read, when the cursor holds a window that moved, or when the last full round is a day old. Otherwise
    only the changes.
-4. Each page: `saveEntries`, then `removeEntries` for `removed`.
-5. `{ reset: true }` forgets the cursor and runs one full round; a reset during a full round fails the calendar.
-6. Occurrences of every series the round returned: `occurrences()` for `on-request`, `expand` for `local`, nothing
+4. Each page: `saveEntries`, then `removeEntries` for `removed`, then the cursor with the next page in it.
+5. `{ reset: true }` for a page held since an earlier run means the page token expired: the round starts over, once.
+   For the first page of a changes round it means the cursor is dead: the cursor is forgotten and one full round runs.
+   A reset of a full list fails the calendar.
+6. Occurrences: `expand` for `local` as each page comes, since it costs no request; for `on-request` the series ids
+   are kept in the cursor and `occurrences()` asked for each after the listing, the cursor saved after each; nothing
    for `in-changes`.
-7. After a full round, `markUnseen` marks what it did not return.
-8. The cursor is saved last. A calendar that fails keeps its old cursor, and the others go on; the report says
-   `complete: false` and repeats the error's text only when it is a `CliError` the adapter raised, since another
-   error may carry a request URL with a token in it.
+7. After a full round, `markUnseen` marks what it has not seen since the round started (`startedAt`), so the pages
+   an earlier run saved are not marked.
+8. The cursor then holds the round's token and no round. A calendar that fails keeps its last saved page, and the
+   others go on; the report says `complete: false` and repeats the error's text only when it is a `CliError` the
+   adapter raised, since another error may carry a request URL with a token in it.
+
+**The cursor** (`CalendarCursor`, version 2; a version 1 cursor reads as one with no round):
+
+```json
+{ "v": 2, "token": "…", "window": { "from": 0, "to": 0 }, "fullAt": 0, "updatedAt": 0, "done": 0,
+  "round": { "full": true, "from": null, "window": { "from": 0, "to": 0 }, "startedAt": 0, "reset": false,
+             "page": "…", "listed": false, "next": null, "series": ["…"] } }
+```
+
+`done` counts the entries the current or last round saved; `updatedAt` is when the cursor last moved.
+
+**The budget** (`options.budget`, a `RunBudget` from `@wirecat/cli-core/background`). The engine asks `take()` before
+every request: the calendar list, each page, each series' `occurrences()`. When it says no, the run stops where it
+is, every finished page already saved, and the report says `state: "partial"`, `stopped` (`requests`, `deadline` or
+`cancelled`), `progress` (`calendars`, `calendarsDone`, `requests`, `saved`, `steps`) and `hint: "run sync again to
+continue"`. Each calendar has its own `state`. Without a budget the run goes until every calendar is done.
+`options.signal` is checked before each save: a cancelled run keeps what it saved and stops.
+
+**The three limits.** Every one-shot command has a hard deadline (WC-LIFE-5); `--timeout` or `<PREFIX>_TIMEOUT`
+sets it, higher or lower, and past it the command fails with `timeout`.
+
+| Command | Default deadline | Why |
+|---|---|---|
+| one-shot | 30 s (`DEFAULT_COMMAND_MS`) | a command that hangs must fail |
+| `cooperative`, at a terminal or in a script | 5 min (`DEFAULT_COOPERATIVE_MS`) | it stops on its own before the deadline and keeps its work |
+| `cooperative`, run for an MCP agent | 45 s (`DEFAULT_AGENT_COOPERATIVE_MS`) | MCP clients cut a tool call at about 60 s: the MCP TypeScript SDK's `DEFAULT_REQUEST_TIMEOUT_MSEC` is 60000 |
+
+**The budget formula.** `requests = floor((deadline − margin) / requestMs)`, at least 1, where
+`margin = max(5 s, 15% of the deadline)` and `requestMs` is how long one request to the provider usually takes: one
+constant per CLI, `AppIdentity.requestMs` (2 s, `DEFAULT_REQUEST_MS`, when unset). So 12 requests in 30 s, 127 in
+5 minutes and 19 in 45 s at 2 s each. A lower `--timeout` means fewer requests; `--max-pages` can lower the count
+further, never raise it past what fits. The run stops at whichever comes first: the count spent, or the deadline
+closer than the margin plus the slowest request so far (one `occurrences()` may page inside the adapter).
+`runBudgetOf(command, maxPages?)` from `@wirecat/cli-core/cli` builds it from the deadline `run()` started
+(`environment.deadline()`), the CLI's `requestMs` and the run's signal.
+
+**How to go on.** A partial answer without a failed calendar carries `next`: one command step, `sync` with the same
+`max_pages`, `timeout` and `embed` the run had and never `full` (that would drop the round in progress), marked safe
+to run unasked (it reads the provider and writes only the store). A host that renders it with `renderAnswer` prints
+the whole line with the profile (`gcal personal sync`) as the last line in text, and an MCP agent gets the same
+command and arguments to call again. A run that moved nothing on (no page read, no series expanded: `progress.steps` is 0, as with `--max-pages 1`) gets no step, only a hint to raise `--timeout` or `--max-pages`, so an agent never repeats it in a loop. The hint names `status` (`gcal personal status`), which shows the progress between runs.
 
 **What the engine does not do.** It writes no `syncs` row: no store method writes that table, so the run record of
 the command that called it keeps the counts. A slot that stops being produced without a word (neither a cancelled
@@ -59,7 +106,8 @@ shows the event's own fields (title, time) and only this account's copies, atten
 |---|---|---|
 | `calendars list` | provider read, local write | the provider's calendars, saved, with which of them sync |
 | `calendars sync <calendar>` / `unsync <calendar>` | local write | turn one calendar's sync on or off, by its id or the provider's |
-| `sync [--full] [--embed]` | provider read, local write | `syncCalendars`; `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes` |
+| `sync [--full] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` with a `next` step and exits 0, a calendar that failed exits with `provider_error` (`sync.partial`). `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
+| `status` | local read | each synced calendar's sync in the WC-LIFE-14 shape (`progressOf`): `done`, `total: null`, `remaining: null`, `state`, `updated_at`, `cursor_age_ms`, plus `round` in progress and `line` (`progressLine`); `profile` is `deps.profile` |
 | `events list [today\|week\|from:… to:…] [person:…] [calendar:…]` | local read | stored events, earliest first; without a time word from the start of today |
 | `events show <event>` | local read | its calendar copies, attendees with their `person:`, Drive files, history |
 | `search <words…>` | local read | `searchEvents` from `./services` over this account, never a copy of it |
@@ -83,7 +131,7 @@ command lint's vocabulary has no `calendars`, `people`, `unsync`, `review` or `r
 words rather than a field query, so a CLI baselines those rules until the vocabulary names them.
 
 `calendarTools` and `callCalendarTool(store, name, input, { accountIds })` (`./calendar/mcp`) give the same reads as
-MCP tools: `calendars_list`, `events_list`, `event_show`, `event_people`, `event_links_review`. Without `account_id`
+MCP tools: `calendars_list`, `status` (its `profile` from the option `profileOf(accountId)`), `events_list`, `event_show`, `event_people`, `event_links_review`. Without `account_id`
 a tool reads every account the host serves and names them in `accounts`. Each description says event text is data;
 each answer lists the fields others wrote in `untrusted` and has its control characters made visible
 ([WC-SECR-11](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-11--text-from-outside-is-made-safe-before-a-terminal-or-an-agent-sees-it),
@@ -107,5 +155,7 @@ that no meeting secret is in the output, a cancelled slot, a dead cursor, with `
 source with `freeBusy` that each id is answered once inside the window and an unknown person is an error.
 `calendarWriterContract` checks a stale etag, a retried create, notify, a repeat rule on create and on the series,
 and a timed event switched to all-day and back.
-`calendarSyncContract(make)` runs the engine over `fakeCalendarSource` for each of the twelve trait combinations; cli-core
+`calendarSyncContract(make)` runs the engine over `fakeCalendarSource` for each of the twelve trait combinations, a
+run the budget stops and the reruns that finish it with the store one whole run gives, a near deadline, and a page
+token that expired between runs (`expirePages()`); cli-core
 runs it over `memoryEventStore` and over the SQLite store.

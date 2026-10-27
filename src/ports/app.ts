@@ -26,6 +26,11 @@ export interface AppIdentity {
    * tg, max and wa print what they always did.
    */
   messenger?: boolean
+  /**
+   * How long one request to the provider usually takes, in ms: a sync's budget is the deadline, less its margin,
+   * divided by it (`requestsFor`). 2 s when unset.
+   */
+  requestMs?: number
   /** Error reasons and detail keys of its own — max's `max_code`, tg's `migrated_chat_id` — kept in every error it prints. */
   errors?: AppErrors
 }

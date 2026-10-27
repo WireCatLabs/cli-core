@@ -34,6 +34,20 @@ shape of this file.
   all-day one, ask the adapter to clear the other kind. A series whose UNTIL, EXDATE or RDATE holds the old kind is
   refused with `event.repeat-kind`. `calendarWriterContract` checks a repeat rule on create and on the series, and
   the switch both ways; `fakeCalendarWriter` returns a series for a draft with a rule.
+- **A run budget for syncs, and a resumable calendar sync.** `runBudget({ requests?, deadline?, requestMs?, signal?
+  })` in `@wirecat/cli-core/background` answers `take()` before each request. It allows `floor((deadline − margin) /
+  requestMs)` requests, `margin` being the larger of 5 s and 15% of the deadline, and `requests` can only lower that;
+  it also says no once the deadline is closer than the margin plus the slowest request so far, or once the signal is
+  aborted. `AppIdentity.requestMs` is each CLI's one expected request time (2 s when unset). `runBudgetOf(command,
+  maxPages?)` in `./cli` builds the budget from the deadline `run()` started, which a command now reads as
+  `environment.deadline()`. The calendar `sync` uses it: `cooperative`, `partial`, `--max-pages <n>`; it saves after
+  every page and every series, and a rerun goes on from there (WC-LIFE-10, 12, 13). A run the budget stops answers
+  `state: "partial"`, `stopped`, `progress` and a `next` step that runs the same `sync` again (none when the run moved
+  nothing on), and exits 0. A page token held since an earlier run that the provider refuses starts that calendar's
+  round over once.
+- **`status` and the MCP read `status`** answer each synced calendar's sync in the WC-LIFE-14
+  shape (`progressOf`), with `cursor_age_ms` to tell a moving sync from a stuck one. `CalendarCommandDeps.profile`
+  and `callCalendarTool`'s `profileOf` name the profile in it.
 
 ### Changed — may break callers
 
@@ -56,6 +70,16 @@ shape of this file.
   tests now cover it per kind. `search conversations` and `search runs` are unchanged: their hits hold ids, counts
   and diagnostics, no one's text.
 - **`WriteContext.names` gains `repeat`**, how the caller spells the rule in a hint (`--repeat`, MCP `repeat`).
+- **A `cooperative` command's default deadline is 5 minutes, and 45 s when an MCP agent runs it**
+  (`DEFAULT_COOPERATIVE_MS`, `DEFAULT_AGENT_COOPERATIVE_MS`); a one-shot command keeps 30 s. MCP clients cut a tool
+  call at about 60 s (the MCP TypeScript SDK's `DEFAULT_REQUEST_TIMEOUT_MSEC`). `messages sync`, which is
+  `cooperative`, now runs up to 5 minutes without `--timeout`; its `--limit` still bounds it.
+- **The calendar cursor is version 2** (`CalendarCursor`): it adds `updatedAt`, `done` and `round`, the round in
+  progress. A version 1 cursor still reads. `CalendarSyncResult` gains `state`; `CalendarSyncReport` gains `state`,
+  `stopped`, `progress`, `hint` and `next`, and `complete` is false while a round is in progress. A failed page no
+  longer keeps the old cursor: the pages before it stay saved and the next run goes on from the failed one.
+- **`calendarSyncContract` gains cases** (a budget stop and the reruns that finish it, a near deadline, an expired
+  page token), and `fakeCalendarSource` page tokens change shape and gain `expirePages()`.
 - **The contract kits check more.** `calendarWriterContract` gains three cases (a rule on create, a rule changed on the
   series, the timed/all-day switch both ways) and `calendarSourceContract` one for a source with `freeBusy`: an
   adapter that runs the kits gets tests that can fail until it supports them.

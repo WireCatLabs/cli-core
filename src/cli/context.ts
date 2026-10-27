@@ -1,6 +1,7 @@
 import { CliError, type KeyringStore, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import { type Deadline, type RunBudget, runBudget } from "../background/budget.js"
 import type { MessageEvent } from "../domain/models.js"
 import { resolveOutput } from "../output.js"
 import type { AppIdentity } from "../ports/app.js"
@@ -72,6 +73,8 @@ export interface BaseEnvironment {
    * what each step brings and may stop at any point: the history a phone pushes after linking.
    */
   untilStopped?: () => AbortSignal
+  /** Set by `run()`: the deadline running now, or none (a persistent command, a phase, a background job). */
+  deadline?: () => Deadline | undefined
   /**
    * Set by `run()`: ends the phase `untilStopped()` began without aborting its signal — the command saw it finish.
    * However a phase ends, the steps after it get the command's one-shot deadline again, started afresh, and a signal
@@ -103,6 +106,21 @@ export interface RelayedRun {
   cwd: string
   /** A promise when the lender opens it on first use. */
   connection: () => MessengerAdapter | Promise<MessengerAdapter>
+}
+
+/**
+ * A budget for a resumable sync, from the deadline running now and the CLI's `requestMs`: so a lower `--timeout`
+ * means fewer requests. `requests` (`--max-pages`) can only lower it.
+ */
+export const runBudgetOf = (command: Command, requests?: number): RunBudget => {
+  const { deadline, signal, app } = environmentOf(command)
+  const now = deadline?.()
+  return runBudget({
+    ...(requests === undefined ? {} : { requests }),
+    ...(app?.requestMs === undefined ? {} : { requestMs: app.requestMs }),
+    ...(now ? { deadline: now } : {}),
+    ...(signal ? { signal } : {}),
+  })
 }
 
 /** A partial answer's exit code, for this run alone. */

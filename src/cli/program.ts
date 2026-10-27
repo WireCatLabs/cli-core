@@ -38,7 +38,14 @@ import {
   storeChangeRefusal,
 } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
-import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
+import {
+  byteCount,
+  DEFAULT_AGENT_COOPERATIVE_MS,
+  DEFAULT_COMMAND_MS,
+  DEFAULT_COOPERATIVE_MS,
+  DEFAULT_OUTPUT_BYTES,
+  execution,
+} from "./execution.js"
 import { setupAtStart } from "./first-run.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
@@ -231,6 +238,11 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   let oneShot: number | undefined
   // Headless, an interactive command's 5 minutes are for its phase; a person at a terminal may still be answering.
   let afterPhase: number | undefined
+  let running: { endsAt: number; ms: number } | undefined
+  const startDeadline = (ms: number | undefined) => {
+    running = ms === undefined ? undefined : { endsAt: Date.now() + ms, ms }
+    control.start(ms)
+  }
   let finished = false
   // The steps after a phase are one-shot again, however it ended: bounded, and ended by a signal as any command is.
   const endPhase = () => {
@@ -239,7 +251,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     if (phaseTimer) clearTimeout(phaseTimer)
     // A later phase keeps the --timeout the steps after this one got, not the one this phase already used up.
     if (explicitEnd !== undefined && oneShot !== undefined) explicitEnd = Date.now() + oneShot
-    control.start(afterPhase)
+    startDeadline(afterPhase)
   }
   const interrupted = (signal: "SIGINT" | "SIGTERM") => {
     // A second signal ends the command as any signal does: one that ignores its phase can still be stopped.
@@ -320,7 +332,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       phased = true
       phase = new AbortController()
       phase.signal.addEventListener("abort", endPhase, { once: true })
-      control.start(undefined)
+      startDeadline(undefined)
       if (explicitEnd !== undefined)
         phaseTimer = setTimeout(
           () =>
@@ -335,6 +347,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       return phase.signal
     },
     endUntilStopped: endPhase,
+    deadline: () => running,
   }
   provide(program, environment)
   program.hook("preAction", async (_root, action) => {
@@ -444,7 +457,11 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           ? undefined
           : lifetime === "interactive"
             ? HEADLESS_INTERACTIVE_MS
-            : DEFAULT_COMMAND_MS
+            : stopsAtItsPace === true
+              ? options.agent
+                ? DEFAULT_AGENT_COOPERATIVE_MS
+                : DEFAULT_COOPERATIVE_MS
+              : DEFAULT_COMMAND_MS
         : persistent
           ? undefined
           : parseDuration(timeout, flags.timeout === undefined ? envName(definition.app, "TIMEOUT") : "--timeout")
@@ -501,7 +518,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       )
       throw new Relayed(code)
     }
-    control.start(deadline)
+    startDeadline(deadline)
     oneShot = deadline
     afterPhase = timeout !== undefined || persistent || job || interactiveLogin ? deadline : DEFAULT_COMMAND_MS
     if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline

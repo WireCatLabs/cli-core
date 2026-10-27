@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
 import { writesInFlight } from "../sends/guarded.js"
-import { baseContext, environmentOf } from "./context.js"
+import { baseContext, environmentOf, runBudgetOf } from "./context.js"
 import * as cli from "./index.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -339,6 +339,40 @@ describe("a command's declared lifetime", () => {
     expect(ended).toBe(false)
     await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(await done).toBe(9)
+  })
+})
+
+describe("the deadline a command sees", () => {
+  it("is the one run() started, so a sync's budget can stop before it", async () => {
+    const seen: unknown[] = []
+    const code = await run(
+      ["chats", "list", "--timeout", "1m"],
+      definition(async (command) => {
+        seen.push(environmentOf(command).deadline?.()?.ms, runBudgetOf(command).limit)
+      }),
+      { streams: captureStreams(), tty: false, env: { ...process.env } },
+    )
+    expect(code).toBe(0)
+    expect(seen).toEqual([60_000, 25])
+  })
+
+  it("is 30 s for a one-shot command, 5 minutes for a cooperative one, 45 s for a cooperative one over MCP", async () => {
+    const deadlineOf = async (meta: CommandMeta, extra: Record<string, unknown> = {}, argv: string[] = []) => {
+      let ms: number | undefined
+      await run(
+        ["chats", "list", ...argv],
+        definition(async (command) => {
+          ms = environmentOf(command).deadline?.()?.ms
+        }, meta),
+        { streams: captureStreams(), tty: false, env: { ...process.env }, ...extra },
+      )
+      return ms
+    }
+    const agent = { agent: { result: () => {}, failure: () => {} } }
+    expect(await deadlineOf({})).toBe(30_000)
+    expect(await deadlineOf({ cooperative: true })).toBe(300_000)
+    expect(await deadlineOf({ cooperative: true }, agent)).toBe(45_000)
+    expect(await deadlineOf({ cooperative: true }, agent, ["--timeout", "20s"])).toBe(20_000)
   })
 })
 

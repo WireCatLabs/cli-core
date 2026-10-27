@@ -15,6 +15,7 @@ import {
   reviewsAnswer,
 } from "../reads.js"
 import { REPEAT_HELP } from "../recurrence.js"
+import { calendarStatus } from "../sync.js"
 import type { EventResponse } from "../writer.js"
 import {
   type CalendarWrites,
@@ -39,6 +40,14 @@ export const calendarTools = [
   {
     name: "calendars_list",
     description: "the stored calendars and which of them sync",
+    properties: { account_id: integer },
+    required: [],
+  },
+  {
+    name: "status",
+    description:
+      "how far each synced calendar's sync is: done, state partial or complete, and cursor_age_ms, which grows while " +
+      "nothing moves it",
     properties: { account_id: integer },
     required: [],
   },
@@ -206,8 +215,11 @@ export const callCalendarTool = async (
     failure = {},
     now = Date.now(),
     writes,
+    profileOf = (accountId) => `account ${accountId}`,
   }: {
     accountIds: readonly number[]
+    /** What `status` calls each account's sync. */
+    profileOf?: (accountId: number) => string
     failure?: FailureContext
     now?: number
     /** Each account's writer and profile; without it the write tools refuse. */
@@ -246,6 +258,17 @@ export const callCalendarTool = async (
     switch (name) {
       case "calendars_list":
         answer = listed((await Promise.all(accounts.map((id) => store.calendars(id)))).flat().map(calendarItem))
+        break
+      case "status":
+        answer = listed(
+          (
+            await Promise.all(
+              accounts.map((id) =>
+                calendarStatus(store, id, { profile: profileOf(id), now }).then(({ items }) => items),
+              ),
+            )
+          ).flat(),
+        )
         break
       case "events_list": {
         const words = typeof args.words === "string" ? args.words.trim().split(/\s+/u) : []
