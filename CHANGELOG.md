@@ -7,7 +7,7 @@ shape of this file.
 
 ## Unreleased
 
-### Changed
+### Added
 
 - **An agent over MCP sends the owner to sign in themselves**: with no session, the server's instructions say the owner
   runs the command the error names or signs in from WireCat Desktop, and that the agent never asks for codes or
