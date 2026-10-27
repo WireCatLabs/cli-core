@@ -73,7 +73,16 @@ const calendarStore = async (entries: EntryInput[]) => {
   )
   const [calendar] = await store.calendar.saveCalendars(
     accountId,
-    [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+    [
+      {
+        externalId: "primary",
+        title: "Work",
+        timezone: "UTC",
+        accessRole: "owner",
+        primary: true,
+        syncByDefault: true,
+      },
+    ],
     1,
   )
   await store.calendar.saveEntries(calendar?.id as number, entries, 1)
@@ -127,7 +136,7 @@ describe("calendar events by meaning", () => {
 
   it("never embeds a working-location entry", async () => {
     download()
-    const store = await calendarStore([entry("w", "cat", NOW, { eventType: "workingLocation" })])
+    const store = await calendarStore([entry("w", "cat", NOW, { eventType: "working-location" })])
 
     expect(await embedEvents(store, { threads: 1 })).toMatchObject({ embedded: 0 })
   })
@@ -140,7 +149,16 @@ describe("calendar events by meaning", () => {
     const other = await store.accounts.saveAccount({ provider: "google-calendar", account: "owner-2" }, { name: null })
     const [calendar] = await store.calendar.saveCalendars(
       other,
-      [{ externalId: "primary", title: "Home", timezone: "UTC", accessRole: "owner", primary: true }],
+      [
+        {
+          externalId: "primary",
+          title: "Home",
+          timezone: "UTC",
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: true,
+        },
+      ],
       2,
     )
     await store.calendar.saveEntries(calendar?.id as number, [entry("text", "cat", NOW + DAY, { icalUid: "u" })], 2)

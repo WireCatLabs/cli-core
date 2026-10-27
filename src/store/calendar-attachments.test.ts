@@ -19,7 +19,16 @@ const setup = async () => {
   )
   const [calendar] = await store.calendar.saveCalendars(
     accountId,
-    [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+    [
+      {
+        externalId: "primary",
+        title: "Work",
+        timezone: "UTC",
+        accessRole: "owner",
+        primary: true,
+        syncByDefault: true,
+      },
+    ],
     1,
   )
   const drive = String(
