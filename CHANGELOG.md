@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.470.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **An MCP server serves only the profiles it is told**, the owner's choice written in the agent's config
