@@ -353,7 +353,7 @@ describe("calendar commands", () => {
 
   // The vocabulary has no calendars, people, unsync, review or resolve yet, nor the event flags (--calendar,
   // --series, --attendee, --location, --end-time, --id), and these lists take words, not a query.
-  it("pass the command lint every CLI runs on its tree, apart from the vocabulary it lacks", async () => {
+  it("pass the command lint every CLI runs on its tree, apart from list-without-query", async () => {
     const app = { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" }
     const definition = {
       app,
@@ -377,6 +377,6 @@ describe("calendar commands", () => {
     const rules = new Set(
       [...`${lint.stdout}${lint.stderr}`.matchAll(/^(?:high|medium|low)\s+(\S+)/gmu)].map(([, rule]) => rule),
     )
-    expect([...rules].sort()).toEqual(["list-without-query", "option-role", "unknown-resource", "unknown-verb"])
+    expect([...rules].sort()).toEqual(["list-without-query"])
   })
 })
