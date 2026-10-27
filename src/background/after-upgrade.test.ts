@@ -8,6 +8,7 @@ import {
   packageRootOf,
   restartMcpServers,
   staleMcpSessions,
+  thisSystem,
 } from "./after-upgrade.js"
 import { holdLock, lockPath } from "./lock.js"
 
@@ -213,5 +214,13 @@ describe("stdio MCP sessions", () => {
   it("says it could not check rather than claiming none", () => {
     expect(staleMcpSessions(system(undefined))).toMatchObject({ checked: false, sessions: [] })
     expect(staleMcpSessions(system([], null))).toMatchObject({ checked: false, sessions: [] })
+  })
+})
+
+describe("thisSystem", () => {
+  it("is not run from an installed package under a test runner, and lists this user's processes on Linux", () => {
+    const system = thisSystem("@synthetic/app", "app")
+    expect(system.packageRoot).toBeUndefined()
+    if (process.platform === "linux") expect(system.processes()?.map((line) => line.pid)).toContain(process.pid)
   })
 })
