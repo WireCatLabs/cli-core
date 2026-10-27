@@ -6,6 +6,7 @@ import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { runCommandForAgent, toolsFromCommands } from "../mcp/agent.js"
+import type { Level } from "../sends/permissions.js"
 import { commandsCommand } from "./commands-command.js"
 import { configCommand } from "./config-command.js"
 import { LOCAL_READ, REMOTE_READ, REMOTE_WRITE } from "./effects.js"
@@ -22,7 +23,7 @@ const app = {
   messenger: false,
 }
 
-const fixture = (saved: Record<string, unknown> = {}) => {
+const fixture = (saved: Record<string, unknown> = {}, defaults: Record<string, Level> = {}) => {
   const root = mkdtempSync(join(tmpdir(), "command-permissions-"))
   const env = { CAL_CONFIG_DIR: root, CAL_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "w.db") }
   const file = join(root, "config.json")
@@ -31,7 +32,7 @@ const fixture = (saved: Record<string, unknown> = {}) => {
   const configuration = settingsFor(app, {
     permissions: commandPermissions({
       extra: ["api.calendar.calendarList.list", "api.calendar.events.delete"],
-      defaults: { "api.calendar.events.delete": "ask" },
+      defaults: { "api.calendar.events.delete": "ask", ...defaults },
     }),
   })
   const definition: ProgramDefinition = {
@@ -160,6 +161,62 @@ describe("a CLI that declares its own permission keys", () => {
     expect(called).not.toHaveBeenCalled()
     expect((await cal("work", "config", "unset", "permissions.apx")).code).toBe(0)
     expect(permissions()).toBeUndefined()
+  })
+
+  it("**over MCP, the read-only lock makes a write to the service unavailable**, and a read stays", async () => {
+    const { definition, configuration, env, called } = fixture({ api: "allow" })
+    const commands = describeProgram(createProgram(definition))
+    const levels = () => configuration.resolveSettings({ profile: "work" }, { env }).permissions
+    const permissions = configuration.permissions
+    const tools = toolsFromCommands(commands, {
+      includeUnavailable: true,
+      levels: levels(),
+      readOnly: true,
+      permissions,
+    })
+    expect(tools.find((tool) => tool.command === "api call")?.availability?.()).toEqual({
+      available: false,
+      reason: "the read-only lock blocks this change",
+    })
+    expect(tools.find((tool) => tool.command === "events list")?.availability?.()).toEqual({ available: true })
+    const offered = toolsFromCommands(commands, { levels: levels(), readOnly: true, permissions })
+    expect(offered.map((tool) => tool.command)).not.toContain("api call")
+    const program = { commands, run: (argv: string[], given: object) => run(argv, definition, { ...given, env }) }
+    const answer = await runCommandForAgent(
+      program,
+      ["api", "call"],
+      { method: "x" },
+      {
+        profile: "work",
+        levels,
+        readOnly: true,
+        permissions,
+      },
+    )
+    expect(answer).toMatchObject({ error: { error: { code: "permission_error" } } })
+    expect(called).not.toHaveBeenCalled()
+  })
+
+  it("**over MCP, the CLI's own deny and readonly defaults hold**, as they do before a run", async () => {
+    const { definition, configuration, env, called } = fixture({}, { "events.list": "deny", "api.call": "readonly" })
+    const commands = describeProgram(createProgram(definition))
+    const levels = () => configuration.resolveSettings({ profile: "work" }, { env }).permissions
+    const permissions = configuration.permissions
+    const tools = toolsFromCommands(commands, { includeUnavailable: true, levels: levels(), permissions })
+    expect(tools.find((tool) => tool.command === "events list")?.availability?.()).toEqual({
+      available: false,
+      reason: "the profile denies events.list",
+      permission: "events.list",
+    })
+    expect(tools.find((tool) => tool.command === "api call")?.availability?.()).toMatchObject({
+      available: false,
+      permission: "api.call",
+    })
+    expect(tools.find((tool) => tool.command === "api list")?.availability?.()).toEqual({ available: true })
+    const program = { commands, run: (argv: string[], given: object) => run(argv, definition, { ...given, env }) }
+    const answer = await runCommandForAgent(program, ["events", "list"], {}, { profile: "work", levels, permissions })
+    expect(answer).toMatchObject({ error: { error: { code: "permission_error" } } })
+    expect(called).not.toHaveBeenCalled()
   })
 
   it("**over MCP, a denied command is found unavailable and refused**", async () => {

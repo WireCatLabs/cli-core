@@ -26,6 +26,10 @@ shape of this file.
   when the server passes `keyOf: configuration.permissions.keyOf`. Messenger CLIs are unchanged. A CLI with a program
   of its own, such as drive, uses the parts: `permissionOverrides(entries, COMMAND_PATH_KEY)`,
   `assertOverridesTighten(overrides, saved, defaults)` from `./sends` and `knownPermissionKeys(program, permissions)`.
+- **MCP judges a declared CLI's command as the check before a run does.** A server passes
+  `permissions: configuration.permissions` to `toolsFromCommands` and to the agent context, in place of `keyOf`. Then
+  a write to the service is unavailable under the read-only lock (`readOnly`), and the CLI's own `deny` or `readonly`
+  defaults make a command unavailable and refuse its call. Before, MCP offered both.
 
 ## 0.449.0 — 26.10.2026
 
