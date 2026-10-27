@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A `search all` event hit carries `untrusted: ["title", "excerpt"]`.** An event's title and the text its excerpt
+  is cut from (description, place, attendee names) are written by whoever sent the invitation, so an agent reading
+  `search all` over MCP now sees them marked as data, as `callCalendarTool`'s answers already were
+  ([WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)).
+  The `hit` entity is strict, so a caller that checks hits against an older copy of it refuses the new field;
+  `allHitItem` sets it, and other kinds of hit leave it out.
+
 ## 0.459.0 — 27.10.2026
 
 ### Changed — may break callers

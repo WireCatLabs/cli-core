@@ -24,4 +24,6 @@ export const hit = v.strictObject({
   scope: v.optional(v.picklist(["transcript", "chat", "summary"])),
   /** A meeting passage's stored line, so two passages of one meeting stay apart; `search meetings` gives the same. */
   id: v.optional(v.pipe(v.string(), v.minLength(1))),
+  /** An event hit's fields that whoever sent the invitation wrote: an agent reads them as data. */
+  untrusted: v.optional(v.array(text)),
 })

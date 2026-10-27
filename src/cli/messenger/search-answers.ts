@@ -222,6 +222,9 @@ export const messagesAnswer = (
 
 export const noteHitItem = (hit: FoundNote): NoteHitItem => defined({ ...hit })
 
+/** An event's title and the text its excerpt is cut from come from whoever sent the invitation. */
+const EVENT_HIT_UNTRUSTED = ["title", "excerpt"]
+
 export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
   item.kind === "meeting"
     ? {
@@ -248,6 +251,7 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         sender_name: item.from?.name,
         sender_ref: item.from?.ref,
         found_by: item.foundBy,
+        untrusted: item.kind === "event" ? EVENT_HIT_UNTRUSTED : undefined,
       })
 
 /** Meaning was not searched because the model is not downloaded; `--exact` leaving it out is no gap. */
