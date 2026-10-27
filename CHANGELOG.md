@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.463.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **The MCP server is `mcp serve`; `mcp` alone only shows its commands**
