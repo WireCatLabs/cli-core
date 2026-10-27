@@ -17,6 +17,7 @@ them and `./meetings` keeps them.
 | `calendars()` | `CalendarInput[]`, with `syncByDefault` decided by the adapter (Google: the owner owns it) |
 | `changes(calendar, { cursor, page, window })` | one page: `{ entries, removed, nextPage }`, the last page with `cursor`; `cursor: null` asks for a full list of the window; a dead cursor answers `{ reset: true }` |
 | `occurrences(calendar, seriesId, window)` | only with `expands: "on-request"` |
+| `freeBusy({ calendars, people, window })` | optional: each calendar's (by the provider's id) and each person's (by address) busy times inside the window, as `BusyTimes` (`{ id, busy, error? }`); a calendar the provider will not show has `error`, never an empty `busy` alone. Never stored |
 
 Every value an adapter returns is already neutral: the words of the table in `src/meetings/event-store.ts`, IANA
 zones, RFC 5545 recurrence lines, a join link without its query, no passcode or PIN. `removed` names only entries the
@@ -65,6 +66,17 @@ shows the event's own fields (title, time) and only this account's copies, atten
 | `people list [<event>]` | local read | one event's attendees, or everyone in this week's events with how many they attend |
 | `people link <person> <other>` | local write | `linkPeople` from `./services`, the people service's own link (`email:ana@x.com telegram:12`) |
 | `links review` / `links resolve <review> <choice>` | local read / write | copies that fit two events equally well, and the owner's choice (`event:<id>` or `apart`); the choices are kept per store, so every account's are listed |
+| `calendars busy [today\|week\|from:… to:…] [calendar:…] [person:<email>…] [--duration-minutes <n>] [--hours 09:00-17:00]` | provider read | only when `deps.freeBusy` is set: `source.freeBusy` for the synced calendars (or those named) and each person named, this week by default; with `--duration-minutes`, the free stretches every one of them shares inside working hours, Monday to Friday, in the owner's zone (`slots`), and in `unknown` whoever the provider would not show. A person appears only by the address given; nothing is stored |
+
+With a writer (`deps.writes`), `events create | update | delete | respond` exist too. `--repeat <rule>` on create
+makes a repeating event: `repeatRule` checks an RFC 5545 subset (FREQ DAILY, WEEKLY or MONTHLY; INTERVAL; BYDAY,
+with an ordinal only in MONTHLY; COUNT or UNTIL, UNTIL a date for an all-day event and a UTC time for a timed one)
+and writes one `RRULE:` line in a fixed order into `EventDraft.recurrence`. On `update` the rule changes only with
+`--series`; the series' EXDATE and RDATE lines are kept. New dates on a timed event, or times on an all-day one,
+switch its kind: the patch carries the new kind only, and the adapter clears the other (Google: `events.update`
+from the event as fetched, since `events.patch` cannot clear `dateTime` without a `null`). A series whose UNTIL,
+EXDATE or RDATE holds the old kind is refused (`event.repeat-kind`), unless a new rule replaces an UNTIL. A write
+that changes a rule saves only the series, and its answer says `hint: "sync to store its occurrences"`.
 
 Each command's permission key is its path (`calendars.sync`, `people.link`), as `commandPermissions` reads it. The
 command lint's vocabulary has no `calendars`, `people`, `unsync`, `review` or `resolve` yet, and `events list` takes
@@ -91,6 +103,9 @@ for (const { name, run } of calendarSourceContract(make)) it(name, run)
 ```
 
 `calendarSourceContract` checks calendar ids, neutral words, zones, recurrence lines, all-day dates, the series UID,
-that no meeting secret is in the output, a cancelled slot, a dead cursor and, with `changed`, a second round.
+that no meeting secret is in the output, a cancelled slot, a dead cursor, with `changed` a second round, and for a
+source with `freeBusy` that each id is answered once inside the window and an unknown person is an error.
+`calendarWriterContract` checks a stale etag, a retried create, notify, a repeat rule on create and on the series,
+and a timed event switched to all-day and back.
 `calendarSyncContract(make)` runs the engine over `fakeCalendarSource` for each of the twelve trait combinations; cli-core
 runs it over `memoryEventStore` and over the SQLite store.

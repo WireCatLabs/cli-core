@@ -210,7 +210,7 @@ describe("calendar write commands", () => {
       },
       now: NOW,
       zone: "UTC",
-      names: { notify: "--notify", id: "--id", calendar: "--calendar", series: "--series" },
+      names: { notify: "--notify", id: "--id", calendar: "--calendar", series: "--series", repeat: "--repeat" },
     }
     await expect(
       updateEvent(context, `event:${await eventOf("e1")}`, { title: "Moved" }, { notify: true }),
@@ -311,6 +311,63 @@ describe("calendar write commands", () => {
       code: "validation_error",
     })
   })
+
+  it("--repeat makes a series with its rule in RFC 5545 order, and says to sync for its occurrences", async () => {
+    const { cli, store } = await setup({ permissions: ALLOW })
+    const made = await cli(...create, ...at, "--repeat", "byday=mo,we;freq=weekly;count=6")
+    expect(made.hint).toBe("sync to store its occurrences")
+    expect(await store.entry(1, made.operation_id as string)).toMatchObject({
+      kind: "series",
+      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6"],
+    })
+    await expect(cli(...create, ...at, "--repeat", "FREQ=WEEKLY;UNTIL=20261231")).rejects.toMatchObject({
+      details: { reason: "event.repeat-invalid" },
+    })
+  })
+
+  it("a series' rule changes only with --series, keeping its EXDATE lines", async () => {
+    const { cli, store, writer, eventOf } = await setup({ permissions: ALLOW })
+    const event = `event:${await eventOf("s1_1")}`
+    await expect(cli("events", "update", event, "--repeat", "FREQ=WEEKLY")).rejects.toMatchObject({
+      details: { param: "--series" },
+    })
+    expect(writer.calls).toEqual([])
+    await cli("events", "update", event, "--series", "--repeat", "FREQ=WEEKLY;UNTIL=20261231T230000Z")
+    expect((await store.entry(1, "s1"))?.recurrence).toEqual(["RRULE:FREQ=WEEKLY;UNTIL=20261231T230000Z"])
+  })
+
+  it("new dates switch a timed event to all-day, and new times switch it back", async () => {
+    const { cli, store, eventOf } = await setup({ permissions: ALLOW })
+    const event = `event:${await eventOf("e1")}`
+    await cli("events", "update", event, "--start-date", "2026-11-02", "--end-date", "2026-11-02", "--no-notify")
+    expect(await store.entry(1, "e1")).toMatchObject({ allDay: true, startDate: "2026-11-02", startsAt: null })
+    await cli("events", "update", event, ...at, "--no-notify")
+    expect(await store.entry(1, "e1")).toMatchObject({
+      allDay: false,
+      startDate: null,
+      startsAt: Date.UTC(2026, 10, 2, 10),
+    })
+  })
+
+  it("a series whose rule ends on a time does not switch to all-day without a new rule", async () => {
+    const { cli, store, writer, eventOf, calendarId } = await setup({ permissions: ALLOW })
+    await store.saveEntries(
+      calendarId,
+      writer.put("primary", { ...series, recurrence: ["RRULE:FREQ=DAILY;UNTIL=20261231T230000Z"] }),
+      NOW,
+    )
+    const event = `event:${await eventOf("s1_1")}`
+    const calls = writer.calls.length
+    await expect(
+      cli("events", "update", event, "--series", "--start-date", "2026-11-02", "--end-date", "2026-11-02"),
+    ).rejects.toMatchObject({ details: { reason: "event.repeat-kind" } })
+    await cli(
+      ...["events", "update", event, "--series", "--start-date", "2026-11-02", "--end-date", "2026-11-02"],
+      ...["--repeat", "FREQ=DAILY;UNTIL=20261231"],
+    )
+    expect(writer.calls.length).toBe(calls + 1)
+    expect(await store.entry(1, "s1")).toMatchObject({ allDay: true, recurrence: ["RRULE:FREQ=DAILY;UNTIL=20261231"] })
+  })
 })
 
 describe("calendar writes through an agent's command tools", () => {
@@ -381,7 +438,7 @@ describe("event ids", () => {
       ask: async () => {},
       now: NOW,
       zone: "UTC",
-      names: { notify: "--notify", id: "--id", calendar: "--calendar", series: "--series" },
+      names: { notify: "--notify", id: "--id", calendar: "--calendar", series: "--series", repeat: "--repeat" },
     }
     const fields = { title: "Example planning", startTime: "2026-11-02T10:00", endTime: "2026-11-02T11:00" }
     for (const id of ["example0id0w", "abcd", "ABCDEF123"])

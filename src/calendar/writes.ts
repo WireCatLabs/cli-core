@@ -9,6 +9,7 @@ import { guardedWrite } from "../sends/guarded.js"
 import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { calendarIn, entryItem, eventIdOf, eventOf, plusDays } from "./reads.js"
+import { kindBoundLines, repeatRule } from "./recurrence.js"
 import {
   CALENDAR_WRITE_DEFAULTS,
   type CalendarWrite,
@@ -48,6 +49,8 @@ export interface EventFields {
   location?: string
   description?: string
   attendees?: string[]
+  /** An RFC 5545 rule, with or without `RRULE:`; on a change, only with the series' scope. */
+  repeat?: string
 }
 
 export interface WriteContext {
@@ -59,7 +62,7 @@ export interface WriteContext {
   now: number
   zone: string
   /** How the caller spells an input in a hint: `--notify or --no-notify` on the command line, `notify` over MCP. */
-  names: { notify: string; id: string; calendar: string; series: string }
+  names: { notify: string; id: string; calendar: string; series: string; repeat: string }
 }
 
 /** Each write is checked by its command's path, the key a declared CLI's `commandPermissions` already knows. */
@@ -82,8 +85,15 @@ const dateOf = (text: string, what: string) => {
 
 const momentOf = (text: string, zone: string) => zonedMoment(text, zone, { start: 0, end: text.length })
 
-/** Typed fields into a draft, or into a patch with only what was given. */
-export const draftOf = (fields: EventFields, zone: string, { whole }: { whole: boolean }): EventPatch => {
+/**
+ * Typed fields into a draft, or into a patch with only what was given. `allDay` is the kind of the event a patch
+ * changes, for a repeat rule's UNTIL when the patch keeps the times.
+ */
+export const draftOf = (
+  fields: EventFields,
+  zone: string,
+  { whole, allDay = false }: { whole: boolean; allDay?: boolean },
+): EventPatch => {
   const patch: EventPatch = {}
   if (fields.title !== undefined) {
     if (!fields.title.trim()) throw new CliError("validation_error", "an event needs a title")
@@ -114,6 +124,12 @@ export const draftOf = (fields: EventFields, zone: string, { whole }: { whole: b
       if (!EMAIL.test(email)) throw new CliError("validation_error", `${email} is not an email address`)
       return { email }
     })
+  if (fields.repeat !== undefined)
+    patch.recurrence = [
+      repeatRule(fields.repeat, {
+        allDay: patch.startDate !== undefined || (patch.startsAt === undefined && allDay),
+      }),
+    ]
   if (!whole && Object.keys(patch).length === 0) throw new CliError("validation_error", "nothing to change")
   return patch
 }
@@ -188,10 +204,12 @@ const keysFor = (context: WriteContext, write: CalendarWrite, notify: boolean): 
   ...(notify ? [EVENTS_NOTIFY_KEY] : []),
 ]
 
-const answerOf = (operationId: string, saved: StoredEntry | undefined) => ({
+const answerOf = (operationId: string, saved: StoredEntry | undefined, repeats = false) => ({
   operation_id: operationId,
   event: saved?.eventId == null ? null : `event:${saved.eventId}`,
   entry: saved ? entryItem(saved) : null,
+  // Only the series is saved here; its occurrences come with the provider's expansion on the next sync.
+  ...(repeats ? { hint: "sync to store its occurrences" } : {}),
 })
 
 /** An id every provider takes as a client-chosen one: Google's base32hex `[a-v0-9]`, a CalDAV UID, a Graph id. */
@@ -236,7 +254,7 @@ export const createEvent = async (
     throw error
   }
   const [saved] = await context.store.saveEntries(calendar.id, [entry], context.now)
-  return answerOf(id, saved)
+  return answerOf(id, saved, draft.recurrence !== undefined)
 }
 
 interface Target {
@@ -297,9 +315,26 @@ export const updateEvent = async (
   fields: EventFields,
   options: { calendar?: string; series?: boolean; notify?: boolean } = {},
 ) => {
-  const patch = draftOf(fields, context.zone, { whole: false })
   const scope: WriteScope = options.series ? "series" : "this"
+  if (fields.repeat !== undefined && scope !== "series")
+    throw new CliError("validation_error", `a repeat rule belongs to the whole series: add ${context.names.series}`, {
+      param: context.names.series,
+    })
   const { calendar, target, participants } = await targetOf(context, reference, { ...options, scope })
+  const patch = draftOf(fields, context.zone, { whole: false, allDay: target.allDay })
+  const kept = (target.recurrence ?? []).filter((line) => !/^RRULE:/iu.test(line))
+  if (patch.recurrence) patch.recurrence = [...patch.recurrence, ...kept]
+  const switching = patch.startDate !== undefined ? !target.allDay : patch.startsAt !== undefined && target.allDay
+  const bound = kindBoundLines(patch.recurrence ? kept : (target.recurrence ?? []))
+  if (switching && bound.length)
+    throw new CliError(
+      "validation_error",
+      `${reference} repeats with ${bound.join(", ")}, which hold a ${target.allDay ? "date" : "time"}; ` +
+        (patch.recurrence || bound.some((line) => !/^RRULE:/iu.test(line))
+          ? "change its kind in the calendar itself"
+          : `give its rule again with ${context.names.repeat} and UNTIL as a ${target.allDay ? "UTC time" : "date"}`),
+      { reason: "event.repeat-kind" },
+    )
   const notify = notifyOf(context, options.notify, hasOthers(participants) || (patch.attendees?.length ?? 0) > 0)
   const operationId = newOperationId()
   const entry = await guardedWrite(
@@ -309,7 +344,7 @@ export const updateEvent = async (
       context.writes.writer.update(calendar, target.externalId, patch, { scope, etag: target.etag as string, notify }),
   )
   const [saved] = await context.store.saveEntries(calendar.id, [entry], context.now)
-  return answerOf(operationId, saved)
+  return answerOf(operationId, saved, patch.recurrence !== undefined || (switching && scope === "series"))
 }
 
 export const deleteEvent = async (

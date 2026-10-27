@@ -9,6 +9,7 @@ import type { EventStore } from "../../meetings/index.js"
 import { searchEvents } from "../../services/events-search.js"
 import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
+import { BUSY_QUERY_HELP, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
 import {
   CALENDAR_UNTRUSTED_FIELDS,
   calendarIn,
@@ -24,6 +25,7 @@ import {
   resolveAnswer,
   reviewsAnswer,
 } from "../reads.js"
+import { REPEAT_HELP } from "../recurrence.js"
 import type { CalendarExpander, CalendarSource } from "../source.js"
 import { syncCalendars } from "../sync.js"
 import type { EventResponse } from "../writer.js"
@@ -48,6 +50,11 @@ export interface CalendarCommandDeps {
   messages?: MessageStore
   /** The provider; `sync` and `calendars list` read it. */
   source?: CalendarSource
+  /**
+   * The source answers `freeBusy`: mounts `calendars busy`. A flag rather than a look at `source`, which a CLI may
+   * build only once a profile is open.
+   */
+  freeBusy?: boolean
   /** For a source with `expands: "local"`. */
   expand?: CalendarExpander
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
@@ -63,6 +70,7 @@ export interface CalendarCommandDeps {
 const LOCAL_READ: Effects = { remote: "none", local: "read" }
 const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 const FETCH: Effects = { remote: "read", local: "write" }
+const REMOTE_READ: Effects = { remote: "read", local: "none" }
 const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 const GROUP: Effects = { remote: "none", local: "none" }
 /** How many pieces one `sync --embed` embeds, as drive's. */
@@ -83,6 +91,12 @@ const integer = (text: string) => {
   if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text)))
     throw new InvalidArgumentError("expected a positive integer")
   return Number(text)
+}
+
+const minutes = (text: string) => {
+  const value = integer(text)
+  if (value < 5 || value > 1440) throw new InvalidArgumentError("expected 5 to 1440 minutes")
+  return value
 }
 
 const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDeps): void => {
@@ -151,6 +165,43 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       await deps.store.setCalendarSynced(calendar.id, synced, now())
       print(calendarItem({ ...calendar, synced }), command)
     })
+
+  if (deps.freeBusy)
+    output(
+      example(
+        annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false })
+          .description(
+            "when calendars and people are taken, asked of the provider and not stored; with --duration-minutes, " +
+              "the free stretches they share",
+          )
+          .argument("[words...]", "today, week, from:<date>, to:<date>, calendar:<id>, person:<email>")
+          .addHelpText("after", BUSY_QUERY_HELP),
+        "calendars busy week person:ana@example.com --json",
+        "calendars busy from:2026-11-02 to:2026-11-06 person:ana@example.com --duration-minutes 30 --hours 10:00-16:00",
+      ),
+    )
+      .option("--duration-minutes <minutes>", "find free stretches at least this long, 5–1440", minutes)
+      .option(
+        "--hours <from-to>",
+        "working hours in your time zone, Monday to Friday, with --duration-minutes",
+        "09:00-17:00",
+      )
+      .action(async (words: string[], opts: { durationMinutes?: number; hours: string }, command: Command) => {
+        if (command.optsWithGlobals<{ offline?: boolean }>().offline)
+          throw new CliError("permission_error", "calendars busy asks the provider; leave out --offline", {
+            reason: "busy.offline",
+          })
+        const hours = workingHoursOf(opts.hours)
+        const query = await busyQuery(words, { store: deps.store, accountId: deps.accountId, zone: zone(), now: now() })
+        print(
+          await busyAnswer(source(), query, {
+            zone: zone(),
+            now: now(),
+            ...(opts.durationMinutes === undefined ? {} : { slot: { minutes: opts.durationMinutes, hours } }),
+          }),
+          command,
+        )
+      })
 
   output(
     example(
@@ -344,7 +395,13 @@ const addEventWrites = (
     ask: terminalAsker(command),
     now: now(),
     zone: zone(),
-    names: { notify: "--notify or --no-notify", id: "--id", calendar: "--calendar", series: "--series" },
+    names: {
+      notify: "--notify or --no-notify",
+      id: "--id",
+      calendar: "--calendar",
+      series: "--series",
+      repeat: "--repeat",
+    },
   })
   const printWritten = (value: object, command: Command) =>
     print({ ...value, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
@@ -373,6 +430,7 @@ const addEventWrites = (
         collect,
         [] as string[],
       )
+      .option("--repeat <rule>", `how it repeats${replacing ? ", with --series" : ""}: ${REPEAT_HELP}`)
   type FieldOptions = Omit<EventFields, "attendees"> & { attendee?: string[] }
   const fieldsOf = ({ attendee, ...given }: FieldOptions): EventFields => ({
     ...Object.fromEntries(Object.entries(given).filter(([, value]) => value !== undefined)),
@@ -394,12 +452,14 @@ const addEventWrites = (
     example(
       notify(
         fields(write("create"), false)
-          .description("add an event to a calendar; one that repeats is made in the calendar itself")
+          .description("add an event to a calendar; with --repeat, one that repeats")
           .argument("<calendar>", "the calendar's id, or the provider's id"),
       ).option("--id <id>", "the id a create that ended in outcome_unknown named: a retry finds that event"),
       "events create 3 --title 'Example planning' --start-time 2026-11-02T10:00 --end-time 2026-11-02T11:00",
       "events create 3 --title 'Example review' --start-date 2026-11-03 --end-date 2026-11-03 " +
         "--attendee ana@example.com --no-notify",
+      "events create 3 --title 'Example standup' --start-time 2026-11-02T09:30 --end-time 2026-11-02T09:45 " +
+        "--repeat 'FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12'",
     ),
   ).action(async (calendar: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
     const { notify: choice, id, ...rest } = opts
@@ -415,10 +475,14 @@ const addEventWrites = (
     example(
       notify(
         target(fields(write("update"), true))
-          .description("change an event; with --series every occurrence of the repeating event")
+          .description(
+            "change an event; with --series every occurrence of the repeating event; new times or dates switch it " +
+              "between timed and all-day",
+          )
           .option("--series", "change the whole repeating event, not only this occurrence"),
       ),
       "events update event:42 --start-time 2026-11-02T14:00 --end-time 2026-11-02T15:00 --notify",
+      "events update event:42 --series --repeat 'FREQ=WEEKLY;BYDAY=TU;UNTIL=20261231T230000Z' --no-notify",
     ),
   ).action(async (reference: string, opts: FieldOptions & Choices, command: Command) => {
     const { calendar: _calendar, series: _series, notify: _notify, ...rest } = opts

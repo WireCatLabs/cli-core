@@ -21,12 +21,15 @@ export type {
   StoredEntry,
   StoredParticipant,
 } from "../meetings/index.js"
+export { repeatRule } from "./recurrence.js"
 export type {
+  BusyTimes,
   CalendarExpander,
   CalendarSource,
   CalendarSourceTraits,
   ChangePage,
   ChangeResult,
+  FreeBusyRequest,
   SyncWindow,
 } from "./source.js"
 export {
