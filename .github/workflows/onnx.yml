@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15, windows-latest, windows-11-arm]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -77,11 +77,9 @@ jobs:
         run: node probe.mjs
       - working-directory: probe
         run: bun probe.mjs
-      - if: runner.os != 'Windows'
-        working-directory: probe
+      - working-directory: probe
         run: node probe-native.mjs
-      - if: runner.os != 'Windows'
-        working-directory: probe
+      - working-directory: probe
         run: bun probe-native.mjs
 
   publish:
