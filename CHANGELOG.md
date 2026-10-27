@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Picture models run on the native ONNX Runtime too**, where text models do: on one machine CLIP embedded 12
+  pictures in 0.5 s against 1.1 s through WebAssembly, and text queries in 0.15 s against 0.26 s, with vectors at
+  cosine 0.99 or more to WebAssembly's, so pictures embedded before still match. `openSession` in
+  `src/embeddings/onnx-runtime.ts` is now the one place that picks the runtime and falls back per model.
+
 ### Fixed
 
 - **Meaning search over documents and notes uses the vector index**, as message search already did: it scanned every

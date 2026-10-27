@@ -203,7 +203,7 @@ They run in ONNX Runtime 1.30.0 (`@wirecat/cli-core-onnx`), on Node and Bun alik
   `models/runtime/onnxruntime-1.30.0-<system>/`. A search never downloads it.
 - **WebAssembly** everywhere else — Windows (its binding needs the DirectML build of `onnxruntime.dll`, not in
   Microsoft's release), Intel Macs, musl — before that download, and whenever the native library does not load or
-  will not open a model. Picture models stay on WebAssembly.
+  will not open a model. Picture models (CLIP, SigLIP2) take the same path.
 
 The two give slightly different numbers for the same text (8-bit kernels differ); vectors built by one search well
 with questions embedded by the other. An API model needs the user's key (`models keys set`), says
