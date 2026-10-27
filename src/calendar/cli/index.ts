@@ -135,11 +135,13 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   )
     .option("--full", "list every synced calendar's window again instead of reading changes")
     .option("--embed", "also index new events for meaning search, with a model already downloaded")
-    .action(async (opts: { full?: boolean; embed?: boolean }, command: Command) => {
+    .action(async (opts: { embed?: boolean }, command: Command) => {
+      // The shared program has a global --full of its own, which claims the flag before this command sees it.
+      const full = command.optsWithGlobals<{ full?: boolean }>().full === true
       const report = await syncCalendars(source(), deps.store, {
         accountId: deps.accountId,
         now: now(),
-        ...(opts.full ? { full: true } : {}),
+        ...(full ? { full: true } : {}),
         ...(deps.expand ? { expand: deps.expand } : {}),
       })
       if (opts.embed && !deps.embed) throw new CliError("configuration_error", "this tool cannot embed events")
