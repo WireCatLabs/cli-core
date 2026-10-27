@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import type { CalendarInput, EntryInput, StoredCalendar } from "../../meetings/index.js"
 import type { CalendarSource, CalendarSourceTraits, ChangeResult, SyncWindow } from "../source.js"
 
@@ -79,7 +80,7 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
       calls.changes.push({ calendar: calendar.externalId, cursor, window, ...(page === undefined ? {} : { page }) })
       if (failIn !== null && failIn-- === 0) {
         failIn = null
-        throw new Error("example provider failed")
+        throw new CliError("provider_error", "example provider failed")
       }
       let entries: EntryInput[]
       let removed: string[] = []
@@ -88,7 +89,7 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
         const [, seen, holds] = /^v(\d+)(?:@(.*))?$/u.exec(cursor) ?? []
         if (seen === undefined || Number(seen) < deadBefore) return { reset: true }
         if (traits.cursorHoldsWindow && holds !== `${window.from}-${window.to}`)
-          throw new Error("this cursor holds another window")
+          throw new CliError("validation_error", "this cursor holds another window")
         const after = log.filter((one) => one.version > Number(seen) && one.calendar === calendar.externalId)
         const changed = new Map<string, EntryInput>()
         for (const one of after) if (one.put) changed.set(one.put.externalId, one.put)

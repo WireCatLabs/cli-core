@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { isCliFailure } from "../errors/failures.js"
 import type { EntryInput, EventStore, StoredCalendar } from "../meetings/index.js"
 import type { CalendarExpander, CalendarSource, SyncWindow } from "./source.js"
 
@@ -243,7 +244,8 @@ export const syncCalendars = async (
         removed: 0,
         occurrences: 0,
         unseen: 0,
-        error: error instanceof Error ? error.message : "the calendar could not be synced",
+        // An adapter's own failure says what went wrong; anything else may carry a request URL with a token in it.
+        error: isCliFailure(error) ? error.message : "the calendar could not be synced",
       })
     }
   }

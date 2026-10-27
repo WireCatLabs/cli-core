@@ -36,13 +36,15 @@ provider confirmed deleted, never one that only left the window.
    for `in-changes`.
 7. After a full round, `markUnseen` marks what it did not return.
 8. The cursor is saved last. A calendar that fails keeps its old cursor, and the others go on; the report says
-   `complete: false` and names the error.
+   `complete: false` and repeats the error's text only when it is a `CliError` the adapter raised, since another
+   error may carry a request URL with a token in it.
 
 **What the engine does not do.** It writes no `syncs` row: no store method writes that table, so the run record of
 the command that called it keeps the counts. A slot that stops being produced without a word (neither a cancelled
-entry nor a removed id) is marked deleted by the next full round, not cancelled; Google sends a cancelled slot as a
-cancelled exception, and a local expander returns an `EXDATE` slot as a cancelled occurrence, so the common cases
-cancel. Embedding the events for search by meaning is the CLI's step after a sync (`embedEvents` in `./services`),
+entry nor a removed id) is marked deleted by the next full round, not cancelled. Google's docs say a cancelled
+instance comes as a cancelled exception in incremental lists, but full lists and `events.instances` leave it out
+unless `showDeleted` is set, so the Google adapter asks for deleted entries on full lists too. A local expander
+returns an `EXDATE` slot as a cancelled occurrence. Embedding the events for search by meaning is the CLI's step after a sync (`embedEvents` in `./services`),
 as drive calls `embedNotes`, because the engine knows only the `EventStore` port.
 
 ## Testing an adapter

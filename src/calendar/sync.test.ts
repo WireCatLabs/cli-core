@@ -31,6 +31,21 @@ describe("syncCalendars", () => {
     expect(report.synced[0]?.error).toMatch(/refused a full list/u)
   })
 
+  it("does not repeat an error that is not the adapter's own, which may hold a token", async () => {
+    const source = fakeCalendarSource()
+    const report = await syncCalendars(
+      {
+        ...source,
+        changes: async () => {
+          throw new Error("GET https://example.com/delta?token=SECRET-MARKER failed")
+        },
+      },
+      memoryEventStore(),
+      { accountId: 1, now: NOW },
+    )
+    expect(report.synced[0]?.error).toBe("the calendar could not be synced")
+  })
+
   it("an unreadable cursor means a full round", async () => {
     const store = memoryEventStore()
     const source = fakeCalendarSource()
