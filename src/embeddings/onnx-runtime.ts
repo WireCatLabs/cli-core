@@ -229,3 +229,30 @@ export const onnxRuntime = (env: NodeJS.ProcessEnv = process.env): Promise<OnnxR
   }
   return found
 }
+
+/**
+ * A session on the native runtime when it is installed and opens this model, else on WebAssembly, with the `ort`
+ * whose tensors that session takes.
+ */
+export const openSession = async (
+  bytes: Uint8Array,
+  threads: number,
+  options: { externalData?: { path: string; data: Uint8Array }[] } = {},
+) => {
+  const runtime = await onnxRuntime()
+  if (runtime.native) {
+    try {
+      const session = await runtime.ort.InferenceSession.create(bytes, {
+        ...options,
+        intraOpNumThreads: threads,
+        interOpNumThreads: 1,
+      })
+      return { ort: runtime.ort, session }
+    } catch {
+      // A model the native runtime will not open still runs through WebAssembly.
+    }
+  }
+  const ort = await import("@wirecat/cli-core-onnx")
+  ort.env.wasm.numThreads = threads
+  return { ort, session: await ort.InferenceSession.create(bytes, options) }
+}
