@@ -360,6 +360,7 @@ export { meaningLane } from "./messages-meaning.js"
 export type { QueryMetadata, SearchCoverage } from "./messages-search.js"
 export { metadataService } from "./metadata.js"
 export {
+  embedEvents,
   embedMail,
   embedNotes,
   type FoundNote,
