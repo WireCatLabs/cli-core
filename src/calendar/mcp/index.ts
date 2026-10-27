@@ -3,6 +3,7 @@ import { isCliFailure } from "../../errors/failures.js"
 import { type EventStore, listed } from "../../meetings/index.js"
 import { agentResult, UNTRUSTED_NEUTRAL } from "../../meetings/mcp/index.js"
 import {
+  calendarIn,
   calendarItem,
   eventAnswer,
   eventIdOf,
@@ -12,6 +13,16 @@ import {
   peopleAnswer,
   reviewsAnswer,
 } from "../reads.js"
+import type { EventResponse } from "../writer.js"
+import {
+  type CalendarWrites,
+  createEvent,
+  deleteEvent,
+  EVENT_RESPONSES,
+  type EventFields,
+  respondToEvent,
+  updateEvent,
+} from "../writes.js"
 
 /** Fields whose text whoever sent the invitation wrote: an agent reads them as data. */
 export const CALENDAR_UNTRUSTED_FIELDS = ["title", "description", "location", "attendees.name", "candidates.title"]
@@ -63,8 +74,80 @@ export const calendarTools = [
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }))
 
+const anyText = { type: "string" }
+const flag = { type: "boolean" }
+const notify = {
+  type: "boolean",
+  description: "whether the provider mails the other attendees; required when there are any",
+}
+const fields = {
+  title: text,
+  start_time: { ...text, description: "when it starts: a time in `timezone` (UTC when absent), or one with its own" },
+  end_time: { ...text, description: "when it ends" },
+  start_date: { ...text, description: "the first day of an all-day event, YYYY-MM-DD" },
+  end_date: { ...text, description: "the last day of an all-day event" },
+  timezone: text,
+  location: { ...anyText, description: "empty clears it" },
+  description: { ...anyText, description: "empty clears it" },
+  attendees: { type: "array", items: text, description: "email addresses; on a change, the whole new list" },
+}
+const target = {
+  account_id: integer,
+  event: text,
+  calendar: { ...text, description: "the calendar, when the event is on more than one" },
+}
+
+/**
+ * The calendar writes, offered only by a host that has a writer. Over MCP `ask` goes ahead (WC-MCP-7); `deny`,
+ * `readonly`, `events.notify` and the extra keys still refuse.
+ */
+export const calendarWriteTools = [
+  {
+    name: "event_create",
+    description: "add a one-time event to a calendar",
+    properties: {
+      account_id: integer,
+      calendar: text,
+      ...fields,
+      notify,
+      id: { ...text, description: "the id an outcome_unknown named: a retry finds that event instead of a new one" },
+    },
+    required: ["calendar", "title"],
+    destructive: false,
+  },
+  {
+    name: "event_update",
+    description: "change an event, or with series every occurrence of its repeating event",
+    properties: { ...target, ...fields, series: flag, notify },
+    required: ["event"],
+    destructive: true,
+  },
+  {
+    name: "event_delete",
+    description: "delete an event; deleting a whole repeating event (series) is denied unless the owner allowed it",
+    properties: { ...target, series: flag, notify },
+    required: ["event"],
+    destructive: true,
+  },
+  {
+    name: "event_respond",
+    description: "answer an invitation; the organiser is told only with notify true",
+    properties: { ...target, response: { type: "string", enum: EVENT_RESPONSES }, notify },
+    required: ["event", "response"],
+    destructive: false,
+  },
+].map(({ properties, required, description, destructive, ...tool }) => ({
+  ...tool,
+  description: `${description}. ${UNTRUSTED_EVENTS}`,
+  inputSchema: { type: "object", properties, required, additionalProperties: false },
+  annotations: { readOnlyHint: false, destructiveHint: destructive, idempotentHint: false, openWorldHint: true },
+}))
+
+const WRITES = new Set(calendarWriteTools.map(({ name }) => name))
+
 const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
-  const tool = calendarTools.find((one) => one.name === name)
+  const tool: { inputSchema: { properties: Record<string, unknown>; required: string[] } } | undefined =
+    calendarTools.find((one) => one.name === name) ?? calendarWriteTools.find((one) => one.name === name)
   if (!tool) throw new CliError("validation_error", "unknown calendar tool")
   if (typeof input !== "object" || input === null || Array.isArray(input))
     throw new CliError("validation_error", "expected argument object")
@@ -80,8 +163,30 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
     )
       throw new CliError("validation_error", `${key} must be a positive integer`)
-    else if (["words", "timezone", "event"].includes(key) && (typeof value !== "string" || !value.trim()))
+    else if (
+      [
+        "words",
+        "timezone",
+        "event",
+        "calendar",
+        "title",
+        "start_time",
+        "end_time",
+        "start_date",
+        "end_date",
+        "id",
+      ].includes(key) &&
+      (typeof value !== "string" || !value.trim())
+    )
       throw new CliError("validation_error", `${key} must not be empty`)
+    else if (["location", "description"].includes(key) && typeof value !== "string")
+      throw new CliError("validation_error", `${key} must be text`)
+    else if (["notify", "series"].includes(key) && typeof value !== "boolean")
+      throw new CliError("validation_error", `${key} must be true or false`)
+    else if (key === "attendees" && (!Array.isArray(value) || value.some((one) => typeof one !== "string")))
+      throw new CliError("validation_error", "attendees must be a list of email addresses")
+    else if (key === "response" && !(EVENT_RESPONSES as readonly unknown[]).includes(value))
+      throw new CliError("validation_error", `response is one of ${EVENT_RESPONSES.join(", ")}`)
   return args
 }
 
@@ -97,8 +202,16 @@ export const callCalendarTool = async (
     accountIds,
     failure = {},
     now = Date.now(),
-  }: { accountIds: readonly number[]; failure?: FailureContext; now?: number },
+    writes,
+  }: {
+    accountIds: readonly number[]
+    failure?: FailureContext
+    now?: number
+    /** Each account's writer and profile; without it the write tools refuse. */
+    writes?: (accountId: number) => CalendarWrites | undefined
+  },
 ) => {
+  const writing = WRITES.has(name)
   try {
     const args = argumentsOf(name, input)
     const asked = args.account_id as number | undefined
@@ -119,6 +232,14 @@ export const callCalendarTool = async (
       )
     }
     let answer: object
+    if (writing) {
+      const written = await writeTool(store, name, args, { asked, accounts, now, writes })
+      const result = { accounts: [written.account], ...written.result, untrusted: CALENDAR_UNTRUSTED_FIELDS }
+      return agentResult({
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        structuredContent: result,
+      })
+    }
     switch (name) {
       case "calendars_list":
         answer = listed((await Promise.all(accounts.map((id) => store.calendars(id)))).flat().map(calendarItem))
@@ -163,8 +284,106 @@ export const callCalendarTool = async (
     })
   } catch (error) {
     const { content, structuredContent } = agentResult(
-      mcpErrorResult(errorObjectOf(error, { ...failure, effects: { remote: "none", local: "read" } })),
+      mcpErrorResult(
+        errorObjectOf(error, {
+          ...failure,
+          effects: writing ? { remote: "write", local: "write" } : { remote: "none", local: "read" },
+        }),
+      ),
     )
     return { content, structuredContent, isError: true as const }
   }
+}
+
+const fieldsOf = (args: Record<string, unknown>): EventFields => ({
+  ...(args.title === undefined ? {} : { title: args.title as string }),
+  ...(args.start_time === undefined ? {} : { startTime: args.start_time as string }),
+  ...(args.end_time === undefined ? {} : { endTime: args.end_time as string }),
+  ...(args.start_date === undefined ? {} : { startDate: args.start_date as string }),
+  ...(args.end_date === undefined ? {} : { endDate: args.end_date as string }),
+  ...(args.location === undefined ? {} : { location: args.location as string }),
+  ...(args.description === undefined ? {} : { description: args.description as string }),
+  ...(args.attendees === undefined ? {} : { attendees: args.attendees as string[] }),
+})
+
+/** The one account a write acts in: the one named, or the only one that holds what it names; never a guess. */
+const accountFor = async (
+  accounts: readonly number[],
+  asked: number | undefined,
+  holds: (accountId: number) => Promise<unknown>,
+  what: string,
+): Promise<number> => {
+  if (asked !== undefined) return asked
+  const holding: number[] = []
+  for (const accountId of accounts)
+    try {
+      await holds(accountId)
+      holding.push(accountId)
+    } catch (error) {
+      if (!isCliFailure(error) || error.code !== "not_found") throw error
+    }
+  const [only] = holding
+  if (only === undefined) throw new CliError("not_found", `no ${what} in these accounts`)
+  if (holding.length > 1)
+    throw new CliError("validation_error", `${what} is in accounts ${holding.join(", ")}; name one with account_id`, {
+      param: "account_id",
+    })
+  return only
+}
+
+const writeTool = async (
+  store: EventStore,
+  name: string,
+  args: Record<string, unknown>,
+  {
+    asked,
+    accounts,
+    now,
+    writes,
+  }: {
+    asked: number | undefined
+    accounts: readonly number[]
+    now: number
+    writes: ((accountId: number) => CalendarWrites | undefined) | undefined
+  },
+): Promise<{ account: number; result: object }> => {
+  const creating = name === "event_create"
+  const account = await accountFor(
+    accounts,
+    asked,
+    (accountId) =>
+      creating
+        ? calendarIn(store, accountId, args.calendar as string)
+        : eventOf(store, accountId, eventIdOf(args.event as string)),
+    creating ? `calendar ${args.calendar}` : `event ${args.event}`,
+  )
+  const profile = writes?.(account)
+  if (!profile) throw new CliError("configuration_error", "this host cannot write to calendars")
+  const context = {
+    store,
+    accountId: account,
+    writes: profile,
+    // WC-MCP-7: nobody is here to answer, and a form would teach people to click yes; the levels decide.
+    ask: async () => {},
+    now,
+    zone: (args.timezone as string | undefined) ?? "UTC",
+    names: { notify: "notify: true or false", id: "id", calendar: "calendar", series: "series" },
+  }
+  const choice = args.notify === undefined ? {} : { notify: args.notify as boolean }
+  const on = {
+    ...(args.calendar === undefined || creating ? {} : { calendar: args.calendar as string }),
+    ...(args.series === true ? { series: true } : {}),
+  }
+  const result =
+    name === "event_create"
+      ? await createEvent(context, args.calendar as string, fieldsOf(args), {
+          ...choice,
+          ...(args.id === undefined ? {} : { id: args.id as string }),
+        })
+      : name === "event_update"
+        ? await updateEvent(context, args.event as string, fieldsOf(args), { ...on, ...choice })
+        : name === "event_delete"
+          ? await deleteEvent(context, args.event as string, { ...on, ...choice })
+          : await respondToEvent(context, args.event as string, args.response as EventResponse, { ...on, ...choice })
+  return { account, result }
 }

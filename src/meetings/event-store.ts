@@ -151,6 +151,8 @@ export interface StoredEntry {
   joinKey: string | null
   url: string | null
   externalUpdatedAt: number | null
+  /** The provider's version of the entry, sent back with a write so a change made since the last sync is refused. */
+  etag: string | null
   seenAt: number | null
   deletedAt: number | null
 }
@@ -250,6 +252,8 @@ export interface EventStore {
   cursor(calendarId: number): Promise<string | null>
   /** `null` forgets the cursor, so the next sync is a full list. */
   setCursor(calendarId: number, value: string | null, now: number): Promise<void>
+  /** One entry by the provider's id; a series, which no event holds, is found only this way. */
+  entry(calendarId: number, externalId: string): Promise<StoredEntry | null>
   events(filter?: EventFilter): Promise<Event[]>
   event(id: number): Promise<EventDetails | null>
   /** The owner's link of an entry to an event; no rule replaces it. */

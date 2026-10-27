@@ -38,3 +38,17 @@ export {
   parseCalendarCursor,
   syncCalendars,
 } from "./sync.js"
+export {
+  CALENDAR_WRITE_DEFAULTS,
+  CALENDAR_WRITE_KEYS,
+  type CalendarWrite,
+  type CalendarWriter,
+  calendarConflict,
+  EVENTS_DELETE_SERIES_KEY,
+  EVENTS_NOTIFY_KEY,
+  type EventDraft,
+  type EventPatch,
+  type EventResponse,
+  type WriteScope,
+} from "./writer.js"
+export type { CalendarWrites } from "./writes.js"

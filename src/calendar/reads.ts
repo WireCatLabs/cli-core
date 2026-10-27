@@ -8,6 +8,7 @@ import {
   type LinkReview,
   listed,
   type StoredCalendar,
+  type StoredEntry,
   type StoredParticipant,
 } from "../meetings/index.js"
 
@@ -46,7 +47,7 @@ export const eventIdOf = (reference: string | number): number => {
 const localDate = (at: number, zone: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at)
 
-const plusDays = (date: string, days: number) => {
+export const plusDays = (date: string, days: number) => {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number]
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
 }
@@ -149,23 +150,25 @@ const attendees = async (participants: StoredParticipant[], personOf?: PersonOfE
   )
 }
 
+export const entryItem = (entry: StoredEntry) => ({
+  id: String(entry.id),
+  calendar_id: String(entry.calendarId),
+  external_id: entry.externalId,
+  kind: entry.kind,
+  status: entry.status,
+  event_type: entry.eventType,
+  own_response: entry.ownResponse,
+  starts_at: iso(entry.startsAt),
+  ends_at: iso(entry.endsAt),
+  join_url: entry.joinUrl,
+  url: entry.url,
+  deleted_at: iso(entry.deletedAt),
+})
+
 export const eventAnswer = async (details: EventDetails, personOf?: PersonOfEmail) => ({
   ...eventItem(details.event),
   ref: `event:${details.event.id}`,
-  entries: details.entries.map((entry) => ({
-    id: String(entry.id),
-    calendar_id: String(entry.calendarId),
-    external_id: entry.externalId,
-    kind: entry.kind,
-    status: entry.status,
-    event_type: entry.eventType,
-    own_response: entry.ownResponse,
-    starts_at: iso(entry.startsAt),
-    ends_at: iso(entry.endsAt),
-    join_url: entry.joinUrl,
-    url: entry.url,
-    deleted_at: iso(entry.deletedAt),
-  })),
+  entries: details.entries.map(entryItem),
   attendees: await attendees(details.participants, personOf),
   attachments: details.attachments.map(({ fileId, title, documentId }) => ({
     file_id: fileId,

@@ -71,6 +71,7 @@ const entryOf = (row: Row): StoredEntry => ({
   joinKey: str(row.join_key),
   url: str(row.url),
   externalUpdatedAt: int(row.external_updated_at),
+  etag: str(row.etag),
   seenAt: int(row.seen_at),
   deletedAt: int(row.deleted_at),
 })
@@ -685,6 +686,13 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
         for (const eventId of new Set(marked.map((row) => int(row.event_id))))
           if (eventId !== null) refreshEvent(eventId, now)
         return marked.length
+      }),
+    entry: async (calendarId, externalId) =>
+      read(database, () => {
+        const row = database
+          .prepare("SELECT * FROM calendar_entries WHERE calendar_id = ? AND external_id = ?")
+          .get(calendarId, externalId) as Row | undefined
+        return row ? entryOf(row) : null
       }),
     cursor: async (calendarId) =>
       read(database, () => {
