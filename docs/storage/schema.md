@@ -1157,16 +1157,16 @@ read before closing its connection.
 
 ### `calendars`
 
-One calendar of an account: Google's primary calendar, a shared or subscribed one. Only those the owner owns are synced; the rest are listed so the owner knows they exist.
+One calendar of an account: the primary one, a shared or a subscribed one. A new calendar syncs when its provider's adapter says so (for Google, one the owner owns); the rest are listed so the owner knows they exist.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `account_id` | integer | not null | → `accounts.id` | provider `google-calendar` |
+| `account_id` | integer | not null | → `accounts.id` | a calendar provider, such as `google-calendar` |
 | `external_id` | text | not null |  | the provider's calendar id |
 | `title` | text |  |  |  |
 | `timezone` | text |  |  | IANA |
-| `access_role` | text |  |  | owner, writer, reader, freeBusyReader |
+| `access_role` | text |  |  | owner, writer, reader, free-busy |
 | `primary_calendar` | integer | not null |  | 1 for the account's primary calendar |
 | `synced` | integer | not null |  | 1 when its entries sync: the owner owns it or chose it |
 | `seen_at` | integer |  |  | the last calendar list that returned it |
@@ -1189,8 +1189,8 @@ One calendar's copy of an event, a series or one occurrence of a series: the sou
 | `event_id` | integer |  | → `events.id` | single and occurrence entries |
 | `event_series_id` | integer |  | → `event_series.id` | series entries |
 | `external_id` | text | not null |  | the provider's event id, unique within the calendar |
-| `ical_uid` | text |  |  | shared by every copy across calendars and every occurrence of a series |
-| `original_starts_at` | integer |  |  | an occurrence's slot in its series |
+| `ical_uid` | text |  |  | the RFC 5545 UID of the series: shared by every copy across calendars and every occurrence of a series |
+| `original_starts_at` | integer |  |  | an occurrence's slot in its series; an all-day slot is midnight UTC of its date |
 | `exception` | integer | not null |  | 1 for an occurrence changed apart from its series |
 | `status` | text | not null |  | confirmed, tentative, cancelled |
 | `title` | text |  |  |  |
@@ -1204,10 +1204,10 @@ One calendar's copy of an event, a series or one occurrence of a series: the sou
 | `timezone` | text |  |  |  |
 | `recurrence` | text |  |  | a series: its RRULE lines, JSON |
 | `recurrence_ends_at` | integer |  |  | a series: its last slot; NULL repeats indefinitely |
-| `event_type` | text |  |  | default, outOfOffice, focusTime, workingLocation, birthday, fromGmail; only default and fromGmail are searched |
-| `transparency` | text |  |  |  |
-| `visibility` | text |  |  |  |
-| `own_response` | text |  |  | the owner's answer: needsAction, accepted, declined, tentative |
+| `event_type` | text |  |  | default, out-of-office, focus, working-location, birthday, from-mail; only default and from-mail are searched |
+| `transparency` | text |  |  | opaque, transparent |
+| `visibility` | text |  |  | default, public, private, confidential |
+| `own_response` | text |  |  | the owner's answer, RFC 5545 PARTSTAT: needs-action, accepted, tentative, declined, delegated |
 | `organizer_identity_id` | integer |  | → `identities.id` | the `identity` it belongs to |
 | `join_url` | text |  |  | without its query string |
 | `join_key` | text |  |  | as `meetings.join_key` |
@@ -1255,7 +1255,7 @@ Who a calendar entry lists: a role in that entry, not a contact of its own. A pe
 | `identity_id` | integer |  | → `identities.id` | the `email` contact of the address; NULL for a room |
 | `email` | text | not null |  | lower case |
 | `name` | text |  |  |  |
-| `response` | text |  |  | needsAction, accepted, declined, tentative |
+| `response` | text |  |  | RFC 5545 PARTSTAT: needs-action, accepted, tentative, declined, delegated |
 | `optional` | integer | not null |  |  |
 | `organizer` | integer | not null |  |  |
 | `self` | integer | not null |  |  |

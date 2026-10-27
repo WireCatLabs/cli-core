@@ -1,4 +1,5 @@
 import { CHUNK_CHARS, chunkHash, splitSections, splitText } from "../../conversations/chunks.js"
+import type { EntryEventType } from "../../meetings/index.js"
 import { analyzerIdentity, DEFAULT_STEMMERS, type Stemmer, type Stemmers } from "../../search/stem.js"
 import { taskStemsOf, taskWordsOf } from "../../search/task-similarity.js"
 import type { CacheDatabase } from "../driver.js"
@@ -48,7 +49,12 @@ export const EVENT_TEXT =
   "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL AND p.resource = 0 AND p.name IS NOT NULL), ''))"
 
 /** Calendar entry types that are listed, never searched (requirements 3.4). */
-export const UNSEARCHED_EVENT_TYPES = ["workingLocation", "focusTime", "outOfOffice", "birthday"] as const
+export const UNSEARCHED_EVENT_TYPES = [
+  "working-location",
+  "focus",
+  "out-of-office",
+  "birthday",
+] as const satisfies readonly EntryEventType[]
 
 /** Visibilities whose entry, when it carries no text, is a busy-only slot: stored, never searched (requirements 3.4). */
 export const BUSY_ONLY_VISIBILITIES = ["private", "confidential"] as const

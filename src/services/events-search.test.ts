@@ -57,7 +57,16 @@ const calendarStore = async (entries: EntryInput[], account = "owner-1") => {
   const accountId = await store.accounts.saveAccount({ provider: "google-calendar", account }, { name: null })
   const [calendar] = await store.calendar.saveCalendars(
     accountId,
-    [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+    [
+      {
+        externalId: "primary",
+        title: "Work",
+        timezone: "UTC",
+        accessRole: "owner",
+        primary: true,
+        syncByDefault: true,
+      },
+    ],
     1,
   )
   await store.calendar.saveEntries(calendar?.id as number, entries, 1)
@@ -69,7 +78,16 @@ const secondCalendar = async (store: MessageStore, account = "owner-2") => {
   const accountId = await store.accounts.saveAccount({ provider: "google-calendar", account }, { name: null })
   const [calendar] = await store.calendar.saveCalendars(
     accountId,
-    [{ externalId: "primary", title: "Home", timezone: "UTC", accessRole: "owner", primary: true }],
+    [
+      {
+        externalId: "primary",
+        title: "Home",
+        timezone: "UTC",
+        accessRole: "owner",
+        primary: true,
+        syncByDefault: true,
+      },
+    ],
     1,
   )
   return calendar?.id as number
@@ -138,8 +156,8 @@ describe("searchEvents", () => {
 
   it("never finds working location, focus time, out of office or a birthday", async () => {
     const store = await calendarStore([
-      entry("w1", "Office Valencia", NOW, { eventType: "workingLocation" }),
-      entry("f1", "Focus Valencia", NOW, { eventType: "focusTime" }),
+      entry("w1", "Office Valencia", NOW, { eventType: "working-location" }),
+      entry("f1", "Focus Valencia", NOW, { eventType: "focus" }),
       entry("m1", "Valencia trip", NOW),
     ])
 

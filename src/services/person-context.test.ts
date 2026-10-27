@@ -165,7 +165,16 @@ describe("contacts context", () => {
     )
     const [calendar] = await store.calendar.saveCalendars(
       calendarAccount,
-      [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+      [
+        {
+          externalId: "primary",
+          title: "Work",
+          timezone: "UTC",
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: true,
+        },
+      ],
       1,
     )
     await store.calendar.saveEntries(
@@ -198,7 +207,16 @@ describe("contacts context", () => {
     )
     const [calendar] = await store.calendar.saveCalendars(
       calendarAccount,
-      [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+      [
+        {
+          externalId: "primary",
+          title: "Work",
+          timezone: "UTC",
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: true,
+        },
+      ],
       1,
     )
     const ana = [{ email: "ana@x.com", name: "Ana" }]

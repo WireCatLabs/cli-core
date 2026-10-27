@@ -29,7 +29,16 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       const fixture = await make()
       const [calendar] = await fixture.store.saveCalendars(
         fixture.accountId,
-        [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+        [
+          {
+            externalId: "primary",
+            title: "Work",
+            timezone: "UTC",
+            accessRole: "owner",
+            primary: true,
+            syncByDefault: true,
+          },
+        ],
         1,
       )
       await check({ ...fixture, calendar: (calendar as { id: number }).id })
@@ -40,7 +49,16 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       (
         await store.saveCalendars(
           accountId,
-          [{ externalId, title: externalId, timezone: "UTC", accessRole: "owner", primary: false }],
+          [
+            {
+              externalId,
+              title: externalId,
+              timezone: "UTC",
+              accessRole: "owner",
+              primary: false,
+              syncByDefault: true,
+            },
+          ],
           1,
         )
       )[0] as { id: number }
@@ -49,13 +67,22 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
   const earlier = CONTRACT_NOW - 24 * HOUR
 
   return [
-    test("a calendar the owner owns syncs; one shared with them is listed and does not", async ({
+    test("a new calendar syncs as its adapter decides, and a later list keeps the owner's choice", async ({
       store,
       accountId,
     }) => {
       await store.saveCalendars(
         accountId,
-        [{ externalId: "team", title: "Team", timezone: null, accessRole: "reader", primary: false }],
+        [
+          {
+            externalId: "team",
+            title: "Team",
+            timezone: null,
+            accessRole: "reader",
+            primary: false,
+            syncByDefault: false,
+          },
+        ],
         2,
       )
       assert.deepEqual(
@@ -65,6 +92,40 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
           ["team", false],
         ],
       )
+      const team = (await store.calendars(accountId)).find(({ externalId }) => externalId === "team")
+      await store.setCalendarSynced(team?.id as number, true, 3)
+      await store.saveCalendars(
+        accountId,
+        [
+          {
+            externalId: "team",
+            title: "Team",
+            timezone: null,
+            accessRole: "free-busy",
+            primary: false,
+            syncByDefault: false,
+          },
+        ],
+        4,
+      )
+      const again = (await store.calendars(accountId)).find(({ externalId }) => externalId === "team")
+      assert.deepEqual([again?.synced, again?.accessRole], [true, "free-busy"])
+    }),
+    test("calendar words are kept in their neutral spelling", async ({ store, calendar }) => {
+      const [entry] = await store.saveEntries(
+        calendar,
+        [
+          single("ooo", later, {
+            eventType: "out-of-office",
+            ownResponse: "needs-action",
+            participants: [{ email: "alice@example.com", response: "delegated" }],
+          }),
+        ],
+        2,
+      )
+      assert.deepEqual([entry?.eventType, entry?.ownResponse], ["out-of-office", "needs-action"])
+      const details = await store.event(entry?.eventId as number)
+      assert.equal(details?.participants[0]?.response, "delegated")
     }),
     test("rule 1: the same calendar and id is the same entry; a change keeps the old values", async ({
       store,
@@ -197,6 +258,40 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       assert.equal(before?.entries[0]?.status, "cancelled")
       const after = await store.event(future?.eventId as number)
       assert.equal(after?.event.status, "cancelled")
+    }),
+    test("entries removed by id: past stays as history, future cancels, a series cancels its slots", async ({
+      store,
+      calendar,
+    }) => {
+      const series: EntryInput = { ...single("s", earlier - HOUR), kind: "series", recurrence: ["RRULE:FREQ=DAILY"] }
+      const slot = (at: number): EntryInput =>
+        single(`s_${at}`, at, { kind: "occurrence", seriesExternalId: "s", originalStartsAt: at })
+      const [past, future, , , slotLater] = await store.saveEntries(
+        calendar,
+        [single("p", earlier), single("f", later), series, slot(earlier), slot(later)],
+        2,
+      )
+      assert.equal(await store.removeEntries(calendar, ["p", "f", "s", "unknown"], CONTRACT_NOW), 3)
+      const happened = (await store.event(past?.eventId as number))?.event
+      assert.equal(happened?.sourceDeletedAt, CONTRACT_NOW)
+      assert.equal(happened?.title, "Example review")
+      assert.equal((await store.event(future?.eventId as number))?.event.status, "cancelled")
+      const occurrence = await store.event(slotLater?.eventId as number)
+      assert.deepEqual([occurrence?.event.status, occurrence?.entries[0]?.status], ["cancelled", "cancelled"])
+      assert.equal(occurrence?.entries[0]?.deletedAt, null)
+      assert.equal(await store.removeEntries(calendar, ["p"], CONTRACT_NOW + 1), 0)
+    }),
+    test("a calendar's cursor is its own, and null forgets it", async (fixture) => {
+      const { store, calendar } = fixture
+      const other = await second(fixture)
+      assert.equal(await store.cursor(calendar), null)
+      const value = JSON.stringify({ v: 1, token: "token-1", window: { from: earlier, to: later }, fullAt: 2 })
+      await store.setCursor(calendar, value, 2)
+      await store.setCursor(other, "other", 2)
+      assert.equal(await store.cursor(calendar), value)
+      await store.setCursor(calendar, null, 3)
+      assert.equal(await store.cursor(calendar), null)
+      assert.equal(await store.cursor(other), "other")
     }),
     test("a full list marks the entries it did not return, plain occurrences only inside the window", async ({
       store,

@@ -26,7 +26,16 @@ const setup = async () => {
   const zoom = await store.accounts.saveAccount({ provider: "zoom", account: "zoom-1" }, { name: null })
   const [calendar] = await store.calendar.saveCalendars(
     accountId,
-    [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+    [
+      {
+        externalId: "primary",
+        title: "Work",
+        timezone: "UTC",
+        accessRole: "owner",
+        primary: true,
+        syncByDefault: true,
+      },
+    ],
     1,
   )
   return { store, path, accountId, zoom, calendar: calendar?.id as number }
