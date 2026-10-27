@@ -61,6 +61,7 @@ const OTHERS: Entry[] = [
   validation("push.unreadable", "the folder to push could not be read"),
   validation("spreadsheet.unreadable", "the workbook could not be read"),
   ["state.invalid", "configuration_error", "the saved sync state is unreadable or invalid; it is kept, not reset"],
+  ["sync.partial", "provider_error", "some calendars did not sync; the next sync retries them"],
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [

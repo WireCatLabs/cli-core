@@ -153,7 +153,7 @@ export { searchStore } from "./messages-archive-search.js"
 export type { ModerateOptions, ModerationService, ShownRules } from "./moderation.js"
 export { moderationService } from "./moderation.js"
 export type { ContactSync, PeopleService } from "./people.js"
-export { peopleService, phoneOf } from "./people.js"
+export { linkPeople, peopleService, phoneOf } from "./people.js"
 export type {
   ContextEvent,
   ContextMessage,

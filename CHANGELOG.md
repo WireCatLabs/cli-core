@@ -31,6 +31,14 @@ shape of this file.
   `@wirecat/cli-core/calendar/testing` adds `fakeCalendarSource`, `memoryEventStore`, `calendarSourceContract` for an
   adapter and `calendarSyncContract` for a store, over all twelve trait combinations. The `EventStore` types are
   exported from `./calendar` too ([Calendars](docs/dev/CALENDARS.md)).
+- **Shared calendar commands and MCP reads.** `addCalendarCommands(program, deps)` (`./calendar/cli`) mounts
+  `calendars list|sync|unsync`, `sync [--full] [--embed]`, `events list [today|week|from:… to:…] [person:…]
+  [calendar:…]`, `events show`, `search` (the events search, over the profile's account), `people list [<event>]`,
+  `people link`, and `links review|resolve`, all read only towards the provider. `calendarTools` and
+  `callCalendarTool` (`./calendar/mcp`) give the reads as MCP tools; without `account_id` they read every account the
+  host serves and name them, and each answer marks the fields an invitation's sender wrote as `untrusted`.
+- **`linkPeople(store, account, person, other)`** (`./services`) is the people service's link as a function, for a
+  tool with no messenger.
 
 ### Changed — may break callers
 
