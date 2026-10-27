@@ -348,7 +348,7 @@ describe("calendar commands", () => {
     await expect(cli("sync")).rejects.toMatchObject({ code: "provider_error", details: { reason: "sync.partial" } })
   })
 
-  it("sync --full lists the whole window under the shared program, whose own --full is global", async () => {
+  it("sync --rescan lists the whole window under the shared program, and --full, its output flag, is refused", async () => {
     const { store, accountId, source } = await setup()
     const written: unknown[] = []
     const app = { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" }
@@ -376,7 +376,10 @@ describe("calendar commands", () => {
     }
     expect(await round("sync", "--json")).toBe("full")
     expect(await round("sync", "--json")).toBe("changes")
-    expect(await round("sync", "--full", "--json")).toBe("full")
+    expect(await round("sync", "--rescan", "--json")).toBe("full")
+    const refused = captureStreams()
+    expect(await run(["sync", "--full", "--json"], definition, { streams: refused, tty: false, env })).toBe(2)
+    expect(refused.stderr.join("")).toContain("sync starts over with --rescan")
   })
 
   it("prints help and exits 0 for every calendar command", async () => {

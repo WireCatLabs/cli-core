@@ -30,7 +30,7 @@ provider confirmed deleted, never one that only left the window.
    months ahead from the start of today in UTC. Calendars with a round in progress go first, then the one synced
    longest ago, so a rerun spends its budget where work was left.
 3. A round in progress goes on, with its own window and token. Otherwise a full round (`cursor: null`) when asked
-   (`full`, which also drops a round in progress), when the source is `fullListOnly`, when there is no cursor or it
+   (`full`, the CLI's `--rescan`, which also drops a round in progress), when the source is `fullListOnly`, when there is no cursor or it
    cannot be read, when the cursor holds a window that moved, or when the last full round is a day old. Otherwise
    only the changes.
 4. Each page: `saveEntries`, then `removeEntries` for `removed`, then the cursor with the next page in it.
@@ -82,7 +82,7 @@ closer than the margin plus the slowest request so far (one `occurrences()` may 
 (`environment.deadline()`), the CLI's `requestMs` and the run's signal.
 
 **How to go on.** A partial answer without a failed calendar carries `next`: one command step, `sync` with the same
-`max_pages`, `timeout` and `embed` the run had and never `full` (that would drop the round in progress), marked safe
+`max_pages`, `timeout` and `embed` the run had and never `--rescan` (that would drop the round in progress), marked safe
 to run unasked (it reads the provider and writes only the store). A host that renders it with `renderAnswer` prints
 the whole line with the profile (`gcal personal sync`) as the last line in text, and an MCP agent gets the same
 command and arguments to call again. A run that moved nothing on (no page read, no series expanded: `progress.steps` is 0, as with `--max-pages 1`) gets no step, only a hint to raise `--timeout` or `--max-pages`, so an agent never repeats it in a loop. The hint names `status` (`gcal personal status`), which shows the progress between runs.
@@ -106,7 +106,7 @@ shows the event's own fields (title, time) and only this account's copies, atten
 |---|---|---|
 | `calendars list` | provider read, local write | the provider's calendars, saved, with which of them sync |
 | `calendars sync <calendar>` / `unsync <calendar>` | local write | turn one calendar's sync on or off, by its id or the provider's |
-| `sync [--full] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` with a `next` step and exits 0, a calendar that failed exits with `provider_error` (`sync.partial`). `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
+| `sync [--rescan] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` with a `next` step and exits 0, a calendar that failed exits with `provider_error` (`sync.partial`). `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
 | `status` | local read | each synced calendar's sync in the WC-LIFE-14 shape (`progressOf`): `done`, `total: null`, `remaining: null`, `state`, `updated_at`, `cursor_age_ms`, plus `round` in progress and `line` (`progressLine`); `profile` is `deps.profile` |
 | `events list [today\|week\|from:… to:…] [person:…] [calendar:…]` | local read | stored events, earliest first; without a time word from the start of today |
 | `events show <event>` | local read | its calendar copies, attendees with their `person:`, Drive files, history |
