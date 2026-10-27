@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.455.0 — 27.10.2026
+
 ### Added
 
 - **A CLI that is not a messenger reuses the shared permission helpers.** `./cli` exports `terminalAsker(command)`,
