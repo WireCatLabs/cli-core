@@ -5537,6 +5537,7 @@ describe("the guard, account and mcp config commands", () => {
       unread_count: 0,
       last_message_at: null,
       created_at: null,
+      untrusted: ["title"],
     })
     expect((await show(["7", "4", "--offline"], forum)).code).toBe(2)
     expect((await show(["7", " "], forum)).code).toBe(2)

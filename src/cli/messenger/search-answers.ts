@@ -30,6 +30,17 @@ const defined = <T extends object>(value: T): T =>
 export const offsetOf = (page: number | undefined, limit: number): number | undefined =>
   page === undefined || page <= 1 ? undefined : (page - 1) * limit
 
+/** Who wrote it and what, the chat's title, the mail's headers: others write them; the owner's own messages too. */
+const MESSAGE_HIT_UNTRUSTED = ["chat_title", "sender_name", "excerpt", "context.sender_name", "context.text"]
+const MAIL_HIT_UNTRUSTED = [
+  "email.subject",
+  "email.from.name",
+  "email.to.name",
+  "email.cc.name",
+  "email.bcc.name",
+  "email.reply_addresses.name",
+]
+
 export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem => {
   const at = parseLocator(hit.locator)
   const around = hit.thread?.items ?? hit.context
@@ -75,6 +86,7 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
       sender_name: one.senderName,
       text: one.text,
     })),
+    untrusted: hit.email ? [...MESSAGE_HIT_UNTRUSTED, ...MAIL_HIT_UNTRUSTED] : MESSAGE_HIT_UNTRUSTED,
   })
 }
 
@@ -188,6 +200,7 @@ const pictureItems = (found: SearchFound): MessageHitItem[] => {
       sender_name: senderName,
       matched_in: "picture",
       score,
+      untrusted: ["sender_name"],
     }))
 }
 
@@ -217,10 +230,24 @@ export const messagesAnswer = (
   })
 }
 
-export const noteHitItem = (hit: FoundNote): NoteHitItem => defined({ ...hit })
+/**
+ * A document comes from a shared drive, where others write and edit; a note is the owner's own, in a folder of
+ * theirs or written in memo, so it is left unmarked.
+ */
+const DOCUMENT_HIT_UNTRUSTED = ["title", "excerpt"]
 
-/** An event's title and the text its excerpt is cut from come from whoever sent the invitation. */
-const EVENT_HIT_UNTRUSTED = ["title", "excerpt"]
+export const noteHitItem = (hit: FoundNote): NoteHitItem =>
+  defined({ ...hit, untrusted: hit.kind === "document" ? DOCUMENT_HIT_UNTRUSTED : undefined })
+
+/** The text of each kind of `search all` hit that someone other than the owner may have written. */
+const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
+  message: ["title", "excerpt", "sender_name"],
+  mail: ["title", "excerpt", "sender_name"],
+  document: DOCUMENT_HIT_UNTRUSTED,
+  note: undefined,
+  event: ["title", "excerpt"],
+  meeting: ["title", "excerpt"],
+}
 
 export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
   item.kind === "meeting"
@@ -235,6 +262,7 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         offset_ms: item.startMs,
         scope: item.scope,
         id: String(item.id),
+        untrusted: ALL_HIT_UNTRUSTED.meeting,
       }
     : defined({
         kind: item.kind,
@@ -248,7 +276,7 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         sender_name: item.from?.name,
         sender_ref: item.from?.ref,
         found_by: item.foundBy,
-        untrusted: item.kind === "event" ? EVENT_HIT_UNTRUSTED : undefined,
+        untrusted: ALL_HIT_UNTRUSTED[item.kind],
       })
 
 /** Meaning was not searched because the model is not downloaded; `--exact` leaving it out is no gap. */

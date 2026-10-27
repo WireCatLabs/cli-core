@@ -20,6 +20,27 @@ shape of this file.
   works from the next upgrade on: the version doing the upgrading must have it, and the server must have been
   started by it.
 
+### Changed — may break callers
+
+- **Every search hit marks the text someone other than the owner wrote.** As `search all` event hits did since
+  0.460.0, each hit carries `untrusted`, the field names an agent reads as data
+  ([WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)):
+  - `search all`: a message or mail hit `["title", "excerpt", "sender_name"]`, a document hit and a meeting hit
+    `["title", "excerpt"]`. A note hit stays unmarked: a note is the owner's own, in a folder of theirs or written in
+    memo, while a document comes from a shared drive.
+  - `search messages` and `search mail`: `chat_title`, `sender_name`, `excerpt`, `context.sender_name`,
+    `context.text`, and on mail `email.subject` and the names in `email.from|to|cc|bcc|reply_addresses`. The owner's
+    own messages are marked too, since one answer mixes both. A picture hit marks `sender_name`.
+  - `search notes`: a document hit `["title", "excerpt"]`, a note hit nothing.
+  - `search meetings` (CLI and the `search_meetings` tool), and the passages of a project's meeting evidence:
+    `["excerpt"]`, plus `source.title` when the meeting's title is given.
+  - `search topics`, `topics list` and `topics show`: `["title"]`, which whoever opened the topic wrote.
+
+  The `message.hit`, `note.hit`, `meeting_hit` and `topic` entities gain an optional `untrusted`, so a caller that
+  checks them against an older copy refuses the new field. MCP answers already showed control characters as text;
+  tests now cover it per kind. `search conversations` and `search runs` are unchanged: their hits hold ids, counts
+  and diagnostics, no one's text.
+
 ## 0.463.0 — 27.10.2026
 
 ### Changed — may break callers
