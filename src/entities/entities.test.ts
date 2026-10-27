@@ -1,6 +1,7 @@
 import { defineQuery, queryFieldsOf } from "@wirecat/cli-base/query"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { LINK_KINDS, LINK_SOURCES } from "../store/sqlite/link-kinds.js"
 import { ENTITIES, type EntityName, entityDefinitions } from "./index.js"
 
 const at = "2026-10-13T10:00:00.000Z"
@@ -1576,4 +1577,27 @@ describe("entity keys", () => {
       expect(() => defineQuery({ entity: name, backend: "sql", fields })).not.toThrow()
     },
   )
+})
+
+describe("a task card's links", () => {
+  it("take every kind and source a stored link may have, a calendar attachment's too", () => {
+    const link = (kind: string, origin: string) => ({
+      id: "1",
+      from: "task:1",
+      to: "document:2",
+      kind,
+      anchor: null,
+      origin,
+      target_text: null,
+      role: null,
+      evidence: null,
+      provenance: null,
+      confirmed: true,
+      created_at: at,
+    })
+    const links = LINK_KINDS.flatMap((kind) => LINK_SOURCES.map((origin) => link(kind, origin)))
+
+    expect(v.is(ENTITIES.task_card, { ...taskCardSample, links, linked_from: links })).toBe(true)
+    expect(links).toContainEqual(expect.objectContaining({ kind: "attached", origin: "calendar" }))
+  })
 })

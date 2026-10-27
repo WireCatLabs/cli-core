@@ -83,6 +83,41 @@ export const logFileLink = (
     )
     .run(fileId, from == null ? null : Number(from), to, method, author, now)
 
+/** How an `attached` link names a Drive file it waits for: by its Drive id, since no row may hold it yet. */
+export const driveFileTarget = (fileId: string): string => `google-drive:${fileId}`
+
+/** The document of the Drive file with this id; `null` when no Drive account holds it, or two do. */
+export const driveDocumentOf = (database: CacheDatabase, fileId: string): number | null => {
+  const rows = database
+    .prepare(
+      "SELECT DISTINCT f.document_id AS id FROM files f JOIN accounts a ON a.id = f.account_id WHERE a.provider = 'google-drive' " +
+        "AND f.external_id = ? AND f.deleted_at IS NULL AND f.document_id IS NOT NULL LIMIT 2",
+    )
+    .all(fileId)
+  return rows.length === 1 ? Number(rows[0]?.id) : null
+}
+
+/** Calendar entries that named this Drive file before Drive stored it now link its document. */
+const linkAttached = (database: CacheDatabase, now: number, fileId: string): void => {
+  const target = driveFileTarget(fileId)
+  if (
+    !database
+      .prepare(
+        "SELECT 1 FROM links WHERE to_type = 'document' AND to_id IS NULL AND target_text = ? AND kind = 'attached'",
+      )
+      .get(target)
+  )
+    return
+  const document = driveDocumentOf(database, fileId)
+  if (document !== null)
+    database
+      .prepare(
+        "UPDATE links SET to_id = ?, updated_at = ? WHERE to_type = 'document' AND to_id IS NULL AND target_text = ? " +
+          "AND kind = 'attached'",
+      )
+      .run(document, now, target)
+}
+
 /** Moves the rows under a folder whose path changed, in one statement over the old prefix. */
 const movePaths = (database: CacheDatabase, accountId: number, from: string, to: string): void => {
   database
@@ -184,6 +219,7 @@ export const syncFile = (
       .get(...(Object.values(values) as (string | number | null)[]), Number(doc.created_at), now)
     const placed = { id: Number(row?.id), path }
     logFileLink(database, now, placed.id, null, documentId, method)
+    if (remote) linkAttached(database, now, externalId)
     if (remote && kind === "folder") placeChildren(database, now, accountId, String(doc.external_id), depth)
     return placed
   }
@@ -199,6 +235,7 @@ export const syncFile = (
       )
       .run(...(Object.values(values) as (string | number | null)[]), changed ? now : Number(existing.updated_at), id)
     if (kind === "folder" && existing.path !== path) movePaths(database, accountId, String(existing.path), path)
+    if (remote && changed) linkAttached(database, now, externalId)
   }
   return { id, path }
 }

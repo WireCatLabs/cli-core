@@ -1,5 +1,6 @@
 import * as v from "valibot"
 import { TASK_TYPES } from "../domain/knowledge.js"
+import { LINK_KINDS, LINK_SOURCES } from "../store/sqlite/link-kinds.js"
 import { TASK_KINDS, TASK_ORIGINS, TASK_STATES, TASK_VERDICTS } from "../tasks/index.js"
 import { count, id, reference, text, time } from "./fields.js"
 import { closeSuggestion } from "./task.js"
@@ -10,22 +11,9 @@ const link = v.strictObject({
   id,
   from: reference,
   to: v.nullable(reference),
-  kind: v.picklist([
-    "links-to",
-    "blocked-by",
-    "follow-up-of",
-    "about",
-    "member-of",
-    "labelled",
-    "answered-by",
-    "evidence",
-    "created-from",
-    "duplicate-of",
-    "related-to",
-    "assigned-to",
-  ]),
+  kind: v.picklist(LINK_KINDS),
   anchor: v.nullable(text),
-  origin: v.picklist(["file", "owner", "suggested", "message"]),
+  origin: v.picklist(LINK_SOURCES),
   target_text: v.nullable(text),
   role: v.nullable(text),
   evidence: v.nullable(text),
