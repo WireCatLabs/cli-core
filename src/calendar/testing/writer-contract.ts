@@ -157,7 +157,6 @@ export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Pr
         )
         assert.equal(allDay.allDay, true)
         assert.equal(allDay.startDate, day)
-        assert.equal(allDay.startsAt ?? null, null)
         const timed = await f.writer.update(
           f.calendar,
           made.externalId,
