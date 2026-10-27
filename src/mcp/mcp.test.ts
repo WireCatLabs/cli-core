@@ -4480,12 +4480,22 @@ describe("mcp config", () => {
     expect(config).toMatchObject({ mcpServers: { "chat-default": { args: [PNPM, "default", "mcp", "serve"] } } })
   })
 
-  it("with no profile, names the server of every profile after the tool alone", () => {
-    const { config } = serverEntry(app, { execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
+  it("names the server of every profile after the tool alone, and a list after its profiles", () => {
+    const every = serverEntry(app, { profiles: "all", execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
+    const listed = serverEntry(app, { profiles: "personal,work", execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
 
-    expect(config).toEqual({
-      mcpServers: { chat: { type: "stdio", command: "/usr/bin/node", args: [PNPM, "mcp", "serve"] } },
+    expect(every.config).toEqual({
+      mcpServers: {
+        chat: { type: "stdio", command: "/usr/bin/node", args: [PNPM, "mcp", "serve", "--profiles", "all"] },
+      },
     })
+    expect(listed.config).toMatchObject({
+      mcpServers: { "chat-personal-work": { args: [PNPM, "mcp", "serve", "--profiles", "personal,work"] } },
+    })
+  })
+
+  it("refuses an entry that names no profile", () => {
+    expect(() => serverEntry(app, { execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })).toThrow(/one profile/)
   })
 
   it("refuses npx, whose cache is cleared, and marks a path bound to a Node version manager", () => {
