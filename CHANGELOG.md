@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.456.0 — 27.10.2026
+
 ### Added
 
 - **A calendar store for any provider.** `EventStore.removeEntries(calendarId, externalIds, now)` cancels entries a
