@@ -15,6 +15,8 @@ contract. This page is the order to read them in, and the rules that are not in 
 | `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter`; `mcpOverStdio` for MCP tests |
 | `@wirecat/cli-core/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
 | `@wirecat/cli-core/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
+| `@wirecat/cli-core/calendar` | `CalendarSource` and `syncCalendars`, for a calendar provider ([CALENDARS.md](CALENDARS.md)) |
+| `@wirecat/cli-core/calendar/testing` | the calendar contract kit: `calendarSourceContract`, `calendarSyncContract`, `fakeCalendarSource`, `memoryEventStore` |
 | `@wirecat/cli-core/files` | native ordinary-file identity checks, directory syncing, `writeFileAtomic` and `acquireLock` |
 | `@wirecat/cli-core/speech/wav` | bounded PCM16 WAV preflight and 16 kHz streaming, without loading a speech model |
 | `@wirecat/cli-core/update` | `appUpdate`: an app's installer, npm's latest version, the update itself and the daily notice |

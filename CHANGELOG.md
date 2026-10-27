@@ -22,6 +22,15 @@ shape of this file.
   neutral one (`outOfOffice` → `out-of-office`, `focusTime` → `focus`, `workingLocation` → `working-location`,
   `fromGmail` → `from-mail`, `needsAction` → `needs-action`, `freeBusyReader` → `free-busy`). Builds that speak
   version 34 still open the store.
+- **`@wirecat/cli-core/calendar`: one sync for every calendar provider.** A calendar CLI writes a `CalendarSource`
+  (`calendars`, `changes` by page with a cursor or `{ reset: true }`, and `occurrences` when the provider expands a
+  series on request) and calls `syncCalendars(source, store, { accountId })`: the calendar list, then each synced
+  calendar's changes or its whole window (a year back, three months ahead, a full list once a day), the slots of the
+  series that changed, the marking after a full list, and the cursor saved last, so a failed calendar retries the
+  same changes. The traits `expands`, `cursorHoldsWindow` and `fullListOnly` cover Google, Outlook and ICS/CalDAV.
+  `@wirecat/cli-core/calendar/testing` adds `fakeCalendarSource`, `memoryEventStore`, `calendarSourceContract` for an
+  adapter and `calendarSyncContract` for a store, over all twelve trait combinations. The `EventStore` types are
+  exported from `./calendar` too ([Calendars](docs/dev/CALENDARS.md)).
 
 ### Changed — may break callers
 
