@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.466.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **`account list` says whether each profile is signed in on this computer.** The `account_profile` entity gains an
