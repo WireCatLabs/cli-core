@@ -473,19 +473,23 @@ const afterCreate = async <T>(context: WriteContext, id: string, write: () => Pr
     return await write()
   } catch (error) {
     if (!isCliError(error)) throw error
-    throw new CliError(
-      error.code,
-      `${error.message}; the new series ${id} is made, so repeat with ${context.names.id} ${id}: it is found, not ` +
-        "made again, and the old series is ended",
-      { ...error.details, operation_id: id },
-    )
+    // A lost answer may have ended the old series: after a sync this occurrence is gone, and a retry finds nothing.
+    const next =
+      error.code === "outcome_unknown"
+        ? `sync: if the series now ends before this occurrence, the split is done; if not, repeat with ` +
+          `${context.names.id} ${id}, which finds the new series instead of making it again`
+        : `repeat with ${context.names.id} ${id}: the new series is found, not made again, and the old one ends`
+    throw new CliError(error.code, `${error.message}; the new series ${id} is made — ${next}`, {
+      ...error.details,
+      operation_id: id,
+    })
   }
 }
 
 /**
- * "This and all following" from the writer's own writes, so every provider has it (RFC 5545 has no such change; Google
- * documents the same split: https://developers.google.com/workspace/calendar/api/guides/recurringevents#modifying_all_following_instances).
- * The new series is made first, under an id journaled before the call, and then the old one ends before the slot:
+ * "This and all following" from the writer's own writes, so every provider has it: neither RFC 5545 nor Google's API has
+ * such a change (https://developers.google.com/workspace/calendar/api/guides/recurringevents only warns against
+ * changing the instances one by one for it). The new series is made first, under an id journaled before the call, and then the old one ends before the slot:
  * a conflict on the old series stops nothing being lost, and a retry with the id finds the new series. Until then
  * later slots show twice, never none.
  */
@@ -689,5 +693,9 @@ export const moveEvent = async (
     ...answerOf(operationId, saved, target.kind === "series"),
     from_calendar: String(calendar.id),
     calendar: String(destination.id),
+    // Stored once here, the copy would stay as it is now: no sync reads a calendar that does not sync.
+    ...(destination.synced
+      ? {}
+      : { hint: `calendar ${destination.id} does not sync: calendars sync ${destination.id} keeps the event current` }),
   }
 }

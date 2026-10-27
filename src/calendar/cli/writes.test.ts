@@ -603,6 +603,23 @@ describe("events update and delete --following", () => {
     })
   })
 
+  it("a lost answer on the old series says to sync first, since the split may be done", async () => {
+    const { cli, writer, slot } = await withWeekly({ permissions: SPLIT })
+    const update = writer.update
+    writer.update = async (...args) => {
+      writer.update = update
+      writer.loseNextAnswer()
+      return update(...args)
+    }
+    const lost = await cli("events", "update", slot, "--following", "--title", "New", "--no-notify").catch(
+      (error) => error,
+    )
+    expect(lost).toMatchObject({ code: "outcome_unknown" })
+    expect(lost.message).toContain("sync: if the series now ends before this occurrence, the split is done")
+    expect(lost.message).toContain(`--id ${lost.details.operation_id}`)
+    expect(writer.held("primary").find(({ externalId }) => externalId === "w1")?.recurrence?.[0]).toContain("UNTIL=")
+  })
+
   it("delete --following ends the series and asks first, as deleting one event does", async () => {
     const { cli, store, slot } = await withWeekly()
     await expect(cli("events", "delete", slot, "--following", "--no-notify")).rejects.toMatchObject({
@@ -626,6 +643,7 @@ describe("events move", () => {
     const event = await eventOf("e1")
     const answer = await cli("events", "move", `event:${event}`, "--to-calendar", "family", "--no-notify")
     expect(answer).toMatchObject({ from_calendar: "1", calendar: "2", event: `event:${event}` })
+    expect(answer).not.toHaveProperty("hint")
     expect(writer.calls.at(-1)).toMatchObject({ write: "move", externalId: "e1", target: "family", notify: false })
     const details = await store.event(event)
     expect(details?.entries.filter(({ status }) => status !== "cancelled").map(({ calendarId }) => calendarId)).toEqual(

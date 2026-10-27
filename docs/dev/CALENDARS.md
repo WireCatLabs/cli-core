@@ -133,12 +133,15 @@ first scheduled (`originalStartsAt`) is the split. The new series is made first,
 client-chosen id journaled before the call. It keeps the old series' rule, the attendees other than the owner, and
 the EXDATE and RDATE dates from the split on. Then the old series is changed: its rule ends with UNTIL just before
 the split (one second before for a timed event, the day before for an all-day one), COUNT gives way to that UNTIL,
-and it keeps the dates before the split. Google documents the same split
-([recurring events](https://developers.google.com/workspace/calendar/api/guides/recurringevents#modifying_all_following_instances)).
-The order is chosen for retries:
+and it keeps the dates before the split. Neither RFC 5545 nor Google's API has such a change; Google's
+[recurring events guide](https://developers.google.com/workspace/calendar/api/guides/recurringevents) only warns against
+changing the instances one by one for it. The order is chosen for retries:
 
 - A conflict on the old series (its `etag` is old) comes after the new series exists. The error names the new
   series' id; after `sync`, the owner repeats with `--id <id>`. The create finds that series and the old one ends.
+- A lost answer on the old series (`outcome_unknown`) may mean it did end. The error says to sync first: if the
+  series now ends before the occurrence, the split is done (and the occurrence is gone, so a retry would not find
+  it); if not, repeat with `--id <id>`.
 - Until then, later slots show twice, never not at all.
 - A series already ending before the split is not split again: the command refuses, or with `--id` only finds the
   new series.
