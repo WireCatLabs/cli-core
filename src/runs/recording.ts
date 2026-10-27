@@ -52,6 +52,7 @@ export const recorded = async <T>(options: RecordingOptions, body: (events: Even
       startedAt: Date.now(),
       ...(options.profile === undefined ? {} : { profile: options.profile }),
       ...(recording.traceId ? { traceId: recording.traceId } : {}),
+      events: recording.events,
     }
     if (options.processRun) useAsProcessRun(scope)
     const answer = await inRun(scope, () => body(recording.events))
@@ -105,19 +106,25 @@ export const startRecording = (options: RecordingOptions): Recording => {
   const run = options.record ? open({ startedAt }) : undefined
   // Unrecorded, the newest events are held until the outcome is known, so a failure can still be kept.
   const held: DiagnosticEvent[] | undefined = !run && options.keepFailed ? [] : undefined
-  let requests = 0
+  const counted = { wire: 0, operation: 0 }
   let refused: RequestEvent | undefined
+  const cap = capped()
+  const requests = () => (counted.wire > 0 ? counted.wire : counted.operation)
 
   const events: EventSink = (event) => {
-    if (event.event === "request") requests += 1
+    if (event.event === "request") counted[event.level === "wire" ? "wire" : "operation"] += 1
     if (event.event === "response" && event.outcome === "error") refused = event
     if (options.trace)
       streams.diagnostic(options.format === "pretty" ? renderEvent(event) : JSON.stringify(logAttributes(event)))
-    if (run) logEvent(run, event)
+    if (run) cap.log(run, event)
     if (held) {
       held.push(event)
       if (held.length > HELD_AT_MOST) held.shift()
     }
+  }
+  const keep = (kept: Run): Run => {
+    for (const event of held ?? []) cap.log(kept, event)
+    return kept
   }
 
   return {
@@ -126,15 +133,22 @@ export const startRecording = (options: RecordingOptions): Recording => {
     events,
     succeed: async (answer) => {
       const partial = partialOutcome(answer)
-      const kept = run ?? (partial && held ? keep(open({ startedAt }), held) : undefined)
-      await kept?.finish(partial ? "partial" : "success", { requests, ...(partial ? { partial } : {}) })
+      const kept = run ?? (partial && held ? keep(open({ startedAt })) : undefined)
+      if (kept) cap.close(kept)
+      await kept?.finish(partial ? "partial" : "success", {
+        requests: requests(),
+        ...cap.dropped(),
+        ...(partial ? { partial } : {}),
+      })
     },
     fail: async (error) => {
-      const failed = run ?? (held ? keep(open({ startedAt }), held) : undefined)
+      const failed = run ?? (held ? keep(open({ startedAt })) : undefined)
       if (failed) {
         if (!isCliFailure(error)) failed.logger.error(crashOf(error))
+        cap.close(failed)
         await failed.finish("failed", {
-          requests,
+          requests: requests(),
+          ...cap.dropped(),
           ...outcomeOf(error),
           error: errorDetailOf(error, refused),
           ...(run ? {} : { keptBecauseFailed: true }),
@@ -152,9 +166,34 @@ export const wasSettled = (error: unknown): boolean => typeof error === "object"
 
 const HELD_AT_MOST = 500
 
-const keep = (run: Run, events: DiagnosticEvent[]): Run => {
-  for (const event of events) logEvent(run, event)
-  return run
+/** A run of a loop that never ends must not fill the disk: past these, events are counted by operation instead. */
+export const EVENTS_AT_MOST = 2000
+export const EVENT_BYTES_AT_MOST = 1024 * 1024
+
+const capped = () => {
+  let lines = 0
+  let bytes = 0
+  let dropped = 0
+  const byOperation: Record<string, number> = {}
+  return {
+    log: (run: Run, event: DiagnosticEvent): void => {
+      // The record's own envelope (time, ids of the run, resource) is about 200 bytes on top of its attributes.
+      const size = JSON.stringify(logAttributes(event)).length + 200
+      if (lines >= EVENTS_AT_MOST || bytes + size > EVENT_BYTES_AT_MOST) {
+        dropped += 1
+        const operation = "operation" in event && event.operation ? event.operation : event.event
+        byOperation[operation] = (byOperation[operation] ?? 0) + 1
+        return
+      }
+      lines += 1
+      bytes += size
+      logEvent(run, event)
+    },
+    close: (run: Run): void => {
+      if (dropped > 0) run.logger.warn({ event: "events.dropped", dropped, counts: byOperation })
+    },
+    dropped: (): { eventsDropped?: number } => (dropped > 0 ? { eventsDropped: dropped } : {}),
+  }
 }
 
 const logEvent = (run: Run, event: DiagnosticEvent): void => {

@@ -2,10 +2,11 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import { isCliError, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
-import type { RequestEvent } from "../runs/events.js"
+import { providerErrorKey, type RequestEvent } from "../runs/events.js"
 import { type Recording, startRecording, wasSettled } from "../runs/recording.js"
 import { KEEP_RUNS_FOR_DAYS } from "../runs/run.js"
 import { runContextOf } from "../runs/run-context.js"
+import { runEvent } from "../runs/scope.js"
 import { environmentOf } from "./context.js"
 import { rootOf } from "./profile.js"
 
@@ -157,25 +158,66 @@ interface Parse {
 
 const parses = new AsyncLocalStorage<Parse>()
 
-/** For a provider client far from the program: the event lands in the current command's run, or nowhere. */
-export const providerEvent = (event: RequestEvent): void => parses.getStore()?.runs.events(event)
+/**
+ * For a provider client far from the program: the event lands in the current command's run — a `startCli` command's,
+ * or the run `run()` opened — or nowhere.
+ */
+export const providerEvent = (event: RequestEvent): void => {
+  const parse = parses.getStore()
+  if (parse) parse.runs.events(event)
+  else runEvent(event)
+}
+
+/** What one wire call was, besides its operation: never the URL as sent, its query or its body. */
+export interface ProviderCall {
+  method?: string
+  /** The path with ids as `:id`, `/v2/users/:id/meetings`; `endpointTemplate` cuts anything past it. */
+  endpointTemplate?: string
+  transport?: RequestEvent["transport"]
+  /** 1 for the first try; a retry passes 2 and up, with the wait before it. */
+  attempt?: number
+  waitMs?: number
+  bytes?: number
+}
+
+export interface ProviderAnswer {
+  status?: number
+  error?: unknown
+  errorCode?: string
+  /** The service's own name for a refusal, `rateLimitExceeded`; dropped unless shaped like one. */
+  providerError?: string
+  bytes?: number
+  counts?: Record<string, number>
+  ids?: Record<string, string>
+}
 
 /**
- * Times one provider call under a fixed operation name — nothing the call carries goes into the run. The returned
+ * Times one wire call under a fixed operation name — nothing the call carries goes into the run. The returned
  * function ends it; an `error` or an `errorCode` makes it a failed one.
  */
-export const providerRequest = (operation: string, sink: (event: RequestEvent) => void = providerEvent) => {
-  sink({ event: "request", operation })
+export const providerRequest = (
+  operation: string,
+  sink: (event: RequestEvent) => void = providerEvent,
+  call: ProviderCall = {},
+) => {
+  const { bytes: sent, ...shape } = call
+  const wire = { operation, level: "wire" as const, ...shape }
+  sink({ event: "request", ...wire, ...(sent === undefined ? {} : { bytes: sent }) })
   const started = performance.now()
-  return ({ status, error, errorCode }: { status?: number; error?: unknown; errorCode?: string } = {}): void => {
+  return ({ status, error, errorCode, providerError, bytes, counts, ids }: ProviderAnswer = {}): void => {
     const failed = error !== undefined || errorCode !== undefined
+    const key = providerErrorKey(providerError)
     sink({
       event: "response",
-      operation,
+      ...wire,
       ...(status === undefined ? {} : { status }),
       durationMs: Math.round(performance.now() - started),
       outcome: failed ? "error" : "ok",
       ...(failed ? { errorCode: errorCode ?? (isCliError(error) ? error.code : "provider_error") } : {}),
+      ...(key ? { providerError: key } : {}),
+      ...(bytes === undefined ? {} : { bytes }),
+      ...(counts ? { counts } : {}),
+      ...(ids ? { ids } : {}),
     })
   }
 }

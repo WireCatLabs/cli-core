@@ -2,10 +2,12 @@
  * One operation against the messenger, as both sinks see it: `--trace` renders it, a recorded run
  * writes it as a line of JSON.
  *
- * ⚠ **Nothing here may carry content.** An operation name, an id, a count, a duration and an error
- * code are safe. A chat title, a name, a message body, a phone number or a token are not — not
- * truncated and not hashed. The adapter builds `ids` and `counts` from fields it names, never by
- * copying a request, and never from what the person typed: a typed chat is often a title.
+ * ⚠ **Nothing here may carry content.** An operation name, an id, a file or folder path, a count, a duration and an
+ * error code are safe: a run record stays on the owner's machine, and keeping the ids that tell runs apart was the
+ * owner's choice (NEED-110, 2026-10-27). A chat title, a name, a message body, a phone number, a token, a URL as sent
+ * or a query string are not — not truncated and not hashed. The adapter builds `ids` and `counts` from fields it names,
+ * never by copying a request, and never from what the person typed: a typed chat is often a title. Anything that
+ * leaves the machine (a bug report) strips the ids too.
  */
 export interface RequestEvent {
   event: "request" | "response"
@@ -30,6 +32,16 @@ export interface RequestEvent {
   errorCode?: string
   /** The messenger's own name for a refusal, when it is shaped like one (`providerErrorKey`). */
   providerError?: string
+  /**
+   * `operation` for one adapter call (`observed`), `wire` for one call on the network under it. A run counts wire
+   * requests when it has any, so one operation over three frames is three requests, never four.
+   */
+  level?: "operation" | "wire"
+  transport?: "http" | "mtproto" | "max-ws" | "wa-engine"
+  /** 1 for the first try, 2 and up for a retry of the same call. */
+  attempt?: number
+  /** How long the client waited before this attempt: a flood wait or a `Retry-After`. */
+  waitMs?: number
 }
 
 /** Something the client noticed and went on without. A code, never the sentence. */
@@ -90,6 +102,8 @@ export const renderEvent = (event: DiagnosticEvent): string => {
     if (event.method !== undefined || event.endpointTemplate !== undefined)
       parts.push([event.method, event.endpointTemplate].filter(Boolean).join(" "))
     if (event.status !== undefined) parts.push(`${event.status}`)
+    if (event.attempt !== undefined && event.attempt > 1) parts.push(`attempt ${event.attempt}`)
+    if (event.waitMs !== undefined) parts.push(`waited ${age(event.waitMs)}`)
   }
   if (event.ids) for (const [name, value] of Object.entries(event.ids)) parts.push(`${name} ${value}`)
   if (event.event !== "cache") {

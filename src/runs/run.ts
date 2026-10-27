@@ -26,8 +26,10 @@ export interface RunMetadata {
   startedAt: string
   completedAt?: string
   status: RunStatus | "running"
-  /** How many operations reached the messenger. */
+  /** How many calls reached the messenger: wire calls when the transport logs them, otherwise operations. */
   requests?: number
+  /** Events past the run's cap, counted rather than written; an `events.dropped` line says which. */
+  eventsDropped?: number
   durationMs?: number
   cliVersion: string
   /** `node 24.1.0` or `bun 1.3.14`, and where: what a problem report is asked for first. */

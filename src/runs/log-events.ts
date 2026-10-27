@@ -12,6 +12,11 @@ export const CORE_LOG_EVENTS = defineLogEvents([
     keys: ["operation", "reason"],
   },
   { id: "command.crashed", meaning: "a command failed on a bug; where, never what", keys: ["error_class", "frames"] },
+  {
+    id: "events.dropped",
+    meaning: "the run reached its cap and counted the rest instead of writing them",
+    keys: ["dropped", "counts"],
+  },
   { id: "send.recorded", meaning: "a write the send guard saw, and how it ended", keys: ["outcome"] },
   { id: "job.start", meaning: "a background job started", keys: ["job"] },
   { id: "job.exit", meaning: "a background job ended", keys: ["job", "outcome"] },

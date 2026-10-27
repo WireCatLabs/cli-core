@@ -309,6 +309,7 @@ export const entryRunner = (registration: Registration): RunEntry => {
       startedAt,
       ...(profile === undefined ? {} : { profile }),
       ...(traceId === undefined ? {} : { traceId }),
+      ...(recording ? { events: recording.events } : {}),
     }
     const result = await inRun(scope, () => {
       const input = inputOf(definition, syncAllowedFor(key, registration.defaults))

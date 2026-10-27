@@ -5,13 +5,16 @@ import { CliError, captureStreams } from "@wirecat/cli-base"
 import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
 import { Command, Option } from "commander"
 import { describe, expect, it } from "vitest"
+import { providerRequest } from "../cli/command-runs.js"
 import { type BaseContext, baseContext } from "../cli/context.js"
 import { run } from "../cli/program.js"
 import { runsCommand } from "../cli/runs/command.js"
 import { settingsFor } from "../cli/settings.js"
 import { CORE_LOG_EVENTS } from "./log-events.js"
-import { listRuns, runsDirFor } from "./run.js"
+import { EVENTS_AT_MOST } from "./recording.js"
+import { findRun, listRuns, readEvents, runsDirFor } from "./run.js"
 import { secretInput } from "./run-context.js"
+import { runEvent } from "./scope.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.2.3" }
 const { resolveSettings } = settingsFor(app)
@@ -371,4 +374,50 @@ it("records failed batch IDs on a partial run without retaining error payloads",
     partial: { failed: 1, failures: [{ id: "50", stage: "download", attachment: 2, errorCode: "rate_limited" }] },
   })
   expect(everythingButArgv(runsDir)).not.toContain(BODY)
+})
+
+describe("request lines in a run", () => {
+  it("**come from a wire layer that is handed no sink**, with method, template, attempt and wait, never the URL", async () => {
+    const { runsDir } = await call(["messages", "send", "777", "hi", "--record"], async () => {
+      const first = providerRequest("messages.send", runEvent, { method: "POST", endpointTemplate: "/chats/:id?x=1" })
+      first({ status: 429, errorCode: "rate_limited", providerError: "FLOOD_WAIT" })
+      const second = providerRequest("messages.send", runEvent, {
+        method: "POST",
+        endpointTemplate: "/chats/:id",
+        transport: "http",
+        attempt: 2,
+        waitMs: 3000,
+      })
+      second({ status: 200, bytes: 120 })
+    })
+    const [metadata] = listRuns(runsDir)
+    // Two wire calls under one operation: the wire count wins, never three.
+    expect(metadata?.requests).toBe(2)
+    const events = readEvents(findRun(runsDir, metadata?.runId ?? "")?.dir ?? "")
+    const wire = events.filter((event) => event.level === "wire")
+    expect(wire.map(({ event, attempt, wait_ms, status }) => ({ event, attempt, wait_ms, status }))).toEqual([
+      { event: "provider.request", attempt: undefined, wait_ms: undefined, status: undefined },
+      { event: "provider.response", attempt: undefined, wait_ms: undefined, status: 429 },
+      { event: "provider.request", attempt: 2, wait_ms: 3000, status: undefined },
+      { event: "provider.response", attempt: 2, wait_ms: 3000, status: 200 },
+    ])
+    expect(wire[1]).toMatchObject({ provider_error: "FLOOD_WAIT", endpoint_template: "/chats/:id", method: "POST" })
+    expect(JSON.stringify(events)).not.toContain("x=1")
+  })
+
+  it("stop at the cap and count the rest by operation", async () => {
+    const { runsDir } = await call(["messages", "send", "777", "hi", "--record"], async () => {
+      for (let at = 0; at < EVENTS_AT_MOST + 5; at++) runEvent({ event: "request", operation: "messages.get" })
+    })
+    const [metadata] = listRuns(runsDir)
+    const events = readEvents(findRun(runsDir, metadata?.runId ?? "")?.dir ?? "")
+    expect(events.filter((event) => event.event !== "events.dropped")).toHaveLength(EVENTS_AT_MOST)
+    // The helper's own request and response come first; its response and six loop requests are past the cap.
+    expect(events.at(-1)).toMatchObject({
+      event: "events.dropped",
+      dropped: 7,
+      counts: { "messages.get": 6, "messages.send": 1 },
+    })
+    expect(metadata?.eventsDropped).toBe(7)
+  })
 })
