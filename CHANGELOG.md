@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.454.0 — 27.10.2026
+
 ### Added
 
 - **`mcp server status` says what each logged-in browser app last did.** Each client in `clients` carries
