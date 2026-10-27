@@ -189,6 +189,7 @@ export const startRun = (options: StartRunOptions): Run => {
   }
   if (!options.lazy) opened()
 
+  let finished = false
   const operations = new Set<string>()
   const codes = new Set<string>()
   const noted =
@@ -197,11 +198,11 @@ export const startRun = (options: StartRunOptions): Run => {
       const { operation, errorCode, error_code, code } = event as Record<string, unknown>
       if (typeof operation === "string") operations.add(operation)
       for (const value of [errorCode, error_code, code]) if (typeof value === "string") codes.add(value)
+      // A connection a long-running server keeps can log after the run that opened it ended: that is not this run.
+      if (finished) return
       opened()[level](event, message)
     }
   const logger: Logger = { debug: noted("debug"), info: noted("info"), warn: noted("warn"), error: noted("error") }
-
-  let finished = false
 
   return {
     id,

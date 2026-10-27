@@ -227,6 +227,14 @@ describe("what is kept, and for how long", () => {
     expect(listRuns(dir).map((run) => run.runId)).toEqual([failed.id, busy.id, quiet.id])
   })
 
+  it("ignores what is logged after it finished, so a quiet success stays one index line", async () => {
+    const dir = runsDir()
+    const run = await finished(dir, "2026-09-20T10:00:00.000Z", "success")
+    run.logger.info({ event: "request", operation: "updates.getState" })
+    expect(readdirSync(join(dir, "2026-09-20"))).toEqual(["index.jsonl"])
+    expect(findRun(dir, run.id)?.metadata.status).toBe("success")
+  })
+
   it("**drops successes after their own horizon and keeps failures for theirs**", async () => {
     const dir = runsDir()
     const old = await finished(dir, "2026-09-01T10:00:00.000Z", "success", true)

@@ -111,7 +111,16 @@ export {
   startRun,
 } from "../runs/run.js"
 export { runContextOf, secretInput } from "../runs/run-context.js"
-export { currentRun, inRun, type RunScope, runEvent, useAsProcessRun } from "../runs/scope.js"
+export {
+  type Attempt,
+  currentAttempt,
+  currentRun,
+  inRun,
+  type RunScope,
+  runEvent,
+  useAsProcessRun,
+  withAttempt,
+} from "../runs/scope.js"
 export { LANGUAGES } from "../search/languages.js"
 export { guardedApp, guardedPress, guardedStart, type Pressed } from "../sends/buttons.js"
 export { guardedClose, guardedCreatePoll, guardedVote } from "../sends/polls.js"

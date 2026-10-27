@@ -7,7 +7,7 @@ import { providerErrorKey, type RequestEvent } from "../runs/events.js"
 import { type Recording, startRecording, wasSettled } from "../runs/recording.js"
 import { KEEP_RUNS_FOR_DAYS, KEEP_SUCCESSFUL_RUNS_FOR_DAYS, RUNS_SIZE_LIMIT_MB } from "../runs/run.js"
 import { keepsSuccess, type RecordInput, runContextOf } from "../runs/run-context.js"
-import { runEvent } from "../runs/scope.js"
+import { currentAttempt, runEvent } from "../runs/scope.js"
 import { environmentOf } from "./context.js"
 import { rootOf } from "./profile.js"
 
@@ -232,7 +232,7 @@ export const providerRequest = (
   call: ProviderCall = {},
 ) => {
   const { bytes: sent, ...shape } = call
-  const wire = { operation, level: "wire" as const, ...shape }
+  const wire = { operation, level: "wire" as const, ...(call.attempt === undefined ? currentAttempt() : {}), ...shape }
   sink({ event: "request", ...wire, ...(sent === undefined ? {} : { bytes: sent }) })
   const started = performance.now()
   return ({ status, error, errorCode, providerError, bytes, counts, ids }: ProviderAnswer = {}): void => {

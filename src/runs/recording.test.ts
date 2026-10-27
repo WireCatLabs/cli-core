@@ -14,7 +14,7 @@ import { CORE_LOG_EVENTS } from "./log-events.js"
 import { EVENTS_AT_MOST } from "./recording.js"
 import { findRun, listRuns, readEvents, runsDirFor } from "./run.js"
 import { secretInput } from "./run-context.js"
-import { runEvent } from "./scope.js"
+import { runEvent, withAttempt } from "./scope.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.2.3" }
 const { resolveSettings } = settingsFor(app)
@@ -421,6 +421,20 @@ describe("request lines in a run", () => {
     ])
     expect(wire[1]).toMatchObject({ provider_error: "FLOOD_WAIT", endpoint_template: "/chats/:id", method: "POST" })
     expect(JSON.stringify(events)).not.toContain("x=1")
+  })
+
+  it("take the attempt and the wait of a retry made above the transport", async () => {
+    const { runsDir } = await call(["messages", "send", "777", "hi", "--record"], async () => {
+      await withAttempt({ attempt: 2, waitMs: 1500 }, async () => {
+        providerRequest("sendMessage", runEvent)({ status: 200 })
+      })
+    })
+    const [metadata] = listRuns(runsDir)
+    const wire = readEvents(findRun(runsDir, metadata?.runId ?? "")?.dir ?? "").filter((e) => e.level === "wire")
+    expect(wire.map(({ attempt, wait_ms }) => ({ attempt, wait_ms }))).toEqual([
+      { attempt: 2, wait_ms: 1500 },
+      { attempt: 2, wait_ms: 1500 },
+    ])
   })
 
   it("stop at the cap and count the rest by operation", async () => {

@@ -79,3 +79,15 @@ export const childTrace = (): { traceId: string; traceparent: string } => {
   const traceId = hex(16)
   return { traceId, traceparent: `00-${traceId}-${hex(8)}-01` }
 }
+
+export interface Attempt {
+  attempt: number
+  waitMs?: number
+}
+
+const attempts = new AsyncLocalStorage<Attempt>()
+
+/** Marks the calls made under it as one try of a retried call: a wire event without its own attempt takes this one. */
+export const withAttempt = <T>(attempt: Attempt, work: () => T): T => attempts.run(attempt, work)
+
+export const currentAttempt = (): Attempt | undefined => attempts.getStore()

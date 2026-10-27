@@ -58,7 +58,10 @@ shape of this file.
 - **Request events gain `level`, `transport`, `attempt` and `wait_ms`**, and `requests` counts wire calls when a
   transport logs them, otherwise operations. `providerRequest` takes a third argument with the call's method, path
   template, transport, attempt, wait and bytes. A run writes at most 2,000 events or 1 MB, then one
-  `events.dropped` line and `events_dropped`. `runEvent` reaches the current run from a wire layer handed no sink.
+  `events.dropped` line and `events_dropped`. `runEvent` reaches the current run from a wire layer handed no sink. A
+  retry made above the transport (`patiently`, the bot APIs' rate-limit wait) marks the calls under it with
+  `withAttempt`, so their lines say `attempt: 2` and the wait. Events logged after a run finished — a long-running
+  server's connection — are dropped rather than written into it.
 - **`record: false` in the config now keeps failures**; before, it kept nothing. `--no-record` still keeps nothing.
 
 ### Added
