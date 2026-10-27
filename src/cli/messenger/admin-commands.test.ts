@@ -1069,6 +1069,26 @@ describe("chats create, join and leave", () => {
     expect(unsupported.stderr.join("\n")).toContain("query.unsupported-field")
   })
 
+  it("says which profiles are not signed in when the messenger knows", async () => {
+    const env = sandbox()
+    rememberAccount(app, "work", "501", env)
+    rememberAccount(app, "old", "502", env)
+    const { CHAT_PROFILE: _, ...unnamed } = env
+    const listed = await call(["account", "list", "--json"], base, unnamed, {
+      profileState: (profile) => (profile === "old" ? "signed-out" : "signed-in"),
+    })
+    expect(
+      answer(listed).items.map(({ profile, signed_in }: { profile: string; signed_in: boolean }) => [
+        profile,
+        signed_in,
+      ]),
+    ).toEqual([
+      ["old", false],
+      ["work", true],
+    ])
+    for (const item of answer(listed).items) expect(v.safeParse(ENTITIES.account_profile, item).success).toBe(true)
+  })
+
   it("**assumes no profile, not even the only one** — an account command says what to name", async () => {
     const { CHAT_PROFILE: _, ...env } = sandbox()
 

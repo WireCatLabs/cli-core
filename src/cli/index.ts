@@ -369,6 +369,7 @@ export {
   type Messenger,
   type MessengerContext,
   messengerContext,
+  type ProfileState,
   type ReadConnection,
   type StoredMessages,
 } from "./messenger/context.js"

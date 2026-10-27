@@ -7,6 +7,26 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`account list` says whether each profile is signed in on this computer.** The `account_profile` entity gains an
+  optional `signed_in`, set when the messenger sets `Messenger.profileState`; a caller that checks items against an
+  older, strict copy of it refuses the new field.
+
+### Fixed
+
+- **`<cli> mcp serve` with no profile marks the profiles that are not signed in.** A messenger sets the new optional
+  `Messenger.profileState(profile, env)` (`signed-in`, `signed-out` or `bot`), read from its own files without
+  connecting. The `profile` field keeps its `enum` and gains `oneOf` entries with a `title` per profile
+  (`default — not signed in`), as MCP's titled enums, and its description lists who is signed in. Bot profiles are left
+  out: they have their own server. A call for a profile that is not signed in is refused with how to sign it in
+  (`<cli> <profile> setup`, or WireCat Desktop) and starts nothing. Unset, every profile counts as signed in, as before.
+- **The "no profile named" error marks the listed profiles that are not signed in** (`beta (not signed in)`), when the
+  messenger sets `profileState`.
+- **The MCP login page says why a code that just worked is now wrong.** Each login code works once; after an app
+  logs in, the server shows a new one. The wrong-code message now says so and points to WireCat Desktop and
+  `<cli> mcp server status`, where the new code is.
+
 ## 0.465.0 — 27.10.2026
 
 ### Changed — may break callers
