@@ -21,8 +21,9 @@ const fixture = () => {
   mkdirSync(env.CHAT_CONFIG_DIR)
   writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ profiles: { alpha: {}, beta: {} } }))
   const connect = vi.fn<Messenger["connect"]>()
-  const read = async (profile: string, history: Messenger["history"]) => {
+  const read = async (profile: string, history: Messenger["history"], more: Partial<Messenger> = {}) => {
     const messenger: Messenger = {
+      ...more,
       app,
       provider: "chat",
       history,
@@ -52,6 +53,15 @@ describe("unrecorded profile errors", () => {
       details: { profiles: ["alpha", "beta"] },
     })
     expect(connect).not.toHaveBeenCalled()
+  })
+
+  it("marks a listed profile that is not signed in", async () => {
+    const { read } = fixture()
+    const result = await read("nosuch", "store", {
+      profileState: (profile) => (profile === "beta" ? "signed-out" : "signed-in"),
+    })
+    expect(result.error.message).toBe('no profile named "nosuch" — profiles here: alpha, beta (not signed in)')
+    expect(result.error.details.profiles).toEqual(["alpha", "beta"])
   })
 
   it("also offers profiles remembered outside configuration", async () => {

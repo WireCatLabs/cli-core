@@ -24,6 +24,10 @@ export interface AllProfilesOptions {
   name: string
   /** Read again for each new session, so a profile set up while serving over HTTP shows up. */
   profiles: () => readonly string[]
+  /** Whether a profile has a session now; unset, every one does. A call for one without is refused with `signIn`. */
+  signedIn?: (profile: string) => boolean
+  /** How to sign a profile in, for the refusal of a call it cannot serve yet. */
+  signIn?: (profile: string) => string
   child: (profile: string) => ChildSpec
   instructions: string
   idleMs?: number
@@ -164,9 +168,23 @@ const pool = (options: AllProfilesOptions) => {
   return { use, close }
 }
 
-/** The child's tool with the one field that picks the profile, required and without a default. */
-export const withProfile = (tool: Tool, profiles: readonly string[], name: string): Tool => {
+/**
+ * The child's tool with the one field that picks the profile, required and without a default. Each profile carries
+ * its state as the title an app shows in its menu (`oneOf` with `const` and `title`, as MCP's titled enums), and the
+ * description repeats it for an app that shows only the description.
+ */
+export const withProfile = (
+  tool: Tool,
+  profiles: readonly string[],
+  name: string,
+  signedIn: (profile: string) => boolean = () => true,
+): Tool => {
   const schema = tool.inputSchema as { properties?: Record<string, object>; required?: string[] }
+  const out = profiles.filter((profile) => !signedIn(profile))
+  const states =
+    out.length === 0
+      ? ""
+      : ` Signed in: ${profiles.filter(signedIn).join(", ") || "none"} · Not signed in: ${out.join(", ")}.`
   return {
     ...tool,
     inputSchema: {
@@ -175,7 +193,11 @@ export const withProfile = (tool: Tool, profiles: readonly string[], name: strin
         profile: {
           type: "string",
           enum: [...profiles],
-          description: `Which ${name} account, by its profile. If the owner did not name one, ask which — never guess.`,
+          oneOf: profiles.map((profile) => ({
+            const: profile,
+            title: signedIn(profile) ? profile : `${profile} — not signed in`,
+          })),
+          description: `Which ${name} account, by its profile. If the owner did not name one, ask which — never guess.${states}`,
         },
         ...schema.properties,
       },
@@ -202,13 +224,14 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
   // list comes from whichever answers first and is kept.
   const tools = (profiles: readonly string[]) => {
     listed ??= children
-      .use(profiles[0] as string, (child) => child.request("tools/list", {}))
+      .use(profiles.find(signedIn) ?? (profiles[0] as string), (child) => child.request("tools/list", {}))
       .then((answer) => (answer.tools ?? []) as Tool[])
     listed.catch(() => {
       listed = undefined
     })
     return listed
   }
+  const signedIn = (profile: string) => options.signedIn?.(profile) ?? true
   const build = (): McpServer => {
     const profiles = [...options.profiles()].sort()
     const server = new McpServer(
@@ -217,7 +240,9 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
     )
     server.server.setRequestHandler("tools/list", async () => ({
       tools:
-        profiles.length === 0 ? [] : (await tools(profiles)).map((one) => withProfile(one, profiles, options.name)),
+        profiles.length === 0
+          ? []
+          : (await tools(profiles)).map((one) => withProfile(one, profiles, options.name, signedIn)),
     }))
     server.server.setRequestHandler("tools/call", async (request) => {
       const { name, arguments: given = {}, _meta } = request.params
@@ -226,6 +251,7 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
         return refusal(
           `${name} needs "profile", one of: ${profiles.join(", ")}. If the owner did not say which account, ask.`,
         )
+      if (!signedIn(profile)) return refusal(options.signIn?.(profile) ?? `profile ${profile} is not signed in.`)
       try {
         return (await children.use(profile, (child) =>
           child.request("tools/call", { name, arguments: rest, ...(_meta ? { _meta } : {}) }),

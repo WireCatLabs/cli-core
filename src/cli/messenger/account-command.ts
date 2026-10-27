@@ -53,6 +53,9 @@ export const accountCommand = (messenger: Messenger): Command => {
                 current: profile === current,
                 account: key?.account ?? null,
                 name: key && store ? await store.accounts.accountName(key) : null,
+                ...(messenger.profileState
+                  ? { signed_in: messenger.profileState(profile, context.env) !== "signed-out" }
+                  : {}),
               })
             }
             renderAnswer(this, context, wholeList("account list", items))

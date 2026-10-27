@@ -142,6 +142,8 @@ export const storedMessages = (
   }
 }
 
+export type ProfileState = "signed-in" | "signed-out" | "bot"
+
 /** What one messenger CLI hands the shared commands. Everything else about it stays in its own code. */
 export interface Messenger extends ServiceMessenger {
   /**
@@ -158,6 +160,12 @@ export interface Messenger extends ServiceMessenger {
    * Called inside `--timeout`; the context tracks and closes what it returns.
    */
   connect: (command: Command, context: BaseContext, options?: ConnectOptions) => Promise<MessengerAdapter>
+  /**
+   * A profile's state, read from the messenger's own files without connecting: `signed-in` has a session, `signed-out`
+   * has none yet, `bot` speaks for a bot. `<tool> mcp` with no profile offers the personal ones and marks those not
+   * signed in; `account list` and the profile errors say so too. Unset: every profile counts as signed in.
+   */
+  profileState?: (profile: string, env: NodeJS.ProcessEnv) => ProfileState
   /** The help for a `<chat>` argument, in this messenger's words. */
   chatArgument: string
   /** The group settings this messenger has, as `chats update` offers them; every one when unset. */
@@ -613,16 +621,21 @@ export const connectedFor = async (
   }
 }
 
+/** `default (not signed in)`: a profile as an error lists it among the choices. */
+export const markedProfile = (messenger: Messenger, profile: string, env: NodeJS.ProcessEnv): string =>
+  messenger.profileState?.(profile, env) === "signed-out" ? `${profile} (not signed in)` : profile
+
 const unrecorded = (
   command: Command,
   messenger: Messenger,
   profile: string,
   { offline, profilesHere }: Pick<Settings, "offline" | "profilesHere">,
+  env: NodeJS.ProcessEnv,
 ): CliError => {
   if (!profilesHere.includes(profile)) {
     return new CliError(
       "not_found",
-      `no profile named "${profile}" — profiles here: ${profilesHere.length > 0 ? profilesHere.join(", ") : "none"}`,
+      `no profile named "${profile}" — profiles here: ${profilesHere.length > 0 ? profilesHere.map((one) => markedProfile(messenger, one, env)).join(", ") : "none"}`,
       { profiles: profilesHere },
     )
   }
@@ -718,7 +731,7 @@ export const messengerContext = (
   const warn: Warn = (text, warning) => (base.renderer.warn as Warn)(text, warning)
   const accountFor = (): AccountKey => {
     const account = messenger.accountOf?.(command) ?? recalledAccount(app, provider, profile, base.env)
-    if (!account) throw unrecorded(command, messenger, profile, base.settings)
+    if (!account) throw unrecorded(command, messenger, profile, base.settings, base.env)
     return account
   }
   const guard =

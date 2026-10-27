@@ -311,8 +311,12 @@ const serveEveryProfile = async (self: Command, context: MessengerContext, messe
   const { app } = messenger
   const { env } = context
   const tokenFile = httpTokenFile(app, ALL_PROFILES, env)
+  const state = (profile: string) => messenger.profileState?.(profile, env) ?? "signed-in"
+  // Read again for each session, so a profile set up while the server runs appears. A bot has its own server.
   const profiles = () =>
-    messenger.resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true }).profilesHere
+    messenger
+      .resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true })
+      .profilesHere.filter((profile) => state(profile) !== "bot")
   if (profiles().length === 0)
     throw new CliError(
       "configuration_error",
@@ -328,6 +332,10 @@ const serveEveryProfile = async (self: Command, context: MessengerContext, messe
     version: app.version,
     name: messenger.name ?? app.command,
     profiles,
+    signedIn: (profile: string) => state(profile) === "signed-in",
+    signIn: (profile: string) =>
+      `profile ${profile} is not signed in — run \`${app.command} ${profile} setup\`, or sign in from WireCat Desktop, ` +
+      "then try again. If the owner did not choose this profile, ask which one.",
     child: (profile: string) => ({ command: execPath, args: [scriptPath, profile, "mcp", "serve", ...tightened], env }),
     instructions: instructions({
       command: app.command,
