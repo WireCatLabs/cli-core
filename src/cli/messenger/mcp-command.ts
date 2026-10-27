@@ -146,17 +146,18 @@ export const mcpCommand = (messenger: Messenger): Command => {
         effects: LOCAL_READ,
         examples: [`${app.command} personal mcp config`],
       })
-        .summary("print this profile's local MCP configuration")
+        .summary("print this profile's local MCP configuration, or with no profile the one for every profile")
         .description(
           "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
         ),
     ).action(async function (this: Command) {
       const flags = this.optsWithGlobals<McpFlags>()
-      const context = messengerContext(this, messenger)
+      const context = messengerContext(this, messenger, { needsProfile: false })
       const { settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
+      const named = namedProfile(settings)
       const entry = serverEntry(app, {
-        profile: settings.profile,
+        ...(named === undefined ? {} : { profile: named }),
         flags,
         execPath: given.execPath ?? process.execPath,
         scriptPath: given.scriptPath ?? realpathSync(process.argv[1] ?? ""),
@@ -420,13 +421,20 @@ export const serverEntry = (
     execPath,
     scriptPath,
     env,
-  }: { profile: string; flags?: McpFlags; execPath: string; scriptPath: string; env: NodeJS.ProcessEnv },
+  }: {
+    /** Left out, the entry is `<tool> mcp`, the server of every profile. */
+    profile?: string
+    flags?: McpFlags
+    execPath: string
+    scriptPath: string
+    env: NodeJS.ProcessEnv
+  },
 ): { config: { mcpServers: Record<string, object> }; nodeBound: boolean } => {
   if (installerOf(scriptPath) === "npx") {
     throw new CliError(
       "validation_error",
       `this ${app.command} runs from npx's cache, which gets cleared, and the path would stop working — ` +
-        `install it globally, then run \`${app.command} ${profile} mcp config\` again`,
+        `install it globally, then run \`${app.command} ${profile === undefined ? "" : `${profile} `}mcp config\` again`,
     )
   }
   const names = [
@@ -439,11 +447,16 @@ export const serverEntry = (
   const server = {
     type: "stdio",
     command: execPath,
-    args: [scriptPath, profile, "mcp", ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry])],
+    args: [
+      scriptPath,
+      ...(profile === undefined ? [] : [profile]),
+      "mcp",
+      ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
+    ],
     ...(Object.keys(directories).length > 0 ? { env: directories } : {}),
   }
   return {
-    config: { mcpServers: { [`${app.command}-${profile}`]: server } },
+    config: { mcpServers: { [profile === undefined ? app.command : `${app.command}-${profile}`]: server } },
     /** The path belongs to one Node version of a version manager; switching Node breaks the entry. */
     nodeBound: VERSION_MANAGER.test(execPath),
   }
