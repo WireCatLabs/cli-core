@@ -21,7 +21,7 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
       const renderer = { ...output.renderer, result: (value: unknown) => printItem(output, value) }
       return { ...output, renderer, ...(env ? { env } : {}) }
     },
-    SHARED_SKILLS,
+    app.messenger === false ? {} : SHARED_SKILLS,
   )
   // An installed skill is instructions every later agent follows.
   const install = command.commands.find((sub) => sub.name() === "install")
@@ -30,11 +30,20 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
     annotate(install, { examples: [`${app.command} skill install --for agents`] })
   }
   const show = command.commands.find((sub) => sub.name() === "show")
-  if (show) annotate(show, { examples: [`${app.command} skill show`, `${app.command} skill show follow-ups`] })
+  if (show)
+    annotate(show, {
+      examples: [
+        `${app.command} skill show`,
+        ...(app.messenger === false ? [] : [`${app.command} skill show follow-ups`]),
+      ],
+    })
   return command
 }
 
-/** Skills this package ships for every CLI on it, printed by `skill show <name>`: `skills/` beside `dist/` and `src/`. */
+/**
+ * Skills this package ships for the messenger CLIs, printed by `skill show <name>`: `skills/` beside `dist/` and `src/`.
+ * Both work on chats, so a CLI without them offers neither.
+ */
 const SHARED_SKILLS = {
   "follow-ups": new URL("../../skills/follow-ups/SKILL.md", import.meta.url),
   "link-conversations": new URL("../../skills/link-conversations/SKILL.md", import.meta.url),

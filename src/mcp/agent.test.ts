@@ -7,6 +7,9 @@ import { Argument, Command, Option } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import {
   changesAuthorityAt,
+  changesStore,
+  FETCH,
+  fetchesOnlyAt,
   grantsAuthority,
   LOCAL_READ,
   LOCAL_WRITE,
@@ -321,6 +324,25 @@ describe("toolsFromCommands", () => {
     expect(removing.required.sort()).toEqual(["chat", "messages", "reason"])
     expect(remove?.writes).toBe(true)
     expect(list?.writes).toBe(false)
+  })
+
+  it("**a fetch into this machine is a read**; a local edit, an authority change and a provider write stay writes", () => {
+    const root = new Command("chat")
+    annotate(root.command("sync"), { effects: FETCH }).action(() => {})
+    changesStore(annotate(root.command("rebuild"), { effects: FETCH })).action(() => {})
+    grantsAuthority(annotate(root.command("allow"), { effects: FETCH })).action(() => {})
+    annotate(root.command("send"), { effects: REMOTE_WRITE }).action(() => {})
+    annotate(root.command("forget"), { effects: LOCAL_WRITE }).action(() => {})
+    const writes = (fetchOnly?: (path: readonly string[]) => boolean) =>
+      Object.fromEntries(
+        toolsFromCommands(describeProgram(root), fetchOnly ? { fetchOnly } : {}).map((tool) => [
+          tool.command,
+          tool.writes,
+        ]),
+      )
+
+    expect(writes(fetchesOnlyAt(root))).toEqual({ sync: false, rebuild: true, allow: true, send: true, forget: true })
+    expect(writes()).toEqual({ sync: true, rebuild: true, allow: true, send: true, forget: true })
   })
 
   it("preserves the legacy executable-only helper projection for existing callers", () => {

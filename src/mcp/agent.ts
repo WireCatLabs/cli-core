@@ -85,6 +85,8 @@ export interface CatalogueOptions {
   permissions?: CommandPermissions | undefined
   /** Whether a command changes what a later run may do (`grantsAuthority`): execution requires `mcp.authority`. */
   authority?: (path: readonly string[]) => boolean
+  /** Whether a command only fetches into this machine (`fetchesOnlyAt`): offered as a read. Unset, every write stays one. */
+  fetchOnly?: (path: readonly string[]) => boolean
   /** Arguments left out of every tool, by name. */
   omit?: readonly string[]
   /** Offer `offline` on commands that read the messenger: answer from the copy on this machine. */
@@ -271,7 +273,7 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
       path: info.path,
       title: info.summary ?? info.description,
       description: info.description,
-      writes: writes(info.effects),
+      writes: writes(info.effects) && options.fetchOnly?.(info.path) !== true,
       input: schemaOf(fieldsOf(info, options)),
       ...(info.output ? { output: info.output } : {}),
     }))

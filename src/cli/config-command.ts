@@ -14,15 +14,18 @@ import {
 } from "./permission-keys.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
 import { nextStep } from "./steps.js"
-import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
+import {
+  changeStoreSetting,
+  isStoreSetting,
+  offersStoreSetting,
+  storeSettings,
+  storeSettingsOf,
+} from "./store-settings.js"
 
 /**
  * The settings in force and where each came from, and changing them. Printed whole: no field the
  * configuration accepts can hold a secret — the schema has nowhere to put one.
  */
-/** `sender_colors` colours who wrote a message; a CLI without messages has nothing to colour. */
-const shownSettings = (app: AppIdentity, config: Configuration): string[] =>
-  app.messenger === false ? config.allSettings.filter((setting) => setting !== "sender_colors") : config.allSettings
 
 export const configCommand = (
   app: AppIdentity,
@@ -57,7 +60,7 @@ export const configCommand = (
           config_file: settings.configPath,
           config_found: settings.configFound,
           paths_overridden: overridden,
-          settings: [...shownSettings(app, config), "command_timeout_ms"]
+          settings: [...config.allSettings, "command_timeout_ms"]
             .filter((setting) => bot || setting !== "read_other_bots")
             .map((setting) => sourced(settings, setting)),
           store_settings: await storeSettings(env),
@@ -84,10 +87,7 @@ export const configCommand = (
         examples: [`${app.command} personal config ${action} limit${action === "set" ? " 20" : ""}`],
       }),
     )
-      .argument(
-        "<setting>",
-        `one of: ${[...shownSettings(app, config), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
-      )
+      .argument("<setting>", `one of: ${[...config.allSettings, ...storeSettingsOf(app)].join(", ")}`)
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")
       .option("--bot", "only for bots — the bot section of the file")
@@ -107,6 +107,11 @@ export const configCommand = (
         config.resolveSettings(flags, { ...options, needsProfile: false, withIssues: true }),
       )
       const { settings, renderer, env } = context
+      if (isStoreSetting(setting) && !offersStoreSetting(app, setting))
+        throw new CliError(
+          "validation_error",
+          `no setting called "${setting}" here — it belongs to the messenger CLIs; one of: ${[...config.allSettings, ...storeSettingsOf(app)].join(", ")}`,
+        )
       if (isStoreSetting(setting)) {
         if (everyone || personal || bot)
           throw new CliError(

@@ -82,6 +82,27 @@ export const changesStore = <T extends Command>(command: T): T => {
 }
 
 /**
+ * Reads the provider and only keeps what it read on this machine — a sync, a list that refreshes the store, a download
+ * that never overwrites. An MCP server offers it through the read tool (owner ruling, 2026-10-27): it changes nothing
+ * at the provider or for other people. A local edit (`changesStore`) and an authority change stay writes.
+ */
+export const fetchesOnly = (command: Command): boolean => {
+  const effects = metaOf(command).effects
+  return (
+    effects?.remote === "read" && effects.local === "write" && !STORE_WRITES.has(command) && !changesAuthority(command)
+  )
+}
+
+/** `fetchesOnly` by command path under `root`, as an MCP catalogue asks it; an unknown path is not one. */
+export const fetchesOnlyAt =
+  (root: Command) =>
+  (path: readonly string[]): boolean => {
+    let at: Command | undefined = root
+    for (const word of path) at = at?.commands.find((one) => one.name() === word)
+    return at !== undefined && fetchesOnly(at)
+  }
+
+/**
  * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
  * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
  * keeps receiving, a remote write is `changesMessenger`'s, and an authority change has its own refusal.

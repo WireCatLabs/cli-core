@@ -153,6 +153,18 @@ const BOT_ONLY_ENTRIES = {
   ),
 }
 
+/**
+ * Settings about messages, senders and bots. A CLI that is not a messenger reads none of them, so it neither lists nor
+ * takes them; a file that still has one is read as before.
+ */
+export const MESSENGER_ONLY_SETTINGS: readonly string[] = [
+  "sender_colors",
+  "sends_per_hour",
+  "transcribe_with",
+  "search_catch_up",
+  "read_other_bots",
+]
+
 /** One program, one version: whether to look for a newer one is not a per-profile matter. */
 const SHARED_DEFAULTS_ONLY = {
   update_check: v.optional(flag),
@@ -421,7 +433,9 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const schema = strictOf(configEntries)
   const defaultsOnlyKeys = Object.keys(defaultsOnly)
   const botOnlyKeys = Object.keys(BOT_ONLY_ENTRIES)
-  const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys]
+  const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys].filter(
+    (setting) => app.messenger !== false || !MESSENGER_ONLY_SETTINGS.includes(setting),
+  )
 
   const PROFILE = envName(app, "PROFILE")
   const PROFILE_LOCK = envName(app, "PROFILE_LOCK")

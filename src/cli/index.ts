@@ -246,6 +246,8 @@ export {
   changesAuthorityNow,
   destroysNothing,
   FETCH,
+  fetchesOnly,
+  fetchesOnlyAt,
   grantsAuthority,
   isLogin,
   isOtherServiceCall,

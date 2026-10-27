@@ -64,7 +64,7 @@ import {
   settingsFor,
 } from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
-import { commandAt, lineOf, withLines } from "./steps.js"
+import { commandAt, failureSteps, lineOf, withLines } from "./steps.js"
 
 export interface ProgramDefinition {
   app: AppIdentity
@@ -835,11 +835,14 @@ const failed = (
       ? new CliError(told.code, told.message, { ...told.details, settlement_failed: true })
       : told
   const effects = judgedEffects(path ? metaOf(commandAt(program, path) ?? program).effects : undefined)
-  const object = errorObjectOf(failure, {
+  const built = errorObjectOf(failure, {
     ...failureContext(app.errors),
     targets: judgedTargets(program),
     ...(effects ? { effects } : {}),
   })
+  const { next: _named, ...said } = built.error
+  const steps = failureSteps(program, built.error)
+  const object: typeof built = { ...built, error: { ...said, ...(steps.length > 0 ? { next: steps } : {}) } }
   showInputFields(object, (path && commandAt(program, path)) || program)
   const command = path || app.command
   return {

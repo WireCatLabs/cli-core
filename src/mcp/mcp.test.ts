@@ -2829,6 +2829,8 @@ describe("three tools in place of one per command", () => {
       expect.arrayContaining(["messages list", "chats mark-read", "status"]),
     )
     expect(every.items[0]).not.toHaveProperty("arguments")
+    const fetched = every.items.find(({ command }: { command: string }) => command === "contacts sync")
+    expect(fetched).toMatchObject({ writes: false })
   })
 
   it("runs reads with read and writes with write, and says which when given the other", async () => {

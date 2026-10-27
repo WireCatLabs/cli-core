@@ -43,15 +43,9 @@ const CHARS_PER_TOKEN_AT_LEAST = 3
 /** Enough of the deps to find a local model and name the command that downloads it. */
 export type ModelDeps = Pick<ServiceDeps, "env" | "embedders"> & { messenger: { app: { command: string } } }
 
-const notDownloaded = (deps: ModelDeps, id: string) =>
-  new CliError(
-    "not_found",
-    `${id} is not downloaded — \`${typedCommand(deps.messenger.app.command, `models download ${id}`)}\``,
-    {
-      reason: "model.not-downloaded",
-      model: id,
-    },
-  )
+/** The download is the error's `next` step, named only by a CLI that has `models` (`failureSteps`). */
+const notDownloaded = (id: string) =>
+  new CliError("not_found", `${id} is not downloaded on this machine`, { reason: "model.not-downloaded", model: id })
 
 export const notBuiltError = (deps: ServiceDeps, chatId: Id) =>
   new CliError(
@@ -92,7 +86,7 @@ export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = DEFAULT_T
       /** In a process of its own, which gives all of its memory back when closed: the MCP server's. */
       apart?: boolean
     } = {}): Promise<Embedder> => {
-      if (!isTextModelInstalled(model, directory)) throw notDownloaded(deps, model.id)
+      if (!isTextModelInstalled(model, directory)) throw notDownloaded(model.id)
       if (apart) {
         const { openProcess } = await import("../embeddings/process.js")
         return openProcess(model, directory, { threads: threads ?? defaultThreads() })
@@ -394,7 +388,7 @@ export const embeddingsMaintenance = (
       const store = await deps.store()
       const account = await deps.account()
       const target = embeddingTarget(deps, choice)
-      if (embed && !build && !target.installed) throw notDownloaded(deps, target.id)
+      if (embed && !build && !target.installed) throw notDownloaded(target.id)
       const chatId =
         chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
       const scan = async () => ({
