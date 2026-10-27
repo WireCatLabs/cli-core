@@ -108,6 +108,24 @@ shape of this file.
   `sync --rescan` uses. `--full` is the shared program's output flag; `sync --full` is now refused with a message
   that names `--rescan`, rather than quietly reading only the changes.
 
+### Changed — may break callers
+
+- **An MCP server serves only the profiles it is told**, the owner's choice written in the agent's config
+  ([WC-MCP-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-9--a-server-serves-the-profiles-it-is-told-with-one-connection-for-each)).
+  `<cli> mcp serve` with no profile no longer serves every profile: it exits 2 with `validation_error` and lists the
+  profiles here. Name one (`<cli> work mcp serve`), a list (`<cli> mcp serve --profiles work,personal`, each name
+  must exist) or every profile (`--profiles all`); the startup line on stderr names the profiles served. A first word
+  with `--profiles` is refused; under `<PREFIX>_PROFILE_LOCK`, `--profiles` may name the locked profile only
+  (`permission_error`). `all` alone is the keyword and is refused inside a list; a profile named `all` is served as
+  `<cli> all mcp serve`. The same choice applies to `--http`, `mcp server start|stop|status`, `mcp revoke` and
+  `mcp config`; the entry `mcp config --profiles all` prints runs `mcp serve --profiles all`. A list's HTTP server
+  has its own login (`mcp-http/_<names>.json`), so its login never opens a wider server; `--profiles all` keeps
+  `_all.json`. For callers: `serverEntry` takes `profile` or `profiles` and refuses neither;
+  `mcpServerCommand` takes `profiles: true` to give `start|stop|status` the option, and `McpServerTarget.profiles`
+  names the set. A client entry or a background server from 0.463.0 that runs `<cli> mcp serve` with no profile
+  stops working: print the entry again with `mcp config --profiles all` and start the server with
+  `mcp server start --profiles all` (`upgrade` cannot restart such a server on the new version).
+
 ## 0.464.0 — 27.10.2026
 
 ### Added
@@ -191,21 +209,6 @@ shape of this file.
 - **The contract kits check more.** `calendarWriterContract` gains three cases (a rule on create, a rule changed on the
   series, the timed/all-day switch both ways) and `calendarSourceContract` one for a source with `freeBusy`: an
   adapter that runs the kits gets tests that can fail until it supports them.
-- **An MCP server serves only the profiles it is told**, the owner's choice written in the agent's config
-  ([WC-MCP-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-9--a-server-serves-the-profiles-it-is-told-with-one-connection-for-each)).
-  `<cli> mcp serve` with no profile no longer serves every profile: it exits 2 with `validation_error` and lists the
-  profiles here. Name one (`<cli> work mcp serve`), a list (`<cli> mcp serve --profiles work,personal`, each name
-  must exist) or every profile (`--profiles all`); the startup line on stderr names the profiles served. A first word
-  with `--profiles` is refused; under `<PREFIX>_PROFILE_LOCK`, `--profiles` may name the locked profile only
-  (`permission_error`). `all` alone is the keyword and is refused inside a list; a profile named `all` is served as
-  `<cli> all mcp serve`. The same choice applies to `--http`, `mcp server start|stop|status`, `mcp revoke` and
-  `mcp config`; the entry `mcp config --profiles all` prints runs `mcp serve --profiles all`. A list's HTTP server
-  has its own login (`mcp-http/_<names>.json`), so its login never opens a wider server; `--profiles all` keeps
-  `_all.json`. For callers: `serverEntry` takes `profile` or `profiles` and refuses neither;
-  `mcpServerCommand` takes `profiles: true` to give `start|stop|status` the option, and `McpServerTarget.profiles`
-  names the set. A client entry or a background server from 0.463.0 that runs `<cli> mcp serve` with no profile
-  stops working: print the entry again with `mcp config --profiles all` and start the server with
-  `mcp server start --profiles all` (`upgrade` cannot restart such a server on the new version).
 
 ## 0.463.0 — 27.10.2026
 
