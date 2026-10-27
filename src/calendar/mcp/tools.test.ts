@@ -111,7 +111,7 @@ describe("calendar MCP tools", () => {
         writer,
         app: { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" },
         settings: () => ({ profile: "work", permissions: {}, permissionSources: {}, sendsPerHour: 30 }),
-        env: { HOME: home, XDG_DATA_HOME: home },
+        env: { HOME: home, XDG_DATA_HOME: home, GCAL_STATE_DIR: home },
       })
       const call = (name: string, input: unknown) =>
         callCalendarTool(store, name, input, { accountIds: [1, 2], now: NOW, writes })

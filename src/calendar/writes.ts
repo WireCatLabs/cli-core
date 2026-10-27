@@ -125,6 +125,7 @@ export const draftOf = (fields: EventFields, zone: string, { whole }: { whole: b
 const writeGuard = (context: WriteContext, extra: readonly PermissionKey[]): SendGuard => {
   const settings = context.writes.settings()
   const defaults = { ...DEFAULT_PERMISSIONS, ...CALENDAR_WRITE_DEFAULTS, ...settings.permissionDefaults }
+  let question: string | undefined
   let answered = false
   const guard = guardFor(
     context.writes.app,
@@ -133,7 +134,7 @@ const writeGuard = (context: WriteContext, extra: readonly PermissionKey[]): Sen
     context.writes.env,
     async (key, request) => {
       if (answered) return
-      await context.ask(key, request)
+      await context.ask(question ?? key, request)
       answered = true
     },
   )
@@ -149,10 +150,14 @@ const writeGuard = (context: WriteContext, extra: readonly PermissionKey[]): Sen
   }
   return {
     ask: async (request) => {
-      const refused = all(request).find(({ key }) =>
-        ["deny", "readonly"].includes(levelFor(settings.permissions, key as PermissionKey, defaults).level),
-      )
+      const levelOf = ({ key }: GuardRequest) => levelFor(settings.permissions, key as PermissionKey, defaults).level
+      const refused = all(request).find((one) => ["deny", "readonly"].includes(levelOf(one)))
       if (refused) guard.check(refused, { reserve: false })
+      // The one question names every key that asks, so a yes to the write is never a silent yes to mailing people.
+      question = all(request)
+        .filter((one) => levelOf(one) === "ask")
+        .map(({ key }) => key)
+        .join(" and ")
       for (const one of all(request)) await guard.ask?.(one)
     },
     check: (request, options) => {

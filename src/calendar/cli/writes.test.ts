@@ -1,14 +1,17 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { commandPermissions, knownPermissionKeys } from "../../cli/permission-keys.js"
 import type { EntryInput } from "../../meetings/index.js"
 import type { GuardSettings } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
-import type { CalendarWrites } from "../writes.js"
+import { CALENDAR_WRITE_KEYS } from "../writer.js"
+import { type CalendarWrites, updateEvent } from "../writes.js"
 import { addCalendarCommands } from "./index.js"
 
 const HOUR = 3_600_000
@@ -68,7 +71,7 @@ const setup = async (
   const writer = fakeCalendarWriter()
   await store.saveEntries(calendar?.id as number, writer.put("primary", review, series, slot), NOW)
   const home = mkdtempSync(join(tmpdir(), "calendar-writes-"))
-  const env = { HOME: home, XDG_DATA_HOME: home }
+  const env = { HOME: home, XDG_DATA_HOME: home, GCAL_STATE_DIR: home }
   const settings = (): GuardSettings => ({
     profile: "work",
     permissions: options.permissions ?? {},
@@ -176,6 +179,38 @@ describe("calendar write commands", () => {
     expect(writer.calls.at(-1)).toMatchObject({ write: "update", notify: false, scope: "this" })
   })
 
+  it("one question names events.notify when it asks too, so a yes to the change is not a silent yes to mailing", async () => {
+    const { store, writer, eventOf } = await setup({ permissions: { "events.notify": "ask" } })
+    const asked: string[] = []
+    const context = {
+      store,
+      accountId: 1,
+      writes: {
+        writer,
+        app,
+        settings: () => ({
+          profile: "work",
+          permissions: { "events.notify": "ask" as Level },
+          permissionSources: {},
+          sendsPerHour: 30,
+        }),
+        env: { HOME: mkdtempSync(join(tmpdir(), "calendar-ask-")) },
+      },
+      ask: async (key: string) => {
+        asked.push(key)
+        throw new CliError("cancelled", "no")
+      },
+      now: NOW,
+      zone: "UTC",
+      names: { notify: "--notify", id: "--id", calendar: "--calendar", series: "--series" },
+    }
+    await expect(
+      updateEvent(context, `event:${await eventOf("e1")}`, { title: "Moved" }, { notify: true }),
+    ).rejects.toMatchObject({ code: "cancelled" })
+    expect(asked).toEqual(["events.update and events.notify"])
+    expect(writer.calls).toEqual([])
+  })
+
   it("with events.notify allowed, --notify all reaches the provider", async () => {
     const { cli, writer, eventOf } = await setup({ permissions: { ...ALLOW, "events.notify": "allow" } })
     await cli("events", "respond", `event:${await eventOf("e1")}`, "declined", "--notify")
@@ -217,6 +252,20 @@ describe("calendar write commands", () => {
     expect(all).toMatchObject({ scope: "series" })
     expect(allowed.writer.calls.at(-1)).toMatchObject({ write: "remove", externalId: "s1", scope: "series" })
     expect((await allowed.store.entry(1, "s1"))?.status).toBe("cancelled")
+  })
+
+  it("a CLI that names CALENDAR_WRITE_KEYS lets the owner set events.notify and events.delete.series", () => {
+    const root = new Command("gcal")
+    addCalendarCommands(root, {
+      store: memoryEventStore(),
+      accountId: 1,
+      account: {} as never,
+      write: () => undefined,
+      writes: { writer: fakeCalendarWriter(), app, settings: () => ({}) as never },
+    })
+    const known = knownPermissionKeys(root, commandPermissions({ extra: CALENDAR_WRITE_KEYS }))
+    for (const key of ["events.create", "events.update", "events.delete", "events.respond", ...CALENDAR_WRITE_KEYS])
+      expect(known).toContain(key)
   })
 
   it("a key the CLI adds is checked too, so denying its API cannot be bypassed", async () => {
