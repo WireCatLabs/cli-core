@@ -113,6 +113,14 @@
       "types": "./dist/calendar/index.d.ts",
       "default": "./dist/calendar/index.js"
     },
+    "./calendar/cli": {
+      "types": "./dist/calendar/cli/index.d.ts",
+      "default": "./dist/calendar/cli/index.js"
+    },
+    "./calendar/mcp": {
+      "types": "./dist/calendar/mcp/index.d.ts",
+      "default": "./dist/calendar/mcp/index.js"
+    },
     "./calendar/testing": {
       "types": "./dist/calendar/testing/index.d.ts",
       "default": "./dist/calendar/testing/index.js"

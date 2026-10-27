@@ -202,16 +202,8 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       })
     },
 
-    link: async (person, other, method = "manual") => {
-      const store = await deps.store()
-      const account = await deps.account()
-      const one = await identityIn(store, account, person)
-      if (other === "me") return store.people.linkToOwner(one)
-      const two = await identityIn(store, account, other)
-      if (one.provider === two.provider && one.id === two.id)
-        throw new CliError("validation_error", "that is the same person twice")
-      return store.people.linkIdentities(one, two, { method, by: "owner" })
-    },
+    link: async (person, other, method = "manual") =>
+      linkPeople(await deps.store(), await deps.account(), person, other, method),
 
     unlink: async (person) => {
       const store = await deps.store()
@@ -316,6 +308,25 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
 const IMPORT_CHUNK = 10
 
 /** Digits, with the `+` and the spaces, dashes and brackets people type dropped. */
+/**
+ * The owner's link of two people, each read in the account's messenger unless prefixed (`max:Ana`, `email:ana@x.com`,
+ * `person:12`); `me` links the first to the owner. A tool without a messenger (a calendar CLI) calls it directly.
+ */
+export const linkPeople = async (
+  store: MessageStore,
+  account: AccountKey,
+  person: string,
+  other: string,
+  method = "manual",
+): Promise<PersonRecord> => {
+  const one = await identityIn(store, account, person)
+  if (other === "me") return store.people.linkToOwner(one)
+  const two = await identityIn(store, account, other)
+  if (one.provider === two.provider && one.id === two.id)
+    throw new CliError("validation_error", "that is the same person twice")
+  return store.people.linkIdentities(one, two, { method, by: "owner" })
+}
+
 export const phoneOf = (typed: string): string => {
   const digits = typed.replace(/[\s()+-]/g, "")
   if (!/^\d{6,15}$/.test(digits)) {
