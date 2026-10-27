@@ -81,15 +81,28 @@ export const changesStore = <T extends Command>(command: T): T => {
   return command
 }
 
+/** A download or a folder to write into: files outside the store, which the owner places, not an agent. */
+const savesFiles = (command: Command): boolean =>
+  command.name() === "download" ||
+  [...command.options.map((option) => option.attributeName()), ...command.registeredArguments.map((one) => one.name())]
+    .map((name) => name.toLowerCase())
+    .some((name) => name === "dir" || name.endsWith("dir") || name === "output")
+
 /**
- * Reads the provider and only keeps what it read on this machine — a sync, a list that refreshes the store, a download
- * that never overwrites. An MCP server offers it through the read tool (owner ruling, 2026-10-27): it changes nothing
- * at the provider or for other people. A local edit (`changesStore`) and an authority change stay writes.
+ * Reads the provider and only keeps what it read in the owner's store — a sync, a list that refreshes it. An MCP server
+ * offers it through the read tool (owner ruling, 2026-10-27; WC-CMD-17): it changes nothing at the provider or for
+ * other people. A local edit (`changesStore`), an authority change, a call to another service (`reachesOtherService`,
+ * a model download) and a command that saves files (a download, a folder to write into) stay writes.
  */
 export const fetchesOnly = (command: Command): boolean => {
   const effects = metaOf(command).effects
   return (
-    effects?.remote === "read" && effects.local === "write" && !STORE_WRITES.has(command) && !changesAuthority(command)
+    effects?.remote === "read" &&
+    effects.local === "write" &&
+    !STORE_WRITES.has(command) &&
+    !changesAuthority(command) &&
+    !OTHER_SERVICE.has(command) &&
+    !savesFiles(command)
   )
 }
 

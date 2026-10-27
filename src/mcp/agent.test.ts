@@ -15,6 +15,7 @@ import {
   LOCAL_WRITE,
   REMOTE_READ,
   REMOTE_WRITE,
+  reachesOtherService,
 } from "../cli/effects.js"
 import { rememberAccount } from "../cli/messenger/accounts.js"
 import type { Messenger } from "../cli/messenger/context.js"
@@ -326,11 +327,16 @@ describe("toolsFromCommands", () => {
     expect(list?.writes).toBe(false)
   })
 
-  it("**a fetch into this machine is a read**; a local edit, an authority change and a provider write stay writes", () => {
+  it("**a fetch into the store is a read**; a local edit, an authority change, a download, a folder to write, another service and a provider write stay writes", () => {
     const root = new Command("chat")
     annotate(root.command("sync"), { effects: FETCH }).action(() => {})
     changesStore(annotate(root.command("rebuild"), { effects: FETCH })).action(() => {})
     grantsAuthority(annotate(root.command("allow"), { effects: FETCH })).action(() => {})
+    annotate(root.command("download"), { effects: FETCH }).action(() => {})
+    annotate(root.command("export"), { effects: FETCH })
+      .option("--output-dir <dir>", "where")
+      .action(() => {})
+    reachesOtherService(annotate(root.command("fetch-model"), { effects: FETCH })).action(() => {})
     annotate(root.command("send"), { effects: REMOTE_WRITE }).action(() => {})
     annotate(root.command("forget"), { effects: LOCAL_WRITE }).action(() => {})
     const writes = (fetchOnly?: (path: readonly string[]) => boolean) =>
@@ -341,8 +347,17 @@ describe("toolsFromCommands", () => {
         ]),
       )
 
-    expect(writes(fetchesOnlyAt(root))).toEqual({ sync: false, rebuild: true, allow: true, send: true, forget: true })
-    expect(writes()).toEqual({ sync: true, rebuild: true, allow: true, send: true, forget: true })
+    const others = {
+      rebuild: true,
+      allow: true,
+      download: true,
+      export: true,
+      "fetch-model": true,
+      send: true,
+      forget: true,
+    }
+    expect(writes(fetchesOnlyAt(root))).toEqual({ sync: false, ...others })
+    expect(writes()).toEqual({ sync: true, ...others })
   })
 
   it("preserves the legacy executable-only helper projection for existing callers", () => {
