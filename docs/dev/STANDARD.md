@@ -1063,7 +1063,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--reply-to` | `<message>` | answer this message id in the same chat |  | `bot messages send` (planned), `messages send` |
 | `--retract` |  | take your vote back, where the poll allows it |  | `polls vote` |
 | `--revision` | `<n>` | the revision you read before editing |  | `contacts notes edit` |
-| `--revoke` |  | forget every login given to a browser app over --http |  | `mcp serve` |
 | `--revote` |  | people may change their vote |  | `polls create` (max, tg only) |
 | `--run` | `<id>` | the run the report is about; the newest failed one if not given |  | `doctor reports create` |
 | `--saved` | `<name\|id>` | run a saved search, or an earlier run by its id; options typed with it replace its own, more words are AND-ed |  | `search messages`, `stats chats newcomers`, `stats contacts responses`, `stats contacts top`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |

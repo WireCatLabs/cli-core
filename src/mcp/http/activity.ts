@@ -46,7 +46,7 @@ export const calledTools = (body: unknown): string[] =>
 
 /**
  * Keeps the activity file of one running server. A call is written at once, so status shows it while the owner
- * watches; other requests at most every two seconds. Its own file, not the token file: `mcp --revoke` rewrites that
+ * watches; other requests at most every two seconds. Its own file, not the token file: `mcp revoke` rewrites that
  * from another process.
  */
 export const activityRecorder = (path: string, now: () => number = Date.now) => {

@@ -32,7 +32,6 @@ export interface McpFlags {
   http?: boolean
   port?: string
   publicUrl?: string
-  revoke?: boolean
 }
 
 const DEFAULT_PORT = MCP_HTTP_DEFAULT_PORT
@@ -83,12 +82,10 @@ export const mcpCommand = (messenger: Messenger): Command => {
         "--public-url <url>",
         "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net or https://<name>.ts.net/tg",
       )
-      .option("--revoke", "forget every login given to a browser app; each must log in again")
       .action(async function (this: Command) {
         const flags = this.optsWithGlobals<McpFlags>()
         const context = messengerContext(this, messenger, { needsProfile: false })
         const profile = namedProfile(context.settings)
-        if (flags.revoke) return revoke(this, context, app, profile)
         if (profile === undefined) return serveEveryProfile(this, context, messenger, flags)
         if (flags.http) {
           const publicUrl = publicUrlOf(flags.publicUrl, {
@@ -119,6 +116,24 @@ export const mcpCommand = (messenger: Messenger): Command => {
       }),
   )
 
+  command.addCommand(
+    annotate(new Command("revoke"), {
+      effects: LOCAL_WRITE,
+      mcp: false,
+      examples: [`${app.command} personal mcp revoke`],
+    })
+      .summary("forget every login given to a browser app")
+      .description(
+        `forget every login \`mcp serve --http\` gave a browser app, of this profile or, with no profile, of the server of every profile; each app must log in again`,
+      )
+      .action(async function (this: Command) {
+        const context = messengerContext(this, messenger, { needsProfile: false })
+        const profile = namedProfile(context.settings)
+        const { revokeAll } = await import("../../mcp/http/oauth.js")
+        revokeAll(httpTokenFile(app, profile ?? ALL_PROFILES, context.env))
+        renderAnswer(this, context, itemOf({ revoked: true, profile: profile ?? null }))
+      }),
+  )
   command.addCommand(
     mcpServerCommand({
       example: `${app.command} personal`,
@@ -285,13 +300,6 @@ export const mcpCommand = (messenger: Messenger): Command => {
     }),
   )
   return command
-}
-
-/** `mcp serve --revoke`: kept apart so it can become its own leaf without touching the server. */
-const revoke = async (self: Command, context: MessengerContext, app: AppIdentity, profile: string | undefined) => {
-  const { revokeAll } = await import("../../mcp/http/oauth.js")
-  revokeAll(httpTokenFile(app, profile ?? ALL_PROFILES, context.env))
-  renderAnswer(self, context, itemOf({ revoked: true, profile: profile ?? null }))
 }
 
 /**

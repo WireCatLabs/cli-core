@@ -187,7 +187,7 @@ export const ownerLogin = ({
     stored.clients.push(client)
     while (stored.clients.length > MAX_CLIENTS) {
       const idle = stored.clients.findIndex((one) => !holding.has(one.id))
-      if (idle === -1) return oauthError("invalid_client_metadata", "too many logged-in apps — run mcp --revoke first")
+      if (idle === -1) return oauthError("invalid_client_metadata", "too many logged-in apps — run mcp revoke first")
       stored.clients.splice(idle, 1)
     }
     store.write(stored)

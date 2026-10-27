@@ -861,9 +861,6 @@
       "value": "<n>",
       "meaning": "the revision you read before editing"
     },
-    "--revoke": {
-      "meaning": "forget every login given to a browser app over --http"
-    },
     "--revote": {
       "meaning": "people may change their vote"
     },
@@ -3173,6 +3170,9 @@
         }
       }
     },
+    "mcp revoke": {
+      "in": "all"
+    },
     "mcp serve": {
       "in": "all",
       "options": {
@@ -3180,7 +3180,6 @@
         "--permission": "all",
         "--port": "all",
         "--public-url": "all",
-        "--revoke": "all",
         "--yes": {
           "in": [],
           "planned": {

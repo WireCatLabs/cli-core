@@ -5092,13 +5092,15 @@ describe("the guard, account and mcp config commands", () => {
     expect(json(withQuery.stderr).error.message).toContain("without a query")
   })
 
-  it("**mcp serve --revoke forgets every browser login** of the profile", async () => {
+  it("**mcp revoke forgets every browser login** of the profile", async () => {
     const env = sandbox()
     const file = httpTokenFile(app, "default", env)
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, JSON.stringify({ clients: [], tokens: [] }))
 
-    const { code, stdout } = await call(["mcp", "serve", "--revoke", "--json"], async () => fake, env)
+    const { code, stdout } = await call(["mcp", "revoke", "--json"], async () => fake, env)
+    const flag = await call(["mcp", "serve", "--revoke", "--json"], async () => fake, env)
+    expect(flag.code).toBe(2)
 
     expect(code).toBe(0)
     expect(json(stdout).item).toEqual({ revoked: true, profile: "default" })
