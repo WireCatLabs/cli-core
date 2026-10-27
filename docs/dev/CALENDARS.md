@@ -78,6 +78,7 @@ each answer lists the fields others wrote in `untrusted` and has its control cha
 [WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)).
 A CLI on cli-core's three-tool MCP server reaches the commands instead; that server wraps a command's answer and
 serialises it with the same escaping (`answered` in `src/mcp/tool.ts`), and its tool descriptions carry the same line.
+An event hit of `search all` names its invitation text in its own `untrusted`: `title` and `excerpt`.
 
 ## Testing an adapter
 
