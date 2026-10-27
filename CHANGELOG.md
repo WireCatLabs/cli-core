@@ -191,11 +191,8 @@ shape of this file.
 - **The contract kits check more.** `calendarWriterContract` gains three cases (a rule on create, a rule changed on the
   series, the timed/all-day switch both ways) and `calendarSourceContract` one for a source with `freeBusy`: an
   adapter that runs the kits gets tests that can fail until it supports them.
-
-### Changed — may break callers
-
-- **An MCP server serves only the profiles it is told** (NEED-1881,
-  [WC-MCP-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-9--a-server-serves-the-profiles-it-is-told-with-one-connection-for-each)).
+- **An MCP server serves only the profiles it is told**, the owner's choice written in the agent's config
+  ([WC-MCP-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-9--a-server-serves-the-profiles-it-is-told-with-one-connection-for-each)).
   `<cli> mcp serve` with no profile no longer serves every profile: it exits 2 with `validation_error` and lists the
   profiles here. Name one (`<cli> work mcp serve`), a list (`<cli> mcp serve --profiles work,personal`, each name
   must exist) or every profile (`--profiles all`); the startup line on stderr names the profiles served. A first word

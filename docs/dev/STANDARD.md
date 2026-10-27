@@ -1071,6 +1071,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--priority` | `<n>` | task priority from 0 (urgent) through 4 (low) |  | `tasks update` |
 | `--problems` |  | only failed responses, warnings and crashes |  | `runs show` |
 | `--profile-photo` | `<who>` | who sees the profile photo: everyone, contacts or nobody |  | `account privacy set` (planned) |
+| `--profiles` | `<names\|all>` | the profiles one MCP server serves, comma-separated, or all of them |  | `mcp config`, `mcp revoke`, `mcp serve`, `mcp server start`, `mcp server status`, `mcp server stop` |
 | `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp serve`, `mcp server start` |
 | `--question` |  | match only questions |  | `replies edit` |
 | `--quiet` |  | diagnostics off. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
