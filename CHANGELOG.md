@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`upgrade` restarts the HTTP MCP server and names the stdio MCP sessions still on the old version**, in every
+  CLI that uses the shared command. After a successful install it restarts each running `mcp serve --http` that
+  `mcp server start` launched, with the same port, address and `--permission` limits, and reports it as
+  `mcp_servers` (old → new version); a server started by hand, by an older version, or one it cannot confirm, is
+  left running and named. It lists this install's MCP sessions over stdio (`mcp serve`, and `mcp` from before it)
+  as `stale_sessions` (PIDs; the version is `null`), says "restart them from your agent app", and says it could not
+  check where it cannot list processes. Nothing is restarted or listed when nothing was installed. A serve restart
+  that runs out of time is now named as such, and `upgrade` no longer waits on one for more than 90 s. The restart
+  works from the next upgrade on: the version doing the upgrading must have it, and the server must have been
+  started by it.
+
 ## 0.463.0 — 27.10.2026
 
 ### Changed — may break callers
