@@ -905,7 +905,7 @@ shape of this file.
   `{"event":"progress","step":"sync","chats":3,"chats_done":1,"fetched":250}`. With `--all`, one once the chat list
   is read (`chats_done` 0), then one after each chat, those passed as already current included; for one chat, one per
   page with `chats` and `chats_done` `null`. At most about two a second; the first and last of `--all` always come.
-  Only in machine output (`--json`, `--jsonl`, or stdout not a terminal), so a background job's log gets them too;
+  Only in machine output (`--json`, `--jsonl`, or stdout not a terminal) and not in a `--background` job's log;
   stdout still carries the one answer. Archive services take an optional `onChat` for the same counts.
 - **`upgrade` restarts the HTTP MCP server and names the stdio MCP sessions still on the old version**, in every
   CLI that uses the shared command. After a successful install it restarts each running `mcp serve --http` that

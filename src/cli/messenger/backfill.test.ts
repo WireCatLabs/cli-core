@@ -620,6 +620,7 @@ describe("store fetch in the background", () => {
     const state = { newest: 150, asked: [] as (string | undefined)[] }
     const child = await call(calls[0]?.argv ?? [], chatOf(state), { ...env, ...calls[0]?.env })
     expect(child.code).toBe(0)
+    expect(progressLines(child.stderr)).toEqual([])
 
     expect((await call(["store", "jobs", "show", "--json"], idle, env)).answer).toMatchObject({
       job,

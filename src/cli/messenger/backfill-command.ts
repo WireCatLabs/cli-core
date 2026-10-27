@@ -214,7 +214,8 @@ export const syncCommand = (messenger: Messenger): Command => {
       const jobs = jobsDir(messenger.app, context.env)
       const jobId = context.env[envName(messenger.app, "BACKFILL_JOB")]
       const stop = stopOnSignal(this)
-      const progress = syncProgress(stepLines(context.streams.diagnostic, context.format !== "pretty"))
+      // A background job keeps its log as it was; its progress is the job file.
+      const progress = syncProgress(stepLines(context.streams.diagnostic, !jobId && context.format !== "pretty"))
       try {
         const options = {
           limit,
