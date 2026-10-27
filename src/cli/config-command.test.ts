@@ -143,6 +143,23 @@ describe("config", () => {
     expect(JSON.parse(readFileSync(file, "utf8")).profiles.work).toEqual({ color: true, limit: 5 })
   })
 
+  it("sets how runs are kept: record_input true, false or failed, and the success horizon", async () => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config") }
+    const file = join(env.CHAT_CONFIG_DIR, "config.json")
+    expect((await call(["work", "config", "set", "record_input", "failed"], env)).code).toBe(0)
+    expect((await call(["work", "config", "set", "keep_successful_runs_for_days", "3"], env)).code).toBe(0)
+    expect((await call(["work", "config", "set", "runs_size_limit_mb", "50"], env)).code).toBe(0)
+    expect((await call(["work", "config", "set", "record_input", "sometimes"], env)).code).toBe(2)
+    expect(JSON.parse(readFileSync(file, "utf8")).profiles.work).toMatchObject({
+      record_input: "failed",
+      keep_successful_runs_for_days: 3,
+      runs_size_limit_mb: 50,
+    })
+    expect((await call(["work", "config", "set", "record_input", "false"], env)).code).toBe(0)
+    expect(JSON.parse(readFileSync(file, "utf8")).profiles.work.record_input).toBe(false)
+  })
+
   it("refuses a top-level unset from a process locked to one profile", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE_LOCK: "work" }

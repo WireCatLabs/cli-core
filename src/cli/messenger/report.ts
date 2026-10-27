@@ -43,6 +43,14 @@ const EVENT_FIELDS = [
   "error_code",
   "provider_error",
   "code",
+  "level",
+  "transport",
+  "attempt",
+  "wait_ms",
+  "method",
+  "endpoint_template",
+  "status",
+  "dropped",
 ]
 
 /**
@@ -91,7 +99,7 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
     },
     run: chosen
       ? {
-          metadata: maskedRun(chosen.metadata, program),
+          metadata: maskedRun(chosen.metadata, label, program),
           events: readEvents(chosen.dir).map(eventOf(label, eventFields)),
         }
       : null,
@@ -100,9 +108,43 @@ export const buildReport = <Doctor extends object, Context extends ReportContext
   return JSON.parse(hideHome(JSON.stringify(report), home)) as Report<Doctor> & Omit<Context, keyof Report>
 }
 
-// A report leaves the machine, so it masks the typed words as `record_input: false` would.
-const maskedRun = (metadata: RunMetadata, program = new Command()): RunMetadata =>
-  metadata.argv ? { ...metadata, argv: maskArgv(program, metadata.argv).argv } : metadata
+/**
+ * A report leaves the machine, so it masks the typed words as `record_input: false` would, and every id that ties it
+ * to a session, a connection, a trace, an app or a chat becomes a label, as the events' ids do.
+ */
+const maskedRun = (metadata: RunMetadata, label: (id: string) => string, program = new Command()): RunMetadata => {
+  const { agent, mcp, partial, traceId } = metadata
+  return {
+    ...metadata,
+    ...(metadata.argv ? { argv: maskArgv(program, metadata.argv).argv } : {}),
+    ...(traceId ? { traceId: label(traceId) } : {}),
+    ...(agent
+      ? {
+          agent: {
+            ...agent,
+            session_id: agent.session_id === null ? null : label(agent.session_id),
+            ...(agent.client
+              ? { client: { ...agent.client, ...(agent.client.id ? { id: label(agent.client.id) } : {}) } }
+              : {}),
+          },
+        }
+      : {}),
+    ...(mcp
+      ? {
+          mcp: {
+            ...mcp,
+            ...(mcp.request_id ? { request_id: label(mcp.request_id) } : {}),
+            ...(mcp.connection_id ? { connection_id: label(mcp.connection_id) } : {}),
+          },
+        }
+      : {}),
+    ...(partial
+      ? {
+          partial: { ...partial, failures: partial.failures.map((failure) => ({ ...failure, id: label(failure.id) })) },
+        }
+      : {}),
+  }
+}
 
 /**
  * Every field of a journal line that names a chat, a message or a write. A send's `operationId` is
@@ -172,6 +214,8 @@ const eventOf =
     const kept = Object.fromEntries(
       Object.entries(event)
         .filter(([key]) => (fields === "recorded" ? RECORDED_FIELDS.has(key) : EVENT_FIELDS.includes(key)))
+        // A line from before records were nested holds pino's numeric `level`, not the request's layer.
+        .filter(([key, value]) => key !== "level" || typeof value === "string")
         .map(([key, value]) => [
           key,
           fields === "recorded" && RECORDED_ID_FIELDS.has(key) && value !== undefined && value !== null

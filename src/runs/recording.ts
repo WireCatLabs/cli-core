@@ -24,6 +24,8 @@ export interface RecordingOptions {
   env?: NodeJS.ProcessEnv
   runsDir?: string
   keepDays?: number
+  keepSuccessDays?: number
+  maxBytes?: number
   now?: () => Date
   /** The caller's trace; otherwise the enclosing run's, otherwise `TRACEPARENT` from `env`. */
   traceId?: string
@@ -33,14 +35,14 @@ export interface RecordingOptions {
    */
   processRun?: boolean
   /** The whole command, its masked arguments and the agent that started it. */
-  context?: RunContext
+  context?: RunContext & { argvIfFailed?: string[] }
 }
 
 /**
  * Runs one command with the diagnostics turned on, and **finalizes on every path**.
  *
- * `--trace` shows each event as it happens and keeps nothing, `--record` keeps it and shows
- * nothing. It is a wrapper rather than three lines in each command because the failure it prevents
+ * `--trace` shows each event as it happens; the run is kept as the config says — every run unless
+ * `record: false`, which keeps failures only. It is a wrapper rather than three lines in each command because the failure it prevents
  * is the quiet one: a run directory left saying `running` because the command threw on the way out.
  */
 export const recorded = async <T>(options: RecordingOptions, body: (events: EventSink) => Promise<T>): Promise<T> => {
@@ -82,7 +84,8 @@ export const startRecording = (options: RecordingOptions): Recording => {
   const runId = newRunId(startedAt, options.command)
   const traceId = options.traceId ?? enclosingTraceId() ?? traceOf(options.env ?? process.env).traceId
 
-  const open = (extra: { startedAt?: Date } = {}): Run =>
+  const { argvIfFailed, ...context } = options.context ?? {}
+  const open = (extra: { startedAt?: Date; lazy?: boolean } = {}): Run =>
     startRun({
       runsDir: options.runsDir ?? runsDirFor(options.app, options.env),
       runId,
@@ -91,7 +94,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
       service: options.app.command,
       cliVersion: options.app.version,
       ...(traceId === undefined ? {} : { traceId }),
-      ...(options.context ? { context: options.context } : {}),
+      ...(options.context ? { context } : {}),
       // The operation has happened or is under way, and failing the command now invites a retry
       // that sends twice.
       onError: (error) => {
@@ -99,11 +102,13 @@ export const startRecording = (options: RecordingOptions): Recording => {
         streams.diagnostic(options.format === "pretty" ? warning : JSON.stringify({ warning }))
       },
       ...(options.keepDays === undefined ? {} : { keepDays: options.keepDays }),
+      ...(options.keepSuccessDays === undefined ? {} : { keepSuccessDays: options.keepSuccessDays }),
+      ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
       now,
       ...extra,
     })
 
-  const run = options.record ? open({ startedAt }) : undefined
+  const run = options.record ? open({ startedAt, lazy: true }) : undefined
   // Unrecorded, the newest events are held until the outcome is known, so a failure can still be kept.
   const held: DiagnosticEvent[] | undefined = !run && options.keepFailed ? [] : undefined
   const counted = { wire: 0, operation: 0 }
@@ -151,6 +156,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
           ...cap.dropped(),
           ...outcomeOf(error),
           error: errorDetailOf(error, refused),
+          ...(argvIfFailed ? { argv: argvIfFailed } : {}),
           ...(run ? {} : { keptBecauseFailed: true }),
         })
       }

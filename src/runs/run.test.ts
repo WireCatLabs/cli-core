@@ -201,6 +201,66 @@ describe("what is kept, and for how long", () => {
     expect(readdirSync(dir)).toEqual(["notes"])
   })
 
+  const finished = async (dir: string, at: string, status: "success" | "failed", events = false) => {
+    const run = startRun({
+      runsDir: dir,
+      command: "chats list",
+      service: "tg",
+      cliVersion: "0.0.0",
+      lazy: true,
+      now: () => new Date(at),
+    })
+    if (events) run.logger.info({ event: "request", operation: "chats.list" })
+    await run.finish(status)
+    return run
+  }
+
+  it("**keeps a lazy success with no events as one index line**, which runs show still finds", async () => {
+    const dir = runsDir()
+    const quiet = await finished(dir, "2026-09-20T10:00:00.000Z", "success")
+    const busy = await finished(dir, "2026-09-20T10:00:01.000Z", "success", true)
+    const failed = await finished(dir, "2026-09-20T10:00:02.000Z", "failed")
+
+    expect(readdirSync(join(dir, "2026-09-20")).sort()).toEqual([busy.id, failed.id, "index.jsonl"].sort())
+    expect(findRun(dir, quiet.id)?.metadata).toMatchObject({ status: "success", command: "chats list" })
+    expect(readEvents(findRun(dir, quiet.id)?.dir ?? "")).toEqual([])
+    expect(listRuns(dir).map((run) => run.runId)).toEqual([failed.id, busy.id, quiet.id])
+  })
+
+  it("**drops successes after their own horizon and keeps failures for theirs**", async () => {
+    const dir = runsDir()
+    const old = await finished(dir, "2026-09-01T10:00:00.000Z", "success", true)
+    const oldQuiet = await finished(dir, "2026-09-01T10:00:01.000Z", "success")
+    const oldFailure = await finished(dir, "2026-09-01T10:00:02.000Z", "failed")
+    const recent = await finished(dir, "2026-09-19T10:00:00.000Z", "success", true)
+
+    pruneRuns(dir, { keepDays: 30, keepSuccessDays: 7, now: new Date("2026-09-20T10:00:00.000Z") })
+
+    expect(listRuns(dir).map((run) => run.runId)).toEqual([recent.id, oldFailure.id])
+    expect(findRun(dir, old.id)).toBeUndefined()
+    expect(findRun(dir, oldQuiet.id)).toBeUndefined()
+  })
+
+  it("**fits the size limit once a day**, oldest successes first, then the oldest days", async () => {
+    const dir = runsDir()
+    const failure = await finished(dir, "2026-09-10T10:00:00.000Z", "failed", true)
+    const success = await finished(dir, "2026-09-11T10:00:00.000Z", "success", true)
+    const today = await finished(dir, "2026-09-20T10:00:00.000Z", "success", true)
+    const now = new Date("2026-09-20T11:00:00.000Z")
+    // Each start above measured with the default limit; this measures again as a new day would.
+    rmSync(join(dir, ".size-checked"))
+
+    pruneRuns(dir, { keepDays: 30, keepSuccessDays: 30, maxBytes: 1, now })
+    expect(listRuns(dir).map((run) => run.runId)).toEqual([today.id])
+    expect(findRun(dir, failure.id)).toBeUndefined()
+    expect(findRun(dir, success.id)).toBeUndefined()
+
+    const later = await finished(dir, "2026-09-20T10:30:00.000Z", "failed", true)
+    pruneRuns(dir, { keepDays: 30, keepSuccessDays: 30, maxBytes: 1, now })
+    // Measured once today already: the next start does not walk the folder again.
+    expect(findRun(dir, later.id)).toBeDefined()
+  })
+
   it("prunes as a recorded run starts, and not otherwise", async () => {
     const dir = runsDir()
     mkdirSync(join(dir, "2020-01-01"), { recursive: true })

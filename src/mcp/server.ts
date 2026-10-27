@@ -30,7 +30,7 @@ import { levelFor, type PermissionKey, readKeysForCommand } from "../sends/permi
 import { openStore } from "../store/store.js"
 import { type AgentAnswer, type AgentProgram, type AgentTool, runCommandForAgent, toolsFromCommands } from "./agent.js"
 import { agentLog } from "./agent-log.js"
-import { type CallerSource, callerOf } from "./caller.js"
+import { type CallerSource, callerOf, withCaller } from "./caller.js"
 import type { HttpOptions } from "./http/serve.js"
 import { mcpHttpMarker } from "./http/state.js"
 import { instructions } from "./instructions.js"
@@ -305,7 +305,9 @@ export const createServer = (
       // The caller's trace reaches the run, its send journal lines and its record, as `TRACEPARENT` does.
       const traceparent = ctx?.mcpReq?._meta?.traceparent
       const env = typeof traceparent === "string" ? { ...context.env, TRACEPARENT: traceparent } : context.env
-      const answer = await queued(one, args, env, callerOf(ctx, keyOfCommand(one.command), source))
+      const caller = callerOf(ctx, keyOfCommand(one.command), source)
+      // The connection the session opens for this call is recorded under the same caller.
+      const answer = await withCaller(caller, () => queued(one, args, env, caller))
       const result =
         "error" in answer
           ? (mcpErrorResult(JSON.parse(agentJson(answer.error)) as ErrorObject) as CallToolResult)
@@ -377,7 +379,7 @@ export const createServer = (
         env: context.env,
         ...(context.keyring ? { keyring: context.keyring } : {}),
         embedders,
-        history: settings.keepFailedRuns,
+        history: settings.record,
       },
       callers,
     }

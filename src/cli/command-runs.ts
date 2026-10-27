@@ -1,36 +1,46 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 import { isCliError, type RenderFormat, type Streams } from "@wirecat/cli-base"
+import { metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
 import { providerErrorKey, type RequestEvent } from "../runs/events.js"
 import { type Recording, startRecording, wasSettled } from "../runs/recording.js"
-import { KEEP_RUNS_FOR_DAYS } from "../runs/run.js"
-import { runContextOf } from "../runs/run-context.js"
+import { KEEP_RUNS_FOR_DAYS, KEEP_SUCCESSFUL_RUNS_FOR_DAYS, RUNS_SIZE_LIMIT_MB } from "../runs/run.js"
+import { keepsSuccess, type RecordInput, runContextOf } from "../runs/run-context.js"
 import { runEvent } from "../runs/scope.js"
 import { environmentOf } from "./context.js"
 import { rootOf } from "./profile.js"
 
-/** What the owner saved: `record` and `keep_runs_for_days`, read from the CLI's own config. */
+/** What the owner saved, read from the CLI's own config: `record`, `record_input` and how long runs are kept. */
 export interface SavedRunSettings {
   record?: boolean | undefined
   keepRunsForDays?: number | undefined
+  keepSuccessfulRunsForDays?: number | undefined
+  runsSizeLimitMb?: number | undefined
   /** `record_input`: left out, the typed words are kept, secrets hidden. */
-  recordInput?: boolean | undefined
+  recordInput?: RecordInput | undefined
 }
 
 export interface RunSettings {
   record: boolean
   keepFailedRuns: boolean
   keepRunsForDays: number
+  keepSuccessfulRunsForDays: number
+  runsSizeLimitMb: number
 }
 
-/** `--record`/`--no-record` first, then the config; a failure is kept unless either says no (WC-LIFE-15). */
+/**
+ * `--record`/`--no-record` first, then the config: every run is kept unless it says `record: false`, which keeps
+ * failures only; `--no-record` keeps nothing (WC-LIFE-15).
+ */
 export const runSettings = (flag: boolean | undefined, saved: SavedRunSettings = {}): RunSettings => {
-  const record = flag ?? saved.record ?? false
+  const record = flag ?? saved.record ?? true
   return {
     record,
-    keepFailedRuns: record || (flag !== false && saved.record !== false),
+    keepFailedRuns: record || flag !== false,
     keepRunsForDays: saved.keepRunsForDays ?? KEEP_RUNS_FOR_DAYS,
+    keepSuccessfulRunsForDays: saved.keepSuccessfulRunsForDays ?? KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+    runsSizeLimitMb: saved.runsSizeLimitMb ?? RUNS_SIZE_LIMIT_MB,
   }
 }
 
@@ -76,13 +86,19 @@ const pathOf = (command: Command): string[] => {
 
 type Tracker = CommandRuns & {
   /** A line that failed before any action, named from its words. */
-  open(program: Command, words: string[], flag: boolean | undefined, format: RenderFormat): void
+  open(
+    program: Command,
+    words: string[],
+    flag: boolean | undefined,
+    format: RenderFormat,
+    lifetime?: string | undefined,
+  ): void
 }
 
 const tracker = (options: CommandRunOptions, typed?: readonly string[]): Tracker => {
   let recording: Recording | undefined
 
-  const open: Tracker["open"] = (program, words, flag, format) => {
+  const open: Tracker["open"] = (program, words, flag, format, lifetime) => {
     recording = undefined
     // Reading the log is not worth a run of its own.
     if (SKIPPED.has(words[0] ?? "")) return
@@ -102,13 +118,22 @@ const tracker = (options: CommandRunOptions, typed?: readonly string[]): Tracker
     const streams = options.streams ?? environment.streams
     const env = options.env ?? environment.env
     const command = `${agent ? "mcp " : ""}${words.join(" ") || options.app.command}`
+    const caller = environment.agent?.caller
     recording = startRecording({
       app: options.app,
       command,
       ...(profile === undefined ? {} : { profile }),
-      record: settings.record,
+      record: keepsSuccess({
+        record: settings.record,
+        fromFlag: flag !== undefined,
+        env: env ?? process.env,
+        caller,
+        persistent: lifetime === "persistent",
+      }),
       keepFailed: settings.keepFailedRuns,
       keepDays: settings.keepRunsForDays,
+      keepSuccessDays: settings.keepSuccessfulRunsForDays,
+      maxBytes: settings.runsSizeLimitMb * 1024 * 1024,
       trace: false,
       format,
       ...(streams ? { streams } : {}),
@@ -119,8 +144,8 @@ const tracker = (options: CommandRunOptions, typed?: readonly string[]): Tracker
         program: rootOf(program),
         ...((environment.argv ?? typed) ? { argv: environment.argv ?? typed } : {}),
         env: env ?? process.env,
-        recordInput: saved.recordInput !== false,
-        caller: environment.agent?.caller,
+        recordInput: saved.recordInput ?? true,
+        caller,
       }),
     })
   }
@@ -135,7 +160,13 @@ const tracker = (options: CommandRunOptions, typed?: readonly string[]): Tracker
     start(action) {
       const flags = action.optsWithGlobals<{ record?: boolean; json?: unknown; jsonl?: unknown }>()
       const json = (flags.json !== undefined && flags.json !== false) || Boolean(flags.jsonl)
-      open(action, pathOf(action), flags.record, options.format?.() ?? (json ? "json" : "pretty"))
+      open(
+        action,
+        pathOf(action),
+        flags.record,
+        options.format?.() ?? (json ? "json" : "pretty"),
+        metaOf(action).lifetime,
+      )
     },
     async succeed() {
       await finish()?.succeed()
@@ -254,7 +285,7 @@ export const recordRuns = (program: Command, options: CommandRunOptions): void =
   program
     .option(
       "--record",
-      "keep this run, with the command as typed and secrets hidden; record_input false leaves the typed words out",
+      "keep this run even where the config says record false; record_input false leaves the typed words out",
     )
     .option("--no-record", "do not keep this run, even if it fails")
   program.hook("preAction", (_root, action) => {

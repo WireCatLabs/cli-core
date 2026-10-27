@@ -1,6 +1,6 @@
 import { CLIENT_INFO_META_KEY } from "@modelcontextprotocol/server"
 import { describe, expect, it } from "vitest"
-import { clientHash, runContextOf } from "../runs/run-context.js"
+import { clientHash, keepsSuccess, runContextOf } from "../runs/run-context.js"
 import { CALLER_META_KEY, callerOf, PROXY_CLIENT_NAME } from "./caller.js"
 
 const claude = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "synthetic-session" }
@@ -75,5 +75,21 @@ describe("runContextOf", () => {
   it("says a command came from the terminal, or from WireCat Desktop", () => {
     expect(runContextOf({ bin: "tg", command: "chats list", env: {} }).via).toBe("cli")
     expect(runContextOf({ bin: "tg", command: "chats list", env: { WIRECAT_CALLER: "desktop" } }).via).toBe("desktop")
+  })
+})
+
+describe("keepsSuccess", () => {
+  const desktop = { WIRECAT_CALLER: "desktop" }
+  it("keeps every success unless the config says no, or Desktop or a long-running command asked without --record", () => {
+    expect(keepsSuccess({ record: true, fromFlag: false, env: {} })).toBe(true)
+    expect(keepsSuccess({ record: false, fromFlag: false, env: {} })).toBe(false)
+    expect(keepsSuccess({ record: true, fromFlag: false, env: desktop })).toBe(false)
+    expect(keepsSuccess({ record: true, fromFlag: true, env: desktop })).toBe(true)
+    expect(keepsSuccess({ record: true, fromFlag: false, env: {}, persistent: true })).toBe(false)
+    expect(keepsSuccess({ record: true, fromFlag: true, env: {}, persistent: true })).toBe(true)
+  })
+
+  it("keeps an MCP call's success even on a server WireCat Desktop started", () => {
+    expect(keepsSuccess({ record: true, fromFlag: false, env: desktop, caller: { via: "mcp-http" } })).toBe(true)
   })
 })

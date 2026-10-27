@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks"
 import { createHash } from "node:crypto"
 import { isContentKey } from "@wirecat/cli-base/standards"
 import type { Argument, Command, Option } from "commander"
@@ -23,6 +24,33 @@ export interface RunClient {
   id?: string
 }
 
+/** `record_input`: the words typed are kept (`true`), masked (`false`), or kept only in a run that failed. */
+export type RecordInput = boolean | "failed"
+
+/**
+ * Whether a run that succeeds is kept. Every run is, unless the config says `record: false` — then only failures —
+ * or WireCat Desktop ran the command for its own pages (`WIRECAT_CALLER=desktop`), or the command runs until stopped
+ * (`watch`, `serve`, `mcp`): those two only on `--record`. An MCP call is the caller's run, not Desktop's.
+ */
+export const keepsSuccess = ({
+  record,
+  fromFlag,
+  env,
+  caller,
+  persistent = false,
+}: {
+  record: boolean
+  fromFlag: boolean
+  env: NodeJS.ProcessEnv
+  caller?: RunCaller | undefined
+  persistent?: boolean
+}): boolean => {
+  if (!record) return false
+  if (fromFlag) return true
+  if (persistent) return false
+  return caller !== undefined || viaOf(env) !== "desktop"
+}
+
 /** How the run was asked for: typed or scripted, an MCP client on stdio or over HTTP, or WireCat Desktop. */
 export type RunVia = "cli" | "mcp-stdio" | "mcp-http" | "desktop"
 
@@ -41,6 +69,16 @@ export interface RunCaller {
   agent?: RunAgent
   mcp?: RunMcp
 }
+
+const calls = new AsyncLocalStorage<RunCaller>()
+
+/**
+ * Runs one MCP call with its caller known, so every run opened under it names that caller: the command's own, and
+ * the connection a server opens for it, which runs under the server's context.
+ */
+export const withCaller = <T>(caller: RunCaller, work: () => T): T => calls.run(caller, work)
+
+export const currentCaller = (): RunCaller | undefined => calls.getStore()
 
 /** An OAuth client id is a bearer of sorts: a run keeps eight hex characters of its SHA-256, enough to tell apps apart. */
 export const clientHash = (id: string): string => createHash("sha256").update(id).digest("hex").slice(0, 8)
@@ -262,16 +300,18 @@ export const runContextOf = ({
   program?: Command
   argv?: readonly string[]
   env: NodeJS.ProcessEnv
-  /** The owner's `record_input`; left out, every value that may be content is masked. */
-  recordInput?: boolean
+  /** The owner's `record_input`; left out, every value that may be content is masked. `failed` keeps them only then. */
+  recordInput?: RecordInput | undefined
   /** Who asked, when the receiver knows better than the environment: an MCP call. */
   caller?: RunCaller | undefined
-}): RunContext => {
-  const masked = program && argv ? maskArgv(program, argv, { keep: recordInput }) : undefined
+}): RunContext & { argvIfFailed?: string[] } => {
+  const masked = program && argv ? maskArgv(program, argv, { keep: recordInput === true }) : undefined
+  const ifFailed = program && argv && recordInput === "failed" ? maskArgv(program, argv, { keep: true }) : undefined
   const agent = caller ? caller.agent : agentOf(env)
   return {
     cliCommand: command ? `${bin} ${command}` : bin,
     ...(masked ? { argv: masked.argv } : {}),
+    ...(ifFailed ? { argvIfFailed: ifFailed.argv } : {}),
     ...(masked?.unknownCommand === undefined ? {} : { unknownCommand: masked.unknownCommand }),
     ...(agent ? { agent } : {}),
     via: caller?.via ?? viaOf(env),

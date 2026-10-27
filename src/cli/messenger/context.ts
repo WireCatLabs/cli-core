@@ -790,7 +790,7 @@ export const messengerContext = (
             offline: base.settings.offline,
             reads: messenger.history ?? "server",
             // Turning recording off by name (--no-record, or record: false) keeps no search history either.
-            history: base.settings.keepFailedRuns,
+            history: base.settings.record,
             searchCatchUp: base.settings.searchCatchUp,
             pictures: base.settings.pictureSearch,
             reranker: base.settings.searchReranker,

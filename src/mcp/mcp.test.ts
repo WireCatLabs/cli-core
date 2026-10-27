@@ -2340,7 +2340,7 @@ describe("the MCP server", () => {
     it("over stdio: the agent that started the server, and the client from initialize", async () => {
       const { call, env } = await connect(failing(), { extraEnv: agentEnv })
       expect((await call("chats list")).isError).toBe(true)
-      const [run] = listRuns(runsDirFor(app, env))
+      const run = listRuns(runsDirFor(app, env)).find((one) => one.command === "mcp chats list")
       expect(run?.via).toBe("mcp-stdio")
       expect(run?.agent).toEqual({
         kind: "claude-code",
@@ -2354,7 +2354,7 @@ describe("the MCP server", () => {
     it("over HTTP: the OAuth app, never the session of whoever started the server", async () => {
       const { call, env } = await connect(failing(), { extraEnv: agentEnv, http: true })
       expect((await call("chats list")).isError).toBe(true)
-      const [run] = listRuns(runsDirFor(app, env))
+      const run = listRuns(runsDirFor(app, env)).find((one) => one.command === "mcp chats list")
       expect(run?.via).toBe("mcp-http")
       expect(run?.agent?.kind).toBe("mcp-client")
       expect(run?.agent?.client).toEqual({

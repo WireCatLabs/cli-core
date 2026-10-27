@@ -1,4 +1,5 @@
 import { CliError, type KeyringStore, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
+import { metaOf } from "@wirecat/cli-base/commands"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { type Deadline, type RunBudget, runBudget } from "../background/budget.js"
@@ -8,7 +9,7 @@ import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { EventSink } from "../runs/events.js"
 import { recorded } from "../runs/recording.js"
-import { type RunCaller, runContextOf } from "../runs/run-context.js"
+import { currentCaller, keepsSuccess, type RunCaller, runContextOf } from "../runs/run-context.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
 import type { SecretInput } from "../terminal/prompt.js"
 import { type Closeable, withDeadline } from "./deadline.js"
@@ -241,14 +242,24 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
             program: rootOf(command),
             ...(environment.argv ? { argv: environment.argv } : {}),
             env,
-            recordInput: settings.recordInput !== false,
-            caller: environment.agent?.caller,
+            recordInput: settings.recordInput ?? true,
+            caller: environment.agent?.caller ?? currentCaller(),
           }),
           ...(ranFor === undefined ? {} : { profile: ranFor }),
-          record: settings.record,
+          record: keepsSuccess({
+            record: settings.record,
+            fromFlag: settings.sources?.record === "flag",
+            env,
+            caller: environment.agent?.caller ?? currentCaller(),
+            persistent: metaOf(command).lifetime === "persistent",
+          }),
           keepFailed: settings.keepFailedRuns,
           trace: settings.trace,
           keepDays: settings.keepRunsForDays,
+          ...(settings.keepSuccessfulRunsForDays === undefined
+            ? {}
+            : { keepSuccessDays: settings.keepSuccessfulRunsForDays }),
+          ...(settings.runsSizeLimitMb === undefined ? {} : { maxBytes: settings.runsSizeLimitMb * 1024 * 1024 }),
           processRun: !environment.agent,
           format,
           streams,

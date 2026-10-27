@@ -82,7 +82,13 @@ export interface ProgramDefinition {
       Partial<
         Pick<
           Settings,
-          "recordInput" | "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "sources"
+          | "recordInput"
+          | "keepSuccessfulRunsForDays"
+          | "permissions"
+          | "permissionSources"
+          | "configPath"
+          | "savedPermissions"
+          | "sources"
         >
       >
   }
@@ -147,9 +153,9 @@ export const createProgram = (
     .option("--yes", "go ahead without the question an ask level puts before a write")
     .option(
       "--record",
-      "keep this run, with the command as typed and secrets hidden; record_input false leaves the typed words out",
+      "keep this run even where the config says record false; record_input false leaves the typed words out",
     )
-    .option("--no-record", "do not keep it, whatever the configuration says")
+    .option("--no-record", "do not keep this run, even if it fails")
     .showHelpAfterError()
 
   for (const command of mounted) program.addCommand(command)
@@ -770,7 +776,7 @@ const keepFailure = async (
         program,
         argv,
         env,
-        recordInput: settings ? settings.recordInput !== false : false,
+        recordInput: settings ? (settings.recordInput ?? true) : false,
         caller: options.agent?.caller,
       }),
       // Settings that did not load never accepted the word, which may be a refused name or somebody's words.
@@ -782,6 +788,9 @@ const keepFailure = async (
       streams: options.streams ?? processStreams,
       env,
       ...(settings ? { keepDays: settings.keepRunsForDays } : {}),
+      ...(settings?.keepSuccessfulRunsForDays === undefined
+        ? {}
+        : { keepSuccessDays: settings.keepSuccessfulRunsForDays }),
     },
     async () => {
       throw failure

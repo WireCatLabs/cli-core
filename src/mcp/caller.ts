@@ -1,6 +1,7 @@
-import { AsyncLocalStorage } from "node:async_hooks"
 import { CLIENT_INFO_META_KEY } from "@modelcontextprotocol/server"
 import { agentOf, clientHash, type RunAgent, type RunCaller, type RunClient } from "../runs/run-context.js"
+
+export { currentCaller, withCaller } from "../runs/run-context.js"
 
 /** The `_meta` key the every-profile server names the real caller under, for the profile server it passes a call to. */
 export const CALLER_META_KEY = "wirecat.dev/caller"
@@ -112,10 +113,3 @@ const passedOn = (value: unknown, tool: string): RunCaller | undefined => {
     },
   }
 }
-
-const calls = new AsyncLocalStorage<RunCaller>()
-
-/** Runs one tool call with its caller known, for a command runner that is not handed it (a CLI's own MCP server). */
-export const withCaller = <T>(caller: RunCaller, work: () => T): T => calls.run(caller, work)
-
-export const currentCaller = (): RunCaller | undefined => calls.getStore()

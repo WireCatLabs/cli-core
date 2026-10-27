@@ -100,16 +100,35 @@ describe("a recorded run", () => {
     expect(kept).not.toContain(BODY)
   })
 
-  it("is not kept when it succeeds without --record", async () => {
-    const { runsDir } = await call(["messages", "send", TITLE, BODY])
-
-    expect(listRuns(runsDir)).toEqual([])
+  it("is kept when it succeeds without being asked, and only when it fails under record: false", async () => {
+    expect(listRuns((await call(["messages", "send", TITLE, BODY])).runsDir)).toMatchObject([{ status: "success" }])
+    const off = JSON.stringify({ defaults: { record: false } })
+    expect(listRuns((await call(["messages", "send", TITLE, BODY], undefined, off)).runsDir)).toEqual([])
   })
 
-  it("is kept when it fails, with the code a script branches on and the sentence masked", async () => {
-    const { code, runsDir } = await call(["messages", "send", TITLE, BODY], async () => {
-      throw new CliError("provider_error", `Telegram refused "${BODY}"`, { provider_error: "PEER_ID_INVALID" })
-    })
+  it("keeps the words typed only when it fails, under record_input: failed", async () => {
+    const failedOnly = JSON.stringify({ defaults: { record_input: "failed" } })
+    const success = await call(["messages", "send", TITLE, BODY], undefined, failedOnly)
+    expect(listRuns(success.runsDir)[0]?.argv).toEqual(["messages", "send", "[redacted]", "[redacted]"])
+    const failure = await call(
+      ["messages", "send", TITLE, BODY],
+      async () => {
+        throw new CliError("timeout", "slow")
+      },
+      failedOnly,
+    )
+    expect(listRuns(failure.runsDir)[0]?.argv).toEqual(["messages", "send", TITLE, BODY])
+  })
+
+  it("is kept when it fails under record: false, with the code a script branches on and the sentence masked", async () => {
+    const off = JSON.stringify({ defaults: { record: false } })
+    const { code, runsDir } = await call(
+      ["messages", "send", TITLE, BODY],
+      async () => {
+        throw new CliError("provider_error", `Telegram refused "${BODY}"`, { provider_error: "PEER_ID_INVALID" })
+      },
+      off,
+    )
 
     expect(code).toBe(11)
     expect(listRuns(runsDir)).toHaveLength(1)
@@ -145,11 +164,10 @@ describe("a recorded run", () => {
     expect(listRuns(runsDir)[0]).toMatchObject({ status: "failed", errorCode: "timeout" })
   })
 
-  it("shows its events on stderr with --trace and keeps nothing", async () => {
-    const { streams, runsDir } = await call(["messages", "send", TITLE, BODY, "--trace"])
+  it("shows its events on stderr with --trace", async () => {
+    const { streams } = await call(["messages", "send", TITLE, BODY, "--trace", "--no-record"])
 
     expect(streams.stderr.map((line) => JSON.parse(line).operation)).toEqual(["messages.send", "messages.send"])
-    expect(listRuns(runsDir)).toEqual([])
   })
 })
 

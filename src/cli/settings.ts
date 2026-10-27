@@ -5,6 +5,8 @@ import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/sett
 import { parseDuration } from "../domain/duration.js"
 import { DEFAULT_RERANK_MODEL, RERANK_MODELS } from "../embeddings/models.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
+import { KEEP_SUCCESSFUL_RUNS_FOR_DAYS, RUNS_SIZE_LIMIT_MB } from "../runs/run.js"
+import type { RecordInput } from "../runs/run-context.js"
 import {
   assertOverridesTighten,
   CEILING_KEY,
@@ -64,6 +66,11 @@ export const count = v.pipe(v.number(wholeNumber), v.integer(wholeNumber), v.min
 const zeroOrMore = plain("has to be a whole number, 0 or more")
 const countOrZero = v.pipe(v.number(zeroOrMore), v.integer(zeroOrMore), v.minValue(0, zeroOrMore))
 export const flag = v.boolean(plain("has to be true or false"))
+/** `record_input`: true, false, or "failed" — the words typed kept only in a run that failed. */
+export const recordInputSetting = v.union(
+  [v.boolean(), v.literal("failed")],
+  plain('has to be true, false or "failed"'),
+)
 
 const wholeOrZero = (text: string, name: string): number => {
   const value = Number(text)
@@ -113,8 +120,10 @@ const SHARED_PROFILE_ENTRIES = {
   color: v.optional(flag),
   sender_colors: v.optional(flag),
   record: v.optional(flag),
-  record_input: v.optional(flag),
+  record_input: v.optional(recordInputSetting),
   keep_runs_for_days: v.optional(count),
+  keep_successful_runs_for_days: v.optional(count),
+  runs_size_limit_mb: v.optional(count),
   permissions: v.optional(permissionLevels),
   sends_per_hour: v.optional(count),
   requests_per_minute: v.optional(countOrZero),
@@ -246,15 +255,21 @@ export interface Settings extends AISettings {
    * differently on purpose — milliseconds in the file, a duration with a unit on the command line.
    */
   commandTimeoutMs: number | undefined
+  /** Every run is kept unless the config says `record: false` or the command says `--no-record`. */
   record: boolean
   /**
-   * A run record keeps the words typed, secrets hidden; off masks every value that may be content. Optional so a CLI
-   * with settings of its own need not return it: left out, the words are kept.
+   * A run record keeps the words typed, secrets hidden; off masks every value that may be content; `"failed"` keeps
+   * them only in a run that failed. Optional so a CLI with settings of its own need not return it: left out, the words
+   * are kept.
    */
-  recordInput?: boolean
-  /** A failed run is kept even unrecorded, unless recording was turned off by name. */
+  recordInput?: RecordInput
+  /** A failed run is kept even unrecorded, unless `--no-record` turned recording off for this command. */
   keepFailedRuns: boolean
   keepRunsForDays: number
+  /** Successful runs go sooner than failed ones. Optional so a CLI with settings of its own need not return it. */
+  keepSuccessfulRunsForDays?: number
+  /** The runs folder's size limit, in megabytes. */
+  runsSizeLimitMb?: number
   /** The variable that made this process read-only, above every level and flag (`<PREFIX>_READ_ONLY`). */
   readOnlyLock?: string
   /**
@@ -513,15 +528,17 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const kindLayers = layers.filter(([from]) => from.startsWith(`config file: ${kind}.`))
 
     const limit = flags.limit === undefined ? fromLayers("limit", DEFAULT_LIMIT) : { value: flags.limit, from: "flag" }
-    const record = flags.record === undefined ? fromLayers("record", false) : { value: flags.record, from: "flag" }
+    const record = flags.record === undefined ? fromLayers("record", true) : { value: flags.record, from: "flag" }
     const timeoutMs = fromLayers<number | undefined>("timeout_ms", undefined)
     const color = fromLayers<boolean | undefined>("color", undefined)
     const senderColors = fromLayers("sender_colors", false)
     const searchCatchUp = fromLayers("search_catch_up", false)
     const pictureSearch = fromLayers("picture_search", false)
     const searchReranker = fromLayers<string>("search_reranker", DEFAULT_RERANK_MODEL)
-    const recordInput = fromLayers("record_input", true)
+    const recordInput = fromLayers<RecordInput>("record_input", true)
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
+    const keepSuccessfulRunsForDays = fromLayers("keep_successful_runs_for_days", KEEP_SUCCESSFUL_RUNS_FOR_DAYS)
+    const runsSizeLimitMb = fromLayers("runs_size_limit_mb", RUNS_SIZE_LIMIT_MB)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = readOnlyLockOf(app, env)
     // A bot has no hourly limit unless the bot section gives it one: a bot that answers people is
@@ -592,8 +609,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
           : (extension.parseDuration ?? parseDuration)(timeout.value, timeout.from === TIMEOUT ? TIMEOUT : "--timeout"),
       record: record.value,
       recordInput: recordInput.value,
-      keepFailedRuns: record.value || record.from === "default",
+      keepFailedRuns: record.value || record.from !== "flag",
       keepRunsForDays: keepRunsForDays.value,
+      keepSuccessfulRunsForDays: keepSuccessfulRunsForDays.value,
+      runsSizeLimitMb: runsSizeLimitMb.value,
       ...(readOnlyLock ? { readOnlyLock } : {}),
       permissions: permissions.levels,
       permissionSources: permissions.sources,
@@ -621,6 +640,8 @@ export const settingsFor = <T extends object = Record<never, never>>(
         record: record.from,
         recordInput: recordInput.from,
         keepRunsForDays: keepRunsForDays.from,
+        keepSuccessfulRunsForDays: keepSuccessfulRunsForDays.from,
+        runsSizeLimitMb: runsSizeLimitMb.from,
         sendsPerHour: sendsPerHour.from,
         requestsPerMinute: requestsPerMinute.from,
         readOtherBots: readOtherBots.from,

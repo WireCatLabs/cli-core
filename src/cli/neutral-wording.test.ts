@@ -90,7 +90,7 @@ describe("shared wording", () => {
     expect(program.description()).toContain("`chat personal chats list`")
     expect(option(program, "--brief")).toBe("found messages as reference, title, time, sender and excerpt only")
     expect(option(program, "--record")).toBe(
-      "keep this run, with the command as typed and secrets hidden; record_input false leaves the typed words out",
+      "keep this run even where the config says record false; record_input false leaves the typed words out",
     )
     expect(metaOf(at(program, "commands", "info")).examples).toEqual(["chat commands info messages list"])
     expect(at(program, "commands").registeredArguments[0]?.description).toContain("for example: search messages")

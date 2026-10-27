@@ -293,16 +293,32 @@ Import the program lazily, as above: the compile cache and the SQLite swap only 
 
 Such a program keeps its own runs ([WC-LIFE-15](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-15--keep-a-run-log-through-cli-core-and-read-it-back-with-runs)):
 `recordRuns(program, { app, content, settings, profile?, agent?, recognise? })` adds `--record` and `--no-record`,
-keeps every failed command as a run — a usage error before any action too, named by the command words it can read
-and never an argument — and every command when the flag or the saved `record` asks. `settings()` returns the saved
-`record` and `keepRunsForDays` (one that throws leaves the defaults); `profile()` names the run's profile and, given
-at all, tells it that the first word may be a profile. Call it after the program's other `parseAsync` wrappers. A
-provider client far from the program logs into the command's run with `providerEvent(event)`, or
-`providerRequest(operation)`, which times one call and returns the function that ends it
-(`{ status?, error?, errorCode? }`). A tool on `run()` gets the flags and the failure before a command from `run()`
-and keeps its own command's run with `commandRuns(options)` — `start(action)`, `succeed()`, `fail(error)`, `runId()`,
-`events(event)` — from its `prepare`, `postAction` and `onFailure`. `runSettings(flag, saved)` is the rule both use:
-the flag, else the saved `record`, else off; a failure is kept unless either says no.
+and keeps every command as a run — a usage error before any action too, named by the command words it can read and
+never an argument. `settings()` returns the saved `record`, `recordInput`, `keepRunsForDays`,
+`keepSuccessfulRunsForDays` and `runsSizeLimitMb` (one that throws leaves the defaults); `profile()` names the run's
+profile and, given at all, tells it that the first word may be a profile. Call it after the program's other
+`parseAsync` wrappers. A provider client far from the program logs into the command's run with
+`providerEvent(event)`, or `providerRequest(operation, sink?, { method, endpointTemplate, transport, attempt, waitMs,
+bytes })`, which times one wire call and returns the function that ends it (`{ status?, error?, errorCode?,
+providerError?, bytes?, counts?, ids? }`); `runEvent(event)` reaches the run of a `run()` command the same way. A
+tool on `run()` gets the flags and the failure before a command from `run()` and keeps its own command's run with
+`commandRuns(options)` — `start(action)`, `succeed()`, `fail(error)`, `runId()`, `events(event)` — from its
+`prepare`, `postAction` and `onFailure`. `runSettings(flag, saved)` is the rule both use: the flag, else the saved
+`record`, else on; `record: false` keeps failures only, `--no-record` keeps nothing.
+
+**What is kept, and for how long.** Every run is kept, successes for `keep_successful_runs_for_days` (7) and
+failures for `keep_runs_for_days` (30); past `runs_size_limit_mb` (200) the oldest successes go first, then the
+oldest days, checked once a day. A success that logged no events is one line in the day's `index.jsonl` and no
+folder; `runs show` reads it from there. A command that runs until stopped (`watch`, `serve`, `mcp`) and a command
+WireCat Desktop runs for its own pages (`WIRECAT_CALLER=desktop`) keep a success only under `--record`. A run holds
+at most 2,000 events or 1 MB; past that it counts the rest by operation in one `events.dropped` line and
+`events_dropped`. `record_input` is `true` (the words typed, secrets hidden), `false` (every value that may be
+content masked) or `"failed"` (the words typed only in a run that failed). A run says how it was asked for (`via`:
+`cli`, `mcp-stdio`, `mcp-http`, `desktop`) and, for an MCP call, which call (`mcp`: tool, request id, connection id)
+and which client (`agent.client`: its name and version, and over HTTP the first 8 hex of the SHA-256 of its OAuth
+client id); over HTTP the server's own environment is never read for the agent. Request events carry `level`
+(`operation` or `wire`), `transport`, `attempt` and `wait_ms`; `requests` counts wire calls when there are any.
+Local records keep chat, person and file ids and paths; `doctor reports create` turns each into a label.
 
 ## Command discovery
 

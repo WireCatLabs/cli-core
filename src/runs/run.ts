@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, sep } from "node:path"
 import { createRecordLog, type Logger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
@@ -80,6 +80,15 @@ export interface StartRunOptions {
   cliVersion: string
   /** Older runs are removed as this one starts. */
   keepDays?: number
+  /** Successful runs older than this are removed sooner than the failures `keepDays` keeps. */
+  keepSuccessDays?: number
+  /** The runs folder's size limit in bytes: past it, the oldest successful runs go first, then the oldest days. */
+  maxBytes?: number
+  /**
+   * Opens the directory only when there is something to put in it: an event, or an ending other than a plain
+   * success. A success with no events is then one line in the day's index (`runs show` reads it from there).
+   */
+  lazy?: boolean
   runId?: string
   now?: () => Date
   /** When the command began, if that was before the run was opened — a failure kept after the fact. */
@@ -103,6 +112,8 @@ export interface Run {
 }
 
 export const KEEP_RUNS_FOR_DAYS = 30
+export const KEEP_SUCCESSFUL_RUNS_FOR_DAYS = 7
+export const RUNS_SIZE_LIMIT_MB = 200
 
 /** `<state dir>/runs` — never the cache directory: a cache is deleted to fix a cache, and a run cannot be rebuilt. */
 export const runsDirFor = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string =>
@@ -117,12 +128,11 @@ export const runsDirFor = (app: AppIdentity, env: NodeJS.ProcessEnv = process.en
  *   events.jsonl   one log record per event (cli-base's `LogRecord`), no ANSI ever
  * ```
  *
- * `run.json` is written **now**, with `status: "running"`, and again by `finish`. A directory
+ * `run.json` is written as the directory opens, with `status: "running"`, and again by `finish`. A directory
  * holding events and no metadata is a special case `runs list` would carry forever.
  *
  * Each write also appends the metadata to the day's `index.jsonl`, which `runs list` and `search runs`
- * read instead of every `run.json`. It is only a cache: pruned with its day, and a day without one is read
- * the slow way.
+ * read instead of every `run.json`. It is the only record of a `lazy` run that succeeded without events.
  */
 export const startRun = (options: StartRunOptions): Run => {
   const now = options.now ?? (() => new Date())
@@ -132,44 +142,13 @@ export const startRun = (options: StartRunOptions): Run => {
 
   // Only while something is being recorded: a tool that is not recording has no business walking
   // that directory.
-  pruneRuns(options.runsDir, { keepDays: options.keepDays ?? KEEP_RUNS_FOR_DAYS, now: startedAt })
-
+  pruneRuns(options.runsDir, {
+    keepDays: options.keepDays ?? KEEP_RUNS_FOR_DAYS,
+    keepSuccessDays: options.keepSuccessDays ?? KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+    maxBytes: options.maxBytes ?? RUNS_SIZE_LIMIT_MB * 1024 * 1024,
+    now: startedAt,
+  })
   refuseRealStateInTests(dir)
-  mkdirSync(dir, { recursive: true, mode: 0o700 })
-
-  // Created here rather than by the logger, which opens with whatever the umask allows. The
-  // directory is already 0700, so this is the second lock rather than the first — but a log file
-  // that outlives its directory, or is copied out of it, should not be the one that is readable.
-  const events = join(dir, "events.jsonl")
-  writeFileSync(events, "", { flag: "a", mode: 0o600 })
-
-  const file = snakeLogger(
-    createRecordLog({
-      to: events,
-      runId: id,
-      command: options.command,
-      resource: { service: options.service, version: options.cliVersion },
-      allow: LOG_ATTRIBUTES,
-      ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
-      ...(options.onError === undefined ? {} : { onError: options.onError }),
-    }),
-  )
-  const operations = new Set<string>()
-  const codes = new Set<string>()
-  const noted =
-    (write: (event: object, message?: string) => void) =>
-    (event: object, message?: string): void => {
-      const { operation, errorCode, error_code, code } = event as Record<string, unknown>
-      if (typeof operation === "string") operations.add(operation)
-      for (const value of [errorCode, error_code, code]) if (typeof value === "string") codes.add(value)
-      write(event, message)
-    }
-  const logger: Logger = {
-    debug: noted(file.debug),
-    info: noted(file.info),
-    warn: noted(file.warn),
-    error: noted(file.error),
-  }
 
   const metadata: RunMetadata = {
     runId: id,
@@ -184,7 +163,43 @@ export const startRun = (options: StartRunOptions): Run => {
     ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
     ...options.context,
   }
-  writeRunFile(dir, metadata)
+
+  let file: Logger | undefined
+  const opened = (): Logger => {
+    if (file) return file
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    // Created here rather than by the logger, which opens with whatever the umask allows. The
+    // directory is already 0700, so this is the second lock rather than the first — but a log file
+    // that outlives its directory, or is copied out of it, should not be the one that is readable.
+    const events = join(dir, "events.jsonl")
+    writeFileSync(events, "", { flag: "a", mode: 0o600 })
+    file = snakeLogger(
+      createRecordLog({
+        to: events,
+        runId: id,
+        command: options.command,
+        resource: { service: options.service, version: options.cliVersion },
+        allow: LOG_ATTRIBUTES,
+        ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
+        ...(options.onError === undefined ? {} : { onError: options.onError }),
+      }),
+    )
+    writeRunFile(dir, metadata)
+    return file
+  }
+  if (!options.lazy) opened()
+
+  const operations = new Set<string>()
+  const codes = new Set<string>()
+  const noted =
+    (level: keyof Logger) =>
+    (event: object, message?: string): void => {
+      const { operation, errorCode, error_code, code } = event as Record<string, unknown>
+      if (typeof operation === "string") operations.add(operation)
+      for (const value of [errorCode, error_code, code]) if (typeof value === "string") codes.add(value)
+      opened()[level](event, message)
+    }
+  const logger: Logger = { debug: noted("debug"), info: noted("info"), warn: noted("warn"), error: noted("error") }
 
   let finished = false
 
@@ -197,7 +212,7 @@ export const startRun = (options: StartRunOptions): Run => {
       finished = true
 
       const completedAt = now()
-      writeRunFile(dir, {
+      const final: RunMetadata = {
         ...metadata,
         ...extra,
         status,
@@ -205,7 +220,18 @@ export const startRun = (options: StartRunOptions): Run => {
         durationMs: completedAt.getTime() - startedAt.getTime(),
         operations: [...operations].sort(),
         codes: [...codes].sort(),
-      })
+      }
+      if (file || status !== "success") {
+        opened()
+        writeRunFile(dir, final)
+        return
+      }
+      try {
+        mkdirSync(join(dir, ".."), { recursive: true, mode: 0o700 })
+        appendIndex(join(dir, ".."), runFileOf(final))
+      } catch (error) {
+        options.onError?.(error as Error)
+      }
     },
   }
 }
@@ -244,15 +270,19 @@ export const newRunId = (startedAt: Date, command: string): string => {
 
 const INDEX = "index.jsonl"
 
+const appendIndex = (dayDir: string, written: Record<string, unknown>): void => {
+  appendFileSync(join(dayDir, INDEX), `${JSON.stringify(written)}\n`, { mode: 0o600 })
+}
+
 const writeRunFile = (dir: string, metadata: RunMetadata): void => {
   // Atomic, so a reader never sees half of one — and 0600, because it names a profile and a
   // command even though it carries nothing of what was said.
   const written = runFileOf(metadata)
   writeSecurely(join(dir, "run.json"), `${JSON.stringify(written, null, 2)}\n`, 0o600)
   try {
-    appendFileSync(join(dir, "..", INDEX), `${JSON.stringify(written)}\n`, { mode: 0o600 })
+    appendIndex(join(dir, ".."), written)
   } catch {
-    // The index only makes reading faster; a day without one is read run by run.
+    // A day without an index is read run by run.
   }
 }
 
@@ -299,7 +329,7 @@ export const listRuns = (
  * The index says what it holds; a run it does not name — written before there was an index, by an older
  * process still running, or when the append failed — is read from its own `run.json`.
  */
-const runsOfDay = (dayDir: string): RunMetadata[] => {
+const indexedRuns = (dayDir: string): Map<string, RunMetadata> => {
   const latest = new Map<string, RunMetadata>()
   let raw = ""
   try {
@@ -314,8 +344,13 @@ const runsOfDay = (dayDir: string): RunMetadata[] => {
       // A torn line from a killed process; that run's next line, or its run.json, still says it.
     }
   }
+  return latest
+}
+
+const runsOfDay = (dayDir: string): RunMetadata[] => {
+  const latest = indexedRuns(dayDir)
   for (const entry of safeReaddir(dayDir)) {
-    if (entry === INDEX || latest.has(entry)) continue
+    if (entry === INDEX || entry.startsWith(".") || latest.has(entry)) continue
     const metadata = readRun(join(dayDir, entry))
     if (metadata) latest.set(metadata.runId, metadata)
   }
@@ -325,10 +360,16 @@ const runsOfDay = (dayDir: string): RunMetadata[] => {
 export const findRun = (runsDir: string, id: string): { dir: string; metadata: RunMetadata } | undefined => {
   const stamped = /^(\d{4})(\d{2})(\d{2})T/.exec(id)
   const likely = stamped ? [`${stamped[1]}-${stamped[2]}-${stamped[3]}`] : []
-  for (const date of [...likely, ...days(runsDir)]) {
+  const dates = [...new Set([...likely, ...days(runsDir)])]
+  for (const date of dates) {
     const dir = join(runsDir, date, id)
     const metadata = readRun(dir)
     if (metadata) return { dir, metadata }
+  }
+  // A success that logged no events is a line in its day's index and nothing else.
+  for (const date of dates) {
+    const metadata = indexedRuns(join(runsDir, date)).get(id)
+    if (metadata) return { dir: join(runsDir, date, id), metadata }
   }
   return undefined
 }
@@ -367,17 +408,31 @@ const eventOf = (line: Record<string, unknown>): Record<string, unknown> => {
 }
 
 /**
- * Removes every day older than `keepDays`, and answers how many days went.
+ * Removes every day older than `keepDays`, then the successful runs of every day older than `keepSuccessDays`, and
+ * answers how many days went. Then, once a day, the folder is measured against `maxBytes`: successful runs go first,
+ * oldest day first, then whole days, until it fits.
  *
- * A whole day at a time, by the directory name, so nothing has to be opened to decide — and a
- * directory that is not a date is left alone rather than guessed at.
+ * A day at a time, by the directory name and the day's index, so no run has to be opened to decide — and a directory
+ * that is not a date is left alone rather than guessed at.
  */
-export const pruneRuns = (runsDir: string, { keepDays, now }: { keepDays: number; now: Date }): number => {
-  const cutoff = day(new Date(now.getTime() - keepDays * 24 * 60 * 60 * 1000))
+export const pruneRuns = (
+  runsDir: string,
+  {
+    keepDays,
+    keepSuccessDays = keepDays,
+    maxBytes,
+    now,
+  }: { keepDays: number; keepSuccessDays?: number; maxBytes?: number; now: Date },
+): number => {
+  const cutoff = day(new Date(now.getTime() - keepDays * DAY_MS))
+  const successCutoff = day(new Date(now.getTime() - Math.min(keepSuccessDays, keepDays) * DAY_MS))
 
   let removed = 0
   for (const date of days(runsDir)) {
-    if (date >= cutoff) continue
+    if (date >= cutoff) {
+      if (date < successCutoff) dropSuccesses(join(runsDir, date))
+      continue
+    }
     try {
       rmSync(join(runsDir, date), { recursive: true, force: true })
       removed += 1
@@ -385,6 +440,82 @@ export const pruneRuns = (runsDir: string, { keepDays, now }: { keepDays: number
       // A day we cannot remove is not a reason to fail the command that was only starting.
     }
   }
+  if (maxBytes !== undefined) removed += fitSize(runsDir, maxBytes, now)
+  return removed
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const SUCCESSES_DROPPED = ".successes-dropped"
+const SIZE_CHECKED = ".size-checked"
+
+/** A day's successful runs, out of its index and off the disk; once per day, marked by a file beside them. */
+const dropSuccesses = (dayDir: string): void => {
+  const marker = join(dayDir, SUCCESSES_DROPPED)
+  try {
+    statSync(marker)
+    return
+  } catch {}
+  try {
+    const kept: string[] = []
+    for (const [id, metadata] of indexedRuns(dayDir)) {
+      if (metadata.status === "success") rmSync(join(dayDir, id), { recursive: true, force: true })
+      else kept.push(JSON.stringify(runFileOf(metadata)))
+    }
+    for (const entry of safeReaddir(dayDir)) {
+      if (entry === INDEX || entry.startsWith(".")) continue
+      if (readRun(join(dayDir, entry))?.status === "success")
+        rmSync(join(dayDir, entry), { recursive: true, force: true })
+    }
+    writeSecurely(join(dayDir, INDEX), kept.map((line) => `${line}\n`).join(""), 0o600)
+    writeFileSync(marker, "", { mode: 0o600 })
+  } catch {
+    // Tried again at the next run's start.
+  }
+}
+
+const sizeOf = (path: string): number => {
+  let total = 0
+  for (const entry of safeReaddir(path)) {
+    const full = join(path, entry)
+    try {
+      const stat = statSync(full)
+      total += stat.isDirectory() ? sizeOf(full) : stat.size
+    } catch {}
+  }
+  return total
+}
+
+/** Measuring walks every file, so it runs at most once a day; a burst can overshoot until the next day's check. */
+const fitSize = (runsDir: string, maxBytes: number, now: Date): number => {
+  const stamp = join(runsDir, SIZE_CHECKED)
+  const today = day(now)
+  try {
+    if (readFileSync(stamp, "utf8").trim() === today) return 0
+  } catch {}
+  const dates = days(runsDir).sort()
+  const sizes = new Map(dates.map((date) => [date, sizeOf(join(runsDir, date))]))
+  let total = [...sizes.values()].reduce((sum, size) => sum + size, 0)
+  let removed = 0
+  // Today is left to the age rule: a day marked done would keep the successes it gains later.
+  for (const date of dates) {
+    if (total <= maxBytes || date === today) break
+    dropSuccesses(join(runsDir, date))
+    const after = sizeOf(join(runsDir, date))
+    total -= (sizes.get(date) ?? 0) - after
+    sizes.set(date, after)
+  }
+  for (const date of dates) {
+    if (total <= maxBytes || date === today) break
+    try {
+      rmSync(join(runsDir, date), { recursive: true, force: true })
+      total -= sizes.get(date) ?? 0
+      removed += 1
+    } catch {}
+  }
+  try {
+    mkdirSync(runsDir, { recursive: true, mode: 0o700 })
+    writeFileSync(stamp, today, { mode: 0o600 })
+  } catch {}
   return removed
 }
 
