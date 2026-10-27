@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.451.0 — 27.10.2026
+
 ### Added
 
 - **Picture models run on the native ONNX Runtime too**, where text models do: on one machine CLIP embedded 12
