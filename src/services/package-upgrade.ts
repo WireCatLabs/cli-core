@@ -1,9 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Installer, isNewer, updateCommand } from "@wirecat/cli-base/update"
+import type { McpServerRestart, StaleSessions } from "../background/after-upgrade.js"
 
 export interface ServerRestarts {
   restarted: readonly string[]
   left: readonly string[]
+  /** Profiles whose `server restart` ran out of time: their serve may still run the old code. */
+  timedOut?: readonly string[]
+  mcpServers?: readonly McpServerRestart[]
+  staleSessions?: StaleSessions
 }
 
 export interface PackageUpgradePorts {
@@ -26,6 +31,9 @@ export interface PackageUpgradeResult {
   command: string | null
   updated: boolean
   restarted: readonly string[]
+  /** Set once an install ran: the HTTP MCP servers it restarted or left, and the stdio sessions still on old code. */
+  mcpServers?: readonly McpServerRestart[]
+  staleSessions?: StaleSessions
   installed?: string
   /** The package manager installed an older version than `latest`. */
   heldBack?: { until: string | null; command: string }
@@ -35,6 +43,7 @@ export interface PackageUpgradeOutcome {
   result: PackageUpgradeResult
   reason: "checked" | "unavailable" | "up_to_date" | "manual" | "updated" | "held_back"
   left: readonly string[]
+  timedOut?: readonly string[]
 }
 
 export const upgradePackage = async (
@@ -81,9 +90,16 @@ export const upgradePackage = async (
 const restart = async (result: PackageUpgradeResult, ports: PackageUpgradePorts): Promise<PackageUpgradeOutcome> => {
   const servers = await ports.afterUpdate?.()
   return {
-    result: { ...result, updated: true, restarted: servers?.restarted ?? [] },
+    result: {
+      ...result,
+      updated: true,
+      restarted: servers?.restarted ?? [],
+      ...(servers?.mcpServers ? { mcpServers: servers.mcpServers } : {}),
+      ...(servers?.staleSessions ? { staleSessions: servers.staleSessions } : {}),
+    },
     reason: "updated",
     left: servers?.left ?? [],
+    ...(servers?.timedOut?.length ? { timedOut: servers.timedOut } : {}),
   }
 }
 

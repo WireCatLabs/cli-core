@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { alive, carries } from "../background/processes.js"
@@ -6,7 +6,9 @@ import { type ServerSystem, thisMachine } from "../background/system.js"
 import { readableLog, tail } from "../background/units.js"
 import { mcpUrlOf, portOf, publicUrlOf } from "../http/public-url.js"
 import {
+  type HttpLaunch,
   type HttpLock,
+  httpLaunchFile,
   httpLockFile,
   httpLogFile,
   mcpHttpMarker,
@@ -158,8 +160,9 @@ export const mcpServerCommand = ({
     const sys = machine(this)
     const log = httpLogFile(one.tokenFile)
     const { [`${one.envPrefix}_TIMEOUT`]: _timeout, ...inherited } = one.env
-    const pid = sys.spawn(
-      [
+    const launch: HttpLaunch = {
+      invocation: one.invocation,
+      argv: [
         ...one.argv,
         "--port",
         String(port),
@@ -167,9 +170,10 @@ export const mcpServerCommand = ({
         url.pathname === "/" ? url.origin : url.href,
         ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
       ],
-      { ...inherited, ...one.childEnv, [mcpHttpMarker(one.envPrefix)]: one.profile ?? "default" },
-      log,
-    )
+      env: { ...one.childEnv, [mcpHttpMarker(one.envPrefix)]: one.profile ?? "default" },
+    }
+    writeSecurely(httpLaunchFile(lockFile), `${JSON.stringify(launch)}\n`, 0o600)
+    const pid = sys.spawn(launch.argv, { ...inherited, ...launch.env }, log)
     for (let look = 0; look < LOOKS; look++) {
       const now = readHttpLock(lockFile)
       if (now?.pid === pid && now.listeningAt) {

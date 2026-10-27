@@ -37,10 +37,13 @@ const rejectsWith = async (promise: Promise<unknown>, check: (error: unknown) =>
 }
 
 const ID = "contract0sample0id0001"
+const WEEKLY = "RRULE:FREQ=WEEKLY;COUNT=3"
+const DAILY = "RRULE:FREQ=DAILY;INTERVAL=2;COUNT=5"
 
 /**
  * What every calendar writer keeps (gcal-cli plan §9, W1): a stale `etag` is a conflict, never an overwrite; a create
- * retried with its id finds the event; `notify: false` mails nobody, and a profile that keeps `events.notify` at its
+ * retried with its id finds the event; a repeat rule is kept as given and changed on the series; a timed event
+ * switches to all-day and back; `notify: false` mails nobody, and a profile that keeps `events.notify` at its
  * default never reaches the provider with a write that would.
  */
 export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Promise<CalendarWriterFixture>) => {
@@ -110,6 +113,62 @@ export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Pr
       },
     })),
     {
+      name: "a create with a repeat rule returns the series holding that rule",
+      run: async () => {
+        const f = await fixture()
+        const made = await f.writer.create(f.calendar, draft(f.at, { recurrence: [WEEKLY] }), {
+          id: ID,
+          notify: false,
+        })
+        assert.equal(made.kind, "series")
+        assert.deepEqual(made.recurrence, [WEEKLY])
+      },
+    },
+    {
+      name: "a change of the series' rule replaces it",
+      run: async () => {
+        const f = await fixture()
+        const made = await f.writer.create(f.calendar, draft(f.at, { recurrence: [WEEKLY] }), {
+          id: ID,
+          notify: false,
+        })
+        const changed = await f.writer.update(
+          f.calendar,
+          made.externalId,
+          { recurrence: [DAILY] },
+          { scope: "series", etag: made.etag as string, notify: false },
+        )
+        assert.deepEqual(changed.recurrence, [DAILY])
+        assert.notEqual(changed.etag, made.etag)
+      },
+    },
+    {
+      name: "a timed event becomes all-day, and back",
+      run: async () => {
+        const f = await fixture()
+        const made = await f.writer.create(f.calendar, draft(f.at), { id: ID, notify: false })
+        const day = new Date(f.at).toISOString().slice(0, 10)
+        const next = new Date(f.at + 86_400_000).toISOString().slice(0, 10)
+        const allDay = await f.writer.update(
+          f.calendar,
+          made.externalId,
+          { startDate: day, endDate: next, timezone: "UTC" },
+          { scope: "this", etag: made.etag as string, notify: false },
+        )
+        assert.equal(allDay.allDay, true)
+        assert.equal(allDay.startDate, day)
+        const timed = await f.writer.update(
+          f.calendar,
+          made.externalId,
+          { startsAt: f.at, endsAt: f.at + 3_600_000, timezone: "UTC" },
+          { scope: "this", etag: allDay.etag as string, notify: false },
+        )
+        assert.equal(timed.allDay ?? false, false)
+        assert.equal(timed.startsAt, f.at)
+        assert.equal(timed.startDate ?? null, null)
+      },
+    },
+    {
       name: "notify reaches the provider as given: false mails nobody",
       run: async () => {
         const f = await fixture()
@@ -158,7 +217,7 @@ export const calendarWriterContract = (fixture: () => CalendarWriterFixture | Pr
               ask: async () => {},
               now: f.at,
               zone: "UTC",
-              names: { notify: "notify", id: "id", calendar: "calendar", series: "series" },
+              names: { notify: "notify", id: "id", calendar: "calendar", series: "series", repeat: "repeat" },
             },
             String(calendar?.id),
             {

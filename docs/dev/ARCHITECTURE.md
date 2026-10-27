@@ -717,6 +717,16 @@ consumers bind their existing update environment and server restart policy. No i
 check/no-op paths, and a failed install or callback never retries. The upgrade plan
 describes the common result and consumer adoption.
 
+After a successful install `upgradeCommand` does two more things for every CLI, with no port
+(`src/background/after-upgrade.ts`). It restarts each running HTTP MCP server it finds under the state
+folder (a lock with a port, a few folders deep, whatever the CLI's layout), but only one that `mcp server
+start` launched: `start` saves what it ran beside the lock (`<name>.launch.json`, with the `--permission`
+limits), and the process must still carry the marker. Anything else is left running and named, so a
+restart never drops a limit or signals a stranger. It then lists this install's MCP sessions over
+stdio (Linux `/proc`, macOS `ps`, Windows `Get-CimInstance`) and names them without touching them: the
+agent app that started them restarts them. Where it cannot list processes it says so. Both run in the
+old process after its files were replaced, so they import nothing lazily.
+
 
 ## Agent conversation linking over MCP
 

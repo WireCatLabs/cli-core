@@ -6,9 +6,10 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
-import { alive } from "../../background/processes.js"
+import { restartMcpServers } from "../../background/after-upgrade.js"
+import { alive, carries } from "../../background/processes.js"
 import type { ServerSystem } from "../../background/system.js"
-import { httpLockFile, readHttpLock } from "../../mcp/http/state.js"
+import { httpLaunchFile, httpLockFile, readHttpLaunch, readHttpLock } from "../../mcp/http/state.js"
 import { mcpServerCommand } from "../mcp-server-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -32,7 +33,7 @@ const { writeFileSync } = require("node:fs")
 const [lock, mode, publicUrl = "https://laptop.example.ts.net/"] = process.argv.slice(1)
 if (mode === "fail") { console.error("port 8765 is in use — pass another with --port"); process.exit(1) }
 writeFileSync(lock, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), port: 8765,
-  publicUrl, listeningAt: new Date().toISOString(), version: "1",
+  publicUrl, listeningAt: new Date().toISOString(), version: process.env.FAKE_VERSION ?? "1",
   loginCode: "ABCD-EFGH", loginCodeExpiresAt: new Date(Date.now() + 600000).toISOString() }), { mode: 0o600 })
 process.on("SIGTERM", () => process.exit(0))
 setInterval(() => {}, 1000)
@@ -124,6 +125,40 @@ describe("mcp server", () => {
     expect(launched[0]?.env).toMatchObject({ CHAT_MCP_HTTP: "personal", CHAT_PROFILE: "personal" })
     expect(launched[0]?.env.CHAT_TIMEOUT).toBeUndefined()
   })
+
+  it.runIf(process.platform === "linux")(
+    "**upgrade restarts a server `start` launched, with its permission limits, on the new version**",
+    async () => {
+      const { cli, env, lockFile, launched } = setup()
+      const started = await cli(["mcp", "server", "start", ...PUBLIC, "--permission", "messages.send=deny"])
+      expect(started.code).toBe(0)
+      expect(readHttpLaunch(httpLaunchFile(lockFile))).toEqual({
+        invocation: "chat personal",
+        argv: launched[0]?.argv,
+        env: { CHAT_PROFILE: "personal", CHAT_MCP_HTTP: "personal" },
+      })
+
+      const [restarted] = await restartMcpServers(app, env, {
+        platform: process.platform,
+        alive,
+        carries,
+        stop: (pid) => process.kill(pid, "SIGTERM"),
+        spawn: (argv, childEnv, log) => {
+          launched.push({ argv, env: childEnv })
+          return background({ ...childEnv, FAKE_VERSION: "2" }, [lockFile, "serve"], openSync(log, "a")).pid ?? 0
+        },
+        pause: () => sleep(20),
+        processes: () => [],
+        packageRoot: undefined,
+      })
+
+      expect(restarted).toMatchObject({ name: "chat personal", restarted: true, from: "1", to: "2" })
+      expect(alive(started.item.pid)).toBe(false)
+      expect(launched[1]?.argv).toEqual(launched[0]?.argv)
+      expect(launched[1]?.argv).toContain("messages.send=deny")
+      expect(launched[1]?.env).toMatchObject({ CHAT_MCP_HTTP: "personal", CHAT_PROFILE: "personal" })
+    },
+  )
 
   it("starts the server of every profile under the tool's path of a shared address", async () => {
     const { cli, launched } = setup("serve", { every: true, publicUrl: "https://laptop.example.ts.net/chat" })

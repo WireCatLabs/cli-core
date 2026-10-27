@@ -14,6 +14,7 @@ import {
   peopleAnswer,
   reviewsAnswer,
 } from "../reads.js"
+import { REPEAT_HELP } from "../recurrence.js"
 import type { EventResponse } from "../writer.js"
 import {
   type CalendarWrites,
@@ -90,6 +91,7 @@ const fields = {
   location: { ...anyText, description: "empty clears it" },
   description: { ...anyText, description: "empty clears it" },
   attendees: { type: "array", items: text, description: "email addresses; on a change, the whole new list" },
+  repeat: { ...text, description: `how it repeats: ${REPEAT_HELP}; on a change, only with series` },
 }
 const target = {
   account_id: integer,
@@ -104,7 +106,7 @@ const target = {
 export const calendarWriteTools = [
   {
     name: "event_create",
-    description: "add a one-time event to a calendar",
+    description: "add an event to a calendar, one that repeats with repeat",
     properties: {
       account_id: integer,
       calendar: text,
@@ -117,7 +119,7 @@ export const calendarWriteTools = [
   },
   {
     name: "event_update",
-    description: "change an event, or with series every occurrence of its repeating event",
+    description: "change an event, or with series every occurrence of its repeating event and its repeat rule",
     properties: { ...target, ...fields, series: flag, notify },
     required: ["event"],
     destructive: true,
@@ -175,6 +177,7 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
         "start_date",
         "end_date",
         "id",
+        "repeat",
       ].includes(key) &&
       (typeof value !== "string" || !value.trim())
     )
@@ -304,6 +307,7 @@ const fieldsOf = (args: Record<string, unknown>): EventFields => ({
   ...(args.location === undefined ? {} : { location: args.location as string }),
   ...(args.description === undefined ? {} : { description: args.description as string }),
   ...(args.attendees === undefined ? {} : { attendees: args.attendees as string[] }),
+  ...(args.repeat === undefined ? {} : { repeat: args.repeat as string }),
 })
 
 /** The one account a write acts in: the one named, or the only one that holds what it names; never a guess. */
@@ -367,7 +371,7 @@ const writeTool = async (
     ask: async () => {},
     now,
     zone: (args.timezone as string | undefined) ?? "UTC",
-    names: { notify: "notify: true or false", id: "id", calendar: "calendar", series: "series" },
+    names: { notify: "notify: true or false", id: "id", calendar: "calendar", series: "series", repeat: "repeat" },
   }
   const choice = args.notify === undefined ? {} : { notify: args.notify as boolean }
   const on = {

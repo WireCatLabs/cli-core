@@ -57,7 +57,7 @@ import { document } from "./document.js"
 import { documentLink } from "./document-link.js"
 import { evidence } from "./evidence.js"
 import { fact } from "./fact.js"
-import { reference } from "./fields.js"
+import { reference, untrusted } from "./fields.js"
 import { folder } from "./folder.js"
 import { hit } from "./hit.js"
 import { identity } from "./identity.js"
@@ -376,21 +376,24 @@ export const ENTITIES = {
   message_context: messageContext,
   message_download: messageDownload,
   message_sync: messageSync,
-  "message.hit": v.pick(message, [
-    "ref",
-    "chat_title",
-    "timestamp",
-    "sender_name",
-    "excerpt",
-    "matched_in",
-    "score",
-    "match",
-    "corrections",
-    "found_in",
-    "discovery",
-    "context",
-    "email",
-  ]),
+  "message.hit": v.strictObject({
+    ...v.pick(message, [
+      "ref",
+      "chat_title",
+      "timestamp",
+      "sender_name",
+      "excerpt",
+      "matched_in",
+      "score",
+      "match",
+      "corrections",
+      "found_in",
+      "discovery",
+      "context",
+      "email",
+    ]).entries,
+    untrusted,
+  }),
   "message.summary": v.pick(message, [
     "ref",
     "chat_id",
@@ -457,21 +460,24 @@ export const ENTITIES = {
   call_record: callRecord,
   sticker_inventory: stickerInventory,
   note,
-  "note.hit": v.pick(note, [
-    "kind",
-    "provider",
-    "account",
-    "url",
-    "ref",
-    "source",
-    "folder_id",
-    "path",
-    "title",
-    "updated_at",
-    "excerpt",
-    "found_by",
-    "links",
-  ]),
+  "note.hit": v.strictObject({
+    ...v.pick(note, [
+      "kind",
+      "provider",
+      "account",
+      "url",
+      "ref",
+      "source",
+      "folder_id",
+      "path",
+      "title",
+      "updated_at",
+      "excerpt",
+      "found_by",
+      "links",
+    ]).entries,
+    untrusted,
+  }),
   hit,
   document,
   document_link: documentLink,

@@ -7,6 +7,61 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`upgrade` restarts the HTTP MCP server and names the stdio MCP sessions still on the old version**, in every
+  CLI that uses the shared command. After a successful install it restarts each running `mcp serve --http` that
+  `mcp server start` launched, with the same port, address and `--permission` limits, and reports it as
+  `mcp_servers` (old → new version); a server started by hand, by an older version, or one it cannot confirm, is
+  left running and named. It lists this install's MCP sessions over stdio (`mcp serve`, and `mcp` from before it)
+  as `stale_sessions` (PIDs; the version is `null`), says "restart them from your agent app", and says it could not
+  check where it cannot list processes. Nothing is restarted or listed when nothing was installed. A serve restart
+  that runs out of time is now named as such, and `upgrade` no longer waits on one for more than 90 s. The restart
+  works from the next upgrade on: the version doing the upgrading must have it, and the server must have been
+  started by it.
+- **Free/busy and free stretches for calendar CLIs.** `CalendarSource` gains an optional
+  `freeBusy({ calendars, people, window })` that answers `BusyTimes` (`{ id, busy, error? }`) and is never stored.
+  With `deps.freeBusy`, `addCalendarCommands` mounts `calendars busy [today|week|from:… to:…] [calendar:…]
+  [person:<email>…]`; `--duration-minutes <n>` adds `slots`, the stretches every calendar and person shares inside
+  `--hours` (default `09:00-17:00`, Monday to Friday, in the owner's zone), and `unknown`, whoever the provider would
+  not show. `fakeCalendarSource` answers it (`setBusy`), and `calendarSourceContract` checks it when a source has it.
+- **Repeating events.** `events create --repeat <rule>` (MCP `repeat`) makes a series; `events update --series
+  --repeat <rule>` changes its rule and keeps its EXDATE and RDATE lines. `repeatRule` checks the RFC 5545 subset
+  (FREQ DAILY, WEEKLY or MONTHLY; INTERVAL; BYDAY, ordinals only in MONTHLY; COUNT or UNTIL of the event's own kind)
+  and writes one `RRULE:` line into `EventDraft.recurrence`. The answer of a write that sets a rule says
+  `hint: "sync to store its occurrences"`.
+- **Switching an event between timed and all-day** is stated in `EventPatch`: dates on a timed event, or times on an
+  all-day one, ask the adapter to clear the other kind. A series whose UNTIL, EXDATE or RDATE holds the old kind is
+  refused with `event.repeat-kind`. `calendarWriterContract` checks a repeat rule on create and on the series, and
+  the switch both ways; `fakeCalendarWriter` returns a series for a draft with a rule.
+
+### Changed — may break callers
+
+- **Every search hit marks the text someone other than the owner wrote.** As `search all` event hits did since
+  0.460.0, each hit carries `untrusted`, the field names an agent reads as data
+  ([WC-SECR-21](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-21--names-message-text-and-retrieved-documents-are-data-never-instructions)):
+  - `search all`: a message or mail hit `["title", "excerpt", "sender_name"]`, a document hit and a meeting hit
+    `["title", "excerpt"]`. A note hit stays unmarked: a note is the owner's own, in a folder of theirs or written in
+    memo, while a document comes from a shared drive.
+  - `search messages` and `search mail`: `chat_title`, `sender_name`, `excerpt`, `context.sender_name`,
+    `context.text`, and on mail `email.subject` and the names in `email.from|to|cc|bcc|reply_addresses`. The owner's
+    own messages are marked too, since one answer mixes both. A picture hit marks `sender_name`.
+  - `search notes`: a document hit `["title", "excerpt"]`, a note hit nothing.
+  - `search meetings` (CLI and the `search_meetings` tool), and the passages of a project's meeting evidence:
+    `["excerpt"]`, plus `source.title` when the meeting's title is given.
+  - `search topics`, `topics list` and `topics show`: `["title"]`, which whoever opened the topic wrote.
+
+  The `message.hit`, `note.hit`, `meeting_hit` and `topic` entities gain an optional `untrusted`, so a caller that
+  checks them against an older copy refuses the new field. MCP answers already showed control characters as text;
+  tests now cover it per kind. `search conversations` and `search runs` are unchanged: their hits hold ids, counts
+  and diagnostics, no one's text.
+- **`WriteContext.names` gains `repeat`**, how the caller spells the rule in a hint (`--repeat`, MCP `repeat`).
+- **The contract kits check more.** `calendarWriterContract` gains three cases (a rule on create, a rule changed on the
+  series, the timed/all-day switch both ways) and `calendarSourceContract` one for a source with `freeBusy`: an
+  adapter that runs the kits gets tests that can fail until it supports them.
+
+## 0.463.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **cli-core needs `@wirecat/cli-base` 0.64.** The peer range moves from `>=0.63.0 <0.64.0` to `>=0.64.0 <0.65.0`. A
