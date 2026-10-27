@@ -424,6 +424,16 @@ describe("calendar commands", () => {
     const rules = new Set(
       [...`${lint.stdout}${lint.stderr}`.matchAll(/^(?:high|medium|low)\s+(\S+)/gmu)].map(([, rule]) => rule),
     )
-    expect([...rules].sort()).toEqual(["list-without-query"])
+    // --following and --to-calendar join the vocabulary in cli-base#387, unreleased:
+    // https://github.com/WireCatLabs/cli-base/pull/387
+    const unnamed = [...`${lint.stdout}${lint.stderr}`.matchAll(/^high\s+option-role\s+(.+?):/gmu)].map(
+      ([, target]) => target,
+    )
+    expect(unnamed.sort()).toEqual([
+      "events delete --following",
+      "events move --to-calendar",
+      "events update --following",
+    ])
+    expect([...rules].sort()).toEqual(["list-without-query", "option-role"])
   })
 })
