@@ -75,8 +75,8 @@ export interface OwnerLogin {
   code(): string
   metadata: OAuthMetadata
   verifier: OAuthTokenVerifier
-  /** Answers the login routes; `undefined` for any other path. */
-  handle(request: Request): Promise<Response | undefined>
+  /** Answers the login routes; `undefined` for any other path. `path` is the request's, as the public sees it. */
+  handle(request: Request, path?: string): Promise<Response | undefined>
   close(): void
 }
 
@@ -119,7 +119,9 @@ export const ownerLogin = ({
   }
   freshCode()
 
-  const endpoint = (path: string) => new URL(path, issuer).href
+  // An issuer under a path, `https://name.ts.net/tg`, keeps its login routes under it too.
+  const base = issuer.pathname.replace(/\/+$/, "")
+  const endpoint = (path: string) => new URL(`${base}${path}`, issuer.origin).href
   const metadata: OAuthMetadata = {
     issuer: issuer.href,
     authorization_endpoint: endpoint("/authorize"),
@@ -210,7 +212,7 @@ export const ownerLogin = ({
       .join("")
     const who = escapeHtml(client.name ?? "an application")
     const target = new URL(params.get("redirect_uri") ?? "")
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(appName)} login</title><style>body{font:16px system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#1d2430}input[type=text]{font:20px ui-monospace,monospace;letter-spacing:.1em;width:100%;padding:.5rem;margin:.5rem 0 1rem;box-sizing:border-box}button{font:inherit;padding:.5rem 1rem}.error{color:#b42318}</style></head><body><h1>${escapeHtml(appName)}</h1><p>An app that calls itself <strong>${who}</strong> asks to reach your messages through <code>${escapeHtml(appName)} mcp --http</code>.</p><p>After you allow it, the login goes to <strong>${escapeHtml(target.host)}</strong>. Allow only if that is the app you are connecting, such as chatgpt.com or claude.ai.</p><p>Type the code shown in WireCat Desktop, or in the terminal where the server runs. If you did not start this login, close this page.</p>${message ? `<p class="error">${escapeHtml(message)}</p>` : ""}<form method="post" action="/authorize">${hidden}<label>Login code<input type="text" name="login_code" autocomplete="off" autofocus required></label><button type="submit">Allow</button></form></body></html>`
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(appName)} login</title><style>body{font:16px system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#1d2430}input[type=text]{font:20px ui-monospace,monospace;letter-spacing:.1em;width:100%;padding:.5rem;margin:.5rem 0 1rem;box-sizing:border-box}button{font:inherit;padding:.5rem 1rem}.error{color:#b42318}</style></head><body><h1>${escapeHtml(appName)}</h1><p>An app that calls itself <strong>${who}</strong> asks to reach your messages through <code>${escapeHtml(appName)} mcp --http</code>.</p><p>After you allow it, the login goes to <strong>${escapeHtml(target.host)}</strong>. Allow only if that is the app you are connecting, such as chatgpt.com or claude.ai.</p><p>Type the code shown in WireCat Desktop, or in the terminal where the server runs. If you did not start this login, close this page.</p>${message ? `<p class="error">${escapeHtml(message)}</p>` : ""}<form method="post" action="${escapeHtml(`${base}/authorize`)}">${hidden}<label>Login code<input type="text" name="login_code" autocomplete="off" autofocus required></label><button type="submit">Allow</button></form></body></html>`
     return new Response(html, {
       status: message ? 400 : 200,
       headers: {
@@ -342,11 +344,11 @@ export const ownerLogin = ({
     close: () => clearTimeout(renewal),
     metadata,
     verifier,
-    handle: async (request) => {
-      const path = new URL(request.url).pathname
-      if (path === "/register" && request.method === "POST") return register(request)
-      if (path === "/authorize" && (request.method === "GET" || request.method === "POST")) return authorize(request)
-      if (path === "/token" && request.method === "POST") return token(request)
+    handle: async (request, path = new URL(request.url).pathname) => {
+      if (path === `${base}/register` && request.method === "POST") return register(request)
+      if (path === `${base}/authorize` && (request.method === "GET" || request.method === "POST"))
+        return authorize(request)
+      if (path === `${base}/token` && request.method === "POST") return token(request)
       return undefined
     },
   }

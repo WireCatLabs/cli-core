@@ -234,6 +234,44 @@ describe("mcp --http and its owner login", () => {
     await client.close()
   })
 
+  it("logs a real client in under a path of a shared address, one path per tool", async () => {
+    const publicUrl = new URL("https://name.test/tg")
+    const { base, codes } = await start({ publicUrl })
+    const { client } = await mcpHttpClient(base, () => codes.at(-1) ?? "", { publicUrl })
+    expect(await client.listTools()).toMatchObject({ tools: [] })
+    await client.close()
+  })
+
+  it("under a path, finds its metadata where RFC 8414 and RFC 9728 put it, and takes a tunnel that drops the path", async () => {
+    const { at, register, pkce } = await start({ publicUrl: new URL("https://name.test/tg/") })
+    const refused = await fetch(at("/mcp"), { method: "POST", body: "{}" })
+    expect(refused.status).toBe(401)
+    expect(refused.headers.get("www-authenticate")).toContain(
+      'resource_metadata="https://name.test/.well-known/oauth-protected-resource/tg/mcp"',
+    )
+    const resource = await (await fetch(at("/.well-known/oauth-protected-resource/tg/mcp"))).json()
+    expect(resource).toMatchObject({
+      resource: "https://name.test/tg/mcp",
+      authorization_servers: ["https://name.test/tg"],
+    })
+    const issuer = await (await fetch(at("/.well-known/oauth-authorization-server/tg"))).json()
+    expect(issuer).toMatchObject({
+      issuer: "https://name.test/tg",
+      authorization_endpoint: "https://name.test/tg/authorize",
+      token_endpoint: "https://name.test/tg/token",
+      registration_endpoint: "https://name.test/tg/register",
+    })
+    const { body: client } = await register()
+    const query = new URLSearchParams({
+      response_type: "code",
+      client_id: client.client_id ?? "",
+      redirect_uri: REDIRECT,
+      code_challenge: pkce().challenge,
+      code_challenge_method: "S256",
+    })
+    expect(await (await fetch(at(`/tg/authorize?${query}`))).text()).toContain('action="/tg/authorize"')
+  })
+
   it("refuses an oversized body before reading it, on the login routes and on MCP", async () => {
     const { at } = await start()
     const big = "x".repeat(70 * 1024)

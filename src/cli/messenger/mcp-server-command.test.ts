@@ -11,7 +11,7 @@ import { httpLockFile, readHttpLock } from "../../mcp/http/state.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
-import { httpTokenFile, mcpCommand } from "./mcp-command.js"
+import { ALL_PROFILES, httpTokenFile, mcpCommand } from "./mcp-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "test", version: "1" }
 const messenger: Messenger = {
@@ -27,10 +27,10 @@ const messenger: Messenger = {
 /** Stands in for `chat mcp --http`: writes the lock as the real server does, then waits to be stopped. */
 const SERVER = `
 const { writeFileSync } = require("node:fs")
-const [lock, mode] = process.argv.slice(1)
+const [lock, mode, publicUrl = "https://laptop.example.ts.net/"] = process.argv.slice(1)
 if (mode === "fail") { console.error("port 8765 is in use — pass another with --port"); process.exit(1) }
 writeFileSync(lock, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), port: 8765,
-  publicUrl: "https://laptop.example.ts.net/", listeningAt: new Date().toISOString(), version: "1",
+  publicUrl, listeningAt: new Date().toISOString(), version: "1",
   loginCode: "ABCD-EFGH", loginCodeExpiresAt: new Date(Date.now() + 600000).toISOString() }), { mode: 0o600 })
 process.on("SIGTERM", () => process.exit(0))
 setInterval(() => {}, 1000)
@@ -47,16 +47,19 @@ const background = (env: NodeJS.ProcessEnv, args: string[] = [], log = "ignore" 
   return child
 }
 
-const setup = (mode: "serve" | "fail" = "serve") => {
+const setup = (
+  mode: "serve" | "fail" = "serve",
+  { every = false, publicUrl }: { every?: boolean; publicUrl?: string } = {},
+) => {
   const root = mkdtempSync(join(tmpdir(), "mcp-server-"))
   const env = {
     PATH: process.env.PATH ?? "",
     CHAT_CONFIG_DIR: join(root, "config"),
     CHAT_STATE_DIR: join(root, "state"),
-    CHAT_PROFILE: "personal",
+    ...(every ? {} : { CHAT_PROFILE: "personal" }),
     CHAT_TIMEOUT: "30s",
   }
-  const tokenFile = httpTokenFile(app, "personal", env)
+  const tokenFile = httpTokenFile(app, every ? ALL_PROFILES : "personal", env)
   const lockFile = httpLockFile(tokenFile)
   mkdirSync(dirname(lockFile), { recursive: true })
   const launched: { argv: string[]; env: NodeJS.ProcessEnv }[] = []
@@ -67,14 +70,14 @@ const setup = (mode: "serve" | "fail" = "serve") => {
     uid: 0,
     spawn: (argv, childEnv, log) => {
       launched.push({ argv, env: childEnv })
-      return background(childEnv, [lockFile, mode], openSync(log, "a")).pid ?? 0
+      return background(childEnv, [lockFile, mode, ...(publicUrl ? [publicUrl] : [])], openSync(log, "a")).pid ?? 0
     },
     pause: () => sleep(20),
   }
   const cli = async (argv: string[]) => {
     const streams = captureStreams()
     const code = await run(
-      ["personal", ...argv, "--json"],
+      [...(every ? [] : ["personal"]), ...argv, "--json"],
       { app, commands: () => [mcpCommand(messenger)] },
       { streams, tty: false, env, system },
     )
@@ -113,6 +116,35 @@ describe("mcp server", () => {
     ])
     expect(launched[0]?.env).toMatchObject({ CHAT_MCP_HTTP: "personal", CHAT_PROFILE: "personal" })
     expect(launched[0]?.env.CHAT_TIMEOUT).toBeUndefined()
+  })
+
+  it("starts the server of every profile under the tool's path of a shared address", async () => {
+    const { cli, launched } = setup("serve", { every: true, publicUrl: "https://laptop.example.ts.net/chat" })
+
+    const { code, item, error } = await cli([
+      "mcp",
+      "server",
+      "start",
+      "--public-url",
+      "https://laptop.example.ts.net/chat/",
+    ])
+    expect(error).toBe("")
+
+    expect(code).toBe(0)
+    expect(item).toMatchObject({
+      profile: null,
+      started: true,
+      connector_url: "https://laptop.example.ts.net/chat/mcp",
+    })
+    expect(launched[0]?.argv).toEqual([
+      "mcp",
+      "--http",
+      "--port",
+      "8765",
+      "--public-url",
+      "https://laptop.example.ts.net/chat",
+    ])
+    expect(launched[0]?.env.CHAT_PROFILE).toBeUndefined()
   })
 
   it("refuses to start a second server and starts nothing", async () => {

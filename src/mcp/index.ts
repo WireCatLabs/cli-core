@@ -1,6 +1,6 @@
 // Apart from the `cli` entry, so a CLI loads the MCP SDK and zod only when it serves MCP.
 
-export { portOf, publicUrlOf } from "../http/public-url.js"
+export { mcpUrlOf, portOf, publicUrlOf } from "../http/public-url.js"
 export {
   type AgentAnswer,
   type AgentContext,
@@ -11,6 +11,13 @@ export {
   runCommandForAgent,
   toolsFromCommands,
 } from "./agent.js"
+export {
+  type AllProfilesOptions,
+  allProfilesServer,
+  type ChildSpec,
+  serveAllProfilesOverHttp,
+  serveAllProfilesOverStdio,
+} from "./all-profiles.js"
 export { type BotServerOptions, createBotServer, type RunBotCommand } from "./bot/server.js"
 export { revokeAll } from "./http/oauth.js"
 export { type HttpOptions, MCP_PATH, serveOverHttp } from "./http/serve.js"

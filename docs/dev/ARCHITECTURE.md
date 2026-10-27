@@ -574,6 +574,17 @@ shell with `<PREFIX>_MCP_HTTP=<profile>` in its environment, and `stop` signals 
 `server` does for `serve`. `status` adds the apps holding a live token, by the name each gave itself. A server started
 that way prints no login code to its log. A CLI with its own `mcp` (drive, memo) mounts `mcpServerCommand`.
 
+A `--public-url` with a path (`https://<name>.ts.net/tg`) puts the issuer, the login routes and `/mcp` under it, so
+several tools share one tunnel address; the issuer's metadata then sits at `/.well-known/oauth-authorization-server/tg`
+and the resource's at `/.well-known/oauth-protected-resource/tg/mcp` (RFC 8414 §3, RFC 9728 §3), and the tunnel routes
+those two paths here as well. `serve.ts` also takes a request whose path the tunnel dropped.
+
+`<tool> mcp` with no profile (`src/mcp/all-profiles.ts`) serves every profile from one server: it lists the tools of
+`<tool> <profile> mcp` with a required `profile` added, and forwards each call to that profile's own server, a child
+it starts on first use and closes after 10 idle minutes. The child applies the profile's permissions, store and
+audit log, so the parent only routes; `createServer` stays one profile. Over HTTP it has its own login,
+`mcp-http/_all.json` (no profile name starts with `_`).
+
 ## The serve relay
 
 A messenger that allows one connection per account — WhatsApp drops the first when a second opens — sets
