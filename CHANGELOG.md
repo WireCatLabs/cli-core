@@ -5,6 +5,40 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Every run is now recorded by default, successes too** — before, only failures were kept unless `--record` or
+  `record: true`. Successful runs are kept 7 days (`keep_successful_runs_for_days`), failures 30
+  (`keep_runs_for_days`), and the runs folder stays under `runs_size_limit_mb` (200; the oldest successes go
+  first, checked once a day). **Privacy:** with `record_input` on, as by default since 0.439.0, every successful
+  `send` now leaves its typed words (message text, a chat typed by title) in a local, 0600 run record for 7 days.
+  `record: false` restores failures only; `record_input: "failed"` keeps the typed words only in a run that failed;
+  `record_input: false` masks them everywhere; `--no-record` keeps nothing. A success that logged no events is one
+  line in the day's index, with no folder; `runs show` finds it there. MCP tools keep successes too. A command that
+  runs until stopped (`watch`, `serve`, `mcp`) and a command WireCat Desktop runs for itself
+  (`WIRECAT_CALLER=desktop`) keep a success only under `--record`. Search history still follows `record`.
+- **A run says who asked for it.** `run.json` gains `via` (`cli`, `mcp-stdio`, `mcp-http`, `desktop`), `mcp`
+  (`tool`, `request_id`, `connection_id`, `proxied`) and `agent.client` (`name`, `version`, and over HTTP `id`, the
+  first 8 hex of the SHA-256 of the OAuth client id). Over HTTP the agent is `mcp-client` with the
+  `Mcp-Session-Id` as its session, never the environment of whoever started `mcp --http`: such runs were credited to
+  that agent before. The `run`, `run.details` and `run.hit` answer shapes declare the new fields. The every-profile server names the real caller to the profile server in
+  `_meta["wirecat.dev/caller"]`; a profile server trusts it only on a connection that server opened.
+- **Request events gain `level`, `transport`, `attempt` and `wait_ms`**, and `requests` counts wire calls when a
+  transport logs them, otherwise operations. `providerRequest` takes a third argument with the call's method, path
+  template, transport, attempt, wait and bytes. A run writes at most 2,000 events or 1 MB, then one
+  `events.dropped` line and `events_dropped`. `runEvent` reaches the current run from a wire layer handed no sink. A
+  retry made above the transport (`patiently`, the bot APIs' rate-limit wait) marks the calls under it with
+  `withAttempt`, so their lines say `attempt: 2` and the wait. Events logged after a run finished — a long-running
+  server's connection — are dropped rather than written into it.
+- **`record: false` in the config now keeps failures**; before, it kept nothing. `--no-record` still keeps nothing.
+
+### Fixed
+
+- **`doctor reports create` labels the ids a run's metadata keeps** — the agent session, the OAuth client id, the
+  MCP connection and request, the trace and a failed chat — as it already labelled the events' ids.
+
 ## 0.466.0 — 27.10.2026
 
 ### Changed — may break callers
@@ -36,33 +70,6 @@ shape of this file.
   that names `--rescan`, rather than quietly reading only the changes.
 
 ## 0.464.0 — 27.10.2026
-
-### Changed — may break callers
-
-- **Every run is now recorded by default, successes too** — before, only failures were kept unless `--record` or
-  `record: true`. Successful runs are kept 7 days (`keep_successful_runs_for_days`), failures 30
-  (`keep_runs_for_days`), and the runs folder stays under `runs_size_limit_mb` (200; the oldest successes go
-  first, checked once a day). **Privacy:** with `record_input` on, as by default since 0.439.0, every successful
-  `send` now leaves its typed words (message text, a chat typed by title) in a local, 0600 run record for 7 days.
-  `record: false` restores failures only; `record_input: "failed"` keeps the typed words only in a run that failed;
-  `record_input: false` masks them everywhere; `--no-record` keeps nothing. A success that logged no events is one
-  line in the day's index, with no folder; `runs show` finds it there. MCP tools keep successes too. A command that
-  runs until stopped (`watch`, `serve`, `mcp`) and a command WireCat Desktop runs for itself
-  (`WIRECAT_CALLER=desktop`) keep a success only under `--record`. Search history still follows `record`.
-- **A run says who asked for it.** `run.json` gains `via` (`cli`, `mcp-stdio`, `mcp-http`, `desktop`), `mcp`
-  (`tool`, `request_id`, `connection_id`, `proxied`) and `agent.client` (`name`, `version`, and over HTTP `id`, the
-  first 8 hex of the SHA-256 of the OAuth client id). Over HTTP the agent is `mcp-client` with the
-  `Mcp-Session-Id` as its session, never the environment of whoever started `mcp --http`: such runs were credited to
-  that agent before. The `run`, `run.details` and `run.hit` answer shapes declare the new fields. The every-profile server names the real caller to the profile server in
-  `_meta["wirecat.dev/caller"]`; a profile server trusts it only on a connection that server opened.
-- **Request events gain `level`, `transport`, `attempt` and `wait_ms`**, and `requests` counts wire calls when a
-  transport logs them, otherwise operations. `providerRequest` takes a third argument with the call's method, path
-  template, transport, attempt, wait and bytes. A run writes at most 2,000 events or 1 MB, then one
-  `events.dropped` line and `events_dropped`. `runEvent` reaches the current run from a wire layer handed no sink. A
-  retry made above the transport (`patiently`, the bot APIs' rate-limit wait) marks the calls under it with
-  `withAttempt`, so their lines say `attempt: 2` and the wait. Events logged after a run finished — a long-running
-  server's connection — are dropped rather than written into it.
-- **`record: false` in the config now keeps failures**; before, it kept nothing. `--no-record` still keeps nothing.
 
 ### Added
 
@@ -145,11 +152,6 @@ shape of this file.
 - **The contract kits check more.** `calendarWriterContract` gains three cases (a rule on create, a rule changed on the
   series, the timed/all-day switch both ways) and `calendarSourceContract` one for a source with `freeBusy`: an
   adapter that runs the kits gets tests that can fail until it supports them.
-
-### Fixed
-
-- **`doctor reports create` labels the ids a run's metadata keeps** — the agent session, the OAuth client id, the
-  MCP connection and request, the trace and a failed chat — as it already labelled the events' ids.
 
 ## 0.463.0 — 27.10.2026
 
