@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.452.0 — 27.10.2026
+
 ### Added
 
 - **An agent over MCP sends the owner to sign in themselves**: with no session, the server's instructions say the owner
