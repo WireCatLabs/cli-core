@@ -109,6 +109,14 @@
       "types": "./dist/meetings/testing/index.d.ts",
       "default": "./dist/meetings/testing/index.js"
     },
+    "./calendar": {
+      "types": "./dist/calendar/index.d.ts",
+      "default": "./dist/calendar/index.js"
+    },
+    "./calendar/testing": {
+      "types": "./dist/calendar/testing/index.d.ts",
+      "default": "./dist/calendar/testing/index.js"
+    },
     "./models": {
       "types": "./dist/models/index.d.ts",
       "default": "./dist/models/index.js"

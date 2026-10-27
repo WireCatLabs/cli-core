@@ -81,6 +81,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./testing` | `src/kit/` | the adapter kit: a fake adapter, the contract cases and their seed — see [the adapter guide](ADAPTERS.md). `src/testing/` is this repository's own test setup and is not published |
 | `./tasks`, `./tasks/testing` | `src/tasks/` | open tasks: model, `TaskStore` port and service — see [Open tasks](#open-tasks) |
 | `./meetings`, `/meetings/cli`, `/meetings/mcp`, `/meetings/testing` | `src/meetings/` | events and meetings, the provider and store ports, pull, import, commands and MCP reads — see [Meetings](MEETINGS.md) and [provider integration](MEETING-PROVIDERS.md) |
+| `./calendar`, `/calendar/testing` | `src/calendar/` | the calendar provider port and the sync engine over `EventStore`; the store types stay in `src/meetings/`, which depends on nothing else — see [Calendars](CALENDARS.md) |
 
 The README's table lists what each export offers; this page does not repeat it.
 
