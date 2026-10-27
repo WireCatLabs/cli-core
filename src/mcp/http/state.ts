@@ -46,6 +46,36 @@ export const httpLogFile = (tokenFile: string) => `${tokenFile.replace(/\.json$/
 /** Beside the token file, so each CLI's own layout decides both: `mcp-http/<profile>.json` → `.lock`. */
 export const httpLockFile = (tokenFile: string) => `${tokenFile.replace(/\.json$/, "")}.lock`
 
+/**
+ * What `mcp server start` ran, so `upgrade` can run it again on the new code with the same port, address and
+ * `--permission` limits. Without it a server is left running rather than restarted with fewer limits.
+ */
+export interface HttpLaunch {
+  /** What a person types before `mcp`: `tg personal`. */
+  invocation: string
+  /** The words after the CLI's entry. */
+  argv: string[]
+  /** Added to the inherited environment: the marker, and the profile for a CLI that reads it from there. */
+  env: Record<string, string>
+}
+
+export const httpLaunchFile = (lockFile: string) => `${lockFile.replace(/\.lock$/, "")}.launch.json`
+
+export const readHttpLaunch = (path: string): HttpLaunch | undefined => {
+  try {
+    const launch = JSON.parse(readFileSync(path, "utf8")) as Partial<HttpLaunch>
+    return typeof launch.invocation === "string" &&
+      Array.isArray(launch.argv) &&
+      launch.argv.every((word) => typeof word === "string") &&
+      typeof launch.env === "object" &&
+      launch.env !== null
+      ? (launch as HttpLaunch)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export const readHttpLock = (path: string): HttpLock | undefined => {
   const lock = readLock(path) as Partial<HttpLock> | undefined
   return lock && typeof lock.port === "number" && typeof lock.publicUrl === "string" ? (lock as HttpLock) : undefined
