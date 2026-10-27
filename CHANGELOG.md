@@ -21,9 +21,11 @@ shape of this file.
   has its own login (`mcp-http/_<names>.json`), so its login never opens a wider server; `--profiles all` keeps
   `_all.json`. For callers: `serverEntry` takes `profile` or `profiles` and refuses neither;
   `mcpServerCommand` takes `profiles: true` to give `start|stop|status` the option, and `McpServerTarget.profiles`
-  names the set. A client entry or a background server from 0.463.0 that runs `<cli> mcp serve` with no profile
-  stops working: print the entry again with `mcp config --profiles all` and start the server with
-  `mcp server start --profiles all` (`upgrade` cannot restart such a server on the new version).
+  names the set. A client entry from 0.463.0–0.469.0 that runs `<cli> mcp serve` with no profile stops working: print
+  it again with `mcp config --profiles all`. A background server of every profile started by those versions: `upgrade`
+  stops it and the new version refuses to start it, so start it again with `mcp server start --profiles all`; one
+  still running without `upgrade` is not recognised by `mcp server stop --profiles all` (its marker changed) and is
+  stopped by its PID.
 
 ## 0.469.0 — 27.10.2026
 
