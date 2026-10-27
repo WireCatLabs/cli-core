@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.63.** The peer range moves from `>=0.62.0 <0.63.0` to `>=0.63.0 <0.64.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.63 adds the shared Google Discovery reader
+  (`adaptDiscovery`, `syncDiscovery`, `readDiscovery` in `@wirecat/cli-base/codegen`) that drive and gcal generate their
+  API code with; nothing cli-core uses changed.
+
 ## 0.449.0 — 26.10.2026
 
 ### Changed — may break callers
