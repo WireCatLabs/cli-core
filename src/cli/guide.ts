@@ -322,7 +322,7 @@ export const checkStep = (program: Command, run: string): string[] => {
   const help = (at as unknown as { _getHelpOption: () => Option | null })._getHelpOption()
   const beforeDashes = rest.slice(index, rest.includes("--") ? rest.indexOf("--") : undefined)
   if (help && beforeDashes.some((word) => word === help.long || word === help.short)) return []
-  // A group with an action of its own runs as typed: `mcp` serves, `mcp server start` is its child.
+  // A group with an action of its own runs as typed rather than asking for one of its children.
   const runsItself = (at as unknown as { _actionHandler: unknown })._actionHandler != null
   if (at.commands.length > 0 && !runsItself) return [`needs one of: ${at.commands.map((one) => one.name()).join(", ")}`]
   for (const command of chain) silent(command)

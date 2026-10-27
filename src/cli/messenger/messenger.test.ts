@@ -5073,15 +5073,15 @@ describe("the guard, account and mcp config commands", () => {
     expect(json(whole.stdout).item.phone).toBe("+00 000 000-1234")
   })
 
-  it("**refuses mcp --http without an https tunnel address**, before connecting", async () => {
-    const missing = await call(["mcp", "--http", "--json"], async () => fake, sandbox())
+  it("**refuses mcp serve --http without an https tunnel address**, before connecting", async () => {
+    const missing = await call(["mcp", "serve", "--http", "--json"], async () => fake, sandbox())
     const plain = await call(
-      ["mcp", "--http", "--public-url", "http://name.example", "--json"],
+      ["mcp", "serve", "--http", "--public-url", "http://name.example", "--json"],
       async () => fake,
       sandbox(),
     )
     const withQuery = await call(
-      ["mcp", "--http", "--public-url", "https://name.ts.net/tg?x=1", "--json"],
+      ["mcp", "serve", "--http", "--public-url", "https://name.ts.net/tg?x=1", "--json"],
       async () => fake,
       sandbox(),
     )
@@ -5092,13 +5092,13 @@ describe("the guard, account and mcp config commands", () => {
     expect(json(withQuery.stderr).error.message).toContain("without a query")
   })
 
-  it("**mcp --revoke forgets every browser login** of the profile", async () => {
+  it("**mcp serve --revoke forgets every browser login** of the profile", async () => {
     const env = sandbox()
     const file = httpTokenFile(app, "default", env)
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, JSON.stringify({ clients: [], tokens: [] }))
 
-    const { code, stdout } = await call(["mcp", "--revoke", "--json"], async () => fake, env)
+    const { code, stdout } = await call(["mcp", "serve", "--revoke", "--json"], async () => fake, env)
 
     expect(code).toBe(0)
     expect(json(stdout).item).toEqual({ revoked: true, profile: "default" })
@@ -5115,7 +5115,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(code).toBe(0)
     expect(json(stdout).item.config.mcpServers["chat-work"]).toMatchObject({
       command: mcp.execPath,
-      args: [mcp.scriptPath, "work", "mcp"],
+      args: [mcp.scriptPath, "work", "mcp", "serve"],
       env: { MESSAGING_STORE: env.MESSAGING_STORE },
     })
     expect(json(stdout).next).toEqual([expect.objectContaining({ step: "mcp.config", command: "mcp config" })])
@@ -5125,12 +5125,26 @@ describe("the guard, account and mcp config commands", () => {
       mcp.scriptPath,
       "default",
       "mcp",
+      "serve",
     ])
   })
 
-  it("**mcp --help suggests an mcp add line that names the profile**", async () => {
+  it("**mcp --help suggests an mcp add line that names the profile and serve**", async () => {
     const help = (await call(["mcp", "--help"], async () => fake, sandbox())).stdout.join("\n").replace(/\s+/g, " ")
-    expect(help).toContain("claude mcp add chat -- chat <profile> mcp")
+    expect(help).toContain("claude mcp add chat -- chat <profile> mcp serve")
+  })
+
+  it("**mcp alone shows its commands and serves nothing** (WC-CMD-3)", async () => {
+    const terminal = await call(["mcp"], async () => fake, sandbox(), { tty: true })
+    const machine = await call(["mcp", "--json"], async () => fake, sandbox())
+
+    expect(terminal.code).toBe(2)
+    expect(terminal.stderr.join("\n")).toContain("serve")
+    expect(machine.code).toBe(2)
+    expect(json(machine.stderr).error).toMatchObject({
+      code: "validation_error",
+      message: expect.stringContaining("--help"),
+    })
   })
 
   it("refuse a script in npx's cache", async () => {

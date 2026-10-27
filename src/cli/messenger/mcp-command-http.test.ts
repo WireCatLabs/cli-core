@@ -38,6 +38,7 @@ describe("HTTP MCP startup", () => {
   it("passes the effective overrides without saving the profile", async () => {
     const { code, streams } = await cli([
       "mcp",
+      "serve",
       "--http",
       "--public-url",
       "https://device.example",
@@ -60,14 +61,14 @@ describe("HTTP MCP startup", () => {
       expect.not.objectContaining({ confirmation: expect.anything() }),
     )
   })
-  it("preserves parent permission overrides in a generated stdio configuration", async () => {
-    const { code, streams } = await cli(["mcp", "--permission", "chats=readonly", "config", "--json"])
+  it("preserves permission overrides in a generated stdio configuration", async () => {
+    const { code, streams } = await cli(["mcp", "config", "--permission", "chats=readonly", "--json"])
     expect(code).toBe(0)
     const entry = JSON.parse(streams.stdout.join("")).item.config
     expect(entry.mcpServers["chat-default"].args).toEqual(expect.arrayContaining(["--permission", "chats=readonly"]))
   })
   it("refuses at startup an override that would loosen the profile, naming the key", async () => {
-    const { code, streams } = await cli(["mcp", "--http", "--permission", "messages.send=allow", "--json"])
+    const { code, streams } = await cli(["mcp", "serve", "--http", "--permission", "messages.send=allow", "--json"])
     expect(code).toBe(2)
     expect(JSON.parse(streams.stderr.at(-1) ?? "null")).toMatchObject({
       error: { code: "validation_error", message: expect.stringContaining("messages.send") },
@@ -77,7 +78,7 @@ describe("HTTP MCP startup", () => {
   it.each([["--http", "--permission", "messages.send=yes"]])(
     "rejects invalid options before starting: %j",
     async (...args) => {
-      const { code } = await cli(["mcp", ...args, "--json"])
+      const { code } = await cli(["mcp", "serve", ...args, "--json"])
       expect(code).not.toBe(0)
       expect(serveOverHttpUntilStopped).not.toHaveBeenCalled()
     },

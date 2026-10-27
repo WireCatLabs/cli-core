@@ -31,8 +31,8 @@ const parsedOrText = (text: string): unknown => {
 }
 
 /**
- * A CLI's `mcp` driven over its stdin and stdout, through its own `run()`, with no process and no SDK:
- * `start` passes the two streams to `run(["<profile>", "mcp"], { ...yourOptions, ...streams })`. It has
+ * A CLI's `mcp serve` driven over its stdin and stdout, through its own `run()`, with no process and no SDK:
+ * `start` passes the two streams to `run(["<profile>", "mcp", "serve"], { ...yourOptions, ...streams })`. It has
  * already answered `initialize` when this resolves.
  */
 export const mcpOverStdio = async (

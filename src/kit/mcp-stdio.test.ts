@@ -39,7 +39,7 @@ describe("mcpOverStdio", () => {
   it("runs a CLI's mcp over its stdin and stdout through run(), and ends it with stdin", async () => {
     const { env, program } = cli()
     const mcp = await mcpOverStdio((streams) =>
-      run(["mcp"], program, { streams: captureStreams(), tty: false, env, ...streams }),
+      run(["mcp", "serve"], program, { streams: captureStreams(), tty: false, env, ...streams }),
     )
 
     const tools = await mcp.tools()
@@ -82,7 +82,7 @@ describe("an MCP server whose client closes stdin", () => {
         params: { name: "chat_read", arguments: { command: "polls show", arguments: { chat: "7", message: "1" } } },
       },
     ]
-    const exited = run(["mcp"], program, { streams: captureStreams(), tty: false, env, stdin, stdout })
+    const exited = run(["mcp", "serve"], program, { streams: captureStreams(), tty: false, env, stdin, stdout })
     stdin.end(`${lines.map((line) => JSON.stringify(line)).join("\n")}\n`)
 
     expect(await exited).toBe(0)

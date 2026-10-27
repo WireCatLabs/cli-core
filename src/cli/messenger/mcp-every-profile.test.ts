@@ -31,8 +31,8 @@ const messenger: Messenger = {
   chatArgument: "a chat",
 }
 
-/** `chat mcp` as an agent runs it: requests on stdin, then stdin closes; the answers are on stdout. */
-const serve = async (requests: object[], { profiles = ["work", "personal"], argv = ["mcp"] } = {}) => {
+/** `chat mcp serve` as an agent runs it: requests on stdin, then stdin closes; the answers are on stdout. */
+const serve = async (requests: object[], { profiles = ["work", "personal"], argv = ["mcp", "serve"] } = {}) => {
   const root = mkdtempSync(join(tmpdir(), "mcp-every-"))
   const env = {
     CHAT_CONFIG_DIR: join(root, "config"),
@@ -85,8 +85,8 @@ const HANDSHAKE = [
   { method: "notifications/initialized" },
 ]
 
-describe("chat mcp, with no profile", () => {
-  it("serves every profile: each tool takes one, and a call runs in `chat <profile> mcp`", async () => {
+describe("chat mcp serve, with no profile", () => {
+  it("serves every profile: each tool takes one, and a call runs in `chat <profile> mcp serve`", async () => {
     const { answers, log } = await serve([
       ...HANDSHAKE,
       { id: 2, method: "tools/list" },
@@ -101,7 +101,7 @@ describe("chat mcp, with no profile", () => {
       profile: "work",
       arguments: { command: "inbox" },
     })
-    expect(log()).toContain("start work mcp")
+    expect(log()).toContain("start work mcp serve")
   })
 
   it("passes a stricter permission on to every profile's server", async () => {
@@ -114,9 +114,9 @@ describe("chat mcp, with no profile", () => {
           params: { name: "chat_read", arguments: { profile: "personal", command: "x" } },
         },
       ],
-      { argv: ["mcp", "--permission", "messages.send=deny"] },
+      { argv: ["mcp", "serve", "--permission", "messages.send=deny"] },
     )
-    expect(log()).toContain("start personal mcp --permission messages.send=deny")
+    expect(log()).toContain("start personal mcp serve --permission messages.send=deny")
   })
 
   it("says so when there is no profile on this computer yet", async () => {

@@ -955,7 +955,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--history` |  | the people added also see the messages from before they came |  | `chats members add` (max-only) |
 | `--holder` | `<name>` | who you are for task claims: a session or chat id |  | `tasks agenda`, `tasks claim`, `tasks release` |
 | `--html` |  | the text is HTML: <b>, <i>, <a href>, <code> |  | `bot messages edit` (planned), `bot messages send` (planned), `messages edit` (tg-only), `messages send` (tg-only) |
-| `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp` |
+| `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp serve` |
 | `--idle` | `<duration>` | stop after this long with nobody using it — 15m, 1h |  | `serve` (max-only), `server restart` (max-only), `server start` (max-only) |
 | `--include` | `<kinds>` | every chat of these kinds, comma-separated. **a folder (`chats folders`) or an export folder (`store export`) takes these chats** |  | `chats folders create` (planned), `chats folders update` (planned), `store export` |
 | `--into` | `<id>` | the task that stays: a duplicate is merged into it, or a message is linked to it instead of opening a task |  | `tasks add`, `tasks merge` |
@@ -1037,17 +1037,17 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `attachments download`, `bot messages sync` (max, tg only), `messages download`, `messages sync`, `store gaps repair` |
 | `--per-chat` | `<limit>` | at most this many per chat, such as 1/12h |  | `replies edit` |
 | `--per-person` | `<limit>` | at most this many per person, such as 1/1d |  | `replies edit` |
-| `--permission` | `<key=level>` | make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys |  | `mcp`, `mcp add`, `mcp check`, `mcp config`, `mcp server start` |
+| `--permission` | `<key=level>` | make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys |  | `mcp add`, `mcp check`, `mcp config`, `mcp serve`, `mcp server start` |
 | `--personal` |  | the personal account's section of the profile's settings |  | `config set`, `config unset` |
 | `--phone-number` | `<who>` | who sees the number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--photo` | `<file>` | an image file — a profile photo in `account update`, a group's photo in `chats update`, a photo to send in `messages send` |  | `account update` — WhatsApp accepts JPEG (.jpg or .jpeg) profile photos; help names each messenger's accepted image formats (WC-CMD-25)., `bot messages send` (planned), `chats update` (planned), `messages send` |
 | `--pin` | `<chat>` | pin this chat at the top of the folder; repeat it for more |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--pinned` | `<on\|off>` | on pins a forum topic at the top of the list, off unpins it |  | `topics edit` (tg-only) |
-| `--port` | `<port>` | the local port behind the tunnel, for mcp --http or bot watch --public-url |  | `bot watch`, `mcp`, `mcp server start` |
+| `--port` | `<port>` | the local port behind the tunnel, for mcp serve --http or bot watch --public-url |  | `bot watch`, `mcp serve`, `mcp server start` |
 | `--priority` | `<n>` | task priority from 0 (urgent) through 4 (low) |  | `tasks update` |
 | `--problems` |  | only failed responses, warnings and crashes |  | `runs show` |
 | `--profile-photo` | `<who>` | who sees the profile photo: everyone, contacts or nobody |  | `account privacy set` (planned) |
-| `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp`, `mcp server start` |
+| `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp serve`, `mcp server start` |
 | `--question` |  | match only questions |  | `replies edit` |
 | `--quiet` |  | diagnostics off. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--quiz` |  | a quiz: one answer is right, and a vote is final |  | `polls create` (tg-only) |
@@ -1063,7 +1063,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--reply-to` | `<message>` | answer this message id in the same chat |  | `bot messages send` (planned), `messages send` |
 | `--retract` |  | take your vote back, where the poll allows it |  | `polls vote` |
 | `--revision` | `<n>` | the revision you read before editing |  | `contacts notes edit` |
-| `--revoke` |  | forget every login given to a browser app over --http |  | `mcp` |
+| `--revoke` |  | forget every login given to a browser app over --http |  | `mcp serve` |
 | `--revote` |  | people may change their vote |  | `polls create` (max, tg only) |
 | `--run` | `<id>` | the run the report is about; the newest failed one if not given |  | `doctor reports create` |
 | `--saved` | `<name\|id>` | run a saved search, or an earlier run by its id; options typed with it replace its own, more words are AND-ed |  | `search messages`, `stats chats newcomers`, `stats contacts responses`, `stats contacts top`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
@@ -1125,7 +1125,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--with-notes` |  | include your private notes, subject to contacts.notes.list permission |  | `contacts show` |
 | `--within` | `<duration>` | the observation window after a known join; each report names what it measures |  | `stats chats newcomers`, `stats chats retention`, `tasks agenda` |
 | `--words` | `<words>` | match any of these whole words, comma-separated; empty clears |  | `replies edit` |
-| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `mcp` (planned), `mcp config` (planned) |
+| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `mcp config` (planned), `mcp serve` (planned) |
 
 <!-- end of the option catalogue -->
 
@@ -1286,7 +1286,7 @@ The three tools, their arguments and what each permission shows are on the handb
 - `status` answers what the server is. `conversations refresh` runs what `search conversations --refresh` runs before
   it searches (NEED-551 A).
 - **Every command is a tool, writes included; the profile's permissions limit it** (owner, 2026-10-23). Left out:
-  `mcp` and `complete`, which an agent call cannot use, and interactive login (`bot auth` too). Finite
+  `mcp` (with `mcp serve`) and `complete`, which an agent call cannot use, and interactive login (`bot auth` too). Finite
   commands remain discoverable even when permissions block execution; availability explains the restriction.
 - **The writes no level stopped before have keys of their own, `ask` by default** (NEED-1663 A), so MCP offers them
   and over MCP they go ahead as any `ask` write: `store backup|restore|migrate|repair|reset|clear|decrypt` and

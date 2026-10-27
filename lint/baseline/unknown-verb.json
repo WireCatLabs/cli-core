@@ -1,6 +1,8 @@
 [
+  "bot mcp serve",
   "chats folders order",
   "chats send-as",
+  "mcp serve",
   "replies audience",
   "replies consents allow",
   "replies consents deny",

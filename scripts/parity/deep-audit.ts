@@ -109,7 +109,8 @@ const captureTools = async (
   retained: string[],
 ): Promise<ToolCapture[]> => {
   const bin = join(root, "dist/bin", `${cli}.js`)
-  if (!commandMap(program).get("mcp")) return [{ mode: "default", argv: ["mcp"], error: "mcp command absent" }]
+  if (!commandMap(program).get("mcp serve"))
+    return [{ mode: "default", argv: ["mcp", "serve"], error: "mcp serve command absent" }]
   const captures: ToolCapture[] = []
   for (const mode of captureModes(RESOURCES)) {
     const home = temporaryHome()
