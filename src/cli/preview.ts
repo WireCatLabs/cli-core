@@ -4,7 +4,7 @@ import { writes as writesAnything } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { commandPathOf } from "./command-contract.js"
-import { refuseUnknownPermissionKeys } from "./permission-keys.js"
+import { type CommandPermissions, refuseUnknownPermissionKeys } from "./permission-keys.js"
 import type { Settings } from "./settings.js"
 
 export class PreviewComplete extends Error {}
@@ -13,22 +13,24 @@ export const preview = (
   command: Command,
   settings: Pick<Settings, "permissions" | "permissionSources" | "configPath" | "savedPermissions" | "profile">,
   tool: string,
-  keyOf?: (path: readonly string[]) => PermissionKey | null | undefined,
+  keys?: ((path: readonly string[]) => PermissionKey | null | undefined) | CommandPermissions,
   messenger = true,
 ) => {
   const path = commandPathOf(command)
   const { permissions } = settings
-  refuseUnknownPermissionKeys(command, settings, tool, keyOf && ((one) => keyOf(commandPathOf(one))))
-  const key = keyOf?.(path) ?? keyForCommand(path)
-  const level = key ? levelFor(permissions, key).level : "allow"
-  for (const source of readKeysForCommand(path)) {
+  const declared = typeof keys === "object" ? keys : undefined
+  const keyOf = typeof keys === "object" ? keys.keyOf : keys
+  refuseUnknownPermissionKeys(command, settings, tool, declared ?? (keyOf && ((one) => keyOf(commandPathOf(one)))))
+  const key = declared ? declared.keyOf(path) : (keyOf?.(path) ?? keyForCommand(path))
+  const level = key ? levelFor(permissions, key, declared?.defaults).level : "allow"
+  for (const source of declared ? [] : readKeysForCommand(path)) {
     if (levelFor(permissions, source).level === "deny")
       throw new CliError("permission_error", `this profile does not permit ${source}`, { permission: source })
   }
   const meta = metaOf(command)
   const writes =
     (meta.effects !== undefined && writesAnything(meta.effects)) ||
-    (key !== null && key !== undefined && WRITE_KEYS.includes(key))
+    (!declared && key !== null && key !== undefined && WRITE_KEYS.includes(key))
   if (level === "deny" || (writes && level === "readonly"))
     throw new CliError("permission_error", `this profile does not permit ${path.join(" ")}`, { permission: key })
   return previewBody(command, { key: key ?? null, level }, messenger)

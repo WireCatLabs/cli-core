@@ -430,16 +430,29 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   return undefined
 }
 
+/** A messenger's key starts with one of its resources, so a misspelled resource is refused by its shape alone. */
+export const RESOURCE_KEY = new RegExp(`^(${RESOURCES.join("|")})(\\.[a-z][a-z-]*)*$`)
+
+/**
+ * A key of a CLI that declares its own commands (`commandPermissions`): any command path. Which paths exist is
+ * checked against the program, not here. Past the first word a key may hold capitals, as Google's method ids do
+ * (`api.calendar.calendarList.list`).
+ */
+export const COMMAND_PATH_KEY = /^[a-z][a-z-]*(\.[a-zA-Z][a-zA-Z-]*)*$/
+
 /** Startup overrides are a nearer layer than the saved profile, and never write that profile. */
-export const permissionOverrides = (entries: readonly string[] = []): Record<PermissionKey, Level> => {
+export const permissionOverrides = (
+  entries: readonly string[] = [],
+  shape: RegExp = RESOURCE_KEY,
+): Record<PermissionKey, Level> => {
   const levels: Record<PermissionKey, Level> = {}
-  const path = new RegExp(`^(${RESOURCES.join("|")})(\\.[a-z][a-z-]*)*$`)
+  const example = shape === RESOURCE_KEY ? "messages.send=allow" : "api=readonly"
   for (const entry of entries) {
     const [key = "", level = "", extra] = entry.split("=")
-    if (!path.test(key) || !(LEVELS as readonly string[]).includes(level) || extra !== undefined)
+    if (!shape.test(key) || !(LEVELS as readonly string[]).includes(level) || extra !== undefined)
       throw new CliError(
         "validation_error",
-        "--permission takes a command path and level, e.g. messages.send=allow (deny, readonly, ask, allow)",
+        `--permission takes a command path and level, e.g. ${example} (deny, readonly, ask, allow)`,
       )
     levels[key] = level as Level
   }
@@ -450,14 +463,15 @@ export const permissionOverrides = (entries: readonly string[] = []): Record<Per
 export const assertOverridesTighten = (
   overrides: Readonly<Record<PermissionKey, Level>>,
   profile: Readonly<Record<PermissionKey, Level>>,
+  defaults: Readonly<Record<PermissionKey, Level>> = DEFAULT_PERMISSIONS,
 ): void => {
   for (const [key, level] of Object.entries(overrides)) {
     const under = Object.keys(profile).filter((named) => named.startsWith(`${key}.`))
-    const lifted = [key, ...under].find((named) => ORDER[level] > ORDER[levelFor(profile, named).level])
+    const lifted = [key, ...under].find((named) => ORDER[level] > ORDER[levelFor(profile, named, defaults).level])
     if (lifted !== undefined)
       throw new CliError(
         "validation_error",
-        `--permission ${key}=${level} would loosen ${lifted} from ${levelFor(profile, lifted).level}; ` +
+        `--permission ${key}=${level} would loosen ${lifted} from ${levelFor(profile, lifted, defaults).level}; ` +
           "it only tightens — change the profile's permissions to loosen it",
         { key, lifted },
       )

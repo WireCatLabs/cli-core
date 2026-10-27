@@ -28,7 +28,9 @@ export {
   sendsPathFor,
 } from "./journal.js"
 export {
+  assertOverridesTighten,
   CEILING_KEY,
+  COMMAND_PATH_KEY,
   DEFAULT_PERMISSIONS,
   keyForCommand,
   keyForWrite,

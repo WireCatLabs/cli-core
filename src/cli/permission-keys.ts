@@ -1,10 +1,62 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
-import { CEILING_KEY, keyForCommand, type PermissionKey, WRITE_KEYS } from "../sends/permissions.js"
+import {
+  AUTHORITY_KEY,
+  CEILING_KEY,
+  DEFAULT_PERMISSIONS,
+  keyForCommand,
+  type Level,
+  type PermissionKey,
+  WRITE_KEYS,
+} from "../sends/permissions.js"
 import { type ConfigIssue, issueMessage, permissionIssues, publicIssue } from "./config-issues.js"
 import type { Settings } from "./settings.js"
 
 export type PermissionKeyOf = (command: Command) => PermissionKey | null | undefined
+
+/**
+ * A CLI that is not a messenger names its own keys: each command is checked against its own path, and the
+ * messenger's resources and write keys mean nothing to it (drive's model). `settingsFor(app, { permissions })` takes it.
+ */
+export interface CommandPermissions {
+  /** The key a command path is checked against; `null` for housekeeping, which no level stops. */
+  keyOf: (path: readonly string[]) => PermissionKey | null
+  /** Keys a command checks inside itself, beyond its own path: `api.calendar.events.insert`. */
+  extra: readonly PermissionKey[]
+  /** cli-core's built-in levels and the CLI's own; they only ever tighten. */
+  defaults: Readonly<Record<PermissionKey, Level>>
+}
+
+/** Either way of naming a program's keys: a messenger's per-command mapping, or a declared CLI's own. */
+export type PermissionKeySource = PermissionKeyOf | CommandPermissions
+
+const HOUSEKEEPING = new Set([
+  "help",
+  "guide",
+  "config",
+  "session",
+  "doctor",
+  "commands",
+  "complete",
+  "upgrade",
+  "skill",
+  "mcp",
+  "runs",
+])
+
+/** A command's own path is its key; the commands that look after the tool have none. */
+export const commandPathKey = (path: readonly string[]): PermissionKey | null =>
+  path[0] === undefined || HOUSEKEEPING.has(path[0]) ? null : path.join(".")
+
+export const commandPermissions = ({
+  keyOf = commandPathKey,
+  extra = [],
+  defaults = {},
+}: Partial<CommandPermissions> = {}): CommandPermissions => ({
+  keyOf,
+  extra: [AUTHORITY_KEY, ...extra],
+  defaults: { ...DEFAULT_PERMISSIONS, ...defaults },
+})
 
 const pathOf = (command: Command): string[] => {
   const words: string[] = []
@@ -26,12 +78,20 @@ const everyCommand = (command: Command): Command[] => [command, ...command.comma
  */
 export const knownPermissionKeys = (
   command: Command,
-  keyOf: PermissionKeyOf = (one) => keyForCommand(pathOf(one)),
+  keyOf: PermissionKeySource = (one) => keyForCommand(pathOf(one)),
   extra: readonly PermissionKey[] = [],
 ): Set<PermissionKey> => {
   const known = new Set<PermissionKey>()
   const add = (key: PermissionKey) => {
     for (let parts = key.split("."); parts.length > 0; parts = parts.slice(0, -1)) known.add(parts.join("."))
+  }
+  if (typeof keyOf !== "function") {
+    for (const one of everyCommand(rootOf(command))) {
+      const key = keyOf.keyOf(pathOf(one))
+      if (key) add(key)
+    }
+    for (const key of [...keyOf.extra, ...extra]) add(key)
+    return known
   }
   for (const one of everyCommand(rootOf(command))) {
     const own = keyOf(one)
@@ -61,7 +121,7 @@ export const unknownPermissionIssues = (
   command: Command,
   settings: Pick<Settings, "configPath" | "savedPermissions" | "permissions" | "permissionSources" | "profile">,
   tool: string,
-  keyOf?: PermissionKeyOf,
+  keyOf?: PermissionKeySource,
 ): ConfigIssue[] => {
   const saved =
     settings.savedPermissions ??
@@ -81,7 +141,7 @@ export const refuseUnknownPermissionKeys = (
   command: Command,
   settings: Pick<Settings, "configPath" | "savedPermissions" | "permissions" | "permissionSources" | "profile">,
   tool: string,
-  keyOf?: PermissionKeyOf,
+  keyOf?: PermissionKeySource,
 ): void => {
   const issues = unknownPermissionIssues(command, settings, tool, keyOf)
   if (issues.length > 0) throw new CliError("configuration_error", issueMessage(issues), { permission: issues[0]?.key })
