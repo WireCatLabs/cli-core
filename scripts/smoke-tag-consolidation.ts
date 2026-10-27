@@ -1,12 +1,11 @@
 import assert from "node:assert/strict"
-import { mkdtempSync } from "node:fs"
-import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { openStore as openLegacyStore } from "@wirecat/cli-core-legacy-tags/store"
 import { openStore } from "../src/store/index.js"
+import { scratch } from "./scratch.js"
 
 export const smokeTagConsolidation = async () => {
-  const path = join(mkdtempSync(join(tmpdir(), "tag-consolidation-smoke-")), "fixture.db")
+  const path = join(scratch("tag-consolidation-smoke-"), "fixture.db")
   const legacy = await openLegacyStore({ path })
   try {
     const source = await legacy.knowledge.createTag("arrival")
