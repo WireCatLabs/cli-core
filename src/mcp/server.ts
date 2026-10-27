@@ -60,7 +60,7 @@ export type ServerOptions = SessionOptions & { spawnJob?: import("../services/ba
 type Invocation = Parameters<Messenger["connect"]>[0]
 
 /** What `run()` sets for each run itself; everything else a test or the CLI handed the server reaches its commands. */
-const PER_RUN = new Set([
+export const PER_RUN = new Set([
   "streams",
   "stdin",
   "stdout",
@@ -88,7 +88,7 @@ const SYNC_FIELDS = ["sync_first", "sync_time", "max_chats", "max_messages"]
 const keyOfCommand = (command: string) => command.replace(/[ -]/g, "_")
 
 /** A command's `--json` answer is already an envelope; a bare list or value is wrapped as one. */
-const envelope = (command: string, value: unknown): object =>
+export const envelope = (command: string, value: unknown): object =>
   Array.isArray(value)
     ? wholeList(command, value)
     : value !== null && typeof value === "object" && ("item" in value || "items" in value)
