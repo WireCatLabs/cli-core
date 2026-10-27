@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.65.** The peer range moves from `>=0.64.0 <0.65.0` to `>=0.65.0 <0.66.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.65 puts `serve` and `revoke` in the command
+  vocabulary, so `cli-dev lint` fails on a baseline entry that names them: remove `mcp serve`, `bot mcp serve`,
+  `mcp revoke` and `replies consents revoke` from a CLI's `lint/baseline/unknown-verb.json` (cli-core's own are gone).
+  Its `cli-dev audit` compares gcal only on the commands it already shares, and its handbook changes the rules on
+  deadlines, MCP profiles and what counts as a write; nothing cli-core calls changed.
+
 ## 0.468.0 — 27.10.2026
 
 ### Changed — may break callers

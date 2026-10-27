@@ -133,7 +133,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `start` | start a running process, or a login session |  |
 | `stop` | stop a running process |  |
 | `restart` | stop and start a running process |  |
+| `serve` | run a server in this process and answer its clients until stopped |  |
 | `end` | end a login session |  |
+| `revoke` | take back what was granted, so it stops working: a login, an invite link, a consent |  |
 | `install` | install a system unit |  |
 | `uninstall` | remove a system unit |  |
 | `cancel` | stop a job or a pending thing |  |
@@ -188,7 +190,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `reject` | the owner refuses what an agent proposed | `decline`, `deny` |
 | `review` | list what waits for the owner's decision |  |
 | `resolve` | settle one thing that waits for the owner's decision, with the owner's choice |  |
-| `move` | move a file in the source |  |
+| `move` | move a thing to another place in the source: a file to a folder, an event to a calendar |  |
 | `copy` | copy a file in the source |  |
 | `run` | run a saved job once, now, as its timer would |  |
 | `claim` | take a thing for a while so no other agent works it at once; the claim lapses by itself |  |
@@ -570,6 +572,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--bots` | `<profiles>` | list | also read these bots' copies, comma-separated, each allowed by the configuration |  |
 | `--only` | `<resources>` | list | only these resources, comma-separated |  |
 | `--profile` | `<name>` | string | the profile to use, instead of the first word |  |
+| `--profiles` | `<names\|all>` | list | the profiles an MCP server serves, comma-separated, or all of them |  |
 | `--history-since-time` | `<time>` | time | inclusive start of the stored history window used for preparation |  |
 | `--expected-fingerprint` | `<hash>` | string | require what it reads to match this fingerprint from an earlier read |  |
 | `--before-time` | `<time>` | time | read what came before this time |  |
@@ -741,6 +744,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--repeat` | `<rule>` | string | how it repeats, as an RFC 5545 rule such as FREQ=WEEKLY;BYDAY=MO;COUNT=10 |  |
 | `--hours` | `<from-to>` | string | the working hours of each day to look in, such as 09:00-17:00, in the owner's time zone |  |
 | `--series` |  | switch | act on the whole repeating event, not only this occurrence |  |
+| `--following` |  | switch | act on this occurrence and every later one of the repeating event |  |
+| `--to-calendar` | `<id>` | id | the calendar it moves to, of the same account |  |
 
 <!-- flags: end -->
 
