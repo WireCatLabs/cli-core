@@ -194,7 +194,9 @@ describe("mcp --http and its owner login", () => {
     const used = codes.at(-1) ?? ""
     expect((await consent(client.client_id ?? "", pkce().challenge, used)).status).toBe(302)
     expect(codes.at(-1)).not.toBe(used)
-    expect((await consent(client.client_id ?? "", pkce().challenge, used)).status).toBe(400)
+    const again = await consent(client.client_id ?? "", pkce().challenge, used)
+    expect(again.status).toBe(400)
+    expect(await again.text()).toContain("Each code works for one login")
   })
 
   it("never redirects to an address the client did not register", async () => {

@@ -135,6 +135,9 @@ shape of this file.
 
 ### Fixed
 
+- **The MCP login page says why a code that just worked is now wrong.** Each login code works once; after an app
+  logs in, the server shows a new one. The wrong-code message now says so and points to WireCat Desktop and
+  `<cli> mcp server status`, where the new code is.
 - **An empty `messages` search no longer suggests `messages sync --all --background`.** `coverage.next` and the
   `messages.sync` step now name one chat (`<cli> messages sync <chat>`: the selected chat, or the most active one
   that was never fetched or is behind), and the search help says to offer it and run it only after the owner

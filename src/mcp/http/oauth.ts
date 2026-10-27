@@ -264,7 +264,11 @@ export const ownerLogin = ({
         retryAt = now() + WRONG_CODE_WAIT_MS
         return throttled()
       }
-      return page(params, client, `Wrong code. ${WRONG_TRIES - wrong} tries left.`)
+      return page(
+        params,
+        client,
+        `Wrong code. Each code works for one login: after an app logs in, a new one appears in WireCat Desktop and in "${appName} mcp server status". ${WRONG_TRIES - wrong} tries left.`,
+      )
     }
     wrong = 0
     freshCode()
