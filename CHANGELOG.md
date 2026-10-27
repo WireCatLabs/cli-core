@@ -13,8 +13,11 @@ shape of this file.
   `attachments[].fileId` (and its title). `saveEntries` links the entry to the document of that Drive file
   (`links` of the new kind `attached`, source `calendar`). When Drive has not stored the file yet, the link waits,
   named `google-drive:<file id>`, and is made when Drive stores it, in whichever order the two sync. When two Drive
-  accounts hold the file, no link is made. A list replaces the entry's links, and an entry saved without
-  `attachments` keeps them. `store.calendar.event(id)` answers them as `attachments`, each with its `documentId`.
+  accounts hold the file, no link is made until one of them no longer does. A list replaces the entry's links, a file
+  named twice is linked once, and an entry saved without `attachments` keeps them: Google leaves the field out of an
+  event with no attachments, so a provider sending a whole event sends `attachments: []` then.
+  `store.calendar.event(id)` answers them as `attachments`, each with its `documentId`, which is `null` while the
+  document is deleted.
 - **Calendar events are found by words.** `searchEvents(store, query, options)` and `store.calendar.search(query)`
   find events by their title, cleaned description, place and attendees' names, in the query language messages use;
   `date:` reads the event's start. The occurrences of one series are one hit, showing the matching occurrence
@@ -30,6 +33,11 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`EventDetails.attachments` is required.** Code that builds an `EventDetails`, such as a fake calendar store, adds
+  `attachments: []`.
+- **Links have a new kind, `attached`, and a new origin, `calendar`.** `Link.kind` gains `attached` and
+  `Link.origin` gains `calendar`, which only the store writes: `LinkInput.origin` is unchanged. The `task_card`
+  entity's links take both. A caller that switches over every kind or origin adds them.
 - **`search all` reads calendar events** when the store holds a calendar (an account whose provider is of the
   `events` kind, as gcal registers `google-calendar`). Hits of kind `event` join the merged list, `searched` and
   `accounts` name `events`, `--only` takes `events`, and `--source` takes a calendar account, `gcal` or `events`. A

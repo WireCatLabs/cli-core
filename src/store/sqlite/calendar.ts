@@ -383,32 +383,43 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     for (const email of stale) drop.run(entryId, email)
   }
 
-  /** The entry's Drive files as `attached` links: the list given replaces the one held. */
+  /**
+   * The entry's Drive files as `attached` links: the list given replaces the one held. A link still waiting for its
+   * document tries again, since the file may have become one account's since.
+   */
   const saveAttachments = (entryId: number, attachments: EntryAttachmentInput[], now: number) => {
     const held = new Map(
       database
         .prepare(
-          "SELECT id, target_text FROM links WHERE from_type = 'calendar_entry' AND from_id = ? AND kind = 'attached'",
+          "SELECT id, target_text, to_id FROM links WHERE from_type = 'calendar_entry' AND from_id = ? AND kind = 'attached'",
         )
         .all(entryId)
-        .map((row) => [String(row.target_text), Number(row.id)]),
+        .map((row) => [String(row.target_text), { id: Number(row.id), documentId: int(row.to_id) }]),
     )
     const insert = database.prepare(
       `INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, target_text, metadata, confirmed, author,
          created_at, updated_at) VALUES ('calendar_entry', ?, 'document', ?, 'attached', 'calendar', ?, ?, 1, 'rule', ?, ?)`,
     )
     const retitle = database.prepare("UPDATE links SET metadata = ?, updated_at = ? WHERE id = ? AND metadata IS NOT ?")
+    const resolve = database.prepare("UPDATE links SET to_id = ?, updated_at = ? WHERE id = ?")
+    const handled = new Set<string>()
     for (const { fileId, title } of attachments) {
-      const target = driveFileTarget(fileId.trim())
-      if (target === driveFileTarget("")) continue
+      const file = fileId.trim()
+      const target = driveFileTarget(file)
+      if (!file || handled.has(target)) continue
+      handled.add(target)
       const metadata = title ? JSON.stringify({ title }) : null
-      const id = held.get(target)
-      if (id === undefined) insert.run(entryId, driveDocumentOf(database, fileId.trim()), target, metadata, now, now)
-      else retitle.run(metadata, now, id, metadata)
+      const link = held.get(target)
+      if (link === undefined) insert.run(entryId, driveDocumentOf(database, file), target, metadata, now, now)
+      else {
+        retitle.run(metadata, now, link.id, metadata)
+        const document = link.documentId === null ? driveDocumentOf(database, file) : null
+        if (document !== null) resolve.run(document, now, link.id)
+      }
       held.delete(target)
     }
     const drop = database.prepare("DELETE FROM links WHERE id = ?")
-    for (const id of held.values()) drop.run(id)
+    for (const { id } of held.values()) drop.run(id)
   }
 
   /** Rules 1 and 2: the row this entry already is, if any. */
@@ -711,8 +722,9 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
             .map(revisionOf),
           attachments: database
             .prepare(
-              "SELECT from_id, target_text, to_id, metadata FROM links WHERE from_type = 'calendar_entry' AND kind = 'attached' " +
-                "AND from_id IN (SELECT value FROM json_each(?)) ORDER BY from_id, id",
+              "SELECT l.from_id, l.target_text, CASE WHEN d.deleted_at IS NULL THEN l.to_id END AS to_id, l.metadata " +
+                "FROM links l LEFT JOIN documents d ON d.id = l.to_id WHERE l.from_type = 'calendar_entry' " +
+                "AND l.kind = 'attached' AND l.from_id IN (SELECT value FROM json_each(?)) ORDER BY l.from_id, l.id",
             )
             .all(ids)
             .map(attachmentOf),

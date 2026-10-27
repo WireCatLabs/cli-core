@@ -235,6 +235,7 @@ export const syncFile = (
       )
       .run(...(Object.values(values) as (string | number | null)[]), changed ? now : Number(existing.updated_at), id)
     if (kind === "folder" && existing.path !== path) movePaths(database, accountId, String(existing.path), path)
+    if (remote && changed) linkAttached(database, now, externalId)
   }
   return { id, path }
 }

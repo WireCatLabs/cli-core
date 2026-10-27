@@ -91,6 +91,59 @@ describe("a calendar entry's Drive attachments", () => {
     expect((await attachmentsOf(store, entry?.eventId ?? null))?.map(({ fileId }) => fileId)).toEqual(["b", "c"])
   })
 
+  it("keep one link for a file the list names twice", async () => {
+    const { store, calendar } = await setup()
+    const [entry] = await store.calendar.saveEntries(calendar, [planning([{ fileId: "a" }, { fileId: " a " }])], 1)
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.map(({ fileId }) => fileId)).toEqual(["a"])
+
+    await store.calendar.saveEntries(calendar, [planning([{ fileId: "b" }])], 2)
+
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.map(({ fileId }) => fileId)).toEqual(["b"])
+  })
+
+  it("show no document while the file's document is deleted, and show it again once Drive restores it", async () => {
+    const { store, calendar, drive } = await setup()
+    const { note } = await driveFile(store, drive, "file-3")
+    const [entry] = await store.calendar.saveEntries(calendar, [planning([{ fileId: "file-3" }])], 1)
+
+    await store.notes.deleteFileNotes(drive, ["file-3.md"])
+    expect(await attachmentsOf(store, entry?.eventId ?? null)).toEqual([
+      { fileId: "file-3", title: null, documentId: null },
+    ])
+
+    await driveFile(store, drive, "file-3")
+    expect(await attachmentsOf(store, entry?.eventId ?? null)).toEqual([
+      { fileId: "file-3", title: null, documentId: Number(note.id) },
+    ])
+  })
+
+  it("link a waiting file once Drive stores it again after a deletion", async () => {
+    const { store, calendar, drive } = await setup()
+    const { note } = await driveFile(store, drive, "file-4")
+    await store.notes.deleteFileNotes(drive, ["file-4.md"])
+    const [entry] = await store.calendar.saveEntries(calendar, [planning([{ fileId: "file-4" }])], 1)
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.[0]?.documentId).toBeNull()
+
+    await driveFile(store, drive, "file-4")
+
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.[0]?.documentId).toBe(Number(note.id))
+  })
+
+  it("link a waiting file when the entry is saved again after the other Drive account's copy was deleted", async () => {
+    const { store, calendar, drive } = await setup()
+    const other = String(
+      await store.accounts.saveAccount({ provider: "google-drive", account: "owner-2" }, { name: null }),
+    )
+    const { note } = await driveFile(store, drive, "shared")
+    await driveFile(store, other, "shared")
+    await store.calendar.saveEntries(calendar, [planning([{ fileId: "shared" }])], 1)
+    await store.notes.deleteFileNotes(other, ["shared"])
+
+    const [entry] = await store.calendar.saveEntries(calendar, [planning([{ fileId: "shared" }])], 2)
+
+    expect((await attachmentsOf(store, entry?.eventId ?? null))?.[0]?.documentId).toBe(Number(note.id))
+  })
+
   it("make no link while two Drive accounts hold the same file", async () => {
     const { store, calendar, drive } = await setup()
     const other = String(

@@ -18,7 +18,7 @@ import { ownerPerson } from "./actors.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
 import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
-import { LINK_KINDS, linkKind } from "./link-kinds.js"
+import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
@@ -27,7 +27,7 @@ import { canonicalThingReference, referenceOfThing, storedThing, type Thing, thi
 import { write } from "./transaction.js"
 
 export const NOTE_FORMATS = ["obsidian", "markdown"] as const
-export const LINK_ORIGINS = ["file", "owner", "suggested", "message"] as const
+export { LINK_ORIGINS } from "./link-kinds.js"
 
 /**
  * A notes folder: an `accounts` row of provider `local` or `obsidian`. Where it is on disk is this computer's config. A
@@ -71,7 +71,7 @@ export interface Link {
   to: string | null
   kind: (typeof LINK_KINDS)[number]
   anchor: string | null
-  origin: (typeof LINK_ORIGINS)[number]
+  origin: (typeof LINK_SOURCES)[number]
   targetText: string | null
   role: string | null
   evidence: string | null
@@ -97,7 +97,7 @@ export interface LinkInput {
   targetText?: string
   kind: Link["kind"]
   anchor?: string
-  origin?: Link["origin"]
+  origin?: (typeof LINK_ORIGINS)[number]
   role?: string
   evidence?: string
   provenance?: string

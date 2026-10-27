@@ -46,7 +46,7 @@ export interface EntryAttachment {
   entryId: number
   fileId: string
   title: string | null
-  /** `null` while no Drive account holds the file, or while two do. */
+  /** `null` while no Drive account holds the file, while two do, or while its document is deleted. */
   documentId: number | null
 }
 
@@ -95,7 +95,8 @@ export interface EntryInput {
   metadata?: Record<string, unknown> | null
   /**
    * Its Drive files: each links the entry to the file's document, now or once Drive stores the file. Absent keeps the
-   * links the entry has; a list replaces them.
+   * links the entry has; a list replaces them. Google leaves `attachments` out of an event that has none, so a provider
+   * sending a whole event sends `[]` then, or a file removed from the event stays linked.
    */
   attachments?: EntryAttachmentInput[]
 }
