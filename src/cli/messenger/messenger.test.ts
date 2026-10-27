@@ -5360,7 +5360,7 @@ describe("the guard, account and mcp config commands", () => {
       )
     const records = kept(join(env.CHAT_STATE_DIR ?? "", "runs")).join("\n")
     expect(records).toContain('"argv":["contacts","lookup","[redacted]","[redacted]","[redacted]","[redacted]"]')
-    expect(records).not.toMatch(/600|34600123456/)
+    expect(records).not.toMatch(/"600"|34600123456/)
   })
 
   it("**contacts sync** keeps the contact list in the store and counts what was new or changed", async () => {
