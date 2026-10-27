@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.64.** The peer range moves from `>=0.63.0 <0.64.0` to `>=0.64.0 <0.65.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.64 adds `cli-dev bundle`, the shared build that
+  ships a CLI's bin as an esbuild bundle (tg-cli's, moved), and calendar words in the command vocabulary; nothing
+  cli-core uses changed. Its changelog lists the lint baseline entries and overrides that go stale in zoom, drive,
+  memo and gcal.
+
 ## 0.462.0 — 27.10.2026
 
 ### Changed — may break callers
