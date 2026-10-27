@@ -1,6 +1,10 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { memoryEventStore } from "../testing/index.js"
-import { CALENDAR_UNTRUSTED_FIELDS, calendarTools, callCalendarTool } from "./index.js"
+import { fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
+import type { CalendarWrites } from "../writes.js"
+import { CALENDAR_UNTRUSTED_FIELDS, calendarTools, calendarWriteTools, callCalendarTool } from "./index.js"
 
 const HOUR = 3_600_000
 const NOW = Date.UTC(2026, 9, 27, 9)
@@ -96,5 +100,65 @@ describe("calendar MCP tools", () => {
     const { store } = await setup()
     const review = body(await callCalendarTool(store, "event_links_review", {}, { accountIds: [1] }))
     expect(review).toMatchObject({ accounts: "all", items: [] })
+  })
+
+  describe("writes", () => {
+    const writable = async () => {
+      const { store } = await setup()
+      const writer = fakeCalendarWriter()
+      const home = mkdtempSync(join(tmpdir(), "calendar-mcp-"))
+      const writes = (): CalendarWrites => ({
+        writer,
+        app: { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" },
+        settings: () => ({ profile: "work", permissions: {}, permissionSources: {}, sendsPerHour: 30 }),
+        env: { HOME: home, XDG_DATA_HOME: home, GCAL_STATE_DIR: home },
+      })
+      const call = (name: string, input: unknown) =>
+        callCalendarTool(store, name, input, { accountIds: [1, 2], now: NOW, writes })
+      return { store, writer, call }
+    }
+    const planning = { title: "Example planning", start_time: "2026-11-02T10:00", end_time: "2026-11-02T11:00" }
+
+    it("are separate tools that say they write, and refuse on a host without a writer", async () => {
+      expect(calendarWriteTools.map(({ name }) => name)).toEqual([
+        "event_create",
+        "event_update",
+        "event_delete",
+        "event_respond",
+      ])
+      for (const tool of calendarWriteTools) expect(tool.annotations.readOnlyHint).toBe(false)
+      const { store } = await setup()
+      const result = await callCalendarTool(
+        store,
+        "event_create",
+        { calendar: "cal-1", ...planning },
+        {
+          accountIds: [1],
+        },
+      )
+      expect(body(result).error).toMatchObject({ code: "configuration_error" })
+    })
+
+    it("an ask level goes ahead for an agent, in the one account that holds the calendar", async () => {
+      const { call, writer, store } = await writable()
+      const made = body(await call("event_create", { calendar: "cal-2", ...planning }))
+      expect(made.accounts).toEqual([2])
+      expect(writer.calls).toEqual([expect.objectContaining({ write: "create", calendar: "cal-2", notify: false })])
+      const calendar = (await store.calendars(2))[0]?.id as number
+      expect((await store.entry(calendar, made.operation_id as string))?.title).toBe("Example planning")
+    })
+
+    it("mailing attendees stays denied for an agent, and the provider is never called", async () => {
+      const { call, writer } = await writable()
+      const result = await call("event_create", {
+        calendar: "cal-1",
+        ...planning,
+        attendees: ["ana@example.com"],
+        notify: true,
+      })
+      expect(result.isError).toBe(true)
+      expect(body(result).error).toMatchObject({ code: "permission_error" })
+      expect(writer.calls).toEqual([])
+    })
   })
 })

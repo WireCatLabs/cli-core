@@ -7,6 +7,40 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Calendar writes (`@wirecat/cli-core/calendar`).** An optional `CalendarWriter` beside `CalendarSource`:
+  `create(calendar, draft, { id, notify })`, `update(calendar, externalId, patch, { scope, etag, notify })`,
+  `remove(calendar, externalId, { scope, etag, notify })` and `respond(calendar, externalId, response, { etag,
+  notify })`, in neutral words (`EventDraft`, `EventPatch`, `WriteScope` `this | series`, `EventResponse`). The id of a
+  create is chosen before the call and journaled as its `sendId`, so a retry after `outcome_unknown` with the same id
+  finds the event instead of making a second one. Every change sends the stored `etag`; an adapter turns a mismatch
+  into `calendarConflict()` (`validation_error`, reason `event.conflict`: sync and try again), never an overwrite. What
+  a write returns is saved at once; a deletion cancels the entry as a sync would. Repeating events are not created
+  here, and "this and following" is not offered.
+- **`events create | update | delete | respond`** in `addCalendarCommands`, only when the CLI passes
+  `writes: CalendarWrites` (the writer, `app`, the profile's `GuardSettings`, and `extraKeys(write)` for keys the
+  CLI adds, such as gcal's `api.calendar.events.insert`). Each goes through `guardFor` and the send journal as a
+  messenger's writes do (WC-PERM-13, WC-PERM-17), and `--dry-run` previews it. Built-in levels
+  (`CALENDAR_WRITE_DEFAULTS`, WC-PERM-6/7): `events.create`, `events.update`, `events.respond` and `events.delete`
+  `ask`; `events.delete.series` `deny`; `events.notify` `deny`. Times are `--start-time`/`--end-time`, an all-day
+  event `--start-date`/`--end-date` (the last day). `--notify` or `--no-notify` is required when the event has
+  attendees other than the owner (reason `event.notify-required`), and `--notify` must pass `events.notify`.
+  `CALENDAR_WRITE_KEYS` lists the keys that are not command paths, for `commandPermissions({ extra })`.
+  `addCalendarCommands` now honours a global `--dry-run` in any host program, as cli-core's other shared commands do.
+- **`calendarWriteTools`** (`event_create`, `event_update`, `event_delete`, `event_respond`) for `callCalendarTool`
+  with `writes: (accountId) => CalendarWrites`. Over MCP `ask` goes ahead (WC-MCP-7); `deny`, `readonly`,
+  `events.notify` and the extra keys still refuse; `notify` is `true` or `false`. A write acts in the account named, or the only one that holds the
+  calendar or event; two make it ask for `account_id`.
+- **Contract kit:** `fakeCalendarWriter` and `calendarWriterContract` (a stale etag is a conflict for update, remove
+  and respond; a create retried with its id finds the event; `notify` reaches the provider as given; with
+  `events.notify` at its default a create that would mail attendees never reaches the provider).
+
+### Changed — may break callers
+
+- **`EventStore` has `entry(calendarId, externalId)`, and `StoredEntry` has `etag`.** A store of its own must add
+  both; the column already exists, so there is no migration.
+
 ## 0.457.0 — 27.10.2026
 
 ### Fixed

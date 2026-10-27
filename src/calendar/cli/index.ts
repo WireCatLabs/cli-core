@@ -2,7 +2,9 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
-import { type Command, InvalidArgumentError } from "commander"
+import { Argument, type Command, InvalidArgumentError } from "commander"
+import { honoursDryRun } from "../../cli/dry-run-guard.js"
+import { terminalAsker } from "../../cli/messenger/ask.js"
 import type { EventStore } from "../../meetings/index.js"
 import { searchEvents } from "../../services/events-search.js"
 import { linkPeople } from "../../services/people.js"
@@ -23,6 +25,17 @@ import {
 } from "../reads.js"
 import type { CalendarExpander, CalendarSource } from "../source.js"
 import { syncCalendars } from "../sync.js"
+import type { EventResponse } from "../writer.js"
+import {
+  type CalendarWrites,
+  createEvent,
+  deleteEvent,
+  EVENT_RESPONSES,
+  type EventFields,
+  respondToEvent,
+  updateEvent,
+  type WriteContext,
+} from "../writes.js"
 
 export interface CalendarCommandDeps {
   store: EventStore
@@ -42,11 +55,14 @@ export interface CalendarCommandDeps {
   now?: () => number
   /** The zone `today`, `week` and a bare date are read in; the computer's when absent. */
   timezone?: string
+  /** The provider's writer and the profile's guard: `events create|update|delete|respond` exist only with it. */
+  writes?: CalendarWrites
 }
 
 const LOCAL_READ: Effects = { remote: "none", local: "read" }
 const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 const FETCH: Effects = { remote: "read", local: "write" }
+const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 const GROUP: Effects = { remote: "none", local: "none" }
 /** How many pieces one `sync --embed` embeds, as drive's. */
 const EMBED_MAX = 600
@@ -219,6 +235,8 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       },
     )
 
+  if (deps.writes) addEventWrites(events, deps.writes, { deps, now, zone, output, print, example })
+
   const people = annotate(program.command("people").description("the people in the account's events"), {
     effects: GROUP,
   })
@@ -291,4 +309,122 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   })
 }
 
-export const addCalendarCommands = sharedCommand(addCalendarCommandsDefinition)
+interface WriteHelpers {
+  deps: CalendarCommandDeps
+  now: () => number
+  zone: () => string
+  output: (command: Command) => Command
+  print: (value: unknown, command: Command) => void
+  example: (command: Command, ...lines: string[]) => Command
+}
+
+const collect = (value: string, previous: string[] = []) => [...previous, value]
+
+const addEventWrites = (
+  events: Command,
+  writes: CalendarWrites,
+  { deps, now, zone, output, print, example }: WriteHelpers,
+) => {
+  const context = (command: Command): WriteContext => ({
+    store: deps.store,
+    accountId: deps.accountId,
+    writes,
+    ask: terminalAsker(command),
+    now: now(),
+    zone: zone(),
+    names: { notify: "--notify or --no-notify", id: "--id", calendar: "--calendar", series: "--series" },
+  })
+  // Left out on purpose: with other attendees the owner must choose, so neither switch is the default.
+  const notify = (command: Command) =>
+    command
+      .option("--notify", "the provider mails the other attendees; needs events.notify allowed")
+      .option("--no-notify", "the provider mails nobody; one of the two is required when there are other attendees")
+  const fields = (command: Command, replacing: boolean) =>
+    command
+      .option("--title <title>", "the event's title")
+      .option("--start-time <time>", "when it starts: a time in your zone, or one with its own")
+      .option("--end-time <time>", "when it ends")
+      .option("--start-date <date>", "the first day of an all-day event, YYYY-MM-DD")
+      .option("--end-date <date>", "the last day of an all-day event")
+      .option("--location <text>", "where; empty clears it")
+      .option("--description <text>", "the details; empty clears it")
+      .option("--attendee <email>", `an attendee; repeat for each${replacing ? ", replacing the list" : ""}`, collect)
+  type FieldOptions = Omit<EventFields, "attendees"> & { attendee?: string[] }
+  const fieldsOf = ({ attendee, ...given }: FieldOptions): EventFields => ({
+    ...Object.fromEntries(Object.entries(given).filter(([, value]) => value !== undefined)),
+    ...(attendee === undefined ? {} : { attendees: attendee }),
+  })
+  type Choices = { calendar?: string; series?: boolean; notify?: boolean }
+  const choicesOf = ({ calendar, series, notify }: Choices) => ({
+    ...(calendar === undefined ? {} : { calendar }),
+    ...(series ? { series: true } : {}),
+    ...(notify === undefined ? {} : { notify }),
+  })
+  const write = (name: string) => annotate(events.command(name), { effects: REMOTE_WRITE, offline: false })
+  const target = (command: Command) =>
+    command
+      .argument("<event>", "the event's id, or event:<id>")
+      .option("--calendar <id>", "the calendar, when the event is on more than one of the account's")
+
+  output(
+    example(
+      notify(
+        fields(write("create"), false)
+          .description("add an event to a calendar; one that repeats is made in the calendar itself")
+          .argument("<calendar>", "the calendar's id, or the provider's id"),
+      ).option("--id <id>", "the id a create that ended in outcome_unknown named: a retry finds that event"),
+      "events create 3 --title 'Example planning' --start-time 2026-11-02T10:00 --end-time 2026-11-02T11:00",
+      "events create 3 --title 'Example review' --start-date 2026-11-03 --end-date 2026-11-03 " +
+        "--attendee ana@example.com --no-notify",
+    ),
+  ).action(async (calendar: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
+    const { notify: choice, id, ...rest } = opts
+    print(
+      await createEvent(context(command), calendar, fieldsOf(rest), {
+        ...(choice === undefined ? {} : { notify: choice }),
+        ...(id === undefined ? {} : { id }),
+      }),
+      command,
+    )
+  })
+  output(
+    example(
+      notify(
+        target(fields(write("update"), true))
+          .description("change an event; with --series every occurrence of the repeating event")
+          .option("--series", "change the whole repeating event, not only this occurrence"),
+      ),
+      "events update event:42 --start-time 2026-11-02T14:00 --end-time 2026-11-02T15:00 --notify",
+    ),
+  ).action(async (reference: string, opts: FieldOptions & Choices, command: Command) => {
+    const { calendar: _calendar, series: _series, notify: _notify, ...rest } = opts
+    print(await updateEvent(context(command), reference, fieldsOf(rest), choicesOf(opts)), command)
+  })
+  output(
+    example(
+      notify(
+        target(write("delete"))
+          .description("delete an event; a whole repeating event needs events.delete.series allowed first")
+          .option("--series", "delete the whole repeating event, not only this occurrence"),
+      ),
+      "events delete event:42 --no-notify",
+    ),
+  ).action(async (reference: string, opts: Choices, command: Command) => {
+    print(await deleteEvent(context(command), reference, choicesOf(opts)), command)
+  })
+  output(
+    example(
+      notify(
+        target(write("respond"))
+          .description("answer an invitation; the organiser is told only with --notify")
+          .addArgument(new Argument("<response>", "the answer").choices(EVENT_RESPONSES)),
+      ),
+      "events respond event:42 accepted --notify",
+    ),
+  ).action(async (reference: string, response: EventResponse, opts: Choices, command: Command) => {
+    print(await respondToEvent(context(command), reference, response, choicesOf(opts)), command)
+  })
+}
+
+// honoursDryRun: a host program other than `run` would otherwise let a write through under --dry-run.
+export const addCalendarCommands = honoursDryRun(sharedCommand(addCalendarCommandsDefinition))

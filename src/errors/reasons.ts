@@ -62,6 +62,8 @@ const OTHERS: Entry[] = [
   validation("spreadsheet.unreadable", "the workbook could not be read"),
   ["state.invalid", "configuration_error", "the saved sync state is unreadable or invalid; it is kept, not reset"],
   ["sync.partial", "provider_error", "some calendars did not sync; the next sync retries them"],
+  validation("event.conflict", "the event changed at the provider since the last sync; sync and try again"),
+  validation("event.notify-required", "the event has other attendees; say whether to notify them"),
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [

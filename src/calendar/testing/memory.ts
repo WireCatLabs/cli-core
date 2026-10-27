@@ -262,6 +262,7 @@ export const memoryEventStore = (): EventStore => {
       joinKey: joinUrl ? (joinKeyOf(joinUrl) ?? "") : null,
       url: input.url ?? null,
       externalUpdatedAt: input.externalUpdatedAt ?? null,
+      etag: input.etag ?? null,
       seenAt: now,
       deletedAt: null,
       updatedAt: now,
@@ -421,6 +422,10 @@ export const memoryEventStore = (): EventStore => {
       for (const eventId of new Set(marked.map(({ eventId }) => eventId)))
         if (eventId !== null) refreshEvent(eventId, now)
       return marked.length
+    },
+    async entry(calendarId, externalId) {
+      const found = entries.find((one) => one.calendarId === calendarId && one.externalId === externalId)
+      return found ? stored(found) : null
     },
     async cursor(calendarId) {
       return cursors.get(calendarId) ?? null

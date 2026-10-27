@@ -1,10 +1,13 @@
 import { describe, it } from "vitest"
+import type { EntryInput } from "../../meetings/index.js"
 import {
   CALENDAR_TRAIT_COMBINATIONS,
   calendarSourceContract,
   calendarSyncContract,
+  calendarWriterContract,
   eventStoreContract,
   fakeCalendarSource,
+  fakeCalendarWriter,
   memoryEventStore,
 } from "./index.js"
 
@@ -80,4 +83,41 @@ describe("fake calendar source", () => {
       }
     }))
       it(`${c.name} ${JSON.stringify(traits)}`, c.run)
+})
+
+describe("fake calendar writer", () => {
+  for (const c of calendarWriterContract(() => {
+    const writer = fakeCalendarWriter()
+    const calendar = {
+      id: 1,
+      accountId: 1,
+      externalId: "primary",
+      title: "Example work",
+      timezone: "UTC",
+      accessRole: "owner" as const,
+      primary: true,
+      synced: true,
+      seenAt: null,
+      deletedAt: null,
+    }
+    const [existing] = writer.put("primary", {
+      externalId: "e1",
+      kind: "single",
+      status: "confirmed",
+      title: "Example review",
+      startsAt: NOW + HOUR,
+      endsAt: NOW + 2 * HOUR,
+      participants: [{ email: "owner@example.com", self: true }],
+    })
+    return {
+      writer,
+      calendar,
+      existing: existing as EntryInput,
+      changeBehind: () => writer.changeBehind("primary", "e1"),
+      loseNextAnswer: () => writer.loseNextAnswer(),
+      notified: () => writer.calls.map(({ notify }) => notify),
+      at: NOW + 24 * HOUR,
+    }
+  }))
+    it(c.name, c.run)
 })

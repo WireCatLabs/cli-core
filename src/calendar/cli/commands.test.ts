@@ -13,7 +13,7 @@ import { runsCommand } from "../../cli/runs/command.js"
 import { answered } from "../../mcp/tool.js"
 import type { EntryInput } from "../../meetings/index.js"
 import { type MessageStore, openStore } from "../../store/store.js"
-import { fakeCalendarSource } from "../testing/index.js"
+import { fakeCalendarSource, fakeCalendarWriter } from "../testing/index.js"
 import { addCalendarCommands, type CalendarCommandDeps } from "./index.js"
 
 const HOUR = 3_600_000
@@ -302,14 +302,21 @@ describe("calendar commands", () => {
     }
   })
 
-  // The vocabulary has no calendars, people, unsync, review or resolve yet, and these lists take words, not a query.
+  // The vocabulary has no calendars, people, unsync, review or resolve yet, nor the event flags (--calendar,
+  // --series, --attendee, --location, --end-time, --id), and these lists take words, not a query.
   it("pass the command lint every CLI runs on its tree, apart from the vocabulary it lacks", async () => {
     const app = { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" }
     const definition = {
       app,
       commands: () => {
         const root = new Command("gcal")
-        addCalendarCommands(root, { store: {} as never, accountId: 1, account, write: () => undefined })
+        addCalendarCommands(root, {
+          store: {} as never,
+          accountId: 1,
+          account,
+          write: () => undefined,
+          writes: { writer: fakeCalendarWriter(), app, settings: () => ({}) as never },
+        })
         return [commandsCommand(app), runsCommand(app), ...root.commands]
       },
     }
@@ -321,6 +328,6 @@ describe("calendar commands", () => {
     const rules = new Set(
       [...`${lint.stdout}${lint.stderr}`.matchAll(/^(?:high|medium|low)\s+(\S+)/gmu)].map(([, rule]) => rule),
     )
-    expect([...rules].sort()).toEqual(["list-without-query", "unknown-resource", "unknown-verb"])
+    expect([...rules].sort()).toEqual(["list-without-query", "option-role", "unknown-resource", "unknown-verb"])
   })
 })
