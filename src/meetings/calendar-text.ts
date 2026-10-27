@@ -55,7 +55,6 @@ export const ENTRY_METADATA_KEYS = [
   "hangoutLink",
   "locked",
   "privateCopy",
-  "recurring_event_id",
 ] as const
 
 export const entryMetadata = (metadata: Record<string, unknown> | null | undefined): Record<string, unknown> => {

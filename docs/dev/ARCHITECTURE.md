@@ -443,9 +443,12 @@ such an account as it does a folder (`DOCUMENT_ACCOUNT_PROVIDERS`, `src/domain/p
 
 **Calendar entries on the events hub — not built yet.** `calendars` and `calendar_entries` are a calendar's source
 records; `events` (`schema.ts:1087`) and `event_series` stay the entities that `meetings` already points at. An
-entry matches by its Google id, then by series slot, then by `ical_uid` across calendars, then by Zoom's join key
+entry matches by its provider id, then by series slot, then by `ical_uid` across calendars, then by Zoom's join key
 with an overlapping time. Attendees are `calendar_entry_participants`; changed fields go to
-`calendar_entry_revisions`; a past occurrence deleted in Google keeps its event with `source_deleted_at`.
+`calendar_entry_revisions`; a past occurrence deleted at the provider keeps its event with `source_deleted_at`. Calendar words (`event_type`,
+`own_response`, a participant's `response`, `access_role`) are stored in one neutral spelling, RFC 5545 where it has
+one (`EntryEventType`, `ParticipantResponse`, `CalendarAccessRole` in `src/meetings/event-store.ts`); each adapter
+translates its provider's words.
 
 **Contacts.** A contact is an `identities` row (`schema.ts:134`): one person as one source knows them, linked to a
 `persons` row through `identity_links`, every change logged in `identity_link_events` (`schema.ts:152-191`).

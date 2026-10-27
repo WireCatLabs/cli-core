@@ -61,6 +61,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261025072644_version-33-calendars-triggers", version: 33, minCompatible: 32 },
   { name: "20261025182500_version-34-vector-index", version: 34, minCompatible: 34 },
   { name: "20261025182501_version-34-vector-index-triggers", version: 34, minCompatible: 34 },
+  { name: "20261027102259_version-35-calendar-neutral", version: 35, minCompatible: 34 },
+  { name: "20261027102302_version-35-calendar-neutral-data", version: 35, minCompatible: 34 },
 ]
 
 export const generatedMigrations = (

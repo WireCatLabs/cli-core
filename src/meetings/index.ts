@@ -26,18 +26,23 @@ export type {
 export { type MeetingCueIdentity, meetingCueFingerprint } from "./cue-fingerprint.js"
 export { EVENT_QUERY } from "./event-query.js"
 export type {
+  CalendarAccessRole,
   CalendarInput,
   EntryAttachment,
   EntryAttachmentInput,
+  EntryEventType,
   EntryInput,
   EntryKind,
   EntryParticipantInput,
   EntryRevision,
   EntryStatus,
+  EntryTransparency,
+  EntryVisibility,
   EventDetails,
   EventFilter,
   EventStore,
   LinkReview,
+  ParticipantResponse,
   ReviewDecision,
   StoredCalendar,
   StoredEntry,

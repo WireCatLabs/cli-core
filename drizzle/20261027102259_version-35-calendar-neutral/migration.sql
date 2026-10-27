@@ -1,0 +1,2 @@
+ALTER TABLE `calendar_entries` ADD `series_external_id` text;--> statement-breakpoint
+CREATE INDEX `calendar_entries_by_calendar_id_series_external_id` ON `calendar_entries` (`calendar_id`,`series_external_id`) WHERE series_external_id IS NOT NULL;

@@ -7,6 +7,36 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A calendar store for any provider.** `EventStore.removeEntries(calendarId, externalIds, now)` cancels entries a
+  provider names only by id (CalDAV, Outlook) under the same history rules as a cancelled entry: a past event stays,
+  a future one cancels, a series cancels its occurrences. `EventStore.cursor(calendarId)` and
+  `setCursor(calendarId, value, now)` keep where a calendar's sync stopped, in `sync_cursors` under
+  `calendar:<id>`; `null` forgets it. `ical_uid` is defined as the RFC 5545 UID of the series, and an all-day slot's
+  `originalStartsAt` as midnight UTC of its date.
+- **An occurrence names its series in a column (store version 35).** `calendar_entries.series_external_id` holds an
+  occurrence's series id, so an occurrence stored before its series still finds it; `StoredEntry.seriesExternalId`
+  answers it. The migration fills it from `metadata.recurring_event_id`, which the store no longer writes and
+  `ENTRY_METADATA_KEYS` no longer keeps, and rewrites calendar words already stored in Google's spelling into the
+  neutral one (`outOfOffice` → `out-of-office`, `focusTime` → `focus`, `workingLocation` → `working-location`,
+  `fromGmail` → `from-mail`, `needsAction` → `needs-action`, `freeBusyReader` → `free-busy`). Builds that speak
+  version 34 still open the store.
+
+### Changed — may break callers
+
+- **Calendar words are neutral, RFC 5545 where it has a word, lower case with hyphens.** `eventType` takes
+  `default`, `out-of-office`, `focus`, `working-location`, `birthday`, `from-mail`; `ownResponse` and a participant's
+  `response` take `needs-action`, `accepted`, `tentative`, `declined`, `delegated`; `accessRole` takes `owner`,
+  `writer`, `reader`, `free-busy`; `transparency` and `visibility` keep their words, now typed. The new types
+  `EntryEventType`, `ParticipantResponse`, `CalendarAccessRole`, `EntryTransparency` and `EntryVisibility` say so,
+  and an adapter translates its provider's words (Google's `outOfOffice`, `needsAction`, `freeBusyReader` …).
+  `UNSEARCHED_EVENT_TYPES` holds the neutral words.
+- **`CalendarInput.syncByDefault` is required** and decides whether a calendar seen for the first time syncs. The
+  store no longer reads Google's `owner` role for it; an adapter sets it (Google: the owner owns the calendar).
+- **`EventStore` gains `removeEntries`, `cursor` and `setCursor`, and `StoredEntry` gains `seriesExternalId`.** A
+  fake event store adds them.
+
 ## 0.455.0 — 27.10.2026
 
 ### Added
