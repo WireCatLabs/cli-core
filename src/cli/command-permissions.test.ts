@@ -6,6 +6,7 @@ import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { runCommandForAgent, toolsFromCommands } from "../mcp/agent.js"
+import { commandsCommand } from "./commands-command.js"
 import { configCommand } from "./config-command.js"
 import { LOCAL_READ, REMOTE_READ, REMOTE_WRITE } from "./effects.js"
 import { commandPathKey, commandPermissions, knownPermissionKeys } from "./permission-keys.js"
@@ -91,6 +92,25 @@ describe("a CLI that declares its own permission keys", () => {
     })
     expect((await cal("work", "events", "list")).code).toBe(0)
     expect(called).toHaveBeenCalledTimes(1)
+  })
+
+  it("**a preview and discovery judge the command by its own key**", async () => {
+    const { cal, called } = fixture({ "api.call": "readonly", "api.list": "deny" })
+    const previewed = await cal("work", "api", "call", "x", "--dry-run", "--json")
+    expect(previewed.error).toMatchObject({ code: "permission_error", details: { permission: "api.call" } })
+    const streams = captureStreams()
+    const { definition, env } = fixture({ "api.list": "deny" })
+    await run(["work", "api", "call", "x", "--dry-run", "--json"], definition, { streams, env, tty: false })
+    expect(JSON.parse(streams.stdout.join("")).item.permission).toEqual({ key: "api.call", level: "allow" })
+    const listed = captureStreams()
+    await run(
+      ["work", "commands", "api", "--json"],
+      { ...definition, commands: () => [...definition.commands(), commandsCommand(app)] },
+      { streams: listed, env, tty: false },
+    )
+    const [list] = JSON.parse(listed.stdout.join("")).commands[0].commands
+    expect(list.availability).toMatchObject({ available: false, permission: "api.list" })
+    expect(called).not.toHaveBeenCalled()
   })
 
   it("**refuses a write to the service under readonly**", async () => {

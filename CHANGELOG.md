@@ -23,7 +23,9 @@ shape of this file.
   only a messenger's resources. Each command is refused before it runs when its key is `deny`, when it writes under
   `readonly`, and when it writes to the service under the read-only lock. `ask` stays with the write guard
   (`permissionDefaults`: `configuration.permissions.defaults`). MCP finds and refuses the command by the same key
-  when the server passes `keyOf: configuration.permissions.keyOf`. Messenger CLIs are unchanged.
+  when the server passes `keyOf: configuration.permissions.keyOf`. Messenger CLIs are unchanged. A CLI with a program
+  of its own, such as drive, uses the parts: `permissionOverrides(entries, COMMAND_PATH_KEY)`,
+  `assertOverridesTighten(overrides, saved, defaults)` from `./sends` and `knownPermissionKeys(program, permissions)`.
 
 ## 0.449.0 — 26.10.2026
 
