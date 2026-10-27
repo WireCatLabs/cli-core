@@ -44,13 +44,13 @@ const profile = (permissions: Record<string, string> = {}) => ({ profiles: { [AU
  * Each names a configured profile, since a server started without one stops.
  */
 export const captureModes = (resources: readonly string[]): CaptureMode[] => [
-  { mode: "default", argv: [AUDIT_PROFILE, "mcp"], config: profile() },
+  { mode: "default", argv: [AUDIT_PROFILE, "mcp", "serve"], config: profile() },
   {
     mode: "read-only",
-    argv: [AUDIT_PROFILE, "mcp"],
+    argv: [AUDIT_PROFILE, "mcp", "serve"],
     config: profile(Object.fromEntries(resources.filter((one) => one !== "bot").map((one) => [one, "readonly"]))),
   },
-  { mode: "deny-send", argv: [AUDIT_PROFILE, "mcp"], config: profile({ "messages.send": "deny" }) },
+  { mode: "deny-send", argv: [AUDIT_PROFILE, "mcp", "serve"], config: profile({ "messages.send": "deny" }) },
 ]
 
 export const CAPTURE_MODES = captureModes([]).map(({ mode }) => mode)

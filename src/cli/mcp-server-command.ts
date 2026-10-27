@@ -27,7 +27,7 @@ export interface McpServerTarget {
   envPrefix: string
   env: NodeJS.ProcessEnv
   tokenFile: string
-  /** The words after the CLI's own entry that run `mcp --http` in the foreground, before `--port`. */
+  /** The words after the CLI's own entry that run `mcp serve --http` in the foreground, before `--port`. */
   argv: string[]
   /** Added to the server's environment: the profile, for a CLI that reads it from there. */
   childEnv?: Record<string, string>
@@ -37,8 +37,13 @@ export interface McpServerTarget {
 export interface McpServerOptions {
   /** How help shows the CLI before `mcp`: `tg personal`. */
   example: string
-  /** The CLI's own `mcp --http` default, when it is not 8765. */
+  /** The CLI's own `mcp serve --http` default, when it is not 8765. */
   defaultPort?: number
+  /**
+   * `start` takes `--permission` and hands it to the server: only for a CLI whose `mcp serve` takes it too,
+   * since a server that refuses the option dies before it listens.
+   */
+  permission?: boolean
   target: (self: Command) => McpServerTarget
   /** The CLI's own answer: the item in `--json`, else the lines. */
   answer: (self: Command, item: object, lines: string[]) => void
@@ -88,7 +93,7 @@ const clientLines = (clients: ReturnType<typeof signedInClients>) =>
       ]
 
 /**
- * `mcp --http` in the background: `start`, `stop`, `status`, as `server` does for `serve`. The server
+ * `mcp serve --http` in the background: `start`, `stop`, `status`, as `server` does for `serve`. The server
  * keeps a lock beside its token file (`state.ts`) with its port, address and login code, so status
  * survives the shell that started it, and `stop` ends only a process that carries this CLI's marker.
  * None of it is offered over MCP: status holds a live login code.
@@ -96,16 +101,19 @@ const clientLines = (clients: ReturnType<typeof signedInClients>) =>
 export const mcpServerCommand = ({
   example,
   defaultPort = MCP_HTTP_DEFAULT_PORT,
+  permission = false,
   target,
   answer,
   system,
 }: McpServerOptions): Command => {
   const command = annotate(new Command("server"), { effects: LOCAL_READ, mcp: false })
     .summary("run the HTTP MCP server in the background")
-    .description("start, stop and check `mcp --http` in the background; status shows the login code for a browser app")
+    .description(
+      "start, stop and check `mcp serve --http` in the background; status shows the login code for a browser app",
+    )
   const machine = (self: Command) => system?.(self) ?? thisMachine()
 
-  destroysNothing(
+  const start = destroysNothing(
     annotate(command.command("start"), {
       effects: LOCAL_WRITE,
       mcp: false,
@@ -113,86 +121,91 @@ export const mcpServerCommand = ({
     }),
   )
     .summary("start the HTTP MCP server in the background")
-    .description("start `mcp --http` apart from this shell and answer once it listens, with its login code")
+    .description("start `mcp serve --http` apart from this shell and answer once it listens, with its login code")
     .option("--port <port>", `the local port (default ${defaultPort})`)
     .option(
       "--public-url <url>",
       "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net or https://<name>.ts.net/tg",
     )
-    .option(
+  if (permission)
+    start.option(
       "--permission <key=level>",
       "make a permission stricter for this server only; repeat for more keys",
       (value: string, previous: string[] = []) => [...previous, value],
     )
-    .action(async function (this: Command) {
-      // A CLI whose `mcp` takes the same flags reads them first, so they are looked up on both.
-      const flags = this.optsWithGlobals<{ port?: string; publicUrl?: string; permission?: string[] }>()
-      const one = target(this)
-      const url = publicUrlOf(flags.publicUrl, {
-        missing: "mcp server start",
-        reaches: "the browser apps reach it",
-        path: true,
-      })
-      const port = portOf(flags.port, defaultPort)
-      const lockFile = httpLockFile(one.tokenFile)
-      const before = readHttpLock(lockFile)
-      if (before && alive(before.pid)) {
+  start.action(async function (this: Command) {
+    // A CLI with a root-wide `--permission` hands it over too, so the server is never looser than asked.
+    const flags = this.optsWithGlobals<{ port?: string; publicUrl?: string; permission?: string[] }>()
+    const one = target(this)
+    const url = publicUrlOf(flags.publicUrl, {
+      missing: "mcp server start",
+      reaches: "the browser apps reach it",
+      path: true,
+    })
+    const port = portOf(flags.port, defaultPort)
+    const lockFile = httpLockFile(one.tokenFile)
+    const before = readHttpLock(lockFile)
+    if (before && alive(before.pid)) {
+      answer(
+        this,
+        { profile: one.profile ?? null, started: false, running: true, ...serving(one, before, Date.now()) },
+        [
+          `Already serving ${one.invocation} over HTTP since ${clock(before.startedAt)} (PID ${before.pid}, port ${before.port}).`,
+        ],
+      )
+      return
+    }
+    const sys = machine(this)
+    const log = httpLogFile(one.tokenFile)
+    const { [`${one.envPrefix}_TIMEOUT`]: _timeout, ...inherited } = one.env
+    const pid = sys.spawn(
+      [
+        ...one.argv,
+        "--port",
+        String(port),
+        "--public-url",
+        url.pathname === "/" ? url.origin : url.href,
+        ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
+      ],
+      { ...inherited, ...one.childEnv, [mcpHttpMarker(one.envPrefix)]: one.profile ?? "default" },
+      log,
+    )
+    for (let look = 0; look < LOOKS; look++) {
+      const now = readHttpLock(lockFile)
+      if (now?.pid === pid && now.listeningAt) {
+        const code = liveCode(now, Date.now())
         answer(
           this,
-          { profile: one.profile ?? null, started: false, running: true, ...serving(one, before, Date.now()) },
+          { profile: one.profile ?? null, started: true, running: true, ...serving(one, now, Date.now()), log },
           [
-            `Already serving ${one.invocation} over HTTP since ${clock(before.startedAt)} (PID ${before.pid}, port ${before.port}).`,
+            `Started: serving ${one.invocation} over HTTP (PID ${pid}) on 127.0.0.1:${now.port}.`,
+            `Browser apps connect to ${connectorUrl(now)}`,
+            ...(code ? [`Login code for a new browser app: ${code.code} (until ${clock(code.expires_at)}).`] : []),
           ],
         )
         return
       }
-      const sys = machine(this)
-      const log = httpLogFile(one.tokenFile)
-      const { [`${one.envPrefix}_TIMEOUT`]: _timeout, ...inherited } = one.env
-      const pid = sys.spawn(
-        [
-          ...one.argv,
-          "--port",
-          String(port),
-          "--public-url",
-          url.pathname === "/" ? url.origin : url.href,
-          ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
-        ],
-        { ...inherited, ...one.childEnv, [mcpHttpMarker(one.envPrefix)]: one.profile ?? "default" },
-        log,
-      )
-      for (let look = 0; look < LOOKS; look++) {
-        const now = readHttpLock(lockFile)
-        if (now?.pid === pid && now.listeningAt) {
-          const code = liveCode(now, Date.now())
-          answer(
-            this,
-            { profile: one.profile ?? null, started: true, running: true, ...serving(one, now, Date.now()), log },
-            [
-              `Started: serving ${one.invocation} over HTTP (PID ${pid}) on 127.0.0.1:${now.port}.`,
-              `Browser apps connect to ${connectorUrl(now)}`,
-              ...(code ? [`Login code for a new browser app: ${code.code} (until ${clock(code.expires_at)}).`] : []),
-            ],
-          )
-          return
-        }
-        if (!alive(pid)) {
-          const last = readableLog(tail(log, 5)).trim()
-          throw new CliError("provider_unavailable", `mcp --http stopped before it listened${last ? `:\n${last}` : ""}`)
-        }
-        await sys.pause()
+      if (!alive(pid)) {
+        const last = readableLog(tail(log, 5)).trim()
+        throw new CliError(
+          "provider_unavailable",
+          `mcp serve --http stopped before it listened${last ? `:\n${last}` : ""}`,
+          { retryable: false },
+        )
       }
-      throw new CliError(
-        "timeout",
-        `mcp --http is running but not listening yet — \`${one.invocation} mcp server status\`; its log: ${log}`,
-      )
-    })
+      await sys.pause()
+    }
+    throw new CliError(
+      "timeout",
+      `mcp serve --http is running but not listening yet — \`${one.invocation} mcp server status\`; its log: ${log}`,
+    )
+  })
 
   destroysNothing(
     annotate(command.command("stop"), { effects: LOCAL_WRITE, mcp: false, examples: [`${example} mcp server stop`] }),
   )
     .summary("stop the background HTTP MCP server")
-    .description("stop `mcp --http` — only one that `mcp server start` started")
+    .description("stop `mcp serve --http` — only one that `mcp server start` started")
     .action(async function (this: Command) {
       const one = target(this)
       const lock = readHttpLock(httpLockFile(one.tokenFile))
@@ -205,13 +218,13 @@ export const mcpServerCommand = ({
       if (byOf(one, lock.pid) !== "server") {
         throw new CliError(
           "validation_error",
-          `mcp --http for ${one.invocation} (PID ${lock.pid}) was not started by \`${one.invocation} mcp server start\` — stop it where it runs`,
+          `mcp serve --http for ${one.invocation} (PID ${lock.pid}) was not started by \`${one.invocation} mcp server start\` — stop it where it runs`,
         )
       }
       process.kill(lock.pid, "SIGTERM")
       const sys = machine(this)
       for (let look = 0; look < LOOKS && alive(lock.pid); look++) await sys.pause()
-      if (alive(lock.pid)) throw new CliError("timeout", `mcp --http (PID ${lock.pid}) has not stopped yet`)
+      if (alive(lock.pid)) throw new CliError("timeout", `mcp serve --http (PID ${lock.pid}) has not stopped yet`)
       answer(this, { profile: one.profile ?? null, stopped: true, pid: lock.pid }, [
         `Stopped serving ${one.invocation} over HTTP (PID ${lock.pid}).`,
       ])
@@ -224,7 +237,7 @@ export const mcpServerCommand = ({
   })
     .summary("whether the HTTP MCP server runs, its login code and the apps logged in")
     .description(
-      "whether `mcp --http` runs, on which port and address, the login code for a new browser app, and the apps logged in",
+      "whether `mcp serve --http` runs, on which port and address, the login code for a new browser app, and the apps logged in",
     )
     .action(function (this: Command) {
       const one = target(this)

@@ -87,7 +87,7 @@ accounts, before a release. **A mistake sends a message to a person.**
 
 - **A write is proven on the other side.** A message sent from one account is read back, by id, from
   the other. Pacing matters: a burst of writes gets the account rate-limited.
-- **A command that does not exit is a failure.** Start a long-running one (`watch`, `serve`, `mcp`)
+- **A command that does not exit is a failure.** Start a long-running one (`watch`, `serve`, `mcp serve`)
   in the background, take its PID at start (`$!`), and stop that PID, never by name.
 - **Snapshot before a change, restore the exact value after, and read it back.** Keep the value in a
   shell variable, not a file. What cannot be put back exactly is not run.

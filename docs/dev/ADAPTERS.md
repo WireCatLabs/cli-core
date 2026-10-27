@@ -218,7 +218,7 @@ WhatsApp over Baileys probably works like this; it has not been observed yet. Fo
   commands included: a relayed run gets serve's adapter, and a run for another profile is refused. Never call
   `messenger.connect` from a command.
 - With no live `serve`, the command connects on its own. `serve`, `server`, `bot`, logins, `--offline` and
-  `mcp --http` are not relayed. There is no relay on Windows.
+  `mcp serve --http` are not relayed. There is no relay on Windows.
 
 ## History from the store
 
@@ -406,16 +406,16 @@ personal or default settings, and supplies `--bot` internally. Changing limits r
 `mcp.authority`; the agent still cannot turn that key or `bot.api` on for itself. Commands requiring
 an interactive terminal or an unbounded process keep their transport exclusions.
 
-### Testing `mcp` over stdin and stdout
+### Testing `mcp serve` over stdin and stdout
 
-`mcpOverStdio(start)` drives your CLI's `mcp` the way an agent's client does, through your own
+`mcpOverStdio(start)` drives your CLI's `mcp serve` the way an agent's client does, through your own
 `run()`, with no child process. `start` gets two streams to pass to `run`; the helper answers
 `initialize` first, and `close()` ends stdin and resolves with the exit code:
 
 ```ts
 import { mcpOverStdio } from "@wirecat/cli-core/testing"
 
-const mcp = await mcpOverStdio((streams) => run(["agent", "mcp"], { streams: captureStreams(), tty: false, ...streams }))
+const mcp = await mcpOverStdio((streams) => run(["agent", "mcp", "serve"], { streams: captureStreams(), tty: false, ...streams }))
 const { isError, body } = await mcp.call("wa_write", { command: "messages delete", arguments: { chat, messages } })
 expect(await mcp.close()).toBe(0)
 ```

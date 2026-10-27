@@ -165,6 +165,7 @@ describe("command effects", () => {
         "conversations consents remove",
         "conversations links add",
         "conversations links clear",
+        "mcp revoke",
         "mentions confirm",
         "mentions reject",
         "searches clear",
