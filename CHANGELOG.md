@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **Meaning search over documents and notes uses the vector index**, as message search already did: it scanned every
+  chunk of the store in pages (on one archive 600,000 chunks, mostly mail, for 23,000 document chunks), 7–18 s a
+  query; now about 0.05 s, with the same results, ties included. It still scans when the index is not ready or cannot
+  give an exact answer. `memo search all` gets most of the gain.
+
 ## 0.450.0 — 27.10.2026
 
 ### Added

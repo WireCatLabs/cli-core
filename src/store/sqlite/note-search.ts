@@ -22,6 +22,7 @@ import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
 import { canonicalTagNamed } from "./tags.js"
 import { read } from "./transaction.js"
+import { searchIndex } from "./vector-index.js"
 import { dot } from "./vectors.js"
 
 export interface NoteQuery {
@@ -449,6 +450,15 @@ export interface NoteSearch extends DocumentPictureStore {
 
 const SCAN_PAGE = 5_000
 
+/** A note's best chunk so far, and its lowest chunk, by which the scan breaks ties. */
+interface Best {
+  score: number
+  first: number
+  chunk: number
+  start: number
+  end: number
+}
+
 /** The live documents and notes of a chunk scan, narrowed by folder and source. */
 const LIVE =
   "((k.chunkable_type = 'document' AND EXISTS (SELECT 1 FROM documents d WHERE d.id = k.chunkable_id AND d.deleted_at IS NULL AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
@@ -522,34 +532,87 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
     nearest: async (model, query, { limit, folderIds, withInternal, source }) => {
       drain()
       const scope = live(folderIds, source, withInternal)
-      const page = database.prepare(
-        `SELECT k.id, k.chunkable_type AS type, k.chunkable_id AS owner, k.start_offset AS start, k.end_offset AS end, v.vector
-           FROM chunks k JOIN embeddings v ON v.model = ? AND v.content_hash = k.content_hash
-          WHERE k.id > ?${scope.sql}
-          ORDER BY k.id LIMIT ?`,
-      )
-      const best = new Map<string, { score: number; start: number; end: number }>()
-      let after = 0
-      for (;;) {
-        const rows = page.all(model, after, ...scope.params, SCAN_PAGE)
-        for (const row of rows) {
-          const score = dot(query, row.vector as Uint8Array)
-          const key = `${row.type}:${row.owner}`
-          if (score > (best.get(key)?.score ?? Number.NEGATIVE_INFINITY))
-            best.set(key, { score, start: Number(row.start), end: Number(row.end) })
-        }
-        const last = rows.at(-1)
-        if (!last || rows.length < SCAN_PAGE) break
-        after = Number(last.id)
+      const columns = `k.id, k.chunkable_type AS type, k.chunkable_id AS owner, k.start_offset AS start,
+        k.end_offset AS end, k.content_hash AS hash, v.vector
+           FROM chunks k JOIN embeddings v ON v.model = ? AND v.content_hash = k.content_hash`
+      const keep = (best: Map<string, Best>, row: Record<string, unknown>) => {
+        const score = dot(query, row.vector as Uint8Array)
+        const key = `${row.type}:${row.owner}`
+        const held = best.get(key)
+        if (!held || score > held.score)
+          best.set(key, {
+            score,
+            first: held?.first ?? Number(row.id),
+            chunk: Number(row.id),
+            start: Number(row.start),
+            end: Number(row.end),
+          })
       }
-      return [...best.entries()]
-        .sort(([, a], [, b]) => b.score - a.score)
-        .slice(0, limit)
-        .flatMap(([key, { score, start, end }]) => {
-          const [type, id] = key.split(":")
-          const note = read(String(type), Number(id))
-          return note ? [{ ref: note.ref, note, score, range: { start, end } }] : []
-        })
+      // The scan meets each note first at its lowest chunk, and keeps that order among equal scores.
+      const ranked = (best: Map<string, Best>) =>
+        [...best.entries()].sort(([, a], [, b]) => b.score - a.score || a.first - b.first).slice(0, limit)
+
+      const indexed = (): [string, Best][] | undefined => {
+        const types = source === undefined ? ["document", "note"] : source === "file" ? ["document"] : ["note"]
+        const accounts = database.prepare(
+          "SELECT DISTINCT coalesce(account_id, 0) AS account FROM chunks WHERE chunkable_type = ?",
+        )
+        const wanted = folderIds?.length ? new Set(folderIds.map(Number)) : undefined
+        const candidates = database.prepare(
+          `SELECT ${columns} WHERE k.id IN (SELECT value FROM json_each(?))${scope.sql} ORDER BY k.id`,
+        )
+        const first = database.prepare(
+          `SELECT min(k.id) AS first FROM chunks k JOIN embeddings v ON v.model = ? AND v.content_hash = k.content_hash
+            WHERE k.chunkable_type = ? AND k.chunkable_id = ?${scope.sql}`,
+        )
+        const merged = new Map<string, Best>()
+        for (const type of types)
+          for (const { account } of accounts.all(type)) {
+            if (type === "document" && wanted && !wanted.has(Number(account))) continue
+            const found = searchIndex(
+              database,
+              model,
+              { kind: type, account: Number(account) },
+              query,
+              limit,
+              (near) => {
+                const hashes = new Map(near.map(({ id, hash }) => [id, hash]))
+                const best = new Map<string, Best>()
+                for (const row of candidates.all(model, JSON.stringify([...hashes.keys()]), ...scope.params))
+                  if (hashes.get(Number(row.id)) === row.hash) keep(best, row)
+                for (const [key, held] of best) {
+                  const [kind, owner] = key.split(":")
+                  held.first = Number(first.get(model, String(kind), Number(owner), ...scope.params)?.first)
+                }
+                const results = ranked(best)
+                return { results, best: results.map(([, { chunk }]) => chunk) }
+              },
+            )
+            if (!found) return undefined
+            for (const [key, held] of found) merged.set(key, held)
+          }
+        return ranked(merged)
+      }
+
+      const scanned = (): [string, Best][] => {
+        const page = database.prepare(`SELECT ${columns} WHERE k.id > ?${scope.sql} ORDER BY k.id LIMIT ?`)
+        const best = new Map<string, Best>()
+        let after = 0
+        for (;;) {
+          const rows = page.all(model, after, ...scope.params, SCAN_PAGE)
+          for (const row of rows) keep(best, row)
+          const last = rows.at(-1)
+          if (!last || rows.length < SCAN_PAGE) break
+          after = Number(last.id)
+        }
+        return ranked(best)
+      }
+
+      return (indexed() ?? scanned()).flatMap(([key, { score, start, end }]) => {
+        const [type, id] = key.split(":")
+        const note = read(String(type), Number(id))
+        return note ? [{ ref: note.ref, note, score, range: { start, end } }] : []
+      })
     },
   }
 }
