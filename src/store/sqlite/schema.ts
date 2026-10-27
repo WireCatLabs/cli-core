@@ -1181,6 +1181,7 @@ export const calendarEntries = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    seriesExternalId: text("series_external_id"),
   },
   (table) => [
     unique().on(table.calendarId, table.externalId),
@@ -1188,6 +1189,9 @@ export const calendarEntries = sqliteTable(
     index("calendar_entries_by_calendar_id_starts_at").on(table.calendarId, table.startsAt),
     index("calendar_entries_by_ical_uid").on(table.icalUid).where(sql`ical_uid IS NOT NULL`),
     index("calendar_entries_by_join_key").on(table.joinKey).where(sql`join_key IS NOT NULL`),
+    index("calendar_entries_by_calendar_id_series_external_id")
+      .on(table.calendarId, table.seriesExternalId)
+      .where(sql`series_external_id IS NOT NULL`),
     index("calendar_entries_by_event_id").on(table.eventId),
     index("calendar_entries_by_event_series_id").on(table.eventSeriesId),
     index("calendar_entries_by_event_type_event_id").on(table.eventType, table.eventId),

@@ -124,6 +124,8 @@ export interface StoredEntry {
   calendarId: number
   kind: EntryKind
   seriesEntryId: number | null
+  /** On an occurrence: its series' `externalId`, also before that series is stored. */
+  seriesExternalId: string | null
   eventId: number | null
   eventSeriesId: number | null
   externalId: string

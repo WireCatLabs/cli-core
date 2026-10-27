@@ -69,6 +69,9 @@ export const calendarTables = [
       c("seen_at", "integer", { note: "the last sync that returned it" }),
       ...ts(),
       del(),
+      c("series_external_id", "text", {
+        note: "on an occurrence: its series' `external_id`, so it finds a series stored after it (version 35)",
+      }),
     ],
     keys: [
       "UNIQUE (calendar_id, external_id)",
@@ -76,6 +79,7 @@ export const calendarTables = [
       "INDEX (calendar_id, starts_at)",
       "INDEX (ical_uid) WHERE ical_uid IS NOT NULL",
       "INDEX (join_key) WHERE join_key IS NOT NULL",
+      "INDEX (calendar_id, series_external_id) WHERE series_external_id IS NOT NULL",
     ],
   },
   {

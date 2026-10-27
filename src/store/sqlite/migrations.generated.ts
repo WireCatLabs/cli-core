@@ -761,5 +761,22 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER vector_index_conversation_au AFTER UPDATE OF chat_id ON conversations\n  WHEN old.chat_id IS NOT new.chat_id BEGIN\n  INSERT INTO vector_index_redo (chunk_id)\n    SELECT id FROM chunks WHERE chunkable_type = 'conversation' AND chunkable_id = new.id;\n  DELETE FROM vector_index_redo;\nEND;",
       "-- Images and conversations are indexed under their chat's account; messages carry their own.\nCREATE TRIGGER vector_index_chat_au AFTER UPDATE OF account_id ON chats WHEN old.account_id IS NOT new.account_id BEGIN\n  INSERT INTO vector_index_redo (chunk_id)\n    SELECT k.id FROM messages m JOIN attachments a ON a.attachable_type = 'message' AND a.attachable_id = m.id\n      JOIN chunks k ON k.chunkable_type = 'image' AND k.chunkable_id = a.id WHERE m.chat_id = new.id\n    UNION ALL SELECT k.id FROM conversations c JOIN chunks k ON k.chunkable_type = 'conversation' AND k.chunkable_id = c.id\n      WHERE c.chat_id = new.id;\n  DELETE FROM vector_index_redo;\nEND;"
     ]
+  },
+  {
+    "name": "20261027102259_version-35-calendar-neutral",
+    "statements": [
+      "ALTER TABLE `calendar_entries` ADD `series_external_id` text;",
+      "CREATE INDEX `calendar_entries_by_calendar_id_series_external_id` ON `calendar_entries` (`calendar_id`,`series_external_id`) WHERE series_external_id IS NOT NULL;"
+    ]
+  },
+  {
+    "name": "20261027102302_version-35-calendar-neutral-data",
+    "statements": [
+      "-- `metadata.recurring_event_id` stays on the rows it is on: a version-34 build may still open this file and reads it.\nUPDATE calendar_entries SET series_external_id = json_extract(metadata, '$.recurring_event_id')\n  WHERE kind = 'occurrence' AND json_valid(metadata) AND json_extract(metadata, '$.recurring_event_id') IS NOT NULL;",
+      "UPDATE calendar_entries SET event_type = CASE event_type\n    WHEN 'outOfOffice' THEN 'out-of-office'\n    WHEN 'focusTime' THEN 'focus'\n    WHEN 'workingLocation' THEN 'working-location'\n    WHEN 'fromGmail' THEN 'from-mail'\n  END\n  WHERE event_type IN ('outOfOffice', 'focusTime', 'workingLocation', 'fromGmail');",
+      "UPDATE calendar_entries SET own_response = 'needs-action' WHERE own_response = 'needsAction';",
+      "UPDATE calendar_entry_participants SET response = 'needs-action' WHERE response = 'needsAction';",
+      "UPDATE calendars SET access_role = 'free-busy' WHERE access_role = 'freeBusyReader';"
+    ]
   }
 ]

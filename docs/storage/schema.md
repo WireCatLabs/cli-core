@@ -1221,8 +1221,9 @@ One calendar's copy of an event, a series or one occurrence of a series: the sou
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `series_external_id` | text |  |  | on an occurrence: its series' `external_id`, so it finds a series stored after it (version 35) |
 
-*Keys and indexes:* `UNIQUE (calendar_id, external_id)`, `UNIQUE (series_entry_id, original_starts_at)`, `INDEX (calendar_id, starts_at)`, `INDEX (ical_uid) WHERE ical_uid IS NOT NULL`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (event_id)`, `INDEX (event_series_id)`, `INDEX (event_type, event_id)`, `INDEX (organizer_identity_id)`
+*Keys and indexes:* `UNIQUE (calendar_id, external_id)`, `UNIQUE (series_entry_id, original_starts_at)`, `INDEX (calendar_id, starts_at)`, `INDEX (ical_uid) WHERE ical_uid IS NOT NULL`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (calendar_id, series_external_id) WHERE series_external_id IS NOT NULL`, `INDEX (event_id)`, `INDEX (event_series_id)`, `INDEX (event_type, event_id)`, `INDEX (organizer_identity_id)`
 
 ### `calendar_entry_revisions`
 

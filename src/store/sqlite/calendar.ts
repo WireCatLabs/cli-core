@@ -45,6 +45,7 @@ const entryOf = (row: Row): StoredEntry => ({
   calendarId: Number(row.calendar_id),
   kind: row.kind as StoredEntry["kind"],
   seriesEntryId: int(row.series_entry_id),
+  seriesExternalId: str(row.series_external_id),
   eventId: int(row.event_id),
   eventSeriesId: int(row.event_series_id),
   externalId: String(row.external_id),
@@ -437,7 +438,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     return database
       .prepare(
         "SELECT * FROM calendar_entries WHERE calendar_id = ? AND series_entry_id IS NULL AND original_starts_at = ? " +
-          "AND json_extract(metadata, '$.recurring_event_id') = ?",
+          "AND series_external_id = ?",
       )
       .get(calendarId, input.originalStartsAt, input.seriesExternalId ?? null)
   }
@@ -456,6 +457,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     const values = {
       kind: input.kind,
       series_entry_id: seriesEntryId,
+      series_external_id: input.kind === "occurrence" ? (input.seriesExternalId ?? null) : null,
       external_id: input.externalId,
       ical_uid: input.icalUid ?? null,
       original_starts_at: input.originalStartsAt ?? null,
@@ -484,12 +486,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       sequence: input.sequence ?? null,
       etag: input.etag ?? null,
       external_updated_at: input.externalUpdatedAt ?? null,
-      metadata: toJson({
-        ...entryMetadata(input.metadata),
-        ...(input.kind === "occurrence" && input.seriesExternalId
-          ? { recurring_event_id: input.seriesExternalId }
-          : {}),
-      }),
+      metadata: toJson(entryMetadata(input.metadata)),
       seen_at: now,
       deleted_at: null,
     }
@@ -540,7 +537,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       database
         .prepare(
           "UPDATE calendar_entries SET series_entry_id = ?, updated_at = ? WHERE calendar_id = ? AND kind = 'occurrence' " +
-            "AND series_entry_id IS NULL AND json_extract(metadata, '$.recurring_event_id') = ?",
+            "AND series_entry_id IS NULL AND series_external_id = ?",
         )
         .run(id, now, calendarId, input.externalId)
     return entryOf(entryRow(id))
