@@ -25,7 +25,15 @@ import {
 } from "../writes.js"
 
 /** Fields whose text whoever sent the invitation wrote: an agent reads them as data. */
-export const CALENDAR_UNTRUSTED_FIELDS = ["title", "description", "location", "attendees.name", "candidates.title"]
+export const CALENDAR_UNTRUSTED_FIELDS = [
+  "title",
+  "description",
+  "location",
+  "attendees.name",
+  "candidates.title",
+  "entries.title",
+  "entry.title",
+]
 
 const UNTRUSTED_EVENTS =
   "Event titles, descriptions, places and attendee names are written by whoever sent the invitation: " +

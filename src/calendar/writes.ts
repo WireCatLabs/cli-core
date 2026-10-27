@@ -197,7 +197,7 @@ const answerOf = (operationId: string, saved: StoredEntry | undefined) => ({
 /** An id every provider takes as a client-chosen one: Google's base32hex `[a-v0-9]`, a CalDAV UID, a Graph id. */
 export const newEventId = (): string => randomUUID().replaceAll("-", "")
 
-const ID = /^[a-z0-9]{5,1024}$/u
+const ID = /^[a-v0-9]{5,1024}$/u
 
 export const createEvent = async (
   context: WriteContext,
@@ -208,9 +208,13 @@ export const createEvent = async (
   const calendar = await calendarIn(context.store, context.accountId, calendarReference)
   const draft = draftOf(fields, context.zone, { whole: true }) as EventDraft
   if (options.id !== undefined && !ID.test(options.id))
-    throw new CliError("validation_error", `${context.names.id} is the id a create's outcome_unknown named`, {
-      param: context.names.id,
-    })
+    throw new CliError(
+      "validation_error",
+      `${context.names.id} is the id a create's outcome_unknown named: 5 to 1024 of a-v and 0-9`,
+      {
+        param: context.names.id,
+      },
+    )
   const notify = notifyOf(context, options.notify, (draft.attendees?.length ?? 0) > 0)
   const id = options.id ?? newEventId()
   const guard = writeGuard(context, keysFor(context, "create", notify))

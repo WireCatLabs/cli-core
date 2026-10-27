@@ -36,7 +36,7 @@ const rejectsWith = async (promise: Promise<unknown>, check: (error: unknown) =>
   assert.fail(`${message}, but it succeeded`)
 }
 
-const ID = "contract0example0id0001"
+const ID = "contract0sample0id0001"
 
 /**
  * What every calendar writer keeps (gcal-cli plan §9, W1): a stale `etag` is a conflict, never an overwrite; a create
