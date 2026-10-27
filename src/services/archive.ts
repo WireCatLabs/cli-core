@@ -63,6 +63,8 @@ export interface FetchOptions {
   note: (message: string) => void
   stop: AbortSignal
   onPage: (progress: { fetched: number; chatId: string; oldest: number }) => void
+  /** `fetchAll` only: once the chat list is read, then after each chat, current or not; counts across every chat. */
+  onChat?: (progress: { chats: number; done: number; fetched: number }) => void
 }
 
 /** A type, not an interface: a job keeps it as a plain record. */
@@ -282,6 +284,9 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
         ...options,
         catchUp: catchingUp ? (options.catchUp ?? {}) : false,
       })
+      const finished = () =>
+        options.onChat?.({ chats: chats.length, done: answer.items.length, fetched: answer.fetched })
+      finished()
       for (const chat of chats) {
         if (options.stop.aborted || batch.stopped) {
           answer.stopped = true
@@ -289,6 +294,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
         }
         if (await upToDate(chat)) {
           answer.items.push({ chat: chat.id, title: chat.title, fetched: 0, complete: true, current: true })
+          finished()
           continue
         }
         try {
@@ -314,6 +320,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
           const issue = batch.fail(chat.id, "history", error)
           answer.items.push({ chat: chat.id, title: chat.title, fetched: 0, complete: false, error: issue.code, issue })
         }
+        finished()
       }
       if (batch.failed > 0) answer.batch = batch.result()
       answer.complete = !answer.stopped && answer.items.length === chats.length && answer.items.every(done)
