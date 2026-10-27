@@ -187,7 +187,7 @@ describe("contacts context", () => {
     const linked = await people().link("11", "email:ana@x.com")
 
     expect(linked.identities.map((one) => `${one.provider}:${one.id}`)).toEqual(["email:ana@x.com", "telegram:11"])
-||||||| parent of ec7ba160 (feat(search)!: find calendar events by words, in search all and in a person's context)
+  })
 
   it("lists the calendar events of their linked email contact, one occurrence per series", async () => {
     const now = Date.UTC(2026, 9, 26, 12)
