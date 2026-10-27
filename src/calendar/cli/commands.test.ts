@@ -108,6 +108,27 @@ describe("calendar commands", () => {
     await expect(cli("events", "list", "tomorrow")).rejects.toMatchObject({ code: "validation_error" })
   })
 
+  it("a sync its --max-pages stops answers partial without failing, and calendars status says how far it is", async () => {
+    const { cli } = await setup({ profile: "personal" })
+    const stopped = await cli("sync", "--max-pages", "1")
+    expect(stopped).toMatchObject({
+      state: "partial",
+      complete: false,
+      stopped: "requests",
+      requests: 1,
+      hint: "run sync again to continue",
+      synced: [{ externalId: "primary", state: "partial", saved: 0 }],
+    })
+    expect((await cli("calendars", "status")).items).toMatchObject([
+      { external_id: "primary", state: "partial", done: 0, total: null, updated_at: null, cursor_age_ms: null },
+    ])
+    expect(await cli("sync")).toMatchObject({ state: "complete", complete: true })
+    const [status] = (await cli("calendars", "status")).items
+    expect(status).toMatchObject({ job: expect.stringMatching(/^calendar /u), profile: "personal", state: "complete" })
+    expect(status).toMatchObject({ done: 2, round: null, cursor_age_ms: 0 })
+    expect(status?.line).toMatch(/personal: 2 — complete, updated just now$/u)
+  })
+
   it("shows an event with its attendees' people, and hides another account's", async () => {
     const { cli, store } = await setup()
     await cli("sync")
@@ -162,7 +183,15 @@ describe("calendar commands", () => {
   it("every command is keyed by its path for the permissions", async () => {
     const { program } = await setup()
     const known = knownPermissionKeys(program(), commandPermissions())
-    for (const key of ["calendars.list", "calendars.sync", "calendars.unsync", "sync", "events.show", "search"])
+    for (const key of [
+      "calendars.list",
+      "calendars.status",
+      "calendars.sync",
+      "calendars.unsync",
+      "sync",
+      "events.show",
+      "search",
+    ])
       expect(known).toContain(key)
     for (const key of ["people.link", "links.resolve"]) expect(known).toContain(key)
     expect(commandPathKey(["people", "link"])).toBe("people.link")

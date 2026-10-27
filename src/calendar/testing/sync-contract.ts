@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { runBudget } from "../../background/budget.js"
 import type { ContractCase, EntryInput, EventStore, StoredEntry } from "../../meetings/index.js"
 import type { CalendarExpander, CalendarSourceTraits, SyncWindow } from "../source.js"
 import { type CalendarSyncOptions, parseCalendarCursor, syncCalendars } from "../sync.js"
@@ -76,7 +77,8 @@ const nameOf = ({ expands, cursorHoldsWindow, fullListOnly }: CalendarSourceTrai
 /**
  * The sync engine over `fakeCalendarSource`, once for each trait combination: changes after a cursor, removal by id,
  * a dead cursor, a window that moved, each way of expanding a series and a slot cancelled later, a failed page, an
- * unsynced calendar and a full list. Run it over the store the CLI uses.
+ * unsynced calendar, a full list, a run the budget or a near deadline stops and the rerun that finishes it, and a page
+ * token that expired between runs. Run it over the store the CLI uses.
  */
 export const calendarSyncContract = (make: () => CalendarSyncFixture | Promise<CalendarSyncFixture>): ContractCase[] =>
   CALENDAR_TRAIT_COMBINATIONS.flatMap((traits) => {
@@ -207,21 +209,108 @@ export const calendarSyncContract = (make: () => CalendarSyncFixture | Promise<C
         assert.equal(event?.event.status, "cancelled")
       }),
       test(
-        "a failed page keeps the old cursor, and the next run reads the same changes again",
+        "a failed page keeps the pages before it, and the next run goes on from the failed one",
         async ({ store, source, sync }) => {
           source.put("primary", single("e1"))
           const first = await sync(NOW)
           const calendarId = first.synced[0]?.calendarId as number
-          const before = await store.cursor(calendarId)
           source.put("primary", single("e2"), single("e3"))
           source.failAfter(1)
           const failed = await sync(NOW + HOUR)
-          assert.equal(failed.complete, false)
+          assert.deepEqual([failed.complete, failed.state], [false, "partial"])
           assert.match(failed.synced[0]?.error ?? "", /example provider failed/u)
-          assert.equal(await store.cursor(calendarId), before)
+          const held = (await cursorOf(store, calendarId))?.round
+          assert.ok(held?.page)
           const again = await sync(NOW + 2 * HOUR)
           assert.equal(again.complete, true)
+          assert.equal(source.calls.changes.at(-2)?.page, held.page)
           assert.deepEqual([...(await entriesOf(store)).keys()].sort(), ["e1", "e2", "e3"])
+        },
+        { pageSize: 1 },
+      ),
+      test(
+        "a run the budget stops goes on next time and ends with the store one whole run gives",
+        async ({ store, source, sync }) => {
+          const fill = (one: FakeCalendarSource) => {
+            one.put("primary", single("e0"))
+            return one
+          }
+          const grow = (one: FakeCalendarSource) => {
+            one.drop("primary", "e0")
+            one.put("primary", single("e1"), single("e2", AT + HOUR), single("e3", AT + 2 * HOUR))
+            const slots = [slot("s", AT), slot("s", AT + DAY), slot("s", AT + 2 * DAY)]
+            if (traits.expands === "in-changes") one.put("primary", seriesOf("s"), ...slots)
+            else one.put("primary", seriesOf("s"))
+            if (traits.expands === "on-request") one.setOccurrences("s", slots)
+          }
+          const whole = await make()
+          const reference = fill(fakeCalendarSource({ pageSize: 1, traits }))
+          const expand = traits.expands === "local" ? { expand: exampleExpander } : {}
+          const once = (at: number, extra: Partial<CalendarSyncOptions> = {}) =>
+            syncCalendars(reference, whole.store, { accountId: whole.accountId, now: at, ...expand, ...extra })
+          await once(NOW)
+          grow(reference)
+          assert.equal((await once(NOW + HOUR, { full: true })).state, "complete")
+
+          fill(source)
+          await sync(NOW)
+          grow(source)
+          const first = await sync(NOW + HOUR, { full: true, budget: runBudget({ requests: 2 }) })
+          assert.deepEqual(
+            [first.state, first.stopped, first.hint],
+            ["partial", "requests", "run sync again to continue"],
+          )
+          assert.equal(first.synced[0]?.state, "partial")
+          let runs = 1
+          let last = first
+          while (last.state === "partial" && runs < 30) {
+            runs += 1
+            last = await sync(NOW + HOUR + runs * 60_000, { budget: runBudget({ requests: 2 }) })
+            if (last.state === "partial") assert.equal(last.complete, false)
+          }
+          assert.equal(last.state, "complete")
+          assert.ok(runs > 2)
+          const shape = async (one: EventStore) =>
+            [...(await entriesOf(one)).values()]
+              .map(({ externalId, status, deletedAt }) => `${externalId} ${status} ${deletedAt === null}`)
+              .sort()
+          assert.deepEqual(await shape(store), await shape(whole.store))
+          const entries = await entriesOf(store)
+          assert.equal(entries.get("e1")?.deletedAt, null)
+          assert.notEqual(entries.get("e0")?.deletedAt ?? null, null)
+        },
+        { pageSize: 1 },
+      ),
+      test(
+        "a deadline close by stops the run before its next request",
+        async ({ source, sync }) => {
+          source.put("primary", single("e1"), single("e2"))
+          const endsAt = NOW + 30_000
+          const clock = [NOW, NOW + 1_000, endsAt - 2_000]
+          const budget = runBudget({ deadline: { endsAt, ms: 30_000 }, now: () => clock.shift() ?? endsAt })
+          const stopped = await sync(NOW, { budget })
+          assert.deepEqual([stopped.state, stopped.stopped, budget.used], ["partial", "deadline", 2])
+          assert.equal(stopped.synced[0]?.saved, 1)
+          const again = await sync(NOW + HOUR)
+          assert.equal(again.state, "complete")
+          assert.equal(again.synced[0]?.saved, 1)
+        },
+        { pageSize: 1 },
+      ),
+      test(
+        "a page token that expired since the last run starts that calendar's round over, once",
+        async ({ store, source, sync }) => {
+          source.put("primary", single("e1"), single("e2"), single("e3"))
+          const first = await sync(NOW, { budget: runBudget({ requests: 2 }) })
+          assert.equal(first.state, "partial")
+          source.expirePages()
+          const again = await sync(NOW + HOUR)
+          assert.equal(again.state, "complete")
+          const calls = source.calls.changes.slice(1)
+          assert.ok(calls[0]?.page)
+          assert.equal(calls[1]?.page, undefined)
+          assert.deepEqual([...(await entriesOf(store)).keys()].sort(), ["e1", "e2", "e3"])
+          assert.equal((await cursorOf(store, again.synced[0]?.calendarId as number))?.round, null)
         },
         { pageSize: 1 },
       ),

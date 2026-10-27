@@ -3,6 +3,7 @@ import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError } from "commander"
+import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import type { EventStore } from "../../meetings/index.js"
@@ -27,7 +28,7 @@ import {
 } from "../reads.js"
 import { REPEAT_HELP } from "../recurrence.js"
 import type { CalendarExpander, CalendarSource } from "../source.js"
-import { syncCalendars } from "../sync.js"
+import { calendarStatus, syncCalendars } from "../sync.js"
 import type { EventResponse } from "../writer.js"
 import {
   type CalendarWrites,
@@ -46,6 +47,8 @@ export interface CalendarCommandDeps {
   accountId: number
   /** The same account as the shared store names it, for search and people. */
   account: AccountKey
+  /** The profile's name, which `calendars status` gives as each sync's `profile`. */
+  profile?: string
   /** The shared store: `search`, `people link` and the person of an attendee read it. */
   messages?: MessageStore
   /** The provider; `sync` and `calendars list` read it. */
@@ -149,6 +152,22 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     const listed = await deps.store.saveCalendars(deps.accountId, await source().calendars(), now())
     print({ items: listed.map(calendarItem), page: 1, limit: listed.length, hasMore: false }, command)
   })
+  output(
+    example(
+      annotate(calendars.command("status"), { effects: LOCAL_READ }).description(
+        "how far each synced calendar's sync is: entries done, partial or complete, and when it last moved",
+      ),
+      "calendars status --json",
+    ),
+  ).action(async (_opts: unknown, command: Command) => {
+    print(
+      await calendarStatus(deps.store, deps.accountId, {
+        profile: deps.profile ?? `account ${deps.accountId}`,
+        now: now(),
+      }),
+      command,
+    )
+  })
   for (const [name, synced] of [
     ["sync", true],
     ["unsync", false],
@@ -205,28 +224,44 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
 
   output(
     example(
-      annotate(program.command("sync"), { effects: FETCH, offline: false }).description(
-        "bring the synced calendars up to date: what changed since the last sync, or everything with --full",
+      annotate(program.command("sync"), {
+        effects: FETCH,
+        offline: false,
+        cooperative: true,
+        partial: true,
+      }).description(
+        "bring the synced calendars up to date: what changed since the last sync, or everything with --full; a run " +
+          "stops before its deadline or --max-pages and the next one goes on from there",
       ),
       "sync",
       "sync --full --embed",
+      "sync --max-pages 200 --timeout 5m",
     ),
   )
-    .option("--full", "list every synced calendar's window again instead of reading changes")
+    .option("--full", "list every synced calendar's window again, dropping a round in progress")
+    .option(
+      "--max-pages <pages>",
+      "at most this many requests to the provider in this run; one for every 2 s of the deadline if not given",
+      integer,
+    )
     .option("--embed", "also index new events for meaning search, with a model already downloaded")
-    .action(async (opts: { embed?: boolean }, command: Command) => {
+    .action(async (opts: { embed?: boolean; maxPages?: number }, command: Command) => {
       // The shared program has a global --full of its own, which claims the flag before this command sees it.
       const full = command.optsWithGlobals<{ full?: boolean }>().full === true
+      const { signal } = environmentOf(command)
       const report = await syncCalendars(source(), deps.store, {
         accountId: deps.accountId,
         now: now(),
+        budget: runBudgetOf(command, opts.maxPages),
+        ...(signal ? { signal } : {}),
         ...(full ? { full: true } : {}),
         ...(deps.expand ? { expand: deps.expand } : {}),
       })
       if (opts.embed && !deps.embed) throw new CliError("configuration_error", "this tool cannot embed events")
-      const embeddings = opts.embed ? await deps.embed?.(EMBED_MAX) : undefined
+      // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
+      const embeddings = opts.embed && !report.stopped ? await deps.embed?.(EMBED_MAX) : undefined
       print(embeddings === undefined ? report : { ...report, embeddings }, command)
-      if (!report.complete)
+      if (report.synced.some((one) => one.error !== undefined))
         throw new CliError("provider_error", "some calendars did not sync; run sync again to retry them", {
           reason: "sync.partial",
         })

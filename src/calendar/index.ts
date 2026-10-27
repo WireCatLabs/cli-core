@@ -37,7 +37,9 @@ export {
   type CalendarSyncOptions,
   type CalendarSyncReport,
   type CalendarSyncResult,
+  calendarStatus,
   calendarSyncWindow,
+  type PendingRound,
   parseCalendarCursor,
   syncCalendars,
 } from "./sync.js"

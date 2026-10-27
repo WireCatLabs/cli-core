@@ -221,6 +221,7 @@ export {
   environmentOf,
   outputFor,
   provide,
+  runBudgetOf,
   secretInputOf,
 } from "./context.js"
 export { addContractInfo, type ContractEvidenceOptions, contractEvidence } from "./contract-evidence.js"

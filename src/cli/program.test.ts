@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
 import { writesInFlight } from "../sends/guarded.js"
-import { baseContext, environmentOf } from "./context.js"
+import { baseContext, environmentOf, runBudgetOf } from "./context.js"
 import * as cli from "./index.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -339,6 +339,21 @@ describe("a command's declared lifetime", () => {
     expect(ended).toBe(false)
     await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(await done).toBe(9)
+  })
+})
+
+describe("the deadline a command sees", () => {
+  it("is the one run() started, so a sync's budget can stop before it", async () => {
+    const seen: unknown[] = []
+    const code = await run(
+      ["chats", "list", "--timeout", "1m"],
+      definition(async (command) => {
+        seen.push(environmentOf(command).deadline?.()?.ms, runBudgetOf(command).limit)
+      }),
+      { streams: captureStreams(), tty: false, env: { ...process.env } },
+    )
+    expect(code).toBe(0)
+    expect(seen).toEqual([60_000, 30])
   })
 })
 
