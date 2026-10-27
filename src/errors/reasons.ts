@@ -64,6 +64,9 @@ const OTHERS: Entry[] = [
   ["sync.partial", "provider_error", "some calendars did not sync; the next sync retries them"],
   validation("event.conflict", "the event changed at the provider since the last sync; sync and try again"),
   validation("event.notify-required", "the event has other attendees; say whether to notify them"),
+  validation("event.repeat-invalid", "the repeat rule is outside the RFC 5545 subset the calendars take"),
+  validation("event.repeat-kind", "the series' rule holds a date or a time of the kind the event is leaving"),
+  validation("calendars.none-synced", "no calendar syncs yet; name one, or turn one's sync on"),
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [

@@ -4,7 +4,8 @@ import type { Level, PermissionKey } from "../sends/permissions.js"
 
 /**
  * A new event in neutral words: a timed one has `startsAt` and `endsAt` (epoch ms, end exclusive) in `timezone`; an
- * all-day one has `startDate` and `endDate` (`YYYY-MM-DD`, end exclusive). Never repeating.
+ * all-day one has `startDate` and `endDate` (`YYYY-MM-DD`, end exclusive). A repeating one has `recurrence`, RFC 5545
+ * lines as `EntryInput` holds them; its `timezone` is the zone the rule is expanded in, which Google requires.
  */
 export interface EventDraft {
   title: string
@@ -16,9 +17,13 @@ export interface EventDraft {
   location?: string | null
   description?: string | null
   attendees?: { email: string; optional?: boolean }[]
+  recurrence?: string[]
 }
 
-/** Only the fields to change; `null` clears one. `attendees` replaces the whole list. */
+/**
+ * Only the fields to change; `null` clears one. `attendees` and `recurrence` replace the whole list. A patch with
+ * `startDate` for a timed event, or `startsAt` for an all-day one, switches it: the adapter clears the other kind.
+ */
 export type EventPatch = Partial<EventDraft>
 
 /** `this`: the one entry named; `series`: the repeating event it belongs to, named by the series' own id. */

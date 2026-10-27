@@ -19,6 +19,21 @@ shape of this file.
   that runs out of time is now named as such, and `upgrade` no longer waits on one for more than 90 s. The restart
   works from the next upgrade on: the version doing the upgrading must have it, and the server must have been
   started by it.
+- **Free/busy and free stretches for calendar CLIs.** `CalendarSource` gains an optional
+  `freeBusy({ calendars, people, window })` that answers `BusyTimes` (`{ id, busy, error? }`) and is never stored.
+  With `deps.freeBusy`, `addCalendarCommands` mounts `calendars busy [today|week|from:… to:…] [calendar:…]
+  [person:<email>…]`; `--duration-minutes <n>` adds `slots`, the stretches every calendar and person shares inside
+  `--hours` (default `09:00-17:00`, Monday to Friday, in the owner's zone), and `unknown`, whoever the provider would
+  not show. `fakeCalendarSource` answers it (`setBusy`), and `calendarSourceContract` checks it when a source has it.
+- **Repeating events.** `events create --repeat <rule>` (MCP `repeat`) makes a series; `events update --series
+  --repeat <rule>` changes its rule and keeps its EXDATE and RDATE lines. `repeatRule` checks the RFC 5545 subset
+  (FREQ DAILY, WEEKLY or MONTHLY; INTERVAL; BYDAY, ordinals only in MONTHLY; COUNT or UNTIL of the event's own kind)
+  and writes one `RRULE:` line into `EventDraft.recurrence`. The answer of a write that sets a rule says
+  `hint: "sync to store its occurrences"`.
+- **Switching an event between timed and all-day** is stated in `EventPatch`: dates on a timed event, or times on an
+  all-day one, ask the adapter to clear the other kind. A series whose UNTIL, EXDATE or RDATE holds the old kind is
+  refused with `event.repeat-kind`. `calendarWriterContract` checks a repeat rule on create and on the series, and
+  the switch both ways; `fakeCalendarWriter` returns a series for a draft with a rule.
 
 ### Changed — may break callers
 
@@ -40,6 +55,7 @@ shape of this file.
   checks them against an older copy refuses the new field. MCP answers already showed control characters as text;
   tests now cover it per kind. `search conversations` and `search runs` are unchanged: their hits hold ids, counts
   and diagnostics, no one's text.
+- **`WriteContext.names` gains `repeat`**, how the caller spells the rule in a hint (`--repeat`, MCP `repeat`).
 
 ## 0.463.0 — 27.10.2026
 

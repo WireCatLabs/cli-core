@@ -85,7 +85,7 @@ export const fakeCalendarWriter = (options: { provider?: string } = {}): FakeCal
       if (existing) return answer(existing)
       const entry = stamp({
         externalId: id,
-        kind: "single",
+        kind: draft.recurrence ? "series" : "single",
         status: "confirmed",
         participants: [],
         ...fields(draft),

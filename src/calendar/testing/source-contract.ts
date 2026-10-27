@@ -218,5 +218,24 @@ export const calendarSourceContract = (
         )
       if (fixture.movedOut) assert.ok(!removed.includes(fixture.movedOut), "an entry outside the window is no removal")
     }),
+    test("free/busy answers each calendar and person once, inside the window; an unknown person is an error", async ({
+      source,
+      window,
+    }) => {
+      if (!source.freeBusy) return
+      const [first] = await source.calendars()
+      const calendar = (first as NonNullable<typeof first>).externalId
+      const nobody = "nobody@example.invalid"
+      const answer = await source.freeBusy({ calendars: [calendar], people: [nobody], window })
+      assert.deepEqual(answer.map(({ id }) => id).sort(), [calendar, nobody].sort())
+      for (const { id, busy } of answer)
+        for (const one of busy)
+          assert.ok(
+            one.from < one.to && one.from >= window.from && one.to <= window.to,
+            `${id}: ${JSON.stringify(one)}`,
+          )
+      const unknown = answer.find(({ id }) => id === nobody)
+      assert.ok(unknown?.error, "a person the provider cannot see is not free")
+    }),
   ]
 }

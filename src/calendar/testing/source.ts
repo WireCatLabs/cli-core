@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CalendarInput, EntryInput, StoredCalendar } from "../../meetings/index.js"
-import type { CalendarSource, CalendarSourceTraits, ChangeResult, SyncWindow } from "../source.js"
+import type { BusyTimes, CalendarSource, CalendarSourceTraits, ChangeResult, SyncWindow } from "../source.js"
 
 export interface FakeCalendarSourceOptions {
   provider?: string
@@ -28,6 +28,8 @@ export interface FakeCalendarSource extends CalendarSource {
   expireCursors(): void
   /** The `changes()` call after this many more succeeds throws once. */
   failAfter(calls: number): void
+  /** A person's busy times, or the provider's refusal to say; a person never set is `notFound`. */
+  setBusy(person: string, busy: SyncWindow[] | { error: string }): void
   readonly calls: {
     changes: { calendar: string; cursor: string | null; page?: string; window: SyncWindow }[]
     occurrences: string[]
@@ -57,6 +59,7 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
   const held = new Map<string, Map<string, EntryInput>>()
   const log: { version: number; calendar: string; put?: EntryInput; removed?: string }[] = []
   const occurrences = new Map<string, EntryInput[]>()
+  const people = new Map<string, SyncWindow[] | { error: string }>()
   let version = 0
   let deadBefore = 0
   let failIn: number | null = null
@@ -116,6 +119,33 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
           },
         }
       : {}),
+    async freeBusy({ calendars: asked, people: persons, window }) {
+      const taken = (busy: SyncWindow[]) =>
+        busy
+          .filter(({ from, to }) => from < window.to && to > window.from)
+          .map(({ from, to }) => ({ from: Math.max(from, window.from), to: Math.min(to, window.to) }))
+      return [
+        ...asked.map(
+          (id): BusyTimes => ({
+            id,
+            busy: taken(
+              [...of(id).values()]
+                .filter((entry) => entry.status !== "cancelled" && entry.transparency !== "transparent")
+                .flatMap(({ startsAt, endsAt }) =>
+                  startsAt == null || endsAt == null ? [] : [{ from: startsAt, to: endsAt }],
+                ),
+            ),
+          }),
+        ),
+        ...persons.map((id): BusyTimes => {
+          const busy = people.get(id) ?? { error: "notFound" }
+          return Array.isArray(busy) ? { id, busy: taken(busy) } : { id, busy: [], error: busy.error }
+        }),
+      ]
+    },
+    setBusy(person, busy) {
+      people.set(person, busy)
+    },
     put(calendar, ...entries) {
       for (const entry of entries) {
         of(calendar).set(entry.externalId, structuredClone(entry))
