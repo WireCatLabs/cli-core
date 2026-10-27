@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import type { Readable, Writable } from "node:stream"
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
@@ -23,11 +24,13 @@ import { warmEmbedders } from "../embeddings/embed.js"
 import { mcpUrlOf } from "../http/public-url.js"
 import { readOnlyLockOf } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
+import type { RunCaller } from "../runs/run-context.js"
 import { guardFor } from "../sends/guard.js"
 import { levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
 import { openStore } from "../store/store.js"
 import { type AgentAnswer, type AgentProgram, type AgentTool, runCommandForAgent, toolsFromCommands } from "./agent.js"
 import { agentLog } from "./agent-log.js"
+import { type CallerSource, callerOf } from "./caller.js"
 import type { HttpOptions } from "./http/serve.js"
 import { mcpHttpMarker } from "./http/state.js"
 import { instructions } from "./instructions.js"
@@ -236,7 +239,12 @@ export const createServer = (
    * One command at a time, on the session's connection, opened only if the command asks for it. A failure that may
    * have been the connection's drops it, as the session does for its own calls.
    */
-  const invoke = (one: AgentTool, input: Record<string, unknown>, env: NodeJS.ProcessEnv): Promise<AgentAnswer> =>
+  const invoke = (
+    one: AgentTool,
+    input: Record<string, unknown>,
+    env: NodeJS.ProcessEnv,
+    caller: RunCaller,
+  ): Promise<AgentAnswer> =>
     new Promise<AgentAnswer>((resolve) => {
       let finish: ((drop: boolean) => void) | undefined
       let held: Promise<unknown> | undefined
@@ -266,6 +274,7 @@ export const createServer = (
         stdin,
         connection,
         environment: agentEnvironment,
+        caller,
       }).then(async (answer) => {
         finish?.("error" in answer && !harmless(answer.error.error.code))
         await held?.catch(() => undefined)
@@ -273,13 +282,18 @@ export const createServer = (
       })
     })
   let queue: Promise<unknown> = Promise.resolve()
-  const queued = (one: AgentTool, input: Record<string, unknown>, env: NodeJS.ProcessEnv): Promise<AgentAnswer> => {
-    const next = queue.then(() => invoke(one, input, env))
+  const queued = (
+    one: AgentTool,
+    input: Record<string, unknown>,
+    env: NodeJS.ProcessEnv,
+    caller: RunCaller,
+  ): Promise<AgentAnswer> => {
+    const next = queue.then(() => invoke(one, input, env, caller))
     queue = next.catch(() => undefined)
     return next
   }
 
-  const asCommand = (one: AgentTool): McpCommand => ({
+  const asCommand = (one: AgentTool, source: CallerSource): McpCommand => ({
     title: one.title,
     description: one.description,
     writes: one.writes,
@@ -291,7 +305,7 @@ export const createServer = (
       // The caller's trace reaches the run, its send journal lines and its record, as `TRACEPARENT` does.
       const traceparent = ctx?.mcpReq?._meta?.traceparent
       const env = typeof traceparent === "string" ? { ...context.env, TRACEPARENT: traceparent } : context.env
-      const answer = await queued(one, args, env)
+      const answer = await queued(one, args, env, callerOf(ctx, keyOfCommand(one.command), source))
       const result =
         "error" in answer
           ? (mcpErrorResult(JSON.parse(agentJson(answer.error)) as ErrorObject) as CallToolResult)
@@ -315,6 +329,12 @@ export const createServer = (
   })
 
   const build = (): McpServer => {
+    // Built once for a stdio connection; over HTTP the session or the OAuth client identifies the caller instead.
+    const callers: CallerSource = {
+      env: context.env,
+      client: () => server.server.getClientVersion(),
+      connectionId: randomUUID(),
+    }
     const server = new McpServer(
       { name: app.command, version: app.version },
       {
@@ -359,12 +379,13 @@ export const createServer = (
         embedders,
         history: settings.keepFailedRuns,
       },
+      callers,
     }
     registerCommands(
       server,
       app.command,
       {
-        ...Object.fromEntries(commands.map((one) => [one.command, asCommand(one)])),
+        ...Object.fromEntries(commands.map((one) => [one.command, asCommand(one, callers)])),
         ...Object.fromEntries(
           Object.entries(surfaceCommands({ ...pictures, status }, registration)).map(([name, one]) => [
             name,

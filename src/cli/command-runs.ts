@@ -119,6 +119,7 @@ const tracker = (options: CommandRunOptions, typed?: readonly string[]): Tracker
         ...((environment.argv ?? typed) ? { argv: environment.argv ?? typed } : {}),
         env: env ?? process.env,
         recordInput: saved.recordInput !== false,
+        caller: environment.agent?.caller,
       }),
     })
   }

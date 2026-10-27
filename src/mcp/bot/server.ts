@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { serveStdio } from "@modelcontextprotocol/server/stdio"
 import { mcpErrorResult } from "@wirecat/cli-base"
@@ -11,8 +12,10 @@ import { itemOf } from "../../cli/envelope.js"
 import { wholeList } from "../../cli/messenger/chat-answers.js"
 import type { Settings } from "../../cli/settings.js"
 import { MESSENGER_CHANGE_REFUSAL, readOnlyLockOf, readOnlyRefusal } from "../../ports/app.js"
+import type { RunCaller } from "../../runs/run-context.js"
 import type { Level, PermissionKey } from "../../sends/permissions.js"
 import { type AgentAnswer, type AgentProgram, runCommandForAgent, toolsFromCommands } from "../agent.js"
+import { type CallerSource, callerOf } from "../caller.js"
 import { type McpCommand, normal, registerCommands } from "../surface.js"
 import { agentJson } from "../text.js"
 import { answered } from "../tool.js"
@@ -78,7 +81,11 @@ export const createBotServer = (options: BotServerOptions) => {
 
   // One at a time: the commands share the journal, the registry and the local copy.
   let queue: Promise<unknown> = Promise.resolve()
-  const invoke = (path: readonly string[], input: Record<string, unknown>): Promise<AgentAnswer> => {
+  const invoke = (
+    path: readonly string[],
+    input: Record<string, unknown>,
+    caller?: RunCaller,
+  ): Promise<AgentAnswer> => {
     const next = queue.then(() =>
       runCommandForAgent(program, path, path[0] === "config" ? { ...input, bot: true } : input, {
         profile: settings.profile,
@@ -87,6 +94,7 @@ export const createBotServer = (options: BotServerOptions) => {
         levels,
         ...(options.keyOf ? { keyOf: options.keyOf } : {}),
         authority,
+        ...(caller ? { caller } : {}),
       }),
     )
     queue = next.catch(() => undefined)
@@ -94,6 +102,7 @@ export const createBotServer = (options: BotServerOptions) => {
   }
 
   const build = (): McpServer => {
+    const callers: CallerSource = { env, client: () => server.server.getClientVersion(), connectionId: randomUUID() }
     const server = new McpServer(
       { name: `${command}-bot-${settings.profile}`, version: bot.app.version },
       {
@@ -120,8 +129,9 @@ export const createBotServer = (options: BotServerOptions) => {
           writes: tool.writes,
           availability: tool.availability,
           input: tool.input,
-          run: async (args) => {
-            const answer = await invoke(tool.path, args)
+          run: async (args, ctx) => {
+            const caller = callerOf(ctx, `${command}_${tool.command.replaceAll(" ", "_")}`, callers)
+            const answer = await invoke(tool.path, args, caller)
             return "error" in answer
               ? (mcpErrorResult(JSON.parse(agentJson(answer.error)) as ErrorObject) as CallToolResult)
               : answered(body(tool.command, answer.result))

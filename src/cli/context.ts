@@ -8,7 +8,7 @@ import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { EventSink } from "../runs/events.js"
 import { recorded } from "../runs/recording.js"
-import { runContextOf } from "../runs/run-context.js"
+import { type RunCaller, runContextOf } from "../runs/run-context.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
 import type { SecretInput } from "../terminal/prompt.js"
 import { type Closeable, withDeadline } from "./deadline.js"
@@ -97,6 +97,8 @@ export interface AgentRun {
   authority?: boolean
   /** The server's levels allow `bot.api`: a raw Bot API call, past the send guard, may run. */
   botApi?: boolean
+  /** Who made the MCP call, as the server received it; the run records it instead of the server's environment. */
+  caller?: RunCaller
 }
 
 export interface RelayedRun {
@@ -240,6 +242,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
             ...(environment.argv ? { argv: environment.argv } : {}),
             env,
             recordInput: settings.recordInput !== false,
+            caller: environment.agent?.caller,
           }),
           ...(ranFor === undefined ? {} : { profile: ranFor }),
           record: settings.record,

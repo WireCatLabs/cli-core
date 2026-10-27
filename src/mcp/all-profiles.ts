@@ -1,7 +1,9 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
+import { randomUUID } from "node:crypto"
 import type { Readable, Writable } from "node:stream"
 import { type CallToolResult, McpServer, type Tool } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
+import { CALLER_META_KEY, callerOf, PROXY_CLIENT_NAME } from "./caller.js"
 import type { HttpOptions } from "./http/serve.js"
 import { answeredWire } from "./stdio-wire.js"
 
@@ -33,6 +35,8 @@ export interface AllProfilesOptions {
   idleMs?: number
   /** A child's stderr, line by line; never this process's stdout, which carries the protocol. */
   note?: (line: string) => void
+  /** This server's environment, which names the agent that started it on stdio; `process.env` when left out. */
+  env?: NodeJS.ProcessEnv
 }
 
 interface Child {
@@ -109,7 +113,7 @@ const startChild = (spec: ChildSpec, note: (line: string) => void, onExit: () =>
   return request("initialize", {
     protocolVersion: PROTOCOL,
     capabilities: {},
-    clientInfo: { name: "all-profiles", version: "1" },
+    clientInfo: { name: PROXY_CLIENT_NAME, version: "1" },
   })
     .then(() => {
       send({ method: "notifications/initialized" })
@@ -244,7 +248,12 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
           ? []
           : (await tools(profiles)).map((one) => withProfile(one, profiles, options.name, signedIn)),
     }))
-    server.server.setRequestHandler("tools/call", async (request) => {
+    const callers = {
+      env: options.env ?? process.env,
+      client: () => server.server.getClientVersion(),
+      connectionId: randomUUID(),
+    }
+    server.server.setRequestHandler("tools/call", async (request, ctx) => {
       const { name, arguments: given = {}, _meta } = request.params
       const { profile, ...rest } = given as Record<string, unknown>
       if (typeof profile !== "string" || !profiles.includes(profile))
@@ -254,7 +263,12 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
       if (!signedIn(profile)) return refusal(options.signIn?.(profile) ?? `profile ${profile} is not signed in.`)
       try {
         return (await children.use(profile, (child) =>
-          child.request("tools/call", { name, arguments: rest, ...(_meta ? { _meta } : {}) }),
+          // Children are shared by every session, so each call names its own caller.
+          child.request("tools/call", {
+            name,
+            arguments: rest,
+            _meta: { ..._meta, [CALLER_META_KEY]: callerOf(ctx, name, callers) },
+          }),
         )) as CallToolResult
       } catch (error) {
         return refusal(`profile ${profile}: ${error instanceof Error ? error.message : String(error)}`)

@@ -58,9 +58,19 @@ describe("one MCP server for every profile", () => {
   it("runs a call in the named profile's own server, without the profile field", async () => {
     const { client, started } = await start()
     const answer = await client.callTool({ name: "chat_read", arguments: { profile: "work", command: "chats list" } })
-    expect(textOf(answer)).toEqual({ profile: "work", name: "chat_read", arguments: { command: "chats list" } })
+    expect(textOf(answer)).toMatchObject({ profile: "work", name: "chat_read", arguments: { command: "chats list" } })
     await client.callTool({ name: "chat_read", arguments: { profile: "work", command: "inbox" } })
     expect(started()).toEqual(["start work mcp"])
+  })
+
+  it("names the real caller to the profile's server, since every session shares it", async () => {
+    const { client } = await start()
+    const answer = await client.callTool({ name: "chat_read", arguments: { profile: "work", command: "inbox" } })
+    expect((textOf(answer) as { _meta: Record<string, unknown> })._meta["wirecat.dev/caller"]).toMatchObject({
+      via: "mcp-stdio",
+      agent: { kind: "mcp-client", client: { name: "test" } },
+      mcp: { tool: "chat_read", request_id: expect.any(String), connection_id: expect.any(String) },
+    })
   })
 
   it("refuses a call that names no profile or an unknown one, and starts nothing for it", async () => {

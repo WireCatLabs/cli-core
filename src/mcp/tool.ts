@@ -31,6 +31,7 @@ import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from 
 import { onlineDeps, storeModeDeps } from "../services/deps.js"
 import { type Services, servicesFor } from "../services/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { type CallerSource, callerOf } from "./caller.js"
 import type { MessengerSession } from "./session.js"
 import { agentJson } from "./text.js"
 
@@ -176,6 +177,8 @@ export interface Registration {
   log?: (call: ToolCall) => Promise<void>
   /** The CLI's commands, by which an answer's next steps are judged safe to run unasked. */
   targets?: NonNullable<StepInput["targets"]>
+  /** How a call's caller is worked out on this connection (`callerOf`); without it the environment's agent is kept. */
+  callers?: CallerSource
 }
 
 export type ToolTier = "read" | "draft" | "write-private" | "write-public" | "destructive" | "admin"
@@ -290,7 +293,12 @@ export const entryRunner = (registration: Registration): RunEntry => {
             keepFailed: true,
             trace: false,
             format: "json",
-            context: runContextOf({ bin: app.command, command, env: registration.defaults.env ?? process.env }),
+            context: runContextOf({
+              bin: app.command,
+              command,
+              env: registration.defaults.env ?? process.env,
+              caller: registration.callers ? callerOf(ctx, key, registration.callers) : undefined,
+            }),
             ...(traceId === undefined ? {} : { traceId }),
           })
         : undefined

@@ -771,6 +771,7 @@ const keepFailure = async (
         argv,
         env,
         recordInput: settings ? settings.recordInput !== false : false,
+        caller: options.agent?.caller,
       }),
       // Settings that did not load never accepted the word, which may be a refused name or somebody's words.
       profile: settings ? namedProfile(settings) : undefined,

@@ -20,7 +20,9 @@ import { lentConnection } from "../cli/messenger/serve-relay.js"
 import type { RunOptions } from "../cli/program.js"
 import type { StdinField } from "../cli/stdin-field.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
+import type { RunCaller } from "../runs/run-context.js"
 import { authorityAllowed, botApiAllowed, type Level, type PermissionKey } from "../sends/permissions.js"
+import { currentCaller } from "./caller.js"
 
 /** The CLI's own `run` — a fresh program on every call — and its command tree as `commands --json` describes it. */
 export interface AgentProgram {
@@ -47,6 +49,8 @@ export interface AgentContext {
   stdin?: (path: readonly string[]) => StdinField | undefined
   /** More of the run's environment, read by the commands that look for it: the server's `spawnJob`, `embedders`. */
   environment?: Readonly<Record<string, unknown>>
+  /** Who made the call (`callerOf`); the run records it rather than this server's environment. */
+  caller?: RunCaller
 }
 
 export type AgentAnswer = { result: unknown } | { error: ErrorObject }
@@ -355,6 +359,7 @@ export const runCommandForAgent = async (
         ...(ctx.overrides?.length ? { overrides: ctx.overrides } : {}),
         authority: levels !== undefined && authorityAllowed(levels),
         botApi: levels !== undefined && botApiAllowed(levels),
+        ...((ctx.caller ?? currentCaller()) ? { caller: ctx.caller ?? currentCaller() } : {}),
       },
       // Opened only when the command asks: a read the store answers never connects.
       ...(lend

@@ -2328,6 +2328,44 @@ describe("the MCP server", () => {
     expect(listRuns(dir).map(({ runId }) => runId)).toEqual(before)
   })
 
+  describe("a recorded call names its caller", () => {
+    const failing = () =>
+      scripted({
+        chats: async () => {
+          throw new CliError("timeout", "synthetic timeout")
+        },
+      })
+    const agentEnv = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "synthetic-session-1" }
+
+    it("over stdio: the agent that started the server, and the client from initialize", async () => {
+      const { call, env } = await connect(failing(), { extraEnv: agentEnv })
+      expect((await call("chats list")).isError).toBe(true)
+      const [run] = listRuns(runsDirFor(app, env))
+      expect(run?.via).toBe("mcp-stdio")
+      expect(run?.agent).toEqual({
+        kind: "claude-code",
+        session_id: "synthetic-session-1",
+        client: { name: "test", version: "1.0.0" },
+      })
+      expect(run?.mcp).toMatchObject({ tool: "chats_list", request_id: expect.any(String) })
+      expect(run?.mcp?.connection_id).toMatch(/^[0-9a-f-]{36}$/)
+    })
+
+    it("over HTTP: the OAuth app, never the session of whoever started the server", async () => {
+      const { call, env } = await connect(failing(), { extraEnv: agentEnv, http: true })
+      expect((await call("chats list")).isError).toBe(true)
+      const [run] = listRuns(runsDirFor(app, env))
+      expect(run?.via).toBe("mcp-http")
+      expect(run?.agent?.kind).toBe("mcp-client")
+      expect(run?.agent?.client).toEqual({
+        name: "Test app",
+        version: "1.0.0",
+        id: expect.stringMatching(/^[0-9a-f]{8}$/),
+      })
+      expect(JSON.stringify(run)).not.toContain("synthetic-session-1")
+    })
+  })
+
   it("plans gaps locally and repairs them through the retained session", async () => {
     const root = await filledRoot()
     const backend = scripted()
