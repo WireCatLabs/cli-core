@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { isContentKey } from "@wirecat/cli-base/standards"
 import type { Argument, Command, Option } from "commander"
 import { BARE_PHONE, INTERNATIONAL_PHONE } from "./error-detail.js"
@@ -12,7 +13,40 @@ export interface RunAgent {
   session_id: string | null
   /** Set, and only `true`, when a chat message started the agent's turn; who sent it is never kept. */
   from_chat?: true
+  /** The MCP client that made the call, as it named itself; `id` is `clientHash` of an OAuth client's id. */
+  client?: RunClient
 }
+
+export interface RunClient {
+  name: string
+  version?: string
+  id?: string
+}
+
+/** How the run was asked for: typed or scripted, an MCP client on stdio or over HTTP, or WireCat Desktop. */
+export type RunVia = "cli" | "mcp-stdio" | "mcp-http" | "desktop"
+
+/** The MCP call a run answered. `connection_id` groups the calls of one connection when no agent session does. */
+export interface RunMcp {
+  tool: string
+  request_id?: string
+  connection_id?: string
+  /** The every-profile server passed the call on; the caller is the one it named. */
+  proxied?: true
+}
+
+/** Who asked for a run, worked out by whoever received the call; it wins over the process's environment. */
+export interface RunCaller {
+  via: RunVia
+  agent?: RunAgent
+  mcp?: RunMcp
+}
+
+/** An OAuth client id is a bearer of sorts: a run keeps eight hex characters of its SHA-256, enough to tell apps apart. */
+export const clientHash = (id: string): string => createHash("sha256").update(id).digest("hex").slice(0, 8)
+
+/** `WIRECAT_CALLER=desktop` is set by WireCat Desktop on the commands it runs for its own pages. */
+export const viaOf = (env: NodeJS.ProcessEnv): RunVia => (env.WIRECAT_CALLER?.trim() === "desktop" ? "desktop" : "cli")
 
 /**
  * The agent is read from what each one sets in the processes it starts: Claude Code `CLAUDECODE` and
@@ -220,6 +254,7 @@ export const runContextOf = ({
   argv,
   env,
   recordInput = false,
+  caller,
 }: {
   bin: string
   /** The run's own name, `messages list` or `mcp messages list`; empty when no command was recognised. */
@@ -229,13 +264,17 @@ export const runContextOf = ({
   env: NodeJS.ProcessEnv
   /** The owner's `record_input`; left out, every value that may be content is masked. */
   recordInput?: boolean
+  /** Who asked, when the receiver knows better than the environment: an MCP call. */
+  caller?: RunCaller | undefined
 }): RunContext => {
   const masked = program && argv ? maskArgv(program, argv, { keep: recordInput }) : undefined
-  const agent = agentOf(env)
+  const agent = caller ? caller.agent : agentOf(env)
   return {
     cliCommand: command ? `${bin} ${command}` : bin,
     ...(masked ? { argv: masked.argv } : {}),
     ...(masked?.unknownCommand === undefined ? {} : { unknownCommand: masked.unknownCommand }),
     ...(agent ? { agent } : {}),
+    via: caller?.via ?? viaOf(env),
+    ...(caller?.mcp ? { mcp: caller.mcp } : {}),
   }
 }

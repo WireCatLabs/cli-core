@@ -1,10 +1,10 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { tmpdir, userInfo } from "node:os"
 import { join } from "node:path"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
-import { findRun, listRuns, pruneRuns, readEvents, startRun } from "./run.js"
+import { findRun, listRuns, pruneRuns, readEvents, refuseRealStateInTests, runsDirFor, startRun } from "./run.js"
 
 const runsDir = () => join(mkdtempSync(join(tmpdir(), "runs-")), "runs")
 
@@ -208,5 +208,27 @@ describe("what is kept, and for how long", () => {
     begin(dir)
 
     expect(readdirSync(dir)).not.toContain("2020-01-01")
+  })
+})
+
+describe("the owner's real data folder", () => {
+  it("is refused to a test, whatever HOME the fixture passed", () => {
+    const real = { HOME: userInfo().homedir }
+    const dir = join(runsDirFor({ appName: "chat-cli", envPrefix: "CHAT" } as never, real), "2026-10-27", "x")
+    expect(() => refuseRealStateInTests(dir)).toThrow(/real data folder/)
+    expect(() =>
+      startRun({
+        runsDir: runsDirFor({ appName: "chat-cli", envPrefix: "CHAT" } as never, real),
+        command: "x",
+        service: "chat",
+        cliVersion: "0.0.0",
+      }),
+    ).toThrow(/real data folder/)
+  })
+
+  it("is left alone outside tests and for the sandbox's own folders", () => {
+    const dir = join(userInfo().homedir, ".local", "share", "chat-cli", "runs", "x")
+    expect(() => refuseRealStateInTests(dir, {})).not.toThrow()
+    expect(() => refuseRealStateInTests(join(runsDir(), "x"))).not.toThrow()
   })
 })

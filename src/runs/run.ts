@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto"
 import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { userInfo } from "node:os"
+import { join, sep } from "node:path"
 import { createRecordLog, type Logger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../ports/app.js"
 import type { RunError } from "./error-detail.js"
 import { LOG_ATTRIBUTES } from "./log-attributes.js"
 import { fromLogAttributes, logAttributes, snakeLogger } from "./log-keys.js"
-import type { RunAgent } from "./run-context.js"
+import type { RunAgent, RunMcp, RunVia } from "./run-context.js"
 
 export type RunStatus = "success" | "failed" | "partial"
 
@@ -55,14 +56,18 @@ export interface RunMetadata {
   argv?: string[]
   /** The word that named no command, when that is why the run failed. */
   unknownCommand?: string
-  /** The coding agent that started it, when one did. */
+  /** The coding agent that started it, when one did, and the MCP client that made the call. */
   agent?: RunAgent
+  /** How it was asked for (`viaOf`, or the MCP server that received it). */
+  via?: RunVia
+  /** The MCP call it answered. */
+  mcp?: RunMcp
   /** How a failed run failed (`errorDetailOf`). */
   error?: RunError
 }
 
 /** Who started a run and with what, known before it starts. */
-export type RunContext = Pick<RunMetadata, "cliCommand" | "argv" | "unknownCommand" | "agent">
+export type RunContext = Pick<RunMetadata, "cliCommand" | "argv" | "unknownCommand" | "agent" | "via" | "mcp">
 
 export interface StartRunOptions {
   runsDir: string
@@ -127,6 +132,7 @@ export const startRun = (options: StartRunOptions): Run => {
   // that directory.
   pruneRuns(options.runsDir, { keepDays: options.keepDays ?? KEEP_RUNS_FOR_DAYS, now: startedAt })
 
+  refuseRealStateInTests(dir)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
 
   // Created here rather than by the logger, which opens with whatever the umask allows. The
@@ -200,6 +206,23 @@ export const startRun = (options: StartRunOptions): Run => {
       })
     },
   }
+}
+
+/**
+ * The test sandbox moves HOME and the XDG folders, so a run that still resolves into the owner's own data folder is a
+ * fixture that bypassed it: thousands of test runs once landed beside the owner's real ones. The passwd entry's home
+ * is read because HOME is the very thing the sandbox changed.
+ */
+export const refuseRealStateInTests = (dir: string, env: NodeJS.ProcessEnv = process.env): void => {
+  if (env.VITEST === undefined) return
+  let home: string
+  try {
+    home = userInfo().homedir
+  } catch {
+    return
+  }
+  if (dir.startsWith(join(home, ".local", "share") + sep))
+    throw new Error(`a test opened a run in the real data folder: ${dir}`)
 }
 
 export const runtime = (): string => {
