@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.462.0 — 27.10.2026
+
 ### Changed — may break callers
 
 - **`skill show`, `skill status` and `skill install` answer `--json` in the one-thing envelope**
