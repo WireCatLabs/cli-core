@@ -5,7 +5,7 @@ import { dirname, join } from "node:path"
 import { CliError, captureStreams, NOT_ALLOWED } from "@wirecat/cli-base"
 import { listEnvelopeSchema, logRecordSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import { describe, expect, it, onTestFinished } from "vitest"
+import { describe, expect, it, onTestFinished, vi } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { ENTITIES } from "../../entities/index.js"
 import { job as jobEntity } from "../../entities/job.js"
@@ -71,7 +71,7 @@ const call = async (
   argv: string[],
   connection: MessengerAdapter,
   env: NodeJS.ProcessEnv,
-  { fetching, ...extra }: { spawnJob?: SpawnJob; signal?: AbortSignal; fetching?: Fetching } = {},
+  { fetching, ...extra }: { spawnJob?: SpawnJob; signal?: AbortSignal; fetching?: Fetching; tty?: boolean } = {},
 ) => {
   const messenger: Messenger = {
     app,
@@ -100,7 +100,7 @@ const call = async (
       ...extra,
     },
   )
-  const body = streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined
+  const body = streams.stdout[0] && !extra.tty ? JSON.parse(streams.stdout[0]) : undefined
   if (code === 0 && argv[0] === "store" && argv[1] === "jobs" && body) {
     const names = {
       show: "store_job_details",
@@ -423,6 +423,96 @@ describe("messages sync", () => {
   })
 })
 
+/** Chats 9001..9003 whose messages are 1..newest; each history page moves the clock on by `stepMs`. */
+const chatsOf = (newest: Record<string, number>, stepMs: number): MessengerAdapter & ServerReads => {
+  const at = (chatId: string, id: number) => ({ ...message(id), chatId })
+  return {
+    self: () => "500",
+    close: async () => {},
+    chats: async () => ({
+      items: Object.entries(newest).map(([id, top]) => ({
+        id,
+        title: `Secret title ${id}`,
+        kind: "group",
+        unreadCount: 0,
+        lastMessageAt: at(id, top).timestamp,
+        participantsCount: null,
+      })),
+      hasMore: false,
+    }),
+    history: async (chatId: string, { limit, before }: { limit: number; before?: string }) => {
+      vi.setSystemTime(Date.now() + stepMs)
+      const upper = before === undefined ? (newest[chatId] ?? 0) : Number(before) - 1
+      const low = Math.max(1, upper - limit + 1)
+      const items = upper < 1 ? [] : Array.from({ length: upper - low + 1 }, (_, index) => at(chatId, low + index))
+      return { items, hasMore: low > 1 }
+    },
+  } as unknown as MessengerAdapter & ServerReads
+}
+
+const progressLines = (stderr: string) =>
+  stderr
+    .split("\n")
+    .filter((line) => line.startsWith('{"event":"progress"'))
+    .map((line) => JSON.parse(line))
+
+describe("messages sync progress", () => {
+  const clock = () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-27T00:00:00Z") })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+  }
+  const sync = ["messages", "sync", "--page-size", "2", "--pause", "1ms", "--since-time", "2020-01-01"]
+
+  it("**--all prints counts on stderr after the chat list and after each chat, current ones too, never an id or title**", async () => {
+    clock()
+    const env = setup()
+    // 9001 is the oldest chat, walked last; held whole beforehand, so --all passes it as current.
+    const adapter = chatsOf({ "9001": 2, "9002": 5, "9003": 3 }, 1_000)
+    expect((await call([...sync, "9001", "--json"], adapter, env)).code).toBe(0)
+
+    const { code, stdout, stderr, answer } = await call([...sync, "--all", "--json"], adapter, env)
+
+    expect(code).toBe(0)
+    expect(stdout).toHaveLength(1)
+    expect(answer).toMatchObject({ chats: 3, fetched: 8 })
+    expect(progressLines(stderr)).toEqual([
+      { event: "progress", step: "sync", chats: 3, chats_done: 0, fetched: 0 },
+      { event: "progress", step: "sync", chats: 3, chats_done: 1, fetched: 5 },
+      { event: "progress", step: "sync", chats: 3, chats_done: 2, fetched: 8 },
+      { event: "progress", step: "sync", chats: 3, chats_done: 3, fetched: 8 },
+    ])
+    expect(stderr).not.toMatch(/Secret title|900[123]/)
+  })
+
+  it("**one chat prints a line per page** with the running count and no chat totals", async () => {
+    clock()
+    const { stderr } = await call([...sync, "9002", "--json"], chatsOf({ "9002": 5 }, 1_000), setup())
+
+    expect(progressLines(stderr)).toEqual(
+      [2, 4, 5].map((fetched) => ({
+        event: "progress",
+        step: "sync",
+        chats: null,
+        chats_done: null,
+        fetched,
+      })),
+    )
+    expect(stderr).not.toMatch(/Secret title|9002/)
+  })
+
+  it("**keeps to about two lines a second** when pages come faster, and prints none for a person", async () => {
+    clock()
+    const fast = chatsOf({ "9002": 5 }, 100)
+
+    expect(progressLines((await call([...sync, "9002", "--json"], fast, setup())).stderr)).toEqual([
+      { event: "progress", step: "sync", chats: null, chats_done: null, fetched: 2 },
+    ])
+    expect(progressLines((await call([...sync, "9002"], fast, setup(), { tty: true })).stderr)).toEqual([])
+  })
+})
+
 describe("store fetch in the background", () => {
   const spawned = (pid: number) => {
     const calls: { argv: string[]; env: NodeJS.ProcessEnv; log: string }[] = []
@@ -530,6 +620,7 @@ describe("store fetch in the background", () => {
     const state = { newest: 150, asked: [] as (string | undefined)[] }
     const child = await call(calls[0]?.argv ?? [], chatOf(state), { ...env, ...calls[0]?.env })
     expect(child.code).toBe(0)
+    expect(progressLines(child.stderr)).toEqual([])
 
     expect((await call(["store", "jobs", "show", "--json"], idle, env)).answer).toMatchObject({
       job,
