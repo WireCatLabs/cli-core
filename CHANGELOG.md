@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.457.0 — 27.10.2026
+
 ### Fixed
 
 - **`sync --full` lists the whole window again.** Under the shared program its global `--full` took the flag before
