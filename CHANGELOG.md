@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`mcp server status` says what each logged-in browser app last did.** Each client in `clients` carries
+  `last_request_at` (its last MCP request of any kind, so an app that logged in has also reached the server),
+  `last_tool` and `last_tool_at` (its last `tools/call`) and `tool_calls_today` (calls since local midnight); `null`
+  and `0` for an app that has done nothing yet. The running server keeps them in `<token file>.activity.json`, mode
+  600, beside the token file: tool names and times only, never arguments or results, and a name that does not look
+  like a tool's is not kept. WireCat Desktop shows them as "last call 2 min ago · tg_read".
+
 ## 0.453.0 — 27.10.2026
 
 ### Added

@@ -12,6 +12,7 @@ import {
 } from "@modelcontextprotocol/server"
 import { CliError } from "@wirecat/cli-base"
 import { type Listening, listen } from "../../http/listen.js"
+import { activityRecorder, calledTools, httpActivityFile } from "./activity.js"
 import { ownerLogin } from "./oauth.js"
 import { httpLock } from "./state.js"
 
@@ -91,6 +92,15 @@ const metadataRequest = (request: Request, path: string, base: string): Request 
   return new Request(url, { method: request.method, headers: request.headers })
 }
 
+const toolsIn = async (request: Request): Promise<string[]> => {
+  if (request.method !== "POST") return []
+  try {
+    return calledTools(await request.clone().json())
+  } catch {
+    return []
+  }
+}
+
 export interface HttpOptions {
   /**
    * The tunnel's address, as the browser apps reach it — `https://name.ts.net`, or under a path when tools share
@@ -160,6 +170,7 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
     verifier: login.verifier,
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resource),
   })
+  const activity = activityRecorder(httpActivityFile(tokenFile), now)
   const allowedHosts = [...new Set([publicUrl.hostname, ...LOCAL])]
   const allowedOrigins = [publicUrl.origin]
 
@@ -185,6 +196,7 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
       if (path !== mcpPath) return new Response("Not found", { status: 404 })
       const auth = await bearer(request)
       if (auth instanceof Response) return auth
+      activity.record(auth.clientId, await toolsIn(request))
       return (await isLegacyRequest(request)) ? legacy.handle(request, auth) : mcp.fetch(request, { authInfo: auth })
     },
     { host: "127.0.0.1", port },
@@ -198,6 +210,7 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
     url: listening.url,
     close: async () => {
       login.close()
+      activity.flush()
       try {
         await listening.close()
         await legacy.close()

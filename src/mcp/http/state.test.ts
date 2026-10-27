@@ -5,6 +5,7 @@ import { dirname, join } from "node:path"
 import { McpServer } from "@modelcontextprotocol/server"
 import { describe, expect, it } from "vitest"
 import { freePort } from "../../testing/mcp-http-client.js"
+import { httpActivityFile, localDay } from "./activity.js"
 import { serveOverHttp } from "./serve.js"
 import { ACCESS_SECONDS, httpLockFile, REFRESH_SECONDS, readHttpLock, signedInClients } from "./state.js"
 
@@ -97,11 +98,49 @@ describe("signed-in apps", () => {
 
     const clients = signedInClients(tokenFile, now)
 
+    const quiet = { lastRequestAt: null, lastTool: null, lastToolAt: null, toolCallsToday: 0 }
     expect(clients).toEqual([
-      { claimedName: "Claude", lastLoginAt: new Date(now - 60_000).toISOString() },
-      { claimedName: null, lastLoginAt: new Date((seconds + 3600 - REFRESH_SECONDS) * 1000).toISOString() },
+      { claimedName: "Claude", lastLoginAt: new Date(now - 60_000).toISOString(), ...quiet },
+      {
+        claimedName: null,
+        lastLoginAt: new Date((seconds + 3600 - REFRESH_SECONDS) * 1000).toISOString(),
+        ...quiet,
+      },
     ])
     expect(JSON.stringify(clients)).not.toMatch(/"a"|"b"/)
+  })
+
+  it("adds each app's last call and today's calls from the activity file, zero from another day", () => {
+    const tokenFile = tokenFileIn()
+    const now = new Date(2026, 9, 27, 12, 0).getTime()
+    const seconds = Math.floor(now / 1000)
+    mkdirSync(dirname(tokenFile), { recursive: true })
+    const app = (id: string) => ({ id, name: id, redirectUris: [], authMethod: "none", issuedAt: 0 })
+    writeFileSync(
+      tokenFile,
+      JSON.stringify({
+        clients: [app("today"), app("yesterday")],
+        tokens: ["today", "yesterday"].map((id) => ({
+          hash: id,
+          kind: "refresh",
+          clientId: id,
+          expiresAt: seconds + 60,
+        })),
+      }),
+    )
+    const at = "2026-10-27T11:58:00.000Z"
+    writeFileSync(
+      httpActivityFile(tokenFile),
+      JSON.stringify({
+        today: { lastRequestAt: at, lastTool: "tg_read", lastToolAt: at, day: localDay(now), toolCalls: 3 },
+        yesterday: { lastRequestAt: at, day: "2026-10-26", toolCalls: 9 },
+      }),
+    )
+
+    const clients = signedInClients(tokenFile, now)
+
+    expect(clients.find((c) => c.claimedName === "today")).toMatchObject({ lastTool: "tg_read", toolCallsToday: 3 })
+    expect(clients.find((c) => c.claimedName === "yesterday")).toMatchObject({ lastTool: null, toolCallsToday: 0 })
   })
 
   it("is empty without a token file", () => {

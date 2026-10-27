@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
 import { holdLock, type Lock, readLock, releaseLock, takeLock } from "../../background/lock.js"
+import { httpActivityFile, localDay, readActivity } from "./activity.js"
 
 export const ACCESS_SECONDS = 60 * 60
 export const REFRESH_SECONDS = 30 * 24 * 60 * 60
@@ -68,6 +69,11 @@ export interface SignedInClient {
   /** What the app said its name was when it registered — anyone may register, so it proves nothing. */
   claimedName: string | null
   lastLoginAt: string
+  /** Any MCP request with its token, so the app reached the server after logging in. */
+  lastRequestAt: string | null
+  lastTool: string | null
+  lastToolAt: string | null
+  toolCallsToday: number
 }
 
 /**
@@ -77,6 +83,8 @@ export interface SignedInClient {
 export const signedInClients = (tokenFile: string, now = Date.now()): SignedInClient[] => {
   const seconds = Math.floor(now / 1000)
   const { clients, tokens } = readStored(tokenFile)
+  const activity = readActivity(httpActivityFile(tokenFile))
+  const today = localDay(now)
   const last = new Map<string, number>()
   for (const token of tokens) {
     if (token.expiresAt <= seconds) continue
@@ -85,9 +93,16 @@ export const signedInClients = (tokenFile: string, now = Date.now()): SignedInCl
   }
   return clients
     .filter((client) => last.has(client.id))
-    .map((client) => ({
-      claimedName: client.name ?? null,
-      lastLoginAt: new Date((last.get(client.id) ?? 0) * 1000).toISOString(),
-    }))
+    .map((client) => {
+      const did = activity[client.id]
+      return {
+        claimedName: client.name ?? null,
+        lastLoginAt: new Date((last.get(client.id) ?? 0) * 1000).toISOString(),
+        lastRequestAt: did?.lastRequestAt ?? null,
+        lastTool: did?.lastTool ?? null,
+        lastToolAt: did?.lastToolAt ?? null,
+        toolCallsToday: did?.day === today ? did.toolCalls : 0,
+      }
+    })
     .sort((a, b) => b.lastLoginAt.localeCompare(a.lastLoginAt))
 }
