@@ -84,7 +84,7 @@ const setup = (
   const cli = async (argv: string[]) => {
     const streams = captureStreams()
     const code = await run(
-      [...(every ? [] : ["personal"]), ...argv, "--json"],
+      [...(every ? [] : ["personal"]), ...argv, ...(every ? ["--profiles", "all"] : []), "--json"],
       { app, commands: () => [mcp(tokenFile, env)] },
       { streams, tty: false, env, system },
     )
@@ -175,6 +175,7 @@ describe("mcp server", () => {
     expect(code).toBe(0)
     expect(item).toMatchObject({
       profile: null,
+      profiles: "all",
       started: true,
       connector_url: "https://laptop.example.ts.net/chat/mcp",
     })
@@ -182,12 +183,44 @@ describe("mcp server", () => {
       "mcp",
       "serve",
       "--http",
+      "--profiles",
+      "all",
       "--port",
       "8765",
       "--public-url",
       "https://laptop.example.ts.net/chat",
     ])
     expect(launched[0]?.env.CHAT_PROFILE).toBeUndefined()
+    expect(launched[0]?.env.CHAT_MCP_HTTP).toBe(ALL_PROFILES)
+
+    const status = await cli(["mcp", "server", "status"])
+    expect(status.item).toMatchObject({ running: true, by: "server", profiles: "all" })
+    const stopped = await cli(["mcp", "server", "stop"])
+    expect(stopped.item).toMatchObject({ stopped: true })
+  })
+
+  it.each([
+    [["mcp", "server", "start", ...PUBLIC], "name the profiles to serve"],
+    [["work", "mcp", "serve", "--profiles", "personal"], "not both"],
+    [["work", "mcp", "config", "--profiles", "all"], "not both"],
+    [["mcp", "revoke"], "name the profiles to serve"],
+  ])("refuses %j with exit 2 and lists the profiles", async (argv, words) => {
+    const root = mkdtempSync(join(tmpdir(), "mcp-server-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ profiles: { work: {}, personal: {} } }))
+    const streams = captureStreams()
+
+    const code = await run(
+      [...argv, "--json"],
+      { app, commands: () => [mcpCommand(messenger)] },
+      { streams, tty: false, env },
+    )
+
+    expect(code).toBe(2)
+    const { error } = JSON.parse(streams.stderr.join(""))
+    expect(error).toMatchObject({ code: "validation_error", details: { profiles: ["personal", "work"] } })
+    expect(error.message).toContain(words)
   })
 
   it("refuses to start a second server and starts nothing", async () => {

@@ -31,13 +31,14 @@ const messenger: Messenger = {
   chatArgument: "a chat",
 }
 
-/** `chat mcp serve` as an agent runs it: requests on stdin, then stdin closes; the answers are on stdout. */
+/** `chat mcp serve --profiles` as an agent runs it: requests on stdin, then stdin closes; the answers are on stdout. */
 const serve = async (
   requests: object[],
   {
     profiles = ["work", "personal"],
-    argv = ["mcp", "serve"],
+    argv = ["mcp", "serve", "--profiles", "all"],
     profileState = undefined as Messenger["profileState"],
+    extra = {} as Record<string, string>,
   } = {},
 ) => {
   const root = mkdtempSync(join(tmpdir(), "mcp-every-"))
@@ -45,6 +46,7 @@ const serve = async (
     CHAT_CONFIG_DIR: join(root, "config"),
     CHAT_STATE_DIR: join(root, "state"),
     MESSAGING_STORE: join(root, "m.db"),
+    ...extra,
   }
   mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
   writeFileSync(
@@ -92,9 +94,9 @@ const HANDSHAKE = [
   { method: "notifications/initialized" },
 ]
 
-describe("chat mcp serve, with no profile", () => {
-  it("serves every profile: each tool takes one, and a call runs in `chat <profile> mcp serve`", async () => {
-    const { answers, log } = await serve([
+describe("chat mcp serve --profiles", () => {
+  it("--profiles all serves every profile: each tool takes one, and a call runs in `chat <profile> mcp serve`", async () => {
+    const { answers, log, stderr } = await serve([
       ...HANDSHAKE,
       { id: 2, method: "tools/list" },
       { id: 3, method: "tools/call", params: { name: "chat_read", arguments: { profile: "work", command: "inbox" } } },
@@ -109,6 +111,49 @@ describe("chat mcp serve, with no profile", () => {
       arguments: { command: "inbox" },
     })
     expect(log()).toContain("start work mcp serve")
+    expect(stderr.join("")).toContain("serving every profile (personal, work)")
+  })
+
+  it("serves only the profiles listed, and refuses a call for another", async () => {
+    const { answers, stderr } = await serve(
+      [
+        ...HANDSHAKE,
+        { id: 2, method: "tools/list" },
+        { id: 3, method: "tools/call", params: { name: "chat_read", arguments: { profile: "home", command: "x" } } },
+      ],
+      { profiles: ["work", "personal", "home"], argv: ["mcp", "serve", "--profiles", "work, personal,work"] },
+    )
+    const listed = answers.find((one) => one.id === 2)?.result as { tools: { inputSchema: object }[] }
+    expect(JSON.stringify(listed.tools[0]?.inputSchema)).toContain('"enum":["personal","work"]')
+    expect(JSON.stringify(answers.find((one) => one.id === 3)?.result)).toContain("one of: personal, work")
+    expect(stderr.join("")).toContain("serving profiles personal, work")
+  })
+
+  it.each([
+    [["mcp", "serve"], "validation_error", "name the profiles to serve"],
+    [["mcp", "serve", "--profiles", "work,nobody"], "validation_error", 'no profile named "nobody"'],
+    [["mcp", "serve", "--profiles", "all,work"], "validation_error", "`all` alone for every profile"],
+  ])("refuses %j and lists the profiles", async (argv, code, words) => {
+    const { failure, answers } = await serve(HANDSHAKE, { argv })
+    expect(failure).toMatchObject({ code, details: { profiles: ["personal", "work"] } })
+    expect(failure?.message).toContain(words)
+    expect(answers).toEqual([])
+  })
+
+  it("under a profile lock, --profiles may name the locked profile only", async () => {
+    for (const given of ["all", "work,personal"]) {
+      const { failure } = await serve(HANDSHAKE, {
+        argv: ["mcp", "serve", "--profiles", given],
+        extra: { CHAT_PROFILE_LOCK: "work" },
+      })
+      expect(failure).toMatchObject({ code: "permission_error" })
+    }
+    const { failure, stderr } = await serve(HANDSHAKE, {
+      argv: ["mcp", "serve", "--profiles", "work"],
+      extra: { CHAT_PROFILE_LOCK: "work" },
+    })
+    expect(failure).toBeUndefined()
+    expect(stderr.join("")).toContain("serving profile work")
   })
 
   it("passes a stricter permission on to every profile's server", async () => {
@@ -121,7 +166,7 @@ describe("chat mcp serve, with no profile", () => {
           params: { name: "chat_read", arguments: { profile: "personal", command: "x" } },
         },
       ],
-      { argv: ["mcp", "serve", "--permission", "messages.send=deny"] },
+      { argv: ["mcp", "serve", "--profiles", "all", "--permission", "messages.send=deny"] },
     )
     expect(log()).toContain("start personal mcp serve --permission messages.send=deny")
   })
@@ -156,6 +201,33 @@ describe("chat mcp serve, with no profile", () => {
     expect(refused.content[0]?.text).toContain("profile default is not signed in — run `chat default setup`")
     expect(refused.content[0]?.text).toContain("or sign in from WireCat Desktop")
     expect(log()).not.toContain("start default mcp")
+  })
+
+  it("marks a listed profile not signed in and refuses its call, and refuses a bot in the list", async () => {
+    const states = { default: "signed-out", personal: "signed-in", news: "bot" } as const
+    const profileState = (profile: string) => states[profile as keyof typeof states]
+    const { answers } = await serve(
+      [
+        ...HANDSHAKE,
+        { id: 2, method: "tools/list" },
+        { id: 3, method: "tools/call", params: { name: "chat_read", arguments: { profile: "default", command: "x" } } },
+      ],
+      {
+        profiles: ["default", "news", "personal"],
+        profileState,
+        argv: ["mcp", "serve", "--profiles", "default,personal"],
+      },
+    )
+    expect(JSON.stringify(answers.find((one) => one.id === 2)?.result)).toContain('"title":"default — not signed in"')
+    expect(JSON.stringify(answers.find((one) => one.id === 3)?.result)).toContain("profile default is not signed in")
+
+    const { failure } = await serve(HANDSHAKE, {
+      profiles: ["default", "news", "personal"],
+      profileState,
+      argv: ["mcp", "serve", "--profiles", "news,personal"],
+    })
+    expect(failure).toMatchObject({ code: "validation_error" })
+    expect(failure?.message).toContain("news is a bot profile")
   })
 
   it("says so when there is no profile on this computer yet", async () => {

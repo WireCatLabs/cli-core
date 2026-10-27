@@ -802,6 +802,10 @@
       "value": "<who>",
       "meaning": "who sees the profile photo: everyone, contacts or nobody"
     },
+    "--profiles": {
+      "value": "<names|all>",
+      "meaning": "the profiles one MCP server serves, comma-separated, or all of them"
+    },
     "--public-url": {
       "value": "<url>",
       "meaning": "the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch"
@@ -3160,6 +3164,7 @@
       "in": "all",
       "options": {
         "--permission": "all",
+        "--profiles": "all",
         "--yes": {
           "in": [],
           "planned": {
@@ -3171,7 +3176,10 @@
       }
     },
     "mcp revoke": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--profiles": "all"
+      }
     },
     "mcp serve": {
       "in": "all",
@@ -3179,6 +3187,7 @@
         "--http": "all",
         "--permission": "all",
         "--port": "all",
+        "--profiles": "all",
         "--public-url": "all",
         "--yes": {
           "in": [],
@@ -3198,14 +3207,21 @@
       "options": {
         "--permission": "all",
         "--port": "all",
+        "--profiles": "all",
         "--public-url": "all"
       }
     },
     "mcp server status": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--profiles": "all"
+      }
     },
     "mcp server stop": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--profiles": "all"
+      }
     },
     "mentions": {
       "in": "all"

@@ -24,8 +24,10 @@ const LOOKS = 120
 export interface McpServerTarget {
   /** What a person types before `mcp`: `tg personal`, `memo`. */
   invocation: string
-  /** Absent for a CLI without profiles. */
+  /** Absent for a CLI without profiles, and for a server of several. */
   profile?: string
+  /** A server of several profiles: what `--profiles` took, its token file's name and the profiles it names. */
+  profiles?: { option: string; key: string; label: string }
   envPrefix: string
   env: NodeJS.ProcessEnv
   tokenFile: string
@@ -46,6 +48,8 @@ export interface McpServerOptions {
    * since a server that refuses the option dies before it listens.
    */
   permission?: boolean
+  /** `start`, `stop` and `status` take `--profiles`, for a CLI whose `mcp serve` serves several profiles. */
+  profiles?: boolean
   target: (self: Command) => McpServerTarget
   /** The CLI's own answer: the item in `--json`, else the lines. */
   answer: (self: Command, item: object, lines: string[]) => void
@@ -65,7 +69,22 @@ const liveCode = (lock: HttpLock, now: number) =>
     ? { code: lock.loginCode, expires_at: lock.loginCodeExpiresAt }
     : null
 
-const markerOf = (target: McpServerTarget) => `${mcpHttpMarker(target.envPrefix)}=${target.profile ?? "default"}`
+const markerValue = (target: McpServerTarget) => target.profile ?? target.profiles?.key ?? "default"
+
+const markerOf = (target: McpServerTarget) => `${mcpHttpMarker(target.envPrefix)}=${markerValue(target)}`
+
+/** How a line names the server: `chat personal`, or `chat` and the profiles it serves. */
+const shown = (target: McpServerTarget) =>
+  target.profiles ? `${target.invocation}, ${target.profiles.label},` : target.invocation
+
+/** The `mcp server <verb>` that finds this server again. */
+const again = (target: McpServerTarget, verb: string) =>
+  `${target.invocation} mcp server ${verb}${target.profiles ? ` --profiles ${target.profiles.option}` : ""}`
+
+const named = (target: McpServerTarget) => ({
+  profile: target.profile ?? null,
+  ...(target.profiles ? { profiles: target.profiles.option } : {}),
+})
 
 /** Who started it decides whether `stop` may end it: only a process that carries our marker. */
 const byOf = (target: McpServerTarget, pid: number) => (carries(pid, markerOf(target)) ? "server" : "hand")
@@ -104,6 +123,7 @@ export const mcpServerCommand = ({
   example,
   defaultPort = MCP_HTTP_DEFAULT_PORT,
   permission = false,
+  profiles = false,
   target,
   answer,
   system,
@@ -148,13 +168,9 @@ export const mcpServerCommand = ({
     const lockFile = httpLockFile(one.tokenFile)
     const before = readHttpLock(lockFile)
     if (before && alive(before.pid)) {
-      answer(
-        this,
-        { profile: one.profile ?? null, started: false, running: true, ...serving(one, before, Date.now()) },
-        [
-          `Already serving ${one.invocation} over HTTP since ${clock(before.startedAt)} (PID ${before.pid}, port ${before.port}).`,
-        ],
-      )
+      answer(this, { ...named(one), started: false, running: true, ...serving(one, before, Date.now()) }, [
+        `Already serving ${shown(one)} over HTTP since ${clock(before.startedAt)} (PID ${before.pid}, port ${before.port}).`,
+      ])
       return
     }
     const sys = machine(this)
@@ -170,7 +186,7 @@ export const mcpServerCommand = ({
         url.pathname === "/" ? url.origin : url.href,
         ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
       ],
-      env: { ...one.childEnv, [mcpHttpMarker(one.envPrefix)]: one.profile ?? "default" },
+      env: { ...one.childEnv, [mcpHttpMarker(one.envPrefix)]: markerValue(one) },
     }
     writeSecurely(httpLaunchFile(lockFile), `${JSON.stringify(launch)}\n`, 0o600)
     const pid = sys.spawn(launch.argv, { ...inherited, ...launch.env }, log)
@@ -178,15 +194,11 @@ export const mcpServerCommand = ({
       const now = readHttpLock(lockFile)
       if (now?.pid === pid && now.listeningAt) {
         const code = liveCode(now, Date.now())
-        answer(
-          this,
-          { profile: one.profile ?? null, started: true, running: true, ...serving(one, now, Date.now()), log },
-          [
-            `Started: serving ${one.invocation} over HTTP (PID ${pid}) on 127.0.0.1:${now.port}.`,
-            `Browser apps connect to ${connectorUrl(now)}`,
-            ...(code ? [`Login code for a new browser app: ${code.code} (until ${clock(code.expires_at)}).`] : []),
-          ],
-        )
+        answer(this, { ...named(one), started: true, running: true, ...serving(one, now, Date.now()), log }, [
+          `Started: serving ${shown(one)} over HTTP (PID ${pid}) on 127.0.0.1:${now.port}.`,
+          `Browser apps connect to ${connectorUrl(now)}`,
+          ...(code ? [`Login code for a new browser app: ${code.code} (until ${clock(code.expires_at)}).`] : []),
+        ])
         return
       }
       if (!alive(pid)) {
@@ -201,7 +213,7 @@ export const mcpServerCommand = ({
     }
     throw new CliError(
       "timeout",
-      `mcp serve --http is running but not listening yet — \`${one.invocation} mcp server status\`; its log: ${log}`,
+      `mcp serve --http is running but not listening yet — \`${again(one, "status")}\`; its log: ${log}`,
     )
   })
 
@@ -214,23 +226,23 @@ export const mcpServerCommand = ({
       const one = target(this)
       const lock = readHttpLock(httpLockFile(one.tokenFile))
       if (!lock || !alive(lock.pid)) {
-        answer(this, { profile: one.profile ?? null, stopped: false }, [
-          `Nothing to stop: ${one.invocation} is not serving MCP over HTTP.`,
+        answer(this, { ...named(one), stopped: false }, [
+          `Nothing to stop: ${shown(one)} is not serving MCP over HTTP.`,
         ])
         return
       }
       if (byOf(one, lock.pid) !== "server") {
         throw new CliError(
           "validation_error",
-          `mcp serve --http for ${one.invocation} (PID ${lock.pid}) was not started by \`${one.invocation} mcp server start\` — stop it where it runs`,
+          `mcp serve --http for ${shown(one)} (PID ${lock.pid}) was not started by \`${again(one, "start")}\` — stop it where it runs`,
         )
       }
       process.kill(lock.pid, "SIGTERM")
       const sys = machine(this)
       for (let look = 0; look < LOOKS && alive(lock.pid); look++) await sys.pause()
       if (alive(lock.pid)) throw new CliError("timeout", `mcp serve --http (PID ${lock.pid}) has not stopped yet`)
-      answer(this, { profile: one.profile ?? null, stopped: true, pid: lock.pid }, [
-        `Stopped serving ${one.invocation} over HTTP (PID ${lock.pid}).`,
+      answer(this, { ...named(one), stopped: true, pid: lock.pid }, [
+        `Stopped serving ${shown(one)} over HTTP (PID ${lock.pid}).`,
       ])
     })
 
@@ -253,7 +265,7 @@ export const mcpServerCommand = ({
       answer(
         this,
         {
-          profile: one.profile ?? null,
+          ...named(one),
           running,
           ...(live ?? {}),
           ...(lock && !running ? { stale: { pid: lock.pid, started_at: lock.startedAt } } : {}),
@@ -269,8 +281,8 @@ export const mcpServerCommand = ({
         },
         [
           live && lock
-            ? `Serving ${one.invocation} over HTTP since ${clock(lock.startedAt)} (PID ${lock.pid}) on port ${lock.port}${live.listening ? "" : ", not listening yet"}; browser apps connect to ${live.connector_url}. ${live.by === "server" ? `Started by \`${one.invocation} mcp server start\`.` : "Started by hand — `mcp server stop` leaves it alone."}`
-            : `Not serving ${one.invocation} over HTTP.`,
+            ? `Serving ${shown(one)} over HTTP since ${clock(lock.startedAt)} (PID ${lock.pid}) on port ${lock.port}${live.listening ? "" : ", not listening yet"}; browser apps connect to ${live.connector_url}. ${live.by === "server" ? `Started by \`${again(one, "start")}\`.` : "Started by hand — `mcp server stop` leaves it alone."}`
+            : `Not serving ${shown(one)} over HTTP.`,
           ...(live?.login_code
             ? [
                 `Login code for a new browser app: ${live.login_code.code} (until ${clock(live.login_code.expires_at)}).`,
@@ -286,5 +298,11 @@ export const mcpServerCommand = ({
       )
     })
 
+  if (profiles)
+    for (const one of command.commands)
+      one.option(
+        "--profiles <names|all>",
+        "the server of several profiles that `mcp serve --profiles` serves: names, comma-separated, or all",
+      )
   return command
 }

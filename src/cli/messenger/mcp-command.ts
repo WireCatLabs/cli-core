@@ -16,7 +16,7 @@ import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effec
 import { itemOf, renderAnswer } from "../envelope.js"
 import { MCP_HTTP_DEFAULT_PORT, mcpServerCommand } from "../mcp-server-command.js"
 import { rootOf } from "../profile.js"
-import { namedProfile } from "../settings.js"
+import { NoProfileHere, namedProfile, type Settings } from "../settings.js"
 import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
@@ -32,12 +32,95 @@ export interface McpFlags {
   http?: boolean
   port?: string
   publicUrl?: string
+  profiles?: string
 }
 
 const DEFAULT_PORT = MCP_HTTP_DEFAULT_PORT
 
-/** The token file of `<tool> mcp serve --http` for every profile: no profile name can start with `_`. */
+/** The token file of `<tool> mcp serve --http --profiles all`: no profile name can start with `_`. */
 export const ALL_PROFILES = "_all"
+
+/** `--profiles all`; a profile named `all` is served alone, as `<tool> all mcp serve`. */
+export const EVERY_PROFILE = "all"
+
+/** The profiles `--profiles` names: `all`, read again on each session, or a fixed list. */
+export interface ProfileSet {
+  /** What `--profiles` takes to name this set again: `all`, or the names sorted, comma-separated. */
+  option: string
+  profiles: () => string[]
+  /** The token file's name: a list's login never opens the server of other profiles. */
+  key: string
+}
+
+/**
+ * The profile or profiles an MCP server is for, always named (NEED-1881, WC-MCP-9): a leading profile, or
+ * `--profiles` with a list or `all`. Neither, or both, is refused with the profiles on this computer. `--profiles`
+ * takes the place of `<PREFIX>_PROFILE`; under `<PREFIX>_PROFILE_LOCK` it may name the locked profile only
+ * (WC-ACCT-5).
+ */
+export const servedProfiles = (
+  self: Command,
+  messenger: Messenger,
+  { settings, env }: { settings: Pick<Settings, "profile" | "sources" | "profilesHere">; env: NodeJS.ProcessEnv },
+  given: string | undefined,
+  words: string,
+): { profile: string } | { set: ProfileSet } => {
+  const { app } = messenger
+  const here = settings.profilesHere
+  const listed = `profiles here: ${here.length > 0 ? here.join(", ") : "none"}`
+  const named = namedProfile(settings)
+  if (given === undefined && named !== undefined) return { profile: named }
+  if (given !== undefined && settings.sources.profile === "first word")
+    throw new CliError(
+      "validation_error",
+      `name one profile or --profiles, not both: \`${app.command} ${named} ${words}\` or \`${app.command} ${words} ` +
+        `--profiles ${given}\``,
+      { profiles: here },
+    )
+  if (given === undefined) {
+    if (here.length === 0) throw new NoProfileHere(app)
+    throw new CliError(
+      "validation_error",
+      `name the profiles to serve: \`${app.command} <profile> ${words}\`, or \`${app.command} ${words} --profiles ` +
+        `<a,b>\` or \`--profiles all\` — ${listed}`,
+      { profiles: here },
+    )
+  }
+  const names = [...new Set(given.split(",").map((one) => one.trim()))].filter(Boolean).sort()
+  const lock = env[envName(app, "PROFILE_LOCK")]?.trim()
+  if (lock && names.some((one) => one !== lock))
+    throw new CliError(
+      "permission_error",
+      `this process is locked to profile ${lock} (${envName(app, "PROFILE_LOCK")}) — --profiles may name only ${lock}`,
+    )
+  if (lock) return { set: { option: lock, profiles: () => [lock], key: `_${lock}` } }
+  if (names.length === 1 && names[0] === EVERY_PROFILE) {
+    const every = () =>
+      messenger.resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true }).profilesHere
+    return { set: { option: EVERY_PROFILE, profiles: every, key: ALL_PROFILES } }
+  }
+  if (names.length === 0 || names.includes(EVERY_PROFILE))
+    throw new CliError(
+      "validation_error",
+      `--profiles takes profile names, comma-separated, or \`all\` alone for every profile — a profile named all ` +
+        `is served as \`${app.command} all ${words}\`; ${listed}`,
+      { profiles: here },
+    )
+  const unknown = names.filter((one) => !here.includes(one))
+  if (unknown.length > 0)
+    throw new CliError(
+      "validation_error",
+      `no profile named ${unknown.map((one) => `"${one}"`).join(", ")} — ${listed}`,
+      { profiles: here },
+    )
+  return { set: { option: names.join(","), profiles: () => names, key: `_${names.join(",")}` } }
+}
+
+const withProfiles = (command: Command): Command =>
+  command.option(
+    "--profiles <names|all>",
+    "serve several profiles from one server instead of one: names, comma-separated, or all for every profile",
+  )
 
 /** Where `mcp serve --http` keeps the hashes of the tokens it issued — per profile, in the state folder. */
 export const httpTokenFile = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>
@@ -58,20 +141,23 @@ export const mcpCommand = (messenger: Messenger): Command => {
       `serve this profile to an agent over MCP and set it up — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp serve\``,
     )
   command.addCommand(
-    withFlags(
-      annotate(new Command("serve"), {
-        effects: REMOTE_WRITE,
-        lifetime: "persistent",
-        mcp: false,
-        examples: [
-          `${app.command} personal mcp serve`,
-          `${app.command} personal mcp serve --http --public-url https://laptop.example.ts.net`,
-        ],
-      })
-        .summary("serve this profile's commands to an AI agent")
-        .description(
-          `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp serve\`; with no profile, \`${app.command} mcp serve\` serves every profile and each tool asks which`,
-        ),
+    withProfiles(
+      withFlags(
+        annotate(new Command("serve"), {
+          effects: REMOTE_WRITE,
+          lifetime: "persistent",
+          mcp: false,
+          examples: [
+            `${app.command} personal mcp serve`,
+            `${app.command} mcp serve --profiles work,personal`,
+            `${app.command} personal mcp serve --http --public-url https://laptop.example.ts.net`,
+          ],
+        })
+          .summary("serve this profile's commands to an AI agent")
+          .description(
+            `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp serve\`; \`${app.command} mcp serve --profiles a,b\` or \`--profiles all\` serves those profiles from one server and each tool asks which`,
+          ),
+      ),
     )
       .option(
         "--http",
@@ -85,8 +171,9 @@ export const mcpCommand = (messenger: Messenger): Command => {
       .action(async function (this: Command) {
         const flags = this.optsWithGlobals<McpFlags>()
         const context = messengerContext(this, messenger, { needsProfile: false })
-        const profile = namedProfile(context.settings)
-        if (profile === undefined) return serveEveryProfile(this, context, messenger, flags)
+        const served = servedProfiles(this, messenger, context, flags.profiles, "mcp serve")
+        if ("set" in served) return serveProfiles(this, context, messenger, flags, served.set)
+        const { profile } = served
         if (flags.http) {
           const publicUrl = publicUrlOf(flags.publicUrl, {
             missing: "--http",
@@ -117,46 +204,68 @@ export const mcpCommand = (messenger: Messenger): Command => {
   )
 
   command.addCommand(
-    annotate(new Command("revoke"), {
-      effects: LOCAL_WRITE,
-      mcp: false,
-      examples: [`${app.command} personal mcp revoke`],
-    })
-      .summary("forget every login given to a browser app")
-      .description(
-        `forget every login \`mcp serve --http\` gave a browser app, of this profile or, with no profile, of the server of every profile; each app must log in again`,
+    withProfiles(
+      annotate(new Command("revoke"), {
+        effects: LOCAL_WRITE,
+        mcp: false,
+        examples: [`${app.command} personal mcp revoke`, `${app.command} mcp revoke --profiles all`],
+      })
+        .summary("forget every login given to a browser app")
+        .description(
+          "forget every login `mcp serve --http` gave a browser app, of this profile or of the server `--profiles` names; each app must log in again",
+        ),
+    ).action(async function (this: Command) {
+      const context = messengerContext(this, messenger, { needsProfile: false })
+      const served = servedProfiles(this, messenger, context, this.opts<McpFlags>().profiles, "mcp revoke")
+      const { revokeAll } = await import("../../mcp/http/oauth.js")
+      revokeAll(httpTokenFile(app, "set" in served ? served.set.key : served.profile, context.env))
+      renderAnswer(
+        this,
+        context,
+        itemOf(
+          "set" in served
+            ? { revoked: true, profile: null, profiles: served.set.option }
+            : { revoked: true, profile: served.profile },
+        ),
       )
-      .action(async function (this: Command) {
-        const context = messengerContext(this, messenger, { needsProfile: false })
-        const profile = namedProfile(context.settings)
-        const { revokeAll } = await import("../../mcp/http/oauth.js")
-        revokeAll(httpTokenFile(app, profile ?? ALL_PROFILES, context.env))
-        renderAnswer(this, context, itemOf({ revoked: true, profile: profile ?? null }))
-      }),
+    }),
   )
   command.addCommand(
     mcpServerCommand({
       example: `${app.command} personal`,
       permission: true,
+      profiles: true,
       target: (self) => {
-        const { settings, env } = messengerContext(self, messenger, { needsProfile: false })
-        if (namedProfile(settings) === undefined)
+        const context = messengerContext(self, messenger, { needsProfile: false })
+        const { env } = context
+        const served = servedProfiles(
+          self,
+          messenger,
+          context,
+          self.opts<McpFlags>().profiles,
+          `mcp server ${self.name()}`,
+        )
+        if ("set" in served) {
+          const { set } = served
           return {
             invocation: app.command,
+            profiles: { option: set.option, key: set.key, label: profileSetLabel(set) },
             envPrefix: app.envPrefix,
             env,
-            tokenFile: httpTokenFile(app, ALL_PROFILES, env),
-            argv: ["mcp", "serve", "--http"],
+            tokenFile: httpTokenFile(app, set.key, env),
+            argv: ["mcp", "serve", "--http", "--profiles", set.option],
             version: app.version,
           }
+        }
+        const { profile } = served
         return {
-          invocation: `${app.command} ${settings.profile}`,
-          profile: settings.profile,
+          invocation: `${app.command} ${profile}`,
+          profile,
           envPrefix: app.envPrefix,
           env,
-          tokenFile: httpTokenFile(app, settings.profile, env),
+          tokenFile: httpTokenFile(app, profile, env),
           argv: ["mcp", "serve", "--http"],
-          childEnv: { [`${app.envPrefix}_PROFILE`]: settings.profile },
+          childEnv: { [`${app.envPrefix}_PROFILE`]: profile },
           version: app.version,
         }
       },
@@ -168,23 +277,25 @@ export const mcpCommand = (messenger: Messenger): Command => {
     }),
   )
   command.addCommand(
-    withFlags(
-      annotate(new Command("config"), {
-        effects: LOCAL_READ,
-        examples: [`${app.command} personal mcp config`],
-      })
-        .summary("print the local MCP configuration, of this profile or of every profile")
-        .description(
-          "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
-        ),
+    withProfiles(
+      withFlags(
+        annotate(new Command("config"), {
+          effects: LOCAL_READ,
+          examples: [`${app.command} personal mcp config`, `${app.command} mcp config --profiles all`],
+        })
+          .summary("print the local MCP configuration of this profile, or of those --profiles names")
+          .description(
+            "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
+          ),
+      ),
     ).action(async function (this: Command) {
       const flags = this.optsWithGlobals<McpFlags>()
       const context = messengerContext(this, messenger, { needsProfile: false })
-      const { settings, env } = context
+      const { env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
-      const named = namedProfile(settings)
+      const served = servedProfiles(this, messenger, context, flags.profiles, "mcp config")
       const entry = serverEntry(app, {
-        ...(named === undefined ? {} : { profile: named }),
+        ...("set" in served ? { profiles: served.set.option } : { profile: served.profile }),
         flags,
         execPath: given.execPath ?? process.execPath,
         scriptPath: given.scriptPath ?? realpathSync(process.argv[1] ?? ""),
@@ -194,7 +305,14 @@ export const mcpCommand = (messenger: Messenger): Command => {
       renderAnswer(
         this,
         context,
-        itemOf({ config: entry.config }, { next: entry.nodeBound ? [nextStep("mcp.config", { args: {} })] : [] }),
+        itemOf(
+          { config: entry.config },
+          {
+            next: entry.nodeBound
+              ? [nextStep("mcp.config", { args: { profiles: "set" in served ? served.set.option : undefined } })]
+              : [],
+          },
+        ),
         () => JSON.stringify(entry.config, null, 2),
       )
     }),
@@ -302,25 +420,41 @@ export const mcpCommand = (messenger: Messenger): Command => {
   return command
 }
 
+/** How the startup and status lines name a set, so the owner sees which accounts an agent reaches. */
+export const profileSetLabel = (set: ProfileSet): string => {
+  const names = set.profiles().join(", ")
+  if (set.option === EVERY_PROFILE) return `every profile (${names || "none yet"})`
+  return set.profiles().length === 1 ? `profile ${names}` : `profiles ${names}`
+}
+
 /**
- * `<tool> mcp serve` with no profile: every profile on this computer, each call in that profile's own
- * `<tool> <profile> mcp serve`
- * (`src/mcp/all-profiles.ts`). Nothing picks a profile: each tool takes one, and the agent is told to ask.
+ * `<tool> mcp serve --profiles <names|all>`: those profiles from one server, each call in that profile's own
+ * `<tool> <profile> mcp serve` (`src/mcp/all-profiles.ts`). Nothing picks a profile: each tool takes one, and the
+ * agent is told to ask.
  */
-const serveEveryProfile = async (self: Command, context: MessengerContext, messenger: Messenger, flags: McpFlags) => {
+const serveProfiles = async (
+  self: Command,
+  context: MessengerContext,
+  messenger: Messenger,
+  flags: McpFlags,
+  set: ProfileSet,
+) => {
   const { app } = messenger
   const { env } = context
-  const tokenFile = httpTokenFile(app, ALL_PROFILES, env)
+  const tokenFile = httpTokenFile(app, set.key, env)
   const state = (profile: string) => messenger.profileState?.(profile, env) ?? "signed-in"
-  // Read again for each session, so a profile set up while the server runs appears. A bot has its own server.
-  const profiles = () =>
-    messenger
-      .resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true })
-      .profilesHere.filter((profile) => state(profile) !== "bot")
+  const bots = set.option === EVERY_PROFILE ? [] : set.profiles().filter((profile) => state(profile) === "bot")
+  if (bots.length > 0)
+    throw new CliError(
+      "validation_error",
+      `${bots.join(", ")} ${bots.length === 1 ? "is a bot profile" : "are bot profiles"}, served by \`${app.command} <profile> bot mcp serve\``,
+    )
+  // `all` reads the profiles again for each session, so one set up while the server runs appears.
+  const profiles = () => set.profiles().filter((profile) => state(profile) !== "bot")
   if (profiles().length === 0)
     throw new CliError(
       "configuration_error",
-      `no ${app.command} profile on this computer yet — set one up, then run \`${app.command} mcp serve\` again`,
+      `no ${app.command} profile on this computer yet — set one up, then run \`${app.command} mcp serve --profiles all\` again`,
     )
   const given = environmentOf<McpEnvironment>(self).mcp ?? {}
   const execPath = given.execPath ?? process.execPath
@@ -364,7 +498,7 @@ const serveEveryProfile = async (self: Command, context: MessengerContext, messe
         context.renderer.note(
           env[mcpHttpMarker(app.envPrefix)] === undefined
             ? `login code for a new browser app: ${code} (until ${expires.toTimeString().slice(0, 5)}; a new one after each login)`
-            : `a new login code for a browser app: \`${app.command} mcp server status\``,
+            : `a new login code for a browser app: \`${app.command} mcp server status --profiles ${set.option}\``,
         ),
     }).catch((error: unknown) => {
       if ((error as NodeJS.ErrnoException).code === "EADDRINUSE")
@@ -372,7 +506,7 @@ const serveEveryProfile = async (self: Command, context: MessengerContext, messe
       throw error
     })
     context.renderer.note(
-      `serving every profile on ${listening.url.href} — point your tunnel at it; connectors use ${mcpUrlOf(publicUrl).href}`,
+      `serving ${profileSetLabel(set)} on ${listening.url.href} — point your tunnel at it; connectors use ${mcpUrlOf(publicUrl).href}`,
     )
     await new Promise<void>((resolve) => {
       process.once("SIGINT", resolve)
@@ -382,6 +516,7 @@ const serveEveryProfile = async (self: Command, context: MessengerContext, messe
     return
   }
   const { serveAllProfilesOverStdio } = await import("../../mcp/all-profiles.js")
+  context.renderer.note(`serving ${profileSetLabel(set)} over MCP on stdin and stdout`)
   const { stdin, stdout, signal } = environmentOf(self)
   await serveAllProfilesOverStdio(options, {
     ...(stdin ? { stdin: stdin as Readable } : {}),
@@ -433,6 +568,13 @@ export const redactTail = (text: string, home: string | undefined): string => {
   return lines.slice(-TAIL_LINES).join("\n").slice(-TAIL_BYTES)
 }
 
+/** `tg-work`; `tg` for every profile; `tg-personal-work` for a list, a name every client accepts. */
+const serverName = (app: AppIdentity, profile: string | undefined, profiles: string | undefined) => {
+  if (profile !== undefined) return `${app.command}-${profile}`
+  if (profiles === EVERY_PROFILE) return app.command
+  return `${app.command}-${(profiles ?? "").split(",").join("-")}`
+}
+
 const VERSION_MANAGER = /[\\/](\.nvm|nvm|\.fnm|fnm|fnm_multishells|\.volta|volta|\.asdf|mise)[\\/]/i
 
 /**
@@ -447,24 +589,29 @@ export const serverEntry = (
   app: AppIdentity,
   {
     profile,
+    profiles,
     flags = {},
     execPath,
     scriptPath,
     env,
   }: {
-    /** Left out, the entry is `<tool> mcp serve`, the server of every profile. */
+    /** One profile, or `profiles`: the `--profiles` of a server of several. */
     profile?: string
+    profiles?: string
     flags?: McpFlags
     execPath: string
     scriptPath: string
     env: NodeJS.ProcessEnv
   },
 ): { config: { mcpServers: Record<string, object> }; nodeBound: boolean } => {
+  if ((profile === undefined) === (profiles === undefined))
+    throw new CliError("validation_error", "an MCP entry serves one profile or the profiles --profiles names")
+  const words = profile === undefined ? `mcp config --profiles ${profiles}` : `${profile} mcp config`
   if (installerOf(scriptPath) === "npx") {
     throw new CliError(
       "validation_error",
       `this ${app.command} runs from npx's cache, which gets cleared, and the path would stop working — ` +
-        `install it globally, then run \`${app.command} ${profile === undefined ? "" : `${profile} `}mcp config\` again`,
+        `install it globally, then run \`${app.command} ${words}\` again`,
     )
   }
   const names = [
@@ -482,12 +629,13 @@ export const serverEntry = (
       ...(profile === undefined ? [] : [profile]),
       "mcp",
       "serve",
+      ...(profiles === undefined ? [] : ["--profiles", profiles]),
       ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
     ],
     ...(Object.keys(directories).length > 0 ? { env: directories } : {}),
   }
   return {
-    config: { mcpServers: { [profile === undefined ? app.command : `${app.command}-${profile}`]: server } },
+    config: { mcpServers: { [serverName(app, profile, profiles)]: server } },
     /** The path belongs to one Node version of a version manager; switching Node breaks the entry. */
     nodeBound: VERSION_MANAGER.test(execPath),
   }

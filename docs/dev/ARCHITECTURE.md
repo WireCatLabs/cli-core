@@ -584,11 +584,16 @@ several tools share one tunnel address; the issuer's metadata then sits at `/.we
 and the resource's at `/.well-known/oauth-protected-resource/tg/mcp` (RFC 8414 §3, RFC 9728 §3), and the tunnel routes
 those two paths here as well. `serve.ts` also takes a request whose path the tunnel dropped.
 
-`<tool> mcp serve` with no profile (`src/mcp/all-profiles.ts`) serves every profile from one server: it lists the tools
-of `<tool> <profile> mcp serve` with a required `profile` added, and forwards each call to that profile's own server, a child
-it starts on first use and closes after 10 idle minutes. The child applies the profile's permissions, store and
-audit log, so the parent only routes; `createServer` stays one profile. Over HTTP it has its own login,
-`mcp-http/_all.json` (no profile name starts with `_`).
+An MCP server always names its profiles (NEED-1881, WC-MCP-9): `<tool> <profile> mcp serve`, or
+`<tool> mcp serve --profiles work,personal` or `--profiles all`; with neither, `servedProfiles` (`mcp-command.ts`)
+refuses with `validation_error` and the profiles here, and `--profiles` beside a first word is refused too. Under
+`<PREFIX>_PROFILE_LOCK`, `--profiles` may name the locked profile only. `all` alone is the keyword; a profile named
+`all` is served as `<tool> all mcp serve`. `mcp server start|stop|status`, `mcp revoke` and `mcp config` take the
+same choice. The server of several profiles (`src/mcp/all-profiles.ts`) lists the tools of `<tool> <profile> mcp serve`
+with a required `profile` added, and forwards each call to that profile's own server, a child it starts on first use
+and closes after 10 idle minutes. The child applies the profile's permissions, store and audit log, so the parent only
+routes; `createServer` stays one profile. Over HTTP each set has its own login, so a login given to a list never opens
+a wider server: `mcp-http/_all.json` for `all`, `mcp-http/_<names>.json` for a list (no profile name starts with `_`).
 
 ## The serve relay
 
