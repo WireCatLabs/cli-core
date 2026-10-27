@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.471.0 — 27.10.2026
+
 ### Added
 
 - **`appMcpCommand(app, configuration, { name, untrusted, permissionExample, skill?, signedIn? })` — the shared
