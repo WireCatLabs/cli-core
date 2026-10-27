@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../domain/locator.js"
 import type { ChatKind, Id, Message, Provider } from "../domain/models.js"
+import type { Event, EventFilter } from "../meetings/index.js"
 import { pickPerson } from "../resolve.js"
 import type { AccountKey, IdentityRef, LinkedIdentity, MessageStore, PersonRecord } from "../store/store.js"
 import { messageOfEmail } from "../store/store.js"
@@ -31,6 +32,19 @@ export interface SharedChat {
   lastMessageAt: string | null
 }
 
+/** A calendar event the person is invited to, through any contact linked to them. */
+export interface ContextEvent {
+  /** `event:<id>`: of a series, the one occurrence listed. */
+  ref: string
+  title: string | null
+  startsAt: string | null
+  endsAt: string | null
+  allDay: boolean
+  location: string | null
+  /** confirmed or tentative; a cancelled event is not listed. */
+  status: string | null
+}
+
 /** `not_fetched`: nothing of its history was ever read into the store; `partial`: only some of it was. */
 export type NotReadReason = "not_fetched" | "partial"
 
@@ -41,6 +55,8 @@ export interface PersonContext {
   last: { fromThem: ContextMessage | null; fromMe: ContextMessage | null; fromThemAnywhere: ContextMessage | null }
   recent: { direct: ContextMessage[]; groups: ContextMessage[] }
   mentions: ContextMessage[]
+  /** Calendar events they are invited to, one occurrence per series: the next ones, then the latest past ones. */
+  events: { upcoming: ContextEvent[]; recent: ContextEvent[] }
   limits: { messages: number; bytes: number }
   /** A list was cut by `limits`. */
   hasMore: boolean
@@ -54,6 +70,8 @@ export interface ContextOptions {
   bytes?: number
   /** ms: nothing older. */
   since?: number
+  /** ms: what splits upcoming events from past ones; the clock when absent. */
+  now?: number
 }
 
 export const toContext = (key: AccountKey, message: Message, chatTitle: string | null): ContextMessage => ({
@@ -103,6 +121,46 @@ const mailWith = async (
 
 const newestFirst = (a: ContextMessage, b: ContextMessage) => Date.parse(b.timestamp) - Date.parse(a.timestamp)
 
+const iso = (at: number | null) => (at === null ? null : new Date(at).toISOString())
+
+const contextEvent = (event: Event): ContextEvent => ({
+  ref: `event:${event.id}`,
+  title: event.title,
+  startsAt: iso(event.startsAt),
+  endsAt: iso(event.endsAt),
+  allDay: event.allDay === true,
+  location: event.location,
+  status: event.status ?? null,
+})
+
+const EVENT_PAGE = 100
+/** A weekly meeting held for years is hundreds of occurrences; past this many rows the list stops, cut. */
+const EVENT_ROWS = 1000
+
+/** Up to `limit` events of `filter`, in its order, the first occurrence of each series only and none cancelled. */
+const eventsOnce = async (
+  store: MessageStore,
+  filter: EventFilter,
+  limit: number,
+): Promise<{ items: Event[]; cut: boolean }> => {
+  const items: Event[] = []
+  const series = new Set<number>()
+  for (let offset = 0; offset < EVENT_ROWS; offset += EVENT_PAGE) {
+    const page = await store.calendar.events({ ...filter, limit: EVENT_PAGE, offset })
+    for (const event of page) {
+      if (event.status === "cancelled") continue
+      if (event.eventSeriesId !== null) {
+        if (series.has(event.eventSeriesId)) continue
+        series.add(event.eventSeriesId)
+      }
+      if (items.length === limit) return { items, cut: true }
+      items.push(event)
+    }
+    if (page.length < EVENT_PAGE) return { items, cut: false }
+  }
+  return { items, cut: true }
+}
+
 /**
  * The accounts each identity is read in: for the messenger asked, only the account asked about — a
  * second account of the same messenger is somebody else's view; for a linked messenger, every account
@@ -123,7 +181,7 @@ export const personContext = async (
   store: MessageStore,
   asked: AccountKey,
   reference: string,
-  { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since }: ContextOptions = {},
+  { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since, now = Date.now() }: ContextOptions = {},
 ): Promise<PersonContext> => {
   const found = pickPerson(reference, await store.people.people(asked.provider, { account: asked.account }))
   const record = await store.people.personOf({ provider: asked.provider, id: found.id })
@@ -195,6 +253,16 @@ export const personContext = async (
     cut ||= named.hasMore
   }
 
+  const personId = Number(record.uid)
+  const upcoming = await eventsOnce(store, { personId, from: now }, messages)
+  const upcomingIds = new Set(upcoming.items.map(({ id }) => id))
+  const past = await eventsOnce(
+    store,
+    { personId, to: now, newest: true, ...(since === undefined ? {} : { from: since }) },
+    messages,
+  )
+  cut ||= upcoming.cut || past.cut
+
   direct.sort(newestFirst)
   const each = [...direct, ...beyond].sort(newestFirst)
   theirs.sort(newestFirst)
@@ -224,6 +292,10 @@ export const personContext = async (
     },
     recent: { direct: kept.direct, groups: kept.groups },
     mentions: kept.mentions,
+    events: {
+      upcoming: upcoming.items.map(contextEvent),
+      recent: past.items.filter(({ id }) => !upcomingIds.has(id)).map(contextEvent),
+    },
     limits: { messages, bytes },
     hasMore: cut || kept.cut,
     complete: notRead.length === 0,

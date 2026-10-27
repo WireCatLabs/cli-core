@@ -41,6 +41,45 @@ export interface Corpus {
   terms?: (text: string, stemmer: Stemmer) => { words: string; stems: string }
 }
 
+/** What an event `e` is searched by besides its title: the cleaned description, the place and the attendees' names. */
+export const EVENT_TEXT =
+  "trim(coalesce(e.description, '') || ' ' || coalesce(e.location, '') || ' ' || coalesce((" +
+  "SELECT group_concat(p.name, ' ') FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id " +
+  "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL AND p.resource = 0 AND p.name IS NOT NULL), ''))"
+
+/** Calendar entry types that are listed, never searched (requirements 3.4). */
+export const UNSEARCHED_EVENT_TYPES = ["workingLocation", "focusTime", "outOfOffice", "birthday"] as const
+
+/** Visibilities whose entry, when it carries no text, is a busy-only slot: stored, never searched (requirements 3.4). */
+export const BUSY_ONLY_VISIBILITIES = ["private", "confidential"] as const
+
+const sqlList = (values: readonly string[]) => values.map((value) => `'${value}'`).join(", ")
+
+/** A calendar copy `ce` that may be searched: of a searchable type, and not a busy-only slot. */
+const SEARCHABLE_COPY =
+  `(ce.event_type IS NULL OR ce.event_type NOT IN (${sqlList(UNSEARCHED_EVENT_TYPES)})) ` +
+  `AND NOT (coalesce(ce.visibility, '') IN (${sqlList(BUSY_ONLY_VISIBILITIES)}) AND trim(coalesce(ce.title, '')) = '' ` +
+  "AND trim(coalesce(ce.description, '')) = '' AND trim(coalesce(ce.location, '')) = '')"
+
+/**
+ * Whether the event `event` (an SQL expression of its id) has a searchable calendar copy, and with `account` one in
+ * those accounts (an SQL condition over `c.account_id`). Only live copies count, unless none is: an event its
+ * calendars deleted keeps its past copies as history.
+ */
+export const searchableCopy = (event: string, account?: string): string =>
+  `EXISTS (SELECT 1 FROM calendar_entries ce${account ? " JOIN calendars c ON c.id = ce.calendar_id" : ""} ` +
+  `WHERE ce.event_id = ${event} AND ${SEARCHABLE_COPY}${account ? ` AND ${account}` : ""} ` +
+  `AND (ce.deleted_at IS NULL OR NOT EXISTS (SELECT 1 FROM calendar_entries l WHERE l.event_id = ${event} ` +
+  "AND l.deleted_at IS NULL)))"
+
+/**
+ * Whether an event `e` is searched at all: by words, by meaning and in `search all`. The one place that names what
+ * is left out. An event no calendar holds (a Zoom meeting's own) is searched; a cancelled one is not.
+ */
+export const EVENT_LIVE =
+  "(e.deleted_at IS NULL AND coalesce(e.status, '') <> 'cancelled' AND " +
+  `(NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id) OR ${searchableCopy("e.id")}))`
+
 export const CORPORA = {
   document: {
     type: "document",
@@ -96,16 +135,12 @@ export const CORPORA = {
     type: "event",
     index: "event_index",
     table: "events",
-    // Working location, focus time, out of office and birthdays are listed, never searched (requirements 3.4).
     read:
-      "SELECT e.title, trim(coalesce(e.description, '') || ' ' || coalesce(e.location, '') || ' ' || coalesce((" +
-      "SELECT group_concat(p.name, ' ') FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id " +
-      "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL AND p.resource = 0 AND p.name IS NOT NULL), '')) AS body, " +
-      "e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id " +
-      "AND ce.deleted_at IS NULL AND ce.event_type IN ('workingLocation', 'focusTime', 'outOfOffice', 'birthday')) AS live, " +
+      `SELECT e.title, ${EVENT_TEXT} AS body, ${EVENT_LIVE} AS live, ` +
       "coalesce((SELECT a.scope FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id " +
-      "JOIN accounts a ON a.id = c.account_id WHERE ce.event_id = e.id LIMIT 1), 'personal') AS scope FROM events e WHERE e.id = ?",
-    pieces: false,
+      "JOIN accounts a ON a.id = c.account_id WHERE ce.event_id = e.id LIMIT 1), 'personal') AS scope, " +
+      "(SELECT c.account_id FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id " +
+      "WHERE ce.event_id = e.id AND ce.deleted_at IS NULL ORDER BY ce.id LIMIT 1) AS account_id FROM events e WHERE e.id = ?",
   },
 } as const satisfies Record<string, Corpus>
 

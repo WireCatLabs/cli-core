@@ -18,7 +18,7 @@ import { entriesOfList, fitting, type SkippedSource } from "../search/account-li
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
-import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
+import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
@@ -43,16 +43,17 @@ export interface NotesSearchRequest {
   signal?: AbortSignal
 }
 
-/** A notes search in the query language messages use, for `search notes` and `search all` to call. */
-export const searchNotesQuery = async (
+/**
+ * Text in the query language messages use, parsed for a store search: `date:` read in `timezone`, and the store's
+ * stemmer when a word is stemmed.
+ */
+export const storeQuery = async (
   store: MessageStore,
-  request: NotesSearchRequest,
-): Promise<{ items: NoteHit[]; hasMore: boolean }> => {
-  if (!request.text.trim()) throw new CliError("validation_error", "say what to find in the notes")
-  const ast = validateFields(
-    parseLucene(request.text, { ...SEARCH_QUERY, defaultField: request.exact ? "exact" : "text" }),
-  )
-  const timezone = timezoneOf(request.timezone)
+  text: string,
+  { exact, timezone }: { exact?: boolean; timezone?: string } = {},
+): Promise<{ root: ResolvedNode; stemmer?: Stemmer }> => {
+  const ast = validateFields(parseLucene(text, { ...SEARCH_QUERY, defaultField: exact ? "exact" : "text" }))
+  const zone = timezoneOf(timezone)
   const resolve = (node: QueryNode): ResolvedNode => {
     if (node.kind === "boolean")
       return { ...node, clauses: node.clauses.map(({ occur, node }) => ({ occur, node: resolve(node) })) }
@@ -65,7 +66,7 @@ export const searchNotesQuery = async (
           node.operator === "range" ? (node.upper ?? "*") : node.value,
           node.operator === "range" ? node.lower_inclusive === true : true,
           node.operator === "range" ? node.upper_inclusive === true : true,
-          timezone,
+          zone,
           node.span,
         ),
       },
@@ -78,8 +79,21 @@ export const searchNotesQuery = async (
       "the store asks for stemmers this tool does not know — upgrade this tool, or search exact forms with --exact",
       { reason: "stemmer.unknown" },
     )
-  return store.notes.search({
+  return {
     root: resolve(ast.root),
+    ...(hasStems(ast.root) ? { stemmer: createStemmer(stemmers ?? DEFAULT_STEMMERS) } : {}),
+  }
+}
+
+/** A notes search in the query language messages use, for `search notes` and `search all` to call. */
+export const searchNotesQuery = async (
+  store: MessageStore,
+  request: NotesSearchRequest,
+): Promise<{ items: NoteHit[]; hasMore: boolean }> => {
+  if (!request.text.trim()) throw new CliError("validation_error", "say what to find in the notes")
+  const { root, stemmer } = await storeQuery(store, request.text, request)
+  return store.notes.search({
+    root,
     limit: request.limit,
     ...(request.offset === undefined ? {} : { offset: request.offset }),
     ...(request.newest ? { newest: true } : {}),
@@ -87,7 +101,7 @@ export const searchNotesQuery = async (
     ...(request.withInternal ? { withInternal: true } : {}),
     ...(request.source ? { source: request.source } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
-    ...(hasStems(ast.root) ? { stemmer: createStemmer(stemmers ?? DEFAULT_STEMMERS) } : {}),
+    ...(stemmer ? { stemmer } : {}),
   })
 }
 

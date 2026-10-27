@@ -189,6 +189,62 @@ describe("contacts context", () => {
     expect(linked.identities.map((one) => `${one.provider}:${one.id}`)).toEqual(["email:ana@x.com", "telegram:11"])
   })
 
+  it("lists the calendar events of their linked email contact, one occurrence per series", async () => {
+    const now = Date.UTC(2026, 9, 26, 12)
+    const day = 86_400_000
+    const calendarAccount = await store.accounts.saveAccount(
+      { provider: "google-calendar", account: "owner-1" },
+      { name: null },
+    )
+    const [calendar] = await store.calendar.saveCalendars(
+      calendarAccount,
+      [{ externalId: "primary", title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+      1,
+    )
+    const ana = [{ email: "ana@x.com", name: "Ana" }]
+    const at = (externalId: string, title: string, startsAt: number, extra: object = {}) => ({
+      externalId,
+      kind: "single" as const,
+      status: "confirmed" as const,
+      title,
+      startsAt,
+      endsAt: startsAt + 3_600_000,
+      participants: ana,
+      ...extra,
+    })
+    await store.calendar.saveEntries(
+      calendar?.id as number,
+      [
+        at("past", "Kick-off", now - 3 * day),
+        at("gone", "Called off", now + day, { status: "cancelled" }),
+        at("other", "Without her", now + day, { participants: [{ email: "bo@x.com" }] }),
+        at("s1", "Weekly sync", now + 2 * day, { kind: "series", recurrence: ["RRULE:FREQ=WEEKLY"] }),
+        ...[0, 1, 2].map((week) =>
+          at(`s1_${week}`, "Weekly sync", now + (2 + 7 * week) * day, {
+            kind: "occurrence",
+            seriesExternalId: "s1",
+            originalStartsAt: now + (2 + 7 * week) * day,
+          }),
+        ),
+      ],
+      1,
+    )
+    await people().link("11", "email:ana@x.com")
+
+    const found = await people().context("11", { now })
+
+    expect(found.events.upcoming.map(({ title, startsAt }) => [title, startsAt])).toEqual([
+      ["Weekly sync", new Date(now + 2 * day).toISOString()],
+    ])
+    expect(found.events.recent.map(({ title }) => title)).toEqual(["Kick-off"])
+    expect(found.events.upcoming[0]?.ref).toMatch(/^event:\d+$/)
+
+    await store.calendar.markUnseen(calendar?.id as number, now, { from: now - 30 * day, to: now + 30 * day }, now)
+    const after = await people().context("11", { now })
+    expect(after.events.upcoming).toEqual([])
+    expect(after.events.recent.map(({ title }) => title)).toEqual(["Kick-off"])
+  })
+
   it("keeps a renamed person's history and key", async () => {
     const before = await people().context("11")
     await store.people.savePeople(tg, [{ id: "11", name: "Ana María" }])

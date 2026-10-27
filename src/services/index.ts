@@ -155,6 +155,7 @@ export { moderationService } from "./moderation.js"
 export type { ContactSync, PeopleService } from "./people.js"
 export { peopleService, phoneOf } from "./people.js"
 export type {
+  ContextEvent,
   ContextMessage,
   ContextOptions,
   NotReadReason,
@@ -276,6 +277,14 @@ export {
   savePicture,
 } from "./document-pictures.js"
 export type { ModelChoice } from "./embeddings.js"
+export {
+  calendarAccounts,
+  type EventsFound,
+  type EventsQuery,
+  type FoundEvent,
+  foundEvent,
+  searchEvents,
+} from "./events-search.js"
 export { createMeetingBatchReader } from "./meeting-batch.js"
 export {
   type MeetingCombinedHit,
@@ -365,6 +374,7 @@ export {
   searchNotes,
   searchNotesOf,
   searchNotesQuery,
+  storeQuery,
 } from "./notes-search.js"
 export {
   type PackageUpgradeOutcome,

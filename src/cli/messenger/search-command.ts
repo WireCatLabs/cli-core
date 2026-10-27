@@ -53,12 +53,13 @@ const maxMeetingsOf = (value: string): number | "all" => {
 
 const allCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("all"), { effects: REMOTE_READ, partial: true })
-    .summary("search stored messages, notes and selected meeting transcripts")
+    .summary("search stored messages, notes, calendar events and selected meeting transcripts")
     .description(
       (messenger.serverSearch
         ? "search messenger messages and notes in the local store, and by default the messenger's server for " +
-          "messages too (notes are local only; --backend archive or --offline keeps it to the local store)"
+          "messages too (notes and events are local only; --backend archive or --offline keeps it to the local store)"
         : "search messenger messages and notes in the local store") +
+        ", calendar events when the store holds a calendar" +
         ", and a meeting account's transcripts when --source names one — best match first; not mail (the separate memo CLI searches it: memo search mail), " +
         "tasks, people, memories or projects. Use it when you do not know where something was written; search messages " +
         "or notes reads one kind with all its fields",
@@ -72,7 +73,7 @@ const allCommand = (messenger: Messenger): Command => {
     )
     .option(
       "--only <resources>",
-      "only these resources, separated by commas: messages, notes; meetings when --source names a meeting account",
+      "only these resources, separated by commas: messages, notes, events; meetings when --source names a meeting account",
       onlyOf,
     )
     .option(

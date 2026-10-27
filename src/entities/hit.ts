@@ -1,15 +1,15 @@
 import * as v from "valibot"
 import { count, reference, text, time } from "./fields.js"
 
-/** One result of `search all`: a message, a mail, a note or a meeting passage, best first. */
+/** One result of `search all`: a message, a mail, a note, a calendar event or a meeting passage, best first. */
 export const hit = v.strictObject({
-  kind: v.picklist(["message", "mail", "note", "document", "meeting"]),
+  kind: v.picklist(["message", "mail", "note", "document", "event", "meeting"]),
   ref: reference,
   provider: text,
   url: v.optional(text),
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
   account: text,
-  /** The chat, the mail thread's subject, the note's or the meeting's title. */
+  /** The chat, the mail thread's subject, the note's, the event's or the meeting's title. */
   title: v.nullable(text),
   /** Null for a meeting whose start is unknown. */
   timestamp: v.nullable(time),

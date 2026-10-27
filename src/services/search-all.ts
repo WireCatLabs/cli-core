@@ -9,6 +9,7 @@ import type { MessengerTraits } from "../ports/traits.js"
 import { MESSAGE_PARSING } from "../search/lucene/types.js"
 import { planQuestion } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { MAX_SEARCH_OFFSET, searchStore } from "./messages-archive-search.js"
@@ -16,17 +17,17 @@ import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
-export const RESOURCES_SEARCHED = ["messages", "mail", "notes"] as const
+export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events"] as const
 export type SearchedResource = (typeof RESOURCES_SEARCHED)[number]
 
 export interface SearchAllItem {
-  kind: "message" | "mail" | "note" | "document"
-  /** `msg:…` for a message or a mail, `note:…` for a note. */
+  kind: "message" | "mail" | "note" | "document" | "event"
+  /** `msg:…` for a message or a mail, `note:…` for a note, `event:…` for a calendar event. */
   ref: string
   provider: string
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
   account: string
-  /** The chat, the mail thread's subject or the note's title. */
+  /** The chat, the mail thread's subject, the note's or the event's title. */
   url?: string
   title: string | null
   timestamp: string
@@ -80,7 +81,7 @@ export interface SearchAllRequest {
   only?: readonly SearchedResource[]
   exact?: boolean
   timezone?: string
-  /** For messages only; mail and notes are always the local store's. */
+  /** For messages only; mail, notes and events are always the local store's. */
   backend?: Backend
   server?: ServerOptions
   env?: NodeJS.ProcessEnv
@@ -118,9 +119,9 @@ const filtersBeside = (text: string): string | undefined => {
 }
 
 /**
- * `search all`: messages, mail and notes from the local store — messages also from the messenger's
+ * `search all`: messages, mail, notes and calendar events from the local store — messages also from the messenger's
  * server, as `search messages` asks it — each list best first, merged by reciprocal rank so no
- * resource's own scores have to be compared with another's.
+ * resource's own scores have to be compared with another's. Events are read only when the store holds a calendar.
  */
 export const searchAll = async (
   store: MessageStore,
@@ -270,6 +271,31 @@ export const searchAll = async (
             ...(await store.notes.documentsAccounts()).map(({ id }) => id),
           ]
           accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
+        } else if (resource === "events") {
+          const read = request.scope?.events ?? (await calendarAccounts(store))
+          if (!read.length) continue
+          const found = await searchEvents(store, request.text, {
+            limit: window,
+            accounts: read,
+            ...(request.exact ? { exact: true } : {}),
+            ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+          })
+          hasMore ||= found.has_more
+          lists.push(
+            found.hits.map((hit) => ({
+              kind: "event",
+              ref: hit.ref,
+              provider: hit.provider ?? "calendar",
+              account: hit.account ?? "",
+              ...(hit.url ? { url: hit.url } : {}),
+              title: hit.title,
+              timestamp: hit.starts_at ?? hit.updated_at,
+              text: hit.excerpt,
+              foundBy: hit.found_by,
+            })),
+          )
+          accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
         } else lists.push(await messagesOf(resource))
         searched.push(resource)
       } catch (error) {

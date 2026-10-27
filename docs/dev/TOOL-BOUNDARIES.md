@@ -1,7 +1,7 @@
 # Which tool owns which command
 
 Status: decided by the owner 2026-10-11, revised 2026-10-14: tg and max keep notes, tags and tasks, and
-`search notes` and `search all` (messages and notes, no mail); they drop `search mail`. Done: `search mail` (see
+`search notes` and `search all` (messages, notes and calendar events, no mail); they drop `search mail`. Done: `search mail` (see
 the end).
 
 Until this split, tg and max carried commands about data they did not bring in (`tg search mail`), memo
@@ -40,7 +40,7 @@ Source tools keep every group about their service: `session`, `setup`, `account`
 | Today in tg and max | After |
 |---|---|
 | `search mail` | knowledge tool only; the source tool points to it |
-| `search all` | both: in the source tool messages and notes, never mail; in the knowledge tool with mail |
+| `search all` | both: in the source tool messages, notes and calendar events, never mail; in the knowledge tool with mail |
 | `search notes` | both |
 | `search messages`, `search conversations`, `search topics`, `searches` | source tool, limited to its own accounts |
 | `contacts context` (every messenger, mail, meetings) | knowledge tool; the source tool keeps the contact's own record |

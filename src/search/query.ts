@@ -34,9 +34,7 @@ export const sourceOf = (name: string, value: string, providers: readonly Provid
   if (isKind(source))
     fail(
       `${name}${source} names ${source}, which a message search does not read — ` +
-        (source === "events"
-          ? "no search reads them yet"
-          : `search ${source === "meetings" ? "all --source meetings" : "notes"} does`),
+        `search ${source === "meetings" || source === "events" ? `all --source ${source}` : "notes"} does`,
     )
   const named = providerNamed(source)
   if (named && providers.includes(named.name)) return named.name
