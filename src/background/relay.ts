@@ -110,6 +110,7 @@ export const listenRelay = async (
   // The caller holds the serve lock, so a socket left here belongs to a serve that is gone.
   rmSync(path, { force: true })
   const open = new Set<Socket>()
+  const running = new Set<Promise<void>>()
   const server = createServer((socket) => {
     open.add(socket)
     const stop = new AbortController()
@@ -146,7 +147,12 @@ export const listenRelay = async (
           }
           stdin.isTTY = parsed.output.stdinTty
           if (parsed.output.stdinTty) stdin.end()
-          void serve(socket, parsed.output, stdin, stop.signal, run)
+          const job = serve(socket, parsed.output, stdin, stop.signal, run)
+          running.add(job)
+          void job.then(
+            () => running.delete(job),
+            () => running.delete(job),
+          )
           return
         }
         if (typeof message.stdin === "string" && !stdin.writableEnded) stdin.write(Buffer.from(message.stdin, "base64"))
@@ -167,6 +173,7 @@ export const listenRelay = async (
     close: async () => {
       for (const socket of open) socket.destroy()
       await new Promise<void>((resolve) => server.close(() => resolve()))
+      await Promise.allSettled(running)
       rmSync(path, { force: true })
     },
   }
