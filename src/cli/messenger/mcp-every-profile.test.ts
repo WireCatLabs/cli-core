@@ -93,9 +93,7 @@ describe("chat mcp, with no profile", () => {
       { id: 3, method: "tools/call", params: { name: "chat_read", arguments: { profile: "work", command: "inbox" } } },
     ])
     const [hello, listed, called] = [1, 2, 3].map((id) => answers.find((one) => one.id === id)?.result)
-    expect(String(hello?.instructions)).toContain(
-      'accounts, one per profile: personal, work. Every tool takes "profile"',
-    )
+    expect(String(hello?.instructions)).toContain('every tool needs "profile" — ask if none was named')
     expect(listed).toMatchObject({
       tools: [{ name: "chat_read", inputSchema: { required: ["profile", "command"] } }],
     })

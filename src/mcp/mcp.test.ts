@@ -2496,6 +2496,14 @@ describe("the MCP server", () => {
       skill: skillResource(app, new URL("file:///SKILL.md")).instruction,
     })
     expect(text.length).toBeLessThanOrEqual(2048)
+    const every = instructions({
+      command: "chat",
+      name: "Chat",
+      profile: ["personal", "work", "family", "a-long-profile-name"],
+      writes: [],
+      skill: skillResource(app, new URL("file:///SKILL.md")).instruction,
+    })
+    expect(every.length).toBeLessThanOrEqual(2048)
   })
 })
 

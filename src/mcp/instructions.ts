@@ -24,7 +24,7 @@ export const instructions = ({
   const offers = (key: string) => all || writes.includes(key)
   return [
     all
-      ? `The owner's personal ${name} accounts, one per profile: ${profile.join(", ")}. Every tool takes "profile": if the owner did not name the account, ask which — never guess. A mistake here reaches a real person.`
+      ? `The owner's ${name} accounts; every tool needs "profile" — ask if none was named. Mistakes reach real people.`
       : `The owner's personal ${name} account (profile "${profile}"). A mistake here reaches a real person.`,
     `Use these tools when asked to find a chat, read a conversation, find a message or a person in ${name}.`,
     `Find a command with ${command}_tools_search, then run it with ${command}_read or ${command}_write: { command, arguments }.`,
