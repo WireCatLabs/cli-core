@@ -429,7 +429,7 @@ describe("commands through serve's relay", () => {
         done()
       },
     })
-    const session = client(["mcp"], env, { stdin, stdout })
+    const session = client(["mcp", "serve"], env, { stdin, stdout })
     stdin.write(
       `${JSON.stringify({
         jsonrpc: "2.0",

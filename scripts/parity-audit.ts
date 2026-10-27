@@ -126,7 +126,7 @@ const fresh = (): Record<string, string> => {
 }
 
 const mcpTools = async (bin: string): Promise<string[]> =>
-  (await mcpSchemas(bin, ["mcp"], sandboxEnvironment(auditHome()))).map((tool) => tool.name).sort()
+  (await mcpSchemas(bin, ["mcp", "serve"], sandboxEnvironment(auditHome()))).map((tool) => tool.name).sort()
 
 const markdown = (dir: string) => (existsSync(dir) ? readdirSync(dir).filter((name) => name.endsWith(".md")) : [])
 

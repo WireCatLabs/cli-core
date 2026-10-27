@@ -4409,7 +4409,7 @@ describe("mcp config", () => {
         "chat-work": {
           type: "stdio",
           command: "/usr/bin/node",
-          args: [PNPM, "work", "mcp"],
+          args: [PNPM, "work", "mcp", "serve"],
           env: {
             CHAT_STATE_DIR: "/s",
             MESSAGING_STORE: "/m.db",
@@ -4426,13 +4426,15 @@ describe("mcp config", () => {
   it("names a profile called default like any other, and passes it, since a server started without one stops", () => {
     const { config } = serverEntry(app, { profile: "default", execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
 
-    expect(config).toMatchObject({ mcpServers: { "chat-default": { args: [PNPM, "default", "mcp"] } } })
+    expect(config).toMatchObject({ mcpServers: { "chat-default": { args: [PNPM, "default", "mcp", "serve"] } } })
   })
 
   it("with no profile, names the server of every profile after the tool alone", () => {
     const { config } = serverEntry(app, { execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
 
-    expect(config).toEqual({ mcpServers: { chat: { type: "stdio", command: "/usr/bin/node", args: [PNPM, "mcp"] } } })
+    expect(config).toEqual({
+      mcpServers: { chat: { type: "stdio", command: "/usr/bin/node", args: [PNPM, "mcp", "serve"] } },
+    })
   })
 
   it("refuses npx, whose cache is cleared, and marks a path bound to a Node version manager", () => {

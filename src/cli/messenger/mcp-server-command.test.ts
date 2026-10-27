@@ -3,11 +3,13 @@ import { mkdirSync, mkdtempSync, openSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
-import { captureStreams } from "@wirecat/cli-base"
+import { CliError, captureStreams } from "@wirecat/cli-base"
+import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { alive } from "../../background/processes.js"
 import type { ServerSystem } from "../../background/system.js"
 import { httpLockFile, readHttpLock } from "../../mcp/http/state.js"
+import { mcpServerCommand } from "../mcp-server-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
@@ -24,7 +26,7 @@ const messenger: Messenger = {
   },
 }
 
-/** Stands in for `chat mcp --http`: writes the lock as the real server does, then waits to be stopped. */
+/** Stands in for `chat mcp serve --http`: writes the lock as the real server does, then waits to be stopped. */
 const SERVER = `
 const { writeFileSync } = require("node:fs")
 const [lock, mode, publicUrl = "https://laptop.example.ts.net/"] = process.argv.slice(1)
@@ -49,7 +51,11 @@ const background = (env: NodeJS.ProcessEnv, args: string[] = [], log = "ignore" 
 
 const setup = (
   mode: "serve" | "fail" = "serve",
-  { every = false, publicUrl }: { every?: boolean; publicUrl?: string } = {},
+  {
+    every = false,
+    publicUrl,
+    mcp = () => mcpCommand(messenger),
+  }: { every?: boolean; publicUrl?: string; mcp?: (tokenFile: string, env: NodeJS.ProcessEnv) => Command } = {},
 ) => {
   const root = mkdtempSync(join(tmpdir(), "mcp-server-"))
   const env = {
@@ -78,7 +84,7 @@ const setup = (
     const streams = captureStreams()
     const code = await run(
       [...(every ? [] : ["personal"]), ...argv, "--json"],
-      { app, commands: () => [mcpCommand(messenger)] },
+      { app, commands: () => [mcp(tokenFile, env)] },
       { streams, tty: false, env, system },
     )
     const out = streams.stdout.join("")
@@ -90,7 +96,7 @@ const setup = (
 const PUBLIC = ["--public-url", "https://laptop.example.ts.net"]
 
 describe("mcp server", () => {
-  it("starts mcp --http apart from the shell with the marker, and answers with the port, address and login code", async () => {
+  it("starts mcp serve --http apart from the shell with the marker, and answers with the port, address and login code", async () => {
     const { cli, launched } = setup()
 
     const { code, item } = await cli(["mcp", "server", "start", ...PUBLIC, "--port", "9001"])
@@ -108,6 +114,7 @@ describe("mcp server", () => {
     })
     expect(launched[0]?.argv).toEqual([
       "mcp",
+      "serve",
       "--http",
       "--port",
       "9001",
@@ -138,6 +145,7 @@ describe("mcp server", () => {
     })
     expect(launched[0]?.argv).toEqual([
       "mcp",
+      "serve",
       "--http",
       "--port",
       "8765",
@@ -163,8 +171,48 @@ describe("mcp server", () => {
 
     const { code, error } = await cli(["mcp", "server", "start", ...PUBLIC])
 
+    const refusal = JSON.parse(error.trim().split("\n").at(-1) ?? "null").error
     expect(code).not.toBe(0)
-    expect(JSON.parse(error.trim().split("\n").at(-1) ?? "null").error.message).toMatch(/port 8765 is in use/)
+    expect(refusal.message).toMatch(/port 8765 is in use/)
+    expect(refusal.retry?.safe).not.toBe(true)
+  })
+
+  it("hands --permission to the server", async () => {
+    const { cli, launched } = setup()
+
+    const { code } = await cli(["mcp", "server", "start", ...PUBLIC, "--permission", "messages.send=deny"])
+
+    expect(code).toBe(0)
+    expect(launched[0]?.argv.slice(-2)).toEqual(["--permission", "messages.send=deny"])
+  })
+
+  it("refuses --permission before starting anything when the CLI's server does not take it", async () => {
+    const { cli, launched } = setup("serve", {
+      mcp: (tokenFile, env) =>
+        new Command("mcp").addCommand(
+          mcpServerCommand({
+            example: "chat personal",
+            target: () => ({
+              invocation: "chat personal",
+              profile: "personal",
+              envPrefix: "CHAT",
+              env,
+              tokenFile,
+              argv: ["mcp", "serve", "--http"],
+              version: "1",
+            }),
+            answer: () => {
+              throw new CliError("validation_error", "must not answer")
+            },
+          }),
+        ),
+    })
+
+    const { code, error } = await cli(["mcp", "server", "start", ...PUBLIC, "--permission", "messages.send=deny"])
+
+    expect(code).toBe(2)
+    expect(error).toMatch(/--permission/)
+    expect(launched).toHaveLength(0)
   })
 
   it("needs the tunnel's address", async () => {

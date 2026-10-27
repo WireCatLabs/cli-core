@@ -32,15 +32,14 @@ export interface McpFlags {
   http?: boolean
   port?: string
   publicUrl?: string
-  revoke?: boolean
 }
 
 const DEFAULT_PORT = MCP_HTTP_DEFAULT_PORT
 
-/** The token file of `<tool> mcp --http` for every profile: no profile name can start with `_`. */
+/** The token file of `<tool> mcp serve --http` for every profile: no profile name can start with `_`. */
 export const ALL_PROFILES = "_all"
 
-/** Where `mcp --http` keeps the hashes of the tokens it issued — per profile, in the state folder. */
+/** Where `mcp serve --http` keeps the hashes of the tokens it issued — per profile, in the state folder. */
 export const httpTokenFile = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "mcp-http", `${profile}.json`)
 
@@ -53,64 +52,92 @@ const withFlags = (command: Command): Command =>
 
 export const mcpCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const command = withFlags(
-    annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent", mcp: false })
-      .summary("serve this profile's commands to an AI agent")
-      .description(
-        `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp\`; with no profile, \`${app.command} mcp\` serves every profile and each tool asks which`,
-      ),
-  )
-    .option(
-      "--http",
-      "serve over HTTP on 127.0.0.1 for ChatGPT and Claude in the browser, behind your tunnel; the profile's permissions decide",
+  const command = annotate(new Command("mcp"), { effects: LOCAL_READ, mcp: false })
+    .summary("serve this profile's commands to an AI agent, and set that up")
+    .description(
+      `serve this profile to an agent over MCP and set it up — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp serve\``,
     )
-    .option("--port <port>", `the local port for --http (default ${DEFAULT_PORT})`)
-    .option(
-      "--public-url <url>",
-      "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net or https://<name>.ts.net/tg",
-    )
-    .option("--revoke", "forget every login given to a browser app; each must log in again")
-  command.action(async function (this: Command) {
-    const flags = this.optsWithGlobals<McpFlags>()
-    const context = messengerContext(this, messenger, { needsProfile: false })
-    if (namedProfile(context.settings) === undefined) return serveEveryProfile(this, context, messenger, flags)
-    if (flags.revoke) {
-      const { revokeAll } = await import("../../mcp/http/oauth.js")
-      revokeAll(httpTokenFile(app, context.settings.profile, context.env))
-      renderAnswer(this, context, itemOf({ revoked: true, profile: context.settings.profile }))
-      return
-    }
-    if (flags.http) {
-      const publicUrl = publicUrlOf(flags.publicUrl, {
-        missing: "--http",
-        reaches: `the browser apps reach ${app.command}`,
-        path: true,
+  command.addCommand(
+    withFlags(
+      annotate(new Command("serve"), {
+        effects: REMOTE_WRITE,
+        lifetime: "persistent",
+        mcp: false,
+        examples: [
+          `${app.command} personal mcp serve`,
+          `${app.command} personal mcp serve --http --public-url https://laptop.example.ts.net`,
+        ],
       })
-      const { serveOverHttpUntilStopped } = await import("../../mcp/server.js")
-      const tokenFile = httpTokenFile(app, context.settings.profile, context.env)
-      await serveOverHttpUntilStopped(
-        this,
-        context,
-        messenger,
-        {},
-        {
-          publicUrl,
-          port: portOf(flags.port, DEFAULT_PORT),
-          tokenFile,
-          lockFile: httpLockFile(tokenFile),
-          version: app.version,
-        },
+        .summary("serve this profile's commands to an AI agent")
+        .description(
+          `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} <profile> mcp serve\`; with no profile, \`${app.command} mcp serve\` serves every profile and each tool asks which`,
+        ),
+    )
+      .option(
+        "--http",
+        "serve over HTTP on 127.0.0.1 for ChatGPT and Claude in the browser, behind your tunnel; the profile's permissions decide",
       )
-      return
-    }
-    // Loaded here, not at the top: every other command would otherwise pay for the SDK.
-    const { serveOverStdio } = await import("../../mcp/server.js")
-    await serveOverStdio(this, context, messenger, {})
-  })
+      .option("--port <port>", `the local port for --http (default ${DEFAULT_PORT})`)
+      .option(
+        "--public-url <url>",
+        "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net or https://<name>.ts.net/tg",
+      )
+      .action(async function (this: Command) {
+        const flags = this.optsWithGlobals<McpFlags>()
+        const context = messengerContext(this, messenger, { needsProfile: false })
+        const profile = namedProfile(context.settings)
+        if (profile === undefined) return serveEveryProfile(this, context, messenger, flags)
+        if (flags.http) {
+          const publicUrl = publicUrlOf(flags.publicUrl, {
+            missing: "--http",
+            reaches: `the browser apps reach ${app.command}`,
+            path: true,
+          })
+          const { serveOverHttpUntilStopped } = await import("../../mcp/server.js")
+          const tokenFile = httpTokenFile(app, profile, context.env)
+          await serveOverHttpUntilStopped(
+            this,
+            context,
+            messenger,
+            {},
+            {
+              publicUrl,
+              port: portOf(flags.port, DEFAULT_PORT),
+              tokenFile,
+              lockFile: httpLockFile(tokenFile),
+              version: app.version,
+            },
+          )
+          return
+        }
+        // Loaded here, not at the top: every other command would otherwise pay for the SDK.
+        const { serveOverStdio } = await import("../../mcp/server.js")
+        await serveOverStdio(this, context, messenger, {})
+      }),
+  )
 
+  command.addCommand(
+    annotate(new Command("revoke"), {
+      effects: LOCAL_WRITE,
+      mcp: false,
+      examples: [`${app.command} personal mcp revoke`],
+    })
+      .summary("forget every login given to a browser app")
+      .description(
+        `forget every login \`mcp serve --http\` gave a browser app, of this profile or, with no profile, of the server of every profile; each app must log in again`,
+      )
+      .action(async function (this: Command) {
+        const context = messengerContext(this, messenger, { needsProfile: false })
+        const profile = namedProfile(context.settings)
+        const { revokeAll } = await import("../../mcp/http/oauth.js")
+        revokeAll(httpTokenFile(app, profile ?? ALL_PROFILES, context.env))
+        renderAnswer(this, context, itemOf({ revoked: true, profile: profile ?? null }))
+      }),
+  )
   command.addCommand(
     mcpServerCommand({
       example: `${app.command} personal`,
+      permission: true,
       target: (self) => {
         const { settings, env } = messengerContext(self, messenger, { needsProfile: false })
         if (namedProfile(settings) === undefined)
@@ -119,7 +146,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
             envPrefix: app.envPrefix,
             env,
             tokenFile: httpTokenFile(app, ALL_PROFILES, env),
-            argv: ["mcp", "--http"],
+            argv: ["mcp", "serve", "--http"],
             version: app.version,
           }
         return {
@@ -128,7 +155,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
           envPrefix: app.envPrefix,
           env,
           tokenFile: httpTokenFile(app, settings.profile, env),
-          argv: ["mcp", "--http"],
+          argv: ["mcp", "serve", "--http"],
           childEnv: { [`${app.envPrefix}_PROFILE`]: settings.profile },
           version: app.version,
         }
@@ -276,25 +303,20 @@ export const mcpCommand = (messenger: Messenger): Command => {
 }
 
 /**
- * `<tool> mcp` with no profile: every profile on this computer, each call in that profile's own `<tool> <profile> mcp`
+ * `<tool> mcp serve` with no profile: every profile on this computer, each call in that profile's own
+ * `<tool> <profile> mcp serve`
  * (`src/mcp/all-profiles.ts`). Nothing picks a profile: each tool takes one, and the agent is told to ask.
  */
 const serveEveryProfile = async (self: Command, context: MessengerContext, messenger: Messenger, flags: McpFlags) => {
   const { app } = messenger
   const { env } = context
   const tokenFile = httpTokenFile(app, ALL_PROFILES, env)
-  if (flags.revoke) {
-    const { revokeAll } = await import("../../mcp/http/oauth.js")
-    revokeAll(tokenFile)
-    renderAnswer(self, context, itemOf({ revoked: true, profile: null }))
-    return
-  }
   const profiles = () =>
     messenger.resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true }).profilesHere
   if (profiles().length === 0)
     throw new CliError(
       "configuration_error",
-      `no ${app.command} profile on this computer yet — set one up, then run \`${app.command} mcp\` again`,
+      `no ${app.command} profile on this computer yet — set one up, then run \`${app.command} mcp serve\` again`,
     )
   const given = environmentOf<McpEnvironment>(self).mcp ?? {}
   const execPath = given.execPath ?? process.execPath
@@ -306,7 +328,7 @@ const serveEveryProfile = async (self: Command, context: MessengerContext, messe
     version: app.version,
     name: messenger.name ?? app.command,
     profiles,
-    child: (profile: string) => ({ command: execPath, args: [scriptPath, profile, "mcp", ...tightened], env }),
+    child: (profile: string) => ({ command: execPath, args: [scriptPath, profile, "mcp", "serve", ...tightened], env }),
     instructions: instructions({
       command: app.command,
       name: messenger.name ?? app.command,
@@ -422,7 +444,7 @@ export const serverEntry = (
     scriptPath,
     env,
   }: {
-    /** Left out, the entry is `<tool> mcp`, the server of every profile. */
+    /** Left out, the entry is `<tool> mcp serve`, the server of every profile. */
     profile?: string
     flags?: McpFlags
     execPath: string
@@ -451,6 +473,7 @@ export const serverEntry = (
       scriptPath,
       ...(profile === undefined ? [] : [profile]),
       "mcp",
+      "serve",
       ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
     ],
     ...(Object.keys(directories).length > 0 ? { env: directories } : {}),

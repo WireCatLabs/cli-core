@@ -452,7 +452,7 @@ describe("chat_bot_chats_moderate", () => {
 })
 
 describe("bot mcp config", () => {
-  it("**prints the entry for `bot mcp`**", async () => {
+  it("**prints the entry for `bot mcp serve`**", async () => {
     const streams = captureStreams()
     const code = await run(["sales", "bot", "mcp", "config", "--json"], definition, {
       streams,
@@ -467,7 +467,7 @@ describe("bot mcp config", () => {
         "chat-bot-sales": {
           type: "stdio",
           command: "/usr/bin/node",
-          args: ["/opt/chat/cli.js", "sales", "bot", "mcp"],
+          args: ["/opt/chat/cli.js", "sales", "bot", "mcp", "serve"],
           env: { CHAT_CONFIG_DIR: env.CHAT_CONFIG_DIR, CHAT_STATE_DIR: env.CHAT_STATE_DIR },
         },
       },

@@ -4,7 +4,7 @@ Someday work: P3 items, nice-to-haves and research. Same ids, marks and one-line
 [BACKLOG.md](BACKLOG.md#rules). An item moves to [BACKLOG.md](BACKLOG.md) when it becomes P2.
 
 - **CORE-13** · P3 · Serve relay, what v1 leaves out: a Windows named pipe, `ask` forwarded to the client, waiting
-  for a starting serve, per-watcher buffers, `mcp --http` through serve, a path type on options.
+  for a starting serve, per-watcher buffers, `mcp serve --http` through serve, a path type on options.
   [The serve relay](ARCHITECTURE.md#the-serve-relay) · [notes](BACKLOG-NOTES.md#core-13).
 - **CORE-14** · P3 · 🚩 One Markdown parser: tg and wa use `parseMarkdownSpans`; max-cli's dialect waits for the
   owner, and the legacy `parseMarkdown` (`src/index.ts:12`) goes in the next breaking release.

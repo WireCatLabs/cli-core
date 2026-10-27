@@ -789,7 +789,7 @@
     },
     "--port": {
       "value": "<port>",
-      "meaning": "the local port behind the tunnel, for mcp --http or bot watch --public-url"
+      "meaning": "the local port behind the tunnel, for mcp serve --http or bot watch --public-url"
     },
     "--priority": {
       "value": "<n>",
@@ -804,7 +804,7 @@
     },
     "--public-url": {
       "value": "<url>",
-      "meaning": "the tunnel's https address: the browser apps reach mcp --http through it, a messenger delivers to bot watch"
+      "meaning": "the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch"
     },
     "--question": {
       "meaning": "match only questions"
@@ -860,9 +860,6 @@
     "--revision": {
       "value": "<n>",
       "meaning": "the revision you read before editing"
-    },
-    "--revoke": {
-      "meaning": "forget every login given to a browser app over --http"
     },
     "--revote": {
       "meaning": "people may change their vote"
@@ -1732,12 +1729,18 @@
     },
     "bot mcp": {
       "in": ["max", "tg"],
-      "options": {},
       "planned": {
         "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
       }
     },
     "bot mcp config": {
+      "in": ["max", "tg"],
+      "options": {},
+      "planned": {
+        "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+      }
+    },
+    "bot mcp serve": {
       "in": ["max", "tg"],
       "options": {},
       "planned": {
@@ -3138,22 +3141,7 @@
       }
     },
     "mcp": {
-      "in": "all",
-      "options": {
-        "--http": "all",
-        "--permission": "all",
-        "--port": "all",
-        "--public-url": "all",
-        "--revoke": "all",
-        "--yes": {
-          "in": [],
-          "planned": {
-            "max": "P7",
-            "tg": "P7",
-            "wa": "P7"
-          }
-        }
-      }
+      "in": "all"
     },
     "mcp add": {
       "in": "all",
@@ -3172,6 +3160,26 @@
       "in": "all",
       "options": {
         "--permission": "all",
+        "--yes": {
+          "in": [],
+          "planned": {
+            "max": "P7",
+            "tg": "P7",
+            "wa": "P7"
+          }
+        }
+      }
+    },
+    "mcp revoke": {
+      "in": "all"
+    },
+    "mcp serve": {
+      "in": "all",
+      "options": {
+        "--http": "all",
+        "--permission": "all",
+        "--port": "all",
+        "--public-url": "all",
         "--yes": {
           "in": [],
           "planned": {

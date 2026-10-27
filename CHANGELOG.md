@@ -14,6 +14,23 @@ shape of this file.
   ships a CLI's bin as an esbuild bundle (tg-cli's, moved), and calendar words in the command vocabulary; nothing
   cli-core uses changed. Its changelog lists the lint baseline entries and overrides that go stale in zoom, drive,
   memo and gcal.
+- **The MCP server is `mcp serve`; `mcp` alone only shows its commands**
+  ([WC-CMD-3](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-3--give-a-group-without-a-leaf-only-its-help-never-a-hidden-default-action)).
+  `mcpCommand` gives the `mcp` group with `serve`, `revoke`, `config`, `add`, `check` and `server`; `--http`, `--port`,
+  `--public-url` and `--permission` move from `mcp` to `mcp serve`, and `mcp --revoke` is now its own command,
+  `mcp revoke`, with no flag left behind. An agent is set up with
+  `claude mcp add <cli> -- <cli> <profile> mcp serve`. `bot mcp` is a group too, and the bot's server is
+  `bot mcp serve`. `serverEntry`, so `mcp config`, `mcp add`, `mcp check` and `bot mcp config`, writes `mcp serve`,
+  the server of every profile starts `<cli> <profile> mcp serve` for each, and `mcp server start` runs
+  `mcp serve --http`. There is no alias: an old client entry that runs `<cli> <profile> mcp` gets the group's help and
+  exits 2 — print it again with `mcp config` or `mcp add`.
+- **`mcpServerCommand` takes `--permission` only when asked.** `mcp server start` offered `--permission` to
+  every CLI and passed it to a server that might not take it; that server died before it listened and `start`
+  answered `provider_unavailable` with `retry.safe: true`, so an agent retried for ever. A CLI whose `mcp serve` takes
+  `--permission` passes `permission: true` (`mcpCommand` does); otherwise `start --permission` is refused as an unknown
+  option before anything starts. A `--permission` set on the CLI's root is still handed over. A server that stops
+  before it listens is now `retry.safe: false`. A CLI's own target names its server as `argv: [..., "mcp", "serve",
+  "--http"]` once its `mcp` is a group too.
 
 ## 0.462.0 — 27.10.2026
 

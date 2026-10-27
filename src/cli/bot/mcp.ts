@@ -14,38 +14,50 @@ import type { BotMessenger } from "./port.js"
 /** `bot mcp`, mounted only for a messenger that hands in its `run` on `BotMessenger.mcp`. */
 export const botMcpCommand = (bot: BotMessenger): Command => {
   const { app } = bot
-  const command = annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent", mcp: false })
+  const command = annotate(new Command("mcp"), { effects: LOCAL_READ, mcp: false })
     .description(
-      `serve this bot to an agent over MCP, on stdin and stdout — \`claude mcp add sales-bot -- ${app.command} sales bot mcp\``,
+      `serve this bot to an agent over MCP and set it up — \`claude mcp add sales-bot -- ${app.command} sales bot mcp serve\``,
     )
-    .summary("serve this bot to an agent over MCP, on stdin and stdout")
-    .action(async function (this: Command) {
-      const context = botContext(this, bot)
-      if (!context.tokens.read()) {
-        throw new CliError(
-          "authentication_error",
-          `no bot token for profile "${context.profile}" — run \`${context.words} auth set\``,
-        )
-      }
-      const mcp = bot.mcp
-      if (!mcp) throw new Error("bot mcp is mounted only with BotMessenger.mcp")
-      // Loaded here: every other command would otherwise pay for the SDK.
-      const [{ serveBotOverStdio }, run] = await Promise.all([import("../../mcp/bot/server.js"), mcp.program()])
-      await serveBotOverStdio(
-        {
-          bot,
-          program: { run, commands: describeProgram(rootOf(this)) },
-          authority: changesAuthorityAt(rootOf(this)),
-          settings: context.settings,
-          levels: () => bot.resolveSettings(this.optsWithGlobals(), { env: context.env, kind: "bot" }).permissions,
-          env: context.env,
-          ...(mcp.keyOf ? { keyOf: mcp.keyOf } : {}),
-          ...(mcp.skill ? { skill: mcp.skill } : {}),
-        },
-        context.streams.diagnostic,
-      )
-    })
+    .summary("serve this bot to an agent over MCP, and set that up")
 
+  command.addCommand(
+    annotate(new Command("serve"), {
+      effects: REMOTE_WRITE,
+      lifetime: "persistent",
+      mcp: false,
+      examples: botExamples(bot, "mcp serve"),
+    })
+      .description(
+        `serve this bot to an agent over MCP, on stdin and stdout — \`claude mcp add sales-bot -- ${app.command} sales bot mcp serve\``,
+      )
+      .summary("serve this bot to an agent over MCP, on stdin and stdout")
+      .action(async function (this: Command) {
+        const context = botContext(this, bot)
+        if (!context.tokens.read()) {
+          throw new CliError(
+            "authentication_error",
+            `no bot token for profile "${context.profile}" — run \`${context.words} auth set\``,
+          )
+        }
+        const mcp = bot.mcp
+        if (!mcp) throw new Error("bot mcp is mounted only with BotMessenger.mcp")
+        // Loaded here: every other command would otherwise pay for the SDK.
+        const [{ serveBotOverStdio }, run] = await Promise.all([import("../../mcp/bot/server.js"), mcp.program()])
+        await serveBotOverStdio(
+          {
+            bot,
+            program: { run, commands: describeProgram(rootOf(this)) },
+            authority: changesAuthorityAt(rootOf(this)),
+            settings: context.settings,
+            levels: () => bot.resolveSettings(this.optsWithGlobals(), { env: context.env, kind: "bot" }).permissions,
+            env: context.env,
+            ...(mcp.keyOf ? { keyOf: mcp.keyOf } : {}),
+            ...(mcp.skill ? { skill: mcp.skill } : {}),
+          },
+          context.streams.diagnostic,
+        )
+      }),
+  )
   command.addCommand(
     annotate(new Command("config"), { effects: LOCAL_READ, examples: botExamples(bot, "mcp config") })
       .description("print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing")

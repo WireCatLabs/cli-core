@@ -64,7 +64,7 @@ chat kinds use query terms. CLI and MCP both accept only canonical argument name
   with an owner-only access list (NEED-1405; off on Windows now); forwarding an `ask` question to the client's
   terminal instead of requiring `--yes`; waiting for a serve that is still starting instead of failing on the
   messenger's own lock; per-watcher buffer budgets for a relayed `watch` (max-cli's `server/subscribers.ts`);
-  `mcp --http` through serve; a path type on options instead of the placeholder naming rule (DEBT-124).
+  `mcp serve --http` through serve; a path type on options instead of the placeholder naming rule (DEBT-124).
 
 ## CORE-14
 
