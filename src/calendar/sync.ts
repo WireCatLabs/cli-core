@@ -163,6 +163,8 @@ export interface CalendarSyncReport {
     requests: number
     /** Entries and slots saved. */
     saved: number
+    /** Pages read and series expanded, each saved in the cursor: 0 means this run moved nothing on. */
+    steps: number
   }
   hint?: string
 }
@@ -178,6 +180,8 @@ interface Plan {
   expand: CalendarExpander | undefined
   budget: RunBudget
   signal: AbortSignal | undefined
+  /** Called on each page or series saved. */
+  moved: () => void
 }
 
 const freshRound = (full: boolean, from: string | null, window: SyncWindow, now: number, reset = false) => ({
@@ -220,7 +224,7 @@ const deadList = (provider: string) =>
  * at most the step it was on. Returns why it stopped, or `null` when the round finished.
  */
 const syncOne = async (
-  { source, store, calendar, window, now, expand, budget, signal }: Plan,
+  { source, store, calendar, window, now, expand, budget, signal, moved }: Plan,
   stored: CalendarCursor | null,
   asked: boolean,
   result: CalendarSyncResult,
@@ -295,6 +299,7 @@ const syncOne = async (
       round = { ...round, page: page.nextPage }
     }
     await save()
+    moved()
   }
   const occurrences = source.occurrences
   for (const series of round.series) {
@@ -310,6 +315,7 @@ const syncOne = async (
     await saveSlots(slots)
     round = { ...round, series: round.series.filter((one) => one !== series) }
     await save()
+    moved()
   }
   if (signal?.aborted) return "cancelled"
   result.unseen = round.full ? await store.markUnseen(calendar.id, round.startedAt, round.window, now) : 0
@@ -350,7 +356,7 @@ export const syncCalendars = async (
     notSynced: [],
     complete: true,
     state: "complete",
-    progress: { calendars: 0, calendarsDone: 0, requests: 0, saved: 0 },
+    progress: { calendars: 0, calendarsDone: 0, requests: 0, saved: 0, steps: 0 },
   }
   const finish = (stopped: BudgetStop | null) => {
     report.progress = {
@@ -358,6 +364,7 @@ export const syncCalendars = async (
       calendarsDone: report.synced.filter((one) => one.state === "complete").length,
       requests: budget.used,
       saved: report.synced.reduce((sum, one) => sum + one.saved + one.occurrences, 0),
+      steps,
     }
     report.complete = report.synced.every((one) => one.state === "complete" && one.error === undefined)
     report.state = report.complete && stopped === null ? "complete" : "partial"
@@ -368,6 +375,7 @@ export const syncCalendars = async (
     }
     return report
   }
+  let steps = 0
   let stopped = budget.take()
   if (stopped) return finish(stopped)
   const listed = await store.saveCalendars(options.accountId, await source.calendars(), now)
@@ -410,6 +418,9 @@ export const syncCalendars = async (
           expand: options.expand,
           budget,
           signal: options.signal,
+          moved: () => {
+            steps += 1
+          },
         },
         stored,
         asked,

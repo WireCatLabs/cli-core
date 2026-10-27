@@ -6,6 +6,7 @@ import { Argument, type Command, InvalidArgumentError } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
+import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
 import { searchEvents } from "../../services/events-search.js"
 import { linkPeople } from "../../services/people.js"
@@ -47,7 +48,7 @@ export interface CalendarCommandDeps {
   accountId: number
   /** The same account as the shared store names it, for search and people. */
   account: AccountKey
-  /** The profile's name, which `calendars status` gives as each sync's `profile`. */
+  /** The profile's name, which `status` gives as each sync's `profile`. */
   profile?: string
   /** The shared store: `search`, `people link` and the person of an attendee read it. */
   messages?: MessageStore
@@ -152,22 +153,6 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     const listed = await deps.store.saveCalendars(deps.accountId, await source().calendars(), now())
     print({ items: listed.map(calendarItem), page: 1, limit: listed.length, hasMore: false }, command)
   })
-  output(
-    example(
-      annotate(calendars.command("status"), { effects: LOCAL_READ }).description(
-        "how far each synced calendar's sync is: entries done, partial or complete, and when it last moved",
-      ),
-      "calendars status --json",
-    ),
-  ).action(async (_opts: unknown, command: Command) => {
-    print(
-      await calendarStatus(deps.store, deps.accountId, {
-        profile: deps.profile ?? `account ${deps.accountId}`,
-        now: now(),
-      }),
-      command,
-    )
-  })
   for (const [name, synced] of [
     ["sync", true],
     ["unsync", false],
@@ -261,9 +246,11 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
       const embeddings = opts.embed && !report.stopped ? await deps.embed?.(EMBED_MAX) : undefined
       const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
-      // The same command again, never --full: that would drop the round this run leaves in progress.
+      // The same command again, never --full: that would drop the round this run leaves in progress. A run that moved
+      // nothing on would only repeat itself, so it gets no step an agent may run unasked.
+      const stuck = report.state === "partial" && report.progress.steps === 0 && !report.synced.some((one) => one.error)
       const next =
-        report.state === "partial" && !report.synced.some((one) => one.error !== undefined)
+        report.state === "partial" && !stuck && !report.synced.some((one) => one.error !== undefined)
           ? [
               {
                 kind: "command" as const,
@@ -279,12 +266,36 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
               },
             ]
           : undefined
+      const progressAt = lineOf(command, "status")
+      report.hint = stuck
+        ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
+        : report.state === "partial"
+          ? `run sync again to continue; see progress: ${progressAt}`
+          : report.hint
+      if (report.hint === undefined) delete report.hint
       print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
       if (report.synced.some((one) => one.error !== undefined))
         throw new CliError("provider_error", "some calendars did not sync; run sync again to retry them", {
           reason: "sync.partial",
         })
     })
+
+  output(
+    example(
+      annotate(program.command("status"), { effects: LOCAL_READ }).description(
+        "how far each synced calendar's sync is: entries done, partial or complete, and when it last moved",
+      ),
+      "status --json",
+    ),
+  ).action(async (_opts: unknown, command: Command) => {
+    print(
+      await calendarStatus(deps.store, deps.accountId, {
+        profile: deps.profile ?? `account ${deps.accountId}`,
+        now: now(),
+      }),
+      command,
+    )
+  })
 
   const events = annotate(program.command("events").description("the account's stored events"), { effects: GROUP })
   output(

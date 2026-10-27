@@ -44,7 +44,7 @@ export const calendarTools = [
     required: [],
   },
   {
-    name: "calendars_status",
+    name: "status",
     description:
       "how far each synced calendar's sync is: done, state partial or complete, and cursor_age_ms, which grows while " +
       "nothing moves it",
@@ -218,7 +218,7 @@ export const callCalendarTool = async (
     profileOf = (accountId) => `account ${accountId}`,
   }: {
     accountIds: readonly number[]
-    /** What `calendars_status` calls each account's sync. */
+    /** What `status` calls each account's sync. */
     profileOf?: (accountId: number) => string
     failure?: FailureContext
     now?: number
@@ -259,7 +259,7 @@ export const callCalendarTool = async (
       case "calendars_list":
         answer = listed((await Promise.all(accounts.map((id) => store.calendars(id)))).flat().map(calendarItem))
         break
-      case "calendars_status":
+      case "status":
         answer = listed(
           (
             await Promise.all(

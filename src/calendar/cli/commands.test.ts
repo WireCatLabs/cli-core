@@ -108,28 +108,40 @@ describe("calendar commands", () => {
     await expect(cli("events", "list", "tomorrow")).rejects.toMatchObject({ code: "validation_error" })
   })
 
-  it("a sync its --max-pages stops answers partial without failing, and calendars status says how far it is", async () => {
-    const { cli } = await setup({ profile: "personal" })
-    const stopped = await cli("sync", "--max-pages", "1")
+  it("a sync its --max-pages stops answers partial without failing, and status says how far it is", async () => {
+    const source = fakeCalendarSource({ pageSize: 1 })
+    source.put("primary", planning(), { ...planning(), externalId: "e2", participants: [] })
+    const { cli } = await setup({ profile: "personal", source })
+    const stopped = await cli("sync", "--max-pages", "2")
     expect(stopped).toMatchObject({
       state: "partial",
       complete: false,
       stopped: "requests",
-      progress: { calendars: 1, calendarsDone: 0, requests: 1, saved: 0 },
-      hint: "run sync again to continue",
-      synced: [{ externalId: "primary", state: "partial", saved: 0 }],
-      next: [{ kind: "command", command: "sync", args: { max_pages: 1 }, safe_to_auto_execute: true }],
+      progress: { calendars: 1, calendarsDone: 0, requests: 2, saved: 1, steps: 1 },
+      hint: "run sync again to continue; see progress: gcal status",
+      synced: [{ externalId: "primary", state: "partial", saved: 1 }],
+      next: [{ kind: "command", command: "sync", args: { max_pages: 2 }, safe_to_auto_execute: true }],
     })
-    expect((await cli("calendars", "status")).items).toMatchObject([
-      { external_id: "primary", state: "partial", done: 0, total: null, updated_at: null, cursor_age_ms: null },
+    expect((await cli("status")).items).toMatchObject([
+      { external_id: "primary", state: "partial", done: 1, total: null, round: "full", cursor_age_ms: 0 },
     ])
     const finished = await cli("sync")
-    expect(finished).toMatchObject({ state: "complete", complete: true, progress: { calendarsDone: 1, saved: 2 } })
+    expect(finished).toMatchObject({ state: "complete", complete: true, progress: { calendarsDone: 1, saved: 1 } })
     expect(finished.next).toBeUndefined()
-    const [status] = (await cli("calendars", "status")).items
+    expect(finished.hint).toBeUndefined()
+    const [status] = (await cli("status")).items
     expect(status).toMatchObject({ job: expect.stringMatching(/^calendar /u), profile: "personal", state: "complete" })
     expect(status).toMatchObject({ done: 2, round: null, cursor_age_ms: 0 })
     expect(status?.line).toMatch(/personal: 2 — complete, updated just now$/u)
+  })
+
+  it("a run that moved nothing on offers no step to run unasked, only a hint to give it more room", async () => {
+    const { cli } = await setup()
+    const first = await cli("sync", "--max-pages", "1")
+    expect(first).toMatchObject({ state: "partial", progress: { requests: 1, steps: 0 } })
+    expect(first.next).toBeUndefined()
+    expect(first.hint).toMatch(/^this run moved nothing on: raise --timeout or --max-pages/u)
+    expect((await cli("status")).items).toMatchObject([{ state: "partial", done: 0, updated_at: null }])
   })
 
   it("shows an event with its attendees' people, and hides another account's", async () => {
@@ -188,9 +200,9 @@ describe("calendar commands", () => {
     const known = knownPermissionKeys(program(), commandPermissions())
     for (const key of [
       "calendars.list",
-      "calendars.status",
       "calendars.sync",
       "calendars.unsync",
+      "status",
       "sync",
       "events.show",
       "search",

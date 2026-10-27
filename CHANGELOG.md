@@ -35,17 +35,17 @@ shape of this file.
   refused with `event.repeat-kind`. `calendarWriterContract` checks a repeat rule on create and on the series, and
   the switch both ways; `fakeCalendarWriter` returns a series for a draft with a rule.
 - **A run budget for syncs, and a resumable calendar sync.** `runBudget({ requests?, deadline?, requestMs?, signal?
-  })` in `@wirecat/cli-core/background` answers `take()` before each request. It allows
-  `floor((deadline − margin) / requestMs)` requests, `margin` being the larger of 5 s and 15% of the deadline, and
-  `requests` can only lower that; it also says no once the deadline is closer than the margin plus the slowest
-  request so far, or once the signal is aborted. `AppIdentity.requestMs` is each CLI's one expected request time
-  (2 s when unset). `runBudgetOf(command, maxPages?)` in `./cli` builds the budget from the deadline `run()` started,
-  which a command now reads as `environment.deadline()`. The calendar `sync` uses it: `cooperative`, `partial`,
-  `--max-pages <n>`; it saves after every page and every series, and a rerun goes on from there (WC-LIFE-10, 12,
-  13). A run the budget stops answers `state: "partial"`, `stopped`, `progress` and a `next` step that runs the same
-  `sync` again, and exits 0. A page token held since an earlier run that the provider refuses starts that calendar's
+  })` in `@wirecat/cli-core/background` answers `take()` before each request. It allows `floor((deadline − margin) /
+  requestMs)` requests, `margin` being the larger of 5 s and 15% of the deadline, and `requests` can only lower that;
+  it also says no once the deadline is closer than the margin plus the slowest request so far, or once the signal is
+  aborted. `AppIdentity.requestMs` is each CLI's one expected request time (2 s when unset). `runBudgetOf(command,
+  maxPages?)` in `./cli` builds the budget from the deadline `run()` started, which a command now reads as
+  `environment.deadline()`. The calendar `sync` uses it: `cooperative`, `partial`, `--max-pages <n>`; it saves after
+  every page and every series, and a rerun goes on from there (WC-LIFE-10, 12, 13). A run the budget stops answers
+  `state: "partial"`, `stopped`, `progress` and a `next` step that runs the same `sync` again (none when the run moved
+  nothing on), and exits 0. A page token held since an earlier run that the provider refuses starts that calendar's
   round over once.
-- **`calendars status` and the MCP read `calendars_status`** answer each synced calendar's sync in the WC-LIFE-14
+- **`status` and the MCP read `status`** answer each synced calendar's sync in the WC-LIFE-14
   shape (`progressOf`), with `cursor_age_ms` to tell a moving sync from a stuck one. `CalendarCommandDeps.profile`
   and `callCalendarTool`'s `profileOf` name the profile in it.
 
