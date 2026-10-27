@@ -2,10 +2,11 @@ export {
   type BudgetStop,
   DEADLINE_MARGIN_MS,
   DEADLINE_MARGIN_SHARE,
+  DEFAULT_REQUEST_MS,
   type Deadline,
-  defaultRequests,
-  MS_PER_REQUEST,
+  deadlineMargin,
   type RunBudget,
+  requestsFor,
   runBudget,
 } from "./budget.js"
 export {

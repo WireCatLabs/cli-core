@@ -8,9 +8,14 @@ describe("runBudget", () => {
     expect([budget.used, budget.stopped]).toEqual([2, "requests"])
   })
 
-  it("allows one request per 2 s of the deadline when not told, and no limit without a deadline", () => {
-    expect(runBudget({ deadline: { endsAt: 30_000, ms: 30_000 }, now: () => 0 }).limit).toBe(15)
-    expect(runBudget({ deadline: { endsAt: 600_000, ms: 600_000 }, now: () => 0 }).limit).toBe(300)
+  it("allows the requests that fit before the margin, (deadline − margin) / requestMs, and a lower count asked", () => {
+    const deadline = (ms: number) => ({ endsAt: ms, ms })
+    expect(runBudget({ deadline: deadline(30_000) }).limit).toBe(12)
+    expect(runBudget({ deadline: deadline(300_000) }).limit).toBe(127)
+    expect(runBudget({ deadline: deadline(45_000), requestMs: 1_500 }).limit).toBe(25)
+    expect(runBudget({ deadline: deadline(30_000), requests: 5 }).limit).toBe(5)
+    expect(runBudget({ deadline: deadline(30_000), requests: 500 }).limit).toBe(12)
+    expect(runBudget({ requests: 5 }).limit).toBe(5)
     expect(runBudget().limit).toBeNull()
   })
 

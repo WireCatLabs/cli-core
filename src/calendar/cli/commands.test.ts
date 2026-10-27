@@ -115,14 +115,17 @@ describe("calendar commands", () => {
       state: "partial",
       complete: false,
       stopped: "requests",
-      requests: 1,
+      progress: { calendars: 1, calendarsDone: 0, requests: 1, saved: 0 },
       hint: "run sync again to continue",
       synced: [{ externalId: "primary", state: "partial", saved: 0 }],
+      next: [{ kind: "command", command: "sync", args: { max_pages: 1 }, safe_to_auto_execute: true }],
     })
     expect((await cli("calendars", "status")).items).toMatchObject([
       { external_id: "primary", state: "partial", done: 0, total: null, updated_at: null, cursor_age_ms: null },
     ])
-    expect(await cli("sync")).toMatchObject({ state: "complete", complete: true })
+    const finished = await cli("sync")
+    expect(finished).toMatchObject({ state: "complete", complete: true, progress: { calendarsDone: 1, saved: 2 } })
+    expect(finished.next).toBeUndefined()
     const [status] = (await cli("calendars", "status")).items
     expect(status).toMatchObject({ job: expect.stringMatching(/^calendar /u), profile: "personal", state: "complete" })
     expect(status).toMatchObject({ done: 2, round: null, cursor_age_ms: 0 })

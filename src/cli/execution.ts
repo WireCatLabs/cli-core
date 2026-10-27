@@ -4,6 +4,13 @@ import type { Closeable } from "./deadline.js"
 import { fieldsOf, projectFields } from "./result-fields.js"
 
 export const DEFAULT_COMMAND_MS = 30_000
+/** A `cooperative` command stops on its own before its deadline and keeps its work, so it may run longer. */
+export const DEFAULT_COOPERATIVE_MS = 5 * 60_000
+/**
+ * The same over MCP: clients cut a tool call at about 60 s (the MCP TypeScript SDK's `DEFAULT_REQUEST_TIMEOUT_MSEC`
+ * is 60000), so the command answers well before that.
+ */
+export const DEFAULT_AGENT_COOPERATIVE_MS = 45_000
 export const DEFAULT_OUTPUT_BYTES = 4 * 1024 * 1024
 
 export const byteCount = (value: string, option: string, zero = false): number => {

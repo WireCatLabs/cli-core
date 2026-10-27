@@ -353,7 +353,26 @@ describe("the deadline a command sees", () => {
       { streams: captureStreams(), tty: false, env: { ...process.env } },
     )
     expect(code).toBe(0)
-    expect(seen).toEqual([60_000, 30])
+    expect(seen).toEqual([60_000, 25])
+  })
+
+  it("is 30 s for a one-shot command, 5 minutes for a cooperative one, 45 s for a cooperative one over MCP", async () => {
+    const deadlineOf = async (meta: CommandMeta, extra: Record<string, unknown> = {}, argv: string[] = []) => {
+      let ms: number | undefined
+      await run(
+        ["chats", "list", ...argv],
+        definition(async (command) => {
+          ms = environmentOf(command).deadline?.()?.ms
+        }, meta),
+        { streams: captureStreams(), tty: false, env: { ...process.env }, ...extra },
+      )
+      return ms
+    }
+    const agent = { agent: { result: () => {}, failure: () => {} } }
+    expect(await deadlineOf({})).toBe(30_000)
+    expect(await deadlineOf({ cooperative: true })).toBe(300_000)
+    expect(await deadlineOf({ cooperative: true }, agent)).toBe(45_000)
+    expect(await deadlineOf({ cooperative: true }, agent, ["--timeout", "20s"])).toBe(20_000)
   })
 })
 

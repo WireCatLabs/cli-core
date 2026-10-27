@@ -38,7 +38,14 @@ import {
   storeChangeRefusal,
 } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
-import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
+import {
+  byteCount,
+  DEFAULT_AGENT_COOPERATIVE_MS,
+  DEFAULT_COMMAND_MS,
+  DEFAULT_COOPERATIVE_MS,
+  DEFAULT_OUTPUT_BYTES,
+  execution,
+} from "./execution.js"
 import { setupAtStart } from "./first-run.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
@@ -450,7 +457,11 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           ? undefined
           : lifetime === "interactive"
             ? HEADLESS_INTERACTIVE_MS
-            : DEFAULT_COMMAND_MS
+            : stopsAtItsPace === true
+              ? options.agent
+                ? DEFAULT_AGENT_COOPERATIVE_MS
+                : DEFAULT_COOPERATIVE_MS
+              : DEFAULT_COMMAND_MS
         : persistent
           ? undefined
           : parseDuration(timeout, flags.timeout === undefined ? envName(definition.app, "TIMEOUT") : "--timeout")

@@ -22,25 +22,36 @@ export interface RunBudget {
 
 export const DEADLINE_MARGIN_MS = 5_000
 export const DEADLINE_MARGIN_SHARE = 0.15
-/** With no `--max-pages`, one request for every 2 s of the deadline: 15 in the default 30 s. */
-export const MS_PER_REQUEST = 2_000
+/** How long one request to a provider is expected to take when the CLI does not say (`AppIdentity.requestMs`). */
+export const DEFAULT_REQUEST_MS = 2_000
 
-export const defaultRequests = (deadline: Deadline | undefined): number | null =>
-  deadline === undefined ? null : Math.max(1, Math.floor(deadline.ms / MS_PER_REQUEST))
+export const deadlineMargin = (deadline: Deadline): number =>
+  Math.max(DEADLINE_MARGIN_MS, deadline.ms * DEADLINE_MARGIN_SHARE)
 
+/** The requests that fit before the margin: `(deadline − margin) / requestMs`, at least one; none without a deadline. */
+export const requestsFor = (deadline: Deadline | undefined, requestMs = DEFAULT_REQUEST_MS): number | null =>
+  deadline === undefined ? null : Math.max(1, Math.floor((deadline.ms - deadlineMargin(deadline)) / requestMs))
+
+/**
+ * Stops at whichever comes first: the requests that fit the deadline (`requestsFor`), an explicit `requests` lower
+ * than that, the deadline's margin plus the slowest request so far, or the signal.
+ */
 export const runBudget = ({
   requests,
   deadline,
+  requestMs,
   signal,
   now = Date.now,
 }: {
   requests?: number
   deadline?: Deadline
+  requestMs?: number
   signal?: AbortSignal
   now?: () => number
 } = {}): RunBudget => {
-  const limit = requests ?? defaultRequests(deadline)
-  const margin = deadline ? Math.max(DEADLINE_MARGIN_MS, deadline.ms * DEADLINE_MARGIN_SHARE) : 0
+  const fits = requestsFor(deadline, requestMs)
+  const limit = fits === null ? (requests ?? null) : Math.min(fits, requests ?? fits)
+  const margin = deadline ? deadlineMargin(deadline) : 0
   let used = 0
   let stopped: BudgetStop | null = null
   let last: number | undefined

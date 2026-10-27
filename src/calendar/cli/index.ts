@@ -235,13 +235,13 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       ),
       "sync",
       "sync --full --embed",
-      "sync --max-pages 200 --timeout 5m",
+      "sync --timeout 2m",
     ),
   )
     .option("--full", "list every synced calendar's window again, dropping a round in progress")
     .option(
       "--max-pages <pages>",
-      "at most this many requests to the provider in this run; one for every 2 s of the deadline if not given",
+      "at most this many requests to the provider in this run; as many as fit the deadline if not given",
       integer,
     )
     .option("--embed", "also index new events for meaning search, with a model already downloaded")
@@ -260,7 +260,26 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       if (opts.embed && !deps.embed) throw new CliError("configuration_error", "this tool cannot embed events")
       // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
       const embeddings = opts.embed && !report.stopped ? await deps.embed?.(EMBED_MAX) : undefined
-      print(embeddings === undefined ? report : { ...report, embeddings }, command)
+      const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
+      // The same command again, never --full: that would drop the round this run leaves in progress.
+      const next =
+        report.state === "partial" && !report.synced.some((one) => one.error !== undefined)
+          ? [
+              {
+                kind: "command" as const,
+                step: "calendar.sync",
+                command: "sync",
+                args: Object.fromEntries(
+                  Object.entries({ max_pages: opts.maxPages, timeout, embed: opts.embed }).filter(
+                    ([, value]) => value !== undefined,
+                  ),
+                ),
+                why: "the sync stopped before its end to answer in time; running it again goes on from where it stopped",
+                safe_to_auto_execute: true,
+              },
+            ]
+          : undefined
+      print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
       if (report.synced.some((one) => one.error !== undefined))
         throw new CliError("provider_error", "some calendars did not sync; run sync again to retry them", {
           reason: "sync.partial",

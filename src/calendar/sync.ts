@@ -155,8 +155,15 @@ export interface CalendarSyncReport {
   state: "partial" | "complete"
   /** Why the run stopped early: its request budget, its deadline, or a cancel. */
   stopped?: BudgetStop
-  /** Requests made to the source. */
-  requests: number
+  /** What this run did, so a partial run still shows that it moves. */
+  progress: {
+    calendars: number
+    calendarsDone: number
+    /** Requests made to the source: the calendar list, each page, each series' slots. */
+    requests: number
+    /** Entries and slots saved. */
+    saved: number
+  }
   hint?: string
 }
 
@@ -343,10 +350,15 @@ export const syncCalendars = async (
     notSynced: [],
     complete: true,
     state: "complete",
-    requests: 0,
+    progress: { calendars: 0, calendarsDone: 0, requests: 0, saved: 0 },
   }
   const finish = (stopped: BudgetStop | null) => {
-    report.requests = budget.used
+    report.progress = {
+      calendars: report.synced.length,
+      calendarsDone: report.synced.filter((one) => one.state === "complete").length,
+      requests: budget.used,
+      saved: report.synced.reduce((sum, one) => sum + one.saved + one.occurrences, 0),
+    }
     report.complete = report.synced.every((one) => one.state === "complete" && one.error === undefined)
     report.state = report.complete && stopped === null ? "complete" : "partial"
     if (stopped) report.stopped = stopped

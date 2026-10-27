@@ -59,16 +59,33 @@ provider confirmed deleted, never one that only left the window.
 **The budget** (`options.budget`, a `RunBudget` from `@wirecat/cli-core/background`). The engine asks `take()` before
 every request: the calendar list, each page, each series' `occurrences()`. When it says no, the run stops where it
 is, every finished page already saved, and the report says `state: "partial"`, `stopped` (`requests`, `deadline` or
-`cancelled`), `requests` and `hint: "run sync again to continue"`. Each calendar has its own `state`. Without a budget
-the run goes until every calendar is done. `options.signal` is checked before each save: a cancelled run keeps what
-it saved and stops.
+`cancelled`), `progress` (`calendars`, `calendarsDone`, `requests`, `saved`) and `hint: "run sync again to
+continue"`. Each calendar has its own `state`. Without a budget the run goes until every calendar is done.
+`options.signal` is checked before each save: a cancelled run keeps what it saved and stops.
 
-`runBudget({ requests?, deadline?, signal?, now? })` says no when `requests` are spent; when the deadline is closer
-than the larger of 5 s and 15% of it, plus the slowest gap between two requests so far (one `occurrences()` may
-page inside the adapter); or when the signal is aborted. Without `requests` it allows one per 2 s of the deadline
-(15 in the default 30 s), and no limit when there is no deadline. `runBudgetOf(command, maxPages?)` from
-`@wirecat/cli-core/cli` builds one from the deadline `run()` started (`environment.deadline()`) and the run's signal.
-`--timeout` still sets the hard limit; the budget only makes the run stop before it.
+**The three limits.** Every one-shot command has a hard deadline (WC-LIFE-5); `--timeout` or `<PREFIX>_TIMEOUT`
+sets it, higher or lower, and past it the command fails with `timeout`.
+
+| Command | Default deadline | Why |
+|---|---|---|
+| one-shot | 30 s (`DEFAULT_COMMAND_MS`) | a command that hangs must fail |
+| `cooperative`, at a terminal or in a script | 5 min (`DEFAULT_COOPERATIVE_MS`) | it stops on its own before the deadline and keeps its work |
+| `cooperative`, run for an MCP agent | 45 s (`DEFAULT_AGENT_COOPERATIVE_MS`) | MCP clients cut a tool call at about 60 s: the MCP TypeScript SDK's `DEFAULT_REQUEST_TIMEOUT_MSEC` is 60000 |
+
+**The budget formula.** `requests = floor((deadline − margin) / requestMs)`, at least 1, where
+`margin = max(5 s, 15% of the deadline)` and `requestMs` is how long one request to the provider usually takes: one
+constant per CLI, `AppIdentity.requestMs` (2 s, `DEFAULT_REQUEST_MS`, when unset). So 12 requests in 30 s, 127 in
+5 minutes and 19 in 45 s at 2 s each. A lower `--timeout` means fewer requests; `--max-pages` can lower the count
+further, never raise it past what fits. The run stops at whichever comes first: the count spent, or the deadline
+closer than the margin plus the slowest request so far (one `occurrences()` may page inside the adapter).
+`runBudgetOf(command, maxPages?)` from `@wirecat/cli-core/cli` builds it from the deadline `run()` started
+(`environment.deadline()`), the CLI's `requestMs` and the run's signal.
+
+**How to go on.** A partial answer without a failed calendar carries `next`: one command step, `sync` with the same
+`max_pages`, `timeout` and `embed` the run had and never `full` (that would drop the round in progress), marked safe
+to run unasked (it reads the provider and writes only the store). A host that renders it with `renderAnswer` prints
+the whole line with the profile (`gcal personal sync`) as the last line in text, and an MCP agent gets the same
+command and arguments to call again. `calendars status` shows the progress between runs.
 
 **What the engine does not do.** It writes no `syncs` row: no store method writes that table, so the run record of
 the command that called it keeps the counts. A slot that stops being produced without a word (neither a cancelled
@@ -89,7 +106,7 @@ shows the event's own fields (title, time) and only this account's copies, atten
 |---|---|---|
 | `calendars list` | provider read, local write | the provider's calendars, saved, with which of them sync |
 | `calendars sync <calendar>` / `unsync <calendar>` | local write | turn one calendar's sync on or off, by its id or the provider's |
-| `sync [--full] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` and exits 0, a calendar that failed exits with `provider_error` (`sync.partial`). `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
+| `sync [--full] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` with a `next` step and exits 0, a calendar that failed exits with `provider_error` (`sync.partial`). `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
 | `calendars status` | local read | each synced calendar's sync in the WC-LIFE-14 shape (`progressOf`): `done`, `total: null`, `remaining: null`, `state`, `updated_at`, `cursor_age_ms`, plus `round` in progress and `line` (`progressLine`); `profile` is `deps.profile` |
 | `events list [today\|week\|from:… to:…] [person:…] [calendar:…]` | local read | stored events, earliest first; without a time word from the start of today |
 | `events show <event>` | local read | its calendar copies, attendees with their `person:`, Drive files, history |

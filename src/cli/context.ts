@@ -109,14 +109,15 @@ export interface RelayedRun {
 }
 
 /**
- * A budget for a resumable sync: `--max-pages` when given, else one request per 2 s of the command's deadline, and a
- * stop close to the deadline or on the run's signal.
+ * A budget for a resumable sync, from the deadline running now and the CLI's `requestMs`: so a lower `--timeout`
+ * means fewer requests. `requests` (`--max-pages`) can only lower it.
  */
 export const runBudgetOf = (command: Command, requests?: number): RunBudget => {
-  const { deadline, signal } = environmentOf(command)
+  const { deadline, signal, app } = environmentOf(command)
   const now = deadline?.()
   return runBudget({
     ...(requests === undefined ? {} : { requests }),
+    ...(app?.requestMs === undefined ? {} : { requestMs: app.requestMs }),
     ...(now ? { deadline: now } : {}),
     ...(signal ? { signal } : {}),
   })
