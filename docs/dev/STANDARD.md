@@ -139,6 +139,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `cancel` | stop a job or a pending thing |  |
 | `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; a mirror syncs both ways | `refresh` |
 | `fetch` | one bounded pull of one named thing into the store, not a catch-up |  |
+| `unsync` | stop syncing a thing; what the store already holds stays |  |
 | `export` | write from the store to a file |  |
 | `import` | bring a file or list the user gives into the store or the messenger, once |  |
 | `download` | save a file from the source to this machine |  |
@@ -162,6 +163,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `unstar` | take the owner's star off a message |  |
 | `vote` | answer a poll |  |
 | `answer` | reply to a button someone pressed under a bot's message |  |
+| `respond` | answer an invitation: accept, tentatively accept or decline it |  |
 | `press` | press a button under a bot's message; the bot sees who pressed it |  |
 | `action` | show what a bot is doing in a chat, such as typing, for a few seconds |  |
 | `watch` | follow new events as they come, and keep them |  |
@@ -184,6 +186,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `acknowledge` | record successful delivery using the exact receipt issued when the item was claimed |  |
 | `confirm` | the owner accepts what an agent proposed | `accept`, `approve` |
 | `reject` | the owner refuses what an agent proposed | `decline`, `deny` |
+| `review` | list what waits for the owner's decision |  |
+| `resolve` | settle one thing that waits for the owner's decision, with the owner's choice |  |
 | `move` | move a file in the source |  |
 | `copy` | copy a file in the source |  |
 | `run` | run a saved job once, now, as its timer would |  |
@@ -218,6 +222,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `evidence` | the stored messages or lines a result or a reference rests on |
 | `passage` | a cited transcript line with bounded surrounding lines from the same revision |
 | `agenda` | what needs a look today |
+| `busy` | when calendars or people are taken, without what takes them |
 | `categories` | the categories a thing takes, with what each means |
 | `domains` | the internet domains links point to, most linked first |
 | `places` | the street addresses confirmed as places, most mentioned first |
@@ -275,6 +280,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
 | `meetings` | collection | stored meetings, from Zoom or another provider |  |
+| `calendars` | collection | calendars of an account, each synced or not |  |
+| `events` | collection | calendar entries: meetings, appointments and other things on a calendar |  |
+| `people` | collection | persons the owner deals with, such as the attendees of events |  |
 | `recordings` | collection | the files a provider recorded of a meeting |  |
 | `jobs` | collection | work this tool runs in the background or on a timer |  |
 | `actions` | collection | what an agent proposes to do; the owner confirms or rejects each |  |
@@ -421,7 +429,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--no-preview` |  | switch | no preview card for a link in the text |  |
 | `--no-record` |  | switch | do not keep this run, whatever the configuration says |  |
 | `--no-registries` |  | switch | do not ask the public ban lists |  |
-| `--notify` |  | switch | tell the chat's members about it |  |
+| `--notify` |  | switch | tell the people it concerns about it: the chat's members, or an event's attendees |  |
+| `--no-notify` |  | switch | tell nobody about it |  |
 | `--offline` |  | switch | answer from what was recorded and never connect |  |
 | `--operation-id` | `<id>` | id | the write attempt this repeats, from an unknown outcome; a retry with it cannot write twice |  |
 | `--port` | `<port>` | number | the local port for --http |  |
@@ -722,6 +731,16 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--lease` | `<duration>` | duration | how long a claim lasts before it lapses by itself; claiming again extends it |  |
 | `--filter` | `<query>` | string | a query every result must also match, beside the search's own words |  |
 | `--values` | `<json>` | string | cell values as JSON rows for an explicit range update or row append; not a list filter |  |
+| `--end-time` | `<time>` | time | when it ends |  |
+| `--start-date` | `<date>` | time | the first day of something that lasts whole days, such as an all-day event |  |
+| `--end-date` | `<date>` | time | the last day of something that lasts whole days, such as an all-day event |  |
+| `--location` | `<text>` | string | where it takes place |  |
+| `--attendee` | `<email>` | string | a person invited to the event, by email address; repeat it for more |  |
+| `--id` | `<id>` | id | the id to create it with, chosen beforehand, so a retry finds it instead of making a second one |  |
+| `--calendar` | `<id>` | id | the calendar it acts on, when the thing is on more than one |  |
+| `--repeat` | `<rule>` | string | how it repeats, as an RFC 5545 rule such as FREQ=WEEKLY;BYDAY=MO;COUNT=10 |  |
+| `--hours` | `<from-to>` | string | the working hours of each day to look in, such as 09:00-17:00, in the owner's time zone |  |
+| `--series` |  | switch | act on the whole repeating event, not only this occurrence |  |
 
 <!-- flags: end -->
 
