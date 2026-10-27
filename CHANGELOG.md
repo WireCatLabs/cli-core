@@ -26,15 +26,6 @@ shape of this file.
   two paths to the server as well as `/tg` (with Tailscale: `--set-path <path> http://127.0.0.1:<port><path>` for
   each). Without a path nothing changes.
 
-### Changed — may break callers
-
-- **cli-core needs `@wirecat/cli-base` 0.63.** The peer range moves from `>=0.62.0 <0.63.0` to `>=0.63.0 <0.64.0`. A
-  CLI that pins cli-base moves its pin with this release. cli-base 0.63 adds the shared Google Discovery reader
-  (`adaptDiscovery`, `syncDiscovery`, `readDiscovery` in `@wirecat/cli-base/codegen`) that drive and gcal generate their
-  API code with; nothing cli-core uses changed.
-
-### Added
-
 - **A CLI that is not a messenger can use the shared `permissions`, keyed by its own command paths.** It passes
   `settingsFor(app, { permissions: commandPermissions({ extra, defaults }) })` and hands that `configuration` to
   `run`. Then `config set permissions.<key>` and an MCP server's `--permission` take its command paths, the groups
@@ -49,6 +40,13 @@ shape of this file.
   `permissions: configuration.permissions` to `toolsFromCommands` and to the agent context, in place of `keyOf`. Then
   a write to the service is unavailable under the read-only lock (`readOnly`), and the CLI's own `deny` or `readonly`
   defaults make a command unavailable and refuse its call. Before, MCP offered both.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.63.** The peer range moves from `>=0.62.0 <0.63.0` to `>=0.63.0 <0.64.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.63 adds the shared Google Discovery reader
+  (`adaptDiscovery`, `syncDiscovery`, `readDiscovery` in `@wirecat/cli-base/codegen`) that drive and gcal generate their
+  API code with; nothing cli-core uses changed.
 
 ## 0.449.0 — 26.10.2026
 
