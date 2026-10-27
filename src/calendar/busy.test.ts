@@ -90,6 +90,12 @@ describe("calendars busy", () => {
     })
   })
 
+  it("refuses --offline before asking the provider", async () => {
+    const { cli, root } = await setup()
+    root.option("--offline")
+    await expect(cli("--offline", "calendars", "busy")).rejects.toMatchObject({ details: { reason: "busy.offline" } })
+  })
+
   it("refuses a word it does not know and an address that is not one", async () => {
     const { cli } = await setup()
     await expect(cli("calendars", "busy", "soon")).rejects.toMatchObject({ details: { reason: "query.unknown_word" } })

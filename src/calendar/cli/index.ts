@@ -187,6 +187,10 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         "09:00-17:00",
       )
       .action(async (words: string[], opts: { durationMinutes?: number; hours: string }, command: Command) => {
+        if (command.optsWithGlobals<{ offline?: boolean }>().offline)
+          throw new CliError("permission_error", "calendars busy asks the provider; leave out --offline", {
+            reason: "busy.offline",
+          })
         const hours = workingHoursOf(opts.hours)
         const query = await busyQuery(words, { store: deps.store, accountId: deps.accountId, zone: zone(), now: now() })
         print(
