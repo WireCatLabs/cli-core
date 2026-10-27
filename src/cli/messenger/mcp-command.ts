@@ -146,7 +146,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
         effects: LOCAL_READ,
         examples: [`${app.command} personal mcp config`],
       })
-        .summary("print this profile's local MCP configuration, or with no profile the one for every profile")
+        .summary("print the local MCP configuration, of this profile or of every profile")
         .description(
           "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
         ),
