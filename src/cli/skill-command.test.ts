@@ -30,10 +30,22 @@ describe("skill show", () => {
     expect(stdout).toEqual(["---\nname: chat-cli\n---\n\n# chat"])
   })
 
-  it("answers JSON when asked for it by name", async () => {
+  it("answers JSON in the one-thing envelope when asked for it by name", async () => {
     const { stdout } = await show(["skill", "show", "--json"])
 
-    expect(JSON.parse(stdout[0] ?? "")).toEqual({ name: "chat-cli", content: "---\nname: chat-cli\n---\n\n# chat" })
+    expect(JSON.parse(stdout[0] ?? "")).toEqual({
+      item: { name: "chat-cli", content: "---\nname: chat-cli\n---\n\n# chat" },
+      meta: expect.objectContaining({ complete: true }),
+    })
+  })
+
+  it("answers --jsonl with one item line and the end line", async () => {
+    const lines = (await show(["skill", "show", "--jsonl"])).stdout.map((line) => JSON.parse(line))
+
+    expect(lines).toEqual([
+      { type: "item", data: { name: "chat-cli", content: "---\nname: chat-cli\n---\n\n# chat" } },
+      expect.objectContaining({ type: "end", complete: true }),
+    ])
   })
 
   it("**prints the shared link-conversations skill** with this CLI's command in it", async () => {
@@ -94,6 +106,17 @@ describe("the skill hint", () => {
     expect(first.stdout).toEqual([])
     expect(first.stderr).toEqual(["agents: `chat skill install` installs this tool's guide"])
     expect((await go(["probe"])).stderr).toEqual([])
+  })
+
+  it("answers skill install and skill status in the one-thing envelope", async () => {
+    const { go } = agent()
+
+    const install = JSON.parse((await go(["skill", "install", "--for", "claude", "--json"])).stdout[0] ?? "")
+    const status = JSON.parse((await go(["skill", "status", "--json"])).stdout[0] ?? "")
+
+    expect(install).toMatchObject({ item: { name: "chat-cli", version: "1.0.0" }, meta: { complete: true } })
+    expect(status.item.targets[0]).toMatchObject({ target: "claude", state: "current" })
+    expect(status.meta).toMatchObject({ complete: true })
   })
 
   it("says nothing once the skill is installed", async () => {
