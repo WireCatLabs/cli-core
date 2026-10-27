@@ -2,8 +2,9 @@
 # Copies what ONNX Runtime's Node builds load out of npm tarballs, each checked against the integrity npm
 # records for it:
 #   onnxruntime-web: the WebAssembly build — the other 130 MB of that package are browser builds nobody here runs;
-#   onnxruntime-node: its JavaScript and the 0.4 MB binding of each platform — not its 46 MB libraries, which
-#   @wirecat/cli-core downloads with the models, from Microsoft's release of the same version.
+#   onnxruntime-node: its JavaScript and the 0.3–0.4 MB binding of each platform — not its 25–46 MB libraries, which
+#   @wirecat/cli-core downloads with the models: from Microsoft's release of the same version, and on Windows, whose
+#   binding needs the DirectML build of onnxruntime.dll that release lacks, from this same npm tarball.
 set -eu
 cd "$(dirname "$0")"
 VERSION=1.30.0
@@ -41,7 +42,7 @@ grep -qF 'require(require("./location.js").binding());' native/binding.js
 cp location.cjs native/location.js
 echo '{"type":"commonjs"}' > native/package.json
 grep -qF "exports.version = '$VERSION';" native/version.js
-for target in linux/x64 linux/arm64 darwin/arm64; do
+for target in linux/x64 linux/arm64 darwin/arm64 win32/x64 win32/arm64; do
   mkdir -p "native/$(echo "$target" | tr / -)"
   cp "$from/bin/napi-v6/$target/onnxruntime_binding.node" "native/$(echo "$target" | tr / -)/"
 done
