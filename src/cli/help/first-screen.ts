@@ -65,6 +65,11 @@ export const WIRECAT_TOOLS: readonly Tool[] = [
     shown: "memo context <person>",
     does: "one person across messengers, mail, notes and meetings",
   },
+  {
+    command: "mail",
+    package: "@wirecat/mail-cli",
+    does: "IMAP mail in the same local store: search your mailbox offline, next to your other WireCat data",
+  },
 ]
 
 const WIDTH = 100
