@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.472.0 — 28.10.2026
+
 ### Added
 
 - **`./mail` and `./mail/testing` — the mail engine, moved from memo.** `MailSource` (the port a mail CLI's adapter
