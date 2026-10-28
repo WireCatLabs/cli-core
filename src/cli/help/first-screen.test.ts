@@ -59,6 +59,7 @@ describe("the first screen", () => {
         zm                      Zoom meetings: transcripts and summaries, searchable with your other WireCat data
         drive                   Google Drive and Docs as local text, searchable with your other WireCat data
         memo context <person>   one person across messengers, mail, notes and meetings
+        mail                    IMAP mail in the same local store: search your mailbox offline, next to your other WireCat data
 
       Start here:   tg personal setup  (any profile name works)
                     tg account list    your profiles and their logged-in accounts
