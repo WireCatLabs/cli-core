@@ -82,6 +82,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./tasks`, `./tasks/testing` | `src/tasks/` | open tasks: model, `TaskStore` port and service — see [Open tasks](#open-tasks) |
 | `./meetings`, `/meetings/cli`, `/meetings/mcp`, `/meetings/testing` | `src/meetings/` | events and meetings, the provider and store ports, pull, import, commands and MCP reads — see [Meetings](MEETINGS.md) and [provider integration](MEETING-PROVIDERS.md) |
 | `./calendar`, `/calendar/cli`, `/calendar/mcp`, `/calendar/testing` | `src/calendar/` | the calendar provider port, the sync engine over `EventStore`, the shared commands and MCP reads; the store types stay in `src/meetings/`, which depends on nothing else — see [Calendars](CALENDARS.md) |
+| `./mail`, `/mail/testing` | `src/mail/` | the mail source port, the sync engine over `store.mail` (resume points, rules, deletions, attachment text), sender scoring and the contract kit — see [Mail](MAIL.md) |
 
 The README's table lists what each export offers; this page does not repeat it.
 

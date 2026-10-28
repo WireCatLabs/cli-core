@@ -55,6 +55,7 @@ const OTHERS: Entry[] = [
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],
   validation("extraction.text-too-long", "the text is too long for memory extraction"),
   validation("file.locked", "another process holds the file's lock"),
+  ["mail.source-failed", "provider_error", "the mail server refused or did not complete a request"],
   ["mirror.partial", "provider_error", "some mirrored files were not synced"],
   ["profile.wrong-account", "authentication_error", "the signed-in source account does not match this profile"],
   validation("push.too-many-files", "the folder holds more files than one push takes"),

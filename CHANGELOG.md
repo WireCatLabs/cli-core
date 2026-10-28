@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`./mail` and `./mail/testing` — the mail engine, moved from memo.** `MailSource` (the port a mail CLI's adapter
+  implements), `syncMail(source, store, options)` (resume points per folder, rules, deletions with a safety stop,
+  envelopes, attachment text, `index` for the caller's embedding), `scoreSenders`, the rules and the parser. The account
+  key `{ provider: "email", account: <address> }` and the sync-state keys (`mail_resume:<folder>`, `mail_folder_scope`,
+  `mail_coverage`, `mail_sender_scores`) are memo's, so a mailbox memo imported continues where it stopped. `./mail/testing`
+  has a Gmail-shaped in-memory source and the contract every adapter must pass. See `docs/dev/MAIL.md`. Mail is now
+  fetched by its own source tool, not by the knowledge tool: `TOOL-BOUNDARIES.md` and `STANDARD.md` say so.
+
 ## 0.471.0 — 27.10.2026
 
 ### Added
