@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { factsOf } from "./facts.js"
 import type { MailHeaders } from "./headers.js"
 import { probeMail } from "./probe.js"
 import { decide, type MailRule } from "./rules.js"
@@ -64,5 +65,25 @@ describe("decide", () => {
       match: { list_id: "deals.shop.example" },
     })
     expect(decide(layered, { headers: { ...deal, from: "orders@mail.shop.example" } })?.action).toBe("keep")
+  })
+})
+
+describe("factsOf", () => {
+  const news = { from: "news@shop.example", to: [], listId: "news.shop.example", bulk: true }
+  const rule: MailRule = { match: { score_at_least: 1 }, action: "skip", decided_at: "2026-10-14T00:00:00.000Z" }
+
+  it("gives a rule the sender's score and whether the owner wrote to it, from the whole listing", () => {
+    const items = [email(1, news), email(2, news), email(3, { from: "alice@example.test", to: [], bulk: false })]
+
+    const facts = factsOf(items, [rule])
+
+    expect(facts(items[0] as Listed)).toMatchObject({ score: expect.any(Number), replied: false })
+    expect(facts(items[2] as Listed)).toMatchObject({ score: expect.any(Number) })
+  })
+
+  it("leaves an item as listed when no rule needs a score", () => {
+    const items = [email(1, news)]
+
+    expect(factsOf(items, [{ ...rule, match: { domain: "shop.example" } }])(items[0] as Listed)).toBe(items[0])
   })
 })
