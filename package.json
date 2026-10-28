@@ -125,6 +125,14 @@
       "types": "./dist/calendar/testing/index.d.ts",
       "default": "./dist/calendar/testing/index.js"
     },
+    "./mail": {
+      "types": "./dist/mail/index.d.ts",
+      "default": "./dist/mail/index.js"
+    },
+    "./mail/testing": {
+      "types": "./dist/mail/testing/index.d.ts",
+      "default": "./dist/mail/testing/index.js"
+    },
     "./models": {
       "types": "./dist/models/index.d.ts",
       "default": "./dist/models/index.js"
@@ -200,6 +208,7 @@
     "dictionary-en": "4.0.0",
     "dictionary-es": "4.0.0",
     "dictionary-ru": "3.0.0",
+    "disposable-email-domains-js": "1.26.0",
     "echarts": "6.1.0",
     "fflate": "0.8.3",
     "iconv-lite": "0.7.3",
@@ -212,10 +221,12 @@
     "mdast-util-gfm": "3.1.0",
     "micromark-extension-gfm": "3.0.0",
     "ogg-opus-decoder": "1.7.5",
+    "postal-mime": "4.1.4",
     "psl": "1.15.0",
     "qrcode-generator": "2.0.4",
     "sherpa-onnx": "2.0.0",
     "string-width": "8.3.0",
+    "tldts": "7.4.19",
     "unpdf": "1.9.1",
     "valibot": "1.5.0",
     "word-extractor": "1.0.4",
