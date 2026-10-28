@@ -11,8 +11,8 @@ repeated some of them, and this package held everything. Each tool gets one job 
 
 | Role | Who | Owns |
 |---|---|---|
-| **Source tool** | tg, max, zm | Its own service: log in, sync it into the shared local store, act there (send, reply, react, read a chat) |
-| **Knowledge tool** | memo, to be renamed | The whole store across sources: search everywhere, a person across messengers and mail, tasks, notes, memories, facts, projects, reminders, vocabulary. Note-folder and mail import are its own sources |
+| **Source tool** | tg, max, zm, mail-cli | Its own service: log in, sync it into the shared local store, act there (send, reply, react, read a chat) |
+| **Knowledge tool** | memo, to be renamed | The whole store across sources: search everywhere, a person across messengers and mail, tasks, notes, memories, facts, projects, reminders, vocabulary. Note-folder import is its own source; it reads mail from the store, and never fetches it |
 | **Library** | this package (later `@wirecat/cli-base`) | The store, the services, the adapter kit and the shared command builders. No product commands of its own |
 
 **The rule: a command lives where its data comes from.** Data one source brings in is that source tool's.
@@ -24,8 +24,11 @@ note on a contact, tags a chat, makes a task from a message, reads `tasks agenda
 `serve` and a reply rule's `task` action still open tasks there. These commands are the shared builders here;
 memo mounts the same ones (`Messenger.accountOf`).
 
-**Never in a source tool:** mail. tg has no `search mail` (it is an unknown command there), and tg's `search all`
-never reads mail.
+**Mail is fetched by its own source tool**, `mail-cli`, like messengers and calendars: it signs in, fetches, and writes
+the store through the shared `./mail` engine ([MAIL.md](MAIL.md)). It is a source tool, and the rule that a command lives
+where its data comes from holds for it. tg and max do not read mail: tg has no `search mail` (it is an unknown command
+there), and their `search all` never reads mail. Searching mail and linking it to people and projects stays in the
+knowledge tool.
 
 Nobody uses these tools yet (owner, 2026-10-11), so a command moves in one step, with no alias.
 
@@ -49,7 +52,7 @@ Source tools keep every group about their service: `session`, `setup`, `account`
 | `tasks list/add/close/plan/link/show/agenda`, `stats tasks` | both, on the same builders |
 | tasks across sources, assign | knowledge tool |
 
-Already only in the knowledge tool, and staying there: notes import, export and folders, mail import,
+Already only in the knowledge tool, and staying there: notes import, export and folders,
 memories, facts, proposed actions, the agent log, organizations, projects, relationships, reminders,
 vocabulary, `ask`, scheduled imports. The knowledge tool's MCP server is the one an agent uses for these;
 a source tool's MCP server offers only its own service.

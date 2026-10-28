@@ -784,8 +784,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 (owner, 2026-10-08), as statistics live under `stats`: `search all`, `search messages`,
 `search notes`, `search conversations`, `search topics`; for the bot account `bot search messages`.
 `search all` covers messages and notes, and a meeting account `--source` names, and is the one an agent
-should reach for first. Mail is the knowledge tool's: a source tool has no `search mail`, and `search all`
-there never reads mail (owner, 2026-10-14; [TOOL-BOUNDARIES.md](TOOL-BOUNDARIES.md)). A resource's own `search` leaf (`messages search`) does not exist beside it.
+should reach for first. Mail is searched in the knowledge tool: a messenger tool has no `search mail`, and `search all`
+there never reads mail (owner, 2026-10-14). Mail is fetched by its own source tool, `mail-cli`, on the shared `./mail`
+engine, as messengers and calendars are (owner, 2026-10-28; [TOOL-BOUNDARIES.md](TOOL-BOUNDARIES.md)). A resource's own `search` leaf (`messages search`) does not exist beside it.
 `searches` stays: it is the owner's saved searches, a resource, not a search.
 
 ### Where a search word is looked for
