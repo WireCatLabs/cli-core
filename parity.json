@@ -3671,16 +3671,16 @@
       "in": "all"
     },
     "reactions list": {
-      "in": ["tg", "wa"],
-      "reason": "max-cli does not list who reacted to a message",
+      "in": ["tg"],
+      "reason": "max-cli and whatsapp-cli do not list who reacted to a message",
       "options": {
         "--cursor": {
-          "in": ["tg", "wa"],
-          "reason": "max-cli does not list who reacted to a message"
+          "in": ["tg"],
+          "reason": "max-cli and whatsapp-cli do not list who reacted to a message"
         },
         "--limit": {
-          "in": ["tg", "wa"],
-          "reason": "max-cli does not list who reacted to a message"
+          "in": ["tg"],
+          "reason": "max-cli and whatsapp-cli do not list who reacted to a message"
         }
       }
     },
