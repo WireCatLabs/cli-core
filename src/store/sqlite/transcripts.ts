@@ -58,7 +58,7 @@ export const intoVoiceAttachment = (context: StoreContext, messagePk: number): v
     .prepare(
       `SELECT a.id, t.text, t.source FROM message_transcripts t
        JOIN attachments a ON a.attachable_type = 'message' AND a.attachable_id = t.message_id
-       WHERE t.message_id = ? AND (a.kind = 'voice' OR a.mime = 'audio/ogg') ORDER BY a.position LIMIT 1`,
+       WHERE t.message_id = ? AND (a.kind IN ('voice', 'audio') OR a.mime LIKE 'audio/%') ORDER BY a.position LIMIT 1`,
     )
     .get(messagePk)
   if (!row) return

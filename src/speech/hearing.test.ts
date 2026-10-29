@@ -97,6 +97,20 @@ describe("hearing voice messages in a list", () => {
     expect([...kept.rows.keys()]).toEqual(["7/1"])
   })
 
+  it("**shows a kept transcript of an audio file, but never hears one with --transcribe**", async () => {
+    const kept = memory()
+    const audio = (id: string): Message => ({ ...voice(id), attachments: [{ kind: "audio", mime: "audio/mp4" }] })
+    kept.keep({ chatId: "7", messageId: "1" }, "heard with messages transcribe", "parakeet-v3")
+    const adapter = telegram(() => new CliError("provider_error", "asked"))
+
+    const hearing = await hearVoices(messenger, [audio("1"), audio("2")], kept, {
+      choice,
+      connect: (work) => work(adapter),
+    })
+
+    expect(hearing).toEqual({ transcripts: new Map([["7/1", "heard with messages transcribe"]]), unheard: [] })
+  })
+
   it("stops asking when the time is up, and says what is left", async () => {
     const hearing = await hearVoices(messenger, [voice("1")], memory(), {
       choice,

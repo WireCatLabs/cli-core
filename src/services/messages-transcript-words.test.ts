@@ -29,7 +29,11 @@ const message = (id: string, text: string, attachments: Attachment[] = []): Mess
 })
 
 /** Voice notes 1–3 and typed messages 4–5, each transcript as speech recognition heard it. */
-const seeded = async (transcripts: Record<string, string>, typed: Record<string, string> = {}) => {
+const seeded = async (
+  transcripts: Record<string, string>,
+  typed: Record<string, string> = {},
+  recorded: Attachment[] = voice,
+) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "transcript-words-")), "messages.db") })
   live.push(store)
   await store.chats.saveChats(account, [
@@ -39,7 +43,7 @@ const seeded = async (transcripts: Record<string, string>, typed: Record<string,
     account,
     "1",
     [
-      ...Object.keys(transcripts).map((id) => message(id, "", voice)),
+      ...Object.keys(transcripts).map((id) => message(id, "", recorded)),
       ...Object.entries(typed).map(([id, text]) => message(id, text)),
     ],
     { via: "history" },
@@ -52,6 +56,11 @@ const search = (store: MessageStore, text: string) => searchStore(store, account
 const ids = (found: { items: { id: string }[] }) => found.items.map(({ id }) => id).sort()
 
 describe("voice-note transcripts", () => {
+  it("**are found for an audio file someone sent**, not only a voice note", async () => {
+    const store = await seeded({ "1": "jugamos a las seis" }, {}, [{ kind: "audio", mime: "audio/mp4" }])
+    expect(ids(await search(store, "transcript:jugamos"))).toEqual(["1"])
+  })
+
   it("**are found in another form of a word**, and not under exact:", async () => {
     const store = await seeded({ "1": "мы вчера позвонили риелтору насчёт квартиры" })
     expect(ids(await search(store, "transcript:риелтор"))).toEqual(["1"])

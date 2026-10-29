@@ -6,7 +6,7 @@ import type { Settings } from "../cli/settings.js"
 import type { Message } from "../domain/models.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { openStore } from "../store/store.js"
-import { type Choice, choose, hearLocally, hearOnline } from "./transcribe.js"
+import { type Choice, choose, hearLocally, hearOnline, isAudioFile } from "./transcribe.js"
 
 /** `--model` chooses who hears what `--transcribe` asks for; alone it would quietly do nothing. */
 export const modelWith = (transcribe: boolean | undefined, model: string | undefined): string | undefined => {
@@ -40,6 +40,9 @@ export const keyOf = ({ chatId, messageId }: Voice): string => `${chatId}/${mess
 /** Telegram says `voice`; MAX says `audio` with Ogg in it. */
 export const isVoice = (message: Message): boolean =>
   message.attachments.some(({ kind, mime }) => kind === "voice" || mime === "audio/ogg")
+
+/** `messages transcribe` hears any audio file; `--transcribe` hears only voice notes, or every song in a chat. */
+export const hasAudio = (message: Message): boolean => message.attachments.some(isAudioFile)
 
 export interface Kept {
   get(voice: Voice): Promise<{ text: string; source: string } | undefined>
@@ -81,11 +84,11 @@ export const hearVoices = async (
 ): Promise<Hearing> => {
   const transcripts = new Map<string, string>()
   const missing: Voice[] = []
-  for (const message of messages.filter(isVoice)) {
+  for (const message of messages.filter(hasAudio)) {
     const voice = { chatId: message.chatId, messageId: message.id }
     const text = (await kept.get(voice))?.text
-    if (text === undefined) missing.push(voice)
-    else transcripts.set(keyOf(voice), text)
+    if (text !== undefined) transcripts.set(keyOf(voice), text)
+    else if (isVoice(message)) missing.push(voice)
   }
   if (!transcribe || missing.length === 0) return { transcripts, unheard: missing }
 
@@ -139,7 +142,7 @@ export const hearForTool = async (
   { settings, env }: { settings: Pick<Settings, "configured" | "shared" | "profile">; env: NodeJS.ProcessEnv },
   model?: string,
 ): Promise<Hearing | undefined> => {
-  if (!messages.some(isVoice)) return undefined
+  if (!messages.some(hasAudio)) return undefined
   const kept = await openKept(messenger, settings.profile, env)
   try {
     return await hearVoices(
