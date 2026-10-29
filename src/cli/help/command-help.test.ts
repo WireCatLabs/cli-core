@@ -157,6 +157,27 @@ describe("generated command help", () => {
     )
   })
 
+  it("names no profile in an example that names its profiles with --profiles", () => {
+    const program = createProgram({
+      ...tool,
+      commands: () => [
+        ...tool.commands(),
+        new Command("mcp").addCommand(
+          annotate(new Command("serve"), {
+            effects: WRITE,
+            examples: ["tg mcp serve", "tg mcp serve --profiles work,personal", "tg mcp serve --profiles all"],
+          })
+            .option("--profiles <names|all>")
+            .action(() => {}),
+        ),
+      ],
+    })
+
+    expect(commandHelpMarkdown(program, ["mcp", "serve"])).toContain(
+      "**Example:** `tg personal mcp serve`, `tg mcp serve --profiles work,personal`, `tg mcp serve --profiles all`",
+    )
+  })
+
   it("lets a definition pin and drop what comes next", async () => {
     const pinned: ProgramDefinition = {
       ...tool,

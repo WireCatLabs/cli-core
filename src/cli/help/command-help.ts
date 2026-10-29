@@ -204,6 +204,8 @@ const withProfile = (command: Command, example: string): string => {
   const root = rootOf(command)
   const top = commandPathOf(command)[0]
   if (!profiled.has(root) || top === undefined || !takesProfile(command)) return example
+  // `--profiles` names the profiles itself; a profile word beside it is refused.
+  if (example.split(" ").includes("--profiles")) return example
   const prefix = `${root.name()} ${top}`
   return example === prefix || example.startsWith(`${prefix} `)
     ? `${root.name()} ${EXAMPLE_PROFILE} ${example.slice(root.name().length + 1)}`
