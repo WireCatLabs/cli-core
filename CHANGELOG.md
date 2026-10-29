@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.480.0 — 29.10.2026
+
 ### Changed — may break callers
 
 - **`StoredMessages.reactors` is required again.** 0.479.0 made it optional so a messenger that builds its own
