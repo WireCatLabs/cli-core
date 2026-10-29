@@ -2,6 +2,7 @@ import type { ErrorCode } from "@wirecat/cli-base"
 import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { InferOutput } from "valibot"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
+import { senderIsMe } from "../../domain/models.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
 import type { ENTITIES } from "../../entities/index.js"
 import { excerpt } from "../../services/excerpt.js"
@@ -49,6 +50,7 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
     chat_title: hit.chatTitle ?? undefined,
     timestamp: hit.timestamp,
     sender_name: hit.senderName,
+    sender_is_me: senderIsMe(hit, at.account),
     excerpt: hit.excerpt ?? excerpt(hit.text, query),
     matched_in: hit.matchedIn,
     score: hit.score ?? undefined,
@@ -194,10 +196,11 @@ const pictureItems = (found: SearchFound): MessageHitItem[] => {
   const shown = new Set(found.items.map(({ locator }) => locator))
   return (found.pictures ?? [])
     .filter(({ locator }) => !shown.has(locator))
-    .map(({ locator, timestamp, senderName, score }) => ({
+    .map(({ locator, timestamp, senderName, senderIsMe, score }) => ({
       ref: locator,
       timestamp,
       sender_name: senderName,
+      sender_is_me: senderIsMe,
       matched_in: "picture",
       score,
       untrusted: ["sender_name"],
@@ -274,6 +277,7 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         url: item.url,
         excerpt: item.text,
         sender_name: item.from?.name,
+        sender_is_me: item.senderIsMe,
         sender_ref: item.from?.ref,
         found_by: item.foundBy,
         untrusted: ALL_HIT_UNTRUSTED[item.kind],

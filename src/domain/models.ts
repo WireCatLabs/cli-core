@@ -417,6 +417,10 @@ export interface Message {
   delivery?: Delivery
 }
 
+/** MAX reports the owner's own messages with no sender id, so `outgoing` counts as well as the id. */
+export const senderIsMe = (message: Pick<Message, "outgoing" | "senderId">, account: string): boolean =>
+  message.outgoing === true || (message.senderId !== null && String(message.senderId) === account)
+
 /** `delivered` reached the other person's phone; `read` they opened it (a voice note or view-once file played counts). */
 export type Delivery = "delivered" | "read"
 

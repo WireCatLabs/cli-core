@@ -1,7 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
 import type * as v from "valibot"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
-import type { Attachment, MailPerson, Message, MessageHit, QuotedMessage } from "../../domain/models.js"
+import {
+  type Attachment,
+  type MailPerson,
+  type Message,
+  type MessageHit,
+  type QuotedMessage,
+  senderIsMe,
+} from "../../domain/models.js"
 import type { message as messageSchema } from "../../entities/message.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { AccountKey } from "../../store/store.js"
@@ -75,8 +82,7 @@ export const messageItem = (message: ReadMessage, reader: AccountKey): MessageIt
     sender_name: message.senderName,
     sender_username: message.senderUsername,
     sender_is_chat: message.senderIsChat,
-    // MAX reports the owner's own messages with no sender id, so `outgoing` counts as well as the id.
-    sender_is_me: message.outgoing === true || (message.senderId !== null && String(message.senderId) === account),
+    sender_is_me: senderIsMe(message, account),
     mentions: message.mentions,
     timestamp: message.timestamp,
     edited_at: message.editedAt,

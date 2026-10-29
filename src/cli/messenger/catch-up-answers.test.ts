@@ -1,5 +1,8 @@
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
-import { catchUpQuery, INBOX_QUERY, REVIEW_QUERY } from "./catch-up-answers.js"
+import type { Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
+import { catchUpQuery, INBOX_QUERY, inboxAnswer, REVIEW_QUERY } from "./catch-up-answers.js"
 
 describe("catchUpQuery", () => {
   it("takes comma-separated chat kinds in the native query", () => {
@@ -33,5 +36,48 @@ describe("catchUpQuery", () => {
   it("refuses an end: a catch-up reads from a point on", () => {
     expect(() => catchUpQuery(["date<2h"], INBOX_QUERY, "inbox")).toThrow(/from a point on/)
     expect(() => catchUpQuery(["chat:7"], INBOX_QUERY, "inbox")).toThrow()
+  })
+})
+
+describe("inboxAnswer", () => {
+  it("says which message the owner wrote", () => {
+    const said = (id: string, outgoing: boolean): Message => ({
+      id,
+      chatId: "7",
+      senderId: outgoing ? "500" : "9",
+      senderName: outgoing ? "Me" : "Olga",
+      timestamp: `2026-09-27T10:0${id}:00.000Z`,
+      editedAt: null,
+      text: `text ${id}`,
+      outgoing,
+      attachments: [],
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+    })
+    const answer = inboxAnswer(
+      {
+        mode: "unread",
+        chats: [
+          {
+            id: "7",
+            title: "Book club",
+            kind: "group",
+            unreadCount: 1,
+            messages: [said("1", true), said("2", false)],
+            more: false,
+          },
+        ],
+        skipped: [],
+        partial: false,
+        quiet: 0,
+      },
+      undefined,
+      { provider: "test", account: "500" },
+      false,
+    )
+
+    for (const item of answer.items) v.parse(ENTITIES["message.summary"], item)
+    expect(answer.items.map(({ sender_is_me }) => sender_is_me)).toEqual([true, false])
   })
 })
