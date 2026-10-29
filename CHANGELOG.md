@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.481.0 — 29.10.2026
+
 ### Added
 
 - **`messages transcribe` hears an audio file someone sent, not only a voice note** — an iPhone recording reaches
