@@ -24,6 +24,8 @@ shape of this file.
   sender id is the reading account's own, so MAX's owner, which has no sender id, is told apart from an unknown sender.
 - **Projects have a `kind`: `project` or `inbox`**, and `projects(query)` takes `kind:` and `name:` (with `*`
   wildcards) as query fields.
+- **`store.people.owner()`** returns the person marked as the owner, with their linked identities, or `undefined`
+  when none is marked: what a caller needs to resolve `person:me`.
 
 ### Changed — may break callers
 
