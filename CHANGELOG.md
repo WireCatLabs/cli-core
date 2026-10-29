@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`StoredMessages.reactors` is required again.** 0.479.0 made it optional so a messenger that builds its own
+  `StoredMessages` kept compiling; whatsapp-cli now implements it, so every messenger must give it (`async () => []` for
+  one that stores no reactions). tg-cli and max-cli do not build a `StoredMessages` and are not affected.
+
+### Added
+
+- **`reactions list` is in whatsapp-cli too** (`parity.json`: `tg` and `wa`; max-cli does not list who reacted).
+
 ## 0.479.0 — 29.10.2026
 
 ### Added
