@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.479.0 — 29.10.2026
+
 ### Added
 
 - **`StoredMessages.reactors(chatId, messageId)`** gives an adapter the reactions the store holds for a message, so a
