@@ -31,6 +31,8 @@ export interface Hearing {
   unheard: Voice[]
   /** Why some were not heard — the first reason; the messages are still worth showing. */
   problem?: string
+  /** Set under `--offline`: the command (`<app> <profile>`) that hears a message online, which `--offline` never does. */
+  offline?: string
 }
 
 export const keyOf = ({ chatId, messageId }: Voice): string => `${chatId}/${messageId}`
@@ -169,6 +171,18 @@ export const hearingMissing = (hearing: Hearing | undefined, transcribe: boolean
   if (transcribe && hearing.problem !== undefined)
     return [{ field: "transcript", why: `not transcribed: ${hearing.problem}`, step: "messages.transcribe" }]
   if (hearing.unheard.length === 0) return []
+  if (hearing.offline !== undefined) {
+    const commands = hearing.unheard.map(
+      ({ chatId, messageId }) => `${hearing.offline} messages transcribe ${chatId} ${messageId}`,
+    )
+    return [
+      {
+        field: "transcript",
+        why: `--offline reads only transcripts already stored; ${hearing.unheard.length} voice message(s) have none: ${commands.join("; ")}`,
+        step: "messages.transcribe",
+      },
+    ]
+  }
   const ids = hearing.unheard.map((voice) => voice.messageId).join(", ")
   return [
     {

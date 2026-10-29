@@ -48,7 +48,7 @@ export const hearForCommand = async (
     else if (transcribe && hearing.unheard.length > 0) {
       context.renderer.note(`${hearing.unheard.length} voice message(s) not heard yet — ask again later`)
     }
-    return hearing
+    return offline ? { ...hearing, offline: `${messenger.app.command} ${context.profile}` } : hearing
   } finally {
     await kept.close()
   }

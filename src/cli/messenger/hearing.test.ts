@@ -182,6 +182,32 @@ describe("read hearing lifecycle", () => {
     })
   })
 
+  it("under --offline, --transcribe keeps stored transcripts, never connects, and names the command for the rest", async () => {
+    const test = fixture([voice("1"), voice("2")])
+    await test.execute(["messages", "list", "9"])
+    const store = await openStore({ env: test.env })
+    try {
+      await store.messages.keepTranscript({ provider: "chat", account: "500" }, "9", "1", question, "chat")
+    } finally {
+      await store.close()
+    }
+    const before = test.events.length
+    const answer = await test.execute(["messages", "list", "9", "--offline", "--transcribe"])
+    expect(answer.code).toBe(0)
+    expect(test.events.slice(before)).toEqual([])
+    expect(answer.body.items.map((item: { id: string; transcript?: string }) => [item.id, item.transcript])).toEqual([
+      ["1", question],
+      ["2", undefined],
+    ])
+    expect(answer.body.missing).toEqual([
+      {
+        field: "transcript",
+        why: "--offline reads only transcripts already stored; 1 voice message(s) have none: chat default messages transcribe 9 2",
+        step: "messages.transcribe",
+      },
+    ])
+  })
+
   it("excludes a voice question answered by an admin", async () => {
     const response = {
       ...voice("2"),
