@@ -196,6 +196,10 @@ export interface EventFilter {
   from?: number
   /** Events that start before this instant. */
   to?: number
+  /** All-day events, which have dates and no instant, ending after this local day (`YYYY-MM-DD`); `from` without it. */
+  fromDate?: string
+  /** All-day events starting before this local day (exclusive); `to` without it. */
+  toDate?: string
   accountId?: number
   calendarId?: number
   /** Events whose entries list one of this person's contacts. */

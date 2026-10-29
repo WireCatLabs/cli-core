@@ -5,6 +5,19 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`events list` matches all-day events by their dates** (WC-TIME-5). An all-day event is stored as midnight in its
+  calendar's zone, so an owner in another zone got the next day's all-day event in `from:2026-11-02 to:2026-11-02`.
+  `eventsFilter` now also sets `fromDate` / `toDate` (the window's local days, `toDate` exclusive), and both event
+  stores compare an all-day event's `start_date` / `end_date` with them. Timed events, and a filter without the dates,
+  match as before.
+- **`events list` reports `hasMore`.** It was always false; it is now true when another event follows the page (also
+  across accounts in the MCP `events_list`). `listed()` takes an optional `{ limit, hasMore }`.
+- **`people list` says when it counted only its first 1000 events**, with `meta: { complete: true, truncated: true }`.
+
 ## 0.474.0 — 29.10.2026
 
 ### Fixed
