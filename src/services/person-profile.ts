@@ -9,7 +9,7 @@ import type {
 } from "../domain/models.js"
 import { pickPerson } from "../resolve.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
-import { type ServiceDeps, storeIfOpen } from "./deps.js"
+import { type ServiceDeps, storeIfOpen, unlessBusy } from "./deps.js"
 
 /**
  * The person as the messenger describes them, and their stored activity in every chat shared with
@@ -21,12 +21,19 @@ import { type ServiceDeps, storeIfOpen } from "./deps.js"
 export const personProfile = async (deps: ServiceDeps, person: string, known?: PersonCard): Promise<PersonProfile> => {
   const online = deps.offline ? undefined : await deps.connection()
   const held = await storeIfOpen(deps)
-  const facts = online?.profile
+  const read = online?.profile
     ? await online.profile(person)
     : known
       ? factsOfCard(known)
       : await storedFacts(held ?? { store: await deps.store(), account: await deps.account() }, person)
-  if (!held) return { ...facts, chats: quiet(facts), aliases: [] }
+  if (!held) return { ...read, chats: quiet(read), aliases: [] }
+  if (online?.profile && read.phone) {
+    await unlessBusy(() =>
+      held.store.people.savePeople(held.account, [{ id: read.id, name: read.name, phone: read.phone }]),
+    )
+  }
+  const phone = read.phone ?? (await held.store.people.phoneOf(held.account, read.id))
+  const facts = phone ? { ...read, phone } : read
   return {
     ...facts,
     chats: await activityIn(held.store, held.account, facts),

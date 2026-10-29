@@ -50,6 +50,16 @@ export interface Corpus {
 export const speech = (alias: string) =>
   `(coalesce(${alias}.extractor,'') LIKE 'speech:%' OR ${alias}.kind IN ('voice','video_note') OR coalesce(${alias}.mime,'')='audio/ogg')`
 export const SPEECH = speech("att")
+
+/**
+ * What mentions are read from in an attachment: its text, or for a shared contact card its phone behind a phone
+ * word, which makes the number count as a phone whatever its country code. One expression for finding and reading
+ * back, so the offsets agree.
+ */
+export const mentionText = (alias: string) =>
+  `CASE WHEN coalesce(json_extract(${alias}.contact, '$.phone'), '') <> '' THEN 'phone: ' || json_extract(${alias}.contact, '$.phone') ELSE ${alias}.text END`
+export const mentionField = (alias: string) =>
+  `CASE WHEN coalesce(json_extract(${alias}.contact, '$.phone'), '') <> '' THEN 'contact' WHEN ${speech(alias)} THEN 'transcript' ELSE 'file_text' END`
 export const quoted = (value: string) => `"${value.replaceAll('"', '""')}"`
 /** A leaf's words as an FTS5 match: a phrase, or with `~N` its words at most N apart, in any order. */
 export const ftsMatch = (node: ResolvedPredicate): string => {

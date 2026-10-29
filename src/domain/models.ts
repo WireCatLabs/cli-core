@@ -628,6 +628,9 @@ export interface Contact {
 /** Somebody in a chat, as much of them as a chat card shows. */
 export type Member = Pick<Contact, "id" | "name" | "username">
 
+/** A contact of the messenger's address book: the phone is there when the messenger shows it to the owner. */
+export type AddressBookEntry = Member & { phone?: string | null }
+
 /** A topic of a forum group; its messages carry this id as `threadId`. */
 export interface Topic {
   id: Id

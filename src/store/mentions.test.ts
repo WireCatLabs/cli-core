@@ -453,6 +453,34 @@ describe("mentions in files and voice notes", () => {
   })
 })
 
+describe("a shared contact card's phone", () => {
+  const card = { name: "Ana Ruiz", firstName: "Ana", lastName: "Ruiz", phone: "34600123456", userId: "42" }
+
+  it("is a phone mention of field contact, found when the card is stored and again by a rebuild", async () => {
+    const { store } = await fresh()
+    await store.messages.saveMessages(
+      OWNER,
+      "-1",
+      [{ ...message("1", ""), attachments: [{ kind: "contact", name: "Ana Ruiz", contact: card }] }],
+      { via: "history" },
+    )
+    await store.messages.saveMessages(OWNER, "-1", [message("2", "ещё")], { via: "update" })
+
+    const listed = async () =>
+      (await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items.map(
+        ({ kind, field, messageId, value }) => [kind, field, messageId, value],
+      )
+    expect(await listed()).toEqual([["phone", "contact", "1", "34600123456"]])
+    expect(
+      (await searchStore(store, OWNER, { text: 'phone:"34600123456"', limit: 10 })).items.map(({ id }) => id),
+    ).toEqual(["1"])
+
+    expect(await store.mentions.rebuildMentions()).toMatchObject({ attachments: 1, mentions: 1 })
+    expect(await listed()).toEqual([["phone", "contact", "1", "34600123456"]])
+    await store.close()
+  })
+})
+
 describe("an organization's number", () => {
   it("is owned by the organization apart from any person, and later mentions of it are linked", async () => {
     const { path, store } = await fresh()

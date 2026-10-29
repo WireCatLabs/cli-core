@@ -147,6 +147,7 @@ export const identities = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     description: text("description"),
     email: text("email"),
+    phone: text("phone"),
   },
   (table) => [
     unique().on(table.provider, table.externalId),
