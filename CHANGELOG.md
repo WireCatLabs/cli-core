@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.474.0 — 29.10.2026
+
 ### Fixed
 
 - **Help no longer puts a profile into an example that has `--profiles`**: `<cli> mcp serve --profiles
