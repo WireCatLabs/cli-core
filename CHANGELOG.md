@@ -19,6 +19,25 @@ shape of this file.
   `ETIMEDOUT`, a server response code; plain codes only, never the server's text) when the error carries one.
 - **A cooperative command that declares `partial` is a sync and gets 15 minutes at a terminal** (`DEFAULT_SYNC_MS`);
   other cooperative commands keep 5 minutes and MCP keeps 45 seconds. The calendar `sync` is one: it had 5 minutes.
+- **`sender_is_me` on every message the shared message output carries** (`messageItem`, so `messages list`, `show`,
+  `context`, search windows and the catch-up reads of tg, max and wa). It is true when the message is `outgoing` or its
+  sender id is the reading account's own, so MAX's owner, which has no sender id, is told apart from an unknown sender.
+- **Projects have a `kind`: `project` or `inbox`**, and `projects(query)` takes `kind:` and `name:` (with `*`
+  wildcards) as query fields.
+
+### Changed — may break callers
+
+- **`knowledge.projects()` leaves the per-account task inbox projects out** (`IN` plus eight hex digits, such as
+  `telegram:220195113`) unless the query names `kind`; `kind:inbox` lists only them. A caller that read inboxes from
+  the unfiltered list must ask for `kind:inbox`.
+
+### Fixed
+
+- **`projects list 'name:*tart*'` no longer crashes** with `internal_error command.crashed`: `name` was a query field
+  the store had no column for.
+- **`--offline --transcribe` says what it did not do.** It still shows transcripts already stored and never connects;
+  voice messages without one are now in `missing` with the exact `<app> <profile> messages transcribe <chat> <id>`
+  command, in `messages list`, `inbox` and `review`.
 
 ## 0.472.0 — 28.10.2026
 
