@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { maskedAccount } from "../../services/people.js"
+import { withoutPhone } from "../../services/people.js"
 import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
@@ -70,17 +70,13 @@ export const accountCommand = (messenger: Messenger): Command => {
         output: { entity: "account" },
         examples: [`${tool} account show`],
       })
-        .description("who this profile is logged in as; the phone number shows its last four digits")
-        .option("--show-phone", "print the whole phone number")
+        .description("who this profile is logged in as, with the phone number")
+        .option("--hide-phone", "leave the phone number out")
         .action(async function (this: Command) {
-          const whole = this.opts<{ showPhone?: boolean }>().showPhone === true
+          const hide = this.opts<{ hidePhone?: boolean }>().hidePhone === true
           const context = messengerContext(this, messenger)
           const account = await context.withMessenger((connection) => connection.me())
-          renderAnswer(
-            this,
-            context,
-            itemOf(accountAnswer(messenger.provider, whole ? account : maskedAccount(account))),
-          )
+          renderAnswer(this, context, itemOf(accountAnswer(messenger.provider, hide ? withoutPhone(account) : account)))
         }),
     )
     .addCommand(
@@ -94,27 +90,26 @@ export const accountCommand = (messenger: Messenger): Command => {
         .option("--last-name <name>", "your last name")
         .option("--description <text>", "about you")
         .option("--photo <file>", `a new profile photo — ${photoHelp(messenger)}`)
+        .option("--hide-phone", "leave the phone number out of the answer")
         .action(async function (this: Command) {
           const context = messengerContext(this, messenger)
-          const { firstName, lastName, description, photo } = this.opts<{
+          const { firstName, lastName, description, photo, hidePhone } = this.opts<{
             firstName?: string
             lastName?: string
             description?: string
             photo?: string
+            hidePhone?: boolean
           }>()
           const upload = photo === undefined ? undefined : await readProfilePhoto(messenger, photo, context.env)
-          renderItem(
-            this,
-            context,
-            await context.withServices((services) =>
-              services.account.update({
-                ...(firstName === undefined ? {} : { firstName }),
-                ...(lastName === undefined ? {} : { lastName }),
-                ...(description === undefined ? {} : { description }),
-                ...(upload === undefined ? {} : { photo: upload }),
-              }),
-            ),
+          const changed = await context.withServices((services) =>
+            services.account.update({
+              ...(firstName === undefined ? {} : { firstName }),
+              ...(lastName === undefined ? {} : { lastName }),
+              ...(description === undefined ? {} : { description }),
+              ...(upload === undefined ? {} : { photo: upload }),
+            }),
           )
+          renderItem(this, context, hidePhone ? { ...changed, account: withoutPhone(changed.account) } : changed)
         }),
     )
     .addCommand(accountSessionsCommand(messenger))

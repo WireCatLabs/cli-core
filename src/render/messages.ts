@@ -179,9 +179,19 @@ const attachmentLines = (
     )
 
   const polls = attachments.flatMap((attachment) => (attachment.poll ? pollLines(attachment.poll) : []))
+  const cards = attachments.flatMap(({ contact }) =>
+    contact
+      ? [
+          paint(
+            "dim",
+            `👤 ${[contact.name, contact.phone].flatMap((part) => (part ? [singleLine(part)] : [])).join(" · ")}`,
+          ),
+        ]
+      : [],
+  )
   const groups = new Map<string, Attachment[]>()
   for (const attachment of attachments) {
-    if (attachment.buttons || attachment.poll) continue
+    if (attachment.buttons || attachment.poll || attachment.contact) continue
     const key = singleLine(attachment.name ?? attachment.title ?? attachment.kind)
     groups.set(key, [...(groups.get(key) ?? []), attachment])
   }
@@ -193,7 +203,7 @@ const attachmentLines = (
     const each = same.map((attachment, index) => link(String(index + 1), attachment.url)).join(" ")
     return paint("dim", `📎 ${label} ×${same.length} ${each}`)
   })
-  return [...polls, ...files, ...keyboard]
+  return [...polls, ...cards, ...files, ...keyboard]
 }
 
 /** `📊 question`, then each answer with the id a vote takes, its voters and ✓ on the owner's own, then the totals. */

@@ -1,4 +1,12 @@
-import type { Id, PersonAlias, PersonProfile, ProfileFacts, Provider, SharedChatActivity } from "../domain/models.js"
+import type {
+  Id,
+  PersonAlias,
+  PersonCard,
+  PersonProfile,
+  ProfileFacts,
+  Provider,
+  SharedChatActivity,
+} from "../domain/models.js"
 import { pickPerson } from "../resolve.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { type ServiceDeps, storeIfOpen } from "./deps.js"
@@ -7,14 +15,17 @@ import { type ServiceDeps, storeIfOpen } from "./deps.js"
  * The person as the messenger describes them, and their stored activity in every chat shared with
  * them. Online, one profile read; `--offline`, or a messenger that cannot describe a person, what
  * the store has seen of them. Counts always come from the store, so they are a floor unless the
- * chat is stored whole.
+ * chat is stored whole. `known` is the card already read for them: where the messenger has no profile to give, it is
+ * what is known, so a person the store has not saved is not looked up in it a second time.
  */
-export const personProfile = async (deps: ServiceDeps, person: string): Promise<PersonProfile> => {
+export const personProfile = async (deps: ServiceDeps, person: string, known?: PersonCard): Promise<PersonProfile> => {
   const online = deps.offline ? undefined : await deps.connection()
   const held = await storeIfOpen(deps)
   const facts = online?.profile
     ? await online.profile(person)
-    : await storedFacts(held ?? { store: await deps.store(), account: await deps.account() }, person)
+    : known
+      ? factsOfCard(known)
+      : await storedFacts(held ?? { store: await deps.store(), account: await deps.account() }, person)
   if (!held) return { ...facts, chats: quiet(facts), aliases: [] }
   return {
     ...facts,
@@ -34,6 +45,15 @@ const pastOf = (facts: ProfileFacts, recorded: PersonAlias[], provider: Provider
       alias.username && provider === "telegram" ? { ...alias, link: `https://t.me/${alias.username}` } : alias,
     )
     .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt))
+
+const factsOfCard = ({ id, name, username, description, chats }: PersonCard): ProfileFacts => ({
+  id,
+  name,
+  usernames: username ? [username] : [],
+  bio: description,
+  flags: {},
+  chats,
+})
 
 const storedFacts = async (
   { store, account }: { store: MessageStore; account: AccountKey },

@@ -841,6 +841,7 @@ A file of a message, an email or a meeting, with its extracted text.
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `name_folded` | text |  |  | `fold(name)`, which `attachments list name:` compares: SQLite's `lower()` folds ASCII only |
 | `local_path_folded` | text |  |  | `fold(local_path)`, for `local_path:` |
+| `contact` | text |  |  | a shared contact card as JSON: name, first and last name, whole phone, account id |
 
 *Keys and indexes:* `UNIQUE (attachable_type, attachable_id, position)`, `INDEX (name_folded)`, `INDEX (id) WHERE local_path IS NOT NULL AND local_path_folded IS NULL`
 

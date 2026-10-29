@@ -218,6 +218,19 @@ export interface Attachment {
   buttons?: Button[][]
   /** The poll the message carries, as it stood when read; drawn for a person, not part of the JSON answer. */
   poll?: Poll
+  /** The contact card shared in the message (`kind: "contact"`), the phone as the sender typed it. */
+  contact?: SharedContact
+}
+
+/** A contact card sent in a message: who it is for, and the number the sender put on it. */
+export interface SharedContact {
+  /** First and last name as shown. */
+  name: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+  /** The messenger's account for the card, when the number belongs to one. */
+  userId?: Id
 }
 
 /**
@@ -805,7 +818,7 @@ export interface Registered {
   precision: "day" | "month"
 }
 
-/** Everything the messenger itself says about one person, as `contacts info` reads it. */
+/** Everything the messenger itself says about one person, as `contacts show` reads it. */
 export interface ProfileFacts {
   id: Id
   name: string | null
@@ -861,7 +874,7 @@ export interface PersonAlias {
   source: "profile" | "messages"
 }
 
-/** `contacts info`: the person, and their activity in every chat shared with them. */
+/** `contacts show`: the person, and their activity in every chat shared with them. */
 export interface PersonProfile extends Omit<ProfileFacts, "chats"> {
   chats: SharedChatActivity[]
   /** Earlier names and usernames, oldest first; the current ones are not repeated. */
@@ -884,7 +897,7 @@ export interface Account {
   name: string | null
   /** The public handle, without `@`, when there is one. */
   username: string | null
-  /** The whole number, where the messenger tells it; printed as its last four digits unless asked. */
+  /** The whole number, where the messenger tells it; `--hide-phone` leaves it out. */
   phone?: string | null
 }
 

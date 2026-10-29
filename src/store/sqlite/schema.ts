@@ -926,6 +926,7 @@ export const attachments = sqliteTable(
     /** `fold(name)`, `fold(local_path)`: SQLite's lower() folds ASCII only, so filters compare these. */
     nameFolded: text("name_folded"),
     localPathFolded: text("local_path_folded"),
+    contact: text("contact"),
   },
   (table) => [
     unique().on(table.attachableType, table.attachableId, table.position),

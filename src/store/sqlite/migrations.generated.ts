@@ -778,5 +778,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "UPDATE calendar_entry_participants SET response = 'needs-action' WHERE response = 'needsAction';",
       "UPDATE calendars SET access_role = 'free-busy' WHERE access_role = 'freeBusyReader';"
     ]
+  },
+  {
+    "name": "20261029162435_version-36-attachment-contact",
+    "statements": [
+      "ALTER TABLE `attachments` ADD `contact` text;"
+    ]
   }
 ]

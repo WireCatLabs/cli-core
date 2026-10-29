@@ -31,6 +31,15 @@ const attachmentItem = (attachment: Attachment) =>
     width: attachment.width,
     height: attachment.height,
     duration: attachment.duration,
+    contact:
+      attachment.contact &&
+      defined({
+        name: attachment.contact.name,
+        first_name: attachment.contact.firstName,
+        last_name: attachment.contact.lastName,
+        phone: attachment.contact.phone,
+        user_id: attachment.contact.userId,
+      }),
     buttons: attachment.buttons,
   })
 

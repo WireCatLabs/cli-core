@@ -433,6 +433,9 @@
       "value": "<on|off>",
       "meaning": "hide online status and last seen"
     },
+    "--hide-phone": {
+      "meaning": "leave the phone number out"
+    },
     "--history": {
       "meaning": "the people added also see the messages from before they came"
     },
@@ -906,9 +909,6 @@
       "value": "<id>",
       "meaning": "the stickers in this set"
     },
-    "--show-phone": {
-      "meaning": "print the whole phone number"
-    },
     "--silent": {
       "meaning": "deliver without a notification"
     },
@@ -1268,7 +1268,7 @@
     "account show": {
       "in": "all",
       "options": {
-        "--show-phone": "all"
+        "--hide-phone": "all"
       }
     },
     "account update": {
@@ -1276,6 +1276,7 @@
       "options": {
         "--description": "all",
         "--first-name": "all",
+        "--hide-phone": "all",
         "--last-name": "all",
         "--photo": {
           "in": "all",
@@ -2803,12 +2804,6 @@
     "contacts import": {
       "in": "all"
     },
-    "contacts info": {
-      "in": "all",
-      "options": {
-        "--show-phone": "all"
-      }
-    },
     "contacts link": {
       "in": "all"
     },
@@ -2868,6 +2863,7 @@
     "contacts show": {
       "in": "all",
       "options": {
+        "--hide-phone": "all",
         "--with-notes": {
           "in": "all"
         }

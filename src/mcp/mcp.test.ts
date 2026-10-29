@@ -766,7 +766,6 @@ describe("the MCP server", () => {
       "contacts check",
       "contacts context",
       "contacts events",
-      "contacts info",
       "contacts list",
       "contacts lookup",
       "contacts notes list",
@@ -1033,7 +1032,7 @@ describe("the MCP server", () => {
     expect((await call("contacts show", { person: "Olga" })).body.item).toMatchObject({ id: "9", name: "Olga" })
   })
 
-  it("profiles a person with the phone always masked", async () => {
+  it("shows a person's profile with the phone whole, and without it for hide_phone", async () => {
     const { call } = await connect(
       scripted({
         profile: async () => ({
@@ -1041,7 +1040,7 @@ describe("the MCP server", () => {
           name: "Olga",
           usernames: [],
           bio: null,
-          phone: "0123",
+          phone: "+34600000123",
           flags: { scam: false },
           seen: "week",
           chats: [{ id: "7", title: "Book club", kind: "group", lastMessageAt: null }],
@@ -1049,10 +1048,12 @@ describe("the MCP server", () => {
       }),
     )
 
-    const { body } = await call("contacts info", { person: "Olga" })
+    const { body } = await call("contacts show", { person: "Olga" })
+    const hidden = await call("contacts show", { person: "Olga", hide_phone: true })
 
-    expect(body.item).toMatchObject({ id: "9", phone: "***0123", seen: "week" })
+    expect(body.item).toMatchObject({ id: "9", phone: "+34600000123", seen: "week" })
     expect(body.item.chats).toMatchObject([{ id: "7", kind: "group" }])
+    expect(hidden.body.item).not.toHaveProperty("phone")
   })
 
   it("runs calls that arrive together one after another, over the one connection", async () => {
@@ -3542,7 +3543,7 @@ describe("sending over MCP", () => {
     expect(JSON.stringify(entries)).not.toContain("fixed")
   })
 
-  it("shows the account with the phone cut to its last four digits", async () => {
+  it("shows the account with the phone whole", async () => {
     const telegram = scripted({
       me: async () => ({ id: "500", name: "Owner", username: null, phone: "+00 000 000-1234" }),
     })
@@ -3550,7 +3551,7 @@ describe("sending over MCP", () => {
 
     const { body } = await call("account show", {})
 
-    expect(body).toMatchObject({ item: { provider: "chat", id: "500", phone: "***1234" } })
+    expect(body).toMatchObject({ item: { provider: "chat", id: "500", phone: "+00 000 000-1234" } })
   })
 
   it("forwards through the guard, as a forward into the target chat", async () => {

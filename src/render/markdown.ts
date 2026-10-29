@@ -56,6 +56,10 @@ const attachmentLine = (attachment: Attachment): string => {
     const buttons = attachment.buttons.flat().map((button, index) => `${index + 1} ${literal(singleLine(button.text))}`)
     return `buttons: ${buttons.join(" · ")}`
   }
+  if (attachment.contact) {
+    const { name, phone } = attachment.contact
+    return `contact: ${[name, phone].flatMap((part) => (part ? [literal(singleLine(part))] : [])).join(", ")}`
+  }
   const label = literal(singleLine(attachment.title ?? attachment.name ?? attachment.kind))
   if (attachment.url) {
     try {

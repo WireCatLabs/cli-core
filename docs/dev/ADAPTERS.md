@@ -102,6 +102,9 @@ and `AccountEditing`.
   thread from that same store, scoped to the connected account. Never open a second one.
 - `Attachment.providerRef` is yours alone: keep there what fetches the file again, keys included.
   No answer, live event or log prints it, and a later copy without it keeps the stored one.
+- A contact card shared in a message is an attachment of `kind: "contact"` with `contact`: `name`, and where the
+  messenger gives them `firstName`, `lastName`, the whole `phone` and the `userId` of its account. Never mask the
+  phone: it is the owner's own data, and the store keeps it as it came.
 - Set `readsComments: true` when the messenger can read stored comments but cannot send them. Keep
   `channelComments: false` to leave `messages send --comment-to` unavailable. When `readsComments` is unset,
   comment reads inherit the existing `channelComments` capability.

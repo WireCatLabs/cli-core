@@ -1,15 +1,12 @@
 import * as v from "valibot"
-import { chat } from "./chat.js"
 import { count, id, text, time } from "./fields.js"
 
 export const contactLookup = v.strictObject({ id, name: v.nullable(text), username: v.nullable(text) })
 export const contactSync = v.strictObject({ added: count, changed: count, known: count })
 
-export const contactProfile = v.strictObject({
-  id,
-  name: v.nullable(text),
+/** What the messenger says about a person; `contacts show` carries these beside the card's own fields. */
+export const profileFields = {
   usernames: v.array(text),
-  bio: v.nullable(text),
   birthday: v.optional(v.nullable(text)),
   phone: v.optional(v.nullable(text)),
   flags: v.partial(
@@ -38,17 +35,7 @@ export const contactProfile = v.strictObject({
     ),
   ),
   has_photo: v.optional(v.boolean()),
-  chats: v.array(
-    v.strictObject({
-      id,
-      title: v.nullable(text),
-      kind: chat.entries.kind,
-      their_messages: count,
-      first_at: v.nullable(time),
-      last_at: v.nullable(time),
-      complete: v.boolean(),
-    }),
-  ),
+  /** Earlier names and usernames, oldest first; the current ones are not repeated. */
   aliases: v.array(
     v.strictObject({
       name: v.optional(text),
@@ -59,4 +46,4 @@ export const contactProfile = v.strictObject({
       source: v.picklist(["profile", "messages"]),
     }),
   ),
-})
+}

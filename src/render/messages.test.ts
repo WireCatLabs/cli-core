@@ -130,6 +130,15 @@ describe("a message, as a person reads it", () => {
     expect(out).toContain("📎 report.pdf · 24 MB")
   })
 
+  it("prints a shared contact card as its name and whole phone", () => {
+    const out = renderMessage(
+      message({ attachments: [{ kind: "contact", contact: { name: "Ana Ruiz", phone: "+34600123456" } }] }),
+      plain,
+    )
+    expect(out).toContain("👤 Ana Ruiz · +34600123456")
+    expect(out).not.toContain("📎")
+  })
+
   it("prints a bot's keyboard row by row, each button numbered for `messages press`", () => {
     const keyboard = {
       kind: "inline_keyboard",

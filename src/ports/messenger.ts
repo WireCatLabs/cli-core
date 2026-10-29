@@ -525,7 +525,7 @@ export interface AccountTools {
   addressBook(): Promise<Member[]>
 }
 
-/** Everything the messenger says about one person — what `contacts info` shows. */
+/** Everything the messenger says about one person — what `contacts show` shows. */
 export interface PersonProfiles {
   /** Reading it tells them nothing. A chat that is not a person is refused. */
   profile(person: string): Promise<ProfileFacts>

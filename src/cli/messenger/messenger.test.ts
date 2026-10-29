@@ -455,6 +455,38 @@ describe("the shared read commands", () => {
     }
   })
 
+  it("**answer a shared contact card with its name and whole phone**, live and from the store", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const contact = { name: "Ana Ruiz", firstName: "Ana", lastName: "Ruiz", phone: "+34600123456", userId: "42" }
+    const holding: MessengerAdapter = {
+      ...fake,
+      history: async () => ({
+        items: [{ ...message, attachments: [{ kind: "contact", contact }] }],
+        hasMore: false,
+      }),
+    }
+    const argv = ["messages", "list", "7", "--json"]
+    const never = async (): Promise<MessengerAdapter> => {
+      throw new Error("--offline must never connect")
+    }
+
+    const live = await call(argv, async () => holding, env)
+    const stored = await call([...argv, "--offline"], never, env)
+
+    for (const run of [live, stored]) {
+      expect(run.stderr).toEqual([])
+      const [item] = JSON.parse(run.stdout[0] ?? "").items
+      expect(v.safeParse(ENTITIES.message, item).success).toBe(true)
+      expect(item.attachments).toEqual([
+        {
+          kind: "contact",
+          contact: { name: "Ana Ruiz", first_name: "Ana", last_name: "Ruiz", phone: "+34600123456", user_id: "42" },
+        },
+      ])
+    }
+  })
+
   it("mark the message asked for, and name one by its locator", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
@@ -3439,7 +3471,7 @@ describe("the shared read commands", () => {
     expect((await timeline("scope:work")).items).toEqual([])
   })
 
-  it("contacts info adds their stored activity per shared chat, and shows a phone's last four digits", async () => {
+  it("contacts show adds the messenger's profile and their stored activity per shared chat, the phone whole unless --hide-phone", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-profile-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3479,12 +3511,20 @@ describe("the shared read commands", () => {
     await store.close()
     const described: MessengerAdapter = {
       ...fake,
+      contact: async () => ({
+        id: "11",
+        name: "Ana",
+        username: "ana",
+        description: null,
+        lastMessagedAt: "2026-09-01T10:00:00.000Z",
+        chats: [{ id: "11", title: "Ana", kind: "dialog", lastMessageAt: "2026-09-01T10:00:00.000Z" }],
+      }),
       profile: async () => ({
         id: "11",
         name: "Ana",
         usernames: ["ana"],
         bio: null,
-        phone: "0123",
+        phone: "+34600000123",
         flags: { bot: false },
         seen: "recently",
         registered: { at: "2020-05-01T00:00:00.000Z", source: "estimate", precision: "month" },
@@ -3492,31 +3532,34 @@ describe("the shared read commands", () => {
       }),
     }
 
-    const masked = await call(
-      ["contacts", "info", "11", "--json"],
+    const shown = await call(
+      ["contacts", "show", "11", "--json"],
       async () => described,
       env,
       {},
       { provider: "telegram" },
     )
-    const whole = await call(
-      ["contacts", "info", "11", "--show-phone", "--json"],
+    const hidden = await call(
+      ["contacts", "show", "11", "--hide-phone", "--json"],
       async () => described,
       env,
       {},
       { provider: "telegram" },
     )
 
-    expect(masked.code).toBe(0)
-    const answer = JSON.parse(masked.stdout[0] ?? "null").item
-    expect(v.safeParse(ENTITIES.contact_profile, answer).success).toBe(true)
-    expect(v.safeParse(ENTITIES.contact_profile, JSON.parse(whole.stdout[0] ?? "null").item).success).toBe(true)
-    expect(answer).toMatchObject({ seen: "recently", phone: "***0123", registered: { source: "estimate" } })
-    expect(answer.chats).toEqual([
+    expect(shown.code).toBe(0)
+    const answer = JSON.parse(shown.stdout[0] ?? "null").item
+    expect(v.safeParse(ENTITIES.contact, answer).success).toBe(true)
+    expect(v.safeParse(ENTITIES.contact, JSON.parse(hidden.stdout[0] ?? "null").item).success).toBe(true)
+    expect(answer).toMatchObject({ seen: "recently", phone: "+34600000123", registered: { source: "estimate" } })
+    expect(JSON.parse(hidden.stdout[0] ?? "null").item).not.toHaveProperty("phone")
+    expect(answer.chats).toMatchObject([
       {
+        ref: "chat:telegram/500/11",
         id: "11",
         title: "Ana",
         kind: "dialog",
+        last_message_at: "2026-09-01T10:00:00.000Z",
         their_messages: 1,
         first_at: "2026-09-01T10:00:00.000Z",
         last_at: "2026-09-01T10:00:00.000Z",
@@ -3532,10 +3575,9 @@ describe("the shared read commands", () => {
         complete: false,
       },
     ])
-    expect(JSON.parse(whole.stdout[0] ?? "null").item.phone).toBe("0123")
   })
 
-  it("contacts info --offline describes them from the store and never connects", async () => {
+  it("contacts show --offline describes them from the store and never connects", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-profile-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     rememberAccount(app, "default", "500", env)
@@ -3551,7 +3593,7 @@ describe("the shared read commands", () => {
     }
 
     const found = await call(
-      ["contacts", "info", "11", "--offline", "--json"],
+      ["contacts", "show", "11", "--offline", "--json"],
       never,
       env,
       {},
@@ -5060,17 +5102,17 @@ describe("the guard, account and mcp config commands", () => {
     })
   })
 
-  it("**show the phone's last four digits, the whole number only with --show-phone**", async () => {
+  it("**show the whole phone number, and leave it out with --hide-phone**", async () => {
     const withPhone: MessengerAdapter = {
       ...fake,
       me: async () => ({ ...(await fake.me()), phone: "+00 000 000-1234" }),
     }
 
-    const masked = await call(["account", "show", "--json"], async () => withPhone, sandbox())
-    const whole = await call(["account", "show", "--show-phone", "--json"], async () => withPhone, sandbox())
+    const whole = await call(["account", "show", "--json"], async () => withPhone, sandbox())
+    const hidden = await call(["account", "show", "--hide-phone", "--json"], async () => withPhone, sandbox())
 
-    expect(json(masked.stdout).item.phone).toBe("***1234")
     expect(json(whole.stdout).item.phone).toBe("+00 000 000-1234")
+    expect(json(hidden.stdout).item).not.toHaveProperty("phone")
   })
 
   it("**refuses mcp serve --http without an https tunnel address**, before connecting", async () => {
