@@ -393,7 +393,15 @@ const PARENT_CHARACTERS = 300
 export const pairInput = (hit: FoundMessage, parent: Said | null | undefined): string => {
   const line = (m: Said) =>
     `[${hit.chatTitle ?? hit.chatId} · ${m.senderName ?? "unknown"} · ${m.timestamp?.slice(0, 10) ?? "undated"}] ${m.text}`
-  return (parent ? [line(parent).slice(0, PARENT_CHARACTERS), line(hit)] : [line(hit)]).join("\n")
+  const said = line(hit)
+  const before = parent ? line(parent) : ""
+  if (process.env.WIRECAT_BENCH_TOKENS) process.stderr.write(`bench-pair ${before.length} ${said.length}\n`)
+  // Bench branch only: the input forms cli-testing performance/search/rerank-speed compares.
+  const form = process.env.WIRECAT_BENCH_PAIR ?? "parent-300"
+  if (!parent || form === "no-parent") return said
+  if (form === "parent-first") return [before, said].join("\n")
+  if (form === "hit-first") return [said, before].join("\n")
+  return [before.slice(0, PARENT_CHARACTERS), said].join("\n")
 }
 
 const accountOfHit = (hit: FoundMessage): AccountKey => {

@@ -15,11 +15,13 @@ export const openReranker = async (
 ): Promise<Reranker> => {
   const { ort, tokenizer, session } = await loadModel(model, directory, threads)
   const typeIds = session.inputNames.includes("token_type_ids")
+  const cap = Number(process.env.WIRECAT_BENCH_RERANK_TOKENS) || model.maxTokens
   const output = session.outputNames[0] as string
 
   const one = async (question: string, passage: string): Promise<number> => {
     const encoded = tokenizer.encode(question, { text_pair: passage, return_token_type_ids: true })
-    const ids = truncated(encoded.ids, model.maxTokens)
+    if (process.env.WIRECAT_BENCH_TOKENS) process.stderr.write(`bench-tokens ${encoded.ids.length}\n`)
+    const ids = truncated(encoded.ids, cap)
     const shape = [1, ids.length]
     const feeds: Record<string, InstanceType<typeof ort.Tensor>> = {
       input_ids: new ort.Tensor("int64", BigInt64Array.from(ids, BigInt), shape),
@@ -28,7 +30,7 @@ export const openReranker = async (
     if (typeIds)
       feeds.token_type_ids = new ort.Tensor(
         "int64",
-        BigInt64Array.from(truncated(encoded.token_type_ids, model.maxTokens), BigInt),
+        BigInt64Array.from(truncated(encoded.token_type_ids, cap), BigInt),
         shape,
       )
     const logit = (await session.run(feeds))[output]?.data[0]

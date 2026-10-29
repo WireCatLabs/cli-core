@@ -52,6 +52,7 @@ const modelProcess = async (setup: object) => {
   let said = ""
   child.stderr.setEncoding("utf8").on("data", (text: string) => {
     said = (said + text).slice(-2_000)
+    if (process.env.WIRECAT_BENCH_TOKENS) process.stderr.write(text)
   })
   let ready = () => {}
   let refused = (_error: Error) => {}
