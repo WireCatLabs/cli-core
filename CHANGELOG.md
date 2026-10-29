@@ -13,6 +13,12 @@ shape of this file.
   messenger that sends reactions one person at a time (WhatsApp) can implement `MessageReactions.reactors` from the
   store. One `Reactor` per person (`person`, `reaction`, `reactedAt`), newest first; a person's newest reaction wins
   and one they took back is not listed. It is optional on the type, so an adapter that builds its own `StoredMessages` still compiles. It covers only what the store received. No schema change, store version stays 37.
+- **A person's phone is saved in the store** (store version 37, additive, minCompatible stays 34). `contacts sync`
+  saves the phone an address book entry carries (`AddressBookEntry`, a `Member` with an optional `phone`), and an
+  online `contacts show` saves the phone the profile shows, so `contacts show --offline` answers it. A read that
+  shows no phone never erases a saved one.
+- **A shared contact card's phone is a mention** of field `contact`, beside `file_text` and `transcript`:
+  `mentions list kind:phone` and `phone:` search find it, and `mentions rebuild` reads cards stored before.
 
 ## 0.478.0 — 29.10.2026
 
@@ -23,15 +29,6 @@ shape of this file.
   and the other `messageItem` answers had it. A `search all` hit carries it for a message or a mail, and the picture
   lane's hits of `search messages` carry it too. Every answer applies the one rule: `outgoing`, or the sender id is
   the reading account's own.
-
-### Added
-
-- **A person's phone is saved in the store** (store version 37, additive, minCompatible stays 34). `contacts sync`
-  saves the phone an address book entry carries (`AddressBookEntry`, a `Member` with an optional `phone`), and an
-  online `contacts show` saves the phone the profile shows, so `contacts show --offline` answers it. A read that
-  shows no phone never erases a saved one.
-- **A shared contact card's phone is a mention** of field `contact`, beside `file_text` and `transcript`:
-  `mentions list kind:phone` and `phone:` search find it, and `mentions rebuild` reads cards stored before.
 
 ## 0.477.0 — 29.10.2026
 
