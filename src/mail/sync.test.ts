@@ -707,6 +707,35 @@ describe("syncMail with a request budget", () => {
     await expect(roomLeft).resolves.toMatchObject({ saved: 7, complete: true })
   })
 
+  it("waits out a store another process has locked and reads the round again", async () => {
+    const { env } = setup(twelve, { listBatch: 5, fetchBatch: 5 })
+    const real = await store(env)
+    let writes = 0
+    const waits: number[] = []
+    const locked = {
+      ...real,
+      mail: {
+        ...real.mail,
+        saveThread: async (...args: Parameters<typeof real.mail.saveThread>) => {
+          if (++writes === 3) throw Object.assign(new Error("database is locked"), { code: "ERR_SQLITE_ERROR" })
+          return real.mail.saveThread(...args)
+        },
+      },
+    } as MessageStore
+
+    const result = await syncMail(sourceOf(env), locked, {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({}),
+      wait: async (ms) => void waits.push(ms),
+    })
+
+    expect(result).toMatchObject({ complete: true, state: "complete" })
+    expect(waits).toEqual([2000])
+    expect(await emails(env)).toHaveLength(12)
+  })
+
   it("does not let a failed message hide behind the resume point", async () => {
     const { env, box } = setup(twelve, { unreadable: ["105"], listBatch: 20, fetchBatch: 20 })
     await budgeted(env, undefined)

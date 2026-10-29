@@ -161,6 +161,8 @@ export interface MailSyncOptions {
    * is tried once more at the end of the run and, if it still fails, left for the next one. `max` defaults to no limit.
    */
   budget?: RunBudget
+  /** Pauses before a round is read again after the store was locked; tests pass one that does not wait. */
+  wait?: (ms: number) => Promise<void>
 }
 
 /** What a budgeted run carries from one round to the next. */
@@ -181,11 +183,19 @@ interface Plan {
   stopped: BudgetStop | null
   /** Messages in the window not asked for yet, after the round. */
   remaining: number
+  /** The `tried` keys this round added, so a round that failed on a locked store can ask for them again. */
+  roundAsked: string[]
   /** Messages the round asked the source for. */
   asked: number
 }
 
 const LIST_SLICE = 200
+const STORE_BUSY_TRIES = 5
+const STORE_BUSY_WAIT_MS = 2_000
+const isStoreBusy = (error: unknown): boolean =>
+  (error as { code?: unknown } | null)?.code === "ERR_SQLITE_ERROR" &&
+  /database (table )?is locked|SQLITE_BUSY/i.test(String((error as { message?: unknown }).message))
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 const FETCH_SLICE = 50
 const keyOf = (folder: string, uid: string) => `${folder}\0${uid}`
 
@@ -208,12 +218,15 @@ export const syncMail = async (
     stopped: null,
     remaining: 0,
     asked: 0,
+    roundAsked: [],
   }
   const rounds: MailSyncResult[] = []
+  let busyWaits = 0
   const goOn = async () => {
     for (;;) {
       plan.asked = 0
       plan.remaining = 0
+      plan.roundAsked = []
       try {
         rounds.push(
           await syncRound(
@@ -224,6 +237,20 @@ export const syncMail = async (
           ),
         )
       } catch (error) {
+        // Another process holds the store's write lock past its busy timeout (a scheduled memo sync does): what this
+        // run saved stays saved, so wait a little and read the round again, as long as the budget has room.
+        if (isStoreBusy(error) && busyWaits < STORE_BUSY_TRIES && !options.signal?.aborted) {
+          busyWaits++
+          for (const key of plan.roundAsked) plan.tried.delete(key)
+          const stop = budget.take()
+          if (stop === null) {
+            await (options.wait ?? pause)(STORE_BUSY_WAIT_MS * busyWaits)
+            continue
+          }
+          plan.stopped = stop
+          plan.remaining = Math.max(plan.remaining, 1)
+          return
+        }
         // A request cut at the deadline, or failed after the budget was spent, is the run's end, not its failure: what
         // earlier rounds saved is kept and the next run goes on. While the budget has room the error is real.
         const transient = error instanceof CliError && (error.code === "timeout" || error.code === "network_error")
@@ -408,7 +435,10 @@ const syncRound = async (
         plan.remaining += (wanted?.uids ?? []).length
         continue
       }
-      for (const uid of wanted?.uids ?? []) plan.tried.add(keyOf(folder, uid))
+      for (const uid of wanted?.uids ?? []) {
+        plan.tried.add(keyOf(folder, uid))
+        plan.roundAsked.push(keyOf(folder, uid))
+      }
       plan.asked += (wanted?.uids ?? []).length
     }
     const found = await source.list(since, folder, {
