@@ -12,6 +12,7 @@ const message = {
   chat_title: "Synthetic chat",
   sender_id: "9",
   sender_name: "Synthetic sender",
+  sender_is_me: false,
   timestamp: at,
   edited_at: null,
   text: "synthetic text",
