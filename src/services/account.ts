@@ -5,11 +5,10 @@ import { guardedWrite, type Operated } from "../sends/guarded.js"
 import type { AccountAction } from "../sends/journal.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { ServiceDeps } from "./deps.js"
-import { maskedAccount } from "./people.js"
 
 /** The owner's own profile and logins. */
 export interface AccountService {
-  /** The account as it now stands, its phone masked as `account show` masks it. */
+  /** The account as it now stands. */
   update(change: ProfileChange): Promise<Operated<{ account: Account }>>
   /** Logs the owner out of every other device, the phone included. */
   endOtherSessions(): Promise<Operated<{ sessions: AccountSession[] }>>
@@ -55,7 +54,7 @@ export const accountService = (deps: ServiceDeps): AccountService => {
         { operationId, chatId: null, kind: "account", action: "profile" },
         () => update(change),
       )
-      return { operationId, account: maskedAccount(account) }
+      return { operationId, account }
     },
 
     endOtherSessions: async () => {

@@ -16,6 +16,7 @@ import type {
   JoinRequest,
   Member,
   PersonCard,
+  PersonProfile,
   PollVote,
   Topic,
 } from "../../domain/models.js"
@@ -143,6 +144,49 @@ export const contactAnswer = (account: AccountKey, contact: Contact | PersonCard
       updated_at: updatedAt,
     })),
   })
+}
+
+/**
+ * `contacts show`: the card (the owner's alias and notes, the chats shared) with what the messenger says about the
+ * person, and in each shared chat how much of their writing the store holds.
+ */
+export const contactShown = (
+  account: AccountKey,
+  card: PersonCard,
+  profile: PersonProfile,
+): Out<typeof contactSchema> => {
+  const { id: _id, name: _name, bio, chats, ...facts } = profile
+  const listed = new Map(card.chats.map((chat) => [chat.id, chat]))
+  const active = new Set(chats.map(({ id }) => id))
+  const shared = [
+    ...chats.map((chat) => ({
+      ref: chatRef(account, chat.id),
+      id: chat.id,
+      title: chat.title,
+      kind: chat.kind,
+      last_message_at: listed.get(chat.id)?.lastMessageAt ?? chat.lastAt,
+      their_messages: chat.theirMessages,
+      first_at: chat.firstAt,
+      last_at: chat.lastAt,
+      complete: chat.complete,
+    })),
+    ...card.chats
+      .filter(({ id }) => !active.has(id))
+      .map((chat) => ({
+        ref: chatRef(account, chat.id),
+        id: chat.id,
+        title: chat.title,
+        kind: chat.kind,
+        last_message_at: chat.lastMessageAt,
+      })),
+  ]
+  const answer = contactAnswer(account, card)
+  return {
+    ...answer,
+    ...(snakeKeys(facts) as object),
+    description: answer.description ?? bio,
+    chats: shared,
+  } as Out<typeof contactSchema>
 }
 
 export const chatEventAnswer = (chatId: string, event: ChatEvent): Out<typeof chatEventSchema> =>

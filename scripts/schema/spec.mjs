@@ -236,6 +236,11 @@ const EDITS = {
         { note: "`fold(name)`, which `attachments list name:` compares: SQLite's `lower()` folds ASCII only" },
       ],
       ["local_path_folded", "text", { note: "`fold(local_path)`, for `local_path:`" }],
+      [
+        "contact",
+        "text",
+        { note: "a shared contact card as JSON: name, first and last name, whole phone, account id" },
+      ],
     ],
     doc: "A file of a message, an email or a meeting, with its extracted text.",
     keys: [

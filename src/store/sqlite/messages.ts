@@ -56,6 +56,7 @@ const ATTACHMENT_FIELDS = [
   "duration",
   "providerRef",
   "nameFolded",
+  "contact",
 ] as const
 
 const placeholders = <const T extends string>(names: readonly T[]) =>
@@ -104,7 +105,11 @@ const prepare = (orm: Orm) => ({
           const column = attachments[name].name
           return [
             name,
-            sql.raw(name === "providerRef" ? `coalesce(excluded.${column}, ${column})` : `excluded.${column}`),
+            sql.raw(
+              name === "providerRef" || name === "contact"
+                ? `coalesce(excluded.${column}, ${column})`
+                : `excluded.${column}`,
+            ),
           ]
         }),
       ) as Record<(typeof ATTACHMENT_FIELDS)[number], ReturnType<typeof sql.raw>>,
@@ -274,6 +279,7 @@ export const upsertMessage = (
       height: attachment.height ?? null,
       duration: attachment.duration ?? null,
       providerRef: refOf(attachment.providerRef),
+      contact: attachment.contact ? JSON.stringify(attachment.contact) : null,
     })
   })
   if (Number(heardFirst) > 0) intoVoiceAttachment(context, pk)

@@ -1256,7 +1256,7 @@ describe("chats create, join and leave", () => {
     expect(sizes).toEqual([10])
   })
 
-  it("**changes the profile with a photo**, masking the phone, and ends other sessions only with --others", async () => {
+  it("**changes the profile with a photo**, the phone whole, and ends other sessions only with --others", async () => {
     const env = sandbox()
     const root = mkdtempSync(join(tmpdir(), "photo-"))
     const photo = join(root, "me.jpg")
@@ -1287,7 +1287,7 @@ describe("chats create, join and leave", () => {
 
     expect(v.safeParse(ENTITIES.account_change, answer(updated)).success).toBe(true)
     expect(v.safeParse(ENTITIES.ended_account_sessions, answer(ended1)).success).toBe(true)
-    expect(answer(updated)).toMatchObject({ account: { name: "New Name", phone: "***1222" } })
+    expect(answer(updated)).toMatchObject({ account: { name: "New Name", phone: "34600111222" } })
     expect(changes).toEqual([{ firstName: "New", description: "hi", photo: "me.jpg" }])
     expect([empty.code, without.code, unasked.code, ended1.code]).toEqual([2, 2, 7, 0])
     expect(ended).toEqual([1])

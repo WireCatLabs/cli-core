@@ -7,6 +7,30 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A shared contact card is an attachment with a `contact` field** (store version 36). `Attachment.contact`
+  (`SharedContact`: `name`, `firstName?`, `lastName?`, `phone?`, `userId?`) and, in every message answer,
+  `attachments[].contact` (`name`, `first_name?`, `last_name?`, `phone?`, `user_id?`), the phone whole. The store keeps it in
+  the new column `attachments.contact`, so a card read with `--offline` is the card the messenger sent; a later copy of the
+  message without it keeps the stored one. The terminal shows `👤 name · phone`. Additive: `minCompatible` stays 34.
+  What an adapter does: set `contact` on the attachment instead of putting a masked phone in `title`.
+- **`--hide-phone`** on `account show`, `account update` and `contacts show`: the answer without the phone number.
+
+### Changed — may break callers
+
+- **Phone numbers are shown whole.** `account show`, `account update` and `contacts show` print the number the messenger
+  gave, in the CLI and over MCP; they are the owner's own data. `--show-phone` is gone (a script that passes it is refused
+  as an unknown option; drop it), and so is `maskedAccount` from `/cli`: `withoutPhone(answer)` is what `--hide-phone` uses.
+- **`contacts info` is folded into `contacts show`, with no alias.** `contacts show <person>` returns the card as before (alias,
+  shared chats, `--with-notes`) and, with it, the messenger's profile: `usernames`, `birthday`, `phone`, `flags`, `seen`,
+  `contact`, `mutual_contact`, `common_chats_count`, `registered`, `has_photo` and `aliases` (earlier names), and in each shared
+  chat `their_messages`, `first_at`, `last_at` and `complete`. The profile's `bio` is `description`. `--offline` answers from
+  the store alone, as every read does. The entity `contact_profile` and the MCP tool `contacts info` are gone, and `PeopleService.profile`
+  takes the card as an optional second argument. Permission keys are read only as written (0.421.0): a saved
+  `contacts.info` is refused as a key no command checks, with the `config unset` that removes it; `contacts.show` now covers
+  the profile too.
+
 ## 0.476.0 — 29.10.2026
 
 ### Fixed

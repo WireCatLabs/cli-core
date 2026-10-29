@@ -43,8 +43,11 @@ export interface PeopleService {
    */
   list(options: { order: "recent" | "name"; name?: Predicate; notes?: Predicate } & PageWindow): Promise<Page<Contact>>
   show(person: string, options?: { notes?: boolean }): Promise<PersonCard>
-  /** What the messenger says about them, and their stored activity in each shared chat. */
-  profile(person: string): Promise<PersonProfile>
+  /**
+   * What the messenger says about them, and their stored activity in each shared chat. `known`: their card, already
+   * read, which stands in for a messenger that has no profile to give.
+   */
+  profile(person: string, known?: PersonCard): Promise<PersonProfile>
   /** `phone` as digits, parsed by the caller (`phoneOf`). */
   lookup(phone: string): Promise<Member>
   /** The whole contact list from the messenger into the store: what was new, what changed. */
@@ -162,7 +165,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       return localCard(held ? { ...card, chats: await sharedChats(held.store, held.account, card.id) } : card, notes)
     },
 
-    profile: (person) => personProfile(deps, person),
+    profile: (person, known) => personProfile(deps, person, known),
 
     context: async (person, options) => personContext(await deps.store(), await deps.account(), person, options),
 
@@ -395,6 +398,8 @@ const toContact = (chat: Chat): Contact => ({
 const byRecency = (a: Contact, b: Contact) => (b.lastMessagedAt ?? "").localeCompare(a.lastMessagedAt ?? "")
 const byName = (a: Contact, b: Contact) => (a.name ?? "").localeCompare(b.name ?? "")
 
-/** The phone cut to its last four digits: enough to tell two accounts apart. */
-export const maskedAccount = <T extends { phone?: string | null }>(account: T): T =>
-  account.phone ? { ...account, phone: `***${account.phone.replace(/\D/g, "").slice(-4)}` } : account
+/** `--hide-phone`: the answer without the number, for output that will be pasted somewhere. */
+export const withoutPhone = <T extends { phone?: string | null }>(answer: T): T => {
+  const { phone: _phone, ...rest } = answer
+  return rest as T
+}

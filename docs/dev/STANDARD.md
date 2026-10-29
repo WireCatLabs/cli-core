@@ -831,7 +831,7 @@ These paths specify the command hierarchy, not implemented availability. Existin
 registered until the coordinated migration; no additional statistics commands may be added
 outside `stats`. The existing `stats charts` noun view remains under that namespace; review the
 planned `stats tasks show` path as part of the same migration inventory. A normal entity card may
-contain counts (`contacts info`, `store info`);
+contain counts (`contacts show`, `store info`);
 that does not make it a statistics command. Its main purpose remains describing the entity.
 For bot-account statistics the account namespace comes first: `bot stats <resource> ...`, with
 the same meanings wherever the provider supports them; this rule does not add Bot API features.
@@ -977,6 +977,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--full` |  | found messages with their whole text and every provider field |  | every command |
 | `--hidden` | `<on\|off>` | on hides a forum's General topic from the topic list, off shows it |  | `topics edit` (tg-only) |
 | `--hide-online` | `<on\|off>` | hide online status and last seen |  | `account privacy set` (planned) |
+| `--hide-phone` |  | leave the phone number out |  | `account show`, `account update`, `contacts show` |
 | `--history` |  | the people added also see the messages from before they came |  | `chats members add` (max-only) |
 | `--holder` | `<name>` | who you are for task claims: a session or chat id |  | `tasks agenda`, `tasks claim`, `tasks release` |
 | `--html` |  | the text is HTML: <b>, <i>, <a href>, <code> |  | `bot messages edit` (planned), `bot messages send` (planned), `messages edit` (tg-only), `messages send` (tg-only) |
@@ -1100,7 +1101,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--serve` |  | start `serve` in the background if it is not running (the default) |  | every command (planned) |
 | `--server-time` | `<duration>` | stop waiting for the server after this long (default: 5s) |  | `search all` (planned), `search messages` (max, tg only) |
 | `--set` | `<id>` | the stickers in this set |  | `stickers list` (planned) |
-| `--show-phone` |  | print the whole phone number |  | `account show`, `contacts info` |
 | `--silent` |  | deliver without a notification |  | `bot messages send` (planned), `messages forward` (max, tg only), `messages send` (max, tg only), `polls create` (max, tg only) |
 | `--since` | `<id-or-time>` | from this message id, an ISO 8601 time, or 2h / 1d ago; each command says its default. **becomes `--since-time` everywhere — NEED-485** |  | `inbox` (planned), `review` (planned) |
 | `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `attachments download`, `attachments jobs install`, `bot chats moderate` (planned), `bot messages sync` (max, tg only), `chats moderate`, `contacts context`, `contacts prepare`, `messages sync`, `replies test`, `search conversations`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export` |

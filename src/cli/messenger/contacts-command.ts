@@ -7,7 +7,7 @@ import { secretInput } from "../../runs/run-context.js"
 import { levelFor } from "../../sends/permissions.js"
 import { phoneOf } from "../../services/index.js"
 import { dateWindow } from "../../services/moment.js"
-import { maskedAccount } from "../../services/people.js"
+import { withoutPhone } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
 import { readSecret } from "../../terminal/prompt.js"
@@ -19,7 +19,7 @@ import { positiveCount, window, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
 import { commandAt, nextStep } from "../steps.js"
 import { contactWriteCommands } from "./admin-contacts-command.js"
-import { contactAnswer, lines, pageOf } from "./chat-answers.js"
+import { contactAnswer, contactShown, lines, pageOf } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { hideNever } from "./lacks.js"
 import { CONTACTS_QUERY, notesAllowed } from "./people-queries.js"
@@ -97,47 +97,41 @@ export const contactsCommand = (messenger: Messenger): Command => {
   contacts.addCommand(
     annotate(
       annotate(new Command("show"), { effects: REMOTE_READ })
-        .description("one person and the chats you share with them")
+        .summary("one person's profile, your alias and notes, and the chats you share")
+        .description(
+          "one person: what the messenger says about them — handles, flags, last seen, phone, when they registered — " +
+            "your alias, the chats you share, how many of their messages the store holds in each, and the earlier " +
+            "names and usernames the store saw them with; --offline answers from the store alone",
+        )
         .argument("<person>", "their id, @username, or part of their name")
-        .option("--with-notes", "include your private notes, subject to contacts.notes.list permission"),
+        .option("--with-notes", "include your private notes, subject to contacts.notes.list permission")
+        .option("--hide-phone", "leave the phone number out"),
       { output: { entity: "contact" } },
     ).action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
-      const { withNotes } = this.opts<{ withNotes?: boolean }>()
+      const { withNotes, hidePhone } = this.opts<{ withNotes?: boolean; hidePhone?: boolean }>()
       if (withNotes && levelFor(context.settings.permissions, "contacts.notes.list").level === "deny")
         throw new CliError("permission_error", "profile denies contacts.notes.list")
-      const { card, account } = await context.withServices(async (services) => ({
-        card: await services.people.show(person, { notes: withNotes }),
-        account: await services.chats.account(),
-      }))
-      renderAnswer(this, context, itemOf(contactAnswer(account, card)))
-    }),
-  )
-
-  annotate(contacts.command("info"), { effects: REMOTE_READ, output: { entity: "contact_profile" } })
-    .summary("a person's profile from the messenger")
-    .description(
-      "everything the messenger says about one person — handles, flags, last seen, when they registered — and " +
-        "how many of their messages the store holds in each chat you share, the first and the last, and the " +
-        "earlier names and usernames the store saw them with",
-    )
-    .argument("<person>", "their id, @username, or part of their name")
-    .option("--show-phone", "print the whole phone number")
-    .action(async function (this: Command, person: string) {
-      const whole = this.opts<{ showPhone?: boolean }>().showPhone === true
-      const context = messengerContext(this, messenger)
-      const found = await context.withServices((services) => services.people.profile(person))
-      const partial = found.chats.filter(({ complete }) => !complete)
+      const { card, profile, account } = await context.withServices(async (services) => {
+        const card = await services.people.show(person, { notes: withNotes })
+        return {
+          card,
+          profile: await services.people.profile(person, card),
+          account: await services.chats.account(),
+        }
+      })
+      const partial = profile.chats.filter(({ complete }) => !complete)
       renderAnswer(
         this,
         context,
-        itemOf(snakeKeys(whole ? found : maskedAccount(found)), {
+        itemOf(contactShown(account, card, hidePhone ? withoutPhone(profile) : profile), {
           next: syncsFirst(messenger)
             ? partial.map((one) => nextStep("messages.sync", { args: { chat: one.id } }))
             : [],
         }),
       )
-    })
+    }),
+  )
 
   const contextCommand = annotate(contacts.command("context"), {
     effects: REMOTE_READ,

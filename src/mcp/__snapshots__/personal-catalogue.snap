@@ -29,7 +29,6 @@ read  config show
 read  contacts check
 read  contacts context
 read  contacts events
-read  contacts info
 read  contacts list
 read  contacts lookup
 read  contacts notes list

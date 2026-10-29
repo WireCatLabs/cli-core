@@ -37,7 +37,7 @@ import { contact } from "./contact.js"
 import { contactActivity, contactCheck, linkedPerson } from "./contact-activity.js"
 import { contactContext, contactPreparation } from "./contact-context.js"
 import { contactNote } from "./contact-note.js"
-import { contactLookup, contactProfile, contactSync } from "./contact-read.js"
+import { contactLookup, contactSync } from "./contact-read.js"
 import { contactImport, contactStateChange, contactUpdate } from "./contact-write.js"
 import { conversation } from "./conversation.js"
 import { conversationPreparation } from "./conversation-preparation.js"
@@ -236,7 +236,6 @@ export {
   contactNote,
   contactNoteRemoval,
   contactPreparation,
-  contactProfile,
   contactStateChange,
   contactSync,
   contactUpdate,
@@ -433,7 +432,6 @@ export const ENTITIES = {
   contact,
   contact_note: contactNote,
   contact_lookup: contactLookup,
-  contact_profile: contactProfile,
   contact_sync: contactSync,
   contact_update: contactUpdate,
   contact_state_change: contactStateChange,

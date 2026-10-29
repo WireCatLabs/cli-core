@@ -91,7 +91,7 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | mention | a phone, e-mail address, link, document or known person's name found in one place of a stored text, normalized; found → linked or dismissed | extraction, entity, link (`links` joins two stored records) | none |
 | reference | the typed name of any stored thing: `msg:`, `chat:`, `contact:`, `note:`, `document:`, `person:`, `task:`, `fact:`, `memory:` (`src/domain/references.ts`) | ref, id | see [Output keys](#output-keys) |
 | locator | the reference of one message: `msg:<provider>/<account>/<chat>/<message>` only (`src/domain/locator.ts`) | ref | memo `search` puts `note:` and `task:` references in `locator` (`cli-memo/src/search/command.ts:82,123`) |
-| profile | the name of one login of this CLI on this machine; chosen, never assumed | account (for this meaning) | memo `mail <account>`, `--account`; drive help "account profiles"; tg/max `contacts info` (a person's card: another meaning) |
+| profile | the name of one login of this CLI on this machine; chosen, never assumed | account (for this meaning) | memo `mail <account>`, `--account`; drive help "account profiles"; tg/max `contacts show` (a person's card: another meaning) |
 | account | the messenger or mail account behind a profile; also `provider/account` in the store key | profile | tg/max `account list` lists profiles |
 | source | where stored data came from: a messenger, a mailbox, a notes folder, Google Drive | — | memo `tags add` "Put labels on one source" (means one stored thing); drive "imported sources" (means documents) |
 | search hit | one result of a search | result, match, item | JSON key is `items` in some searches and `hits` in others; see below |

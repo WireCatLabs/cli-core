@@ -333,6 +333,7 @@ const toAttachment = (row: typeof attachments.$inferSelect): Attachment =>
       mime: row.mime,
       duration: row.duration,
       providerRef: parsed(row.providerRef),
+      contact: parsed(row.contact),
     }),
   }) as Attachment
 

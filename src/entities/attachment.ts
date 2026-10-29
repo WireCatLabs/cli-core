@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { count, reference, text } from "./fields.js"
+import { count, id, reference, text } from "./fields.js"
 
 export const attachment = v.strictObject({
   /** The message it came with, as a locator; absent inside that message. */
@@ -21,6 +21,16 @@ export const attachment = v.strictObject({
   text: v.optional(text),
   extraction: v.optional(v.strictObject({ origin: text, extractor: text, chars: count, error: v.optional(text) })),
   local_path: v.optional(text),
+  /** A shared contact card (`kind: "contact"`); the phone is the whole number as the sender put it. */
+  contact: v.optional(
+    v.strictObject({
+      name: text,
+      first_name: v.optional(text),
+      last_name: v.optional(text),
+      phone: v.optional(text),
+      user_id: v.optional(id),
+    }),
+  ),
   /** A bot's keyboard under the message, row by row; `messages press` presses one. */
   buttons: v.optional(
     v.array(
