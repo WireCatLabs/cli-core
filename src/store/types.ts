@@ -41,6 +41,8 @@ export interface PersonFacts {
   description?: string | null
   /** An address the provider shows for them: they become one person with the mail contact of that exact address. */
   email?: string | null
+  /** As the provider showed it, whole; only where it shows it to the owner. */
+  phone?: string | null
 }
 
 /** One identity in one messenger, by the messenger's own id. `provider` is any string: `email` is one. */

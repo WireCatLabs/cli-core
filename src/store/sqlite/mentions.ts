@@ -4,6 +4,7 @@ import { type Decider, MENTION_KINDS, type MentionKind, siteOf } from "../../dom
 import { findNames, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import { mentionText } from "./lucene-fields.js"
 import {
   knownPeople,
   participants,
@@ -29,7 +30,7 @@ export interface StoredMention {
   domain: string | null
   confidence: number
   status: MentionStatus
-  /** Which text of the message: `text`, a file's `file_text`, or a voice note's `transcript`. */
+  /** Which text of the message: `text`, a file's `file_text`, a voice note's `transcript`, or a shared card's `contact`. */
   field: string
   /** Who linked or dismissed it: `owner`, an agent by name, `rules` for a value that already had an owner. */
   author: string | null
@@ -165,7 +166,9 @@ export const mentionsState = (database: CacheDatabase): MentionsState => {
 const SELECT =
   "SELECT mn.id, mn.kind, mn.value, mn.domain, mn.confidence, mn.status, mn.author, mn.source_field, " +
   "mn.target_type, mn.target_id, mn.created_at, " +
-  "mn.start_offset, mn.end_offset, CASE WHEN mn.source_type = 'attachment' THEN att.text ELSE m.text END AS text, " +
+  "mn.start_offset, mn.end_offset, CASE WHEN mn.source_type = 'attachment' THEN " +
+  mentionText("att") +
+  " ELSE m.text END AS text, " +
   "m.external_id AS message_id, m.sent_at, m.chat_id AS chat_pk, c.external_id AS chat_id FROM mentions mn " +
   "LEFT JOIN attachments att ON mn.source_type = 'attachment' AND att.id = mn.source_id AND att.attachable_type = 'message' " +
   "JOIN messages m ON mn.source_type IN ('message', 'attachment') " +

@@ -784,5 +784,18 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "ALTER TABLE `attachments` ADD `contact` text;"
     ]
+  },
+  {
+    "name": "20261029180959_version-37-identity-phone",
+    "statements": [
+      "ALTER TABLE `identities` ADD `phone` text;"
+    ]
+  },
+  {
+    "name": "20261029181000_version-37-contact-mention-triggers",
+    "statements": [
+      "-- A shared contact card has no text, only a phone: queue it for mentions like an attachment's text.\n-- Cards stored before version 37 wait for `mentions rebuild`.\nCREATE TRIGGER mention_pending_attachment_contact_ai AFTER INSERT ON attachments\n  WHEN new.attachable_type = 'message' AND new.contact IS NOT NULL BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('attachment', new.id);\nEND;",
+      "CREATE TRIGGER mention_pending_attachment_contact_au AFTER UPDATE OF contact ON attachments\n  WHEN new.attachable_type = 'message' AND old.contact IS NOT new.contact BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('attachment', new.id);\nEND;"
+    ]
   }
 ]

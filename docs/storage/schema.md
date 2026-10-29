@@ -151,6 +151,7 @@ A real person, whatever accounts they write from: their identities point here. `
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `description` | text |  |  | What they wrote about themselves. |
 | `email` | text |  |  | the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise |
+| `phone` | text |  |  | the phone as the messenger showed it, whole; saved by `contacts sync` and an online profile read |
 
 *Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`
 
@@ -2157,7 +2158,7 @@ A phone, e-mail address, link, Google document, person's name or street address 
 | `kind` | text | not null |  | `phone`, `email`, `url`, `document`, `person-name`, `place` |
 | `source_type` | text | not null |  | the text's row: `message`, `attachment` (its file), `document`, `note` or `email` |
 | `source_id` | integer | not null |  | the row in the `source_type` table |
-| `source_field` | text | not null |  | `text`; an attachment's `file_text` or `transcript` |
+| `source_field` | text | not null |  | `text`; an attachment's `file_text`, `transcript` or (a shared contact card) `contact` |
 | `start_offset` | integer | not null |  | where it is written in that text, in UTF-16 units |
 | `end_offset` | integer | not null |  | exclusive; what was written is read back, never copied |
 | `value` | text | not null |  | normalized per kind, as the table's description says |

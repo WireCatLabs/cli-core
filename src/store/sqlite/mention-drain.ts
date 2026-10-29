@@ -9,7 +9,7 @@ import {
 import { findNames, findUnknownNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
-import { speech } from "./lucene-fields.js"
+import { mentionField, mentionText } from "./lucene-fields.js"
 import { storePhoneCountries } from "./phone-countries.js"
 import { placeOf } from "./place-key.js"
 
@@ -129,15 +129,15 @@ export const SOURCES = {
   attachment: {
     count:
       "SELECT count(*) AS n FROM attachments a JOIN messages m ON m.id = a.attachable_id " +
-      "WHERE a.attachable_type = 'message' AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL",
+      `WHERE a.attachable_type = 'message' AND coalesce(${mentionText("a")}, '') <> '' AND m.deleted_at IS NULL`,
     page:
-      `SELECT a.id, a.text, CASE WHEN ${speech("a")} THEN 'transcript' ELSE 'file_text' END AS field, ` +
+      `SELECT a.id, ${mentionText("a")} AS text, ${mentionField("a")} AS field, ` +
       "m.chat_id FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id > ? AND a.attachable_type = 'message' " +
-      "AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL ORDER BY a.id LIMIT ?",
+      `AND coalesce(${mentionText("a")}, '') <> '' AND m.deleted_at IS NULL ORDER BY a.id LIMIT ?`,
     one:
-      `SELECT a.text, CASE WHEN ${speech("a")} THEN 'transcript' ELSE 'file_text' END AS field, ` +
+      `SELECT ${mentionText("a")} AS text, ${mentionField("a")} AS field, ` +
       "m.chat_id FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id = ? AND a.attachable_type = 'message' " +
-      "AND a.text IS NOT NULL AND m.deleted_at IS NULL",
+      `AND ${mentionText("a")} IS NOT NULL AND m.deleted_at IS NULL`,
   },
   // Texts outside a chat: no one wrote them in a chat, so a name in them is never linked by rule.
   document: {

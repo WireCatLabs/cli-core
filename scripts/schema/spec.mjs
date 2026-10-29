@@ -55,6 +55,11 @@ const EDITS = {
           note: "the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise",
         },
       ],
+      [
+        "phone",
+        "text",
+        { note: "the phone as the messenger showed it, whole; saved by `contacts sync` and an online profile read" },
+      ],
     ],
     keys: ["INDEX (email) WHERE email IS NOT NULL"],
   },
@@ -954,7 +959,10 @@ const NEW = {
         id(),
         c("kind", "text", { notnull: true, note: "`phone`, `email`, `url`, `document`, `person-name`, `place`" }),
         ...poly("source", "the text's row: `message`, `attachment` (its file), `document`, `note` or `email`"),
-        c("source_field", "text", { notnull: true, note: "`text`; an attachment's `file_text` or `transcript`" }),
+        c("source_field", "text", {
+          notnull: true,
+          note: "`text`; an attachment's `file_text`, `transcript` or (a shared contact card) `contact`",
+        }),
         c("start_offset", "integer", { notnull: true, note: "where it is written in that text, in UTF-16 units" }),
         c("end_offset", "integer", { notnull: true, note: "exclusive; what was written is read back, never copied" }),
         c("value", "text", { notnull: true, note: "normalized per kind, as the table's description says" }),

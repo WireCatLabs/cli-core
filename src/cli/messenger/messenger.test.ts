@@ -18,7 +18,7 @@ import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import { parseMarkdown } from "../../domain/markdown.js"
-import type { Chat, Member, Message, WindowedMessage } from "../../domain/models.js"
+import type { AddressBookEntry, Chat, Message, WindowedMessage } from "../../domain/models.js"
 import { conversation, ENTITIES } from "../../entities/index.js"
 import { sampleMeeting } from "../../meetings/testing/index.js"
 import type { MessengerAdapter, RemoteFile, SendOptions } from "../../ports/messenger.js"
@@ -3643,6 +3643,57 @@ describe("the shared read commands", () => {
     expect(JSON.parse(found.stdout[0] ?? "null").item).toMatchObject({ id: "11", flags: {}, chats: [{ id: "11" }] })
   })
 
+  it("contacts show saves the phone the messenger shows, so --offline has it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "person-profile-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    rememberAccount(app, "default", "500", env)
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const tg = { provider: "telegram", account: "500" }
+    await store.chats.saveChats(tg, [
+      { id: "11", title: "Ana", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.roster.saveMembers(tg, "11", ["11", "500"])
+    await store.close()
+    const described: MessengerAdapter = {
+      ...fake,
+      contact: async () => ({
+        id: "11",
+        name: "Ana",
+        username: null,
+        description: null,
+        lastMessagedAt: null,
+        chats: [],
+      }),
+      profile: async () => ({
+        id: "11",
+        name: "Ana",
+        usernames: [],
+        bio: null,
+        phone: "+34600000123",
+        flags: {},
+        chats: [],
+      }),
+    }
+    const never = async (): Promise<MessengerAdapter> => {
+      throw new Error("--offline must never connect")
+    }
+    const offline = () =>
+      call(["contacts", "show", "11", "--offline", "--json"], never, env, {}, { provider: "telegram" })
+
+    expect(JSON.parse((await offline()).stdout[0] ?? "null").item).not.toHaveProperty("phone")
+    await call(["contacts", "show", "11", "--json"], async () => described, env, {}, { provider: "telegram" })
+
+    expect(JSON.parse((await offline()).stdout[0] ?? "null").item).toMatchObject({ phone: "+34600000123" })
+    const hidden = await call(
+      ["contacts", "show", "11", "--offline", "--hide-phone", "--json"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(JSON.parse(hidden.stdout[0] ?? "null").item).not.toHaveProperty("phone")
+  })
+
   it("contacts check scores a person, asks the ban lists only when it may, and --deep checks the audit's top", async () => {
     const root = mkdtempSync(join(tmpdir(), "bot-check-"))
     const env = {
@@ -5462,7 +5513,7 @@ describe("the guard, account and mcp config commands", () => {
 
   it("**contacts sync** keeps the contact list in the store and counts what was new or changed", async () => {
     const env = sandbox()
-    let people: Member[] = [{ id: "21", name: "Adam", username: "adam_k" }]
+    let people: AddressBookEntry[] = [{ id: "21", name: "Adam", username: "adam_k", phone: "+34600000021" }]
     const book: MessengerAdapter = { ...fake, addressBook: async () => people }
 
     const first = await call(["contacts", "sync", "--json"], async () => book, env)
@@ -5476,6 +5527,10 @@ describe("the guard, account and mcp config commands", () => {
     expect(v.safeParse(ENTITIES.contact_sync, json(second.stdout).item).success).toBe(true)
     expect(json(first.stdout).item).toEqual({ added: 1, changed: 0, known: 1 })
     expect(json(second.stdout).item).toEqual({ added: 1, changed: 1, known: 2 })
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    expect(await store.people.phoneOf({ provider: "chat", account: "500" }, "21")).toBe("+34600000021")
+    expect(await store.people.phoneOf({ provider: "chat", account: "500" }, "22")).toBeNull()
+    await store.close()
   })
 
   it("**account sessions list** shows where the account is logged in, and a messenger without it refuses", async () => {

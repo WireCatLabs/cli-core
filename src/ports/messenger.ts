@@ -7,6 +7,7 @@ import type { MessagePermalink } from "../domain/message-link.js"
 import type {
   Account,
   AccountSession,
+  AddressBookEntry,
   AdminRight,
   Button,
   CallRecord,
@@ -532,7 +533,7 @@ export interface AccountTools {
   /** The person with this phone number, where their privacy lets the owner find them; `not_found` otherwise. */
   lookup(phone: string): Promise<Member>
   /** The owner's contact list as the messenger keeps it — the address book, not the chats. */
-  addressBook(): Promise<Member[]>
+  addressBook(): Promise<AddressBookEntry[]>
 }
 
 /** Everything the messenger says about one person — what `contacts show` shows. */

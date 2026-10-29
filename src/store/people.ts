@@ -30,6 +30,8 @@ export interface AccountPeople {
   refreshRecency(key: AccountKey): Promise<void>
   /** Every name and username this account's store recorded for one person, the current ones included. */
   personNames(key: AccountKey, personId: Id): Promise<PersonAlias[]>
+  /** The phone saved for them, `null` when none was ever shown to the owner. */
+  phoneOf(key: AccountKey, personId: Id): Promise<string | null>
   privateContact(key: AccountKey, personId: Id): Promise<PrivateContact>
   setContactAlias(key: AccountKey, personId: Id, alias: string | null): Promise<{ personId: Id; alias: string | null }>
   addContactNote(key: AccountKey, personId: Id, text: string): Promise<PrivateContactNote>
@@ -96,6 +98,8 @@ export const accountPeopleOver = (context: StoreContext): AccountPeople => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined ? [] : identities.namesOf(context, accountKey, key.provider, personId)
     },
+
+    phoneOf: async (key, personId) => identities.phoneOf(context, key.provider, personId),
 
     privateContact: async (key, person) => privatePeople.privateContact(context, key, person),
     setContactAlias: async (key, person, alias) => {

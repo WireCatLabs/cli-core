@@ -15,6 +15,15 @@ shape of this file.
   lane's hits of `search messages` carry it too. Every answer applies the one rule: `outgoing`, or the sender id is
   the reading account's own.
 
+### Added
+
+- **A person's phone is saved in the store** (store version 37, additive, minCompatible stays 34). `contacts sync`
+  saves the phone an address book entry carries (`AddressBookEntry`, a `Member` with an optional `phone`), and an
+  online `contacts show` saves the phone the profile shows, so `contacts show --offline` answers it. A read that
+  shows no phone never erases a saved one.
+- **A shared contact card's phone is a mention** of field `contact`, beside `file_text` and `transcript`:
+  `mentions list kind:phone` and `phone:` search find it, and `mentions rebuild` reads cards stored before.
+
 ## 0.477.0 — 29.10.2026
 
 ### Added

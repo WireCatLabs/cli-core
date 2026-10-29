@@ -31,7 +31,7 @@ That column comes from the provider; the `mentions` table comes from our rules.
 ## Tables
 
 - `mentions` — one row per kind per place: `(source_type, source_id, source_field, start_offset, kind)` is unique.
-  `source_type` is `message`, `attachment`, `document`, `note` or `email`; `source_field` is `text`, `file_text` or
+  `source_type` is `message`, `attachment`, `document`, `note` or `email`; `source_field` is `text`, `file_text`, `contact` (a shared contact card's phone) or
   `transcript`. Offsets are
   UTF-16, as JavaScript counts them. The written spelling is not copied; it is read back from the source.
 - `mention_pending` — texts written or edited since their mentions were found. Triggers on `messages` and

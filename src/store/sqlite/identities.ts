@@ -50,6 +50,7 @@ const prepare = (orm: Orm) => ({
       username: identities.username,
       isBot: identities.bot,
       description: identities.description,
+      phone: identities.phone,
       updatedAt: identities.updatedAt,
       personId: identityLinks.personId,
     })
@@ -184,13 +185,15 @@ const saveIdentity = (
       username: facts.username ?? found.username,
       bot: flag(facts.isBot) ?? found.isBot,
       description: facts.description ?? found.description,
+      phone: facts.phone ?? found.phone,
     }
     // Only on a real change: the search trigger rewrites the index row on every update of `name`.
     if (
       changed.name !== found.name ||
       changed.username !== found.username ||
       changed.bot !== found.isBot ||
-      changed.description !== found.description
+      changed.description !== found.description ||
+      changed.phone !== found.phone
     ) {
       orm
         .update(identities)
@@ -217,6 +220,7 @@ const saveIdentity = (
         username: facts.username ?? null,
         bot: flag(facts.isBot),
         description: facts.description ?? null,
+        phone: facts.phone ?? null,
         createdAt: at,
         updatedAt: at,
       })
@@ -474,3 +478,10 @@ export const meetingIdentityPk = (context: StoreContext, accountId: number, iden
   if (associatePerson) statementsOf(context.orm).seen.run({ accountId, identityId: saved.pk, createdAt: context.now() })
   return saved.pk
 }
+
+export const phoneOf = ({ orm }: StoreContext, provider: Provider, nativeId: Id): string | null =>
+  orm
+    .select({ phone: identities.phone })
+    .from(identities)
+    .where(and(eq(identities.provider, provider), eq(identities.externalId, nativeId)))
+    .get()?.phone ?? null
