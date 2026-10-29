@@ -405,11 +405,11 @@ const syncRound = async (
       if (stop) {
         plan.stopped = stop
         capped = true
-        plan.remaining += (wanted as Searched).uids.length
+        plan.remaining += (wanted?.uids ?? []).length
         continue
       }
-      for (const uid of (wanted as Searched).uids) plan.tried.add(keyOf(folder, uid))
-      plan.asked += (wanted as Searched).uids.length
+      for (const uid of wanted?.uids ?? []) plan.tried.add(keyOf(folder, uid))
+      plan.asked += (wanted?.uids ?? []).length
     }
     const found = await source.list(since, folder, {
       headers: rules.length > 0,
