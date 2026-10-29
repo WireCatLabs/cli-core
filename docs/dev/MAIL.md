@@ -41,10 +41,19 @@ account `{ provider: "email", account: <address, lower case> }`.
 - **Deletions.** Stored mail the listing no longer holds is marked deleted, in the window without its first two days
   (IMAP's SINCE counts whole days) and only when the run listed everything. `tooManyGone` refuses 5 or more and over a
   fifth of what is stored, and a snapshot source (`mode: "mbox"`) never proves one.
-- **Limits.** `max` new messages a run, newest first (200); `maxBodyChars` (`MAX_BODY_CHARS`); attachment text up to
+- **Limits.** `max` new messages a run, newest first (200; no limit when budgeted); `maxBodyChars` (`MAX_BODY_CHARS`); attachment text up to
   `MAX_ATTACHMENT_CHARS` (200,000); a run stops between batches of 50 on `signal`, after saving its resume point.
-- **Transport failures.** A chunk in which every message failed stops the run; one unreadable message costs only itself
-  and is tried again next run.
+- **Transport failures.** A chunk in which every message failed stops the run, after saving its resume point; one
+  unreadable message costs only itself and is tried again next run.
+- **`budget`.** A `RunBudget` (`runBudgetOf` in a command) makes the run budgeted (WC-LIFE-16): it reads the window in
+  rounds, one request of the budget per call to the source (`search`, `list`, `fetchRaw`), `source.listBatch` and
+  `source.fetchBatch` messages per call (200 and 50 when the source does not say), saves its resume point after every
+  round and stops when the budget says so. The result has `state` (`partial` or `complete`), `stopped`, `remaining`
+  (messages of the window not asked for) and `requests`; `max` defaults to no limit. A message the source did not
+  return from `list`, or answered with an Error from `fetchRaw`, is asked for once more at the end of the run; if it
+  still fails it is in `unreadable` and not in the resume point, so the next run asks again. A pass that read the
+  window in parts proves no deletion (`deletionsSkipped` says so), except when one round listed all of it. The source
+  spends the budget on its own retries through the `canRetry` it was given.
 - **`retryAttachments`.** Reads again, by provider id through `find`, only the stored mail whose attachment a missing
   reader left unread (`RETRYABLE_ATTACHMENTS`). It lists nothing and moves no resume point.
 - **`index(store, key)`.** Runs after the save; what it answers is `result.indexed`. The engine embeds nothing itself:

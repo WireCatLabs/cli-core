@@ -44,6 +44,7 @@ import {
   DEFAULT_COMMAND_MS,
   DEFAULT_COOPERATIVE_MS,
   DEFAULT_OUTPUT_BYTES,
+  DEFAULT_SYNC_MS,
   execution,
 } from "./execution.js"
 import { setupAtStart } from "./first-run.js"
@@ -450,7 +451,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           `\`${command} <profile> config set --bot permissions.${BOT_API_KEY} allow\``,
         { permission: BOT_API_KEY, sent: false },
       )
-    const { lifetime, cooperative: stopsAtItsPace } = metaOf(action)
+    const { lifetime, cooperative: stopsAtItsPace, partial: answersPartial } = metaOf(action)
     const persistent = lifetime === "persistent"
     listens = persistent
     const interactiveLogin = !headless && lifetime === "interactive"
@@ -466,7 +467,9 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
             : stopsAtItsPace === true
               ? options.agent
                 ? DEFAULT_AGENT_COOPERATIVE_MS
-                : DEFAULT_COOPERATIVE_MS
+                : answersPartial === true
+                  ? DEFAULT_SYNC_MS
+                  : DEFAULT_COOPERATIVE_MS
               : DEFAULT_COMMAND_MS
         : persistent
           ? undefined

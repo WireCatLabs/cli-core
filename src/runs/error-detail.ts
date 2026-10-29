@@ -11,6 +11,8 @@ export interface RunError {
   class: string
   code?: string
   reason?: string
+  /** The transport's own code (`NoConnection`, `ETIMEDOUT`, `UNAVAILABLE`), kept so a failed run says what broke. */
+  cause_code?: string
   message?: string
   /** Ours, not the messenger's: `messages.send`. */
   operation?: string
@@ -30,6 +32,10 @@ export const errorDetailOf = (error: unknown, response?: RequestEvent): RunError
   const thrown = error instanceof Error ? error : undefined
   const code = isCliFailure(error) ? error.code : codeOf(error)
   const reason = typeof details.reason === "string" ? details.reason : undefined
+  const causeCode =
+    typeof details.cause_code === "string" && /^[A-Za-z0-9_.-]{1,40}$/.test(details.cause_code)
+      ? details.cause_code
+      : undefined
   const message = thrown ? redactText(thrown.message) : undefined
   const operation = stringOf(details.operation) ?? response?.operation
   const status = numberOf(details.status) ?? response?.status
@@ -51,6 +57,7 @@ export const errorDetailOf = (error: unknown, response?: RequestEvent): RunError
     class: classOf(error),
     ...(code === undefined ? {} : { code }),
     ...(reason === undefined ? {} : { reason }),
+    ...(causeCode === undefined ? {} : { cause_code: causeCode }),
     ...(message ? { message } : {}),
     ...(operation === undefined ? {} : { operation }),
     ...(http ? { http } : {}),

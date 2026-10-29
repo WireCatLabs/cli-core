@@ -27,6 +27,13 @@ export interface Searched {
 /** Everything the import asks of a mail client, so a transport can be replaced without touching the sync. */
 export interface MailSource {
   /**
+   * How many messages one `list` call reads in about one request's time, parallel connections included; a budgeted
+   * sync lists that many at a time, so a request of the budget is one call. Absent: 200.
+   */
+  listBatch?: number
+  /** The same for `fetchRaw`. Absent: 50. */
+  fetchBatch?: number
+  /**
    * Every message in `folder` received since `since`; all or nothing, since deletions are proved from it.
    * `headers` also reads From, To, Cc and the list fields, for the probe and the owner's rules.
    */
