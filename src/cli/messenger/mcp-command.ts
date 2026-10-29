@@ -210,6 +210,7 @@ export const mcpGroup = (host: McpHost): Command => {
           examples: [
             `${app.command} personal mcp serve`,
             `${app.command} mcp serve --profiles work,personal`,
+            `${app.command} mcp serve --profiles all`,
             `${app.command} personal mcp serve --http --public-url https://laptop.example.ts.net`,
           ],
         })

@@ -143,6 +143,19 @@ describe("restartMcpServers", () => {
     expect(one?.reason).toContain("not listening after 30 s — `app personal mcp server status`")
   })
 
+  it("keeps --profiles in the command it suggests for a server of several profiles", async () => {
+    const { env, system, running } = setup(undefined, {
+      invocation: "app",
+      argv: ["mcp", "serve", "--http", "--profiles", "work,personal"],
+    })
+    system.spawn = () => {
+      running.add(NEW)
+      return NEW
+    }
+    const [one] = await restartMcpServers(app, env, system)
+    expect(one?.reason).toContain("`app mcp server status --profiles work,personal`")
+  })
+
   it("names the log's last line when the new server exits before it listens", async () => {
     const { env, system } = setup()
     system.spawn = (_argv, _env, log) => {

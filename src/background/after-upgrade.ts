@@ -203,6 +203,9 @@ const restartOne = async (
 ): Promise<McpServerRestart> => {
   const launch = readHttpLaunch(httpLaunchFile(lockFile))
   const name = launch?.invocation ?? lockFile
+  const set = launch?.argv.indexOf("--profiles") ?? -1
+  const again = (verb: string) =>
+    `${name} mcp server ${verb}${set === -1 ? "" : ` --profiles ${launch?.argv[set + 1]}`}`
   const from = lock.version ?? null
   const left = (reason: string, rest: Partial<McpServerRestart> = {}): McpServerRestart => ({
     name,
@@ -226,8 +229,7 @@ const restartOne = async (
     return left(errorText(error))
   }
   for (let look = 0; look < STOP_LOOKS && system.alive(lock.pid); look++) await system.pause()
-  if (system.alive(lock.pid))
-    return left(`asked it to stop, and it still ran after 15 s — \`${name} mcp server status\``)
+  if (system.alive(lock.pid)) return left(`asked it to stop, and it still ran after 15 s — \`${again("status")}\``)
 
   const log = lockFile.replace(/\.lock$/, ".log")
   const { [`${envPrefix}_TIMEOUT`]: _timeout, ...inherited } = env
@@ -235,7 +237,7 @@ const restartOne = async (
   try {
     pid = system.spawn(launch.argv, { ...inherited, ...launch.env }, log)
   } catch (error) {
-    return left(`stopped it, and could not start it again: ${errorText(error)} — \`${name} mcp server start\``)
+    return left(`stopped it, and could not start it again: ${errorText(error)} — \`${again("start")}\``)
   }
   for (let look = 0; look < START_LOOKS; look++) {
     const now = readHttpLock(lockFile)
@@ -244,13 +246,13 @@ const restartOne = async (
     if (!system.alive(pid)) {
       const last = readableLog(tail(log, 5)).trim()
       return left(
-        `stopped it, and the new one exited before it listened${last ? `: ${last}` : ""} — \`${name} mcp server start\``,
+        `stopped it, and the new one exited before it listened${last ? `: ${last}` : ""} — \`${again("start")}\``,
         { newPid: pid },
       )
     }
     await system.pause()
   }
-  return left(`started it again (PID ${pid}), and it was not listening after 30 s — \`${name} mcp server status\``, {
+  return left(`started it again (PID ${pid}), and it was not listening after 30 s — \`${again("status")}\``, {
     newPid: pid,
   })
 }
