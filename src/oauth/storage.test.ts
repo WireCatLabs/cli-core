@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { errorObjectOf, errorRecordOf, type KeyringStore } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
@@ -239,4 +240,55 @@ it("never quotes an unreadable entry in its error", () => {
       expect(message).toMatch(/cannot be read/)
       expect(message).not.toContain(secret)
     }
+})
+
+describe("a keyring that cannot be reached", () => {
+  const SECRET = "synthetic-refresh-keyring-echo"
+  const refusing: KeyringStore = {
+    get: () => {
+      throw new Error("Platform failure: DBus error: Failed to connect to socket /run/user/1000/bus")
+    },
+    set: (_service, _account, secret) => {
+      throw new Error(`No storage access: collection is locked, could not store ${secret}`)
+    },
+    delete: () => {
+      throw new Error("No storage access: collection is locked")
+    },
+  }
+  const storage = (keyring = refusing) =>
+    credentialStorage({
+      credentials: { service: "cal-cli", configDir: folder(), storage: "keyring", keyring },
+      account: oauthAccount("google", "personal"),
+      codec: standardCodec("google"),
+    })
+  const failureOf = (act: () => unknown) => {
+    try {
+      act()
+    } catch (error) {
+      return error
+    }
+    throw new Error("expected a failure")
+  }
+
+  it("keeps the keyring's reason for --debug and the run record, not for the answer", () => {
+    const failure = failureOf(() => storage().read())
+    const object = errorObjectOf(failure)
+    expect(object.error.code).toBe("configuration_error")
+    expect(JSON.stringify(object)).not.toContain("DBus")
+    expect(
+      errorRecordOf(failure, object, { command: "session status", service: "cal-cli", version: "0" }),
+    ).toMatchObject({ attributes: { cause: expect.stringContaining("Failed to connect to socket") } })
+  })
+
+  it("never carries the secret it failed to save", () => {
+    const failure = failureOf(() =>
+      storage({ ...refusing, get: () => null }).write({
+        client: { clientId: "client" },
+        tokens: { accessToken: "a", refreshToken: SECRET, expiresAt: NOW, scopes: [] },
+      }),
+    )
+    const cause = (failure as Error).cause as Error
+    expect(cause.message).toContain("collection is locked")
+    expect(cause.message).not.toContain(SECRET)
+  })
 })

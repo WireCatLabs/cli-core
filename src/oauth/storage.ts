@@ -185,10 +185,18 @@ export interface CredentialStorageOptions {
   codec: TokenCodec
 }
 
-const keyringFailure = () =>
-  new CliError("configuration_error", "could not reach the saved sign-in; use an available keyring or file storage", {
-    reason: "oauth.not-saved",
-  })
+// The keyring's own words go to `--debug` and the run record as the cause, never into the answer; a store that
+// echoes what it was handed loses the secret from them first.
+const keyringFailure = (thrown: unknown, secret?: string) => {
+  const failure = new CliError(
+    "configuration_error",
+    "could not reach the saved sign-in; use an available keyring or file storage",
+    { reason: "oauth.not-saved" },
+  )
+  const words = thrown instanceof Error ? thrown.message : String(thrown)
+  failure.cause = new Error(secret ? words.replaceAll(secret, "[secret]") : words)
+  return failure
+}
 
 export const credentialStorage = (options: CredentialStorageOptions): TokenStorage => {
   if (!options.credentials.keyring)
@@ -203,15 +211,15 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
   const raw = (name: string) => {
     try {
       return credentials.read(name)?.secret
-    } catch {
-      throw keyringFailure()
+    } catch (error) {
+      throw keyringFailure(error)
     }
   }
   const save = (value: string) => {
     try {
       credentials.write(account, value)
-    } catch {
-      throw keyringFailure()
+    } catch (error) {
+      throw keyringFailure(error, value)
     }
   }
   const current = () => {
@@ -239,8 +247,8 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
     remove: () => {
       try {
         return credentials.remove(account)
-      } catch {
-        throw keyringFailure()
+      } catch (error) {
+        throw keyringFailure(error)
       }
     },
   }
