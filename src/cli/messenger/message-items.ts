@@ -66,6 +66,8 @@ export const messageItem = (message: ReadMessage, reader: AccountKey): MessageIt
     sender_name: message.senderName,
     sender_username: message.senderUsername,
     sender_is_chat: message.senderIsChat,
+    // MAX reports the owner's own messages with no sender id, so `outgoing` counts as well as the id.
+    sender_is_me: message.outgoing === true || (message.senderId !== null && String(message.senderId) === account),
     mentions: message.mentions,
     timestamp: message.timestamp,
     edited_at: message.editedAt,

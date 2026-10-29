@@ -62,6 +62,14 @@ describe("a message as commands answer it", () => {
     expect(JSON.stringify(item)).not.toContain("opaque")
   })
 
+  it("says whether the account sent it, also when the messenger leaves the owner's sender id out", () => {
+    const sentBy = (patch: Partial<ReadMessage>) => messageItem({ ...full, ...patch }, reader).sender_is_me
+    expect(sentBy({ senderId: "9", outgoing: false })).toBe(false)
+    expect(sentBy({ senderId: "500", outgoing: null })).toBe(true)
+    expect(sentBy({ senderId: null, outgoing: true })).toBe(true)
+    expect(sentBy({ senderId: null, outgoing: null })).toBe(false)
+  })
+
   it("keeps an email's own locator and account, not the reader's", () => {
     const locator = "msg:email/owner%40example.test/thread-9/%3Ca%40example.test%3E"
     const person = { name: null, address: "a@example.test", ref: null }

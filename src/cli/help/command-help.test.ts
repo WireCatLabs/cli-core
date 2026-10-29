@@ -71,7 +71,7 @@ describe("generated command help", () => {
 
     expect(code).toBe(0)
     expect(stdout.slice(stdout.indexOf("Returns:"))).toMatchInlineSnapshot(`
-      "Returns:       message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands info messages list
+      "Returns:       message — ref, id, chat_id, sender_id, sender_name, sender_is_me, timestamp, edited_at, and 30 more; every field: tg commands info messages list
       Next usually:  tg messages link <chat> <message>
                      tg messages delete <chat> <message>
       Example:       tg personal messages list Team
@@ -175,7 +175,7 @@ describe("generated command help", () => {
 
   it("renders the same three as Markdown for docs/commands.md", () => {
     expect(commandHelpMarkdown(createProgram(tool), ["messages", "list"])).toEqual([
-      "**Returns:** message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 29 more; every field: tg commands info messages list",
+      "**Returns:** message — ref, id, chat_id, sender_id, sender_name, sender_is_me, timestamp, edited_at, and 30 more; every field: tg commands info messages list",
       "**Next usually:** `tg messages link <chat> <message>`, `tg messages delete <chat> <message>`",
       "**Example:** `tg personal messages list Team`",
     ])

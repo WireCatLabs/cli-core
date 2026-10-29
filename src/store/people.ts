@@ -1,6 +1,8 @@
+import { CliError } from "@wirecat/cli-base"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../domain/models.js"
 import type { PeopleLookup } from "../resolve.js"
 import { keysOver } from "./keys.js"
+import { ownerPerson } from "./sqlite/actors.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import type { StoreContext } from "./sqlite/open.js"
@@ -49,6 +51,8 @@ export interface PeopleStore extends AccountPeople {
   /** The person a `person:<uid>` reference names. */
   personSeenInAccounts(uid: string, accountIds: readonly number[]): Promise<boolean>
   personByUid(uid: string): Promise<PersonRecord | undefined>
+  /** The person marked as the owner, with every identity linked to them; `undefined` when none is. */
+  owner(): Promise<PersonRecord | undefined>
   /** Accepted facts, the owner's notes and open tasks about them; tasks of an account only if `accounts` holds it. */
   preparation(uid: string, options: { accounts: readonly AccountKey[]; limit: number }): Promise<PersonPreparationRead>
   /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
@@ -116,6 +120,14 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     personOf: async (identity) => personLinks.personOf(context, identity),
     personSeenInAccounts: async (uid, accountIds) => personSeenInAccounts(context, uid, accountIds),
     personByUid: async (uid) => personLinks.personByUid(context, uid),
+    owner: async () => {
+      try {
+        return personLinks.personByUid(context, String(ownerPerson(database).id))
+      } catch (error) {
+        if (error instanceof CliError && error.code === "configuration_error") return undefined
+        throw error
+      }
+    },
     preparation: async (uid, options) => personPreparation(context, uid, options),
     linkIdentities: async (person, other, options) => {
       return write(database, () => personLinks.linkIdentities(context, person, other, options))

@@ -14,6 +14,7 @@ export const project = v.strictObject({
   ref: reference,
   key: text,
   name: text,
+  kind: v.picklist(["project", "inbox"]),
   type: v.picklist(["work", "client", "personal", "oss", "other"]),
   organization_id: v.nullable(id),
   scope: v.picklist(["personal", "work"]),

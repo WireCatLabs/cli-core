@@ -28,6 +28,7 @@ export const typedKey = (database: CacheDatabase, kind: TaskKind): string => {
 }
 
 /** One inbox project per task account (`telegram:100`): derived from the account text alone, no `-` in it. */
+export const INBOX_KEY_LENGTH = 10
 export const inboxKey = (account: string): string =>
   `IN${createHash("sha256").update(account).digest("hex").slice(0, 8).toUpperCase()}`
 

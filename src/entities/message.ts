@@ -26,6 +26,7 @@ export const message = v.strictObject({
   sender_name: v.nullable(text),
   sender_username: v.optional(text),
   sender_is_chat: v.optional(v.boolean()),
+  sender_is_me: v.boolean(),
   mentions: v.optional(v.array(id)),
   /** When it was sent. */
   timestamp: time,
