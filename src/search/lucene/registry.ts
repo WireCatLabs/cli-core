@@ -133,7 +133,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     aliases: [],
     type: "kw",
     operators: terms,
-    normalization: "a folder or label by its id or name, ASCII case folded; mail only",
+    normalization: "a folder or label by its id (ASCII case folded) or name (case folded in any script); mail only",
     support: "A1",
   },
   {

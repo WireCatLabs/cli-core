@@ -152,8 +152,9 @@ A real person, whatever accounts they write from: their identities point here. `
 | `description` | text |  |  | What they wrote about themselves. |
 | `email` | text |  |  | the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise |
 | `phone` | text |  |  | the phone as the messenger showed it, whole; saved by `contacts sync` and an online profile read |
+| `name_folded` | text |  |  | `fold(name)`, which `tags list name:` compares; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`
+*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`, `INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL`
 
 ### `identity_links`
 
@@ -343,8 +344,9 @@ A chat, group or channel of one account, with what the messenger last said about
 | `archived` | integer |  |  | 1 archived, 0 not; NULL when the messenger did not say |
 | `marked_unread` | integer |  |  | 1 when the owner marked it unread; NULL when the messenger did not say |
 | `unread_counted_at` | integer |  |  | when `unread_count` was taken (epoch ms) |
+| `title_folded` | text |  |  | `fold(title)`, which `tags list name:` compares; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, last_message_at DESC)`, `INDEX (parent_chat_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, last_message_at DESC)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (parent_chat_id)`
 
 ### `chat_members`
 
@@ -675,8 +677,9 @@ A conversation by mail.
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `subject_folded` | text |  |  | `fold(subject)`, which `tags list name:` compares; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (id) WHERE subject IS NOT NULL AND subject_folded IS NULL`
 
 ### `emails`
 
@@ -763,8 +766,9 @@ An IMAP folder or a Gmail label. The owner's own tags are taggings.
 | `kind` | text |  |  | inbox, sent, archive, label, folder |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `name_folded` | text |  |  | `fold(name)`, which `mailbox:` and `label:` compare; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (name_folded)`, `INDEX (id) WHERE name_folded IS NULL`
 
 ### `email_mailboxes`
 
@@ -1573,8 +1577,9 @@ A place for tasks, with the short key their ids start with (`MEET-12`).
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `name_folded` | text |  |  | `fold(name)`, which `projects list name:` compares; filled on open when NULL |
 
-*Keys and indexes:* `INDEX (organization_id)`, `INDEX (account_id)`, `INDEX (owner_type, owner_id)`
+*Keys and indexes:* `INDEX (name_folded)`, `INDEX (id) WHERE name_folded IS NULL`, `INDEX (organization_id)`, `INDEX (account_id)`, `INDEX (owner_type, owner_id)`
 
 ### `tasks`
 

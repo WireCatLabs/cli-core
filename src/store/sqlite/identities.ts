@@ -5,6 +5,7 @@ import type { PeopleLookup } from "../../resolve.js"
 import { fold } from "../normalize.js"
 import type { AccountKey, PersonFacts } from "../types.js"
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "./drizzle/core.js"
+import { folded } from "./folded.js"
 import type { Orm, StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import {
@@ -197,7 +198,7 @@ const saveIdentity = (
     ) {
       orm
         .update(identities)
-        .set({ ...changed, updatedAt: now() })
+        .set({ ...changed, nameFolded: folded(changed.name), updatedAt: now() })
         .where(eq(identities.id, found.pk))
         .run()
     }
@@ -216,6 +217,7 @@ const saveIdentity = (
         provider,
         externalId: nativeId,
         name,
+        nameFolded: folded(name),
         metadata: facts.metadata == null ? null : JSON.stringify(facts.metadata),
         username: facts.username ?? null,
         bot: flag(facts.isBot),

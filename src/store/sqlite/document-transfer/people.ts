@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { TransferSnapshot } from "../../document-transfer/model.js"
 import type { CacheDatabase } from "../../driver.js"
+import { fold } from "../../normalize.js"
 import { ownerPerson } from "../actors.js"
 import { stateOfThing, type Thing, thingOf } from "../things.js"
 
@@ -79,12 +80,13 @@ export const copyPeople = (
       if (!row)
         row = database
           .prepare(
-            "INSERT INTO identities (provider,external_id,name,username,bot,created_at,updated_at) VALUES (?,?,?,?,?,?,?) RETURNING id",
+            "INSERT INTO identities (provider,external_id,name,name_folded,username,bot,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?) RETURNING id",
           )
           .get(
             String(identity.provider),
             String(identity.external_id),
             identity.name ?? null,
+            identity.name == null ? null : fold(String(identity.name)),
             identity.username ?? null,
             identity.bot ?? null,
             identity.created_at ?? now(),

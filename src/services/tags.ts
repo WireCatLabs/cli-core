@@ -69,7 +69,7 @@ export const TAGGING_QUERY = {
 const TAGGING_COLUMNS: ColumnMap = {
   tag: { type: "kw", sql: "x.tag" },
   type: { type: "enum", sql: "x.tag_type" },
-  name: { type: "kw", sql: "COALESCE(x.chat_title, x.name)" },
+  name: { type: "kw", sql: "x.name_folded", folded: true },
   sources: {
     where: (node) =>
       node.operator === "wildcard"

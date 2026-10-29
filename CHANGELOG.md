@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Every name filter ignores case in any script, not only Latin** — SQLite's `lower()` folds A–Z only, so
+  `projects list 'name:*ТАРТ*'` missed «Тартус». Store version 38 keeps a folded copy, with an index where a filter
+  reads it, of project names, chat titles, contact names, mail thread subjects and mailbox names, beside the copies
+  tasks, meetings, attachments and files already had. `projects list name:`, `tags list name:` and mail search
+  `mailbox:`/`label:` compare those copies. A trigger empties a copy whose name an older build changed, and the next
+  open refills it, as it fills the copies of rows stored before version 38.
+
 ## 0.481.0 — 29.10.2026
 
 ### Added

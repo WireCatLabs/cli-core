@@ -11,7 +11,7 @@ import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.
 import { inSource } from "../../search/query.js"
 import { STEM_SEPARATOR, type Stemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
-import { normalize } from "../normalize.js"
+import { fold, normalize } from "../normalize.js"
 import { linkMatch } from "./mention-links.js"
 import { valueMatch } from "./phone-countries.js"
 import { canonicalTagNamed } from "./tags.js"
@@ -547,9 +547,9 @@ const mailbox: FieldCompiler = ({ value }, { mail }) =>
           // Not tied to m.account_id: a correlated subquery re-reads every mailbox link for each email (minutes on
           // 880k links), and an email only ever links to its own account's mailboxes anyway.
           `m.id IN (SELECT em.email_id FROM email_mailboxes em WHERE em.mailbox_id IN
-               (SELECT b.id FROM mailboxes b WHERE lower(b.external_id) = lower(?) OR lower(b.name) = lower(?)))`,
+               (SELECT b.id FROM mailboxes b WHERE lower(b.external_id) = lower(?) OR b.name_folded = ?))`,
           value,
-          value,
+          fold(value),
         )
       : bound("0"),
   )

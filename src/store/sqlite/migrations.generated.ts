@@ -797,5 +797,38 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "-- A shared contact card has no text, only a phone: queue it for mentions like an attachment's text.\n-- Cards stored before version 37 wait for `mentions rebuild`.\nCREATE TRIGGER mention_pending_attachment_contact_ai AFTER INSERT ON attachments\n  WHEN new.attachable_type = 'message' AND new.contact IS NOT NULL BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('attachment', new.id);\nEND;",
       "CREATE TRIGGER mention_pending_attachment_contact_au AFTER UPDATE OF contact ON attachments\n  WHEN new.attachable_type = 'message' AND old.contact IS NOT new.contact BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('attachment', new.id);\nEND;"
     ]
+  },
+  {
+    "name": "20261029224106_version-38-folded-names",
+    "statements": [
+      "ALTER TABLE `chats` ADD `title_folded` text;",
+      "ALTER TABLE `email_threads` ADD `subject_folded` text;",
+      "ALTER TABLE `identities` ADD `name_folded` text;",
+      "ALTER TABLE `mailboxes` ADD `name_folded` text;",
+      "ALTER TABLE `projects` ADD `name_folded` text;",
+      "CREATE INDEX `chats_title_to_fold` ON `chats` (`id`) WHERE title IS NOT NULL AND title_folded IS NULL;",
+      "CREATE INDEX `email_threads_subject_to_fold` ON `email_threads` (`id`) WHERE subject IS NOT NULL AND subject_folded IS NULL;",
+      "CREATE INDEX `identities_name_to_fold` ON `identities` (`id`) WHERE name IS NOT NULL AND name_folded IS NULL;",
+      "CREATE INDEX `mailboxes_by_name_folded` ON `mailboxes` (`name_folded`);",
+      "CREATE INDEX `mailboxes_name_to_fold` ON `mailboxes` (`id`) WHERE name_folded IS NULL;",
+      "CREATE INDEX `projects_by_name_folded` ON `projects` (`name_folded`);",
+      "CREATE INDEX `projects_name_to_fold` ON `projects` (`id`) WHERE name_folded IS NULL;"
+    ]
+  },
+  {
+    "name": "20261029224107_version-38-folded-triggers",
+    "statements": [
+      "-- A build older than 38, or a write that forgets the copy, changes a name without its folded copy: empty the copy\n-- so the next open refills it (fillFolded) rather than leave a stale one that filters would trust.\nCREATE TRIGGER tasks_title_folded_au AFTER UPDATE OF title ON tasks\n  WHEN new.title IS NOT old.title AND new.title_folded IS old.title_folded BEGIN\n  UPDATE tasks SET title_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER tasks_close_reason_folded_au AFTER UPDATE OF close_reason ON tasks\n  WHEN new.close_reason IS NOT old.close_reason AND new.close_reason_folded IS old.close_reason_folded BEGIN\n  UPDATE tasks SET close_reason_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER attachments_name_folded_au AFTER UPDATE OF name ON attachments\n  WHEN new.name IS NOT old.name AND new.name_folded IS old.name_folded BEGIN\n  UPDATE attachments SET name_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER attachments_local_path_folded_au AFTER UPDATE OF local_path ON attachments\n  WHEN new.local_path IS NOT old.local_path AND new.local_path_folded IS old.local_path_folded BEGIN\n  UPDATE attachments SET local_path_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER meetings_title_folded_au AFTER UPDATE OF title ON meetings\n  WHEN new.title IS NOT old.title AND new.title_folded IS old.title_folded BEGIN\n  UPDATE meetings SET title_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER files_path_folded_au AFTER UPDATE OF path ON files\n  WHEN new.path IS NOT old.path AND new.path_folded IS old.path_folded BEGIN\n  UPDATE files SET path_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER projects_name_folded_au AFTER UPDATE OF name ON projects\n  WHEN new.name IS NOT old.name AND new.name_folded IS old.name_folded BEGIN\n  UPDATE projects SET name_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER chats_title_folded_au AFTER UPDATE OF title ON chats\n  WHEN new.title IS NOT old.title AND new.title_folded IS old.title_folded BEGIN\n  UPDATE chats SET title_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER identities_name_folded_au AFTER UPDATE OF name ON identities\n  WHEN new.name IS NOT old.name AND new.name_folded IS old.name_folded BEGIN\n  UPDATE identities SET name_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER email_threads_subject_folded_au AFTER UPDATE OF subject ON email_threads\n  WHEN new.subject IS NOT old.subject AND new.subject_folded IS old.subject_folded BEGIN\n  UPDATE email_threads SET subject_folded = NULL WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER mailboxes_name_folded_au AFTER UPDATE OF name ON mailboxes\n  WHEN new.name IS NOT old.name AND new.name_folded IS old.name_folded BEGIN\n  UPDATE mailboxes SET name_folded = NULL WHERE id = new.id;\nEND;"
+    ]
   }
 ]

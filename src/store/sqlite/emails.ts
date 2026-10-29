@@ -5,7 +5,7 @@ import { formatReference } from "../../domain/references.js"
 import type { Attachment, Metadata } from "../../meetings/index.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
-import { normalize } from "../normalize.js"
+import { fold, normalize } from "../normalize.js"
 import type { ConversationSummary, StoredHit } from "../types.js"
 import {
   chunkAttachments,
@@ -18,6 +18,7 @@ import {
 } from "./email-index.js"
 import { recountEmailThread as recount, setEmailFlags } from "./email-state.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
+import { folded } from "./folded.js"
 import { ensurePerson } from "./identities.js"
 import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
@@ -439,15 +440,17 @@ const identityOf = (database: CacheDatabase, { address, name }: EmailAddress, no
     .get(key)
   if (found) {
     if (found.name === null && name)
-      database.prepare("UPDATE identities SET name = ?, updated_at = ? WHERE id = ?").run(name, now, Number(found.id))
+      database
+        .prepare("UPDATE identities SET name = ?, name_folded = ?, updated_at = ? WHERE id = ?")
+        .run(name, fold(name), now, Number(found.id))
     return Number(found.id)
   }
   return Number(
     database
       .prepare(
-        "INSERT INTO identities (provider, external_id, name, created_at, updated_at) VALUES ('email', ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO identities (provider, external_id, name, name_folded, created_at, updated_at) VALUES ('email', ?, ?, ?, ?, ?) RETURNING id",
       )
-      .get(key, name, now, now)?.id,
+      .get(key, name, folded(name), now, now)?.id,
   )
 }
 
@@ -456,12 +459,12 @@ const mailboxPk = (database: CacheDatabase, accountId: number, box: MailboxInput
   return Number(
     database
       .prepare(
-        `INSERT INTO mailboxes (account_id, external_id, name, kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-           ON CONFLICT (account_id, external_id) DO UPDATE SET name = excluded.name,
+        `INSERT INTO mailboxes (account_id, external_id, name, name_folded, kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (account_id, external_id) DO UPDATE SET name = excluded.name, name_folded = excluded.name_folded,
              kind = coalesce(excluded.kind, kind), updated_at = excluded.updated_at
            RETURNING id`,
       )
-      .get(accountId, box.externalId, box.name, box.kind, now, now)?.id,
+      .get(accountId, box.externalId, box.name, fold(box.name), box.kind, now, now)?.id,
   )
 }
 
@@ -586,7 +589,9 @@ const saveThread = (database: CacheDatabase, orm: Orm, input: ThreadSave): numbe
           .get(accountId, externalId, now, now)?.id,
       )
   if (input.subject !== undefined)
-    database.prepare("UPDATE email_threads SET subject = ? WHERE id = ?").run(input.subject, threadId)
+    database
+      .prepare("UPDATE email_threads SET subject = ?, subject_folded = ? WHERE id = ?")
+      .run(input.subject, folded(input.subject), threadId)
   if (input.metadata !== undefined)
     database.prepare("UPDATE email_threads SET metadata = ? WHERE id = ?").run(toJson(input.metadata), threadId)
   const moved = new Set<number>()
@@ -597,9 +602,10 @@ const saveThread = (database: CacheDatabase, orm: Orm, input: ThreadSave): numbe
   const first = database
     .prepare("SELECT subject FROM emails WHERE email_thread_id = ? ORDER BY coalesce(sent_at, received_at), id LIMIT 1")
     .get(threadId)
+  const subject = titleOf(str(first?.subject))
   database
-    .prepare("UPDATE email_threads SET subject = ? WHERE id = ? AND subject IS NULL")
-    .run(titleOf(str(first?.subject)), threadId)
+    .prepare("UPDATE email_threads SET subject = ?, subject_folded = ? WHERE id = ? AND subject IS NULL")
+    .run(subject, folded(subject), threadId)
   for (const id of [threadId, ...moved]) recount(database, id, now)
   queueThreads(database, moved)
   return threadId

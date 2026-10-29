@@ -3,6 +3,7 @@ import type { ChannelTagMatch } from "../../domain/channel-tags.js"
 import type { Chat, ChatUpdate, Id, Member, Page, ProviderMetadata } from "../../domain/models.js"
 import type { AccountKey, StoredChatFilter } from "../types.js"
 import { and, eq, inArray, or, sql } from "./drizzle/core.js"
+import { folded } from "./folded.js"
 import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
 import { bound, type ColumnMap } from "./query-filter.js"
@@ -163,7 +164,14 @@ export const answeredChatPk = (context: StoreContext, accountKey: number, chatId
   return Number(
     orm
       .insert(chats)
-      .values({ accountId: accountKey, externalId: chatId, ...like, createdAt: now(), updatedAt: now() })
+      .values({
+        accountId: accountKey,
+        externalId: chatId,
+        ...like,
+        titleFolded: folded(like.title),
+        createdAt: now(),
+        updatedAt: now(),
+      })
       .returning({ pk: chats.id })
       .get()?.pk,
   )
@@ -186,6 +194,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       parentChatId: parent,
       scope: chat.scope ?? null,
       title: chat.title ?? null,
+      titleFolded: folded(chat.title),
       unreadCount: chat.unreadCount ?? null,
       lastMessageAt: toMs(chat.lastMessageAt),
       participantsCount: chat.participantsCount ?? null,
@@ -201,7 +210,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
         kind: sql`excluded.kind`,
         ...(chat.parentChatId === undefined ? {} : { parentChatId: sql`excluded.parent_chat_id` }),
         scope: sql`coalesce(excluded.scope, ${chats.scope})`,
-        ...(chat.title === undefined ? {} : { title: sql`excluded.title` }),
+        ...(chat.title === undefined ? {} : { title: sql`excluded.title`, titleFolded: sql`excluded.title_folded` }),
         ...(chat.unreadCount === undefined
           ? {}
           : { unreadCount: sql`excluded.unread_count`, unreadCountedAt: sql`excluded.unread_counted_at` }),
@@ -567,9 +576,12 @@ export const metadata = (context: StoreContext, key: AccountKey, chatId: string)
 export const saveMetadata = (context: StoreContext, key: AccountKey, entry: Omit<ChatMetadata, "fetchedAt">) => {
   revisedBy(context, "details", () =>
     context.database
-      .prepare("UPDATE chats SET title=?, username=?, description=?, details_fetched_at=?, updated_at=? WHERE id=?")
+      .prepare(
+        "UPDATE chats SET title=?, title_folded=?, username=?, description=?, details_fetched_at=?, updated_at=? WHERE id=?",
+      )
       .run(
         entry.title,
+        folded(entry.title),
         entry.username,
         entry.description,
         context.now(),

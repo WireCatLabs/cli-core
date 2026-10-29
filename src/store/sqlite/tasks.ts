@@ -92,10 +92,10 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     return Number(
       database
         .prepare(
-          "INSERT INTO projects (key, name, description, type, account_id, scope, tasks_count, status, created_at, updated_at) " +
-            "VALUES (?, ?, ?, 'personal', ?, 'personal', 0, 'active', ?, ?) RETURNING id",
+          "INSERT INTO projects (key, name, name_folded, description, type, account_id, scope, tasks_count, status, created_at, updated_at) " +
+            "VALUES (?, ?, ?, ?, 'personal', ?, 'personal', 0, 'active', ?, ?) RETURNING id",
         )
-        .get(key, account, `What waits on the owner in ${account}`, accountId, at, at)?.id,
+        .get(key, account, folded(account), `What waits on the owner in ${account}`, accountId, at, at)?.id,
     )
   }
   // A task made here has no package id and may be a type the package does not know; the package never sees it.

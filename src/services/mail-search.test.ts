@@ -231,7 +231,11 @@ describe("search mail over the mail tables", () => {
           flagged: true,
           mailboxes: [{ externalId: "Label_1", name: "Projects", kind: "label" }],
         }),
-        email("<five@example.com>", { read: true, flagged: false }),
+        email("<five@example.com>", {
+          read: true,
+          flagged: false,
+          mailboxes: [{ externalId: "Label_2", name: "Счета", kind: "label" }],
+        }),
       ],
     })
     const sorted = async (text: string) => (await found(store, text)).sort()
@@ -246,6 +250,7 @@ describe("search mail over the mail tables", () => {
     ])
     expect(await sorted("label:projects")).toEqual(["<four@example.com>"])
     expect(await sorted("label:Label_1")).toEqual(["<four@example.com>"])
+    expect(await sorted("label:СЧЕТА")).toEqual(["<five@example.com>"])
     await expect(search(store, "is:important")).rejects.toThrow("is takes unread, read, starred")
 
     const TG: AccountKey = { provider: "tg", account: "1" }
