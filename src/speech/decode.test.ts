@@ -22,6 +22,22 @@ describe("decoding audio for the model", () => {
     expect(seconds(await decodeAudio(bytes, refusing))).toBeCloseTo(1, 0)
   })
 
+  it("**hands raw AAC to ffmpeg**, though its frames start like MP3's", async () => {
+    const ffmpeg = vi.fn(async () => ({ samples: new Float32Array(SAMPLE_RATE), rate: SAMPLE_RATE }))
+
+    expect(formatOf(fixture("tone.aac"))).toBe("other")
+    expect(seconds(await decodeAudio(fixture("tone.aac"), ffmpeg))).toBe(1)
+  })
+
+  it("**tries ffmpeg when a bundled decoder cannot read the file**, and keeps that decoder's error without it", async () => {
+    const broken = fixture("tone.ogg").subarray(0, 200)
+    const ffmpeg = vi.fn(async () => ({ samples: new Float32Array(SAMPLE_RATE), rate: SAMPLE_RATE }))
+
+    expect(formatOf(broken)).toBe("opus")
+    expect(seconds(await decodeAudio(broken, ffmpeg))).toBe(1)
+    await expect(decodeAudio(broken, refusing)).rejects.toThrow("complete mono or stereo Ogg Opus")
+  })
+
   it("**hands an iPhone recording (MP4) to ffmpeg**, and anything else it cannot name", async () => {
     const mp4 = new Uint8Array([0, 0, 0, 0x20, ...Buffer.from("ftypM4A ")])
     const ffmpeg = vi.fn(async () => ({ samples: new Float32Array(SAMPLE_RATE), rate: SAMPLE_RATE }))

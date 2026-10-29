@@ -22,9 +22,11 @@ shape of this file.
 - **`messages transcribe` hears an audio file someone sent, not only a voice note** — an iPhone recording reaches
   WhatsApp as an `audio/mp4` file. MP3, FLAC and Ogg Vorbis are read by small bundled decoders (`mpg123-decoder`,
   `@wasm-audio-decoders/flac`, `@wasm-audio-decoders/ogg-vorbis`, MIT); AAC/M4A and other formats by the machine's
-  own `ffmpeg`, when it has one, limited to audio formats and local files. No decoder for AAC is bundled: the small
+  own `ffmpeg`, when it has one, limited to audio formats and local files — and so is a file a bundled decoder fails on. No decoder for AAC is bundled: the small
   ones are GPL. Audio longer than an hour is refused. A transcript kept for an audio file shows in lists and is
   found by `transcript:`; `--transcribe` on a list still hears only voice notes, so it never transcribes music.
+  Where the messenger is asked first (`auto`), the local model takes over only when the messenger refuses the account,
+  so a messenger that rejects an audio file for another reason needs `--local`.
 
 ## 0.479.0 — 29.10.2026
 

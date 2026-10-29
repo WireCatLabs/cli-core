@@ -39,7 +39,9 @@ export const formatOf = (bytes: Uint8Array): Format => {
     return "other"
   }
   if (text(bytes, 0, 4) === "fLaC") return "flac"
-  if (text(bytes, 0, 3) === "ID3" || (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0)) return "mp3"
+  // ADTS AAC shares MPEG's frame sync; its layer bits are 00, which MPEG audio reserves.
+  const frame = bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0 && (((bytes[1] ?? 0) >> 1) & 3) !== 0
+  if (text(bytes, 0, 3) === "ID3" || frame) return "mp3"
   return "other"
 }
 
@@ -142,7 +144,7 @@ export const runFfmpeg: Ffmpeg = async (bytes) => {
         else reject(new CliError("validation_error", `ffmpeg could not read the audio: ${errors.trim() || code}`))
       })
     })
-    const samples = new Float32Array(output.length / 4)
+    const samples = new Float32Array(Math.floor(output.length / 4))
     Buffer.from(samples.buffer).set(output.subarray(0, samples.length * 4))
     return { samples, rate: SAMPLE_RATE }
   } finally {
@@ -150,19 +152,27 @@ export const runFfmpeg: Ffmpeg = async (bytes) => {
   }
 }
 
-/** Opus, Vorbis, FLAC and MP3 by the bundled decoders; anything else by ffmpeg, when the machine has it. */
+const BUNDLED: Record<Exclude<Format, "other">, (bytes: Uint8Array) => Promise<Pcm>> = {
+  opus: decodeOgg,
+  vorbis: decodeVorbis,
+  flac: decodeFlac,
+  mp3: decodeMp3,
+}
+
+/**
+ * Opus, Vorbis, FLAC and MP3 by the bundled decoders; anything else, or what one of them could not read, by ffmpeg
+ * when the machine has it. The bundled decoder's error wins: it names the file's own problem.
+ */
 export const decodeAudio = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmpeg): Promise<Pcm> => {
   const format = formatOf(bytes)
   const pcm =
-    format === "opus"
-      ? await decodeOgg(bytes)
-      : format === "vorbis"
-        ? await decodeVorbis(bytes)
-        : format === "flac"
-          ? await decodeFlac(bytes)
-          : format === "mp3"
-            ? await decodeMp3(bytes)
-            : await ffmpeg(bytes)
+    format === "other"
+      ? await ffmpeg(bytes)
+      : await BUNDLED[format](bytes).catch((error: unknown) =>
+          ffmpeg(bytes).catch(() => {
+            throw error
+          }),
+        )
   if (pcm.samples.length / pcm.rate > LONGEST_AUDIO_SECONDS)
     throw new CliError("validation_error", `the audio is longer than ${LONGEST_AUDIO_SECONDS / 60} minutes`)
   return pcm
