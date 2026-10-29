@@ -11,9 +11,8 @@ shape of this file.
 
 - **Help no longer puts a profile into an example that has `--profiles`**: `<cli> mcp serve --profiles
   work,personal` was shown as `<cli> personal mcp serve --profiles work,personal`, which `mcp serve` refuses ("name
-  one profile or --profiles, not both"). `mcp serve`'s help also shows `<cli> mcp serve --profiles all`. After an
-  upgrade, the restart of an `mcp server start` server of several profiles suggests `mcp server status|start` with
-  the `--profiles` it was started with, not without.
+  one profile or --profiles, not both"). After an upgrade, the restart of an `mcp server start` server of several
+  profiles suggests `mcp server status|start` with the `--profiles` it was started with, not without.
 
 ## 0.473.0 — 29.10.2026
 
