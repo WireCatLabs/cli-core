@@ -1384,6 +1384,45 @@ describe("the shared read commands", () => {
     ])
   })
 
+  it("**lists who reacted** by cursor, refuses where the list is hidden, and stays off a messenger without it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const reactor = {
+      person: { id: "91", name: "Ana", username: null },
+      reaction: "🔥",
+      reactedAt: "2026-10-08T09:00:00.000Z",
+    }
+    const asked: unknown[] = []
+    let hidden = false
+    const reacting: MessengerAdapter = {
+      ...fake,
+      reactors: async (_chatId, _messageId, window) => {
+        asked.push(window)
+        if (hidden) throw new CliError("permission_error", "the chat hides it", { reason: "reactions.list-hidden" })
+        return { items: [reactor], hasMore: true, cursor: "next" }
+      },
+    }
+    const list = (...extra: string[]) =>
+      call(["reactions", "list", "Book", "3", ...extra], async () => reacting, env, {}, { reactionsList: true })
+
+    const listed = await list("reaction:🔥", "--limit", "1", "--cursor", "first", "--json")
+    hidden = true
+    const refused = await list("--json")
+    const unlisted = await call(["reactions", "list", "Book", "3"], async () => reacting, env)
+
+    const body = JSON.parse(listed.stdout[0] ?? "")
+    expect(body.items).toEqual([
+      { person: { id: "91", name: "Ana", username: null }, reaction: "🔥", reacted_at: reactor.reactedAt },
+    ])
+    expect(v.safeParse(ENTITIES.reaction, body.items[0]).success).toBe(true)
+    expect(body.page).toMatchObject({ mode: "cursor", has_more: true, next_cursor: "next" })
+    expect(body.next[0].args).toMatchObject({ chat: "Book", message: "3", query: "reaction:🔥", cursor: "next" })
+    expect(asked[0]).toEqual({ limit: 1, emoji: "🔥", cursor: "first" })
+    expect(refused.code).toBe(5)
+    expect(refused.stderr.join("\n")).toContain("reactions.list-hidden")
+    expect(unlisted.code).not.toBe(0)
+  })
+
   it("**messages list never marks the chat read and refuses --mark-read**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

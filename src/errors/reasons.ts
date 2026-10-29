@@ -107,6 +107,8 @@ const OTHERS: Entry[] = [
   validation("tag-review.required", "the tag needs the owner's review first"),
   ["tag-review.stale", "configuration_error", "the tag review changed meanwhile"],
   validation("tag.invalid", "the tag is not valid"),
+  ["reactions.list-hidden", "permission_error", "the chat does not let its members see who reacted"],
+  ["reactions.broadcast", "permission_error", "a channel does not show who reacted to its posts"],
   validation("task.category-unknown", "the category is not in the task category list"),
   validation("task.claimed", "someone else holds the task"),
   validation("task.closed", "the task is already closed"),

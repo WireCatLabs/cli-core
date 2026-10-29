@@ -344,6 +344,14 @@ export interface PersonReaction {
   reactedAt: string
 }
 
+/** One person's reaction to a message, as `reactions list` gives it. */
+export interface Reactor {
+  person: Member
+  reaction: string
+  /** ISO 8601. */
+  reactedAt: string
+}
+
 /** The message a reply answers or a forward carries. */
 export interface QuotedMessage {
   id: Id

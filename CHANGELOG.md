@@ -16,6 +16,11 @@ shape of this file.
   message without it keeps the stored one. The terminal shows `👤 name · phone`. Additive: `minCompatible` stays 34.
   What an adapter does: set `contact` on the attachment instead of putting a masked phone in `title`.
 - **`--hide-phone`** on `account show`, `account update` and `contacts show`: the answer without the phone number.
+- **`reactions list <chat> <message> [reaction:<emoji>] [--limit <n>] [--cursor <cursor>]`** (read) shows who reacted
+  to a message, newest first, as `{ person: { id, name, username }, reaction, reacted_at }` rows paged by cursor. A
+  messenger turns it on with `Messenger.reactionsList` and `MessageReactions.reactors`; where the chat hides the list
+  it refuses with `reactions.list-hidden` (or `reactions.broadcast` for a channel) instead of answering with none. The
+  permission key is `reactions.list`. New entity `reaction`, new type `Reactor`.
 
 ### Changed — may break callers
 
