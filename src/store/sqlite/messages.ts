@@ -9,6 +9,7 @@ import type {
   PollVote,
   Provider,
   Reactions,
+  Reactor,
 } from "../../domain/models.js"
 import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
@@ -525,6 +526,28 @@ export const derivedReactions = ({ database }: StoreContext, chatKey: number, me
     total: sorted.reduce((sum, [, { count }]) => sum + count, 0),
   }
 }
+
+export const reactors = ({ database }: StoreContext, chatKey: number, messageId: Id): Reactor[] =>
+  (
+    database
+      .prepare(
+        `SELECT i.external_id AS id, i.name, i.username, r.reaction, r.reacted_at AS reactedAt
+         FROM message_reactions r JOIN identities i ON i.id = r.identity_id
+         WHERE r.chat_id = ? AND r.message_external_id = ? AND r.reaction IS NOT NULL
+         ORDER BY r.reacted_at DESC, r.id DESC`,
+      )
+      .all(chatKey, messageId) as {
+      id: string
+      name: string | null
+      username: string | null
+      reaction: string
+      reactedAt: number
+    }[]
+  ).map(({ id, name, username, reaction, reactedAt }) => ({
+    person: { id, name, username },
+    reaction,
+    reactedAt: new Date(reactedAt).toISOString(),
+  }))
 
 /** A reaction older than the one held for that person is dropped, and so is any reaction to a deleted message. */
 export const saveReaction = (

@@ -99,6 +99,29 @@ describe("people's reactions in the store", () => {
     })
   })
 
+  it("lists each person's newest reaction, newest first, without the ones taken back", async () => {
+    const { store, react } = await setUp()
+
+    await react(by("9", "👍", 1))
+    await react(by("10", "❤️", 2))
+    await react(by("11", "🔥", 3))
+    await react(by("9", "😮", 4))
+    await react(by("10", null, 5))
+    await react(by("11", "🔥", 3))
+
+    expect(await store.messages.reactors(owner, "7", "40")).toEqual([
+      { person: { id: "9", name: "Olga", username: null }, reaction: "😮", reactedAt: "2026-10-01T10:04:00.000Z" },
+      { person: { id: "11", name: null, username: null }, reaction: "🔥", reactedAt: "2026-10-01T10:03:00.000Z" },
+    ])
+  })
+
+  it("lists nobody for a message or chat the store holds no reactions for", async () => {
+    const { store } = await setUp()
+
+    expect(await store.messages.reactors(owner, "7", "41")).toEqual([])
+    expect(await store.messages.reactors(owner, "8", "40")).toEqual([])
+  })
+
   it("a reaction to a message not stored yet shows once the message arrives", async () => {
     const { store, react, totals } = await setUp([])
 

@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`StoredMessages.reactors(chatId, messageId)`** gives an adapter the reactions the store holds for a message, so a
+  messenger that sends reactions one person at a time (WhatsApp) can implement `MessageReactions.reactors` from the
+  store. One `Reactor` per person (`person`, `reaction`, `reactedAt`), newest first; a person's newest reaction wins
+  and one they took back is not listed. It covers only what the store received. No schema change, store version stays 37.
+
 ## 0.478.0 — 29.10.2026
 
 ### Fixed

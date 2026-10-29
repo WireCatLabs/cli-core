@@ -7,6 +7,7 @@ import type {
   PersonReaction,
   PollVote,
   Reactions,
+  Reactor,
   WindowedMessage,
 } from "../domain/models.js"
 import { keysOver } from "./keys.js"
@@ -121,6 +122,8 @@ export interface AccountMessages {
   saveVote(key: AccountKey, chatId: Id, messageId: Id, vote: PollVote): Promise<void>
   /** Each voter's newest vote in the poll a message carries, newest first. */
   pollVotes(key: AccountKey, chatId: Id, messageId: Id): Promise<PollVote[]>
+  /** Each person's newest reaction to a message, newest first; a person who took theirs back is not listed. */
+  reactors(key: AccountKey, chatId: Id, messageId: Id): Promise<Reactor[]>
   /** One person's stored messages per chat of this account, newest first. */
   senderStats(key: AccountKey, senderId: Id): Promise<SenderChatStats[]>
   /** What a voice message said, when it was heard before, and by what. */
@@ -272,6 +275,11 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
     pollVotes: async (key, chatId, messageId) => {
       const chatKey = chatKeyOf(key, chatId)
       return chatKey === undefined ? [] : messageWrites.pollVotes(context, chatKey, messageId)
+    },
+
+    reactors: async (key, chatId, messageId) => {
+      const chatKey = chatKeyOf(key, chatId)
+      return chatKey === undefined ? [] : messageWrites.reactors(context, chatKey, messageId)
     },
 
     senderStats: async (key, senderId) => {
