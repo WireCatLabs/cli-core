@@ -214,14 +214,25 @@ export const syncMail = async (
     for (;;) {
       plan.asked = 0
       plan.remaining = 0
-      rounds.push(
-        await syncRound(
-          source,
-          store,
-          { ...options, index: undefined, max: options.max ?? Number.POSITIVE_INFINITY },
-          plan,
-        ),
-      )
+      try {
+        rounds.push(
+          await syncRound(
+            source,
+            store,
+            { ...options, index: undefined, max: options.max ?? Number.POSITIVE_INFINITY },
+            plan,
+          ),
+        )
+      } catch (error) {
+        // A request cut at the deadline, or failed after the budget was spent, is the run's end, not its failure: what
+        // earlier rounds saved is kept and the next run goes on. While the budget has room the error is real.
+        const transient = error instanceof CliError && (error.code === "timeout" || error.code === "network_error")
+        const stop = transient && rounds.length > 0 ? budget.take() : null
+        if (stop === null) throw error
+        plan.stopped = stop
+        plan.remaining = Math.max(plan.remaining, 1)
+        return
+      }
       if (plan.stopped !== null || plan.remaining === 0) return
     }
   }

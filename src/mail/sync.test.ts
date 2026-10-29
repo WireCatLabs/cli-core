@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it } from "vitest"
 import { runBudget } from "../background/budget.js"
 import { formatLocator } from "../domain/locator.js"
@@ -674,6 +675,36 @@ describe("syncMail with a request budget", () => {
       (await (await store(env)).sync.syncState(KEY, resumeKey("[Gmail]/All Mail")))?.value ?? "{}",
     )
     expect(point.done).not.toContainEqual([105, 105])
+  })
+
+  it("ends a run whose request failed after the budget was spent as partial, keeping the earlier rounds", async () => {
+    const { env } = setup(twelve, { listBatch: 5, fetchBatch: 5 })
+    const inner = sourceOf(env)
+    let lists = 0
+    const source: MailSource = {
+      ...inner,
+      list: async (...args) => {
+        if (++lists === 2) throw new CliError("timeout", "the mail server did not answer in time")
+        return inner.list(...args)
+      },
+    }
+
+    const result = await syncMail(source, await store(env), {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({ requests: 4 }),
+    })
+
+    expect(result).toMatchObject({ saved: 5, state: "partial", stopped: "requests" })
+    expect(await emails(env)).toHaveLength(5)
+    const roomLeft = syncMail(source, await store(env), {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({ requests: 100 }),
+    })
+    await expect(roomLeft).resolves.toMatchObject({ saved: 7, complete: true })
   })
 
   it("does not let a failed message hide behind the resume point", async () => {
