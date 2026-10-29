@@ -1,5 +1,5 @@
 import type { Message } from "../../domain/models.js"
-import { type Hearing, hearVoices, isVoice, openKept, spoken, withTranscript } from "../../speech/hearing.js"
+import { type Hearing, hasAudio, hearVoices, openKept, spoken, withTranscript } from "../../speech/hearing.js"
 import { choose } from "../../speech/transcribe.js"
 import type { Messenger, MessengerContext, ReadConnection } from "./context.js"
 
@@ -25,7 +25,7 @@ export const hearForCommand = async (
   model?: string,
   connect?: ReadConnection,
 ): Promise<Hearing | undefined> => {
-  if (!messages.some(isVoice)) return undefined
+  if (!messages.some(hasAudio)) return undefined
   const offline = context.settings.offline
   if (transcribe && offline) context.renderer.note("--offline: only voice messages heard before show their text")
   const kept = await openKept(messenger, context.profile, context.env)

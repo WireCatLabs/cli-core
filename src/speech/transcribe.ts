@@ -3,6 +3,7 @@ import type { Messenger } from "../cli/messenger/context.js"
 import { fromFile, type Settings } from "../cli/settings.js"
 import { capability, type MessengerAdapter, type RemoteFile, type Transcript } from "../ports/messenger.js"
 import { typedCommand } from "../runs/scope.js"
+import type { Ffmpeg } from "./decode.js"
 import { installedBytes, isInstalled, megabytes, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { orderedModels, type SpeechModel, speechModel } from "./models.js"
 import type { Recognizer } from "./recognize.js"
@@ -19,7 +20,7 @@ export interface Heard extends Transcript {
   model?: string
 }
 
-/** A voice message is read into memory whole; minutes of Opus are a few megabytes. */
+/** A recording is read into memory whole; minutes of Opus are a few megabytes. */
 const LARGEST_VOICE = 32 * 1024 * 1024
 
 export type OpenRecognizer = (model: SpeechModel, path: (name: string) => string, vadModel: string) => Recognizer
@@ -31,7 +32,12 @@ export interface Choice {
   directory: string
   /** The local recognizer, where a test hands one in. */
   open?: OpenRecognizer
+  ffmpeg?: Ffmpeg
 }
+
+/** A voice note, or an audio file someone sent — an iPhone recording reaches WhatsApp as `audio/mp4`. */
+export const isAudioFile = ({ kind, mime }: { kind: string; mime?: string | undefined }): boolean =>
+  kind === "voice" || kind === "audio" || (mime?.startsWith("audio/") ?? false)
 
 /** The flag, then the profile's `transcribeWith` and `speechModel`, then `auto` and the CLI's first model. */
 export const choose = (
@@ -87,8 +93,8 @@ export const hearOnline = async (
   }
   if (!isInstalled(choice.model, choice.directory)) throw notDownloaded(messenger, choice.model)
   const { files } = await capability(connection, "download", "download attachments")(chat, messageId)
-  const voice = files.find((file) => file.kind === "voice" || file.mime === "audio/ogg")
-  if (!voice) throw new CliError("validation_error", "that message is not a voice message")
+  const voice = files.find(isAudioFile)
+  if (!voice) throw new CliError("validation_error", "that message has no voice message or audio file")
   const bytes = await readAll(voice)
   await read?.(voice)
   return bytes
@@ -98,10 +104,11 @@ export const hearOnline = async (
 export const hearLocally = async (
   bytes: Uint8Array,
   messageId: string,
-  { model, directory, open }: Choice,
+  { model, directory, open, ffmpeg }: Choice,
 ): Promise<Heard> => {
-  const { decodeOgg, openRecognizer, toModelRate } = await import("./recognize.js")
-  const { samples, rate } = await decodeOgg(bytes)
+  const { openRecognizer, toModelRate } = await import("./recognize.js")
+  const { decodeAudio } = await import("./decode.js")
+  const { samples, rate } = await decodeAudio(bytes, ffmpeg)
   const recognizer = (open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory))
   try {
     return {

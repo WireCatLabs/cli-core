@@ -155,7 +155,7 @@ export const resetAttachmentWords = (database: CacheDatabase): number => {
            extraction_error = NULL, extracted_at = t.heard_at, updated_at = t.updated_at
          FROM message_transcripts t
          WHERE attachments.attachable_type = 'message' AND attachments.attachable_id = t.message_id
-           AND (attachments.kind = 'voice' OR attachments.mime = 'audio/ogg')
+           AND (attachments.kind IN ('voice', 'audio') OR attachments.mime LIKE 'audio/%')
            AND coalesce(attachments.text, '') = '' AND coalesce(attachments.extraction, '') <> 'agent'`,
       )
       .run()

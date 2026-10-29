@@ -21,6 +21,16 @@
   −26 dB and keeps it at 0.3; −25 is the middle of that band (measured 2026-09-30). Quieter than −27 dB,
   0.3 loses part of it too.
 
+## `tone.mp3`, `tone.flac`, `tone.vorbis.ogg`
+
+`tone.ogg` in the other formats the bundled decoders read, for `src/speech/decode.test.ts`:
+
+```sh
+ffmpeg -i tone.ogg -ac 1 -c:a libmp3lame -b:a 32k -map_metadata -1 tone.mp3
+ffmpeg -i tone.ogg -ac 1 -ar 16000 -c:a flac -map_metadata -1 tone.flac
+ffmpeg -i tone.ogg -ac 1 -c:a libvorbis -q:a 0 -map_metadata -1 tone.vorbis.ogg
+```
+
 ## `silero_vad.onnx`
 
 The voice detector model the speech code downloads (`VAD` in `src/speech/models.ts`, same sha256), so

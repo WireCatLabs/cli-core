@@ -264,6 +264,16 @@ describe("hearing a voice message", () => {
     })
   })
 
+  it("**fetches an audio file someone sent**, not only a voice note", async () => {
+    const recording = { ...voice, kind: "audio", mime: "audio/mp4" }
+    const sent = {
+      transcribe: refusing,
+      download: async () => ({ files: [{ kind: "photo", bytes: async function* () {} }, recording], skipped: [] }),
+    } as unknown as MessengerAdapter
+
+    expect(await hearOnline(messenger, sent, "7", "5", choice())).toEqual(tone)
+  })
+
   it("never asks the messenger with --local, and never falls back when told to use the messenger", async () => {
     let asked = false
     const counting = adapter(async () => {
