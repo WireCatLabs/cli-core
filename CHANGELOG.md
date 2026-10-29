@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.482.0 — 29.10.2026
+
 ### Changed — may break callers
 
 - **gcal joins the WireCat tools list.** Every CLI's first screen (`--help`) shows `gcal` under "Works with", and
