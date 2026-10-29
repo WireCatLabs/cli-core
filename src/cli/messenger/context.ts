@@ -174,6 +174,8 @@ export interface Messenger extends ServiceMessenger {
   pollQuiz?: boolean
   /** How many seconds after sending a poll may close by itself — `polls create --close-time`; none when unset. */
   pollCloseSeconds?: readonly [min: number, max: number]
+  /** Whether `reactions list` shows who reacted to a message; no when unset. */
+  reactionsList?: boolean
   /** Whether `polls voters` lists who voted for what; no when unset. */
   pollVoters?: boolean
   /** Whether a poll can be closed — `polls close`; yes when unset. WhatsApp's stay open. */

@@ -1324,6 +1324,7 @@ const samples: Record<EntityName, unknown> = {
   poll_change: { operation_id: "op-1", poll },
   message_write: { operation_id: "op-1", message },
   message_send: { operation_id: "op-1", chat_id: "7", saved: true },
+  reaction: { person: { id: "9", name: null, username: null }, reaction: "🔥", reacted_at: at },
   poll_vote: { person_id: "9", name: null, username: null, answers: ["0"], voted_at: at },
   topic: {
     id: "3",
@@ -1522,6 +1523,7 @@ const renamed: Partial<Record<EntityName, [from: string, to: string]>> = {
   chat_event: ["time", "timestamp"],
   invite_link: ["expires_at", "expire_time"],
   join_request: ["requested_at", "requestedAt"],
+  reaction: ["reacted_at", "reactedAt"],
   poll_vote: ["voted_at", "votedAt"],
   topic: ["unread_count", "unreadCount"],
   folder: ["chat_ids", "chatIds"],

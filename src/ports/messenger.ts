@@ -42,6 +42,7 @@ import type {
   PrivacySettings,
   ProfileFacts,
   ProviderMetadata,
+  Reactor,
   SenderIdentity,
   Sticker,
   StickerSet,
@@ -274,6 +275,15 @@ export interface MessageStars {
 export interface MessageReactions {
   /** The owner's reaction on one message: an emoji replaces the one there was, `null` takes it off. */
   react(chatId: Id, messageId: Id, emoji: string | null): Promise<void>
+  /**
+   * Who reacted, newest first; `emoji` keeps one reaction, `cursor` is the last page's. Refuses with a
+   * `reactions.*` reason where the messenger hides the list, rather than answering with none.
+   */
+  reactors?(
+    chatId: Id,
+    messageId: Id,
+    window: { limit: number; emoji?: string; cursor?: string },
+  ): Promise<Page<Reactor> & { cursor?: string }>
 }
 
 export interface ReadState {

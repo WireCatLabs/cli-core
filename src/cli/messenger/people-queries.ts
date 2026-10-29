@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Predicate, type QueryRegistry, queryError, queryFieldsOf } from "@wirecat/cli-base/query"
-import { contact, pollVote } from "../../entities/index.js"
+import { contact, pollVote, reaction } from "../../entities/index.js"
 import { levelFor } from "../../sends/permissions.js"
 
 const notesText = (node: Predicate) => {
@@ -41,4 +41,11 @@ export const VOTERS_QUERY: QueryRegistry = {
   entity: "poll_vote",
   backend: "native",
   fields: queryFieldsOf(pollVote, { native: ["answers"], examples: { answers: "answers:0" } }),
+}
+
+/** Telegram keeps the people who chose one reaction; one emoji at a time. */
+export const REACTORS_QUERY: QueryRegistry = {
+  entity: "reaction",
+  backend: "native",
+  fields: queryFieldsOf(reaction, { native: ["reaction"], examples: { reaction: "reaction:🔥" } }),
 }

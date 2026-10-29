@@ -18,6 +18,7 @@ import type {
   PersonCard,
   PersonProfile,
   PollVote,
+  Reactor,
   Topic,
 } from "../../domain/models.js"
 import { formatReference } from "../../domain/references.js"
@@ -31,6 +32,7 @@ import type {
   joinRequest as joinRequestSchema,
   member as memberSchema,
   pollVote as pollVoteSchema,
+  reaction as reactionSchema,
   topic as topicSchema,
 } from "../../entities/index.js"
 import type { ChatDocument } from "../../services/chat-documents.js"
@@ -239,6 +241,12 @@ export const pollVoteAnswer = (vote: PollVote): Out<typeof pollVoteSchema> => ({
   username: vote.person.username,
   answers: vote.answers,
   voted_at: vote.votedAt,
+})
+
+export const reactorAnswer = (reactor: Reactor): Out<typeof reactionSchema> => ({
+  person: { id: reactor.person.id, name: reactor.person.name, username: reactor.person.username },
+  reaction: reactor.reaction,
+  reacted_at: reactor.reactedAt,
 })
 
 export const topicAnswer = (topic: Topic): Out<typeof topicSchema> =>

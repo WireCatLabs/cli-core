@@ -3670,6 +3670,20 @@
     "reactions add": {
       "in": "all"
     },
+    "reactions list": {
+      "in": ["tg"],
+      "reason": "max-cli and whatsapp-cli do not list who reacted to a message",
+      "options": {
+        "--cursor": {
+          "in": ["tg"],
+          "reason": "max-cli and whatsapp-cli do not list who reacted to a message"
+        },
+        "--limit": {
+          "in": ["tg"],
+          "reason": "max-cli and whatsapp-cli do not list who reacted to a message"
+        }
+      }
+    },
     "reactions remove": {
       "in": "all"
     },
