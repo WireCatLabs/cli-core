@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.477.0 — 29.10.2026
+
 ### Added
 
 - **A shared contact card is an attachment with a `contact` field** (store version 36). `Attachment.contact`
