@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.475.0 — 29.10.2026
+
 ### Fixed
 
 - **`events list` matches all-day events by their dates** (WC-TIME-5). An all-day event is stored as midnight in its
