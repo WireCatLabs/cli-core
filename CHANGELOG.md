@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.473.0 — 29.10.2026
+
 ### Added
 
 - **`syncMail` takes a `budget` and answers `partial`** (WC-LIFE-16 for mail). With a `RunBudget` it reads the window in
