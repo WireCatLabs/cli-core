@@ -5,6 +5,7 @@ import {
   fieldsHelp,
   parseLucene,
   type QueryNode,
+  type QueryRegistry,
   queryError,
   validateQuery,
   walkQuery,
@@ -74,9 +75,11 @@ const FIELD_SPECS: readonly FieldSpec[] = [
 ]
 const fieldsFor = (report: StatisticsQuery) => FIELD_SPECS.filter(({ name }) => FIELDS[report].includes(name))
 
-export const withStatisticsQuery = (command: Command, report: StatisticsQuery): Command => {
-  const extra = fieldsFor(report)
-  const query = defineQuery({
+const registries = new Map<StatisticsQuery, QueryRegistry>()
+const registryOf = (report: StatisticsQuery): QueryRegistry => {
+  const known = registries.get(report)
+  if (known) return known
+  const registry = defineQuery({
     entity: report.endsWith("top") ? "ranking" : "admin_report",
     backend: "sql",
     fields: [
@@ -84,9 +87,16 @@ export const withStatisticsQuery = (command: Command, report: StatisticsQuery): 
         ...field,
         example: field.name === "text" ? "text:invoice" : field.name === "topic" ? "topic:42" : field.example,
       })),
-      ...extra,
+      ...fieldsFor(report),
     ],
   })
+  registries.set(report, registry)
+  return registry
+}
+
+export const withStatisticsQuery = (command: Command, report: StatisticsQuery): Command => {
+  const extra = fieldsFor(report)
+  const query = registryOf(report)
   annotate(command, { query })
   command.addHelpText(
     "after",

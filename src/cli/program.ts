@@ -106,14 +106,15 @@ export interface ProgramOptions {
   err?: (text: string) => void
 }
 
+// An MCP server builds the tree on every tool call; the contracts of one definition's tree do not change between builds.
+const contractsChecked = new WeakSet<ProgramDefinition>()
+
 /**
  * The command tree, built fresh on each call. Commander is global state by default —
  * `exitOverride` and the write hooks turn it into a value a test can drive.
  */
-export const createProgram = (
-  { app, commands, configure, firstScreen }: ProgramDefinition,
-  { out, err }: ProgramOptions = {},
-): Command => {
+export const createProgram = (definition: ProgramDefinition, { out, err }: ProgramOptions = {}): Command => {
+  const { app, commands, configure, firstScreen } = definition
   const program = new Command()
   const mounted = commands()
   const messenger = app.messenger !== false
@@ -161,7 +162,10 @@ export const createProgram = (
 
   for (const command of mounted) program.addCommand(command)
   configure?.(program)
-  assertSharedContracts(program)
+  if (!contractsChecked.has(definition)) {
+    assertSharedContracts(program)
+    contractsChecked.add(definition)
+  }
   installHelp(program, { pitch: app.description, ...firstScreen })
 
   // Commander builds a usage line from the command tree, where the profile is not a word.

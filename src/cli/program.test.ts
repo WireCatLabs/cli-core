@@ -9,6 +9,7 @@ import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
 import { writesInFlight } from "../sends/guarded.js"
 import { baseContext, environmentOf, runBudgetOf } from "./context.js"
+import { sharedCommandTemplate } from "./contract-templates.js"
 import * as cli from "./index.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -1242,5 +1243,27 @@ describe("a CLI's own command", () => {
   it("**keeps its typed command line on success** through the exported runContextOf, secrets hidden", async () => {
     expect(await recordedArgv(true)).toEqual(["notes", "add", "Fake typed note", "--token=[redacted]"])
     expect(await recordedArgv(false)).toEqual(["notes", "add", "[redacted]", "--token=[redacted]"])
+  })
+})
+
+describe("the shared command contracts", () => {
+  const changedSearch = () => sharedCommandTemplate(app, "search").option("--undocumented", "a silent change")
+
+  it("are checked once per definition, and again for a new one", () => {
+    let broken = false
+    const once: ProgramDefinition = {
+      app,
+      commands: () => [broken ? changedSearch() : sharedCommandTemplate(app, "search")],
+    }
+    createProgram(once)
+    broken = true
+    expect(() => createProgram(once)).not.toThrow()
+    expect(() => createProgram({ ...once })).toThrow("without an explicit override")
+  })
+
+  it("keep refusing a definition that failed them", () => {
+    const failing: ProgramDefinition = { app, commands: () => [changedSearch()] }
+    expect(() => createProgram(failing)).toThrow("without an explicit override")
+    expect(() => createProgram(failing)).toThrow("without an explicit override")
   })
 })

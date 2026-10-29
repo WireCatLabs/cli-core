@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **An MCP server answers each tool call about 6 ms sooner in tg.** The command tree is still built fresh for every
+  call, because each call attaches its own hooks and options to it. Two checks that gave the same answer every time now
+  run once per process: the shared command contracts once per program definition, and each list's query fields once
+  (with `@wirecat/cli-base` 0.65.2, now the pinned version). A CLI that builds a new definition object still gets the
+  check for it.
+
 ## 0.482.0 — 29.10.2026
 
 ### Changed — may break callers
