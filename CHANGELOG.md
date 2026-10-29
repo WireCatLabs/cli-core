@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.476.0 — 29.10.2026
+
 ### Fixed
 
 - **A sign-in that cannot be read says why under `--debug` and in the run record.** `credentialStorage` threw
