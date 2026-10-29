@@ -129,6 +129,7 @@ const samples: Record<EntityName, unknown> = {
     ref: "project:1",
     key: "sample",
     name: "Sample",
+    kind: "project",
     type: "work",
     organization_id: null,
     scope: "work",

@@ -14,10 +14,12 @@ export const PROJECTS_QUERY: QueryRegistry = {
   entity: "project",
   backend: "sql",
   fields: queryFieldsOf(project, {
-    native: ["id", "key", "type", "organization_id", "scope", "created_at"],
+    native: ["id", "key", "name", "kind", "type", "organization_id", "scope", "created_at"],
     examples: {
       id: "id:1",
       key: "key:SMP",
+      name: "name:*tart*",
+      kind: "kind:inbox",
       type: "type:work",
       organization_id: "organization_id:1",
       scope: "scope:work",

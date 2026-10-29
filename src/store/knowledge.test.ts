@@ -264,3 +264,24 @@ it("filters knowledge lists in SQL before their 500-row bound", async () => {
   await f.store.knowledge.cancelReminder(key, reminder.id)
   expect(await f.store.knowledge.reminders(key, reminderQuery)).toEqual([])
 })
+
+it("filters projects by name with wildcards and keeps account task inboxes out unless kind is asked for", async () => {
+  const f = await fixture()
+  const real = await f.store.knowledge.addProject({ key: "STRT", name: "Smart start", type: "work", scope: "work" })
+  const list = async (text?: string) => {
+    const query = text === undefined ? undefined : parseLucene(text)
+    if (query) validateQuery(query, PROJECTS_QUERY)
+    return f.store.knowledge.projects(query)
+  }
+  expect(await list("name:*tart*")).toEqual([real])
+  expect(await list('name:"smart start"')).toEqual([real])
+  expect(await list("name:*nothing*")).toEqual([])
+  expect(real.kind).toBe("project")
+  expect(await list()).toEqual([real])
+  expect(await list("scope:personal")).toEqual([])
+  const inboxes = await list("kind:inbox")
+  expect(inboxes).toMatchObject([{ name: "telegram:500", kind: "inbox" }])
+  expect(await list("kind:project")).toEqual([real])
+  expect((await list("name:telegram*")).length).toBe(0)
+  expect(await list("name:telegram* AND kind:inbox")).toEqual(inboxes)
+})

@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { QueryAst } from "@wirecat/cli-base/query"
+import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
@@ -26,7 +26,7 @@ import {
   type TagKind,
   type TagRow,
 } from "./tags.js"
-import { TASK_KEY_PREFIXES } from "./task-keys.js"
+import { INBOX_KEY_LENGTH, TASK_KEY_PREFIXES } from "./task-keys.js"
 import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
 import { referenceOfThing, stateOfThing, storedThing, type Thing, type ThingState, thingOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -86,6 +86,8 @@ export interface Project {
   ref: string
   key: string
   name: string
+  /** `inbox`: the per-account project that holds an account's tasks; listed only when asked for. */
+  kind: "project" | "inbox"
   type: (typeof PROJECT_TYPES)[number]
   organizationId: string | null
   scope: (typeof SCOPES)[number]
@@ -371,6 +373,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     ref: `project:${row.id}`,
     key: String(row.key),
     name: String(row.name),
+    kind: String(row.key).length === INBOX_KEY_LENGTH ? "inbox" : "project",
     type: row.type as Project["type"],
     organizationId: row.organization_id == null ? null : String(row.organization_id),
     scope: row.scope as Project["scope"],
@@ -725,11 +728,14 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         return projectOf(row as Row)
       }),
     projects: async (query) => {
+      const asksKind = query !== undefined && walkQuery(query.root).some((node) => node.field === "kind")
       const where =
         query &&
         queryFilter(query, {
           id: { type: "kw", sql: "CAST(id AS TEXT)" },
           key: { type: "kw", sql: "key" },
+          name: { type: "kw", sql: "name" },
+          kind: { type: "enum", sql: `CASE WHEN length(key) = ${INBOX_KEY_LENGTH} THEN 'inbox' ELSE 'project' END` },
           type: { type: "enum", sql: "type" },
           organization_id: { type: "kw", sql: "CAST(organization_id AS TEXT)" },
           scope: { type: "enum", sql: "scope" },
@@ -737,7 +743,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         })
       return database
         .prepare(
-          `SELECT * FROM projects WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""} ORDER BY name, id LIMIT 500`,
+          `SELECT * FROM projects WHERE deleted_at IS NULL${asksKind ? "" : ` AND length(key) <> ${INBOX_KEY_LENGTH}`}${where ? ` AND (${where.sql})` : ""} ORDER BY name, id LIMIT 500`,
         )
         .all(...(where?.params ?? []))
         .map(projectOf)
