@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`sender_is_me` on `inbox`, `review`, `search messages` and `search all`**, as 0.473.0 promised. The catch-up
+  answers and the search hits are built field by field, not from `messageItem`, and left it out; only `messages list`
+  and the other `messageItem` answers had it. A `search all` hit carries it for a message or a mail, and the picture
+  lane's hits of `search messages` carry it too. Every answer applies the one rule: `outgoing`, or the sender id is
+  the reading account's own.
+
 ## 0.477.0 — 29.10.2026
 
 ### Added

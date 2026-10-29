@@ -49,16 +49,15 @@ export const catchUpQuery = (
 type Read = Message & { chatTitle?: string | null }
 
 const summaryOf = (message: Read, reader: AccountKey) => {
-  const { ref, chat_id, chat_title, timestamp, sender_name, outgoing, text, transcript, attachments } = messageItem(
-    message,
-    reader,
-  )
+  const { ref, chat_id, chat_title, timestamp, sender_name, sender_is_me, outgoing, text, transcript, attachments } =
+    messageItem(message, reader)
   return {
     ref,
     chat_id,
     chat_title,
     timestamp,
     sender_name,
+    sender_is_me,
     outgoing,
     text,
     ...(transcript === undefined ? {} : { transcript }),

@@ -1,7 +1,7 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import { parseLocator } from "../domain/locator.js"
-import type { MailFields } from "../domain/models.js"
+import { type MailFields, senderIsMe } from "../domain/models.js"
 import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
@@ -35,6 +35,8 @@ export interface SearchAllItem {
   text: string
   /** Who wrote it; `ref` is the `person:` reference where the store has one. A note has none. */
   from?: { name: string | null; ref: string | null }
+  /** A message's or a mail's: whether the owner wrote it. */
+  senderIsMe?: boolean
   /** A mail's people, labels and thread, as `search mail` gives them. */
   email?: MailFields
   /** Which search found it: words, meaning or both. */
@@ -195,6 +197,7 @@ export const searchAll = async (
         from: hit.email?.from
           ? { name: hit.email.from.name ?? hit.email.from.address, ref: hit.email.from.ref }
           : { name: hit.senderName, ref: null },
+        senderIsMe: senderIsMe(hit, at.account),
         ...(hit.email ? { email: hit.email } : {}),
         foundBy,
       }

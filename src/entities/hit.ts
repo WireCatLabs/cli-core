@@ -15,6 +15,8 @@ export const hit = v.strictObject({
   timestamp: v.nullable(time),
   excerpt: text,
   sender_name: v.optional(v.nullable(text)),
+  /** A message's or a mail's: whether the owner wrote it. */
+  sender_is_me: v.optional(v.boolean()),
   /** The writer's `person:` reference, where the store has one. */
   sender_ref: v.optional(v.nullable(reference)),
   found_by: v.optional(v.array(v.picklist(["title", "words", "meaning"]))),

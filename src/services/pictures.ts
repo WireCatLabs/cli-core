@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../domain/locator.js"
-import type { Id } from "../domain/models.js"
+import { type Id, senderIsMe } from "../domain/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import {
   DEFAULT_IMAGE_MODEL,
@@ -41,6 +41,7 @@ export interface PictureHit {
   messageId: Id
   timestamp: string
   senderName: string | null
+  senderIsMe: boolean
   score: number
 }
 
@@ -268,6 +269,7 @@ export const picturesService = (deps: ServiceDeps) => {
                 messageId,
                 timestamp: message.timestamp,
                 senderName: message.senderName,
+                senderIsMe: senderIsMe(message, account.account),
                 score: Number(score.toFixed(4)),
               },
             ]
