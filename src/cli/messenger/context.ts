@@ -52,9 +52,8 @@ export interface StoredMessages {
   wroteTo(personId: Id): Promise<boolean>
   /** Each voter's newest vote in the poll the message carries, newest first; a retracted vote has no answers. */
   pollVotes(chatId: Id, messageId: Id): Promise<PollVote[]>
-  /** Each person's newest reaction the store received for the message, newest first; a taken-back one is not listed.
-   *  Optional so an adapter that builds its own `StoredMessages` still compiles. */
-  reactors?(chatId: Id, messageId: Id): Promise<Reactor[]>
+  /** Each person's newest reaction the store received for the message, newest first; a taken-back one is not listed. */
+  reactors(chatId: Id, messageId: Id): Promise<Reactor[]>
 }
 
 /** `listen` opens a connection that receives updates — only `watch` asks; the rest stay quiet. */
