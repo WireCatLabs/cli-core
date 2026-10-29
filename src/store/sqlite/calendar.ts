@@ -723,14 +723,20 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       const params: (string | number)[] = []
       const entries = (extra: string) =>
         `EXISTS (SELECT 1 FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id WHERE ce.event_id = e.id AND ${extra})`
-      if (filter.from !== undefined) {
-        clauses.push("coalesce(e.ends_at, e.starts_at + 1) > ?")
-        params.push(filter.from)
+      const dated = (column: string, date: string | undefined, instant: string, at: number | undefined) => {
+        if (at === undefined) return
+        if (date === undefined) {
+          clauses.push(instant)
+          params.push(at)
+          return
+        }
+        clauses.push(
+          `(CASE WHEN e.all_day = 1 THEN EXISTS (SELECT 1 FROM calendar_entries ce WHERE ce.event_id = e.id AND ce.${column}) ELSE ${instant} END)`,
+        )
+        params.push(date, at)
       }
-      if (filter.to !== undefined) {
-        clauses.push("e.starts_at < ?")
-        params.push(filter.to)
-      }
+      dated("end_date > ?", filter.fromDate, "coalesce(e.ends_at, e.starts_at + 1) > ?", filter.from)
+      dated("start_date < ?", filter.toDate, "e.starts_at < ?", filter.to)
       if (filter.calendarId !== undefined) {
         clauses.push(entries("ce.calendar_id = ?"))
         params.push(filter.calendarId)

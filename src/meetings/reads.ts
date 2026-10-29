@@ -49,7 +49,14 @@ export const meetingShow = async (store: MeetingStore, id: number, accountId?: n
     throw new MeetingError("not_found", "meeting not found")
   return details
 }
-export const listed = <T>(items: T[]) => ({ items, page: 1, limit: items.length, hasMore: false })
+export const listed = <T>(
+  items: T[],
+  page: { limit: number; hasMore: boolean } = { limit: items.length, hasMore: false },
+) => ({
+  items,
+  page: 1,
+  ...page,
+})
 export const meetingPeople = async (
   store: MeetingStore & Partial<MeetingParticipantSearchStore>,
   query: string,

@@ -446,8 +446,14 @@ export const memoryEventStore = (): EventStore => {
         .filter(
           (event) =>
             event.deletedAt === null &&
-            (filter.from === undefined || (event.endsAt ?? (event.startsAt ?? 0) + 1) > filter.from) &&
-            (filter.to === undefined || (event.startsAt !== null && event.startsAt < filter.to)) &&
+            (filter.from === undefined ||
+              (event.allDay && filter.fromDate !== undefined
+                ? has(event, (one) => (one.endDate ?? "") > (filter.fromDate ?? ""))
+                : (event.endsAt ?? (event.startsAt ?? 0) + 1) > filter.from)) &&
+            (filter.to === undefined ||
+              (event.allDay && filter.toDate !== undefined
+                ? has(event, (one) => one.startDate !== null && one.startDate < (filter.toDate ?? ""))
+                : event.startsAt !== null && event.startsAt < filter.to)) &&
             (filter.calendarId === undefined || has(event, (one) => one.calendarId === filter.calendarId)) &&
             (filter.accountId === undefined ||
               has(event, (one) => calendarOf(one.calendarId).accountId === filter.accountId)) &&

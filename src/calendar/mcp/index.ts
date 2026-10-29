@@ -272,24 +272,27 @@ export const callCalendarTool = async (
         break
       case "events_list": {
         const words = typeof args.words === "string" ? args.words.trim().split(/\s+/u) : []
+        const limit = (args.limit as number | undefined) ?? 100
         const lists = await Promise.all(
-          accounts.map(
-            async (accountId) =>
-              (
-                await eventsAnswer(
-                  store,
-                  await eventsFilter(words, {
-                    store,
-                    accountId,
-                    zone: (args.timezone as string | undefined) ?? "UTC",
-                    now,
-                  }).then((filter) => filter && { ...filter, limit: (args.limit as number | undefined) ?? 100 }),
-                )
-              ).items,
+          accounts.map(async (accountId) =>
+            eventsAnswer(
+              store,
+              await eventsFilter(words, {
+                store,
+                accountId,
+                zone: (args.timezone as string | undefined) ?? "UTC",
+                now,
+              }).then((filter) => filter && { ...filter, limit }),
+            ),
           ),
         )
-        const items = lists.flat().sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""))
-        answer = listed(items.slice(0, (args.limit as number | undefined) ?? 100))
+        const items = lists
+          .flatMap((one) => one.items)
+          .sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""))
+        answer = listed(items.slice(0, limit), {
+          limit,
+          hasMore: items.length > limit || lists.some((one) => one.hasMore),
+        })
         break
       }
       case "event_show":

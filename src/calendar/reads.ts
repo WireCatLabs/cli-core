@@ -117,6 +117,8 @@ export const eventsFilter = async (
       })
   }
   if (!timed) filter.from = day(today)
+  if (filter.from !== undefined) filter.fromDate = localDate(filter.from, context.zone)
+  if (filter.to !== undefined) filter.toDate = plusDays(localDate(filter.to - 1, context.zone), 1)
   return filter
 }
 
@@ -200,6 +202,18 @@ export const eventAnswer = async (details: EventDetails, personOf?: PersonOfEmai
   })),
 })
 
+const EVENTS_COUNTED = 1000
+
+/** One page of events, and whether another follows; probed with one row, since a store reads at most 1000. */
+const page = async (store: EventStore, filter: EventFilter) => {
+  const rows = await store.events(filter)
+  const limit = filter.limit ?? 100
+  const hasMore =
+    rows.length === limit &&
+    (await store.events({ ...filter, offset: (filter.offset ?? 0) + limit, limit: 1 })).length > 0
+  return { rows, limit, hasMore }
+}
+
 /** One event's attendees, or everyone attending the events of the filter, with how many of them each attends. */
 export const peopleAnswer = async (
   store: EventStore,
@@ -210,7 +224,8 @@ export const peopleAnswer = async (
     return listed(await attendees((await eventOf(store, accountId, options.event)).participants, options.personOf))
   const counted = new Map<string, { participant: StoredParticipant; events: number }>()
   const mine = await calendarIds(store, accountId)
-  for (const event of await store.events({ ...options.filter, accountId, limit: 1000 })) {
+  const { rows, hasMore } = await page(store, { ...options.filter, accountId, limit: EVENTS_COUNTED })
+  for (const event of rows) {
     const details = await store.event(event.id)
     const seen = new Set<string>()
     for (const one of details ? ownCopies(details, mine).participants : []) {
@@ -225,11 +240,12 @@ export const peopleAnswer = async (
     [...counted.values()].map(({ participant }) => participant),
     options.personOf,
   )
-  return listed(
+  const answer = listed(
     people
       .map((one) => ({ ...one, events: counted.get(one.email)?.events ?? 0 }))
       .sort((a, b) => b.events - a.events || a.email.localeCompare(b.email)),
   )
+  return hasMore ? { ...answer, meta: { complete: true, truncated: true } } : answer
 }
 
 /** Open link choices, with each candidate event's title and time so the owner can pick. */
@@ -271,5 +287,8 @@ export const resolveAnswer = async (store: EventStore, review: string, choice: s
   }
 }
 
-export const eventsAnswer = async (store: EventStore, filter: EventFilter | null) =>
-  listed(filter === null ? [] : (await store.events(filter)).map(eventItem))
+export const eventsAnswer = async (store: EventStore, filter: EventFilter | null) => {
+  if (filter === null) return listed([])
+  const { rows, limit, hasMore } = await page(store, filter)
+  return listed(rows.map(eventItem), { limit, hasMore })
+}
