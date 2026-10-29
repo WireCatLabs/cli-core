@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A sign-in that cannot be read says why under `--debug` and in the run record.** `credentialStorage` threw
+  `configuration_error` (`oauth.not-saved`, "could not reach the saved sign-in") and dropped the keyring's own error,
+  so a locked keyring, a missing Secret Service and an unreachable D-Bus looked the same. The keyring's message is now
+  the error's `cause`: `--debug` and `runs show` print it, the JSON answer still does not. A secret the keyring echoes
+  back on a failed write is masked first.
+
 ## 0.475.0 — 29.10.2026
 
 ### Fixed
