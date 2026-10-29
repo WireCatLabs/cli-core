@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.478.0 — 29.10.2026
+
 ### Fixed
 
 - **`sender_is_me` on `inbox`, `review`, `search messages` and `search all`**, as 0.473.0 promised. The catch-up
