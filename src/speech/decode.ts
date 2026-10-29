@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { CliError } from "@wirecat/cli-base"
 import { decodeOgg, SAMPLE_RATE } from "./recognize.js"
 
@@ -51,8 +53,17 @@ const firstChannel = (decoded: { channelData: Float32Array[]; samplesDecoded: nu
   return { samples, rate: decoded.sampleRate }
 }
 
+/**
+ * Found from cli-core's own place and imported by URL, so a CLI's bundler leaves the decoder whole: bundled, it looks
+ * for its worker file beside the bundle, where there is none.
+ */
+const load = <T>(name: string): Promise<T> =>
+  import(pathToFileURL(createRequire(import.meta.url).resolve(name)).href) as Promise<T>
+
 const decodeVorbis = async (bytes: Uint8Array): Promise<Pcm> => {
-  const { OggVorbisDecoder } = await import("@wasm-audio-decoders/ogg-vorbis")
+  const { OggVorbisDecoder } = await load<typeof import("@wasm-audio-decoders/ogg-vorbis")>(
+    "@wasm-audio-decoders/ogg-vorbis",
+  )
   const decoder = new OggVorbisDecoder()
   await decoder.ready
   try {
@@ -63,7 +74,7 @@ const decodeVorbis = async (bytes: Uint8Array): Promise<Pcm> => {
 }
 
 const decodeFlac = async (bytes: Uint8Array): Promise<Pcm> => {
-  const { FLACDecoder } = await import("@wasm-audio-decoders/flac")
+  const { FLACDecoder } = await load<typeof import("@wasm-audio-decoders/flac")>("@wasm-audio-decoders/flac")
   const decoder = new FLACDecoder()
   await decoder.ready
   try {
@@ -74,7 +85,7 @@ const decodeFlac = async (bytes: Uint8Array): Promise<Pcm> => {
 }
 
 const decodeMp3 = async (bytes: Uint8Array): Promise<Pcm> => {
-  const { MPEGDecoder } = await import("mpg123-decoder")
+  const { MPEGDecoder } = await load<typeof import("mpg123-decoder")>("mpg123-decoder")
   const decoder = new MPEGDecoder()
   await decoder.ready
   try {
