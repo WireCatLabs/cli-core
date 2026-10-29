@@ -70,6 +70,7 @@ sets it, higher or lower, and past it the command fails with `timeout`.
 |---|---|---|
 | one-shot | 30 s (`DEFAULT_COMMAND_MS`) | a command that hangs must fail |
 | `cooperative`, at a terminal or in a script | 5 min (`DEFAULT_COOPERATIVE_MS`) | it stops on its own before the deadline and keeps its work |
+| `cooperative` and `partial` (a resumable sync), at a terminal or in a script | 15 min (`DEFAULT_SYNC_MS`) | it spends a request budget, answers `partial` with `next` and loses nothing when it stops |
 | `cooperative`, run for an MCP agent | 45 s (`DEFAULT_AGENT_COOPERATIVE_MS`) | MCP clients cut a tool call at about 60 s: the MCP TypeScript SDK's `DEFAULT_REQUEST_TIMEOUT_MSEC` is 60000 |
 
 **The budget formula.** `requests = floor((deadline − margin) / requestMs)`, at least 1, where

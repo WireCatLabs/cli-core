@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { extractText, importEngine } from "../attachments/extract.js"
+import type { BudgetStop, RunBudget } from "../background/budget.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { AccountKey, AttachmentInput, EmailAddress, MessageStore } from "../store/index.js"
 import { BULK, bulkBox } from "./bulk.js"
@@ -55,6 +56,14 @@ export interface MailSyncResult {
   deleted: number
   /** False when `max` stopped the run before every new message was read; the next run continues. */
   complete: boolean
+  /** `partial`: a budgeted run stopped before the whole window was read; the next run goes on. */
+  state?: "partial" | "complete"
+  /** Why a budgeted run stopped early: its request budget, its deadline, or a cancel. */
+  stopped?: BudgetStop
+  /** Messages of the window this run did not get to read; a budgeted run only. */
+  remaining?: number
+  /** Requests a budgeted run spent. */
+  requests?: number
   /** Emails that could not be read or parsed; they are tried again next run. */
   unreadable?: { message: string; reason: string }[]
   /** Why stored messages missing at the source were left alone, when they were. */
@@ -146,9 +155,129 @@ export interface MailSyncOptions {
   index?: (store: MessageStore, key: AccountKey) => Promise<MailIndexed>
   /** Stops between batches of emails, after saving the resume point. */
   signal?: AbortSignal
+  /**
+   * Makes the run budgeted: it reads the window in rounds, one request of the budget per call to the source, saves
+   * after each, stops when the budget says so and answers `state: "partial"`. A message the source could not give
+   * is tried once more at the end of the run and, if it still fails, left for the next one. `max` defaults to no limit.
+   */
+  budget?: RunBudget
 }
 
+/** What a budgeted run carries from one round to the next. */
+interface Plan {
+  budget: RunBudget
+  /** UIDs a round already asked for, `folder\0uid`: a failing message is not asked for again in the same pass. */
+  tried: Set<string>
+  /** Messages the source could not give; asked for once more when the pass is over. */
+  failed: Set<string>
+  /** Only these are asked for: the retry pass. */
+  only?: Set<string>
+  searches: Map<string, Searched>
+  /** Each folder's mode, fixed in the first round: `resumed` asks for what is not done, `full` for everything. */
+  modes: Map<string, "resumed" | "full">
+  unreadable: Map<string, string>
+  /** UIDs the source did not return at all, as the keys of `failed`. */
+  unlisted: Set<string>
+  stopped: BudgetStop | null
+  /** Messages in the window not asked for yet, after the round. */
+  remaining: number
+  /** Messages the round asked the source for. */
+  asked: number
+}
+
+const LIST_SLICE = 200
+const FETCH_SLICE = 50
+const keyOf = (folder: string, uid: string) => `${folder}\0${uid}`
+
 export const syncMail = async (
+  source: MailSource,
+  store: MessageStore,
+  options: MailSyncOptions,
+): Promise<MailSyncResult> => {
+  const { budget, index } = options
+  if (budget === undefined || options.retryAttachments || options.account.mode === "mbox")
+    return syncRound(source, store, options)
+  const plan: Plan = {
+    budget,
+    tried: new Set(),
+    failed: new Set(),
+    searches: new Map(),
+    modes: new Map(),
+    unreadable: new Map(),
+    unlisted: new Set(),
+    stopped: null,
+    remaining: 0,
+    asked: 0,
+  }
+  const rounds: MailSyncResult[] = []
+  const goOn = async () => {
+    for (;;) {
+      plan.asked = 0
+      plan.remaining = 0
+      rounds.push(
+        await syncRound(
+          source,
+          store,
+          { ...options, index: undefined, max: options.max ?? Number.POSITIVE_INFINITY },
+          plan,
+        ),
+      )
+      if (plan.stopped !== null || plan.remaining === 0) return
+    }
+  }
+  await goOn()
+  const remaining = plan.remaining
+  // A message the server failed on once is often fine a minute later; only one more try, then the next run.
+  if (plan.stopped === null && plan.failed.size > 0) {
+    plan.only = new Set(plan.failed)
+    plan.failed.clear()
+    plan.tried.clear()
+    await goOn()
+  }
+  const last = rounds.at(-1) as MailSyncResult
+  const sum = (pick: (round: MailSyncResult) => number) => rounds.reduce((total, round) => total + pick(round), 0)
+  const unreadable = [
+    ...[...plan.unreadable].map(([message, reason]) => ({ message, reason })),
+    ...[...plan.unlisted].map((key) => ({
+      message: `uid:${key.replace("\0", ":")}`,
+      reason: "the server did not return it",
+    })),
+  ]
+  const complete = last.complete && plan.stopped === null && unreadable.length === 0 && remaining === 0
+  const account: AccountKey = { provider: "email", account: options.account.address.toLowerCase() }
+  const indexed = plan.stopped === null ? await index?.(store, account) : undefined
+  const deletionsSkipped = rounds.map((round) => round.deletionsSkipped).findLast((text) => text !== undefined)
+  const { unreadable: _unreadable, ...rest } = last
+  return {
+    ...rest,
+    listed: sum((round) => round.listed),
+    saved: sum((round) => round.saved),
+    alreadyStored: sum((round) => round.alreadyStored),
+    skipped: sum((round) => round.skipped),
+    envelopes: sum((round) => round.envelopes),
+    deleted: sum((round) => round.deleted),
+    complete,
+    state: complete ? "complete" : "partial",
+    remaining,
+    requests: budget.used,
+    ...(plan.stopped === null ? {} : { stopped: plan.stopped }),
+    ...(indexed === undefined ? {} : { indexed }),
+    ...(unreadable.length ? { unreadable } : {}),
+    ...(deletionsSkipped === undefined ? {} : { deletionsSkipped }),
+    ...(rounds.some((round) => round.pass === "resumed") ? { pass: "resumed" as const } : {}),
+    ...(rounds.some((round) => round.attachments)
+      ? { attachments: rounds.flatMap((round) => round.attachments ?? []) }
+      : {}),
+    ...(rounds.some((round) => round.tagsReused)
+      ? { tagsReused: rounds.flatMap((round) => round.tagsReused ?? []) }
+      : {}),
+    ...(rounds.some((round) => round.tagsSkipped)
+      ? { tagsSkipped: rounds.flatMap((round) => round.tagsSkipped ?? []) }
+      : {}),
+  }
+}
+
+const syncRound = async (
   source: MailSource,
   store: MessageStore,
   {
@@ -166,6 +295,7 @@ export const syncMail = async (
     index,
     signal,
   }: MailSyncOptions,
+  plan?: Plan,
 ): Promise<MailSyncResult> => {
   if (retryAttachments)
     return retryUnread({
@@ -206,9 +336,23 @@ export const syncMail = async (
     const point = fresh ? undefined : parsePoint<MboxPoint>((await store.sync.syncState(key, MBOX_RESUME))?.value)
     if (point?.complete && point.size === mboxStamp.size && point.mtimeMs === mboxStamp.mtimeMs) mboxPoint = point
   }
+  let capped = false
   for (const folder of folders) {
     if (mboxPoint !== undefined) break
-    const searched = source.search === undefined || snapshot ? undefined : await source.search(since, folder)
+    let searched: Searched | undefined
+    if (source.search !== undefined && !snapshot) {
+      searched = plan?.searches.get(folder)
+      if (searched === undefined) {
+        const stop = plan?.budget.take()
+        if (plan && stop) {
+          plan.stopped = stop
+          capped = true
+          continue
+        }
+        searched = await source.search(since, folder)
+        plan?.searches.set(folder, searched)
+      }
+    }
     let wanted = searched
     if (searched !== undefined) {
       searches.set(folder, searched)
@@ -217,20 +361,60 @@ export const syncMail = async (
       const point = fresh ? undefined : kept
       if (point !== undefined && point.validity === searched.validity && point.rules === ruleSet) {
         earlier.set(folder, point)
+        const mode = plan?.modes.get(folder)
+        const usable =
+          Date.parse(point.full.since) <= since.getTime() && startedAt - Date.parse(point.full.at) < FULL_PASS_MS
+        // A budgeted run goes on with an unfinished pass however small its window is: listing it whole again would
+        // ask for the same newest messages every run.
+        const unfinished = plan !== undefined && searched.uids.some((uid) => !within(point.done, Number(uid)))
         if (
-          searched.uids.length >= resumeFrom &&
-          Date.parse(point.full.since) <= since.getTime() &&
-          startedAt - Date.parse(point.full.at) < FULL_PASS_MS
+          mode === "resumed" ||
+          (mode === undefined && usable && (searched.uids.length >= resumeFrom || unfinished))
         ) {
           resumed.add(folder)
           wanted = { ...searched, uids: searched.uids.filter((uid) => !within(point.done, Number(uid))) }
         }
       }
+      if (plan !== undefined) {
+        plan.modes.set(folder, resumed.has(folder) ? "resumed" : "full")
+        const open = (wanted as Searched).uids.filter((uid) =>
+          plan.only
+            ? plan.only.has(keyOf(folder, uid)) && !plan.tried.has(keyOf(folder, uid))
+            : !plan.tried.has(keyOf(folder, uid)),
+        )
+        const slice = [...open].sort((a, b) => Number(b) - Number(a)).slice(0, source.listBatch ?? LIST_SLICE)
+        plan.remaining += open.length - slice.length
+        wanted = { ...searched, uids: slice }
+        if (open.length > slice.length) capped = true
+      }
+    }
+    if (plan !== undefined && wanted !== undefined && wanted.uids.length === 0) continue
+    if (plan !== undefined) {
+      const stop = plan.budget.take()
+      if (stop) {
+        plan.stopped = stop
+        capped = true
+        plan.remaining += (wanted as Searched).uids.length
+        continue
+      }
+      for (const uid of (wanted as Searched).uids) plan.tried.add(keyOf(folder, uid))
+      plan.asked += (wanted as Searched).uids.length
     }
     const found = await source.list(since, folder, {
       headers: rules.length > 0,
       ...(wanted === undefined ? {} : { searched: wanted }),
     })
+    if (plan !== undefined && wanted !== undefined) {
+      const got = new Set(found.map(({ uid }) => uid))
+      for (const uid of wanted.uids) {
+        const key = keyOf(folder, uid)
+        if (got.has(uid)) plan.unlisted.delete(key)
+        else {
+          plan.failed.add(key)
+          plan.unlisted.add(key)
+        }
+      }
+    }
     // Spreading a whole mailbox into push() overflows the stack past ~120,000 emails.
     for (const item of found) collected.push(item)
   }
@@ -264,6 +448,8 @@ export const syncMail = async (
   let deleted = 0
   let skipped: string | undefined
   if (snapshot) skipped = "an mbox file is a snapshot; mail missing from it is not proven deleted"
+  else if (plan !== undefined && (capped || plan.tried.size > plan.asked || plan.only !== undefined))
+    skipped = "this run read the window in parts; a run that lists all of it at once checks deletions"
   else if (resumed.size > 0)
     skipped =
       "this run listed only mail not read before; a full listing, at least daily or with --rescan, checks deletions"
@@ -481,13 +667,32 @@ export const syncMail = async (
     await tagStored(item)
     await saveNow()
   }
-  for (let start = 0; start < pending.length; start += FETCH_CHUNK) {
+  const fetchChunk = plan === undefined ? FETCH_CHUNK : (source.fetchBatch ?? FETCH_SLICE)
+  for (let start = 0; start < pending.length; start += fetchChunk) {
     await stopIfAborted()
-    const chunk = pending.slice(start, start + FETCH_CHUNK)
-    const raws = await source.fetchRaw(chunk)
+    const chunk = pending.slice(start, start + fetchChunk)
+    if (plan !== undefined) {
+      const stop = plan.budget.take()
+      if (stop) {
+        plan.stopped = stop
+        full = true
+        break
+      }
+    }
+    let raws: (Uint8Array | Error)[]
+    try {
+      raws = await source.fetchRaw(chunk)
+    } catch (error) {
+      // What this run saved stays saved: the next one goes on from it.
+      await saveNow(true)
+      throw error
+    }
     await stopIfAborted()
     // Every email of a chunk failing is the connection or the login, not the mail: stop instead of trying the rest.
-    if (chunk.length > 1 && raws.every((raw) => raw instanceof Error)) throw raws[0]
+    if (chunk.length > 1 && raws.every((raw) => raw instanceof Error)) {
+      await saveNow(true)
+      throw raws[0]
+    }
     for (const [index, item] of chunk.entries()) {
       let mail: ParsedMail
       try {
@@ -495,9 +700,15 @@ export const syncMail = async (
         if (raw === undefined || raw instanceof Error) throw raw ?? new Error("not read")
         mail = await parseMail(raw, maxBodyChars)
       } catch (error) {
-        unreadable.push({ message: item.messageId, reason: error instanceof Error ? error.message : String(error) })
+        const reason = error instanceof Error ? error.message : String(error)
+        unreadable.push({ message: item.messageId, reason })
+        if (plan !== undefined) {
+          plan.unreadable.set(item.messageId, reason)
+          plan.failed.add(keyOf(item.folder ?? (folders[0] as string), item.uid))
+        }
         continue
       }
+      plan?.unreadable.delete(item.messageId)
       const header = mailHeadersOf(raws[index] as Uint8Array)
       const files = await readAttachments(
         mail,
@@ -564,7 +775,8 @@ export const syncMail = async (
       startedAt,
     )
 
-  const complete = !full && unreadable.length === 0
+  const incomplete = plan !== undefined && (capped || plan.stopped !== null || plan.failed.size > 0)
+  const complete = !full && !incomplete && unreadable.length === 0 && (plan?.unreadable.size ?? 0) === 0
   const bulk = new Map(
     listed.filter((item) => item.headers?.bulk).map((item) => [item.messageId, [bulkBox.externalId]]),
   )

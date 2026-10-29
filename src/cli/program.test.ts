@@ -356,7 +356,7 @@ describe("the deadline a command sees", () => {
     expect(seen).toEqual([60_000, 25])
   })
 
-  it("is 30 s for a one-shot command, 5 minutes for a cooperative one, 45 s for a cooperative one over MCP", async () => {
+  it("is 30 s for a one-shot command, 5 minutes for a cooperative one, 15 minutes for a cooperative sync, 45 s for a cooperative one over MCP", async () => {
     const deadlineOf = async (meta: CommandMeta, extra: Record<string, unknown> = {}, argv: string[] = []) => {
       let ms: number | undefined
       await run(
@@ -371,7 +371,9 @@ describe("the deadline a command sees", () => {
     const agent = { agent: { result: () => {}, failure: () => {} } }
     expect(await deadlineOf({})).toBe(30_000)
     expect(await deadlineOf({ cooperative: true })).toBe(300_000)
+    expect(await deadlineOf({ cooperative: true, partial: true })).toBe(900_000)
     expect(await deadlineOf({ cooperative: true }, agent)).toBe(45_000)
+    expect(await deadlineOf({ cooperative: true, partial: true }, agent)).toBe(45_000)
     expect(await deadlineOf({ cooperative: true }, agent, ["--timeout", "20s"])).toBe(20_000)
   })
 })

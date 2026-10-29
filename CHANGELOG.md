@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`syncMail` takes a `budget` and answers `partial`** (WC-LIFE-16 for mail). With a `RunBudget` it reads the window in
+  rounds of `source.listBatch` messages, spends one request per call to the source, saves its resume point after every
+  round (a 16,000-message folder now finishes over several runs, mid-folder progress included), asks once more at the
+  end of the run for a message the source could not give, and returns `state`, `stopped`, `remaining` and `requests`.
+  `MailSource` gains the optional `listBatch` and `fetchBatch`. Without a budget nothing changes except that a failed
+  chunk now saves the resume point before it throws.
+- **A failed run's record keeps the transport's code.** `runs show` has `error.cause_code` (`NoConnection`,
+  `ETIMEDOUT`, a server response code; plain codes only, never the server's text) when the error carries one.
+- **A cooperative command that declares `partial` is a sync and gets 15 minutes at a terminal** (`DEFAULT_SYNC_MS`);
+  other cooperative commands keep 5 minutes and MCP keeps 45 seconds. The calendar `sync` is one: it had 5 minutes.
+
 ## 0.472.0 — 28.10.2026
 
 ### Added

@@ -43,6 +43,13 @@ export interface FakeMailbox {
   moveFails?: boolean
   /** UIDs whose raw bytes cannot be read: `fetchRaw` answers an Error for each of them, and only for them. */
   unreadable?: string[]
+  /** UIDs that fail once, as a server's backend error does: `list` leaves each out, `fetchRaw` answers an Error. */
+  failOnce?: string[]
+  /** Calls the source answered, by kind, so a test counts a budget's requests. */
+  calls?: { search: number; list: number; fetchRaw: number }
+  /** What the source tells a budgeted sync about its batch sizes. */
+  listBatch?: number
+  fetchBatch?: number
   /** What the source was asked: the UIDs of each listing, and `msgid:<id>` for each `find`. */
   asked?: string[]
 }
@@ -120,16 +127,32 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
     }
   }
 
+  const failedOnce = new Set<string>()
+  const failsNow = (uid: string) => {
+    if (!mailbox.failOnce?.includes(uid) || failedOnce.has(uid)) return false
+    failedOnce.add(uid)
+    return true
+  }
+  const count = (kind: "search" | "list" | "fetchRaw") => {
+    if (mailbox.calls) mailbox.calls[kind] += 1
+  }
+
   return {
-    search,
+    ...(mailbox.listBatch === undefined ? {} : { listBatch: mailbox.listBatch }),
+    ...(mailbox.fetchBatch === undefined ? {} : { fetchBatch: mailbox.fetchBatch }),
+    search: async (since, folder) => {
+      count("search")
+      return search(since, folder)
+    },
 
     list: async (since, folder, options) => {
+      count("list")
       const { uids } = options?.searched ?? (await search(since, folder))
       if (uids.length > 0) mailbox.asked?.push(uids.join(","))
       if (options?.headers && mailbox.headersFail) throw failure("the header fetch was refused")
       const wanted = new Set(uids)
       return inFolder(folder)
-        .filter((m) => wanted.has(m.uid))
+        .filter((m) => wanted.has(m.uid) && !failsNow(m.uid))
         .map((m) => listingOf(m, options?.headers ?? false, folder))
     },
 
@@ -166,12 +189,15 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
         if (messageIds.includes(m.messageId)) m.labels = [...new Set([...(m.labels ?? []), ...labels])]
     },
 
-    fetchRaw: async (items) =>
-      items.map((item) => {
+    fetchRaw: async (items) => {
+      count("fetchRaw")
+      return items.map((item) => {
         const m = mailbox.messages.find((each) => each.uid === item.uid)
-        if (m === undefined || mailbox.unreadable?.includes(item.uid)) return failure(`email ${item.uid} was not read`)
+        if (m === undefined || mailbox.unreadable?.includes(item.uid) || failsNow(item.uid))
+          return failure(`email ${item.uid} was not read`)
         return rawOf(m)
-      }),
+      })
+    },
   }
 }
 

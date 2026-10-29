@@ -34,6 +34,13 @@ describe("redactText", () => {
 })
 
 describe("errorDetailOf", () => {
+  it("keeps the transport's own code, and only a plain code", () => {
+    const failed = new CliError("network_error", "cannot reach the server", { cause_code: "NoConnection" })
+    expect(errorDetailOf(failed).cause_code).toBe("NoConnection")
+    const quoted = new CliError("network_error", "x", { cause_code: "no such mailbox: Mom's tax" })
+    expect(errorDetailOf(quoted).cause_code).toBeUndefined()
+  })
+
   it("reports an MTProto refusal by its key and code", () => {
     const error = new CliError("rate_limited", "Telegram asks to wait 30 s before the next request", {
       provider_error: "FLOOD_WAIT",

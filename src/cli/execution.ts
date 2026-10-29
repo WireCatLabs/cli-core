@@ -7,6 +7,11 @@ export const DEFAULT_COMMAND_MS = 30_000
 /** A `cooperative` command stops on its own before its deadline and keeps its work, so it may run longer. */
 export const DEFAULT_COOPERATIVE_MS = 5 * 60_000
 /**
+ * A cooperative command that also declares `partial` is a resumable sync: it spends a request budget, answers
+ * `partial` with `next`, and loses nothing when it stops, so a terminal lets it run longer than other cooperative work.
+ */
+export const DEFAULT_SYNC_MS = 15 * 60_000
+/**
  * The same over MCP: clients cut a tool call at about 60 s (the MCP TypeScript SDK's `DEFAULT_REQUEST_TIMEOUT_MSEC`
  * is 60000), so the command answers well before that.
  */

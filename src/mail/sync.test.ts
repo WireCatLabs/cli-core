@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { runBudget } from "../background/budget.js"
 import { formatLocator } from "../domain/locator.js"
 import { type MessageStore, openStore } from "../store/index.js"
 import { type ResumePoint, resumeKey } from "./resume.js"
@@ -618,5 +619,70 @@ describe("syncMail attachments", () => {
     expect((await importInto(env)).deleted).toBe(1)
     expect((await s.mail.email(id, "9001"))?.attachments[0]?.text).toBeNull()
     expect(await s.knowledge.annotation(KEY, note.id)).toMatchObject({ targetState: "deleted", text: "Own analysis" })
+  })
+})
+
+describe("syncMail with a request budget", () => {
+  const twelve = Array.from({ length: 12 }, (_, i) => mail(i + 1))
+  const budgeted = async (env: NodeJS.ProcessEnv, requests: number | undefined, extra: Partial<MailSyncOptions> = {}) =>
+    syncMail(sourceOf(env), await store(env), {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget(requests === undefined ? {} : { requests }),
+      ...extra,
+    })
+
+  it("reads the window in slices, one request per call, and answers complete", async () => {
+    const calls = { search: 0, list: 0, fetchRaw: 0 }
+    const { env } = setup(twelve, { calls, listBatch: 5, fetchBatch: 5 })
+
+    const result = await budgeted(env, undefined)
+
+    expect(result).toMatchObject({ listed: 12, saved: 12, complete: true, state: "complete", remaining: 0 })
+    expect(calls).toEqual({ search: 1, list: 3, fetchRaw: 3 })
+    expect(result.requests).toBe(7)
+  })
+
+  it("stops when the budget is spent, keeps what it read, and the next run goes on from there", async () => {
+    const asked: string[] = []
+    const { env } = setup(twelve, { asked, listBatch: 5, fetchBatch: 5 })
+
+    const first = await budgeted(env, 3)
+    expect(first).toMatchObject({ saved: 5, complete: false, state: "partial", stopped: "requests", remaining: 7 })
+    expect(await emails(env)).toHaveLength(5)
+
+    asked.length = 0
+    const second = await budgeted(env, 3)
+    expect(second).toMatchObject({ saved: 5, state: "partial", pass: "resumed" })
+    expect(asked.join(",").split(",")).not.toContain("101")
+
+    const third = await budgeted(env, undefined)
+    expect(third).toMatchObject({ saved: 2, complete: true, state: "complete" })
+    expect(await emails(env)).toHaveLength(12)
+  })
+
+  it("asks again once for a message the server failed on, and counts what still fails", async () => {
+    const { env } = setup(twelve, { failOnce: ["103", "104"], unreadable: ["105"], listBatch: 6, fetchBatch: 6 })
+
+    const result = await budgeted(env, undefined)
+
+    expect(result.saved).toBe(11)
+    expect(result).toMatchObject({ complete: false, state: "partial" })
+    expect(result.unreadable).toEqual([{ message: "9005", reason: "email 105 was not read" }])
+    const point = JSON.parse(
+      (await (await store(env)).sync.syncState(KEY, resumeKey("[Gmail]/All Mail")))?.value ?? "{}",
+    )
+    expect(point.done).not.toContainEqual([105, 105])
+  })
+
+  it("does not let a failed message hide behind the resume point", async () => {
+    const { env, box } = setup(twelve, { unreadable: ["105"], listBatch: 20, fetchBatch: 20 })
+    await budgeted(env, undefined)
+    delete box.unreadable
+
+    const again = await budgeted(env, undefined)
+
+    expect(again).toMatchObject({ saved: 1, complete: true })
   })
 })
