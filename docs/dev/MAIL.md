@@ -36,14 +36,21 @@ else All Mail by its role), saves each new message with `store.mail.saveThread`,
 are any `unreadable`, `attachments`, `deletionsSkipped`, `tagsReused`, `tagsSkipped`, `indexed`). Every message is the
 account `{ provider: "email", account: <address, lower case> }`.
 
-- **Quick folders.** A folder whose `search` says `quick` is not listed with headers: the sync lists its UIDs not yet
-  done, reads the raw bytes of the newest `max` (a budgeted run: `fetchBatch` a round) and takes the id from the
-  Message-ID, so stored mail keeps its id and the same message in two folders is one email. Rules and the bulk
-  classification then run on the headers of those bytes; a skipped or envelope mail is read once and never stored in
-  full, and is done afterwards. A folder is quick only when no stored mail could be read twice: its resume point
-  matches the UIDVALIDITY and the rules, or the store holds none of its mail. After a new UIDVALIDITY, other rules or
-  `rescan` the folder is listed with headers, which recognises stored mail without reading it. A quick run never proves
-  a deletion and never refreshes the flags of mail it skips: `rescan` does both.
+- **Quick folders.** A folder whose `search` says `quick` is not listed with headers: the sync lists the UID, flags,
+  date and size of every message in the window, and reads the raw bytes of the newest `max` not done and not located
+  (a budgeted run: `fetchBatch` a round). It takes the id from the Message-ID, so stored mail keeps its id and the same
+  message in two folders is one email. Rules and the bulk classification then run on the headers of those bytes; a
+  skipped or envelope mail is read once and never stored in full, and is done afterwards.
+- **Locations.** For such a folder every stored email keeps where it is, in `email_locations` (folder, UIDVALIDITY,
+  UID; two folders, two rows), written in the same transaction as the email. The folder's resume point says from which
+  date on that holds (`located`). A folder is quick when its point matches the UIDVALIDITY and the rules and its
+  `located` covers the window, or when the store holds none of its mail. Otherwise (mail stored before locations
+  existed, a new UIDVALIDITY, other rules, `rescan`, a wider window) it is listed once with headers, which recognises
+  stored mail without reading it and records the locations, and the next run is quick. A new UIDVALIDITY drops the
+  folder's old locations. A quick run refreshes the flags of every located message the listing shows, and proves
+  deletions as a header listing does: located mail in the window (without its first two days) whose UID `search` no
+  longer lists leaves that folder, and is deleted when no other location of it is left and the run saw it nowhere. A run
+  that read the window in parts (a budget, a retry pass) or whose too large a share would go proves nothing.
 - **Rules.** A skip rule keeps a new message out; an envelope rule records its sender, date, size and labels and never
   its text; both come from `account.rules`, decided by `decide` over the facts of the listing (`factsOf`, which also
   works out a sender score when a rule asks).
@@ -75,7 +82,7 @@ All under the account, in `store.sync` (`syncState`, `setSyncState`):
 
 | Key | Holds |
 |---|---|
-| `mail_resume:<folder>` | a `ResumePoint`: the folder's UIDVALIDITY, the UID ranges done, the hash of the rules they were decided under, the widest full listing and its time, and the widest window ever listed. A later run lists only the UIDs not done, while the point's full listing is under a day old (`FULL_PASS_MS`) and the window is at least `resumeFrom` (5,000) UIDs; a new UIDVALIDITY, other rules or `rescan` list everything again |
+| `mail_resume:<folder>` | a `ResumePoint`: the folder's UIDVALIDITY, the UID ranges done, from when its mail is located (`located`), the hash of the rules they were decided under, the widest full listing and its time, and the widest window ever listed. A later run lists only the UIDs not done, while the point's full listing is under a day old (`FULL_PASS_MS`) and the window is at least `resumeFrom` (5,000) UIDs; a new UIDVALIDITY, other rules or `rescan` list everything again |
 | `mail_resume:mbox` | a `MboxPoint`: the file's size and modification time, and whether every message was read |
 | `mail_folder_scope` | the mode and folders of the last run; a change skips deletions once |
 | `mail_coverage` | the folders, window and whether the last run was complete |

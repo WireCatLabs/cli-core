@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-107 tables, 23 full-text indexes.
+108 tables, 23 full-text indexes.
 
 ## Conventions
 
@@ -781,6 +781,19 @@ Which mailboxes an email is in; Gmail puts one email in several.
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `PRIMARY KEY (email_id, mailbox_id)`, `INDEX (mailbox_id)`
+
+### `email_locations`
+
+Where an IMAP server holds an email: folder, UIDVALIDITY and UID. A sync that skips an email finds it here, to refresh its flags and to prove it deleted. An email in two folders has two rows.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `mailbox_id` | integer | not null | → `mailboxes.id` | the `mailboxe` it belongs to |
+| `uidvalidity` | text | not null |  |  |
+| `uid` | integer | not null |  |  |
+| `email_id` | integer | not null | → `emails.id` | the `email` it belongs to |
+
+*Keys and indexes:* `PRIMARY KEY (mailbox_id, uidvalidity, uid)`, `INDEX (email_id)`
 
 ### `email_words`
 

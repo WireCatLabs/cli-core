@@ -700,6 +700,17 @@ const NEW = {
       ],
       keys: ["PRIMARY KEY (email_id, mailbox_id)"],
     },
+    {
+      name: "email_locations",
+      doc: "Where an IMAP server holds an email: folder, UIDVALIDITY and UID. A sync that skips an email finds it here, to refresh its flags and to prove it deleted. An email in two folders has two rows.",
+      cols: [
+        fk("mailbox_id", "mailboxes", { notnull: true }),
+        c("uidvalidity", "text", { notnull: true }),
+        c("uid", "integer", { notnull: true }),
+        fk("email_id", "emails", { notnull: true }),
+      ],
+      keys: ["PRIMARY KEY (mailbox_id, uidvalidity, uid)", "INDEX (email_id)"],
+    },
     fts("email_words", "Word index over email subjects and bodies.", "normalized_text, scope"),
     fts("email_stems", "Stem index, the pair of email_words.", "stems, scope"),
     queue("email_index_pending", "emails"),

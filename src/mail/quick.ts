@@ -24,6 +24,8 @@ export interface QuickPlan {
 }
 
 export interface QuickRead {
+  /** Every message of the window the server listed, done or not: its flags refresh the stored mail. */
+  listing: Quick[]
   /** Messages read and identified, with their raw bytes so the save does not read them again. */
   read: { item: Listed; raw: Uint8Array }[]
   unreadable: { message: string; reason: string }[]
@@ -43,18 +45,19 @@ export const readQuick = async (
   done: Ranges,
   max: number,
   plan: QuickPlan | undefined,
+  located: ReadonlySet<string>,
 ): Promise<QuickRead> => {
-  const answer: QuickRead = { read: [], unreadable: [], capped: false }
+  const answer: QuickRead = { listing: [], read: [], unreadable: [], capped: false }
   let items = plan?.quick.get(folder)
   if (items === undefined) {
-    const asked = searched.uids.filter(
-      (uid) => !within(done, Number(uid)) && (plan?.only === undefined || plan.only.has(keyOf(folder, uid))),
-    )
+    // Mail whose location is known is listed for its flags only; it is never read again.
+    const asked = searched.uids.filter((uid) => plan?.only === undefined || plan.only.has(keyOf(folder, uid)))
+    const wanted = asked.filter((uid) => !within(done, Number(uid)) && !located.has(uid))
     if (asked.length > 0 && plan) {
       const stop = plan.budget.take()
       if (stop) {
         plan.stopped = stop
-        plan.remaining += asked.length
+        plan.remaining += wanted.length
         return { ...answer, capped: true }
       }
     }
@@ -62,15 +65,16 @@ export const readQuick = async (
     if (plan !== undefined) {
       plan.quick.set(folder, items)
       const got = new Set(items.map(({ uid }) => uid))
-      for (const uid of asked)
+      for (const uid of wanted)
         if (!got.has(uid)) {
           plan.failed.add(keyOf(folder, uid))
           plan.unlisted.add(keyOf(folder, uid))
         }
     }
   }
+  answer.listing = items
   const open = items
-    .filter(({ uid }) => !within(done, Number(uid)) && !plan?.tried.has(keyOf(folder, uid)))
+    .filter(({ uid }) => !within(done, Number(uid)) && !located.has(uid) && !plan?.tried.has(keyOf(folder, uid)))
     .sort((a, b) => Number(b.uid) - Number(a.uid))
   const slice = open.slice(0, plan === undefined ? max : (source.fetchBatch ?? FETCH_SLICE))
   if (plan !== undefined) plan.remaining += open.length - slice.length

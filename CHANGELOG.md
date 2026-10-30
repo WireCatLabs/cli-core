@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A quick mail sync proves deletions and refreshes flags again (store version 39).** The store keeps each email's
+  place on an IMAP server (`email_locations`: folder, UIDVALIDITY, UID), saved with the email, so a run that lists only
+  UIDs and flags can tell which stored mail the server dropped and which flags changed, without reading the mail. The
+  first run on mail stored before this lists the folder once with headers to record the places; after that the folder
+  is quick. A new UIDVALIDITY drops the folder's places. New `store.mail.folderEmails`, `setLocations` and
+  `forgetLocations`, and `locations` on `EmailInput`.
+
 ## 0.487.0 — 30.10.2026
 
 ### Added

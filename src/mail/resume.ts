@@ -22,6 +22,12 @@ export interface ResumePoint {
    * over: a timer's 30 days must never stand in for a mailbox read since 2004.
    */
   widest?: { since: string; total: number; at: string }
+  /**
+   * From this date on, every stored email of the folder has its UID in `email_locations`: a listing that gives UIDs
+   * and flags is enough to refresh flags and prove deletions. Absent after an engine that did not know locations
+   * wrote the point, and then one header listing records them.
+   */
+  located?: string
   /** What the latest run listed, whatever its window. */
   last?: { since: string; total: number; done: number; at: string }
   updatedAt: string

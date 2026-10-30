@@ -76,9 +76,9 @@ describe("syncMail over a quick listing", () => {
   })
 
   it("skips mail stored by an earlier run by its UID, and reads only the new one", async () => {
-    const { box, change, sync, reset } = harness([mail(1), mail(2)], { quick: false })
+    const { box, change, sync, reset } = harness([mail(1), mail(2)])
     await sync()
-    change({ quick: true, messages: [mail(1), mail(2), mail(3)] })
+    change({ messages: [mail(1), mail(2), mail(3)] })
     reset()
 
     const { result } = await sync()
@@ -89,6 +89,7 @@ describe("syncMail over a quick listing", () => {
     reset()
     expect((await sync()).result).toMatchObject({ saved: 0, listed: 0 })
     expect(box.read).toEqual([])
+    expect(box.calls).toMatchObject({ list: 0, quick: 1, fetchRaw: 0 })
   })
 
   it("lists mail already stored by id, without reading it, when the UIDVALIDITY changed", async () => {
