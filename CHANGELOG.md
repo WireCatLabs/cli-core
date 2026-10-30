@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.488.0 — 30.10.2026
+
 ### Added
 
 - **A quick mail sync proves deletions and refreshes flags again (store version 39).** The store keeps each email's
