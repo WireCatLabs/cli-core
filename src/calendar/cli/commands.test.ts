@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-base"
+import { captureStreams, errorObjectOf } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { commandsCommand } from "../../cli/commands-command.js"
@@ -10,6 +10,7 @@ import { itemOf } from "../../cli/envelope.js"
 import { commandPathKey, commandPermissions, knownPermissionKeys } from "../../cli/permission-keys.js"
 import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
+import { failureContext } from "../../errors/reasons.js"
 import { answered } from "../../mcp/tool.js"
 import type { EntryInput } from "../../meetings/index.js"
 import { type MessageStore, openStore } from "../../store/store.js"
@@ -337,6 +338,19 @@ describe("calendar commands", () => {
       status: "linked",
       chosen: `event:${first?.eventId}`,
     })
+    const other = await store.accounts.saveAccount({ provider: "google-calendar", account: "owner-2" }, { name: null })
+    const [d] = await store.calendar.saveCalendars(
+      other,
+      [{ externalId: "d", title: "d", timezone: null, accessRole: "owner", primary: true, syncByDefault: true }],
+      NOW,
+    )
+    await store.calendar.saveEntries(d?.id as number, [planning({ externalId: "d", icalUid: "shared" })], NOW)
+    const [theirs] = await store.calendar.reviews({ status: "open" })
+    expect(theirs?.calendarId).toBe(d?.id)
+    await expect(cli("links", "resolve", String(theirs?.id), `event:${first?.eventId}`)).rejects.toMatchObject({
+      code: "permission_error",
+    })
+    expect((await store.calendar.reviews({ status: "open" }))[0]?.id).toBe(theirs?.id)
   })
 
   it("sync --embed embeds after the sync; a calendar that fails makes the run partial", async () => {
@@ -345,7 +359,21 @@ describe("calendar commands", () => {
     expect(await cli("sync", "--embed")).toMatchObject({ embeddings: 1 })
     expect(embedded).toEqual([600])
     source.failAfter(0)
-    await expect(cli("sync")).rejects.toMatchObject({ code: "provider_error", details: { reason: "sync.partial" } })
+    const failure = cli("sync")
+    await expect(failure).rejects.toMatchObject({
+      code: "provider_error",
+      message: expect.stringMatching(/^calendar \d+ \(Work\): example provider failed/u),
+      details: {
+        reason: "sync.partial",
+        calendars: [{ external_id: "primary", title: "Work", error: expect.stringMatching(/failed/u) }],
+      },
+    })
+    const { error } = errorObjectOf(await failure.catch((thrown: unknown) => thrown), {
+      ...failureContext(),
+      effects: { remote: "read", local: "write" },
+    })
+    expect(error.retry).toEqual({ safe: true })
+    expect(error.details?.calendars).toHaveLength(1)
   })
 
   it("sync --rescan lists the whole window under the shared program, and --full, its output flag, is refused", async () => {

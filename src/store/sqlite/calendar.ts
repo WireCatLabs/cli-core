@@ -106,6 +106,7 @@ const reviewOf = (row: Row): LinkReview => ({
   id: Number(row.id),
   linkableType: String(row.linkable_type),
   linkableId: Number(row.linkable_id),
+  calendarId: int(row.calendar_id),
   entityType: String(row.entity_type),
   candidates: fromJson<number[]>(row.candidates),
   reason: String(row.reason),
@@ -122,6 +123,10 @@ const attachmentOf = (row: Row): EntryAttachment => ({
   title: str(fromJson<{ title?: unknown } | null>(row.metadata)?.title),
   documentId: int(row.to_id),
 })
+
+const REVIEWS =
+  "SELECT r.*, CASE WHEN r.linkable_type = 'calendar_entry' THEN " +
+  "(SELECT calendar_id FROM calendar_entries WHERE id = r.linkable_id) END AS calendar_id FROM link_reviews r"
 
 const TRACKED = ["title", "starts_at", "ends_at", "location", "status", "recurrence", "recurrence_ends_at"] as const
 
@@ -712,6 +717,16 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
           .get(calendarId, externalId) as Row | undefined
         return row ? entryOf(row) : null
       }),
+    slotsOf: async (calendarId, seriesExternalId, window) =>
+      read(database, () =>
+        database
+          .prepare(
+            `SELECT * FROM calendar_entries WHERE calendar_id = ? AND kind = 'occurrence' AND series_external_id = ?
+               AND original_starts_at >= ? AND original_starts_at < ? AND deleted_at IS NULL ORDER BY original_starts_at`,
+          )
+          .all(calendarId, seriesExternalId, window.from, window.to)
+          .map(entryOf),
+      ),
     cursor: async (calendarId) =>
       read(database, () => {
         const { account_id } = calendarRow(calendarId)
@@ -848,12 +863,12 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       }),
     reviews: async (filter = {}) =>
       database
-        .prepare(`SELECT * FROM link_reviews${filter.status ? " WHERE status = ?" : ""} ORDER BY created_at, id`)
+        .prepare(`${REVIEWS}${filter.status ? " WHERE r.status = ?" : ""} ORDER BY r.created_at, r.id`)
         .all(...(filter.status ? [filter.status] : []))
         .map(reviewOf),
     resolveReview: async (id, decision, now) =>
       write(database, () => {
-        const row = database.prepare("SELECT * FROM link_reviews WHERE id = ?").get(id)
+        const row = database.prepare(`${REVIEWS} WHERE r.id = ?`).get(id)
         if (!row) throw new CliError("not_found", `no review ${id} in the local store`)
         const review = reviewOf(row)
         if (review.status !== "open") throw new CliError("validation_error", `review ${id} is already ${review.status}`)
@@ -928,7 +943,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
             "UPDATE link_reviews SET status = ?, chosen_id = ?, decided_by = 'owner', decided_at = ?, updated_at = ? WHERE id = ?",
           )
           .run(chosen === null ? "apart" : "linked", chosen, now, now, id)
-        return reviewOf(database.prepare("SELECT * FROM link_reviews WHERE id = ?").get(id) as Row)
+        return reviewOf(database.prepare(`${REVIEWS} WHERE r.id = ?`).get(id) as Row)
       }),
   }
 }

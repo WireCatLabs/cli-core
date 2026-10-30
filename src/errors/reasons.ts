@@ -165,6 +165,7 @@ export const REASONS: ErrorReason[] = defineReasons([
  */
 export const DETAILS = [
   "contracts",
+  "calendars",
   "allowed",
   "alternative",
   "arguments",
