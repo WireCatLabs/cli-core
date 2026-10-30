@@ -9,6 +9,7 @@ import { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 import { dropMissing, tooManyGone } from "./gone.js"
 import { mailHeadersOf } from "./headers.js"
 import { type Address, MAX_BODY_CHARS, type ParsedMail, parseMail } from "./parse.js"
+import { FETCH_SLICE, keyOf, type QuickPlan, readQuick } from "./quick.js"
 import {
   FULL_PASS_MS,
   MBOX_RESUME,
@@ -164,30 +165,16 @@ export interface MailSyncOptions {
 }
 
 /** What a budgeted run carries from one round to the next. */
-interface Plan {
-  budget: RunBudget
-  /** UIDs a round already asked for, `folder\0uid`: a failing message is not asked for again in the same pass. */
-  tried: Set<string>
-  /** Messages the source could not give; asked for once more when the pass is over. */
-  failed: Set<string>
-  /** Only these are asked for: the retry pass. */
-  only?: Set<string>
+interface Plan extends QuickPlan {
   searches: Map<string, Searched>
   /** Each folder's mode, fixed in the first round: `resumed` asks for what is not done, `full` for everything. */
   modes: Map<string, "resumed" | "full">
   unreadable: Map<string, string>
-  /** UIDs the source did not return at all, as the keys of `failed`. */
-  unlisted: Set<string>
-  stopped: BudgetStop | null
-  /** Messages in the window not asked for yet, after the round. */
-  remaining: number
-  /** Messages the round asked the source for. */
-  asked: number
+  /** Folders read with `quick`, fixed in the first round like `modes`. */
+  quickFolders: Set<string>
 }
 
 const LIST_SLICE = 200
-const FETCH_SLICE = 50
-const keyOf = (folder: string, uid: string) => `${folder}\0${uid}`
 
 export const syncMail = async (
   source: MailSource,
@@ -205,6 +192,8 @@ export const syncMail = async (
     modes: new Map(),
     unreadable: new Map(),
     unlisted: new Set(),
+    quick: new Map(),
+    quickFolders: new Set(),
     stopped: null,
     remaining: 0,
     asked: 0,
@@ -241,6 +230,7 @@ export const syncMail = async (
   // A message the server failed on once is often fine a minute later; only one more try, then the next run.
   if (plan.stopped === null && plan.failed.size > 0) {
     plan.only = new Set(plan.failed)
+    plan.quick.clear()
     plan.failed.clear()
     plan.tried.clear()
     await goOn()
@@ -348,6 +338,21 @@ const syncRound = async (
     if (point?.complete && point.size === mboxStamp.size && point.mtimeMs === mboxStamp.mtimeMs) mboxPoint = point
   }
   let capped = false
+  const unreadable: NonNullable<MailSyncResult["unreadable"]> = []
+  /** Raw mail read to learn its id, kept for the save so it is not read twice. */
+  const rawOf = new Map<Listed, Uint8Array>()
+  const quickRan = new Set<string>()
+  let holding: Set<string> | undefined
+  const holdsMail = async (folder: string) => {
+    holding ??= new Set(
+      (await store.mail.emailRefs({ accountId })).flatMap(({ mailboxes }) =>
+        mailboxes
+          .filter(({ kind }) => kind !== "label" && kind !== ENVELOPE && kind !== BULK)
+          .map((box) => box.externalId),
+      ),
+    )
+    return holding.has(folder)
+  }
   for (const folder of folders) {
     if (mboxPoint !== undefined) break
     let searched: Searched | undefined
@@ -370,6 +375,45 @@ const syncRound = async (
       const kept = parsePoint<ResumePoint>((await store.sync.syncState(key, resumeKey(folder)))?.value)
       if (kept !== undefined) storedPoints.set(folder, kept)
       const point = fresh ? undefined : kept
+      const sameRules = point !== undefined && point.validity === searched.validity && point.rules === ruleSet
+      // Without a cheap id the mail's identity is in its bytes, so a folder is listed quickly only when no stored mail
+      // can be read twice: its done UIDs are known, or the store holds nothing from it. Otherwise (a new UIDVALIDITY,
+      // other rules, --rescan) the full header listing recognises what is stored without downloading it.
+      const quickable =
+        !snapshot &&
+        searched.quick === true &&
+        searched.validity !== undefined &&
+        source.quick !== undefined &&
+        source.identify !== undefined
+      const inQuick =
+        quickable &&
+        (plan === undefined
+          ? sameRules || !(await holdsMail(folder))
+          : plan.quickFolders.has(folder) || (!plan.modes.has(folder) && (sameRules || !(await holdsMail(folder)))))
+      if (inQuick) {
+        plan?.quickFolders.add(folder)
+        plan?.modes.set(folder, "resumed")
+        resumed.add(folder)
+        quickRan.add(folder)
+        const done = point !== undefined && sameRules ? point.done : ([] as Ranges)
+        if (point !== undefined && sameRules) earlier.set(folder, point)
+        const round = await readQuick(
+          source as Parameters<typeof readQuick>[0],
+          since,
+          folder,
+          searched,
+          done,
+          max,
+          plan,
+        )
+        if (round.capped) capped = true
+        for (const { item, raw } of round.read) {
+          collected.push(item)
+          rawOf.set(item, raw)
+        }
+        for (const bad of round.unreadable) unreadable.push(bad)
+        continue
+      }
       if (point !== undefined && point.validity === searched.validity && point.rules === ruleSet) {
         earlier.set(folder, point)
         const mode = plan?.modes.get(folder)
@@ -461,6 +505,8 @@ const syncRound = async (
   if (snapshot) skipped = "an mbox file is a snapshot; mail missing from it is not proven deleted"
   else if (plan !== undefined && (capped || plan.tried.size > plan.asked || plan.only !== undefined))
     skipped = "this run read the window in parts; a run that lists all of it at once checks deletions"
+  else if (quickRan.size > 0)
+    skipped = "this run listed only mail not read before, by UID; --rescan lists every message and checks deletions"
   else if (resumed.size > 0)
     skipped =
       "this run listed only mail not read before; a full listing, at least daily or with --rescan, checks deletions"
@@ -516,7 +562,6 @@ const syncRound = async (
   }
 
   const attachments: NonNullable<MailSyncResult["attachments"]> = []
-  const unreadable: NonNullable<MailSyncResult["unreadable"]> = []
   let saved = 0
   let alreadyStored = 0
   let ruledOut = 0
@@ -682,7 +727,9 @@ const syncRound = async (
   for (let start = 0; start < pending.length; start += fetchChunk) {
     await stopIfAborted()
     const chunk = pending.slice(start, start + fetchChunk)
-    if (plan !== undefined) {
+    // Mail read to learn its id is already in hand: a chunk of it costs no request.
+    const unread = chunk.filter((item) => !rawOf.has(item))
+    if (plan !== undefined && unread.length > 0) {
       const stop = plan.budget.take()
       if (stop) {
         plan.stopped = stop
@@ -692,7 +739,8 @@ const syncRound = async (
     }
     let raws: (Uint8Array | Error)[]
     try {
-      raws = await source.fetchRaw(chunk)
+      const got = unread.length > 0 ? await source.fetchRaw(unread) : []
+      raws = chunk.map((item) => rawOf.get(item) ?? (got[unread.indexOf(item)] as Uint8Array | Error))
     } catch (error) {
       // What this run saved stays saved: the next one goes on from it.
       await saveNow(true)
@@ -786,7 +834,7 @@ const syncRound = async (
       startedAt,
     )
 
-  const incomplete = plan !== undefined && (capped || plan.stopped !== null || plan.failed.size > 0)
+  const incomplete = capped || (plan !== undefined && (plan.stopped !== null || plan.failed.size > 0))
   const complete = !full && !incomplete && unreadable.length === 0 && (plan?.unreadable.size ?? 0) === 0
   const bulk = new Map(
     listed.filter((item) => item.headers?.bulk).map((item) => [item.messageId, [bulkBox.externalId]]),

@@ -65,6 +65,26 @@ export const mailSourceContract = (make: MailSourceFixture): ContractCase[] => {
         first === undefined ? [] : [first],
       )
     }),
+    test("lists quickly the same UIDs, flags and sizes, and gives from the bytes the ids `list` gives", async (source) => {
+      if (source.search === undefined || source.quick === undefined || source.identify === undefined) return
+      const searched = await source.search(SINCE, folder)
+      if (!searched.quick) return
+      const quick = await source.quick(SINCE, folder, { searched })
+      const full = await source.list(SINCE, folder)
+      assert.deepEqual(quick.map(({ uid }) => uid).sort(), full.map(({ uid }) => uid).sort())
+      const raws = await source.fetchRaw(quick)
+      for (const [index, item] of quick.entries()) {
+        const raw = raws[index]
+        assert.ok(raw instanceof Uint8Array, "bytes")
+        const same = full.find(({ uid }) => uid === item.uid)
+        assert.deepEqual(source.identify(raw as Uint8Array, item), {
+          messageId: same?.messageId,
+          threadId: same?.threadId,
+        })
+        assert.equal(item.seen, same?.seen)
+        assert.equal(item.receivedAt, same?.receivedAt)
+      }
+    }),
     test("returns each message's bytes in order, and one that cannot be read as an Error, not a failed call", async (source) => {
       const listed = await source.list(SINCE, folder)
       const raws = await source.fetchRaw(listed)

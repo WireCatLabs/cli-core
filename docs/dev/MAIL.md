@@ -16,6 +16,7 @@ the member out.
 | Member | What the adapter does |
 |---|---|
 | `list(since, folder, { headers?, searched? })` | every message in `folder` received since `since`, all or nothing, since deletions are proved from it; `headers` also reads From, To, Cc and the list fields; `searched` limits it to those UIDs |
+| `quick?(since, folder, { searched })`, `identify?(raw, item)` | for a server that gives no message id without reading the message (no OBJECTID, no Gmail extensions): `search` answers `quick: true`, `quick` lists the UIDs of `searched` with flags, date and size only, and `identify` gives the `messageId` and `threadId` that `list` would have given, from the bytes `fetchRaw` returned |
 | `fetchRaw(items)` | each item's raw RFC 5322 bytes, in order; a message that cannot be read is an `Error` in its place, never a failed call |
 | `search?(since, folder)` | the folder's UIDs in the window and its UIDVALIDITY, without reading a message; absent for a file, which has no UIDs |
 | `stamp?()` | a file's size and modification time, so an unchanged file read to the end is not read again |
@@ -35,6 +36,14 @@ else All Mail by its role), saves each new message with `store.mail.saveThread`,
 are any `unreadable`, `attachments`, `deletionsSkipped`, `tagsReused`, `tagsSkipped`, `indexed`). Every message is the
 account `{ provider: "email", account: <address, lower case> }`.
 
+- **Quick folders.** A folder whose `search` says `quick` is not listed with headers: the sync lists its UIDs not yet
+  done, reads the raw bytes of the newest `max` (a budgeted run: `fetchBatch` a round) and takes the id from the
+  Message-ID, so stored mail keeps its id and the same message in two folders is one email. Rules and the bulk
+  classification then run on the headers of those bytes; a skipped or envelope mail is read once and never stored in
+  full, and is done afterwards. A folder is quick only when no stored mail could be read twice: its resume point
+  matches the UIDVALIDITY and the rules, or the store holds none of its mail. After a new UIDVALIDITY, other rules or
+  `rescan` the folder is listed with headers, which recognises stored mail without reading it. A quick run never proves
+  a deletion and never refreshes the flags of mail it skips: `rescan` does both.
 - **Rules.** A skip rule keeps a new message out; an envelope rule records its sender, date, size and labels and never
   its text; both come from `account.rules`, decided by `decide` over the facts of the listing (`factsOf`, which also
   works out a sender score when a rule asks).

@@ -12,6 +12,13 @@ shape of this file.
 - **A messenger can say what `reactions list` covers.** The new `reactionsListScope` option on the messenger (for
   WhatsApp, "reactions received while this computer was syncing") adds `missing: [{ field: "reactions", why }]` to the
   JSON answer and one line on stderr for a person: "shows only …". A messenger that sets none answers as before.
+- **Mail from a server with no cheap message id (Yandex) syncs from a listing of UID, flags, date and size.** A header
+  FETCH of 200 messages took 5 to 40 s there and often failed, so six months took hours. A `MailSource` can now answer
+  `quick: true` from `search` and give `quick` and `identify`; `syncMail` then lists only the UIDs not done, reads the
+  raw bytes of the new ones and takes the id from the Message-ID, so stored mail keeps its id and nothing stored is read
+  again. Rules and the bulk class run on the downloaded headers. A new UIDVALIDITY, other rules or `rescan` list the
+  folder with headers as before; a quick run proves no deletion and refreshes no flags of the mail it skips.
+  `mailSourceContract` checks that `quick` and `identify` agree with `list`; `fakeMailSource` takes `quick: true`.
 
 ## 0.486.0 — 30.10.2026
 
