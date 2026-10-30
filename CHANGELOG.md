@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.486.0 — 30.10.2026
+
 ### Fixed
 
 - **A messenger's `mcp revoke`, `mcp server stop` and `mcp server status` with no profile say what the profile is
