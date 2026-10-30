@@ -47,6 +47,12 @@ shape of this file.
   them, with their events. A rescan cannot do this, since it never lists them again. Implementations of `EventStore`
   outside cli-core need `restoreUnseen`.
 
+- **The store's `node:sqlite` driver prepares each SQL text once per connection.** It prepared every statement again
+  on every call, which was a quarter of a gcal sync's time. Each connection now keeps up to 1,000 prepared
+  statements (least recently used out first) and finalizes them on `close()`. gcal 0.1.1's first sync of a synthetic
+  calendar ran 2.5–2.7 times faster (5,000 events: 6.7 → 2.5 s; 50,000: 68 → 28 s). `prepare()` with the same SQL
+  now returns the same statement. Bun's driver already cached through `db.query()`.
+
 ## 0.488.0 — 30.10.2026
 
 ### Added
