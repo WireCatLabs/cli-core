@@ -18,10 +18,18 @@ export interface Listed {
   headers?: MailHeaders
 }
 
+/** A message as `quick` lists it: everything but the ids, which a source without a cheap one reads from the raw bytes. */
+export type Quick = Omit<Listed, "messageId" | "threadId">
+
 export interface Searched {
   /** Absent when the server does not say; then no UID is trusted across runs. */
   validity?: string
   uids: string[]
+  /**
+   * The server gives no message id without reading the message, so `list` is slow. The sync then lists with `quick`
+   * and takes the id from the raw bytes with `identify`.
+   */
+  quick?: boolean
 }
 
 /** Everything the import asks of a mail client, so a transport can be replaced without touching the sync. */
@@ -43,6 +51,13 @@ export interface MailSource {
    * those. Absent for a file, which has no UIDs.
    */
   search?(since: Date, folder: string): Promise<Searched>
+  /**
+   * For a folder whose `search` said `quick`: UID, flags, date and size of the given UIDs, with no envelope and no
+   * header. A UID the server does not return is left out.
+   */
+  quick?(since: Date, folder: string, options: { searched: Searched }): Promise<Quick[]>
+  /** The ids of a message read by `fetchRaw`, worked out as `list` works them out; needed wherever `quick` is. */
+  identify?(raw: Uint8Array, item: Quick): { messageId: string; threadId: string }
   /** A file's size and modification time, so an unchanged file read to the end is not read again. */
   stamp?(): Promise<FileStamp>
   /**
@@ -67,5 +82,5 @@ export interface MailSource {
   /** Puts labels back on messages in `folder`, by Gmail id. */
   label?(messageIds: readonly string[], folder: string, labels: readonly string[]): Promise<void>
   /** Each item's raw RFC 5322 bytes, in order; one that could not be read is an Error, not a failed call. */
-  fetchRaw(items: Listed[]): Promise<(Uint8Array | Error)[]>
+  fetchRaw(items: Quick[]): Promise<(Uint8Array | Error)[]>
 }

@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { GMAIL_ALL_MAIL } from "../folders.js"
 import { headersOf } from "../headers.js"
 import type { FileStamp } from "../resume.js"
-import type { Listed, MailSource, Searched } from "../source.js"
+import type { Listed, MailSource, Quick, Searched } from "../source.js"
 
 export type FakePerson = [name: string | null, address: string]
 
@@ -46,7 +46,11 @@ export interface FakeMailbox {
   /** UIDs that fail once, as a server's backend error does: `list` leaves each out, `fetchRaw` answers an Error. */
   failOnce?: string[]
   /** Calls the source answered, by kind, so a test counts a budget's requests. */
-  calls?: { search: number; list: number; fetchRaw: number }
+  calls?: { search: number; list: number; fetchRaw: number; quick?: number }
+  /** Answers as a server with no cheap message id does: `search` says `quick`, and `quick` and `identify` work. */
+  quick?: boolean
+  /** The UIDs `fetchRaw` was asked for, in order, so a test proves nothing is read twice. */
+  read?: string[]
   /** What the source tells a budgeted sync about its batch sizes. */
   listBatch?: number
   fetchBatch?: number
@@ -92,17 +96,21 @@ const failure = (message: string) => new CliError("provider_error", message, { r
 const labelsOf = (m: FakeMail): string[] =>
   [...new Set([...(m.labels ?? []), ...(m.flagged ? ["Starred"] : [])])].sort()
 
-const listingOf = (m: FakeMail, headers: boolean, folder: string): Listed => ({
+const quickOf = (m: FakeMail, folder: string): Quick => ({
   uid: m.uid,
-  messageId: m.messageId,
-  threadId: m.threadId,
   receivedAt: new Date(m.receivedAt).toISOString(),
   size: rawOf(m).length,
   labels: labelsOf(m),
   seen: m.seen ?? false,
   flagged: m.flagged ?? false,
-  ...(headers ? { headers: headersOf(Buffer.from(rawOf(m)).toString().split("\r\n\r\n")[0] ?? "") } : {}),
   folder,
+})
+
+const listingOf = (m: FakeMail, headers: boolean, folder: string): Listed => ({
+  ...quickOf(m, folder),
+  messageId: m.messageId,
+  threadId: m.threadId,
+  ...(headers ? { headers: headersOf(Buffer.from(rawOf(m)).toString().split("\r\n\r\n")[0] ?? "") } : {}),
 })
 
 /**
@@ -121,6 +129,7 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
     const from = Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate())
     return {
       validity: String(mailbox.validity ?? 12),
+      ...(mailbox.quick ? { quick: true } : {}),
       uids: inFolder(folder)
         .filter((m) => Date.parse(m.receivedAt) >= from)
         .map((m) => m.uid),
@@ -133,8 +142,8 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
     failedOnce.add(uid)
     return true
   }
-  const count = (kind: "search" | "list" | "fetchRaw") => {
-    if (mailbox.calls) mailbox.calls[kind] += 1
+  const count = (kind: "search" | "list" | "fetchRaw" | "quick") => {
+    if (mailbox.calls) mailbox.calls[kind] = (mailbox.calls[kind] ?? 0) + 1
   }
 
   return {
@@ -155,6 +164,24 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
         .filter((m) => wanted.has(m.uid) && !failsNow(m.uid))
         .map((m) => listingOf(m, options?.headers ?? false, folder))
     },
+
+    ...(mailbox.quick
+      ? {
+          quick: async (_since: Date, folder: string, options: { searched: Searched }) => {
+            count("quick")
+            if (mailbox.searchFails) throw failure(mailbox.searchFails)
+            const wanted = new Set(options.searched.uids)
+            return inFolder(folder)
+              .filter((m) => wanted.has(m.uid) && !failsNow(m.uid))
+              .map((m) => quickOf(m, folder))
+          },
+          identify: (raw: Uint8Array) => {
+            const id = /^Message-ID:\s*<(.+?)@example\.test>/im.exec(Buffer.from(raw).toString())?.[1] as string
+            const m = mailbox.messages.find((each) => each.messageId === id) as FakeMail
+            return { messageId: m.messageId, threadId: m.threadId }
+          },
+        }
+      : {}),
 
     find: async (messageIds, folder, options) => {
       for (const id of messageIds) mailbox.asked?.push(`msgid:${id}`)
@@ -191,6 +218,7 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
 
     fetchRaw: async (items) => {
       count("fetchRaw")
+      mailbox.read?.push(...items.map(({ uid }) => uid))
       return items.map((item) => {
         const m = mailbox.messages.find((each) => each.uid === item.uid)
         if (m === undefined || mailbox.unreadable?.includes(item.uid) || failsNow(item.uid))
@@ -212,7 +240,7 @@ export const fakeArchiveSource = (archive: { mails: FakeMail[]; stamp: FileStamp
       .map((m) => ({ ...listingOf(m, true, folder), uid: "" })),
   stamp: async () => ({ ...archive.stamp }),
   fetchRaw: async (items) =>
-    items.map((item) => {
+    (items as Listed[]).map((item) => {
       const m = archive.mails.find((each) => each.messageId === item.messageId)
       return m === undefined ? failure(`email ${item.messageId} was not found`) : rawOf(m)
     }),

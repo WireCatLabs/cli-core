@@ -103,15 +103,21 @@ export const headersOf = (text: string): MailHeaders => {
   }
 }
 
+const headTextOf = (raw: Uint8Array): string => {
+  const bytes = Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength)
+  const end = [bytes.indexOf("\r\n\r\n"), bytes.indexOf("\n\n")].filter((at) => at !== -1)
+  return bytes.subarray(0, end.length ? Math.min(...end) : Math.min(bytes.length, 256 * 1024)).toString("utf8")
+}
+
+/** The header fields of a whole email, as `headersOf` reads them from a listing. */
+export const headersOfRaw = (raw: Uint8Array): MailHeaders => headersOf(headTextOf(raw))
+
 /**
  * List-Id, the bulk-mail fields, Reply-To and Gmail's SPF, DKIM and DMARC verdicts of a whole email, kept on mail
  * stored in full so a rule or a sender score can be worked out from the store later. Names are lower case.
  */
 export const mailHeadersOf = (raw: Uint8Array): Record<string, string | boolean> => {
-  const bytes = Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength)
-  const end = [bytes.indexOf("\r\n\r\n"), bytes.indexOf("\n\n")].filter((at) => at !== -1)
-  const head = bytes.subarray(0, end.length ? Math.min(...end) : Math.min(bytes.length, 256 * 1024))
-  const unfolded = unfold(head.toString("utf8"))
+  const unfolded = unfold(headTextOf(raw))
   const listId = listIdOf(field(unfolded, "List-Id"))
   const precedence = field(unfolded, "Precedence")?.trim().toLowerCase()
   const [replyTo] = addressesOf(field(unfolded, "Reply-To"))
