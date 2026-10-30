@@ -1573,8 +1573,9 @@ A place for tasks, with the short key their ids start with (`MEET-12`).
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `name_folded` | text |  |  | `fold(name)`, which `projects list name:` compares |
 
-*Keys and indexes:* `INDEX (organization_id)`, `INDEX (account_id)`, `INDEX (owner_type, owner_id)`
+*Keys and indexes:* `INDEX (id) WHERE name_folded IS NULL`, `INDEX (organization_id)`, `INDEX (account_id)`, `INDEX (owner_type, owner_id)`
 
 ### `tasks`
 

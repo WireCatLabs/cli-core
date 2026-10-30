@@ -1292,7 +1292,9 @@ const NEW = {
         c("status", "text", { note: "active, archived" }),
         ...ts(),
         del(),
+        c("name_folded", "text", { note: "`fold(name)`, which `projects list name:` compares" }),
       ],
+      keys: ["INDEX (id) WHERE name_folded IS NULL"],
     },
     {
       name: "tasks",

@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`projects list 'name:*ТАРТ*'` finds "Тартус".** The `name:` filter folded ASCII letters only, so a Cyrillic project
+  name matched in its own letter case alone. Projects now keep a folded copy of the name, as tasks and meetings do
+  (store version 38); a store filled it on first open, and an older build's new projects are filled on the next open.
+
 ## 0.482.0 — 29.10.2026
 
 ### Changed — may break callers

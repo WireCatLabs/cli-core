@@ -68,6 +68,7 @@ const NAMES = {
   "aliases:aliasable_type,aliasable_id": "aliases_by_aliasable_type_aliasable_id",
   "tasks:id WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL": "tasks_close_reason_to_fold",
   "attachments:id WHERE local_path IS NOT NULL AND local_path_folded IS NULL": "attachments_local_path_to_fold",
+  "projects:id WHERE name_folded IS NULL": "projects_name_to_fold",
   "meetings:id WHERE title IS NOT NULL AND title_folded IS NULL": "meetings_title_to_fold",
   "files:id WHERE path_folded IS NULL": "files_path_to_fold",
   "meetings:id WHERE join_url IS NOT NULL AND join_key IS NULL": "meetings_join_key_to_fill",

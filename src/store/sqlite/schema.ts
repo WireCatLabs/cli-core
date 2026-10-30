@@ -1527,8 +1527,10 @@ export const projects = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    nameFolded: text("name_folded"),
   },
   (table) => [
+    index("projects_name_to_fold").on(table.id).where(sql`name_folded IS NULL`),
     index("projects_by_organization_id").on(table.organizationId),
     index("projects_by_account_id").on(table.accountId),
     index("projects_by_owner_type_owner_id").on(table.ownerType, table.ownerId),

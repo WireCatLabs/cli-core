@@ -265,6 +265,21 @@ it("filters knowledge lists in SQL before their 500-row bound", async () => {
   expect(await f.store.knowledge.reminders(key, reminderQuery)).toEqual([])
 })
 
+it("finds a project with a Cyrillic name by a name filter in any letter case", async () => {
+  const f = await fixture()
+  const project = await f.store.knowledge.addProject({ key: "TRTS", name: "Тартус Ёлка", type: "work", scope: "work" })
+  const list = async (text: string) => {
+    const query = parseLucene(text)
+    validateQuery(query, PROJECTS_QUERY)
+    return f.store.knowledge.projects(query)
+  }
+  expect(await list("name:*ТАРТ*")).toEqual([project])
+  expect(await list("name:*тарт*")).toEqual([project])
+  expect(await list('name:"тартус ёлка"')).toEqual([project])
+  expect(await list("name:*ЁЛКА")).toEqual([project])
+  expect(await list("name:*тартар*")).toEqual([])
+})
+
 it("filters projects by name with wildcards and keeps account task inboxes out unless kind is asked for", async () => {
   const f = await fixture()
   const real = await f.store.knowledge.addProject({ key: "STRT", name: "Smart start", type: "work", scope: "work" })

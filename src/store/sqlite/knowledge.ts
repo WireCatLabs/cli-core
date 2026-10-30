@@ -8,6 +8,7 @@ import { formatMeetingReference } from "../../meetings/index.js"
 import type { AccountKey } from "../types.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
+import { folded } from "./folded.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
@@ -712,12 +713,13 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         const at = now()
         const row = database
           .prepare(
-            "INSERT INTO projects (key, name, description, type, organization_id, scope, tasks_count, status, created_at, updated_at) " +
-              "VALUES (?, ?, ?, ?, ?, ?, 0, 'active', ?, ?) RETURNING *",
+            "INSERT INTO projects (key, name, name_folded, description, type, organization_id, scope, tasks_count, status, created_at, updated_at) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?) RETURNING *",
           )
           .get(
             chosen,
             title,
+            folded(title),
             description === undefined ? null : textOf(description, 2000),
             oneOf(type, PROJECT_TYPES, "a project's type"),
             organizationId,
@@ -734,7 +736,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         queryFilter(query, {
           id: { type: "kw", sql: "CAST(id AS TEXT)" },
           key: { type: "kw", sql: "key" },
-          name: { type: "kw", sql: "name" },
+          name: { type: "kw", sql: "name_folded", folded: true },
           kind: { type: "enum", sql: `CASE WHEN length(key) = ${INBOX_KEY_LENGTH} THEN 'inbox' ELSE 'project' END` },
           type: { type: "enum", sql: "type" },
           organization_id: { type: "kw", sql: "CAST(organization_id AS TEXT)" },
