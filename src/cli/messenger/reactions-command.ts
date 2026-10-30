@@ -44,6 +44,8 @@ export const reactionsCommand = (messenger: Messenger): Command => {
             ...(cursor === undefined ? {} : { cursor }),
           })
         })
+        const why =
+          messenger.reactionsListScope === undefined ? undefined : `shows only ${messenger.reactionsListScope}`
         renderAnswer(
           this,
           context,
@@ -54,9 +56,11 @@ export const reactionsCommand = (messenger: Messenger): Command => {
             paging: "cursor",
             ...(found.cursor === undefined ? {} : { cursor: found.cursor }),
             args: { chat, message, ...(words.length > 0 ? { query: words.join(" ") } : {}) },
+            ...(why === undefined ? {} : { missing: [{ field: "reactions", why }] }),
           }),
           lines(({ reacted_at, person, reaction: name }) => [reacted_at, person.name ?? person.id, name].join("  ")),
         )
+        if (why !== undefined && context.format !== "json") context.renderer.note(why)
       }),
     )
 

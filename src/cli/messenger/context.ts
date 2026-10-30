@@ -183,6 +183,8 @@ export interface Messenger extends ServiceMessenger {
   pollCloseSeconds?: readonly [min: number, max: number]
   /** Whether `reactions list` shows who reacted to a message; no when unset. */
   reactionsList?: boolean
+  /** What `reactions list` covers when it is less than everyone who reacted, as the end of "shows only …", such as "reactions received while this computer was syncing"; none when unset. */
+  reactionsListScope?: string
   /** Whether `polls voters` lists who voted for what; no when unset. */
   pollVoters?: boolean
   /** Whether a poll can be closed — `polls close`; yes when unset. WhatsApp's stay open. */
