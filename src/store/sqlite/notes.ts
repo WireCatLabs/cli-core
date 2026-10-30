@@ -20,6 +20,7 @@ import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
+import { holdingText } from "./note-index.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
@@ -770,7 +771,8 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       const about = options.about === undefined ? undefined : thingOf(database, canonicalThingReference(options.about))
       if (options.about !== undefined && !about) return { items: [], hasMore: false }
       const folder = options.folderId === undefined ? null : Number(folderRow(options.folderId).id)
-      const search = options.search ?? null
+      const documentText = options.search === undefined ? undefined : holdingText("document", "d.id", options.search)
+      const noteText = options.search === undefined ? undefined : holdingText("note", "n.id", options.search)
       const aboutType = about?.type ?? null
       const aboutId = about?.id ?? null
       const files =
@@ -787,9 +789,9 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
                     "WHERE f.deleted_at IS NULL AND d.deleted_at IS NULL AND f.account_id = ? AND ? IS NOT NULL ") +
                   "AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
                   `AND (? IS NULL OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
-                  "AND (? IS NULL OR instr(lower(coalesce(d.body, '')), lower(?)) > 0) ORDER BY d.created_at DESC, d.id DESC LIMIT ?",
+                  `${documentText ? `AND ${documentText.sql} ` : ""}ORDER BY d.created_at DESC, d.id DESC LIMIT ?`,
               )
-              .all(folder, folder, aboutType, aboutType, aboutId, search, search, limit + offset + 1)
+              .all(folder, folder, aboutType, aboutType, aboutId, ...(documentText?.params ?? []), limit + offset + 1)
               .map(documentOf)
       const written =
         options.source === "file" || folder !== null
@@ -798,9 +800,9 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
               .prepare(
                 "SELECT n.* FROM notes n WHERE n.deleted_at IS NULL " +
                   `AND (? IS NULL OR (n.notable_type = ? AND n.notable_id = ?) OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'note' AND l.from_id = n.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
-                  "AND (? IS NULL OR instr(lower(n.body), lower(?)) > 0) ORDER BY n.created_at DESC, n.id DESC LIMIT ?",
+                  `${noteText ? `AND ${noteText.sql} ` : ""}ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
               )
-              .all(aboutType, aboutType, aboutId, aboutType, aboutId, search, search, limit + offset + 1)
+              .all(aboutType, aboutType, aboutId, aboutType, aboutId, ...(noteText?.params ?? []), limit + offset + 1)
               .map(noteOf)
       const all = [...files, ...written].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.ref.localeCompare(a.ref),

@@ -389,11 +389,13 @@ describe("what the initial migration seeds and enforces", () => {
         .map((row) => row.name),
     ).toEqual([
       "document_index",
+      "document_trigrams",
       "event_index",
       "memory_index",
       "message_stems",
       "message_words",
       "note_index",
+      "note_trigrams",
       "task_index",
       "transcript_index",
     ])

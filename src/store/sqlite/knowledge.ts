@@ -11,6 +11,7 @@ import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
+import { holdingText } from "./note-index.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { queryFilter } from "./query-filter.js"
@@ -502,20 +503,13 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       checked(key)
       const thing = options.target ? resolve(key, options.target).thing : undefined
       if (options.target && !thing) return { items: [], hasMore: false }
+      const text = options.search === undefined ? undefined : holdingText("note", "id", options.search)
       const rows = database
         .prepare(
           "SELECT * FROM notes WHERE deleted_at IS NULL AND (? IS NULL OR (notable_type = ? AND notable_id = ?)) " +
-            "AND (? IS NULL OR instr(lower(body), lower(?)) > 0) ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+            `${text ? `AND ${text.sql} ` : ""}ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
         )
-        .all(
-          thing?.type ?? null,
-          thing?.type ?? null,
-          thing?.id ?? null,
-          options.search ?? null,
-          options.search ?? null,
-          limit + 1,
-          offset,
-        )
+        .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, ...(text?.params ?? []), limit + 1, offset)
       const items = rows.slice(0, limit).flatMap((row) => annotationOf(row) ?? [])
       return { items, hasMore: rows.length > limit }
     },

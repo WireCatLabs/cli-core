@@ -837,5 +837,15 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TABLE `email_locations` (\n\t`mailbox_id` integer NOT NULL,\n\t`uidvalidity` text NOT NULL,\n\t`uid` integer NOT NULL,\n\t`email_id` integer NOT NULL,\n\tCONSTRAINT `email_locations_pk` PRIMARY KEY(`mailbox_id`, `uidvalidity`, `uid`),\n\tCONSTRAINT `fk_email_locations_mailbox_id_mailboxes_id_fk` FOREIGN KEY (`mailbox_id`) REFERENCES `mailboxes`(`id`),\n\tCONSTRAINT `fk_email_locations_email_id_emails_id_fk` FOREIGN KEY (`email_id`) REFERENCES `emails`(`id`)\n);",
       "CREATE INDEX `email_locations_by_email_id` ON `email_locations` (`email_id`);"
     ]
+  },
+  {
+    "name": "20261030225520_version-40-note-trigrams",
+    "statements": [
+      "CREATE VIRTUAL TABLE note_trigrams USING fts5(text, content = '', contentless_delete = 1, tokenize = 'trigram');",
+      "CREATE VIRTUAL TABLE document_trigrams USING fts5(text, content = '', contentless_delete = 1, tokenize = 'trigram');",
+      "CREATE TRIGGER note_trigrams_bd BEFORE DELETE ON notes BEGIN\n  DELETE FROM note_trigrams WHERE rowid = old.id;\nEND;",
+      "CREATE TRIGGER document_trigrams_bd BEFORE DELETE ON documents BEGIN\n  DELETE FROM document_trigrams WHERE rowid = old.id;\nEND;",
+      "-- The trigrams hold JS-normalized text, which SQL cannot produce: fillTrigrams fills the rows stored before this\n-- version, up to `watermark`, and a search reads the rest of them by their text meanwhile.\nINSERT INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version)\n  SELECT 'note_trigrams', coalesce(max(id), 0), 0, 0, 1 FROM notes\n  UNION ALL SELECT 'document_trigrams', coalesce(max(id), 0), 0, 0, 1 FROM documents;"
+    ]
   }
 ]

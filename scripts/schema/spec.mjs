@@ -801,6 +801,12 @@ const NEW = {
     documentRevisionsTable,
     fts("document_words", "Word index over documents.", "normalized_text, scope"),
     fts("document_stems", "Stem index, the pair of document_words.", "stems, scope"),
+    {
+      name: "document_trigrams",
+      virtual: true,
+      doc: "Trigram index over the normalized title and text of documents, rowid = document id: a search finds any part of a word, in any letter case.",
+      sql: "CREATE VIRTUAL TABLE document_trigrams USING fts5(text, content = '', contentless_delete = 1, tokenize = 'trigram')",
+    },
     queue("document_index_pending", "documents"),
     {
       name: "notes",
@@ -832,6 +838,12 @@ const NEW = {
     },
     fts("note_words", "Word index over notes.", "normalized_text, scope"),
     fts("note_stems", "Stem index, the pair of note_words.", "stems, scope"),
+    {
+      name: "note_trigrams",
+      virtual: true,
+      doc: "Trigram index over the normalized title and text of notes, rowid = note id: a search finds any part of a word, in any letter case.",
+      sql: "CREATE VIRTUAL TABLE note_trigrams USING fts5(text, content = '', contentless_delete = 1, tokenize = 'trigram')",
+    },
     queue("note_index_pending", "notes"),
     {
       name: "memories",

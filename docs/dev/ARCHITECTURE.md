@@ -347,6 +347,14 @@ Notes are few, so a change of stemmer choices queues them all again at the next 
 for a reindex. `searchNotes` (`src/store/sqlite/note-search.ts`) compiles the same parsed query as
 messages over the fields a note has (`text`, `exact`, `body`, `tag`, `date`, `in`) and refuses the rest;
 `searchNotesQuery` (`src/services/notes-search.ts`) is the service a `search notes` command calls.
+`note_trigrams` and `document_trigrams` (store version 40) hold the same normalized title and text as the words,
+under the trigram tokenizer, written and dropped by the same drain. `holdingText` (`src/store/sqlite/note-index.ts`)
+turns a list filter — `notes` with a search, knowledge annotations, contacts `--notes` — into a match on them, so
+any part of a word is found in any letter case, `ё` as `е`. A query of fewer than three characters is refused,
+since the trigram index answers it with nothing. Version 40 records in `search_index_state` (`note_trigrams`,
+`document_trigrams`) the highest id stored before it; `fillTrigrams` writes those rows' trigrams in batches at the
+end of every `drainNoteIndex` until `filled_through` reaches it. A row not yet filled, or still in its queue, is
+matched by `instr(lower(...))`, as before version 40.
 
 **One `search` group (plan, STANDARD.md "Search hierarchy").**
 `src/cli/messenger/search-command.ts` mounts `search all|messages|mail|notes|conversations` (and
