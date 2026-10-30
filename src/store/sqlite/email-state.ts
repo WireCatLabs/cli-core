@@ -1,5 +1,7 @@
 import type { CacheDatabase } from "../driver.js"
+import { dropAttachmentChunks } from "./email-index.js"
 import { flag } from "./events.js"
+import { dropUnusedVectors } from "./vector-index.js"
 
 export const recountEmailThread = (database: CacheDatabase, threadId: number, now: number) =>
   database
@@ -48,4 +50,48 @@ export const setEmailFlags = (
     ).changes
   }
   return changed
+}
+
+export const markEmailsDeleted = (
+  database: CacheDatabase,
+  accountId: number,
+  externalIds: string[],
+  now: number,
+): number => {
+  const mark = database.prepare(
+    `UPDATE emails SET deleted_at = ?, body_text = NULL, body_html = NULL, snippet = NULL, updated_at = ?
+       WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL
+       RETURNING id, email_thread_id`,
+  )
+  const forget = database.prepare(
+    "UPDATE attachments SET text = NULL, normalized_text = NULL WHERE attachable_type = 'email' AND attachable_id = ?",
+  )
+  const unlocate = database.prepare("DELETE FROM email_locations WHERE email_id = ?")
+  const threads = externalIds.flatMap((id) =>
+    mark.all(now, now, accountId, id).map((r) => {
+      const pieces = dropAttachmentChunks(database, Number(r.id))
+      forget.run(Number(r.id))
+      unlocate.run(Number(r.id))
+      dropUnusedVectors(database, pieces)
+      return Number(r.email_thread_id)
+    }),
+  )
+  for (const id of new Set(threads)) recountEmailThread(database, id, now)
+  return threads.length
+}
+
+export const markEmailsRestored = (
+  database: CacheDatabase,
+  accountId: number,
+  externalIds: string[],
+  now: number,
+): number => {
+  const unmark = database.prepare(
+    `UPDATE emails SET deleted_at = NULL, updated_at = ?
+       WHERE account_id = ? AND external_id = ? AND deleted_at IS NOT NULL
+       RETURNING email_thread_id`,
+  )
+  const threads = externalIds.flatMap((id) => unmark.all(now, accountId, id).map((r) => Number(r.email_thread_id)))
+  for (const id of new Set(threads)) recountEmailThread(database, id, now)
+  return threads.length
 }

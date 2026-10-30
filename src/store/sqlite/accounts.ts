@@ -143,6 +143,9 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.delete(messages).where(eq(messages.accountId, accountKey)).run()
   orm.delete(chats).where(eq(chats.accountId, accountKey)).run()
   orm.delete(syncCursors).where(eq(syncCursors.accountId, accountKey)).run()
+  orm.run(
+    sql`DELETE FROM email_locations WHERE mailbox_id IN (SELECT id FROM mailboxes WHERE account_id = ${accountKey})`,
+  )
   // Deleting an email clears its recipients, mailboxes, words, attachments and tags (trigger email_bd).
   orm.run(sql`DELETE FROM emails WHERE account_id = ${accountKey}`)
   orm.run(

@@ -16,7 +16,16 @@ import {
   threadPieces,
   titleOf,
 } from "./email-index.js"
-import { recountEmailThread as recount, setEmailFlags } from "./email-state.js"
+import {
+  type EmailLocationInput,
+  type FolderEmail,
+  folderEmails,
+  forgetLocations,
+  locate,
+  setLocations,
+} from "./email-locations.js"
+import { markEmailsDeleted, markEmailsRestored, recountEmailThread as recount, setEmailFlags } from "./email-state.js"
+
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { ensurePerson } from "./identities.js"
@@ -26,6 +35,9 @@ import type { Orm, StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
+
+export type { EmailLocationInput, FolderEmail }
+
 import { dot } from "./vectors.js"
 
 type Row = Record<string, unknown>
@@ -69,6 +81,8 @@ export interface EmailInput {
   mailRuleId?: number | null
   /** Added to the mailboxes the email is already in; one scan sees one folder, so none is taken away. */
   mailboxes?: MailboxInput[]
+  /** Added to the locations the email has; a UID already known in that folder now points here. */
+  locations?: EmailLocationInput[]
   /** Replaced when given; the text is word-indexed. */
   attachments?: AttachmentInput[]
 }
@@ -302,6 +316,20 @@ export interface MailStore {
     flags: ReadonlyMap<string, { read?: boolean; flagged?: boolean }>,
     now: number,
   ): Promise<number>
+  /** The live emails whose location in `folder` has this UIDVALIDITY, oldest UID first. */
+  folderEmails(accountId: number, folder: string, uidvalidity: string): Promise<FolderEmail[]>
+  /**
+   * Records where emails the store holds are in `folder`, by Message-ID; one it does not hold is left out. Locations
+   * of the folder under another UIDVALIDITY are dropped: its UIDs mean nothing now.
+   */
+  setLocations(
+    accountId: number,
+    folder: string,
+    uidvalidity: string,
+    found: ReadonlyMap<string, number[]>,
+  ): Promise<number>
+  /** Forgets that these UIDs of `folder` hold anything; an email left with no location there leaves the folder too. */
+  forgetLocations(accountId: number, folder: string, uidvalidity: string, uids: number[]): Promise<void>
   /** Marks emails gone at the source and drops their text; saving one again brings it back. Answers how many changed. */
   markDeleted(accountId: number, externalIds: string[], now: number): Promise<number>
   /**
@@ -548,6 +576,7 @@ const saveEmail = (
   }
 
   for (const box of mail.mailboxes ?? []) join(database, emailId, mailboxPk(database, accountId, box, now), now)
+  for (const where of mail.locations ?? []) locate(database, accountId, emailId, where)
 
   if (mail.attachments !== undefined) {
     const before = dropAttachmentChunks(database, emailId)
@@ -917,40 +946,15 @@ export const mailStoreOver = (
       return setEmailFlags(database, accountId, flags, now)
     })
   },
-  async markDeleted(accountId, externalIds, now) {
-    return write(database, () => {
-      const mark = database.prepare(
-        `UPDATE emails SET deleted_at = ?, body_text = NULL, body_html = NULL, snippet = NULL, updated_at = ?
-           WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL
-           RETURNING id, email_thread_id`,
-      )
-      const forget = database.prepare(
-        "UPDATE attachments SET text = NULL, normalized_text = NULL WHERE attachable_type = 'email' AND attachable_id = ?",
-      )
-      const threads = externalIds.flatMap((id) =>
-        mark.all(now, now, accountId, id).map((r) => {
-          const pieces = dropAttachmentChunks(database, Number(r.id))
-          forget.run(Number(r.id))
-          dropUnusedVectors(database, pieces)
-          return Number(r.email_thread_id)
-        }),
-      )
-      for (const id of new Set(threads)) recount(database, id, now)
-      return threads.length
-    })
-  },
-  async markRestored(accountId, externalIds, now) {
-    return write(database, () => {
-      const unmark = database.prepare(
-        `UPDATE emails SET deleted_at = NULL, updated_at = ?
-           WHERE account_id = ? AND external_id = ? AND deleted_at IS NOT NULL
-           RETURNING email_thread_id`,
-      )
-      const threads = externalIds.flatMap((id) => unmark.all(now, accountId, id).map((r) => Number(r.email_thread_id)))
-      for (const id of new Set(threads)) recount(database, id, now)
-      return threads.length
-    })
-  },
+  folderEmails: async (accountId, folder, uidvalidity) => folderEmails(database, accountId, folder, uidvalidity),
+  setLocations: async (accountId, folder, uidvalidity, found) =>
+    write(database, () => setLocations(database, accountId, folder, uidvalidity, found)),
+  forgetLocations: async (accountId, folder, uidvalidity, uids) =>
+    write(database, () => forgetLocations(database, accountId, folder, uidvalidity, uids)),
+  markDeleted: async (accountId, externalIds, now) =>
+    write(database, () => markEmailsDeleted(database, accountId, externalIds, now)),
+  markRestored: async (accountId, externalIds, now) =>
+    write(database, () => markEmailsRestored(database, accountId, externalIds, now)),
   async chunksToEmbed(model, { after, limit }) {
     drainEmailIndex(database, stemmerFor)
     const file = database.prepare("SELECT text FROM attachments WHERE id = ?")

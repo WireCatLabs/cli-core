@@ -901,6 +901,24 @@ export const emailMailboxes = sqliteTable(
   ],
 )
 
+export const emailLocations = sqliteTable(
+  "email_locations",
+  {
+    mailboxId: integer("mailbox_id")
+      .notNull()
+      .references(() => mailboxes.id),
+    uidvalidity: text("uidvalidity").notNull(),
+    uid: integer("uid").notNull(),
+    emailId: integer("email_id")
+      .notNull()
+      .references(() => emails.id),
+  },
+  (table) => [
+    primaryKey({ columns: [table.mailboxId, table.uidvalidity, table.uid] }),
+    index("email_locations_by_email_id").on(table.emailId),
+  ],
+)
+
 export const emailIndexPending = sqliteTable(
   "email_index_pending",
   {

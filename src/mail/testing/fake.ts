@@ -27,6 +27,8 @@ export interface FakeMail {
   flagged?: boolean
   /** `trash` puts it in the trash folder; otherwise it is in All Mail, which INBOX also shows. */
   folder?: "trash"
+  /** Folders that do not hold it although its `folder` says they do, as a server's delete from one folder leaves it. */
+  absentFrom?: string[]
 }
 
 /** The mailbox a fake source reads live, so a test changes it between syncs; the switches make the source fail. */
@@ -122,7 +124,9 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
   const trash = () => mailbox.trash ?? TRASH
   const inFolder = (folder: string): FakeMail[] => {
     if (![all(), trash(), "INBOX"].includes(folder)) throw failure(`Gmail has no such mailbox: ${folder}`)
-    return mailbox.messages.filter((m) => (folder === trash() ? m.folder === "trash" : m.folder !== "trash"))
+    return mailbox.messages.filter(
+      (m) => (folder === trash() ? m.folder === "trash" : m.folder !== "trash") && !m.absentFrom?.includes(folder),
+    )
   }
   const search = async (since: Date, folder: string): Promise<Searched> => {
     if (mailbox.searchFails) throw failure(mailbox.searchFails)

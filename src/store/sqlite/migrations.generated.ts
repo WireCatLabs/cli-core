@@ -830,5 +830,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER email_threads_subject_folded_au AFTER UPDATE OF subject ON email_threads\n  WHEN new.subject IS NOT old.subject AND new.subject_folded IS old.subject_folded BEGIN\n  UPDATE email_threads SET subject_folded = NULL WHERE id = new.id;\nEND;",
       "CREATE TRIGGER mailboxes_name_folded_au AFTER UPDATE OF name ON mailboxes\n  WHEN new.name IS NOT old.name AND new.name_folded IS old.name_folded BEGIN\n  UPDATE mailboxes SET name_folded = NULL WHERE id = new.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261030114008_version-39-email-locations",
+    "statements": [
+      "CREATE TABLE `email_locations` (\n\t`mailbox_id` integer NOT NULL,\n\t`uidvalidity` text NOT NULL,\n\t`uid` integer NOT NULL,\n\t`email_id` integer NOT NULL,\n\tCONSTRAINT `email_locations_pk` PRIMARY KEY(`mailbox_id`, `uidvalidity`, `uid`),\n\tCONSTRAINT `fk_email_locations_mailbox_id_mailboxes_id_fk` FOREIGN KEY (`mailbox_id`) REFERENCES `mailboxes`(`id`),\n\tCONSTRAINT `fk_email_locations_email_id_emails_id_fk` FOREIGN KEY (`email_id`) REFERENCES `emails`(`id`)\n);",
+      "CREATE INDEX `email_locations_by_email_id` ON `email_locations` (`email_id`);"
+    ]
   }
 ]

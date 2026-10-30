@@ -1,14 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
-import { extractText, importEngine } from "../attachments/extract.js"
+import { importEngine } from "../attachments/extract.js"
 import type { BudgetStop, RunBudget } from "../background/budget.js"
 import type { LoadEngine } from "../readers/types.js"
-import type { AccountKey, AttachmentInput, EmailAddress, MessageStore } from "../store/index.js"
+import type { AccountKey, EmailLocationInput, FolderEmail, MessageStore } from "../store/index.js"
+import { addressOf, FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { BULK, bulkBox } from "./bulk.js"
 import { factsOf } from "./facts.js"
 import { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 import { dropMissing, tooManyGone } from "./gone.js"
 import { mailHeadersOf } from "./headers.js"
-import { type Address, MAX_BODY_CHARS, type ParsedMail, parseMail } from "./parse.js"
+import { flagsToRefresh, proveByLocation } from "./locations.js"
+import { MAX_BODY_CHARS, type ParsedMail, parseMail } from "./parse.js"
 import { FETCH_SLICE, keyOf, type QuickPlan, readQuick } from "./quick.js"
 import {
   FULL_PASS_MS,
@@ -23,6 +25,7 @@ import {
   rulesKey,
   within,
 } from "./resume.js"
+import { retryUnread } from "./retry.js"
 import { ruleTagger, settleRuleTags, type TagOutcome } from "./rule-tags.js"
 import { decide, ENVELOPE, envelopeBox, envelopeBoxOf, type MailRule, tagsOf } from "./rules.js"
 import type { DomainAge } from "./score.js"
@@ -85,57 +88,13 @@ export interface MailSyncResult {
 const DAY = 86_400_000
 /** IMAP's SINCE counts whole days in the server's zone, so the window's first days are not trusted. */
 const EDGE = 2 * DAY
-export const MAX_ATTACHMENT_CHARS = 200_000
-/** One chunk of raw mail is held in memory at a time. */
-const FETCH_CHUNK = 50
 /** How often a long run saves where it is, so a kill costs at most this much listing again. */
 const SAVE_EVERY_MS = 30_000
 /** About a minute of listing; the 30-day window of the timer stays below it. */
 const RESUME_FROM = 5_000
 
-const addressOf = ({ email, name }: Address): EmailAddress => ({ address: email, name })
-
-type AttachmentLog = NonNullable<MailSyncResult["attachments"]>
-
-/** A parsed email's attachments as the store keeps them, each with its text or why it has none. */
-const readAttachments = async (
-  mail: ParsedMail,
-  messageId: string,
-  { loadEngine, maxAttachmentChars, at }: { loadEngine: LoadEngine; maxAttachmentChars: number; at: number },
-  log: AttachmentLog,
-): Promise<AttachmentInput[]> => {
-  const files: AttachmentInput[] = []
-  for (const [position, part] of mail.attachments.entries()) {
-    const extraction =
-      part.bytes === null
-        ? { status: "unavailable" as const }
-        : await extractText(part.bytes, { kind: "file", name: part.name, mime: part.mime, path: part.name }, loadEngine)
-    log.push({ message: messageId, part: part.id, status: extraction.status })
-    const extracted = extraction.status === "extracted" ? extraction : undefined
-    files.push({
-      position,
-      kind: "file",
-      mime: part.mime,
-      name: part.name,
-      title: null,
-      url: null,
-      size: part.bytes === null ? null : part.bytes.byteLength,
-      width: null,
-      height: null,
-      duration: null,
-      providerRef: { message: messageId, part: part.id },
-      localPath: null,
-      text: extracted ? extracted.text.slice(0, maxAttachmentChars) : null,
-      normalizedText: null,
-      extraction: extracted ? "text" : "failed",
-      extractor: extracted ? extracted.extractor : null,
-      extractionError: extracted ? null : extraction.status,
-      contentSha256: null,
-      extractedAt: at,
-    })
-  }
-  return files
-}
+export { MAX_ATTACHMENT_CHARS } from "./attachments.js"
+export { RETRYABLE_ATTACHMENTS } from "./retry.js"
 
 export interface MailSyncOptions {
   account: MailAccount
@@ -342,6 +301,11 @@ const syncRound = async (
   /** Raw mail read to learn its id, kept for the save so it is not read twice. */
   const rawOf = new Map<Listed, Uint8Array>()
   const quickRan = new Set<string>()
+  /** Folders whose server gives no cheap id: their mail's UIDs are kept, so a UID listing can stand in for headers. */
+  const locatable = new Set<string>()
+  /** A quick folder's stored mail as it was before this run changed anything, with the UID of each. */
+  const folderMail = new Map<string, FolderEmail[]>()
+  const refreshed = new Map<string, { read?: boolean; flagged?: boolean }>()
   let holding: Set<string> | undefined
   const holdsMail = async (folder: string) => {
     holding ??= new Set(
@@ -385,11 +349,16 @@ const syncRound = async (
         searched.validity !== undefined &&
         source.quick !== undefined &&
         source.identify !== undefined
+      if (quickable) locatable.add(folder)
+      // The UID listing proves deletions only for mail whose UID is stored; a folder stored before locations existed
+      // gets them from one header listing.
+      const located = point?.located !== undefined && Date.parse(point.located) <= since.getTime()
+      const quickReady = async () => (sameRules && located) || !(await holdsMail(folder))
       const inQuick =
         quickable &&
         (plan === undefined
-          ? sameRules || !(await holdsMail(folder))
-          : plan.quickFolders.has(folder) || (!plan.modes.has(folder) && (sameRules || !(await holdsMail(folder)))))
+          ? await quickReady()
+          : plan.quickFolders.has(folder) || (!plan.modes.has(folder) && (await quickReady())))
       if (inQuick) {
         plan?.quickFolders.add(folder)
         plan?.modes.set(folder, "resumed")
@@ -397,6 +366,9 @@ const syncRound = async (
         quickRan.add(folder)
         const done = point !== undefined && sameRules ? point.done : ([] as Ranges)
         if (point !== undefined && sameRules) earlier.set(folder, point)
+        const rows = await store.mail.folderEmails(accountId, folder, searched.validity as string)
+        folderMail.set(folder, rows)
+        const byUid = new Map(rows.map((row) => [String(row.uid), row]))
         const round = await readQuick(
           source as Parameters<typeof readQuick>[0],
           since,
@@ -405,7 +377,10 @@ const syncRound = async (
           done,
           max,
           plan,
+          new Set(byUid.keys()),
         )
+        for (const [id, flags] of flagsToRefresh(byUid, round.listing))
+          refreshed.set(id, { ...refreshed.get(id), ...flags })
         if (round.capped) capped = true
         for (const { item, raw } of round.read) {
           collected.push(item)
@@ -417,6 +392,7 @@ const syncRound = async (
       if (point !== undefined && point.validity === searched.validity && point.rules === ruleSet) {
         earlier.set(folder, point)
         const mode = plan?.modes.get(folder)
+        const backfill = quickable && !located
         const usable =
           Date.parse(point.full.since) <= since.getTime() && startedAt - Date.parse(point.full.at) < FULL_PASS_MS
         // A budgeted run goes on with an unfinished pass however small its window is: listing it whole again would
@@ -424,7 +400,7 @@ const syncRound = async (
         const unfinished = plan !== undefined && searched.uids.some((uid) => !within(point.done, Number(uid)))
         if (
           mode === "resumed" ||
-          (mode === undefined && usable && (searched.uids.length >= resumeFrom || unfinished))
+          (mode === undefined && usable && !backfill && (searched.uids.length >= resumeFrom || unfinished))
         ) {
           resumed.add(folder)
           wanted = { ...searched, uids: searched.uids.filter((uid) => !within(point.done, Number(uid))) }
@@ -490,6 +466,22 @@ const syncRound = async (
     current.add(item.folder ?? (folders[0] as string))
     foundFolders.set(item.messageId, current)
   }
+  const listingWhole =
+    !capped && (plan === undefined || (plan.stopped === null && plan.failed.size === 0 && plan.only === undefined))
+  /** Where each message was seen this run, saved with it so a message saved is a message located. */
+  const locationsOf = new Map<string, EmailLocationInput[]>()
+  for (const item of collected) {
+    const folder = item.folder ?? (folders[0] as string)
+    const validity = searches.get(folder)?.validity
+    if (!locatable.has(folder) || validity === undefined) continue
+    const where = locationsOf.get(item.messageId) ?? []
+    where.push({ folder, uidvalidity: validity, uid: Number(item.uid) })
+    locationsOf.set(item.messageId, where)
+  }
+  const locationOf = (item: Listed) => {
+    const locations = locationsOf.get(item.messageId)
+    return locations === undefined ? {} : { locations }
+  }
   const mailbox = (folder: string) => ({ externalId: folder, name: folder, kind: null })
   const label = (name: string) => ({ externalId: `label:${name}`, name, kind: "label" })
   const labelsOf = new Map(collected.flatMap((item) => (item.labels === undefined ? [] : [[item.messageId, item]])))
@@ -505,9 +497,30 @@ const syncRound = async (
   if (snapshot) skipped = "an mbox file is a snapshot; mail missing from it is not proven deleted"
   else if (plan !== undefined && (capped || plan.tried.size > plan.asked || plan.only !== undefined))
     skipped = "this run read the window in parts; a run that lists all of it at once checks deletions"
-  else if (quickRan.size > 0)
-    skipped = "this run listed only mail not read before, by UID; --rescan lists every message and checks deletions"
-  else if (resumed.size > 0)
+  else if (quickRan.size > 0) {
+    const proof = await proveByLocation(
+      store,
+      accountId,
+      {
+        folders: new Map(
+          [...quickRan].map((folder) => [
+            folder,
+            { searched: searches.get(folder) as Searched, rows: folderMail.get(folder) ?? [] },
+          ]),
+        ),
+        windowFrom: windowStart.getTime(),
+        present,
+        now: startedAt,
+      },
+      tooManyGone,
+    )
+    deleted = proof.deleted
+    skipped =
+      proof.skipped ??
+      (quickRan.size < folders.length
+        ? "folders this run did not list by UID are not checked for deletions; --rescan lists every message and checks them"
+        : undefined)
+  } else if (resumed.size > 0)
     skipped =
       "this run listed only mail not read before; a full listing, at least daily or with --rescan, checks deletions"
   else if (previousScope !== undefined && previousScope.value !== scope)
@@ -654,6 +667,8 @@ const syncRound = async (
           : { since: prior.window.since, total: prior.window.total, at: prior.updatedAt })
       const widestEver =
         priorWidest === undefined || since.getTime() <= Date.parse(priorWidest.since) ? thisRun : priorWidest
+      const located = locatable.has(folder) && (quickRan.has(folder) || (!resumed.has(folder) && listingWhole))
+      const locatedFrom = before?.located === undefined ? since.toISOString() : before.located
       const point: ResumePoint = {
         validity: searched.validity,
         done: merged,
@@ -667,11 +682,21 @@ const syncRound = async (
             }
           : before.window,
         widest: widestEver,
+        ...(located
+          ? { located: Date.parse(locatedFrom) < since.getTime() ? locatedFrom : since.toISOString() }
+          : before?.located === undefined
+            ? {}
+            : { located: before.located }),
         last: { ...thisRun, done: searched.uids.filter((uid) => within(merged, Number(uid))).length },
         updatedAt: new Date(now()).toISOString(),
       }
       await store.sync.setSyncState(key, resumeKey(folder), JSON.stringify(point))
     }
+  }
+  // Mail already stored is located before its UID is marked done, so a done UID always has its place.
+  for (const folder of locatable) {
+    const searched = searches.get(folder) as Searched
+    await store.mail.setLocations(accountId, folder, searched.validity as string, uidsOf.get(folder) ?? new Map())
   }
   let savedAt = now()
   const saveNow = async (force = false) => {
@@ -706,6 +731,7 @@ const syncRound = async (
           size: item.size ?? null,
           outgoing: headers?.from === key.account,
           mailboxes: [...inMailboxes(item), envelopeBox(rule.match)],
+          ...locationOf(item),
           ...flagsOf(item),
           mailRuleId: rule.id ?? null,
           metadata: {
@@ -794,6 +820,7 @@ const syncRound = async (
             ...(Object.keys(header).length ? { headers: header } : {}),
             outgoing: mail.from === null ? null : mail.from.email === key.account,
             mailboxes: inMailboxes(item),
+            ...locationOf(item),
             ...flagsOf(item),
             ...(upgraded.has(item.messageId) ? { metadata: {} } : {}),
             mailRuleId: decide(rules, factsFor(item))?.id ?? null,
@@ -824,13 +851,19 @@ const syncRound = async (
   if (!snapshot)
     await store.mail.setFlags(
       accountId,
-      new Map(
-        [...labelsOf].flatMap(([id, { seen, flagged }]) =>
+      new Map([
+        ...refreshed,
+        ...[...labelsOf].flatMap(([id, { seen, flagged }]) =>
           seen === undefined && flagged === undefined
             ? []
-            : [[id, { ...(seen === undefined ? {} : { read: seen }), ...(flagged === undefined ? {} : { flagged }) }]],
+            : [
+                [
+                  id,
+                  { ...(seen === undefined ? {} : { read: seen }), ...(flagged === undefined ? {} : { flagged }) },
+                ] as const,
+              ],
         ),
-      ),
+      ]),
       startedAt,
     )
 
@@ -871,136 +904,5 @@ const syncRound = async (
     ...(searches.size > 0 ? { pass: resumed.size > 0 ? ("resumed" as const) : ("full" as const) } : {}),
     ...(tagging.reused.length ? { tagsReused: tagging.reused } : {}),
     ...(tagging.skipped.length ? { tagsSkipped: tagging.skipped } : {}),
-  }
-}
-
-/** Failures a newer install mends: the reader was missing, not the file at fault, so reading again can succeed. */
-export const RETRYABLE_ATTACHMENTS = ["engine-missing"]
-
-/**
- * Reads again, by Gmail id, only the stored emails with an attachment a missing reader left unread: memo keeps no
- * attachment file, so the email comes from the source again. Nothing is listed, so no deletion is proved and no
- * resume point moves; the email keeps its stored mailboxes, flags and rule.
- */
-const retryUnread = async ({
-  store,
-  source,
-  account,
-  since,
-  max,
-  maxBodyChars,
-  maxAttachmentChars,
-  now,
-  loadEngine,
-  index,
-}: {
-  store: MessageStore
-  source: MailSource
-  account: MailAccount
-  since: Date
-  max: number
-  maxBodyChars: number
-  maxAttachmentChars: number
-  now: () => number
-  loadEngine: LoadEngine
-  index: MailSyncOptions["index"]
-}): Promise<MailSyncResult> => {
-  const startedAt = now()
-  const key: AccountKey = { provider: "email", account: account.address.toLowerCase() }
-  const find = source.find
-  if (find === undefined)
-    throw new CliError(
-      "validation_error",
-      "--retry-attachments reads mail again by its Gmail id; an mbox file or a plain IMAP account has none",
-    )
-  const accountId = await store.accounts.saveAccount(key, { name: account.address })
-  const wanted = (await store.mail.emailRefs({ accountId, attachmentErrors: RETRYABLE_ATTACHMENTS })).map(
-    ({ externalId }) => externalId,
-  )
-  const chosen = wanted.slice(0, max)
-  const found = new Map<string, Listed>()
-  for (const folder of await mailFolders(account, source)) {
-    const left = chosen.filter((id) => !found.has(id))
-    if (left.length === 0) break
-    for (const item of await find(left, folder)) if (!found.has(item.messageId)) found.set(item.messageId, item)
-  }
-  const items = [...found.values()]
-  const attachments: AttachmentLog = []
-  const unreadable: NonNullable<MailSyncResult["unreadable"]> = []
-  let emails = 0
-  let extracted = 0
-  let stillFailed = 0
-  for (let start = 0; start < items.length; start += FETCH_CHUNK) {
-    const chunk = items.slice(start, start + FETCH_CHUNK)
-    const raws = await source.fetchRaw(chunk)
-    for (const [index, item] of chunk.entries()) {
-      const raw = raws[index]
-      const stored = await store.mail.email(accountId, item.messageId)
-      if (stored === null) continue
-      let mail: ParsedMail
-      try {
-        if (raw === undefined || raw instanceof Error) throw raw ?? new Error("not read")
-        mail = await parseMail(raw, maxBodyChars)
-      } catch (error) {
-        unreadable.push({ message: item.messageId, reason: error instanceof Error ? error.message : String(error) })
-        continue
-      }
-      const before = new Map(stored.attachments.map(({ position, extractionError }) => [position, extractionError]))
-      const files = await readAttachments(
-        mail,
-        item.messageId,
-        { loadEngine, maxAttachmentChars, at: startedAt },
-        attachments,
-      )
-      for (const file of files)
-        if (RETRYABLE_ATTACHMENTS.includes(before.get(file.position) ?? ""))
-          if (file.extraction === "text") extracted++
-          else stillFailed++
-      const header = mailHeadersOf(raw as Uint8Array)
-      await store.mail.saveThread({
-        accountId,
-        externalId: item.threadId,
-        now: startedAt,
-        emails: [
-          {
-            externalId: item.messageId,
-            subject: mail.subject,
-            from: mail.from === null ? null : addressOf(mail.from),
-            to: mail.to.map(addressOf),
-            cc: mail.cc.map(addressOf),
-            bcc: mail.bcc.map(addressOf),
-            sentAt: null,
-            receivedAt: Date.parse(item.receivedAt),
-            bodyText: mail.text || null,
-            size: item.size ?? stored.size,
-            ...(Object.keys(header).length ? { headers: header } : {}),
-            outgoing: mail.from === null ? null : mail.from.email === key.account,
-            mailboxes: stored.mailboxes.map(({ externalId, name, kind }) => ({ externalId, name, kind })),
-            ...(stored.read === null ? {} : { read: stored.read }),
-            ...(stored.flagged === null ? {} : { flagged: stored.flagged }),
-            metadata: stored.metadata,
-            mailRuleId: stored.mailRuleId,
-            attachments: files,
-          },
-        ],
-      })
-      emails++
-    }
-  }
-  const indexed = await index?.(store, key)
-  return {
-    account: key.account,
-    since: since.toISOString(),
-    listed: items.length,
-    saved: 0,
-    alreadyStored: 0,
-    skipped: 0,
-    envelopes: 0,
-    deleted: 0,
-    complete: wanted.length <= max && unreadable.length === 0,
-    ...(indexed === undefined ? {} : { indexed }),
-    retried: { emails, extracted, stillFailed, missing: chosen.length - items.length },
-    ...(attachments.length ? { attachments } : {}),
-    ...(unreadable.length ? { unreadable } : {}),
   }
 }
