@@ -226,10 +226,15 @@ export const peopleAnswer = async (
   const counted = new Map<string, { participant: StoredParticipant; events: number }>()
   const mine = await calendarIds(store, accountId)
   const { rows, hasMore } = await page(store, { ...options.filter, accountId, limit: EVENTS_COUNTED })
+  const byEvent = new Map<number, StoredParticipant[]>()
+  for (const { eventId, ...one } of await store.participantsOf(
+    rows.map(({ id }) => id),
+    [...mine],
+  ))
+    byEvent.set(eventId, [...(byEvent.get(eventId) ?? []), one])
   for (const event of rows) {
-    const details = await store.event(event.id)
     const seen = new Set<string>()
-    for (const one of details ? ownCopies(details, mine).participants : []) {
+    for (const one of byEvent.get(event.id) ?? []) {
       if (one.resource || one.self || seen.has(one.email)) continue
       seen.add(one.email)
       const held = counted.get(one.email)

@@ -274,6 +274,8 @@ export interface EventStore {
   slotsOf(calendarId: number, seriesExternalId: string, window: { from: number; to: number }): Promise<StoredEntry[]>
   events(filter?: EventFilter): Promise<Event[]>
   event(id: number): Promise<EventDetails | null>
+  /** The participants of these events' copies on these calendars, deleted copies too, as `event` gives them. */
+  participantsOf(eventIds: number[], calendarIds: number[]): Promise<(StoredParticipant & { eventId: number })[]>
   /** The owner's link of an entry to an event; no rule replaces it. */
   linkEntry(entryId: number, eventId: number, now: number): Promise<void>
   /** The owner's unlink: the rules leave the entry alone after it. */

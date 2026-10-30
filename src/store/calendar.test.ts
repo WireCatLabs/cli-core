@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest"
 import { linkEvent } from "../meetings/index.js"
 import { CONTRACT_NOW, eventStoreContract, sampleMeeting } from "../meetings/testing/index.js"
 import { openCache } from "./open.js"
+import { eventStoreOver } from "./sqlite/calendar.js"
+import type { StoreContext } from "./sqlite/open.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const opened: MessageStore[] = []
@@ -60,6 +62,43 @@ describe("SQLite event store", () => {
     return { store: store.calendar, accountId }
   }))
     it(`contract: ${name}`, run)
+
+  it("a list of events by time seeks the time index, dated or not", async () => {
+    const { store, path, calendar } = await setup()
+    const at = CONTRACT_NOW
+    await store.calendar.saveEntries(
+      calendar,
+      [{ externalId: "e1", kind: "single", status: "confirmed", title: "Review", startsAt: at, endsAt: at + HOUR }],
+      at,
+    )
+    const database = await openCache(path)
+    const asked: string[] = []
+    const spy = new Proxy(database, {
+      get: (target, key) =>
+        key === "prepare"
+          ? (sql: string) => {
+              asked.push(sql)
+              return target.prepare(sql)
+            }
+          : Reflect.get(target, key),
+    })
+    const events = eventStoreOver({ database: spy, now: () => at } as unknown as StoreContext)
+    for (const filter of [
+      { from: at - HOUR, to: at + HOUR },
+      { from: at - HOUR, to: at + HOUR, fromDate: "1970-02-11", toDate: "1970-02-13" },
+    ]) {
+      asked.length = 0
+      expect(await events.events(filter)).toHaveLength(1)
+      const sql = asked.find((one) => one.startsWith("SELECT e.* FROM events e")) as string
+      const params = Array.from({ length: (sql.match(/\?/gu) ?? []).length }, () => 0)
+      const plan = database
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all(...params)
+        .map((row) => String(row.detail))
+      expect(plan.join(" | ")).toMatch(/SEARCH e USING INDEX events_by_time \(starts_at>\? AND starts_at<\?\)/u)
+    }
+    database.close()
+  })
 
   it("rule 4: an entry for a Zoom meeting's room at its time adopts the meeting's automatic event", async () => {
     const { store, zoom, calendar } = await setup()
