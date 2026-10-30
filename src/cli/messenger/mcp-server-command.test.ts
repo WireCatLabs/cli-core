@@ -203,7 +203,9 @@ describe("mcp server", () => {
     [["mcp", "server", "start", ...PUBLIC], "name the profiles to serve"],
     [["work", "mcp", "serve", "--profiles", "personal"], "not both"],
     [["work", "mcp", "config", "--profiles", "all"], "not both"],
-    [["mcp", "revoke"], "name the profiles to serve"],
+    [["mcp", "revoke"], "name the profiles whose browser logins to forget: `chat <profile> mcp revoke`"],
+    [["mcp", "server", "stop"], "name the profiles whose server to stop"],
+    [["mcp", "server", "status"], "name the profiles whose server to check"],
   ])("refuses %j with exit 2 and lists the profiles", async (argv, words) => {
     const root = mkdtempSync(join(tmpdir(), "mcp-server-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }

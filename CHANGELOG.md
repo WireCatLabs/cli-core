@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A messenger's `mcp revoke`, `mcp server stop` and `mcp server status` with no profile say what the profile is
+  for.** They refused with "name the profiles to serve", the words of `mcp serve`. Now: "name the profiles whose
+  browser logins to forget", "… whose server to stop", "… whose server to check". `mcp serve`, `mcp server start` and
+  `mcp config` keep "to serve". Same exit 2 and `details.profiles`.
+
 ## 0.485.0 — 30.10.2026
 
 ### Fixed
