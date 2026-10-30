@@ -229,6 +229,63 @@ export const calendarSyncContract = (make: () => CalendarSyncFixture | Promise<C
           ["confirmed", "confirmed", "confirmed"],
         )
       }),
+      test("a daily full round asks only the series that changed, and every series once a week", async ({
+        store,
+        source,
+        sync,
+      }) => {
+        if (traits.expands !== "on-request" || traits.fullListOnly) return
+        const tagged = (series: EntryInput, etag: string) => ({ ...series, etag })
+        const days = (from: number, count: number) => Array.from({ length: count }, (_, n) => slot("s", from + n * DAY))
+        putSeries(source, tagged(seriesOf("s"), "v1"), days(AT, 3))
+        putSeries(source, tagged(seriesOf("t"), "v1"), [slot("t", AT)])
+        await sync(NOW)
+        const asked = () => source.calls.occurrences.length
+        const before = asked()
+        putSeries(source, tagged(seriesOf("t"), "v2"), [slot("t", AT), slot("t", AT + DAY)])
+        const nextDay = await sync(NOW + DAY)
+        assert.equal(nextDay.synced[0]?.round, "full")
+        assert.deepEqual(source.calls.occurrences.slice(before), ["t"])
+        const entries = await entriesOf(store)
+        assert.deepEqual(
+          days(AT, 3).map(({ externalId }) => [entries.get(externalId)?.status, entries.get(externalId)?.deletedAt]),
+          [
+            ["confirmed", null],
+            ["confirmed", null],
+            ["confirmed", null],
+          ],
+        )
+        const far = AT + 92 * DAY
+        source.setOccurrences("s", [...days(AT, 3), slot("s", far)])
+        const atWeek = before + 1
+        await sync(NOW + 2 * DAY)
+        assert.equal(asked(), atWeek)
+        await sync(NOW + 8 * DAY)
+        assert.ok(source.calls.occurrences.slice(atWeek).includes("s"))
+        assert.equal((await entriesOf(store)).get(slotId("s", far))?.status, "confirmed")
+      }),
+      test("the slots of many series take a few store writes, not two for each series", async ({
+        store,
+        source,
+        accountId,
+      }) => {
+        if (traits.expands !== "on-request") return
+        for (let n = 0; n < 120; n++) putSeries(source, seriesOf(`s${n}`), [slot(`s${n}`, AT), slot(`s${n}`, AT + DAY)])
+        let writes = 0
+        const counted = new Proxy(store, {
+          get: (target, key) => {
+            const value = Reflect.get(target, key)
+            if (typeof value !== "function") return value
+            return (...args: unknown[]) => {
+              if (["saveEntries", "removeEntries", "saveSlots", "setCursor"].includes(String(key))) writes += 1
+              return value.apply(target, args)
+            }
+          },
+        })
+        const report = await syncCalendars(source, counted, { accountId, now: NOW })
+        assert.equal(report.synced[0]?.occurrences, 240)
+        assert.ok(writes <= 10, `${writes} writes`)
+      }),
       test(
         "a failed page keeps the pages before it, and the next run goes on from the failed one",
         async ({ store, source, sync }) => {

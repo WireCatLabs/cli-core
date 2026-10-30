@@ -600,6 +600,70 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     }
   }
 
+  const saveAll = (calendarId: number, entries: EntryInput[], now: number): StoredEntry[] => {
+    calendarRow(calendarId)
+    // A series first, so an occurrence in the same page finds it.
+    const ordered = [...entries].sort((a, b) => Number(b.kind === "series") - Number(a.kind === "series"))
+    const ids = new Map<EntryInput, number>()
+    const saved = ordered.map((input) => {
+      const entry = saveEntry(calendarId, input, now)
+      ids.set(input, entry.id)
+      return entry
+    })
+    for (const entry of saved)
+      if (entry.kind === "series" && entry.status === "cancelled") cancelOccurrences(entry.id, now)
+    const current = saved.map(({ id }) => entryOf(entryRow(id)))
+    for (const entry of current) link(entry, now)
+    refreshAround(
+      current.map(({ id }) => id),
+      now,
+    )
+    return entries.map((input) => entryOf(entryRow(ids.get(input) as number)))
+  }
+
+  const removeAll = (calendarId: number, externalIds: string[], now: number): number => {
+    calendarRow(calendarId)
+    const removed = database
+      .prepare(
+        `SELECT * FROM calendar_entries WHERE calendar_id = ? AND external_id IN (SELECT value FROM json_each(?))
+           AND status <> 'cancelled' AND deleted_at IS NULL`,
+      )
+      .all(calendarId, JSON.stringify(externalIds))
+    for (const row of removed) {
+      cancel(row, now)
+      database.prepare("UPDATE calendar_entries SET seen_at = ? WHERE id = ?").run(now, Number(row.id))
+      if (row.kind === "series") cancelOccurrences(Number(row.id), now)
+    }
+    refreshAround(
+      removed.map((row) => Number(row.id)),
+      now,
+    )
+    return removed.length
+  }
+
+  const putCursor = (calendarId: number, value: string | null, now: number) => {
+    const accountId = Number(calendarRow(calendarId).account_id)
+    if (value === null)
+      database
+        .prepare("DELETE FROM sync_cursors WHERE account_id = ? AND key = ?")
+        .run(accountId, cursorKey(calendarId))
+    else
+      database
+        .prepare(
+          `INSERT INTO sync_cursors (account_id, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        )
+        .run(accountId, cursorKey(calendarId), value, now, now)
+  }
+
+  const slotRows = (calendarId: number, series: string, window: { from: number; to: number }) =>
+    database
+      .prepare(
+        `SELECT * FROM calendar_entries WHERE calendar_id = ? AND kind = 'occurrence' AND series_external_id = ?
+           AND original_starts_at >= ? AND original_starts_at < ? AND deleted_at IS NULL ORDER BY original_starts_at`,
+      )
+      .all(calendarId, series, window.from, window.to)
+
   return {
     saveCalendars: async (accountId, calendars, now) =>
       write(database, () => {
@@ -640,47 +704,9 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
           .prepare("UPDATE calendars SET synced = ?, updated_at = ? WHERE id = ?")
           .run(flag(synced), now, calendarId)
       }),
-    saveEntries: async (calendarId, entries, now) =>
-      write(database, () => {
-        calendarRow(calendarId)
-        // A series first, so an occurrence in the same page finds it.
-        const ordered = [...entries].sort((a, b) => Number(b.kind === "series") - Number(a.kind === "series"))
-        const ids = new Map<EntryInput, number>()
-        const saved = ordered.map((input) => {
-          const entry = saveEntry(calendarId, input, now)
-          ids.set(input, entry.id)
-          return entry
-        })
-        for (const entry of saved)
-          if (entry.kind === "series" && entry.status === "cancelled") cancelOccurrences(entry.id, now)
-        const current = saved.map(({ id }) => entryOf(entryRow(id)))
-        for (const entry of current) link(entry, now)
-        refreshAround(
-          current.map(({ id }) => id),
-          now,
-        )
-        return entries.map((input) => entryOf(entryRow(ids.get(input) as number)))
-      }),
+    saveEntries: async (calendarId, entries, now) => write(database, () => saveAll(calendarId, entries, now)),
     removeEntries: async (calendarId, externalIds, now) =>
-      write(database, () => {
-        calendarRow(calendarId)
-        const removed = database
-          .prepare(
-            `SELECT * FROM calendar_entries WHERE calendar_id = ? AND external_id IN (SELECT value FROM json_each(?))
-               AND status <> 'cancelled' AND deleted_at IS NULL`,
-          )
-          .all(calendarId, JSON.stringify(externalIds))
-        for (const row of removed) {
-          cancel(row, now)
-          database.prepare("UPDATE calendar_entries SET seen_at = ? WHERE id = ?").run(now, Number(row.id))
-          if (row.kind === "series") cancelOccurrences(Number(row.id), now)
-        }
-        refreshAround(
-          removed.map((row) => Number(row.id)),
-          now,
-        )
-        return removed.length
-      }),
+      write(database, () => removeAll(calendarId, externalIds, now)),
     markUnseen: async (calendarId, seenBefore, window, now) =>
       write(database, () => {
         const marked = database
@@ -720,15 +746,29 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
         return row ? entryOf(row) : null
       }),
     slotsOf: async (calendarId, seriesExternalId, window) =>
-      read(database, () =>
-        database
-          .prepare(
-            `SELECT * FROM calendar_entries WHERE calendar_id = ? AND kind = 'occurrence' AND series_external_id = ?
-               AND original_starts_at >= ? AND original_starts_at < ? AND deleted_at IS NULL ORDER BY original_starts_at`,
-          )
-          .all(calendarId, seriesExternalId, window.from, window.to)
-          .map(entryOf),
-      ),
+      read(database, () => slotRows(calendarId, seriesExternalId, window).map(entryOf)),
+    saveSlots: async (calendarId, groups, window, cursor, now) =>
+      write(database, () => {
+        let [saved, removed] = [0, 0]
+        const seen = database.prepare("UPDATE calendar_entries SET seen_at = ? WHERE id = ?")
+        for (const { series, slots } of groups) {
+          const held = slotRows(calendarId, series, window)
+          if (slots === null) {
+            for (const row of held) seen.run(now, Number(row.id))
+            continue
+          }
+          if (slots.length) saved += saveAll(calendarId, slots, now).length
+          const given = new Set(slots.map(({ externalId }) => externalId))
+          const stale = held
+            .filter(
+              (row) => Number(row.exception) !== 1 && row.status !== "cancelled" && !given.has(String(row.external_id)),
+            )
+            .map((row) => String(row.external_id))
+          if (stale.length) removed += removeAll(calendarId, stale, now)
+        }
+        putCursor(calendarId, cursor, now)
+        return { saved, removed }
+      }),
     cursor: async (calendarId) =>
       read(database, () => {
         const { account_id } = calendarRow(calendarId)
@@ -738,21 +778,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
             .get(Number(account_id), cursorKey(calendarId))?.value,
         )
       }),
-    setCursor: async (calendarId, value, now) =>
-      write(database, () => {
-        const accountId = Number(calendarRow(calendarId).account_id)
-        if (value === null)
-          database
-            .prepare("DELETE FROM sync_cursors WHERE account_id = ? AND key = ?")
-            .run(accountId, cursorKey(calendarId))
-        else
-          database
-            .prepare(
-              `INSERT INTO sync_cursors (account_id, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-            )
-            .run(accountId, cursorKey(calendarId), value, now, now)
-      }),
+    setCursor: async (calendarId, value, now) => write(database, () => putCursor(calendarId, value, now)),
     events: async (filter: EventFilter = {}) => {
       const clauses = ["e.deleted_at IS NULL"]
       const params: (string | number)[] = []

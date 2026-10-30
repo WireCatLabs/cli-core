@@ -211,6 +211,12 @@ export interface EventFilter {
 }
 
 /** Pairs the rules left unlinked because two or more entities fit equally well (requirements 3.6). */
+/** One series' slots for `EventStore.saveSlots`: what the provider gave, or `null` to keep what is stored. */
+export interface SeriesSlots {
+  series: string
+  slots: EntryInput[] | null
+}
+
 export interface LinkReview {
   id: number
   linkableType: string
@@ -270,6 +276,18 @@ export interface EventStore {
   setCursor(calendarId: number, value: string | null, now: number): Promise<void>
   /** One entry by the provider's id; a series, which no event holds, is found only this way. */
   entry(calendarId: number, externalId: string): Promise<StoredEntry | null>
+  /**
+   * Several series' slots in the window and the sync cursor, in one transaction: a sync commits once for many series
+   * instead of twice for each. A series' slots replace its stored plain slots in the window (one it no longer has is
+   * cancelled, as `removeEntries` does); `slots: null` keeps them and counts them as seen now.
+   */
+  saveSlots(
+    calendarId: number,
+    groups: SeriesSlots[],
+    window: { from: number; to: number },
+    cursor: string,
+    now: number,
+  ): Promise<{ saved: number; removed: number }>
   /** The series' stored slots, moved ones too, whose original start falls in the window; deleted ones left out. */
   slotsOf(calendarId: number, seriesExternalId: string, window: { from: number; to: number }): Promise<StoredEntry[]>
   events(filter?: EventFilter): Promise<Event[]>

@@ -330,7 +330,7 @@ export const memoryEventStore = (): EventStore => {
     return entry
   }
 
-  return {
+  const store: EventStore = {
     async saveCalendars(accountId, list, now) {
       return list.map((one) => {
         let calendar = calendars.find((held) => held.accountId === accountId && held.externalId === one.externalId)
@@ -453,6 +453,33 @@ export const memoryEventStore = (): EventStore => {
         .sort((a, b) => (a.originalStartsAt as number) - (b.originalStartsAt as number))
         .map(stored)
     },
+    async saveSlots(calendarId, groups, window, cursor, now) {
+      let [saved, removed] = [0, 0]
+      for (const { series, slots } of groups) {
+        const held = entries.filter(
+          (one) =>
+            one.calendarId === calendarId &&
+            one.kind === "occurrence" &&
+            one.seriesExternalId === series &&
+            one.originalStartsAt !== null &&
+            one.originalStartsAt >= window.from &&
+            one.originalStartsAt < window.to &&
+            one.deletedAt === null,
+        )
+        if (slots === null) {
+          for (const one of held) one.seenAt = now
+          continue
+        }
+        if (slots.length) saved += (await store.saveEntries(calendarId, slots, now)).length
+        const given = new Set(slots.map(({ externalId }) => externalId))
+        const stale = held
+          .filter((one) => !one.exception && one.status !== "cancelled" && !given.has(one.externalId))
+          .map(({ externalId }) => externalId)
+        if (stale.length) removed += await store.removeEntries(calendarId, stale, now)
+      }
+      await store.setCursor(calendarId, cursor, now)
+      return { saved, removed }
+    },
     async cursor(calendarId) {
       return cursors.get(calendarId) ?? null
     },
@@ -558,4 +585,5 @@ export const memoryEventStore = (): EventStore => {
       return { ...review, candidates: [...review.candidates] }
     },
   }
+  return store
 }

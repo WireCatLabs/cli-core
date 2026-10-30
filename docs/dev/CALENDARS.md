@@ -42,7 +42,13 @@ provider confirmed deleted, never one that only left the window.
 6. Occurrences: `expand` for `local` as each page comes, since it costs no request; for `on-request` the series ids
    are kept in the cursor and `occurrences()` asked for each after the listing, the cursor saved after each; nothing
    for `in-changes`. A series' slots replace its stored ones in the window: a plain slot it no longer gives (the series
-   moved, or dropped it) is cancelled through `removeEntries`, so an incremental round leaves no slot at the old time.
+   moved, or dropped it) is cancelled, so an incremental round leaves no slot at the old time. `saveSlots` saves the
+   slots of up to 50 series or 250 slots and the cursor in one transaction, so a sync commits a few times per calendar,
+   not twice per series, and holds the write lock briefly. The daily full round asks only the series that changed
+   (another etag than the stored one, or no stored slots in the window); the others keep their slots, counted as seen.
+   Once the window's end has moved 7 days since every series was last asked (`slotsTo` in the cursor), or on
+   `--rescan`, it asks every series, so a series that does not change lacks at most 7 days of slots at the window's far
+   end.
 7. After a full round, `markUnseen` marks what it has not seen since the round started (`startedAt`), so the pages
    an earlier run saved are not marked. It marks only what the list could return (`entryInWindow`): a single or a
    moved slot by its own time, a plain slot by its series' time, a series while it repeats into the window (by
