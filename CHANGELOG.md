@@ -411,7 +411,6 @@ shape of this file.
 - **The MCP login page says why a code that just worked is now wrong.** Each login code works once; after an app
   logs in, the server shows a new one. The wrong-code message now says so and points to WireCat Desktop and
   `<cli> mcp server status`, where the new code is.
-||||||| parent of 113a11c1 (feat(calendar)!: move events, change or delete "this and all following", writes allowed by default)
 
 ## 0.465.0 — 27.10.2026
 
