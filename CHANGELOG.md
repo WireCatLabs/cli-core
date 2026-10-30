@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.483.0 — 30.10.2026
+
 ### Fixed
 
 - **An MCP server answers each tool call about 6 ms sooner in tg.** The command tree is still built fresh for every
