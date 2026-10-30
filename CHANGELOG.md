@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.484.0 — 30.10.2026
+
 ### Fixed
 
 - **Every name filter ignores case in any script, not only Latin** — SQLite's `lower()` folds A–Z only, so
