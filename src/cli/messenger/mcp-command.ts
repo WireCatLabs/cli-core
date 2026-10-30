@@ -44,6 +44,11 @@ export const ALL_PROFILES = "_all"
 /** `--profiles all`; a profile named `all` is served alone, as `<tool> all mcp serve`. */
 export const EVERY_PROFILE = "all"
 
+const SERVER_PURPOSE: Readonly<Record<string, string>> = {
+  stop: "whose server to stop",
+  status: "whose server to check",
+}
+
 /** The profiles `--profiles` names: `all`, read again on each session, or a fixed list. */
 export interface ProfileSet {
   /** What `--profiles` takes to name this set again: `all`, or the names sorted, comma-separated. */
@@ -65,6 +70,7 @@ export const servedProfiles = (
   { settings, env }: { settings: Pick<Settings, "profile" | "sources" | "profilesHere">; env: NodeJS.ProcessEnv },
   given: string | undefined,
   words: string,
+  purpose = "to serve",
 ): { profile: string } | { set: ProfileSet } => {
   const { app } = messenger
   const here = settings.profilesHere
@@ -82,7 +88,7 @@ export const servedProfiles = (
     if (here.length === 0) throw new NoProfileHere(app)
     throw new CliError(
       "validation_error",
-      `name the profiles to serve: \`${app.command} <profile> ${words}\`, or \`${app.command} ${words} --profiles ` +
+      `name the profiles ${purpose}: \`${app.command} <profile> ${words}\`, or \`${app.command} ${words} --profiles ` +
         `<a,b>\` or \`--profiles all\` — ${listed}`,
       { profiles: here },
     )
@@ -267,7 +273,14 @@ export const mcpGroup = (host: McpHost): Command => {
         ),
     ).action(async function (this: Command) {
       const context = host.context(this, { needsProfile: false })
-      const served = servedProfiles(this, host, context, this.opts<McpFlags>().profiles, "mcp revoke")
+      const served = servedProfiles(
+        this,
+        host,
+        context,
+        this.opts<McpFlags>().profiles,
+        "mcp revoke",
+        "whose browser logins to forget",
+      )
       const { revokeAll } = await import("../../mcp/http/oauth.js")
       revokeAll(httpTokenFile(app, "set" in served ? served.set.key : served.profile, context.env))
       renderAnswer(
@@ -289,7 +302,14 @@ export const mcpGroup = (host: McpHost): Command => {
       target: (self) => {
         const context = host.context(self, { needsProfile: false })
         const { env } = context
-        const served = servedProfiles(self, host, context, self.opts<McpFlags>().profiles, `mcp server ${self.name()}`)
+        const served = servedProfiles(
+          self,
+          host,
+          context,
+          self.opts<McpFlags>().profiles,
+          `mcp server ${self.name()}`,
+          SERVER_PURPOSE[self.name()],
+        )
         if ("set" in served) {
           const { set } = served
           return {
