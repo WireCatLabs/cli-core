@@ -277,9 +277,21 @@ export const reviewsAnswer = async (store: EventStore) => {
   }
 }
 
-export const resolveAnswer = async (store: EventStore, review: string, choice: string, now: number) => {
+export const resolveAnswer = async (
+  store: EventStore,
+  accountId: number,
+  review: string,
+  choice: string,
+  now: number,
+) => {
   if (!/^[1-9]\d*$/u.test(review)) throw new CliError("validation_error", "a review is its id from links review")
   const decision = choice === "apart" ? { apart: true as const } : { choose: eventIdOf(choice) }
+  const found = (await store.reviews()).find(({ id }) => id === Number(review))
+  if (found && (found.calendarId === null || !(await calendarIds(store, accountId)).has(found.calendarId)))
+    throw new CliError(
+      "permission_error",
+      `review ${review} is about a copy on another account's calendar; resolve it from that account's profile`,
+    )
   const resolved = await store.resolveReview(Number(review), decision, now)
   return {
     id: String(resolved.id),

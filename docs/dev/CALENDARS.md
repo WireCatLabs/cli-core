@@ -30,7 +30,9 @@ provider confirmed deleted, never one that only left the window.
    months ahead from the start of today in UTC. Calendars with a round in progress go first, then the one synced
    longest ago, so a rerun spends its budget where work was left.
 3. A round in progress goes on, with its own window and token. Otherwise a full round (`cursor: null`) when asked
-   (`full`, the CLI's `--rescan`, which also drops a round in progress), when the source is `fullListOnly`, when there is no cursor or it
+   (`full`, the CLI's `--rescan`, which also drops a round in progress, and is saved as each calendar's round before
+   the first request, so a run its budget stops still lists the calendars it did not reach in full next time), when
+   the source is `fullListOnly`, when there is no cursor or it
    cannot be read, when the cursor holds a window that moved, or when the last full round is a day old. Otherwise
    only the changes.
 4. Each page: `saveEntries`, then `removeEntries` for `removed`, then the cursor with the next page in it.
@@ -39,7 +41,8 @@ provider confirmed deleted, never one that only left the window.
    A reset of a full list fails the calendar.
 6. Occurrences: `expand` for `local` as each page comes, since it costs no request; for `on-request` the series ids
    are kept in the cursor and `occurrences()` asked for each after the listing, the cursor saved after each; nothing
-   for `in-changes`.
+   for `in-changes`. A series' slots replace its stored ones in the window: a plain slot it no longer gives (the series
+   moved, or dropped it) is cancelled through `removeEntries`, so an incremental round leaves no slot at the old time.
 7. After a full round, `markUnseen` marks what it has not seen since the round started (`startedAt`), so the pages
    an earlier run saved are not marked. It marks only what the list could return (`entryInWindow`): a single or a
    moved slot by its own time, a plain slot by its series' time, a series while it repeats into the window (by
@@ -111,14 +114,14 @@ shows the event's own fields (title, time) and only this account's copies, atten
 |---|---|---|
 | `calendars list` | provider read, local write | the provider's calendars, saved, with which of them sync |
 | `calendars sync <calendar>` / `unsync <calendar>` | local write | turn one calendar's sync on or off, by its id or the provider's |
-| `sync [--rescan] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` with a `next` step and exits 0, a calendar that failed exits with `provider_error` (`sync.partial`). `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
+| `sync [--rescan] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` with a `next` step and exits 0, a calendar that failed exits with `provider_error` (`sync.partial`), whose message and `details.calendars` name each failed calendar and its error, since a host may print only the error; it is safe to retry, as a sync sends the provider no write. `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
 | `status` | local read | each synced calendar's sync in the WC-LIFE-14 shape (`progressOf`): `done`, `total: null`, `remaining: null`, `state`, `updated_at`, `cursor_age_ms`, plus `round` in progress and `line` (`progressLine`); `profile` is `deps.profile` |
 | `events list [today\|week\|from:… to:…] [person:…] [calendar:…]` | local read | stored events, earliest first; without a time word from the start of today |
 | `events show <event>` | local read | its calendar copies, attendees with their `person:`, Drive files, history |
 | `search <words…>` | local read | `searchEvents` from `./services` over this account, never a copy of it |
 | `people list [<event>]` | local read | one event's attendees, or everyone in this week's events with how many they attend |
 | `people link <person> <other>` | local write | `linkPeople` from `./services`, the people service's own link (`email:ana@x.com telegram:12`) |
-| `links review` / `links resolve <review> <choice>` | local read / write | copies that fit two events equally well, and the owner's choice (`event:<id>` or `apart`); the choices are kept per store, so every account's are listed |
+| `links review` / `links resolve <review> <choice>` | local read / write | copies that fit two events equally well, and the owner's choice (`event:<id>` or `apart`); the choices are kept per store, so every account's are listed, but only the profile's own account resolves one (`LinkReview.calendarId`) |
 | `calendars busy [today\|week\|from:… to:…] [calendar:…] [person:<email>…] [--duration-minutes <n>] [--hours 09:00-17:00]` | provider read | only when `deps.freeBusy` is set: `source.freeBusy` for the synced calendars (or those named) and each person named, this week by default; with `--duration-minutes`, the free stretches every one of them shares inside working hours, Monday to Friday, in the owner's zone (`slots`), and in `unknown` whoever the provider would not show. A person appears only by the address given; nothing is stored |
 
 With a writer (`deps.writes`), `events create | update | delete | respond` exist too. `--repeat <rule>` on create

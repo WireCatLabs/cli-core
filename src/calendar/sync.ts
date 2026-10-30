@@ -207,18 +207,17 @@ const freshRound = (full: boolean, from: string | null, window: SyncWindow, now:
   series: [],
 })
 
-/** The round in progress, or the one this run starts: a full one when asked, due, or the only kind the source has. */
+/** The round in progress, or the one this run starts: a full one when due or the only kind the source has. */
 const roundFor = (
   source: CalendarSource,
   stored: CalendarCursor | null,
-  { asked, window, now }: { asked: boolean; window: SyncWindow; now: number },
+  { window, now }: { window: SyncWindow; now: number },
 ): PendingRound => {
-  if (stored?.round && !asked) return stored.round
+  if (stored?.round) return stored.round
   const windowMoved = stored !== null && (stored.window.from !== window.from || stored.window.to !== window.to)
   // A full round once a day also asks every series for its slots again, which an incremental round does only for
   // the series that changed (foundation §6.2 step 7).
   const full =
-    asked ||
     source.traits.fullListOnly ||
     stored === null ||
     stored.token === null ||
@@ -237,7 +236,6 @@ const deadList = (provider: string) =>
 const syncOne = async (
   { source, store, calendar, window, now, expand, budget, signal, moved }: Plan,
   stored: CalendarCursor | null,
-  asked: boolean,
   result: CalendarSyncResult,
 ): Promise<BudgetStop | null> => {
   let cursor: CalendarCursor = stored ?? {
@@ -255,7 +253,7 @@ const syncOne = async (
     await store.restoreUnseen(calendar.id, calendarSyncWindow, now)
     cursor = { ...cursor, restored: true }
   }
-  let round = roundFor(source, stored, { asked, window, now })
+  let round = roundFor(source, stored, { window, now })
   if (round !== stored?.round) cursor = { ...cursor, done: 0 }
   const show = () => Object.assign(result, { round: round.full ? "full" : "changes", reset: round.reset })
   show()
@@ -263,11 +261,18 @@ const syncOne = async (
     cursor = { ...cursor, round, updatedAt: now, ...finished }
     await store.setCursor(calendar.id, JSON.stringify(cursor), now)
   }
-  const saveSlots = async (slots: EntryInput[]) => {
-    if (!slots.length) return
-    await store.saveEntries(calendar.id, slots, now)
-    result.occurrences += slots.length
-    cursor = { ...cursor, done: cursor.done + slots.length }
+  /** A series' slots in the window replace the ones stored: a slot it no longer has, moved or dropped, is cancelled. */
+  const saveSlots = async (series: string, slots: EntryInput[]) => {
+    if (slots.length) {
+      await store.saveEntries(calendar.id, slots, now)
+      result.occurrences += slots.length
+      cursor = { ...cursor, done: cursor.done + slots.length }
+    }
+    const given = new Set(slots.map(({ externalId }) => externalId))
+    const stale = (await store.slotsOf(calendar.id, series, round.window))
+      .filter((one) => !one.exception && one.status !== "cancelled" && !given.has(one.externalId))
+      .map(({ externalId }) => externalId)
+    if (stale.length) result.removed += await store.removeEntries(calendar.id, stale, now)
   }
   const stop = () => budget.take()
   let restarted = false
@@ -302,7 +307,8 @@ const syncOne = async (
       cursor = { ...cursor, done: cursor.done + page.entries.length }
       for (const entry of page.entries) {
         if (entry.kind !== "series" || entry.status === "cancelled") continue
-        if (source.traits.expands === "local") await saveSlots(await (expand as CalendarExpander)(entry, round.window))
+        if (source.traits.expands === "local")
+          await saveSlots(entry.externalId, await (expand as CalendarExpander)(entry, round.window))
         else if (source.traits.expands === "on-request" && !round.series.includes(entry.externalId))
           round = { ...round, series: [...round.series, entry.externalId] }
       }
@@ -329,7 +335,7 @@ const syncOne = async (
       round.window,
     )
     if (signal?.aborted) return "cancelled"
-    await saveSlots(slots)
+    await saveSlots(series, slots)
     round = { ...round, series: round.series.filter((one) => one !== series) }
     await save()
     moved()
@@ -407,9 +413,16 @@ export const syncCalendars = async (
     const [x, y] = [rank(a), rank(b)]
     return (x[0] as number) - (y[0] as number) || (x[1] as number) - (y[1] as number)
   })
+  if (options.full)
+    // Every calendar keeps the rescan as its round in progress, so one this run does not reach starts it next time.
+    for (const one of synced) {
+      const round = freshRound(true, null, window, now)
+      const fresh = { v: 2 as const, token: null, window, fullAt: 0, updatedAt: null, restored: true as const }
+      one.stored = { ...(one.stored ?? fresh), done: 0, round }
+      await store.setCursor(one.calendar.id, JSON.stringify(one.stored), now)
+    }
   for (const { calendar, stored } of synced) {
-    const asked = options.full === true
-    const planned = roundFor(source, stored, { asked, window, now })
+    const planned = roundFor(source, stored, { window, now })
     const result: CalendarSyncResult = {
       calendarId: calendar.id,
       externalId: calendar.externalId,
@@ -440,7 +453,6 @@ export const syncCalendars = async (
           },
         },
         stored,
-        asked,
         result,
       )
     } catch (error) {

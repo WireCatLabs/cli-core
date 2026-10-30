@@ -245,6 +245,23 @@ const retryable = async <T>(context: WriteContext, id: string, write: () => Prom
   }
 }
 
+/**
+ * The store's save of what the provider already made. A failure here names the id: without it the owner's retry makes
+ * the event a second time.
+ */
+const savedAfterCreate = async <T>(context: WriteContext, id: string, save: () => Promise<T>): Promise<T> => {
+  try {
+    return await save()
+  } catch (error) {
+    throw new CliError(
+      isCliError(error) ? error.code : "invalid_response",
+      `the provider made event ${id}, but the local store did not save it (${error instanceof Error ? error.message : String(error)}); ` +
+        `sync to store it — do not create it again: a create repeated with ${context.names.id} ${id} finds it`,
+      { ...(isCliError(error) ? error.details : {}), operation_id: id, id },
+    )
+  }
+}
+
 export const createEvent = async (
   context: WriteContext,
   calendarReference: string,
@@ -263,7 +280,9 @@ export const createEvent = async (
       () => context.writes.writer.create(calendar, draft, { id, notify }),
     ),
   )
-  const [saved] = await context.store.saveEntries(calendar.id, [entry], context.now)
+  const [saved] = await savedAfterCreate(context, id, () =>
+    context.store.saveEntries(calendar.id, [entry], context.now),
+  )
   return answerOf(id, saved, draft.recurrence !== undefined)
 }
 
@@ -334,6 +353,24 @@ const scopeOf = (context: WriteContext, { series, following }: ScopeChoice): Fol
   return following ? "following" : series ? "series" : "this"
 }
 
+/**
+ * A new COUNT or UNTIL that drops slots the series had deletes them as surely as a delete of the series does, so it
+ * takes that key too. A bound this cannot compare with the old one counts as shorter.
+ */
+const shortens = (target: StoredEntry, rule: string, zone: string): boolean => {
+  // A date UNTIL takes in its whole day.
+  const endOf = (line: string, in_: string) => {
+    const end = ruleEnd(line, in_)
+    return end !== undefined && /UNTIL=\d{8}(?:;|$)/iu.test(line) ? end + 86_400_000 - 1 : end
+  }
+  const [until, count] = [endOf(rule, zone), ruleCount(rule)]
+  if (until === undefined && count === undefined) return false
+  const before = ruleLine(target.recurrence ?? [])
+  const [wasUntil, wasCount] = before === undefined ? [] : [endOf(before, target.timezone ?? zone), ruleCount(before)]
+  if (until !== undefined) return wasUntil === undefined || until < wasUntil
+  return wasCount === undefined || Number(count) < Number(wasCount)
+}
+
 export const updateEvent = async (
   context: WriteContext,
   reference: string,
@@ -366,9 +403,10 @@ export const updateEvent = async (
       { reason: "event.repeat-kind" },
     )
   const notify = notifyOf(context, options.notify, hasOthers(participants) || (patch.attendees?.length ?? 0) > 0)
+  const ends = patch.recurrence !== undefined && shortens(target, patch.recurrence[0] as string, context.zone)
   const operationId = newOperationId()
   const entry = await guardedWrite(
-    writeGuard(context, keysFor(context, "update", notify)),
+    writeGuard(context, [...keysFor(context, "update", notify), ...(ends ? [EVENTS_DELETE_SERIES_KEY] : [])]),
     { chatId: null, kind: "edit", key: COMMAND_KEY.update, operationId, notify },
     () =>
       context.writes.writer.update(calendar, target.externalId, patch, { scope, etag: target.etag as string, notify }),
@@ -585,7 +623,9 @@ const updateFollowing = async (
         ),
       ),
     )
-  const [saved, ended] = await context.store.saveEntries(calendar.id, written, context.now)
+  const [saved, ended] = await savedAfterCreate(context, id, () =>
+    context.store.saveEntries(calendar.id, written, context.now),
+  )
   return {
     operation_id: id,
     event: entry.eventId === null ? null : `event:${entry.eventId}`,

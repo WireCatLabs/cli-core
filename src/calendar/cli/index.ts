@@ -276,10 +276,26 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
           : report.hint
       if (report.hint === undefined) delete report.hint
       print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
-      if (report.synced.some((one) => one.error !== undefined))
-        throw new CliError("provider_error", "some calendars did not sync; run sync again to retry them", {
-          reason: "sync.partial",
-        })
+      const failed = report.synced.filter((one) => one.error !== undefined)
+      if (failed.length)
+        // The error carries what failed, since a host that prints only the error drops the report printed above.
+        throw new CliError(
+          "provider_error",
+          `${failed.map((one) => `calendar ${one.calendarId} (${one.title ?? one.externalId}): ${one.error}`).join("; ")}` +
+            " — run sync again to retry",
+          {
+            reason: "sync.partial",
+            calendars: failed.map((one) => ({
+              calendar_id: String(one.calendarId),
+              external_id: one.externalId,
+              title: one.title,
+              error: one.error,
+            })),
+            retryable: true,
+            // A sync sends the provider no write, so running it again changes nothing there.
+            sent: false,
+          },
+        )
     })
 
   output(
@@ -435,7 +451,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       "links resolve 7 event:42",
     ),
   ).action(async (review: string, choice: string, _opts: unknown, command: Command) => {
-    print(await resolveAnswer(deps.store, review, choice, now()), command)
+    print(await resolveAnswer(deps.store, deps.accountId, review, choice, now()), command)
   })
 }
 

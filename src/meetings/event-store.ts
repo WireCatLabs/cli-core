@@ -215,6 +215,8 @@ export interface LinkReview {
   id: number
   linkableType: string
   linkableId: number
+  /** The calendar of a `calendar_entry` review's copy, so a choice is made only from that calendar's account. */
+  calendarId: number | null
   entityType: string
   candidates: number[]
   reason: string
@@ -268,6 +270,8 @@ export interface EventStore {
   setCursor(calendarId: number, value: string | null, now: number): Promise<void>
   /** One entry by the provider's id; a series, which no event holds, is found only this way. */
   entry(calendarId: number, externalId: string): Promise<StoredEntry | null>
+  /** The series' stored slots, moved ones too, whose original start falls in the window; deleted ones left out. */
+  slotsOf(calendarId: number, seriesExternalId: string, window: { from: number; to: number }): Promise<StoredEntry[]>
   events(filter?: EventFilter): Promise<Event[]>
   event(id: number): Promise<EventDetails | null>
   /** The owner's link of an entry to an event; no rule replaces it. */

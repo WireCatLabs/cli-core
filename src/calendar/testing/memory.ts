@@ -96,6 +96,7 @@ export const memoryEventStore = (): EventStore => {
           id: nextId++,
           linkableType: "calendar_entry",
           linkableId: entry.id,
+          calendarId: entry.calendarId,
           entityType: entity,
           candidates: ids,
           reason: "ical-uid",
@@ -436,6 +437,21 @@ export const memoryEventStore = (): EventStore => {
     async entry(calendarId, externalId) {
       const found = entries.find((one) => one.calendarId === calendarId && one.externalId === externalId)
       return found ? stored(found) : null
+    },
+    async slotsOf(calendarId, seriesExternalId, window) {
+      return entries
+        .filter(
+          (one) =>
+            one.calendarId === calendarId &&
+            one.kind === "occurrence" &&
+            one.seriesExternalId === seriesExternalId &&
+            one.originalStartsAt !== null &&
+            one.originalStartsAt >= window.from &&
+            one.originalStartsAt < window.to &&
+            one.deletedAt === null,
+        )
+        .sort((a, b) => (a.originalStartsAt as number) - (b.originalStartsAt as number))
+        .map(stored)
     },
     async cursor(calendarId) {
       return cursors.get(calendarId) ?? null

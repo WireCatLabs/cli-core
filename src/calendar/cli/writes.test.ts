@@ -186,6 +186,22 @@ describe("calendar write commands", () => {
     expect(await store.entry(1, id)).toMatchObject({ title: "Example planning" })
   })
 
+  it("a create the store fails to save names the event's id, and a retry with it finds the one event", async () => {
+    const { cli, writer, store } = await setup({ permissions: ALLOW })
+    const save = store.saveEntries
+    store.saveEntries = async () => {
+      store.saveEntries = save
+      throw new CliError("provider_unavailable", "database is locked", { reason: "store.locked" })
+    }
+    const failed = await cli(...create, ...at).catch((error) => error)
+    const id = failed.details.operation_id as string
+    expect(failed).toMatchObject({ code: "provider_unavailable", details: { reason: "store.locked", id } })
+    expect(failed.message).toContain(`--id ${id}`)
+    await cli(...create, ...at, "--id", id)
+    expect(writer.held("primary").filter(({ externalId }) => externalId === id)).toHaveLength(1)
+    expect(await store.entry(1, id)).toMatchObject({ title: "Example planning" })
+  })
+
   it("an event with other attendees needs --notify, and mailing them is denied until the owner allows it", async () => {
     const { cli, writer, eventOf } = await setup({ permissions: ALLOW })
     const event = `event:${await eventOf("e1")}`
@@ -356,8 +372,24 @@ describe("calendar write commands", () => {
       details: { param: "--series" },
     })
     expect(writer.calls).toEqual([])
-    await cli("events", "update", event, "--series", "--repeat", "FREQ=WEEKLY;UNTIL=20261231T230000Z")
-    expect((await store.entry(1, "s1"))?.recurrence).toEqual(["RRULE:FREQ=WEEKLY;UNTIL=20261231T230000Z"])
+    await cli("events", "update", event, "--series", "--repeat", "FREQ=WEEKLY;INTERVAL=2")
+    expect((await store.entry(1, "s1"))?.recurrence).toEqual(["RRULE:FREQ=WEEKLY;INTERVAL=2"])
+  })
+
+  it("a rule that ends the series sooner deletes its later slots, so it needs events.delete.series too", async () => {
+    const denied = await setup({ permissions: ALLOW })
+    const event = `event:${await denied.eventOf("s1_1")}`
+    for (const repeat of ["FREQ=DAILY;COUNT=3", "FREQ=DAILY;UNTIL=20261231T230000Z"])
+      await expect(denied.cli("events", "update", event, "--series", "--repeat", repeat)).rejects.toMatchObject({
+        code: "permission_error",
+        details: { permission: "events.delete.series" },
+      })
+    expect(denied.writer.calls).toEqual([])
+    const allowed = await setup({ permissions: { ...ALLOW, "events.delete.series": "allow" } })
+    await allowed.cli("events", "update", event, "--series", "--repeat", "FREQ=DAILY;COUNT=3")
+    expect((await allowed.store.entry(1, "s1"))?.recurrence).toEqual(["RRULE:FREQ=DAILY;COUNT=3"])
+    await allowed.cli("events", "update", event, "--series", "--repeat", "FREQ=DAILY;COUNT=5")
+    expect(allowed.writer.calls).toHaveLength(2)
   })
 
   it("new dates switch a timed event to all-day, and new times switch it back", async () => {
