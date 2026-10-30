@@ -16,6 +16,7 @@ import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import { storeCommand } from "./archive-commands.js"
 import type { Messenger } from "./context.js"
+import { messagesCommand } from "./messages-command.js"
 import { statsCommand } from "./stats-command.js"
 import { tagsCommand } from "./tags-command.js"
 import { tasksCommand } from "./tasks-command.js"
@@ -85,6 +86,7 @@ const setup = async (config?: object) => {
           app,
           commands: () => [
             statsCommand(messenger),
+            messagesCommand(messenger),
             tasksCommand(messenger),
             tagsCommand(messenger),
             storeCommand(messenger),
@@ -437,6 +439,22 @@ describe("tasks", () => {
     expect(printed).toMatch(
       /assigned — others owe you, oldest first \(1\)\n {2}\S+ {2}person:\d+ {2}since .+Send the invoice/,
     )
+  })
+
+  it("**the agenda names the chats the store holds only in part**: incomplete, a bounded sync first, never an error", async () => {
+    const call = await setup()
+    const answer = json(await call("tasks", "agenda", "--within", "3650d", "--json"))
+    expect(answer.meta.complete).toBe(false)
+    expect(answer.missing).toMatchObject([{ field: "history", step: "messages.sync" }])
+    expect(answer.next).toMatchObject([
+      { step: "messages.sync", args: { chat: "7", since_time: expect.any(String) } },
+      { step: "messages.sync", args: { chat: "7" } },
+    ])
+    const rows = [...answer.item.owed, ...answer.item.waiting, ...answer.item.unsynced]
+    expect(rows.map((row: { completeness: { state: string } }) => row.completeness.state)).toEqual(["unknown"])
+    const printed = (await call.pretty("tasks", "agenda", "--within", "3650d")).stdout.join("")
+    expect(printed).toContain("hold only part of their history")
+    expect(printed).toContain("[never fetched]")
   })
 
   it("**keys, categorizes, tags and claims a task**: one holder at a time, hidden from others on the agenda", async () => {

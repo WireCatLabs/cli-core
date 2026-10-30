@@ -71,6 +71,30 @@ describe("allAnswer", () => {
     expect(answer.next?.filter(({ step }) => step === "models.download")).toHaveLength(1)
   })
 
+  it("names the chat the messages were searched in when the store holds it only in part", () => {
+    const answer = allAnswer(
+      "search all",
+      {
+        ...found({ by: "words and meaning" }),
+        coverage: {
+          state: "partial",
+          lastSyncedAt: null,
+          inventoryComplete: true,
+          accounts: [],
+          coveredChats: 2,
+          messages: 262,
+          chats: { complete: 1, partial: 1, neverFetched: 0, behind: 0, withGaps: 0 },
+          attention: [{ chatId: "63488582", title: "Synthetic", state: "partial", gaps: false, behind: false }],
+          next: "chat messages sync 63488582",
+        },
+      },
+      { limit: 10 },
+    )
+
+    expect(answer.next).toMatchObject([{ step: "messages.sync", args: { chat: "63488582" } }])
+    expect(answer.missing).toMatchObject([{ field: "coverage", step: "messages.sync" }])
+  })
+
   it("adds nothing once messages were searched by meaning", () => {
     const answer = allAnswer("search all", found({ by: "words and meaning" }), { limit: 10 })
 

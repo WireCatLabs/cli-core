@@ -14,6 +14,16 @@ const agendaChat = v.strictObject({
   last_from_owner: v.nullable(v.boolean()),
   /** Open tasks whose source is in this chat. */
   open_tasks: v.array(id),
+  /** `unknown` means nothing ever fetched the chat's history; `partial` that the store holds only part of it. */
+  completeness: v.strictObject({
+    state: v.picklist(["complete", "partial", "unknown"]),
+    up_to_date: v.nullable(v.boolean()),
+    gaps: v.boolean(),
+    reaches_start: v.boolean(),
+    fetched_at: v.nullable(time),
+  }),
+  /** What the store holds of the chat: the count and the span, never the text. */
+  held: v.strictObject({ messages: v.number(), oldest_at: v.nullable(time), newest_at: v.nullable(time) }),
 })
 
 /** What needs a look today, from the store alone and without one message's text. */

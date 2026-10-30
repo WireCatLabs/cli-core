@@ -5,7 +5,9 @@ import { isLocator, parseLocator } from "../../domain/locator.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
+import { chatCoverage } from "../../services/chat-coverage.js"
 import { readMail } from "../../services/mail-search.js"
+import { storedChatId } from "../../services/message-resolution.js"
 import { modelWith, spoken } from "../../speech/hearing.js"
 import type { AccountKey } from "../../store/store.js"
 import { REMOTE_READ } from "../effects.js"
@@ -38,6 +40,7 @@ import { pinCommand, starCommands, unpinCommand } from "./messages-pin-command.j
 import { pressCommand } from "./messages-press-command.js"
 import { scheduledCommand } from "./messages-scheduled-command.js"
 import { sendCommand } from "./messages-send-command.js"
+import { coverageGaps } from "./search-answers.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
 import { transcribeSubcommand } from "./transcribe-command.js"
 
@@ -50,6 +53,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
   const list = annotate(messages.command("list"), {
     examples: [`${messenger.app.command} personal messages list "Book club" --limit 20`],
     effects: REMOTE_READ,
+    partial: true,
   })
     .description("a chat's messages, oldest to newest")
     .addHelpText("after", SAVE_HELP)
@@ -87,6 +91,16 @@ export const messagesCommand = (messenger: Messenger): Command => {
       const next = page.hasMore
         ? cursorOf(window, { first: page.items[0]?.id, last: page.items.at(-1)?.id })
         : undefined
+      // Offline, the store is the whole answer: say how much of the chat it holds. Online the messenger is read.
+      const gaps = context.settings.offline
+        ? coverageGaps(
+            await context.withStore(async (store, account) =>
+              chatCoverage(store, account, [
+                await storedChatId(messenger, chat, store, account, { includeLeft: true }),
+              ]),
+            ),
+          )
+        : { next: [], missing: [] }
       renderAnswer(
         this,
         context,
@@ -97,7 +111,9 @@ export const messagesCommand = (messenger: Messenger): Command => {
           paging: "cursor",
           ...(next === undefined ? {} : { cursor: next }),
           args: { chat, ...(query.length > 0 ? { query: query.join(" ") } : {}) },
-          missing: hearingMissing(hearing, transcribe === true),
+          next: gaps.next,
+          missing: [...hearingMissing(hearing, transcribe === true), ...gaps.missing],
+          ...(gaps.missing.length > 0 ? { meta: { complete: false } } : {}),
         }),
         () => renderMessages(spokenItems(page.items, hearing), viewOf(context, messenger)),
       )

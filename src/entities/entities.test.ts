@@ -1131,6 +1131,8 @@ const samples: Record<EntityName, unknown> = {
         last_message_at: at,
         last_from_owner: null,
         open_tasks: ["t1"],
+        completeness: { state: "partial", up_to_date: false, gaps: false, reaches_start: false, fetched_at: at },
+        held: { messages: 262, oldest_at: at, newest_at: at },
       },
     ],
     waiting: [],

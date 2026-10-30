@@ -28,6 +28,7 @@ import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, queryTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
+import { coverageGaps } from "./search-answers.js"
 import { refuseJsonl, taskStatsAnswer } from "./stats-answers.js"
 
 const line = ({ id, key, state, kind, group, createdAt, message, note }: TaskView) =>
@@ -75,11 +76,25 @@ const applyText = (pass: ChatRulePass, yes: boolean, tool: string) =>
         ...(pass.tasks.length > 0 ? [`  ${tool} tasks scan ${pass.chat} --yes opens them`] : []),
       ].join("\n")
 
+const agendaChats = (agenda: Agenda) => [...agenda.unsynced, ...agenda.owed, ...agenda.waiting]
+
+const agendaGaps = (agenda: Agenda) =>
+  coverageGaps(
+    agendaChats(agenda).map(({ coverage }) => coverage),
+    0,
+    agenda.since,
+  )
+
+const STATE_MARK = { complete: "", partial: "  [partial]", unknown: "  [never fetched]" } as const
+
 const agendaText = (agenda: Agenda) => {
   const chat = (one: Agenda["owed"][number]) =>
     `  ${when(one.lastMessageAt)}  ${one.title ?? one.chatId}  ${one.lastMessage ?? one.chatId}` +
-    (one.openTasks.length > 0 ? `  (${one.openTasks.length} open)` : "")
+    (one.openTasks.length > 0 ? `  (${one.openTasks.length} open)` : "") +
+    STATE_MARK[one.coverage.completeness.state]
+  const [history] = agendaGaps(agenda).missing
   return [
+    ...(history ? [`${history.why}: sync before trusting what is listed`] : []),
     ...(agenda.stale
       ? [`the store saved nothing since ${when(agenda.storedAt)}: sync before trusting quiet chats`]
       : []),
@@ -545,7 +560,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   withQuery(
-    annotate(tasks.command("agenda"), { effects: LOCAL_READ, examples: [`${tool} personal tasks agenda`] })
+    annotate(tasks.command("agenda"), {
+      effects: LOCAL_READ,
+      partial: true,
+      examples: [`${tool} personal tasks agenda`],
+    })
       .summary("what needs a look today: tasks due, chats you owe or wait on, what you are owed")
       .description(
         "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
@@ -593,7 +612,13 @@ export const tasksCommand = (messenger: Messenger): Command => {
           holder: holderOf(this),
         }),
       )
-      renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)
+      const { next, missing } = agendaGaps(agenda)
+      renderAnswer(
+        this,
+        context,
+        itemOf(agendaItem(agenda), { next, missing, ...(missing.length > 0 ? { meta: { complete: false } } : {}) }),
+        () => `${agendaText(agenda)}\n`,
+      )
     })
 
   annotate(tasks.command("categories"), {

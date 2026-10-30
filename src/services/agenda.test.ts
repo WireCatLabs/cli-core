@@ -67,6 +67,30 @@ const seeded = async () => {
   return { store, tasks: tasksService(deps), agenda: agendaService(deps, () => now) }
 }
 
+it("says per listed chat how much of its history the store holds, so a quiet chat is not taken for a whole one", async () => {
+  const { store, agenda } = await seeded()
+  try {
+    await store.sync.markRange(account, "1", 10, 11)
+    const shown = await agenda.show({ query: kinds("") })
+    expect(shown.since).toBe(daysAgo(30))
+    const rows = Object.fromEntries(
+      [...shown.owed, ...shown.waiting, ...shown.unsynced].map(({ chatId, coverage }) => [
+        chatId,
+        [coverage.completeness.state, coverage.held.messages],
+      ]),
+    )
+    expect(rows).toEqual({ "1": ["partial", 2], "2": ["unknown", 2], "6": ["unknown", 0], "7": ["unknown", 2] })
+    const [owed] = agendaItem(shown).owed
+    expect(owed).toMatchObject({
+      completeness: { state: "partial", reaches_start: false },
+      held: { messages: 2, oldest_at: daysAgo(5), newest_at: daysAgo(3) },
+    })
+    v.parse(agendaEntity, agendaItem(shown))
+  } finally {
+    await store.close()
+  }
+})
+
 it("lists the chats owed an answer and the ones waiting on others, from who wrote last and never the text", async () => {
   const { store, agenda } = await seeded()
   try {
@@ -81,6 +105,7 @@ it("lists the chats owed an answer and the ones waiting on others, from who wrot
       lastMessageAt: daysAgo(3),
       lastFromOwner: false,
       openTasks: [],
+      coverage: expect.objectContaining({ chatId: "1" }),
     })
     expect(shown.waiting.map((one) => one.chatId)).toEqual(["2"])
     expect(

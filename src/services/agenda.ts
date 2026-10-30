@@ -19,6 +19,7 @@ import {
   type TaskDetails,
   type Where,
 } from "../store/store.js"
+import { type ChatCoverage, chatCoverage } from "./chat-coverage.js"
 import { CHAT_KINDS } from "./chats.js"
 import type { ServiceDeps } from "./deps.js"
 import { taskAccount } from "./task-rules.js"
@@ -98,6 +99,8 @@ export interface AgendaAssigned
 }
 
 export interface AgendaChat extends Omit<ChatActivity, "lastMessageId"> {
+  /** How much of the chat's history the store holds: a chat held from last week alone is not a quiet chat. */
+  coverage: ChatCoverage
   /** The newest message, as a locator to read around; never its text. `null` while it is not stored. */
   lastMessage: string | null
   /** Open tasks whose source is in this chat. */
@@ -111,6 +114,8 @@ export interface AgendaChat extends Omit<ChatActivity, "lastMessageId"> {
  */
 export interface Agenda {
   at: string
+  /** The start of the window the chats were read for (`within`). */
+  since: string
   account: string
   storedAt: string | null
   stale: boolean
@@ -206,20 +211,37 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
             }),
       openTasks: open.filter((task) => chatOf(task.source) === chat.chatId).map((task) => task.id),
     }))
+    const silentFor = (chat: Omit<AgendaChat, "coverage">) => at - Date.parse(chat.lastMessageAt)
+    const shown = {
+      owed: chats.filter((chat) => chat.lastFromOwner === false && silentFor(chat) >= unanswered),
+      waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= waiting),
+      unsynced: chats.filter((chat) => chat.lastMessage === null),
+    }
+    const covered = new Map(
+      (
+        await chatCoverage(
+          store,
+          account,
+          Object.values(shown).flatMap((list) => list.map(({ chatId }) => chatId)),
+        )
+      ).map((one) => [one.chatId, one]),
+    )
+    const withCoverage = (list: typeof chats): AgendaChat[] =>
+      list.map((chat) => ({ ...chat, coverage: covered.get(chat.chatId) as ChatCoverage }))
     const inList = new Set((await store.tasks.categories()).map(({ name }) => name))
     const unlisted = new Map<string, number>()
     for (const { category } of open)
       if (category && !inList.has(category)) unlisted.set(category, (unlisted.get(category) ?? 0) + 1)
-    const silentFor = (chat: AgendaChat) => at - Date.parse(chat.lastMessageAt)
     return {
       at: new Date(at).toISOString(),
+      since: new Date(at - within).toISOString(),
       account: taskAccount(account),
       storedAt: activity.storedAt,
       stale: activity.storedAt === null || at - Date.parse(activity.storedAt) > DAY,
       tasks,
-      owed: chats.filter((chat) => chat.lastFromOwner === false && silentFor(chat) >= unanswered),
-      waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= waiting),
-      unsynced: chats.filter((chat) => chat.lastMessage === null),
+      owed: withCoverage(shown.owed),
+      waiting: withCoverage(shown.waiting),
+      unsynced: withCoverage(shown.unsynced),
       assigned,
       unlistedCategories: [...unlisted].sort().map(([name, openTasks]) => ({ name, openTasks })),
     }
@@ -315,6 +337,18 @@ export const agendaItem = (shown: Agenda): AgendaItem => {
     last_message_at: one.lastMessageAt,
     last_from_owner: one.lastFromOwner,
     open_tasks: one.openTasks,
+    completeness: {
+      state: one.coverage.completeness.state,
+      up_to_date: one.coverage.completeness.upToDate,
+      gaps: one.coverage.completeness.gaps,
+      reaches_start: one.coverage.completeness.reachesStart,
+      fetched_at: one.coverage.completeness.fetchedAt,
+    },
+    held: {
+      messages: one.coverage.held.messages,
+      oldest_at: one.coverage.held.oldestAt,
+      newest_at: one.coverage.held.newestAt,
+    },
   })
   return {
     at: shown.at,

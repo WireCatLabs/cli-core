@@ -27,7 +27,7 @@ import { MEETINGS_UNNAMED } from "../../services/search-all-meetings.js"
 import { modelPath, modelsDirectory, vadPath } from "../../speech/install.js"
 import { speechModel, VAD } from "../../speech/models.js"
 import { openCache } from "../../store/open.js"
-import { openStore, registerProvider } from "../../store/store.js"
+import { historyStartKey, type MessageStore, openStore, registerProvider } from "../../store/store.js"
 import { searchRecipes, seedSearchRecipes } from "../../testing/search-recipes.js"
 import { commandsCommand } from "../commands-command.js"
 import { type RunOptions, run } from "../program.js"
@@ -428,6 +428,49 @@ it("names in a recorded answer's meta.run_id the run that was kept", async () =>
 })
 
 describe("the shared read commands", () => {
+  it("**messages list --offline says how much of the chat the store holds**: incomplete, with the sync that fills it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = {
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CONFIG_DIR: join(root, "config"),
+      MESSAGING_STORE: join(root, "m.db"),
+    }
+    const never = async (): Promise<MessengerAdapter> => {
+      throw new Error("--offline must never connect")
+    }
+    const held = { provider: "chat", account: "500" }
+    const offline = async () =>
+      JSON.parse((await call(["messages", "list", "Book", "--offline", "--json"], never, env)).stdout[0] ?? "")
+    const keep = async (work: (store: MessageStore) => Promise<unknown>) => {
+      const store = await openStore({ path: env.MESSAGING_STORE })
+      try {
+        await work(store)
+      } finally {
+        await store.close()
+      }
+    }
+    await call(["chats", "list", "--json"], async () => fake, env)
+    await call(["messages", "list", "Book", "--json"], async () => fake, env)
+    await keep((store) => store.sync.markRange(held, "7", 1, 1))
+
+    const partial = await offline()
+    expect(partial.meta.complete).toBe(false)
+    expect(partial.missing).toEqual([
+      {
+        field: "history",
+        why: "1 of 1 chats hold only part of their history; the first is held from 2026-09-27 only",
+        step: "messages.sync",
+      },
+    ])
+    expect(partial.next).toMatchObject([{ step: "messages.sync", args: { chat: "7" } }])
+
+    await keep((store) => store.sync.setSyncState(held, historyStartKey("7"), "1"))
+    const whole = await offline()
+    expect(whole.missing).toBeUndefined()
+    expect(whole.meta.complete).toBe(true)
+  })
+
   it("**answer offline exactly what the messenger answered**, without connecting", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
@@ -451,7 +494,15 @@ describe("the shared read commands", () => {
       const live = withoutMeta(await call(argv, online, env))
       const offline = withoutMeta(await call([...argv, "--offline"], never, env))
       expect(live.code).toBe(0)
-      expect(offline).toEqual({ ...live, stderr: [] })
+      // What the store holds of the chat is told offline only: online the messenger is the answer.
+      const stored = {
+        ...offline,
+        stdout: offline.stdout.map((line) => {
+          const { next: _, missing: __, ...rest } = JSON.parse(line)
+          return JSON.stringify(rest)
+        }),
+      }
+      expect(stored).toEqual({ ...live, stderr: [] })
     }
   })
 
