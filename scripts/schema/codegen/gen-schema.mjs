@@ -70,6 +70,11 @@ const NAMES = {
   "attachments:id WHERE local_path IS NOT NULL AND local_path_folded IS NULL": "attachments_local_path_to_fold",
   "meetings:id WHERE title IS NOT NULL AND title_folded IS NULL": "meetings_title_to_fold",
   "files:id WHERE path_folded IS NULL": "files_path_to_fold",
+  "identities:id WHERE name IS NOT NULL AND name_folded IS NULL": "identities_name_to_fold",
+  "chats:id WHERE title IS NOT NULL AND title_folded IS NULL": "chats_title_to_fold",
+  "email_threads:id WHERE subject IS NOT NULL AND subject_folded IS NULL": "email_threads_subject_to_fold",
+  "mailboxes:id WHERE name_folded IS NULL": "mailboxes_name_to_fold",
+  "projects:id WHERE name_folded IS NULL": "projects_name_to_fold",
   "meetings:id WHERE join_url IS NOT NULL AND join_key IS NULL": "meetings_join_key_to_fill",
 }
 

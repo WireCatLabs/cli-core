@@ -60,8 +60,9 @@ const EDITS = {
         "text",
         { note: "the phone as the messenger showed it, whole; saved by `contacts sync` and an online profile read" },
       ],
+      ["name_folded", "text", { note: "`fold(name)`, which `tags list name:` compares; filled on open when NULL" }],
     ],
-    keys: ["INDEX (email) WHERE email IS NOT NULL"],
+    keys: ["INDEX (email) WHERE email IS NOT NULL", "INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL"],
   },
   identity_links: {
     cols: { linked_at: "created_at", linked_by: "author" },
@@ -160,9 +161,10 @@ const EDITS = {
       ["archived", "integer", { note: "1 archived, 0 not; NULL when the messenger did not say" }],
       ["marked_unread", "integer", { note: "1 when the owner marked it unread; NULL when the messenger did not say" }],
       ["unread_counted_at", "integer", { note: "when `unread_count` was taken (epoch ms)" }],
+      ["title_folded", "text", { note: "`fold(title)`, which `tags list name:` compares; filled on open when NULL" }],
     ],
     note: "`chat_metadata` merged in (owner).",
-    keys: ["INDEX (account_id, last_message_at DESC)"],
+    keys: ["INDEX (account_id, last_message_at DESC)", "INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL"],
   },
   chat_members: { add: [["created_at", "integer", { notnull: true }]] },
   member_stays: {
@@ -595,8 +597,11 @@ const NEW = {
         meta(),
         ...ts(),
         del(),
+        c("subject_folded", "text", {
+          note: "`fold(subject)`, which `tags list name:` compares; filled on open when NULL",
+        }),
       ],
-      keys: ["UNIQUE (account_id, external_id)"],
+      keys: ["UNIQUE (account_id, external_id)", "INDEX (id) WHERE subject IS NOT NULL AND subject_folded IS NULL"],
     },
     {
       name: "emails",
@@ -679,8 +684,11 @@ const NEW = {
         c("name", "text", { notnull: true }),
         c("kind", "text", { note: "inbox, sent, archive, label, folder" }),
         ...ts(),
+        c("name_folded", "text", {
+          note: "`fold(name)`, which `mailbox:` and `label:` compare; filled on open when NULL",
+        }),
       ],
-      keys: ["UNIQUE (account_id, external_id)"],
+      keys: ["UNIQUE (account_id, external_id)", "INDEX (name_folded)", "INDEX (id) WHERE name_folded IS NULL"],
     },
     {
       name: "email_mailboxes",
@@ -1292,7 +1300,11 @@ const NEW = {
         c("status", "text", { note: "active, archived" }),
         ...ts(),
         del(),
+        c("name_folded", "text", {
+          note: "`fold(name)`, which `projects list name:` compares; filled on open when NULL",
+        }),
       ],
+      keys: ["INDEX (name_folded)", "INDEX (id) WHERE name_folded IS NULL"],
     },
     {
       name: "tasks",

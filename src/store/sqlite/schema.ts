@@ -148,10 +148,12 @@ export const identities = sqliteTable(
     description: text("description"),
     email: text("email"),
     phone: text("phone"),
+    nameFolded: text("name_folded"),
   },
   (table) => [
     unique().on(table.provider, table.externalId),
     index("identities_by_email").on(table.email).where(sql`email IS NOT NULL`),
+    index("identities_name_to_fold").on(table.id).where(sql`name IS NOT NULL AND name_folded IS NULL`),
   ],
 )
 
@@ -361,10 +363,12 @@ export const chats = sqliteTable(
     archived: integer("archived"),
     markedUnread: integer("marked_unread"),
     unreadCountedAt: integer("unread_counted_at"),
+    titleFolded: text("title_folded"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
     index("chats_by_recency").on(table.accountId, desc(table.lastMessageAt)),
+    index("chats_title_to_fold").on(table.id).where(sql`title IS NOT NULL AND title_folded IS NULL`),
     index("chats_by_parent_chat_id").on(table.parentChatId),
   ],
 )
@@ -767,8 +771,12 @@ export const emailThreads = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    subjectFolded: text("subject_folded"),
   },
-  (table) => [unique().on(table.accountId, table.externalId)],
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    index("email_threads_subject_to_fold").on(table.id).where(sql`subject IS NOT NULL AND subject_folded IS NULL`),
+  ],
 )
 
 export const emails = sqliteTable(
@@ -867,8 +875,13 @@ export const mailboxes = sqliteTable(
     kind: text("kind"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    nameFolded: text("name_folded"),
   },
-  (table) => [unique().on(table.accountId, table.externalId)],
+  (table) => [
+    unique().on(table.accountId, table.externalId),
+    index("mailboxes_by_name_folded").on(table.nameFolded),
+    index("mailboxes_name_to_fold").on(table.id).where(sql`name_folded IS NULL`),
+  ],
 )
 
 export const emailMailboxes = sqliteTable(
@@ -1527,8 +1540,11 @@ export const projects = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    nameFolded: text("name_folded"),
   },
   (table) => [
+    index("projects_by_name_folded").on(table.nameFolded),
+    index("projects_name_to_fold").on(table.id).where(sql`name_folded IS NULL`),
     index("projects_by_organization_id").on(table.organizationId),
     index("projects_by_account_id").on(table.accountId),
     index("projects_by_owner_type_owner_id").on(table.ownerType, table.ownerId),

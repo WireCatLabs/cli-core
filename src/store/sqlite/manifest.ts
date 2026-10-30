@@ -66,6 +66,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261029162435_version-36-attachment-contact", version: 36, minCompatible: 34 },
   { name: "20261029180959_version-37-identity-phone", version: 37, minCompatible: 34 },
   { name: "20261029181000_version-37-contact-mention-triggers", version: 37, minCompatible: 34 },
+  { name: "20261029224106_version-38-folded-names", version: 38, minCompatible: 34 },
+  { name: "20261029224107_version-38-folded-triggers", version: 38, minCompatible: 34 },
 ]
 
 export const generatedMigrations = (

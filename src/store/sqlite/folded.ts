@@ -2,7 +2,11 @@ import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
 import { writeBatch } from "./transaction.js"
 
-/** Every name a list filter compares, beside its `fold()`ed copy: SQLite's `lower()` folds ASCII only. */
+/**
+ * Every name a filter compares, beside its `fold()`ed copy: SQLite's `lower()`, `NOCASE` and `LIKE` fold ASCII only,
+ * and Bun cannot register a function that folds the rest. A writer sets the copy; a trigger empties a copy whose name
+ * changed without it (version 38), and `fillFolded` refills it on the next open.
+ */
 export const FOLDED = [
   { table: "tasks", column: "title" },
   { table: "tasks", column: "close_reason" },
@@ -10,6 +14,11 @@ export const FOLDED = [
   { table: "attachments", column: "local_path" },
   { table: "meetings", column: "title" },
   { table: "files", column: "path" },
+  { table: "projects", column: "name" },
+  { table: "chats", column: "title" },
+  { table: "identities", column: "name" },
+  { table: "email_threads", column: "subject" },
+  { table: "mailboxes", column: "name" },
 ] as const
 
 export const folded = (value: string | null | undefined): string | null =>

@@ -322,7 +322,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
     {
       type: "chat",
       sql:
-        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, " +
+        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, c.title_folded AS name_folded, " +
         "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN chats c ON c.id=g.taggable_id " +
         "JOIN accounts a ON a.id=c.account_id WHERE g.taggable_type='chat' AND a.provider=? AND a.external_id=?",
@@ -331,7 +331,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
     {
       type: "contact",
       sql:
-        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, NULL AS chat_title, " +
+        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, NULL AS chat_title, i.name_folded AS name_folded, " +
         "i.external_id AS person_id, i.name AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN identities i ON i.id=g.taggable_id " +
         "WHERE g.taggable_type='identity' AND i.provider=?",
@@ -340,7 +340,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
     {
       type: "message",
       sql:
-        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, " +
+        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, c.title_folded AS name_folded, " +
         "NULL AS person_id, NULL AS name, m.external_id AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN messages m ON m.id=g.taggable_id JOIN chats c ON c.id=m.chat_id " +
         "JOIN accounts a ON a.id=c.account_id WHERE g.taggable_type='message' AND a.provider=? AND a.external_id=?",
@@ -349,7 +349,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
     {
       type: "chat",
       sql:
-        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, " +
+        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, th.subject_folded AS name_folded, " +
         "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN email_threads th ON th.id=g.taggable_id " +
         "JOIN accounts a ON a.id=th.account_id WHERE g.taggable_type='email_thread' AND a.provider=? AND a.external_id=?",
@@ -358,7 +358,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
     {
       type: "message",
       sql:
-        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, " +
+        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, th.subject_folded AS name_folded, " +
         "NULL AS person_id, NULL AS name, e.external_id AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN emails e ON e.id=g.taggable_id " +
         "JOIN email_threads th ON th.id=e.email_thread_id JOIN accounts a ON a.id=e.account_id " +
@@ -368,7 +368,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
     {
       type: "task",
       sql:
-        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, k.title AS chat_title, " +
+        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, k.title AS chat_title, k.title_folded AS name_folded, " +
         "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.canonical_id AS tag_id, " +
         "COALESCE(k.package_id, k.key) AS task_id " +
         "FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id JOIN tasks k ON k.id=g.taggable_id JOIN projects p ON p.id=k.project_id " +
@@ -386,7 +386,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
   ]
   const rows = database
     .prepare(
-      "SELECT * FROM (SELECT tag,type,min(created_at) AS created_at,chat_id,chat_title,person_id,name,message_id,CASE WHEN max(source='owner') THEN 'owner' ELSE min(source) END AS source,target_id,tag_id,task_id,tag_type,max(auto) AS auto FROM (SELECT u.*, CASE u.type WHEN 'identity' THEN 'contact' WHEN 'email_thread' THEN 'chat' " +
+      "SELECT * FROM (SELECT tag,type,min(created_at) AS created_at,chat_id,chat_title,person_id,name,name_folded,message_id,CASE WHEN max(source='owner') THEN 'owner' ELSE min(source) END AS source,target_id,tag_id,task_id,tag_type,max(auto) AS auto FROM (SELECT u.*, CASE u.type WHEN 'identity' THEN 'contact' WHEN 'email_thread' THEN 'chat' " +
         "WHEN 'email' THEN 'message' ELSE u.type END AS tag_type, (u.type = 'chat' AND EXISTS (SELECT 1 FROM " +
         `canonical_auto_tag_claims ac JOIN resolved_tags rt ON rt.id=ac.tag_id WHERE ac.chat_id = u.target_id AND rt.canonical_id = u.tag_id)) AS auto FROM (${union}) u) GROUP BY tag,type,target_id) x ` +
         `WHERE ${where.length === 0 ? "1" : where.map(({ sql }) => `(${sql})`).join(" AND ")} ` +

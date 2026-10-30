@@ -372,7 +372,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `cc` | kw | account-scoped resolution; mail only | `cc:"Alice Synthetic"` | term, phrase |
 | `bcc` | kw | account-scoped resolution; mail only | `bcc:"Alice Synthetic"` | term, phrase |
 | `subject` | txt | every word, folded as text is; mail only | `subject:"quarterly planning"` | term, phrase |
-| `mailbox` | kw | a folder or label by its id or name, ASCII case folded; mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase |
+| `mailbox` | kw | a folder or label by its id (ASCII case folded) or name (case folded in any script); mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase |
 | `label` | kw | the same as mailbox:; mail only | `label:Projects` | term, phrase |
 | `is` | enum | unread, read, starred | `is:unread` | term, phrase |
 | `chat` | kw | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
