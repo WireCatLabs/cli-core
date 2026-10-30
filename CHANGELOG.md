@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.487.0 — 30.10.2026
+
 ### Added
 
 - **A messenger can say what `reactions list` covers.** The new `reactionsListScope` option on the messenger (for
