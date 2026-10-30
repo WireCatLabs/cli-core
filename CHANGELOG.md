@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A store write no longer fails with "database is locked" while another process writes steadily.** SQLite's own wait
+  for the write lock sleeps up to 100 ms between tries, so a process that commits and begins again at once was never
+  seen free, and the waiter failed after the 5 s `busy_timeout` (`mail sync` against `memo sync`). A write now tries
+  for the lock every millisecond within the same `busy_timeout`. `saveAccount` takes the lock the same way instead
+  of as a bare statement.
+
 ## 0.484.0 — 30.10.2026
 
 ### Fixed

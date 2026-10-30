@@ -1,4 +1,5 @@
-import { mkdtempSync } from "node:fs"
+import { spawn } from "node:child_process"
+import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -98,4 +99,44 @@ describe("write", () => {
     write(database, () => saveMessage(database))
     expect(count(database, "messages")).toBe(1)
   })
+})
+
+describe("a write that finds another process writing", () => {
+  const holder = (path: string) => {
+    const script = join(path, "..", "holder.mjs")
+    writeFileSync(
+      script,
+      `import { DatabaseSync } from "node:sqlite"
+const db = new DatabaseSync(${JSON.stringify(path)})
+db.exec("PRAGMA busy_timeout = 5000")
+console.log("ready")
+const end = Date.now() + 9000
+while (Date.now() < end) {
+  db.exec("BEGIN IMMEDIATE")
+  const stop = Date.now() + 20
+  while (Date.now() < stop);
+  db.exec("COMMIT")
+}
+`,
+    )
+    return spawn(process.execPath, [script], { stdio: ["ignore", "pipe", "inherit"] })
+  }
+
+  it("gets in between a writer's back-to-back transactions instead of failing after busy_timeout", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "transaction-busy-")), "store.db")
+    const database = await openCache(path)
+    opened.push(database)
+    migrate(database)
+    const other = holder(path)
+    try {
+      await new Promise((resolve) => other.stdout.once("data", resolve))
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      const started = Date.now()
+      write(database, () => saveMessage(database))
+      expect(Date.now() - started).toBeLessThan(2000)
+      expect(database.prepare("PRAGMA busy_timeout").get()).toEqual({ timeout: 5000 })
+    } finally {
+      other.kill()
+    }
+  }, 20_000)
 })
