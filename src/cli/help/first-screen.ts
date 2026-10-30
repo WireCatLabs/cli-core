@@ -60,6 +60,11 @@ export const WIRECAT_TOOLS: readonly Tool[] = [
     does: "Google Drive and Docs as local text, searchable with your other WireCat data",
   },
   {
+    command: "gcal",
+    package: "@wirecat/gcal-cli",
+    does: "Google Calendar events, searchable with your other WireCat data",
+  },
+  {
     command: "memo",
     package: "@wirecat/cli-memo",
     shown: "memo context <person>",

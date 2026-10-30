@@ -37,3 +37,8 @@ Someday work: P3 items, nice-to-haves and research. Same ids, marks and one-line
   2026-10-12 field test (#1019).
 - **CORE-31** · P3 · `attachments list is:needs_text` lists files with no text but not why: say per file what would
   give it text (a reader, OCR, transcription) and the command that does it. `src/store/sqlite/attachment-texts.ts:198`.
+- **CORE-41** · P3 · Build the command tree once per process: `run()` builds a fresh Commander tree on every call
+  (`src/cli/program.ts:286`) because it writes the call's state into it — `provide(program, environment)`, a
+  `preAction` hook, `setOptionValue("profile")` before the parse. An MCP server pays ~16 ms per call for tg (~10 ms
+  once the self-checks run once per process). Split the static tree from a per-call context
+  ([WC-ARCH-22](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-22--build-the-command-tree-once-keep-each-calls-state-out-of-it)).
