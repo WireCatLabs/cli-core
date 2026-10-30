@@ -46,11 +46,20 @@ shape of this file.
   prints only the error used to lose which calendar failed and why.
 - **`EventStore` gains `slotsOf`, and `LinkReview` gains `calendarId`** (the calendar of a `calendar_entry` review's
   copy). `resolveAnswer` takes the account id after the store.
+- **`EventStore` gains `saveSlots`**, which saves several series' slots and the sync cursor in one transaction.
 
 - **`EventStore` gains `participantsOf(eventIds, calendarIds)`**: the participants of those events' copies on those
   calendars, in one read.
 
 ### Fixed
+
+- **A calendar sync commits a few times per calendar, not twice per repeating event.** The slots of up to 50 series
+  (250 slots) and the cursor go in one transaction. On a 20,000-event store with 819 weekly series (engine and SQLite
+  store, fake provider): 123 write transactions instead of 1,663 for a full round.
+- **The daily full round asks only the series that changed for their slots.** A series with the stored etag and slots
+  stored in the window keeps them; every series is asked again once a week, and on `--rescan`. On the same store the
+  next day's full round made 0 `instances` requests instead of 819 and took 6.7 s instead of 15.1 s. A series that does
+  not change lacks at most 7 days of slots at the window's far end, three months ahead.
 
 - **The daily full calendar sync no longer marks events outside its window as deleted.** A full list returns only
   what falls in the window (a year back, three months ahead), but `markUnseen` limited only plain occurrences to it,

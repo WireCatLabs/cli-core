@@ -2,10 +2,18 @@ import { CliError } from "@wirecat/cli-base"
 import { type BudgetStop, type RunBudget, runBudget } from "../background/budget.js"
 import { progressLine, progressOf } from "../background/checkpoints.js"
 import { isCliFailure } from "../errors/failures.js"
-import type { EntryInput, EventStore, StoredCalendar } from "../meetings/index.js"
+import type { EntryInput, EventStore, SeriesSlots, StoredCalendar } from "../meetings/index.js"
 import type { CalendarExpander, CalendarSource, SyncWindow } from "./source.js"
 
 const DAY = 86_400_000
+/**
+ * How far the window's far end may move before a full round asks every series for its slots again. In between it asks
+ * only the series that changed, so a series that did not change lacks slots up to this far behind the window's end.
+ */
+const SLOTS_EVERY = 7 * DAY
+/** Series whose slots one transaction saves: a short one, so another process waits for the lock briefly. */
+const BATCH_SERIES = 50
+const BATCH_SLOTS = 250
 
 /**
  * A round that stopped before its end: where its listing is, and the series still to ask for their slots. A rerun
@@ -27,6 +35,8 @@ export interface PendingRound {
   next: string | null
   /** Series still to ask for their slots (`expands: "on-request"`). */
   series: string[]
+  /** A full round asks every series it lists; otherwise only those that changed. Absent reads as true. */
+  everySeries?: boolean
 }
 
 /** What the engine keeps in `EventStore.cursor`. Version 1 had no `round`, `updatedAt` or `done`. */
@@ -44,6 +54,8 @@ export interface CalendarCursor {
   round: PendingRound | null
   /** Entries an older build marked deleted outside its window are back (`EventStore.restoreUnseen`). */
   restored?: true
+  /** The window's end when a full round last asked every series for its slots. */
+  slotsTo?: number
 }
 
 const isWindow = (value: unknown): value is SyncWindow =>
@@ -64,11 +76,23 @@ const roundOf = (value: unknown): PendingRound | null | undefined => {
     typeof round.listed !== "boolean" ||
     !isToken(round.next) ||
     !Array.isArray(round.series) ||
-    round.series.some((id) => typeof id !== "string")
+    round.series.some((id) => typeof id !== "string") ||
+    (round.everySeries !== undefined && typeof round.everySeries !== "boolean")
   )
     return undefined
-  const { full, from, window, startedAt, reset, page, listed, next, series } = round as PendingRound
-  return { full, from, window, startedAt, reset, page, listed, next, series }
+  const { full, from, window, startedAt, reset, page, listed, next, series, everySeries } = round as PendingRound
+  return {
+    full,
+    from,
+    window,
+    startedAt,
+    reset,
+    page,
+    listed,
+    next,
+    series,
+    ...(everySeries === false ? { everySeries } : {}),
+  }
 }
 
 export const parseCalendarCursor = (value: string | null): CalendarCursor | null => {
@@ -100,6 +124,7 @@ export const parseCalendarCursor = (value: string | null): CalendarCursor | null
       done: cursor.done,
       round,
       ...(cursor.restored === true ? { restored: true as const } : {}),
+      ...(typeof cursor.slotsTo === "number" ? { slotsTo: cursor.slotsTo } : {}),
     }
   } catch {
     return null
@@ -195,7 +220,14 @@ interface Plan {
   moved: () => void
 }
 
-const freshRound = (full: boolean, from: string | null, window: SyncWindow, now: number, reset = false) => ({
+const freshRound = (
+  full: boolean,
+  from: string | null,
+  window: SyncWindow,
+  now: number,
+  reset = false,
+  everySeries = true,
+): PendingRound => ({
   full,
   from: full ? null : from,
   window,
@@ -205,6 +237,7 @@ const freshRound = (full: boolean, from: string | null, window: SyncWindow, now:
   listed: false,
   next: null,
   series: [],
+  ...(everySeries ? {} : { everySeries }),
 })
 
 /** The round in progress, or the one this run starts: a full one when due or the only kind the source has. */
@@ -215,15 +248,16 @@ const roundFor = (
 ): PendingRound => {
   if (stored?.round) return stored.round
   const windowMoved = stored !== null && (stored.window.from !== window.from || stored.window.to !== window.to)
-  // A full round once a day also asks every series for its slots again, which an incremental round does only for
-  // the series that changed (foundation §6.2 step 7).
   const full =
     source.traits.fullListOnly ||
     stored === null ||
     stored.token === null ||
     (source.traits.cursorHoldsWindow && windowMoved) ||
     now - stored.fullAt >= DAY
-  return freshRound(full, stored?.token ?? null, window, now)
+  // The daily full round asks only the series that changed, and every series once the window's end moved on far
+  // enough that their new slots matter (foundation §6.2 step 7).
+  const everySeries = !full || stored?.slotsTo === undefined || window.to - stored.slotsTo >= SLOTS_EVERY
+  return freshRound(full, stored?.token ?? null, window, now, false, everySeries)
 }
 
 const deadList = (provider: string) =>
@@ -261,18 +295,27 @@ const syncOne = async (
     cursor = { ...cursor, round, updatedAt: now, ...finished }
     await store.setCursor(calendar.id, JSON.stringify(cursor), now)
   }
-  /** A series' slots in the window replace the ones stored: a slot it no longer has, moved or dropped, is cancelled. */
-  const saveSlots = async (series: string, slots: EntryInput[]) => {
-    if (slots.length) {
-      await store.saveEntries(calendar.id, slots, now)
-      result.occurrences += slots.length
-      cursor = { ...cursor, done: cursor.done + slots.length }
-    }
-    const given = new Set(slots.map(({ externalId }) => externalId))
-    const stale = (await store.slotsOf(calendar.id, series, round.window))
-      .filter((one) => !one.exception && one.status !== "cancelled" && !given.has(one.externalId))
-      .map(({ externalId }) => externalId)
-    if (stale.length) result.removed += await store.removeEntries(calendar.id, stale, now)
+  /**
+   * Series' slots and the cursor in one transaction. A series' slots replace its stored ones in the window: a slot it
+   * no longer has, moved or dropped, is cancelled; one kept as stored counts as seen by this round.
+   */
+  const commit = async (groups: SeriesSlots[]) => {
+    const count = groups.reduce((sum, { slots }) => sum + (slots?.length ?? 0), 0)
+    cursor = { ...cursor, round, updatedAt: now, done: cursor.done + count }
+    const { saved, removed } = await store.saveSlots(calendar.id, groups, round.window, JSON.stringify(cursor), now)
+    result.occurrences += saved
+    result.removed += removed
+  }
+  /** A series this full round need not ask: the same version as stored, with its slots in the window stored. */
+  const unchanged = async (entry: EntryInput) => {
+    if (!round.full || round.everySeries !== false || !entry.etag) return false
+    const held = await store.entry(calendar.id, entry.externalId)
+    return (
+      held !== null &&
+      held.etag === entry.etag &&
+      held.deletedAt === null &&
+      (await store.slotsOf(calendar.id, entry.externalId, round.window)).length > 0
+    )
   }
   const stop = () => budget.take()
   let restarted = false
@@ -289,7 +332,7 @@ const syncOne = async (
       // A page token held since an earlier run may have expired; the provider says how long none of them last.
       if (round.page !== null && !restarted) {
         restarted = true
-        round = freshRound(round.full, round.from, round.window, now, round.reset)
+        round = freshRound(round.full, round.from, round.window, now, round.reset, round.everySeries !== false)
       } else if (round.full) throw deadList(source.provider)
       else {
         round = freshRound(true, null, window, now, true)
@@ -301,14 +344,19 @@ const syncOne = async (
       continue
     }
     if (signal?.aborted) return "cancelled"
+    const groups: SeriesSlots[] = []
+    const listed = page.entries.filter((entry) => entry.kind === "series" && entry.status !== "cancelled")
+    const kept = new Set<string>()
+    if (source.traits.expands === "on-request")
+      for (const entry of listed) if (await unchanged(entry)) kept.add(entry.externalId)
     if (page.entries.length) {
       await store.saveEntries(calendar.id, page.entries, now)
       result.saved += page.entries.length
       cursor = { ...cursor, done: cursor.done + page.entries.length }
-      for (const entry of page.entries) {
-        if (entry.kind !== "series" || entry.status === "cancelled") continue
+      for (const entry of listed) {
         if (source.traits.expands === "local")
-          await saveSlots(entry.externalId, await (expand as CalendarExpander)(entry, round.window))
+          groups.push({ series: entry.externalId, slots: await (expand as CalendarExpander)(entry, round.window) })
+        else if (kept.has(entry.externalId)) groups.push({ series: entry.externalId, slots: null })
         else if (source.traits.expands === "on-request" && !round.series.includes(entry.externalId))
           round = { ...round, series: [...round.series, entry.externalId] }
       }
@@ -321,24 +369,33 @@ const syncOne = async (
       seen.add(page.nextPage)
       round = { ...round, page: page.nextPage }
     }
-    await save()
+    await commit(groups)
     moved()
   }
-  const occurrences = source.occurrences
-  for (const series of round.series) {
-    const why = stop()
-    if (why) return why
-    const slots = await (occurrences as NonNullable<CalendarSource["occurrences"]>).call(
-      source,
-      calendar,
-      series,
-      round.window,
-    )
-    if (signal?.aborted) return "cancelled"
-    await saveSlots(series, slots)
-    round = { ...round, series: round.series.filter((one) => one !== series) }
-    await save()
-    moved()
+  const occurrences = source.occurrences as NonNullable<CalendarSource["occurrences"]>
+  let batch: SeriesSlots[] = []
+  // Whatever stops the loop — the budget, a cancel, a failed request — the series asked so far are kept.
+  const flush = async () => {
+    if (!batch.length) return
+    const done = new Set(batch.map(({ series }) => series))
+    round = { ...round, series: round.series.filter((one) => !done.has(one)) }
+    const groups = batch
+    batch = []
+    await commit(groups)
+  }
+  try {
+    for (const series of [...round.series]) {
+      const why = stop()
+      if (why) return why
+      const slots = await occurrences.call(source, calendar, series, round.window)
+      if (signal?.aborted) return "cancelled"
+      batch.push({ series, slots })
+      moved()
+      if (batch.length >= BATCH_SERIES || batch.reduce((sum, one) => sum + (one.slots?.length ?? 0), 0) >= BATCH_SLOTS)
+        await flush()
+    }
+  } finally {
+    await flush()
   }
   if (signal?.aborted) return "cancelled"
   result.unseen = round.full ? await store.markUnseen(calendar.id, round.startedAt, round.window, now) : 0
@@ -347,6 +404,7 @@ const syncOne = async (
     window: round.window,
     fullAt: round.full ? round.startedAt : cursor.fullAt,
     round: null,
+    ...(round.full && round.everySeries !== false ? { slotsTo: round.window.to } : {}),
   })
   result.state = "complete"
   return null

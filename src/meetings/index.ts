@@ -44,6 +44,7 @@ export type {
   LinkReview,
   ParticipantResponse,
   ReviewDecision,
+  SeriesSlots,
   StoredCalendar,
   StoredEntry,
   StoredParticipant,
