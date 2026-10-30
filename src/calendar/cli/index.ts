@@ -37,6 +37,7 @@ import {
   deleteEvent,
   EVENT_RESPONSES,
   type EventFields,
+  moveEvent,
   respondToEvent,
   updateEvent,
   type WriteContext,
@@ -466,6 +467,7 @@ const addEventWrites = (
       id: "--id",
       calendar: "--calendar",
       series: "--series",
+      following: "--following",
       repeat: "--repeat",
     },
   })
@@ -502,10 +504,11 @@ const addEventWrites = (
     ...Object.fromEntries(Object.entries(given).filter(([, value]) => value !== undefined)),
     ...(attendee === undefined || attendee.length === 0 ? {} : { attendees: attendee }),
   })
-  type Choices = { calendar?: string; series?: boolean; notify?: boolean }
-  const choicesOf = ({ calendar, series, notify }: Choices) => ({
+  type Choices = { calendar?: string; series?: boolean; following?: boolean; notify?: boolean }
+  const choicesOf = ({ calendar, series, following, notify }: Choices) => ({
     ...(calendar === undefined ? {} : { calendar }),
     ...(series ? { series: true } : {}),
+    ...(following ? { following: true } : {}),
     ...(notify === undefined ? {} : { notify }),
   })
   const write = (name: string) => annotate(events.command(name), { effects: REMOTE_WRITE, offline: false })
@@ -542,30 +545,66 @@ const addEventWrites = (
       notify(
         target(fields(write("update"), true))
           .description(
-            "change an event; with --series every occurrence of the repeating event; new times or dates switch it " +
-              "between timed and all-day",
+            "change an event; with --series every occurrence of the repeating event, with --following this " +
+              "occurrence and every later one; new times or dates switch it between timed and all-day",
           )
-          .option("--series", "change the whole repeating event, not only this occurrence"),
+          .option("--series", "change the whole repeating event, not only this occurrence")
+          .option(
+            "--following",
+            "change this occurrence and every later one: the repeating event ends before it and a new one starts " +
+              "with the change",
+          )
+          .option("--id <id>", "with --following, the id an outcome_unknown named: a retry finds that new series"),
       ),
       "events update event:42 --start-time 2026-11-02T14:00 --end-time 2026-11-02T15:00 --notify",
       "events update event:42 --series --repeat 'FREQ=WEEKLY;BYDAY=TU;UNTIL=20261231T230000Z' --no-notify",
+      "events update event:42 --following --start-time 2026-11-09T10:00 --end-time 2026-11-09T10:30 --no-notify",
     ),
-  ).action(async (reference: string, opts: FieldOptions & Choices, command: Command) => {
-    const { calendar: _calendar, series: _series, notify: _notify, ...rest } = opts
-    printWritten(await updateEvent(context(command), reference, fieldsOf(rest), choicesOf(opts)), command)
+  ).action(async (reference: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
+    const { calendar: _calendar, series: _series, following: _following, notify: _notify, id, ...rest } = opts
+    printWritten(
+      await updateEvent(context(command), reference, fieldsOf(rest), {
+        ...choicesOf(opts),
+        ...(id === undefined ? {} : { id }),
+      }),
+      command,
+    )
   })
   output(
     example(
       notify(
         target(write("delete"))
-          .description("delete an event; a whole repeating event needs events.delete.series allowed first")
-          .option("--series", "delete the whole repeating event, not only this occurrence"),
+          .description(
+            "delete an event; a whole repeating event, or every later occurrence, needs events.delete.series " +
+              "allowed first",
+          )
+          .option("--series", "delete the whole repeating event, not only this occurrence")
+          .option("--following", "delete this occurrence and every later one: the repeating event ends before it"),
       ),
       "events delete event:42 --no-notify",
+      "events delete event:42 --following --no-notify",
     ),
   ).action(async (reference: string, opts: Choices, command: Command) => {
     printWritten(await deleteEvent(context(command), reference, choicesOf(opts)), command)
   })
+  if (writes.writer.move)
+    output(
+      example(
+        notify(
+          target(write("move"))
+            .description("move an event, with its id, to another calendar of the account; a repeating one moves whole")
+            .requiredOption("--to-calendar <id>", "the calendar to move it to: its id, or the provider's id")
+            .option("--series", "move the whole repeating event an occurrence belongs to"),
+        ),
+        "events move event:42 --to-calendar 4 --no-notify",
+      ),
+    ).action(async (reference: string, opts: Choices & { toCalendar: string }, command: Command) => {
+      const { series, calendar, notify } = opts
+      printWritten(
+        await moveEvent(context(command), reference, opts.toCalendar, choicesOf({ series, calendar, notify })),
+        command,
+      )
+    })
   output(
     example(
       notify(

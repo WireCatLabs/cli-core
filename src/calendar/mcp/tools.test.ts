@@ -140,6 +140,7 @@ describe("calendar MCP tools", () => {
         "event_create",
         "event_update",
         "event_delete",
+        "event_move",
         "event_respond",
       ])
       for (const tool of calendarWriteTools) expect(tool.annotations.readOnlyHint).toBe(false)
@@ -175,6 +176,16 @@ describe("calendar MCP tools", () => {
       expect(result.isError).toBe(true)
       expect(body(result).error).toMatchObject({ code: "permission_error" })
       expect(writer.calls).toEqual([])
+    })
+
+    it("a move stays inside the account: a calendar of another account is not found, and nothing moves", async () => {
+      const { call, writer } = await writable()
+      const made = body(await call("event_create", { calendar: "cal-1", ...planning }))
+      const result = await call("event_move", { event: made.event, to_calendar: "cal-2", notify: false })
+      expect(body(result).error).toMatchObject({ code: "not_found" })
+      expect(writer.calls.map(({ write }) => write)).toEqual(["create"])
+      const typed = await call("event_update", { event: made.event, following: "yes" })
+      expect(body(typed).error).toMatchObject({ code: "validation_error" })
     })
   })
 })
