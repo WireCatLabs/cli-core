@@ -6,6 +6,39 @@ import { drainStems, stemmerCache } from "./stems.js"
 
 type Connection = { depth: number; reading: boolean; stemmerFor: (stemmers: Stemmers) => Stemmer }
 
+const SQLITE_BUSY = 5
+const pause = new Int32Array(new SharedArrayBuffer(4))
+
+const isBusy = (error: unknown): boolean => {
+  const { errcode, errno } = (error ?? {}) as { errcode?: unknown; errno?: unknown }
+  const code = errcode ?? errno
+  return typeof code === "number" && (code & 0xff) === SQLITE_BUSY
+}
+
+/**
+ * Takes the write lock, waiting as long as the connection's `busy_timeout`. SQLite's own wait sleeps 1 ms, then up to
+ * 100 ms between tries, so a process that commits and begins again at once is never seen free and the waiter fails
+ * with "database is locked" after the full timeout. Trying every millisecond sees the gap between two writes.
+ */
+const beginImmediate = (database: CacheDatabase): void => {
+  const timeout = Number(database.prepare("PRAGMA busy_timeout").get()?.timeout ?? 0)
+  const deadline = Date.now() + timeout
+  database.exec("PRAGMA busy_timeout = 0")
+  try {
+    for (;;) {
+      try {
+        database.exec("BEGIN IMMEDIATE")
+        return
+      } catch (error) {
+        if (!isBusy(error) || Date.now() >= deadline) throw error
+        Atomics.wait(pause, 0, 0, 1)
+      }
+    }
+  } finally {
+    database.exec(`PRAGMA busy_timeout = ${timeout}`)
+  }
+}
+
 const connections = new WeakMap<CacheDatabase, Connection>()
 
 const connectionOf = (database: CacheDatabase): Connection => {
@@ -41,7 +74,8 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
   if (connection.reading) throw new Error("a store write cannot run inside a read")
   const outer = connection.depth === 0
   const name = `w${connection.depth + 1}`
-  database.exec(outer ? "BEGIN IMMEDIATE" : `SAVEPOINT ${name}`)
+  if (outer) beginImmediate(database)
+  else database.exec(`SAVEPOINT ${name}`)
   connection.depth += 1
   try {
     const result = body()

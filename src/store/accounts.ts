@@ -46,8 +46,11 @@ export const accountAccountsOver = (context: StoreContext): AccountAccounts => {
   const { accountPk, findAccountPk } = keysOver(context)
   return {
     saveAccount: async (key, { name }) => {
-      const pk = accountPk(key, name)
-      linkInbox(database, `${key.provider}:${key.account}`, pk)
+      const pk = write(database, () => {
+        const made = accountPk(key, name)
+        linkInbox(database, `${key.provider}:${key.account}`, made)
+        return made
+      })
       linkOwnIdentities(context)
       return pk
     },
