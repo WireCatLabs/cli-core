@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import type { EntryInput, EventStore } from "../event-store.js"
+import { type EntryInput, type EventStore, eventChange } from "../event-store.js"
 import type { ContractCase } from "../store.js"
 
 /** A fresh, empty store and one calendar account in it. */
@@ -399,6 +399,86 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
         { from: later, to: later + day, fromDate: day0, toDate: day1 },
       ])
         assert.deepEqual((await store.events(filter)).map(({ title }) => title).length, 3, JSON.stringify(filter))
+    }),
+    test("a list of changes since an instant finds events new, moved or cancelled since, and says which", async ({
+      store,
+      calendar,
+    }) => {
+      await store.saveEntries(
+        calendar,
+        ["same", "moved", "back", "cancelled"].map((id) => single(id, later)),
+        2,
+      )
+      await store.saveEntries(
+        calendar,
+        [
+          single("moved", later + HOUR),
+          single("back", later + HOUR),
+          single("cancelled", later, { status: "cancelled" }),
+          single("new", later),
+        ],
+        10,
+      )
+      await store.saveEntries(calendar, [single("back", later)], 11)
+      const changed = async (since: number) => {
+        const events = await store.events({ changedSince: since })
+        const { entries, revisions } = await store.historyOf(
+          events.map(({ id }) => id),
+          [calendar],
+          since,
+        )
+        return Object.fromEntries(
+          events.map((event) => {
+            const [copy] = entries.filter(({ eventId }) => eventId === event.id)
+            return [
+              copy?.externalId,
+              eventChange(
+                event,
+                entries.filter(({ eventId }) => eventId === event.id),
+                revisions,
+                since,
+              ),
+            ]
+          }),
+        )
+      }
+      assert.deepEqual(await changed(5), {
+        moved: { change: "moved", at: 10, was: { startsAt: later, endsAt: later + HOUR } },
+        cancelled: { change: "cancelled", at: 10 },
+        new: { change: "new", at: 10 },
+      })
+      assert.deepEqual(Object.keys(await changed(12)), [])
+      assert.equal((await changed(1)).same?.change, "new")
+    }),
+    test("a list of overlapping events holds timed events that clash and take the owner's time", async ({
+      store,
+      calendar,
+    }) => {
+      const at = later
+      await store.saveEntries(
+        calendar,
+        [
+          single("first", at),
+          single("second", at + HOUR / 2),
+          single("alone", at + 3 * HOUR),
+          single("declined", at + 3 * HOUR + HOUR / 2, { ownResponse: "declined" }),
+          single("busy", at + 5 * HOUR),
+          single("free", at + 5 * HOUR, { transparency: "transparent" }),
+          single("cancelled", at + 3 * HOUR, { status: "cancelled" }),
+          single("all-day", at, {
+            allDay: true,
+            startDate: new Date(at).toISOString().slice(0, 10),
+            endDate: new Date(at + 24 * HOUR).toISOString().slice(0, 10),
+            endsAt: at + 24 * HOUR,
+          }),
+        ],
+        2,
+      )
+      const found = await store.events({ overlapping: true, from: at - HOUR, to: at + 8 * HOUR })
+      assert.deepEqual(found.map(({ title }) => title).length, 2)
+      const ids = new Set(found.map(({ id }) => id))
+      for (const externalId of ["first", "second"])
+        assert.ok(ids.has((await store.entry(calendar, externalId))?.eventId as number), externalId)
     }),
     test("participants are kept by address; a room is listed and is no contact", async ({ store, calendar }) => {
       const [entry] = await store.saveEntries(

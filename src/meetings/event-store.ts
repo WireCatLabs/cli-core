@@ -155,6 +155,10 @@ export interface StoredEntry {
   etag: string | null
   seenAt: number | null
   deletedAt: number | null
+  /** When this copy was first stored. */
+  createdAt: number
+  /** `transparent`: the copy does not take the owner's time. */
+  transparency: EntryTransparency | null
 }
 
 export interface StoredParticipant {
@@ -198,6 +202,13 @@ export interface EventFilter {
   to?: number
   /** All-day events, which have dates and no instant, ending after this local day (`YYYY-MM-DD`); `from` without it. */
   fromDate?: string
+  /** Events `eventChange` finds new, moved or cancelled at or after this instant. */
+  changedSince?: number
+  /**
+   * Events whose time overlaps another's. Only timed events that take the owner's time count: not cancelled, and with
+   * a live copy the owner did not decline or mark free.
+   */
+  overlapping?: boolean
   /** All-day events starting before this local day (exclusive); `to` without it. */
   toDate?: string
   accountId?: number
@@ -292,6 +303,12 @@ export interface EventStore {
   slotsOf(calendarId: number, seriesExternalId: string, window: { from: number; to: number }): Promise<StoredEntry[]>
   events(filter?: EventFilter): Promise<Event[]>
   event(id: number): Promise<EventDetails | null>
+  /** These events' copies on these calendars, deleted ones too, and their revisions since the instant, for `eventChange`. */
+  historyOf(
+    eventIds: number[],
+    calendarIds: number[],
+    since: number,
+  ): Promise<{ entries: StoredEntry[]; revisions: EntryRevision[] }>
   /** The participants of these events' copies on these calendars, deleted copies too, as `event` gives them. */
   participantsOf(eventIds: number[], calendarIds: number[]): Promise<(StoredParticipant & { eventId: number })[]>
   /** The owner's link of an entry to an event; no rule replaces it. */
@@ -336,4 +353,55 @@ export const entryInWindow = (
   if (start === null || start >= window.to) return false
   if (entry.kind === "series") return seriesEnd(entry) >= window.from
   return Math.max(entry.endsAt ?? start, start + 1) > window.from
+}
+
+/** What happened to an event at or after an instant, from its copies: first stored, a new time, or cancelled. */
+export interface EventChange {
+  change: "new" | "moved" | "cancelled"
+  /** When the store saw it. */
+  at: number
+  /** The time a moved event had at the instant. */
+  was?: { startsAt: number | null; endsAt: number | null }
+}
+
+/**
+ * The event's change since `since`, from its copies and their revisions (each revision holds the fields before one
+ * change): cancelled when the event is gone and a copy was cancelled or removed since; new when its first copy was
+ * stored since; moved when a live copy's time now differs from its time at `since`. `null` when none of these.
+ */
+export const eventChange = (
+  event: Pick<Event, "status" | "sourceDeletedAt">,
+  entries: readonly StoredEntry[],
+  revisions: readonly EntryRevision[],
+  since: number,
+): EventChange | null => {
+  const after = (entryId: number) =>
+    revisions
+      .filter((one) => one.entryId === entryId && one.createdAt >= since)
+      .sort((a, b) => a.createdAt - b.createdAt)
+  if (event.status === "cancelled" || event.sourceDeletedAt !== null) {
+    const times = entries.flatMap((entry) => [
+      ...(entry.deletedAt !== null && entry.deletedAt >= since ? [entry.deletedAt] : []),
+      ...(entry.status === "cancelled"
+        ? after(entry.id)
+            .filter((one) => one.status !== "cancelled")
+            .map(({ createdAt }) => createdAt)
+        : []),
+    ])
+    if (times.length) return { change: "cancelled", at: Math.max(...times) }
+  }
+  const first = Math.min(...entries.map(({ createdAt }) => createdAt))
+  if (entries.length && first >= since) return { change: "new", at: first }
+  for (const entry of entries) {
+    if (entry.deletedAt !== null || entry.status === "cancelled") continue
+    const changes = after(entry.id)
+    const [was] = changes
+    if (was && (was.startsAt !== entry.startsAt || was.endsAt !== entry.endsAt))
+      return {
+        change: "moved",
+        at: (changes.at(-1) as EntryRevision).createdAt,
+        was: { startsAt: was.startsAt, endsAt: was.endsAt },
+      }
+  }
+  return null
 }
