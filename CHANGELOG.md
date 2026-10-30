@@ -40,10 +40,12 @@ shape of this file.
   earlier UNTIL, a smaller COUNT, or a bound of the other kind) deleted the later slots under `events.update` alone; it
   now takes the same key as deleting the series. A rule with no end, or a later one, still needs only
   `events.update`.
-- **`sync.partial` names the calendars that failed and is safe to retry.** The message lists each as
-  `calendar <id> (<title>): <error>`, `details.calendars` carries `calendar_id`, `external_id`, `title` and `error`, and
-  the error says `retry.safe: true` (`retryable: true`, `sent: false`: a sync sends the provider no write). A host that
-  prints only the error used to lose which calendar failed and why.
+- **A calendar `sync` with a failed calendar prints nothing on stdout, and `sync.partial` carries the whole result.**
+  It printed the report and then failed, so stdout held an answer and the run was a failure (WC-OUT-14). Now the
+  error's message lists each failed calendar as `calendar <id> (<title>): <error>`, `details.calendars` holds every
+  synced calendar's `calendar_id`, `external_id`, `title`, `round`, `state`, `saved`, `removed`, `occurrences` and, on a
+  failed one, `error`, and the error says `retry.safe: true` (`retryable: true`, `sent: false`: a sync sends the
+  provider no write). A host that queues the report and prints it before the error must stop doing so.
 - **`EventStore` gains `slotsOf`, and `LinkReview` gains `calendarId`** (the calendar of a `calendar_entry` review's
   copy). `resolveAnswer` takes the account id after the store.
 - **`EventStore` gains `saveSlots`**, which saves several series' slots and the sync cursor in one transaction.
