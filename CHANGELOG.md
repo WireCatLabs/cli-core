@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.485.0 — 30.10.2026
+
 ### Fixed
 
 - **A store write no longer fails with "database is locked" while another process writes steadily.** SQLite's own wait
