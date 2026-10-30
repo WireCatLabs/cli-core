@@ -32,6 +32,9 @@ shape of this file.
   `missing` and `next`; a caller that stops on anything but `meta.complete: true` now sees a store that holds chats in
   part as incomplete. `tasks agenda` is declared `partial`, so the exit code stays 0. `AgendaChat` gains `coverage`
   and `Agenda` gains `since`.
+- **`search messages`, `search mail` and `search all` answer `meta.complete: false` when a chat searched is partial or
+  never fetched**, where they kept `true` and put the gap only in `missing` and `next`. Exit code stays 0 (the commands
+  are declared `partial`). A caller that read `meta.complete` as "no source failed" must read `missing` for the reason.
 - **`messages list --offline --json` may carry `meta.complete: false`, `missing` and `next`** for a chat held in part.
   `messages list` is declared `partial`: the exit code stays 0.
 

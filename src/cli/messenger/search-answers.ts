@@ -99,9 +99,10 @@ const accountName = ({ provider, account }: { provider: string; account: string 
 const metaOf = (
   accounts: readonly { provider: string; account: string }[],
   skipped: readonly { source?: string; resource?: string; code: ErrorCode }[] = [],
+  heldInPart = false,
 ): Partial<Meta> => ({
   accounts: accounts.map(accountName),
-  complete: skipped.length === 0,
+  complete: skipped.length === 0 && !heldInPart,
   ...(skipped.length
     ? { issues: skipped.map(({ source, resource, code }) => ({ code, source: source ?? resource ?? "" })) }
     : {}),
@@ -265,7 +266,7 @@ export const messagesAnswer = (
     page: page ?? 1,
     ...(again ? { args: again } : {}),
     ...gapsOf(found),
-    meta: metaOf(accounts, found.skipped),
+    meta: metaOf(accounts, found.skipped, coverageGaps(found).missing.length > 0),
   })
 }
 
@@ -390,6 +391,6 @@ export const allAnswer = (
       ...messages.missing,
       ...archive.missing,
     ],
-    meta: metaOf(found.accounts, found.skipped),
+    meta: metaOf(found.accounts, found.skipped, archive.missing.length > 0),
   })
 }
