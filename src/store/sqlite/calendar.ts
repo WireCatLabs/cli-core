@@ -9,6 +9,7 @@ import {
   type EventDetails,
   type EventFilter,
   type EventStore,
+  entryInWindow,
   entryMetadata,
   joinKeyOf,
   joinUrlWithoutQuery,
@@ -677,15 +678,32 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       write(database, () => {
         const marked = database
           .prepare(
-            `UPDATE calendar_entries SET deleted_at = ?, updated_at = ? WHERE calendar_id = ? AND deleted_at IS NULL
-               AND (seen_at IS NULL OR seen_at < ?)
-               AND (kind <> 'occurrence' OR exception = 1 OR (original_starts_at >= ? AND original_starts_at < ?))
-             RETURNING event_id`,
+            `SELECT * FROM calendar_entries WHERE calendar_id = ? AND deleted_at IS NULL AND (seen_at IS NULL OR seen_at < ?)
+               AND min(coalesce(starts_at, original_starts_at), coalesce(original_starts_at, starts_at)) < ? AND (kind = 'series'
+                 OR max(coalesce(ends_at, 0), coalesce(starts_at, 0) + 1, coalesce(original_starts_at, 0)) >= ?)`,
           )
-          .all(now, now, calendarId, seenBefore, window.from, window.to)
+          .all(calendarId, seenBefore, window.to, window.from)
+          .filter((row) => entryInWindow(entryOf(row), window))
+        const mark = database.prepare("UPDATE calendar_entries SET deleted_at = ?, updated_at = ? WHERE id = ?")
+        for (const row of marked) mark.run(now, now, Number(row.id))
         for (const eventId of new Set(marked.map((row) => int(row.event_id))))
           if (eventId !== null) refreshEvent(eventId, now)
         return marked.length
+      }),
+    restoreUnseen: async (calendarId, windowAt, now) =>
+      write(database, () => {
+        const restored = database
+          .prepare("SELECT * FROM calendar_entries WHERE calendar_id = ? AND deleted_at IS NOT NULL")
+          .all(calendarId)
+          .map(entryOf)
+          .filter((entry) => !entryInWindow(entry, windowAt(entry.deletedAt as number)))
+        const restore = database.prepare("UPDATE calendar_entries SET deleted_at = NULL, updated_at = ? WHERE id = ?")
+        for (const { id } of restored) restore.run(now, id)
+        refreshAround(
+          restored.map(({ id }) => id),
+          now,
+        )
+        return restored.length
       }),
     entry: async (calendarId, externalId) =>
       read(database, () => {

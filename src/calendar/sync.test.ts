@@ -69,4 +69,39 @@ describe("syncCalendars", () => {
     )
     expect((await syncCalendars(source, store, { accountId: 1, now: NOW + 86_400_000 })).synced[0]?.round).toBe("full")
   })
+
+  it("brings back, once per calendar, entries an older build marked deleted outside its window", async () => {
+    const store = memoryEventStore()
+    const source = fakeCalendarSource()
+    await syncCalendars(source, store, { accountId: 1, now: NOW })
+    const [calendar] = await store.calendars(1)
+    const id = calendar?.id as number
+    const old = Date.UTC(2024, 0, 10, 9)
+    const damage = async (externalId: string) => {
+      await store.saveEntries(
+        id,
+        [
+          {
+            externalId,
+            kind: "single",
+            status: "confirmed",
+            title: "Old review",
+            startsAt: old,
+            endsAt: old + 3_600_000,
+          },
+        ],
+        NOW,
+      )
+      await store.markUnseen(id, NOW + 1, { from: 0, to: Number.MAX_SAFE_INTEGER }, NOW + 1)
+    }
+    await damage("first")
+    const { restored: _, ...olderCursor } = parseCalendarCursor(await store.cursor(id)) ?? {}
+    await store.setCursor(id, JSON.stringify(olderCursor), NOW)
+    await syncCalendars(source, store, { accountId: 1, now: NOW + 3_600_000 })
+    expect((await store.entry(id, "first"))?.deletedAt).toBeNull()
+    expect(parseCalendarCursor(await store.cursor(id))?.restored).toBe(true)
+    await damage("second")
+    await syncCalendars(source, store, { accountId: 1, now: NOW + 7_200_000 })
+    expect((await store.entry(id, "second"))?.deletedAt).not.toBeNull()
+  })
 })

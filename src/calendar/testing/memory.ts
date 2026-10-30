@@ -10,7 +10,7 @@ import type {
   StoredEntry,
   StoredParticipant,
 } from "../../meetings/index.js"
-import { calendarText, type Event, joinKeyOf, joinUrlWithoutQuery } from "../../meetings/index.js"
+import { calendarText, type Event, entryInWindow, joinKeyOf, joinUrlWithoutQuery } from "../../meetings/index.js"
 
 type Entry = StoredEntry & { updatedAt: number }
 
@@ -414,14 +414,24 @@ export const memoryEventStore = (): EventStore => {
           one.calendarId === calendarId &&
           one.deletedAt === null &&
           (one.seenAt === null || one.seenAt < seenBefore) &&
-          (one.kind !== "occurrence" ||
-            one.exception ||
-            (one.originalStartsAt !== null && one.originalStartsAt >= window.from && one.originalStartsAt < window.to)),
+          entryInWindow(one, window),
       )
       for (const one of marked) Object.assign(one, { deletedAt: now, updatedAt: now })
       for (const eventId of new Set(marked.map(({ eventId }) => eventId)))
         if (eventId !== null) refreshEvent(eventId, now)
       return marked.length
+    },
+    async restoreUnseen(calendarId, windowAt, now) {
+      const restored = entries.filter(
+        (one) =>
+          one.calendarId === calendarId && one.deletedAt !== null && !entryInWindow(one, windowAt(one.deletedAt)),
+      )
+      for (const one of restored) Object.assign(one, { deletedAt: null, updatedAt: now })
+      refreshAround(
+        restored.map(({ id }) => id),
+        now,
+      )
+      return restored.length
     },
     async entry(calendarId, externalId) {
       const found = entries.find((one) => one.calendarId === calendarId && one.externalId === externalId)

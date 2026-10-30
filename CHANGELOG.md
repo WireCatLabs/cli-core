@@ -36,6 +36,17 @@ shape of this file.
   `events.notify` stay `deny`, so mailing attendees still needs the owner's yes. A profile that wants a question
   first sets the key to `ask`.
 
+### Fixed
+
+- **The daily full calendar sync no longer marks events outside its window as deleted.** A full list returns only
+  what falls in the window (a year back, three months ahead), but `markUnseen` limited only plain occurrences to it,
+  so every older or later single event, moved occurrence and ended series was marked deleted, and its event cancelled
+  or marked gone at the source. It now marks only what `entryInWindow` (new, from `@wirecat/cli-core/meetings`) puts
+  in the window. Stores already damaged heal on their next sync: each calendar runs the new
+  `EventStore.restoreUnseen` once, which brings back the entries marked outside the window of the list that marked
+  them, with their events. A rescan cannot do this, since it never lists them again. Implementations of `EventStore`
+  outside cli-core need `restoreUnseen`.
+
 ## 0.488.0 — 30.10.2026
 
 ### Added
