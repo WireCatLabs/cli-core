@@ -275,27 +275,32 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
           ? `run sync again to continue; see progress: ${progressAt}`
           : report.hint
       if (report.hint === undefined) delete report.hint
-      print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
       const failed = report.synced.filter((one) => one.error !== undefined)
       if (failed.length)
-        // The error carries what failed, since a host that prints only the error drops the report printed above.
+        // A failure prints nothing on stdout (WC-OUT-14), so the error carries every calendar's result.
         throw new CliError(
           "provider_error",
           `${failed.map((one) => `calendar ${one.calendarId} (${one.title ?? one.externalId}): ${one.error}`).join("; ")}` +
             " — run sync again to retry",
           {
             reason: "sync.partial",
-            calendars: failed.map((one) => ({
+            calendars: report.synced.map((one) => ({
               calendar_id: String(one.calendarId),
               external_id: one.externalId,
               title: one.title,
-              error: one.error,
+              round: one.round,
+              state: one.state,
+              saved: one.saved,
+              removed: one.removed,
+              occurrences: one.occurrences,
+              ...(one.error === undefined ? {} : { error: one.error }),
             })),
             retryable: true,
             // A sync sends the provider no write, so running it again changes nothing there.
             sent: false,
           },
         )
+      print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
     })
 
   output(

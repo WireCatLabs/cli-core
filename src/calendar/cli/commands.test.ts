@@ -90,7 +90,7 @@ const setup = async (deps: Partial<CalendarCommandDeps> = {}) => {
     await program().parseAsync(args, { from: "user" })
     return written.at(-1) as Record<string, unknown> & { items: Record<string, unknown>[] }
   }
-  return { store, accountId, source, cli, program }
+  return { store, accountId, source, cli, program, written }
 }
 
 describe("calendar commands", () => {
@@ -355,10 +355,11 @@ describe("calendar commands", () => {
 
   it("sync --embed embeds after the sync; a calendar that fails makes the run partial", async () => {
     const embedded: number[] = []
-    const { cli, source } = await setup({ embed: async (max) => embedded.push(max) })
+    const { cli, source, written } = await setup({ embed: async (max) => embedded.push(max) })
     expect(await cli("sync", "--embed")).toMatchObject({ embeddings: 1 })
     expect(embedded).toEqual([600])
     source.failAfter(0)
+    const printed = written.length
     const failure = cli("sync")
     await expect(failure).rejects.toMatchObject({
       code: "provider_error",
@@ -374,6 +375,7 @@ describe("calendar commands", () => {
     })
     expect(error.retry).toEqual({ safe: true })
     expect(error.details?.calendars).toHaveLength(1)
+    expect(written).toHaveLength(printed)
   })
 
   it("sync --rescan lists the whole window under the shared program, and --full, its output flag, is refused", async () => {
