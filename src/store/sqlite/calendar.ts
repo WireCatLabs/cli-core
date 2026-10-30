@@ -128,6 +128,8 @@ const REVIEWS =
   "SELECT r.*, CASE WHEN r.linkable_type = 'calendar_entry' THEN " +
   "(SELECT calendar_id FROM calendar_entries WHERE id = r.linkable_id) END AS calendar_id FROM link_reviews r"
 
+const DAY = 86_400_000
+
 const TRACKED = ["title", "starts_at", "ends_at", "location", "status", "recurrence", "recurrence_ends_at"] as const
 
 const flag = (value: boolean | undefined) => (value ? 1 : 0)
@@ -770,6 +772,21 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
       }
       dated("end_date > ?", filter.fromDate, "coalesce(e.ends_at, e.starts_at + 1) > ?", filter.from)
       dated("start_date < ?", filter.toDate, "e.starts_at < ?", filter.to)
+      // Bounds on starts_at alone let SQLite seek its index; the CASE above cannot. They are wider than the CASE: by the
+      // longest stored event back, and by a day each way for an all-day event's zone.
+      if (filter.from !== undefined) {
+        const longest = Number(
+          database
+            .prepare("SELECT coalesce(max(ends_at - starts_at), 0) AS ms FROM events WHERE deleted_at IS NULL")
+            .get()?.ms ?? 0,
+        )
+        clauses.push("e.starts_at >= ?")
+        params.push(filter.from - longest - DAY)
+      }
+      if (filter.to !== undefined && filter.toDate !== undefined) {
+        clauses.push("e.starts_at < ?")
+        params.push(filter.to + DAY)
+      }
       if (filter.calendarId !== undefined) {
         clauses.push(entries("ce.calendar_id = ?"))
         params.push(filter.calendarId)
@@ -832,6 +849,17 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
             .map(attachmentOf),
         }
       }),
+    participantsOf: async (eventIds, calendarIds) =>
+      read(database, () =>
+        database
+          .prepare(
+            `SELECT p.*, ce.event_id FROM calendar_entry_participants p JOIN calendar_entries ce ON ce.id = p.entry_id
+              WHERE ce.event_id IN (SELECT value FROM json_each(?)) AND ce.calendar_id IN (SELECT value FROM json_each(?))
+              ORDER BY ce.event_id, p.entry_id, p.email`,
+          )
+          .all(JSON.stringify(eventIds), JSON.stringify(calendarIds))
+          .map((row) => ({ ...participantOf(row), eventId: Number(row.event_id) })),
+      ),
     linkEntry: async (entryId, eventId, now) =>
       write(database, () => {
         const row = database.prepare("SELECT * FROM calendar_entries WHERE id = ?").get(entryId)

@@ -47,6 +47,9 @@ shape of this file.
 - **`EventStore` gains `slotsOf`, and `LinkReview` gains `calendarId`** (the calendar of a `calendar_entry` review's
   copy). `resolveAnswer` takes the account id after the store.
 
+- **`EventStore` gains `participantsOf(eventIds, calendarIds)`**: the participants of those events' copies on those
+  calendars, in one read.
+
 ### Fixed
 
 - **The daily full calendar sync no longer marks events outside its window as deleted.** A full list returns only
@@ -67,6 +70,11 @@ shape of this file.
   The same for the new series of `events update --following`.
 - **`links resolve` no longer changes a link choice of another account's calendar.** It refuses with
   `permission_error`; `links review` still lists every account's choices.
+- **`events list` by time seeks the time index, and `people list` reads attendees in one query.** The list query put
+  both time bounds inside `CASE WHEN all_day`, so SQLite scanned the events from the start of the window; plain bounds
+  on `starts_at`, wider than the exact ones (back by the longest stored event plus a day, forward by a day), now let it
+  seek. `people list` read each of up to 1,000 events with five queries. On a 20,000-event store: `events list` today
+  12.5 → 2 ms, `people list` for a week 83 → 15 ms, same answers.
 
 - **The store's `node:sqlite` driver prepares each SQL text once per connection.** It prepared every statement again
   on every call, which was a quarter of a gcal sync's time. Each connection now keeps up to 1,000 prepared

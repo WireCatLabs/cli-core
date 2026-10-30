@@ -373,6 +373,33 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       assert.equal(await store.restoreUnseen(calendar, () => ({ from: earlier, to: later + 24 * HOUR }), 13), 0)
       assert.equal((await store.event(inside?.eventId as number))?.event.status, "cancelled")
     }),
+    test("a list by time finds a long event that started well before it, timed or all-day", async ({
+      store,
+      calendar,
+    }) => {
+      const day = 24 * HOUR
+      await store.saveEntries(
+        calendar,
+        [
+          single("trip", later - 30 * day, { endsAt: later + 30 * day }),
+          single("leave", later - 30 * day, {
+            allDay: true,
+            startDate: new Date(later - 30 * day).toISOString().slice(0, 10),
+            endDate: new Date(later + 30 * day).toISOString().slice(0, 10),
+            endsAt: later + 30 * day,
+          }),
+          single("today", later),
+        ],
+        2,
+      )
+      const day0 = new Date(later).toISOString().slice(0, 10)
+      const day1 = new Date(later + day).toISOString().slice(0, 10)
+      for (const filter of [
+        { from: later, to: later + day },
+        { from: later, to: later + day, fromDate: day0, toDate: day1 },
+      ])
+        assert.deepEqual((await store.events(filter)).map(({ title }) => title).length, 3, JSON.stringify(filter))
+    }),
     test("participants are kept by address; a room is listed and is no contact", async ({ store, calendar }) => {
       const [entry] = await store.saveEntries(
         calendar,

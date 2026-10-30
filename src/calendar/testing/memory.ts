@@ -490,6 +490,19 @@ export const memoryEventStore = (): EventStore => {
         .slice(offset, offset + limit)
         .map((event) => ({ ...event }))
     },
+    async participantsOf(eventIds, calendarIds) {
+      const wanted = new Map(
+        entries
+          .filter(
+            (one) => one.eventId !== null && eventIds.includes(one.eventId) && calendarIds.includes(one.calendarId),
+          )
+          .map((one) => [one.id, one.eventId as number]),
+      )
+      return participants
+        .filter((one) => wanted.has(one.entryId))
+        .map((one) => ({ ...one, eventId: wanted.get(one.entryId) as number }))
+        .sort((a, b) => a.eventId - b.eventId || a.entryId - b.entryId || a.email.localeCompare(b.email))
+    },
     async event(id) {
       const event = events.get(id)
       if (!event) return null
