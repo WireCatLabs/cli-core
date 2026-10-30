@@ -1421,6 +1421,31 @@ describe("the shared read commands", () => {
     expect(refused.code).toBe(5)
     expect(refused.stderr.join("\n")).toContain("reactions.list-hidden")
     expect(unlisted.code).not.toBe(0)
+    expect(body.missing).toBeUndefined()
+  })
+
+  it("says in `reactions list` what it covers when the messenger names a scope", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const reactor = {
+      person: { id: "91", name: "Ana", username: null },
+      reaction: "🔥",
+      reactedAt: "2026-10-08T09:00:00.000Z",
+    }
+    const scope = "reactions received while this computer was syncing"
+    const reacting: MessengerAdapter = { ...fake, reactors: async () => ({ items: [reactor], hasMore: false }) }
+    const list = (options: Partial<RunOptions & McpEnvironment>, ...extra: string[]) =>
+      call(["reactions", "list", "Book", "3", ...extra], async () => reacting, env, options, {
+        reactionsList: true,
+        reactionsListScope: scope,
+      })
+
+    const json = await list({}, "--json")
+    const human = await list({ tty: true })
+
+    expect(JSON.parse(json.stdout[0] ?? "").missing).toEqual([{ field: "reactions", why: `shows only ${scope}` }])
+    expect(json.stderr.join("\n")).not.toContain("shows only")
+    expect(human.stderr.join("\n")).toContain(`shows only ${scope}`)
   })
 
   it("**messages list never marks the chat read and refuses --mark-read**", async () => {

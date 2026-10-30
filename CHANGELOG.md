@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A messenger can say what `reactions list` covers.** The new `reactionsListScope` option on the messenger (for
+  WhatsApp, "reactions received while this computer was syncing") adds `missing: [{ field: "reactions", why }]` to the
+  JSON answer and one line on stderr for a person: "shows only …". A messenger that sets none answers as before.
+
 ## 0.486.0 — 30.10.2026
 
 ### Fixed
