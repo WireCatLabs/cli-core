@@ -35,6 +35,17 @@ shape of this file.
   `allow` (were `ask`). `events.delete` stays `ask`, and it also covers `--following`. `events.delete.series` and
   `events.notify` stay `deny`, so mailing attendees still needs the owner's yes. A profile that wants a question
   first sets the key to `ask`.
+- **A calendar series update whose new rule ends it sooner also needs `events.delete.series`,** which is `deny` by
+  default. `events update --series --repeat` with a COUNT or UNTIL that drops slots the series had (a bound added, an
+  earlier UNTIL, a smaller COUNT, or a bound of the other kind) deleted the later slots under `events.update` alone; it
+  now takes the same key as deleting the series. A rule with no end, or a later one, still needs only
+  `events.update`.
+- **`sync.partial` names the calendars that failed and is safe to retry.** The message lists each as
+  `calendar <id> (<title>): <error>`, `details.calendars` carries `calendar_id`, `external_id`, `title` and `error`, and
+  the error says `retry.safe: true` (`retryable: true`, `sent: false`: a sync sends the provider no write). A host that
+  prints only the error used to lose which calendar failed and why.
+- **`EventStore` gains `slotsOf`, and `LinkReview` gains `calendarId`** (the calendar of a `calendar_entry` review's
+  copy). `resolveAnswer` takes the account id after the store.
 
 ### Fixed
 
@@ -46,6 +57,16 @@ shape of this file.
   `EventStore.restoreUnseen` once, which brings back the entries marked outside the window of the list that marked
   them, with their events. A rescan cannot do this, since it never lists them again. Implementations of `EventStore`
   outside cli-core need `restoreUnseen`.
+- **A repeating event moved to another time no longer keeps its slots at the old time.** An incremental sync saved the
+  slots the provider gave for the series and left the old ones scheduled. Now the series' stored plain slots in the
+  window that the provider no longer gives are cancelled.
+- **A `sync --rescan` its budget stopped no longer leaves calendars it did not reach on incremental rounds.** The rescan
+  is saved as each calendar's round before the first request, so the next plain `sync` lists those in full.
+- **A create the provider made but the store failed to save names the event's id.** The error carries
+  `operation_id` and `id` and says to sync, or to repeat with `--id`, which finds the event instead of making it again.
+  The same for the new series of `events update --following`.
+- **`links resolve` no longer changes a link choice of another account's calendar.** It refuses with
+  `permission_error`; `links review` still lists every account's choices.
 
 ## 0.488.0 — 30.10.2026
 

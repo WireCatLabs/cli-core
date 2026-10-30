@@ -417,7 +417,8 @@ export const syncCalendars = async (
     // Every calendar keeps the rescan as its round in progress, so one this run does not reach starts it next time.
     for (const one of synced) {
       const round = freshRound(true, null, window, now)
-      one.stored = { ...(one.stored ?? { v: 2, token: null, window, fullAt: 0, updatedAt: null }), done: 0, round }
+      const fresh = { v: 2 as const, token: null, window, fullAt: 0, updatedAt: null, restored: true as const }
+      one.stored = { ...(one.stored ?? fresh), done: 0, round }
       await store.setCursor(one.calendar.id, JSON.stringify(one.stored), now)
     }
   for (const { calendar, stored } of synced) {
