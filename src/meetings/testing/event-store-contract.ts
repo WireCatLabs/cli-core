@@ -317,6 +317,62 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       assert.equal((await store.event(kept?.eventId as number))?.entries[0]?.deletedAt, null)
       assert.equal((await store.event(far?.eventId as number))?.entries[0]?.deletedAt, null)
     }),
+    test("a full list marks nothing outside its window: a single, a moved slot, a series that ended", async ({
+      store,
+      calendar,
+    }) => {
+      const month = 30 * 24 * HOUR
+      const until = new Date(earlier - month).toISOString().replace(/[-:]|\.\d{3}/gu, "")
+      await store.saveEntries(
+        calendar,
+        [
+          single("old", earlier - month),
+          single("next", later + month),
+          single("inside", later),
+          single("ended", earlier - 2 * month, { kind: "series", recurrence: [`RRULE:FREQ=WEEKLY;UNTIL=${until}`] }),
+          single("endless", earlier - 2 * month, { kind: "series", recurrence: ["RRULE:FREQ=WEEKLY"] }),
+          single("moved", earlier - month, {
+            kind: "occurrence",
+            exception: true,
+            seriesExternalId: "endless",
+            originalStartsAt: earlier - month,
+          }),
+        ],
+        2,
+      )
+      assert.equal(await store.markUnseen(calendar, 10, { from: earlier, to: later + 24 * HOUR }, 11), 2)
+      const deleted = async (id: string) => (await store.entry(calendar, id))?.deletedAt
+      assert.deepEqual(await Promise.all(["old", "next", "ended", "moved", "inside", "endless"].map(deleted)), [
+        null,
+        null,
+        null,
+        null,
+        11,
+        11,
+      ])
+    }),
+    test("entries marked outside the window of the list that marked them come back, with their events", async ({
+      store,
+      calendar,
+    }) => {
+      const month = 30 * 24 * HOUR
+      const [old, next, inside] = await store.saveEntries(
+        calendar,
+        [single("old", earlier - month), single("next", later + month), single("inside", later)],
+        2,
+      )
+      assert.equal(await store.markUnseen(calendar, 10, { from: 0, to: later + 2 * month }, 11), 3)
+      assert.equal((await store.event(next?.eventId as number))?.event.status, "cancelled")
+      assert.equal(await store.restoreUnseen(calendar, () => ({ from: earlier, to: later + 24 * HOUR }), 12), 2)
+      const oldEvent = (await store.event(old?.eventId as number))?.event
+      const nextEvent = (await store.event(next?.eventId as number))?.event
+      assert.equal(oldEvent?.sourceDeletedAt, null)
+      assert.equal(nextEvent?.status, "confirmed")
+      assert.equal((await store.entry(calendar, "old"))?.deletedAt, null)
+      assert.equal((await store.entry(calendar, "inside"))?.deletedAt, 11)
+      assert.equal(await store.restoreUnseen(calendar, () => ({ from: earlier, to: later + 24 * HOUR }), 13), 0)
+      assert.equal((await store.event(inside?.eventId as number))?.event.status, "cancelled")
+    }),
     test("participants are kept by address; a room is listed and is no contact", async ({ store, calendar }) => {
       const [entry] = await store.saveEntries(
         calendar,

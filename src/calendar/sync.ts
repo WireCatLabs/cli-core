@@ -42,6 +42,8 @@ export interface CalendarCursor {
   /** Entries saved by the round in progress, or by the last round. */
   done: number
   round: PendingRound | null
+  /** Entries an older build marked deleted outside its window are back (`EventStore.restoreUnseen`). */
+  restored?: true
 }
 
 const isWindow = (value: unknown): value is SyncWindow =>
@@ -89,7 +91,16 @@ export const parseCalendarCursor = (value: string | null): CalendarCursor | null
       typeof cursor.done !== "number"
     )
       return null
-    return { v: 2, token, window, fullAt, updatedAt: cursor.updatedAt ?? null, done: cursor.done, round }
+    return {
+      v: 2,
+      token,
+      window,
+      fullAt,
+      updatedAt: cursor.updatedAt ?? null,
+      done: cursor.done,
+      round,
+      ...(cursor.restored === true ? { restored: true as const } : {}),
+    }
   } catch {
     return null
   }
@@ -237,6 +248,12 @@ const syncOne = async (
     updatedAt: null,
     done: 0,
     round: null,
+    restored: true,
+  }
+  if (stored !== null && !stored.restored) {
+    // Up to 0.488.0 a full list also marked entries outside its window, which no later list returns to unmark.
+    await store.restoreUnseen(calendar.id, calendarSyncWindow, now)
+    cursor = { ...cursor, restored: true }
   }
   let round = roundFor(source, stored, { asked, window, now })
   if (round !== stored?.round) cursor = { ...cursor, done: 0 }

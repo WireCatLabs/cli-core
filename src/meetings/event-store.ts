@@ -245,10 +245,20 @@ export interface EventStore {
    */
   removeEntries(calendarId: number, externalIds: string[], now: number): Promise<number>
   /**
-   * After a full list: entries not seen since `seenBefore` get `deleted_at`. Plain occurrences come only from the
-   * window fetched, so only those inside it count. Events, series and links stay.
+   * After a full list: entries not seen since `seenBefore` get `deleted_at`. A full list holds only what falls in the
+   * window, so only entries `entryInWindow` puts there count. Events, series and links stay.
    */
   markUnseen(calendarId: number, seenBefore: number, window: { from: number; to: number }, now: number): Promise<number>
+  /**
+   * Takes `deleted_at` off the entries a full list marked although they were outside the window it listed:
+   * `windowAt(deletedAt)` is the window of the list that marked one. Their events take their fields again. Returns how
+   * many came back.
+   */
+  restoreUnseen(
+    calendarId: number,
+    windowAt: (deletedAt: number) => { from: number; to: number },
+    now: number,
+  ): Promise<number>
   /**
    * Where the calendar's last sync stopped, as the sync engine wrote it (`{"v":1,"token":…,"window":…,"fullAt":…}`),
    * or `null` before the first one.
@@ -266,4 +276,40 @@ export interface EventStore {
   unlinkEntry(entryId: number, now: number): Promise<void>
   reviews(filter?: { status?: LinkReview["status"] }): Promise<LinkReview[]>
   resolveReview(id: number, decision: ReviewDecision, now: number): Promise<LinkReview>
+}
+
+const UNTIL = /(?:^|;)UNTIL=(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z?)?(?:;|$)/iu
+
+/** The last moment a series can have a slot, when its rule says; a COUNT rule or none repeats as far as this knows. */
+const seriesEnd = (entry: Pick<StoredEntry, "recurrence" | "recurrenceEndsAt">): number => {
+  if (entry.recurrenceEndsAt !== null) return entry.recurrenceEndsAt
+  const rule = entry.recurrence?.find((line) => /^RRULE:/iu.test(line))
+  const until = rule === undefined ? null : UNTIL.exec(rule.slice("RRULE:".length))
+  if (!until) return Number.POSITIVE_INFINITY
+  const [, year, month, day, hour = "23", minute = "59", second = "59"] = until
+  // A floating or zoned UNTIL is read as UTC; a day later keeps a series near the edge counted as inside.
+  return (
+    Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) + 86_400_000
+  )
+}
+
+/**
+ * Whether a full list of the window would return the entry: a single or a moved slot by its own time, a plain slot by
+ * the time its series gave it, a series while it repeats into the window. An entry with no time is never counted.
+ */
+export const entryInWindow = (
+  entry: Pick<
+    StoredEntry,
+    "kind" | "exception" | "startsAt" | "endsAt" | "originalStartsAt" | "recurrence" | "recurrenceEndsAt"
+  >,
+  window: { from: number; to: number },
+): boolean => {
+  if (entry.kind === "occurrence" && !entry.exception)
+    return (
+      entry.originalStartsAt !== null && entry.originalStartsAt >= window.from && entry.originalStartsAt < window.to
+    )
+  const start = entry.startsAt ?? (entry.kind === "occurrence" ? entry.originalStartsAt : null)
+  if (start === null || start >= window.to) return false
+  if (entry.kind === "series") return seriesEnd(entry) >= window.from
+  return Math.max(entry.endsAt ?? start, start + 1) > window.from
 }

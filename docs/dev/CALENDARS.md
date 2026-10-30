@@ -41,7 +41,11 @@ provider confirmed deleted, never one that only left the window.
    are kept in the cursor and `occurrences()` asked for each after the listing, the cursor saved after each; nothing
    for `in-changes`.
 7. After a full round, `markUnseen` marks what it has not seen since the round started (`startedAt`), so the pages
-   an earlier run saved are not marked.
+   an earlier run saved are not marked. It marks only what the list could return (`entryInWindow`): a single or a
+   moved slot by its own time, a plain slot by its series' time, a series while it repeats into the window (by
+   `recurrenceEndsAt`, else the rule's UNTIL; a COUNT series with no `recurrenceEndsAt` counts as repeating). Before
+   its first round a calendar whose cursor lacks `restored` runs `restoreUnseen` once: builds up to 0.488.0 marked
+   entries outside the window too, and no later list sees them again.
 8. The cursor then holds the round's token and no round. A calendar that fails keeps its last saved page, and the
    others go on; the report says `complete: false` and repeats the error's text only when it is a `CliError` the
    adapter raised, since another error may carry a request URL with a token in it.
