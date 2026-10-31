@@ -12,6 +12,22 @@ shape of this file.
 - **Discovery search keeps the colons of a quoted timestamp in a date filter.** 0.492.0 turned a colon between digits
   into a space so that "22:00" in a question would not fail, but it also did so inside quotes, and
   `date:["2026-08-21T21:30:00Z" TO "…"]` failed with `query.invalid-date` under `discover`. Quoted text is now left as is.
+- **`search notes`, the notes of `search all` and drive's `search` keep the query's fields for hits found by
+  meaning.** `date:today` or `tag:work` without `--exact` returned about 20 notes that matched neither: the meaning
+  half embedded the whole query, fields included, and checked only `--filter`. Now only the query's words and phrases
+  are searched by meaning, and every field and every excluded word (`-draft`) holds for every hit; a field joined to
+  the words by `OR` narrows nothing. A query of fields alone is not searched by meaning and lists the matching notes,
+  newest first. `--filter` also checks every meaning candidate: before, it kept only the newest 500 notes it matched,
+  so an older note found by meaning was dropped.
+- **A Drive document's `date:` and its shown `updated_at` are one time.** `date:` read when the store's copy changed,
+  while the hit showed the document's edit time on Drive, so of 20 hits for `date>=30d` 16 showed an older date. Both
+  are now the edit time on Drive when the store has it, and the store's copy otherwise, as `context` evidence already
+  reads it. `date:` on a Drive document therefore matches by its edit time, and the time is always written as
+  `2026-01-01T00:00:00.000Z`, as every other time is, where a front-matter time was shown as written.
+
+### Added
+
+- **`NoteQuery.refs` checks a list of notes against a query, and `NoteHit.at` is the time `date:` read.**
 
 ## 0.495.0 — 31.10.2026
 

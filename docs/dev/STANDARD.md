@@ -965,7 +965,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--failed` |  | every chat whose newest job failed or died |  | `store jobs retry` |
 | `--file` | `<file>` | attach a file; images go as a photo, videos as a video. Repeat it for more |  | `bot messages send` (planned), `messages send` |
 | `--filename` | `<name>` | the name others see for the --file, instead of its name on disk |  | `messages send` (tg, wa only) |
-| `--filter` | `query` | Strict Lucene filter: any message in the conversation must match; the meaning query stays unchanged. **search notes uses it for a query every note must also match, the meaning half unchanged** |  | `search conversations`, `search notes` |
+| `--filter` | `query` | Strict Lucene filter: any message in the conversation must match; the meaning query stays unchanged. **search notes uses it for a query every note must also match, found by words or by meaning** |  | `search conversations`, `search notes` |
 | `--find-by-phone` | `<who>` | who finds the account by its number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--fingerprint` | `<hash>` | refuse if the inspected coverage plan changed |  | `store gaps repair` |
 | `--first-name` | `<name>` | your first name |  | `account update` |

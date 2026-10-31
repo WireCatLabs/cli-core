@@ -3,9 +3,9 @@ import type { Profiles } from "../search/account-list.js"
 import type { Note, StoredAccount, StoredFile } from "../store/index.js"
 
 /**
- * Where a hit came from. The document's preferred file says it: its account's provider, its link and its edit time.
+ * Where a hit came from. The document's preferred file says it: its account's provider and its link.
  * A Drive document under a notes folder (before version 31 moves it) is still known by its front matter.
- * Indexing time belongs to the local row.
+ * The hit's time is the store search's: the one `date:` reads.
  */
 export const documentSource = (
   note: Note,
@@ -29,16 +29,10 @@ export const documentSource = (
           )
       : undefined
   const url = file?.url ?? (remote && typeof metadata?.sourceUrl === "string" ? metadata.sourceUrl : undefined)
-  const modified =
-    file?.externalUpdatedAt ??
-    (remote && typeof metadata?.modifiedAt === "string" && Number.isFinite(Date.parse(metadata.modifiedAt))
-      ? metadata.modifiedAt
-      : undefined)
   return {
     kind: remote ? ("document" as const) : ("note" as const),
     provider: profile ? profile.command : "notes",
     account: profile?.name ?? note.folderId ?? "internal",
     ...(remote && url !== undefined ? { url } : {}),
-    updated_at: remote && modified !== undefined ? modified : note.updatedAt,
   }
 }

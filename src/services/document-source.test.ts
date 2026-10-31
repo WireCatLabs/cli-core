@@ -41,7 +41,7 @@ describe("imported document search provenance", () => {
         provider: "drive",
         account: "personal",
         url: "https://docs.google.com/document/d/synthetic-document/edit",
-        updated_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
       })
       const all = await searchAllWithMeetings(store, account, {
         source: "drive:personal",
@@ -56,7 +56,7 @@ describe("imported document search provenance", () => {
         provider: "drive",
         account: "personal",
         url: found.hits[0]?.url,
-        timestamp: "2026-01-01T00:00:00Z",
+        timestamp: "2026-01-01T00:00:00.000Z",
       })
       expect((await searchNotesOf(store, account, "budget", { accounts: "drive", exact: true })).hits).toHaveLength(1)
     } finally {
