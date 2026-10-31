@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.510.0 — 31.10.2026
+
 ### Fixed
 
 - **`search events --backend both` marks a repeating event the provider also found.** The stored search shows a series
