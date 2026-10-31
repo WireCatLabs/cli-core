@@ -12,7 +12,7 @@ job; matching it to entities is a later slice.
 import { gatherProjectEvidence } from "@wirecat/cli-core/services"
 
 const result = await gatherProjectEvidence(
-  { evidence: store.contextEvidence, index: store.contextIndex, fetcher },
+  { evidence: store.contextEvidence, index: store.contextIndex, coverage, fetcher },
   {
     project: { name: "Harbour", key: "HRB", background: "Port expansion bid", aliases: ["NBB"] },
     keywords: ["berth tender", "crane"],
@@ -60,10 +60,21 @@ const result = await gatherProjectEvidence(
   half-open `after`/`before`; `before` left out is `asOf`, frozen with the run. Windows longer than 90 days are read in 90-day chunks, newest first. Each
   item keeps its `timeKind`: an imported document's `stored-update` time is when it was stored, not when
   its content happened.
-- **Fetch.** `fetch: "before-read"` calls the host's `ProjectSourceFetcher` once per source before reading.
-  It answers `fetched` or `unsupported` with a history of `complete`, `partial` or `unknown`; a `CliError`
-  becomes that source's `failed` state with its code. A failed fetch is coverage, not absence: the store is
-  still read.
+- **Fetch.** `fetch: "before-read"` needs the host's `coverage` and `fetcher` (`ProjectChatFetcher`). Before the
+  first read of a run (never on a resume) it asks `coverage` what the store holds of each linked chat in `sources`,
+  and calls `fetcher.fetch({ account, chatId, after, before, signal, onProgress })` for each chat it does not hold for
+  the window: not `complete`, and not up to date with no gaps back past `after`. One at a time, inside one budget
+  for all of them, `budgets.maxFetchMs` (default 3 minutes, at most 30); `signal` aborts when it runs out. The
+  answer is `complete`, `partial` or `failed` with an optional `reason`. A chat cut by the budget is `partial`
+  (`fetch-budget`), a chat not started before it ran out `skipped`, and a `CliError` is `failed` with its code. The
+  result's `fetch` lists each chat tried; the reads that follow, and the `linkedChats` coverage, see what it saved.
+  A failed fetch is coverage, not absence: the store is still read. The read budgets start after the fetch.
+  `onFetchProgress` on the ports hears each chat's pages (counts only), for a heartbeat.
+
+- **Stored project.** `gatherStoredProject(store, input)` is the whole `projects evidence` over a store: the
+  project's name, key and aliases, confirmed person members and confirmed linked chats, in the sources the host
+  resolved; `projectsCommand(messenger)` from `@wirecat/cli-core/cli` mounts it as `projects evidence` in a
+  messenger CLI, with `--fetch` syncing through the profile's own connection.
 
 - **Index.** New mail and imported documents wait in a queue before the word index holds them, and the
   context reader reads only the index. With `index: "update"` (the default) the service first runs the host's

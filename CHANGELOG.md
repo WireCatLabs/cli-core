@@ -7,6 +7,26 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`projects evidence --fetch` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
+  that mounts it reads a project's evidence from its profile's stored messages; `--fetch` (off by default, not on
+  MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--fetch-time`
+  (3 minutes), one chat at a time. A chat the time cut stays partial with its `missing` and `next`. The command is
+  declared a fetch (`remote: read`, `local: write`) because of `--fetch`; cli-base fixes effects per command.
+- **`gatherStoredProject`** (services) and **`projectAnswerParts`, `projectEvidenceText`, `projectWindowOf`,
+  `projectCutoffTime`** (cli): memo's `projects evidence` over a store, moved here so memo and the messenger CLIs
+  share it. The host resolves the sources and names its own sync command in the text.
+
+### Changed — may break callers
+
+- **`gatherProjectEvidence`'s fetch port is per linked chat.** `ProjectSourceFetcher` (one fetch per source, no
+  caller) is replaced by `ProjectChatFetcher`: `fetch({ account, chatId, after, before, signal, onProgress })` →
+  `{ state: "complete" | "partial" | "failed", reason? }`. `fetch: "before-read"` now needs the `coverage` port too,
+  takes `budgets.maxFetchMs`, and fetches only linked chats the store does not hold for the window. The result's
+  `fetch` lists those chats (`ProjectChatFetched`) instead of one row per source; `ProjectFetchState` is gone. The
+  read budgets, `maxElapsedMs` included, start after the fetch.
+
 ## 0.503.0 — 31.10.2026
 
 ### Added

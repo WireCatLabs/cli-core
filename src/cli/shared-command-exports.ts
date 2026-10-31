@@ -49,6 +49,7 @@ import {
 import { metadataCommand as metadataCommandDefinition } from "./messenger/metadata-command.js"
 import { modelsCommand as modelsCommandDefinition } from "./messenger/models-command.js"
 import { pollsCommand as pollsCommandDefinition } from "./messenger/polls-command.js"
+import { projectsCommand as projectsCommandDefinition } from "./messenger/projects-command.js"
 import { reactionsCommand as reactionsCommandDefinition } from "./messenger/reactions-command.js"
 import {
   callsCommand as callsCommandDefinition,
@@ -134,6 +135,7 @@ export const tagsCommand = sharedCommand(tagsCommandDefinition)
 export const tasksCommand = sharedCommand(tasksCommandDefinition)
 export const tasksStatsCommand = sharedCommand(tasksStatsCommandDefinition)
 export const topicsCommand = sharedCommand(topicsCommandDefinition)
+export const projectsCommand = sharedCommand(projectsCommandDefinition)
 export const watchCommand = sharedCommand(watchCommandDefinition)
 export const runsCommand = sharedCommand(runsCommandDefinition)
 export const skillCommand = sharedCommand(skillCommandDefinition)

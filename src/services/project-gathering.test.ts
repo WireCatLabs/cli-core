@@ -8,7 +8,7 @@ import { historyStartKey } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
 import { chatCoverage } from "./chat-coverage.js"
-import { gatherProjectEvidence, type ProjectSourceFetcher } from "./project-gathering.js"
+import { gatherProjectEvidence, type ProjectChatFetcher } from "./project-gathering.js"
 import { storedMessageNeighbours, storedNeighbours } from "./project-gathering-around.js"
 import { findEvidenceMentions } from "./project-gathering-mentions.js"
 import type { ProjectGatheringRequest } from "./project-gathering-request.js"
@@ -120,29 +120,16 @@ it("stops at the read budget after first pages, resumes without repeating eviden
   ).rejects.toMatchObject({ code: "validation_error" })
 })
 
-it("keeps a failed connector and a failed source as coverage while other sources are still read", async () => {
+it("keeps a failed source as coverage while other sources are still read", async () => {
   const f = await fixture()
-  const fetcher: ProjectSourceFetcher = {
-    fetch: vi.fn(async ({ source }) => {
-      if (source.kind === "mail") throw new CliError("network_error", "mail server unreachable")
-      return {
-        status: source.kind === "document" ? ("unsupported" as const) : ("fetched" as const),
-        history: "partial" as const,
-      }
-    }),
-  }
   const evidence: ContextEvidenceReader = {
     read: (request) =>
       request.source.kind === "mail"
         ? Promise.reject(new CliError("provider_error", "mail index unreadable"))
         : f.port.read(request),
   }
-  const result = await gatherProjectEvidence({ evidence, fetcher }, { ...f.request, fetch: "before-read" })
-  expect(result.fetch.map((s) => [s.state, s.code])).toEqual([
-    ["fetched", null],
-    ["failed", "network_error"],
-    ["unsupported", null],
-  ])
+  const result = await gatherProjectEvidence({ evidence }, f.request)
+  expect(result.fetch).toEqual([])
   expect(result.units.filter((u) => u.source === 1).map((u) => [u.state, u.issue])).toEqual([
     ["failed", "provider_error"],
     ["failed", "provider_error"],
@@ -939,4 +926,106 @@ it("takes a linked chat's title from its chat row, and gives a chat the store la
     ["empty", "pending", "Crew", "unknown", 0],
     ["nowhere", "pending", null, "unknown", 0],
   ])
+})
+
+it("fetches only the linked chats the store does not hold for the window, then reports them as held", async () => {
+  const f = await fixture()
+  const account = { provider: "example-calendar", account: "AliceExample" }
+  const partial = linkedChat(f, f.accountId, ["a1", "a2", "a3", "a4"], "partial")
+  const whole = linkedChat(f, f.accountId, ["b1", "b2"], "whole")
+  const outside = linkedChat(f, f.otherId, ["c1"], "outside")
+  await f.store.sync.markRange(account, "partial", 2, 4)
+  await f.store.sync.markRange(account, "whole", 1, 2)
+  await f.store.sync.setSyncState(account, historyStartKey("whole"), "1")
+  const progress = vi.fn()
+  const fetcher: ProjectChatFetcher = {
+    fetch: vi.fn(async ({ account: key, chatId, onProgress }) => {
+      onProgress?.({ fetched: 4, oldest: 1 })
+      await f.store.sync.markRange(key, chatId, 1, 4)
+      await f.store.sync.setSyncState(key, historyStartKey(chatId), "1")
+      return { state: "complete" as const }
+    }),
+  }
+  const request = {
+    ...f.request,
+    sources: [present(f.sources[0])],
+    linkedChats: [partial, whole, outside],
+    fetch: "before-read" as const,
+  }
+  const result = await gatherProjectEvidence(
+    { evidence: f.port, coverage: coveragePort(f), fetcher, onFetchProgress: progress },
+    request,
+  )
+  expect(vi.mocked(fetcher.fetch).mock.calls.map(([r]) => [r.chatId, r.after, r.before])).toEqual([
+    ["partial", 0, 10000],
+  ])
+  expect(progress).toHaveBeenCalledWith({
+    fetched: 4,
+    oldest: 1,
+    chat: "chat:example-calendar/AliceExample/partial",
+    index: 0,
+    of: 1,
+  })
+  expect(result.fetch).toEqual([
+    {
+      chat: "chat:example-calendar/AliceExample/partial",
+      state: "complete",
+      reason: null,
+      elapsedMs: expect.any(Number),
+    },
+  ])
+  expect(result.linkedChats.map((c) => [c.chat, c.completeness?.state])).toEqual([
+    ["partial", "complete"],
+    ["whole", "complete"],
+    ["outside", undefined],
+  ])
+  await expect(gatherProjectEvidence({ evidence: f.port, fetcher }, request)).rejects.toMatchObject({
+    code: "configuration_error",
+    details: { param: "fetch" },
+  })
+})
+
+it("stops fetching at the time budget, keeps the cut chat partial and still reads every chat", async () => {
+  const f = await fixture()
+  const chats = ["slow", "next", "broken"].map((name) => linkedChat(f, f.accountId, [`${name} says hi`], name))
+  let clock = 0
+  const fetcher: ProjectChatFetcher = {
+    fetch: vi.fn(async ({ chatId }) => {
+      if (chatId === "broken") throw new CliError("network_error", "unreachable")
+      clock += chatId === "slow" ? 200_000 : 0
+      return { state: "complete" as const }
+    }),
+  }
+  const request = {
+    ...f.request,
+    sources: [present(f.sources[0])],
+    linkedChats: chats,
+    fetch: "before-read" as const,
+    budgets: { maxFetchMs: 180_000 },
+  }
+  const ports = { evidence: f.port, coverage: coveragePort(f), fetcher, now: () => clock }
+  const result = await gatherProjectEvidence(ports, request)
+  expect(result.fetch.map((one) => [one.chat.split("/").pop(), one.state, one.reason])).toEqual([
+    ["slow", "partial", "fetch-budget"],
+    ["next", "skipped", "fetch-budget"],
+    ["broken", "skipped", "fetch-budget"],
+  ])
+  expect(result).toMatchObject({ stopped: null, complete: true })
+  expect(result.linkedChats.every((c) => c.state === "in-scope")).toBe(true)
+
+  clock = 0
+  vi.mocked(fetcher.fetch).mockClear()
+  const roomy = await gatherProjectEvidence(ports, { ...request, budgets: { maxFetchMs: 600_000, maxReads: 1 } })
+  expect(roomy.fetch.map((one) => [one.state, one.reason])).toEqual([
+    ["complete", null],
+    ["complete", null],
+    ["failed", "network_error"],
+  ])
+  vi.mocked(fetcher.fetch).mockClear()
+  await gatherProjectEvidence(ports, {
+    ...request,
+    budgets: { maxFetchMs: 600_000, maxReads: 1 },
+    checkpoint: present(roomy.checkpoint),
+  })
+  expect(fetcher.fetch).not.toHaveBeenCalled()
 })
