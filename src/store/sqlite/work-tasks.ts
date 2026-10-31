@@ -121,7 +121,8 @@ export interface BoardCounts {
 
 export interface TaskEvent {
   kind: (typeof TASK_EVENT_KINDS)[number]
-  actor: Actor | null
+  /** `name`: the person's or the bot's, as the store holds it now. */
+  actor: (Actor & { name: string | null }) | null
   changes: Record<string, [unknown, unknown]> | null
   at: string
 }
@@ -627,12 +628,22 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     events: async (id) =>
       database
         .prepare(
-          "SELECT actor_type, actor_id, kind, changes, created_at FROM task_events WHERE task_id = ? ORDER BY id",
+          "SELECT e.actor_type, e.actor_id, e.kind, e.changes, e.created_at, " +
+            "CASE e.actor_type WHEN 'person' THEN p.name WHEN 'bot' THEN b.name END AS actor_name FROM task_events e " +
+            "LEFT JOIN persons p ON e.actor_type = 'person' AND p.id = e.actor_id " +
+            "LEFT JOIN bots b ON e.actor_type = 'bot' AND b.id = e.actor_id WHERE e.task_id = ? ORDER BY e.id",
         )
         .all(required(id))
         .map((row) => ({
           kind: row.kind as TaskEvent["kind"],
-          actor: row.actor_type == null ? null : { type: row.actor_type as Actor["type"], id: Number(row.actor_id) },
+          actor:
+            row.actor_type == null
+              ? null
+              : {
+                  type: row.actor_type as Actor["type"],
+                  id: Number(row.actor_id),
+                  name: row.actor_name == null ? null : String(row.actor_name),
+                },
           changes: row.changes == null ? null : JSON.parse(String(row.changes)),
           at: iso(row.created_at) as string,
         })),

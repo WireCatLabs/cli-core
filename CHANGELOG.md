@@ -22,6 +22,7 @@ shape of this file.
   (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
   hold each project, assignee, priority and state, each without the query's own terms on that field.
 - **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
+- **`tasks.events(id)`** names who acted: `actor.name` is the person's or the bot's name, or null.
 - **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
 
 ### Changed — may break callers
