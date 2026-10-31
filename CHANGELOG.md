@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.491.0 — 31.10.2026
+
 ### Fixed
 
 - **A budgeted mail sync now finishes locating a large folder stored before email locations existed.** It listed
