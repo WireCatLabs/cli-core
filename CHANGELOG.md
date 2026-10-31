@@ -57,15 +57,12 @@ shape of this file.
 
 ## 0.496.0 — 31.10.2026
 
-### Changed — may break callers
-
-- **A CLI that is not a messenger (`messenger: false`) has no `config show --bot`, `config set --personal|--bot` or
-  `config unset --personal|--bot`.** Only a messenger has bots, and with them the file's personal and bot sections; a
-  calendar or notes CLI offered the options, in its help, `commands --json` and its MCP tools, with nothing behind
-  them. A script that passes one there is now refused as an unknown option.
-
 ### Fixed
 
+- **A CLI that is not a messenger (`messenger: false`) no longer shows `config show --bot` or `config set|unset
+  --personal|--bot`.** Only a messenger has bots, and with them the file's personal and bot sections; a calendar or
+  notes CLI listed the options in its help, `commands --json` and its MCP tools with nothing behind them. They are
+  hidden there and still accepted, so a script that passes one keeps working.
 - **`config show` with moved folders no longer says a session made without them reads as none.** That was true
   before cli-base 0.65.5; a moved run now reads the usual keyring entry, and keeps a sign-in it makes in a temporary
   entry that `session end` removes. The note says so.

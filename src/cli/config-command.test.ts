@@ -18,13 +18,14 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
 }
 
 describe("config", () => {
-  it("**a CLI that is not a messenger has no --bot or --personal**, and show names kind and permissions as a messenger's does", async () => {
+  it("**a CLI that is not a messenger shows no --bot or --personal**, and show names kind and permissions as a messenger's does", async () => {
     const tool = { ...app, messenger: false }
     const own = settingsFor(tool)
     const longs = (name: string, of = app) =>
       configCommand(of, of === app ? config : own)
         .commands.find((one) => one.name() === name)
-        ?.options.map((option) => option.long)
+        ?.options.filter((option) => !option.hidden)
+        .map((option) => option.long)
     for (const name of ["show", "set", "unset"]) {
       expect(longs(name, tool)).not.toContain("--bot")
       expect(longs(name, tool)).not.toContain("--personal")
@@ -44,6 +45,13 @@ describe("config", () => {
     const { item } = JSON.parse(streams.stdout[0] ?? "{}")
     expect(item).toMatchObject({ kind: "personal", permissions: {}, permission_sources: {} })
     expect(streams.stderr.join("\n")).toContain("a sign-in made with them is kept apart")
+    const old = captureStreams()
+    const stillTaken = await run(
+      ["work", "config", "show", "--bot", "--json"],
+      { app: tool, commands: () => [configCommand(tool, own)] },
+      { streams: old, tty: false, env },
+    )
+    expect(stillTaken).toBe(0)
   })
 
   it("**a CLI that is not a messenger offers no messenger setting**, and refuses one", async () => {

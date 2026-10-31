@@ -1,6 +1,6 @@
 import { CliError, pathsAreOverridden } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { type AppIdentity, envName } from "../ports/app.js"
 import { AUTHORITY_KEY, BOT_API_KEY } from "../sends/permissions.js"
 import { baseContext, environmentOf } from "./context.js"
@@ -34,13 +34,17 @@ export const configCommand = (
 ): Command => {
   const command = new Command("config").description("the settings in force, and where each one came from")
 
-  // Only a messenger has bots, and with them the personal and bot sections of the file.
+  // Only a messenger has bots, and with them the personal and bot sections of the file. Elsewhere the options stay
+  // accepted, so a script that passes one still runs, but help, `commands --json` and MCP leave them out.
   const bots = app.messenger !== false
+  const kindOption = (flags: string, description: string) => new Option(flags, description).hideHelp(!bots)
   const show = annotate(command.command("show"), {
     effects: LOCAL_READ,
     examples: [`${app.command} personal config show`],
   }).description("the profile, the profiles that exist, and each setting with where it came from")
-  if (bots) show.option("--bot", "the settings a bot command on this profile gets, rather than the personal account's")
+  show.addOption(
+    kindOption("--bot", "the settings a bot command on this profile gets, rather than the personal account's"),
+  )
   show.action(async function (this: Command) {
     const bot = this.opts<{ bot?: boolean }>().bot === true
     const context = baseContext(this, (flags, options) =>
@@ -97,10 +101,8 @@ export const configCommand = (
     )
       .argument("<setting>", `one of: ${[...config.allSettings, ...storeSettingsOf(app)].join(", ")}`)
       .option("--defaults", "change what every profile gets, rather than this profile")
-    if (bots)
-      sub
-        .option("--personal", "only for personal accounts — the personal section of the file")
-        .option("--bot", "only for bots — the bot section of the file")
+      .addOption(kindOption("--personal", "only for personal accounts — the personal section of the file"))
+      .addOption(kindOption("--bot", "only for bots — the bot section of the file"))
     if (action === "set")
       sub
         .argument("<value>", "a number, true or false; for a group tg:work,max:Alice,email:me@x")
