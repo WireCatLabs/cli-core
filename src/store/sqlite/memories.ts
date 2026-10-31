@@ -158,6 +158,27 @@ export const subjectOf = (
   }
 }
 
+type Numbered = "memories" | "facts"
+const highestKey = (table: Numbered) => `ids.${table}.highest`
+
+/**
+ * The id the next row takes: above every row there is and every one forgotten. SQLite hands out the highest id + 1,
+ * so without this a forgotten record's number would name the next one, and a stale `memory:N` act on it.
+ */
+export const nextId = (database: StoreContext["database"], table: Numbered): number => {
+  const kept = database.prepare("SELECT value FROM store_settings WHERE key = ?").get(highestKey(table))
+  const highest = database.prepare(`SELECT max(id) AS id FROM ${table}`).get()
+  return Math.max(Number(kept?.value ?? 0), Number(highest?.id ?? 0)) + 1
+}
+
+/** Before a delete: remembers the highest id handed out, which the delete may be about to free. */
+export const keepHighestId = (database: StoreContext["database"], table: Numbered, at: number): void => {
+  const highest = nextId(database, table) - 1
+  database
+    .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+    .run(highestKey(table), String(highest), at)
+}
+
 /** Counts every link from or to a row and drops the ones its delete trigger does not: those pointing at it. */
 export const dropLinksOf = (database: StoreContext["database"], thing: { type: string; id: number }): number => {
   const count = Number(
@@ -251,10 +272,11 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
         const made = Number(
           database
             .prepare(
-              "INSERT INTO memories (kind, body, subject_type, subject_id, author_type, author_id, model, confidence, status, " +
-                "last_verified_at, supersedes_id, scope, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+              "INSERT INTO memories (id, kind, body, subject_type, subject_id, author_type, author_id, model, confidence, status, " +
+                "last_verified_at, supersedes_id, scope, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
+              nextId(database, "memories"),
               kind,
               body,
               subject?.type ?? null,
@@ -311,6 +333,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     remove: async (reference) => {
       const id = Number(rowOf(reference).id)
       const links = erase(database, () => {
+        keepHighestId(database, "memories", now())
         database.prepare("UPDATE memories SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
         const count = dropLinksOf(database, { type: "memory", id })
         database.prepare("DELETE FROM memories WHERE id = ?").run(id)

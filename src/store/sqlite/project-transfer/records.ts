@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../../driver.js"
 import { fold } from "../../normalize.js"
 import type { ProjectAnnotationSnapshot } from "../../project-transfer/snapshot-model.js"
+import { nextId } from "../memories.js"
 import { type Thing, thingOf } from "../things.js"
 
 export const restoreAnnotationRecords = (
@@ -56,9 +57,10 @@ export const restoreAnnotationRecords = (
     if (!author) throw new CliError("validation_error", "project annotation author is required")
     const row = database
       .prepare(
-        "INSERT INTO facts(type,statement,status,project_id,subject_type,subject_id,occurred_at,supersedes_id,author_type,author_id,model,confirmed_by_type,confirmed_by_id,scope,source,created_at,updated_at) VALUES(?,?,?,?,NULL,NULL,?,NULL,?,?,?,?,?,?,?,?,?) RETURNING id",
+        "INSERT INTO facts(id,type,statement,status,project_id,subject_type,subject_id,occurred_at,supersedes_id,author_type,author_id,model,confirmed_by_type,confirmed_by_id,scope,source,created_at,updated_at) VALUES(?,?,?,?,?,NULL,NULL,?,NULL,?,?,?,?,?,?,?,?,?) RETURNING id",
       )
       .get(
+        nextId(database, "facts"),
         fact.type,
         fact.statement,
         fact.status,
