@@ -7,46 +7,8 @@ shape of this file.
 
 ## Unreleased
 
-## 0.496.0 — 31.10.2026
-
-### Changed — may break callers
-
-- **A discovery follow-up carries an `excerpt` of up to 240 characters, as the hit itself, instead of its whole
-  `text`.** On a real archive one follow-up (a pasted long write-up) added 7 KB to a five-hit answer, a sixth of it.
-  `items[].follow_ups[].text` is now `items[].follow_ups[].excerpt`; `messages context <ref>` shows the whole message.
-  The terminal output is unchanged.
-- **The shared calendar commands no longer add their own `--json` and `--jsonl`.** They read the host program's global
-  flags, as every other command does ([WC-CMD-14](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-14--keep-the-shared-global-flags-at-their-meaning)).
-  The per-command copies showed up in `commands --json` and as `json` and `jsonl` inputs of every calendar MCP tool,
-  and an agent that sent `jsonl: true` was refused with "choose --json or --jsonl", because the MCP runner always adds
-  `--json`. A host that mounts `addCalendarCommands` on a program without global `--json`/`--jsonl` must define them.
-- **`people list` takes `[query...]` instead of `[event]`**: one event's attendees are `people list event:42`, and a
-  bare `people list 42` is now refused as a word with no field. Its MCP tool's input is `query` (`"event:42"`), no
-  longer `event` (WC-CMD-20).
-- **`CalendarCommandDeps.embed` returns `{ model, embedded, left }`**, which `embedEvents` already answers, so
-  `calendar_sync` can describe `embeddings`. It was `Promise<unknown>`.
-
-### Fixed
-
-- **Discovery search keeps the colons of a quoted timestamp in a date filter.** 0.492.0 turned a colon between digits
-  into a space so that "22:00" in a question would not fail, but it also did so inside quotes, and
-  `date:["2026-08-21T21:30:00Z" TO "…"]` failed with `query.invalid-date` under `discover`. Quoted text is now left as is.
-- **`search notes`, the notes of `search all` and drive's `search` keep the query's fields for hits found by
-  meaning.** `date:today` or `tag:work` without `--exact` returned about 20 notes that matched neither: the meaning
-  half embedded the whole query, fields included, and checked only `--filter`. Now only the query's words and phrases
-  are searched by meaning, and every field and every excluded word (`-draft`) holds for every hit; a field joined to
-  the words by `OR` narrows nothing. A query of fields alone is not searched by meaning and lists the matching notes,
-  newest first. `--filter` also checks every meaning candidate: before, it kept only the newest 500 notes it matched,
-  so an older note found by meaning was dropped.
-- **A Drive document's `date:` and its shown `updated_at` are one time.** `date:` read when the store's copy changed,
-  while the hit showed the document's edit time on Drive, so of 20 hits for `date>=30d` 16 showed an older date. Both
-  are now the edit time on Drive when the store has it, and the store's copy otherwise, as `context` evidence already
-  reads it. `date:` on a Drive document therefore matches by its edit time, and the time is always written as
-  `2026-01-01T00:00:00.000Z`, as every other time is, where a front-matter time was shown as written.
-
 ### Added
 
-- **`NoteQuery.refs` checks a list of notes against a query, and `NoteHit.at` is the time `date:` read.**
 - **A calendar source can offer its provider's own search, and the shared `search` uses it.** `CalendarSource.search(calendar,
   { query, limit })` is optional and answers `{ entries, more }` (new type `SearchPage`). With `serverSearch: true` in
   `CalendarCommandDeps` (a flag, as `freeBusy`, so the source can stay unbuilt until a profile is open), `search` takes
@@ -70,6 +32,50 @@ shape of this file.
   whole list the provider answered, as `[query...]` after the options
   ([WC-CMD-20](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-20--give-a-list-one-query-over-its-entitys-fields-as-its-last-argument)).
   `events list` keeps its words for now.
+
+### Changed — may break callers
+
+- **The shared calendar commands no longer add their own `--json` and `--jsonl`.** They read the host program's global
+  flags, as every other command does ([WC-CMD-14](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-14--keep-the-shared-global-flags-at-their-meaning)).
+  The per-command copies showed up in `commands --json` and as `json` and `jsonl` inputs of every calendar MCP tool,
+  and an agent that sent `jsonl: true` was refused with "choose --json or --jsonl", because the MCP runner always adds
+  `--json`. A host that mounts `addCalendarCommands` on a program without global `--json`/`--jsonl` must define them.
+- **`people list` takes `[query...]` instead of `[event]`**: one event's attendees are `people list event:42`, and a
+  bare `people list 42` is now refused as a word with no field. Its MCP tool's input is `query` (`"event:42"`), no
+  longer `event` (WC-CMD-20).
+- **`CalendarCommandDeps.embed` returns `{ model, embedded, left }`**, which `embedEvents` already answers, so
+  `calendar_sync` can describe `embeddings`. It was `Promise<unknown>`.
+
+## 0.496.0 — 31.10.2026
+
+### Changed — may break callers
+
+- **A discovery follow-up carries an `excerpt` of up to 240 characters, as the hit itself, instead of its whole
+  `text`.** On a real archive one follow-up (a pasted long write-up) added 7 KB to a five-hit answer, a sixth of it.
+  `items[].follow_ups[].text` is now `items[].follow_ups[].excerpt`; `messages context <ref>` shows the whole message.
+  The terminal output is unchanged.
+
+### Fixed
+
+- **Discovery search keeps the colons of a quoted timestamp in a date filter.** 0.492.0 turned a colon between digits
+  into a space so that "22:00" in a question would not fail, but it also did so inside quotes, and
+  `date:["2026-08-21T21:30:00Z" TO "…"]` failed with `query.invalid-date` under `discover`. Quoted text is now left as is.
+- **`search notes`, the notes of `search all` and drive's `search` keep the query's fields for hits found by
+  meaning.** `date:today` or `tag:work` without `--exact` returned about 20 notes that matched neither: the meaning
+  half embedded the whole query, fields included, and checked only `--filter`. Now only the query's words and phrases
+  are searched by meaning, and every field and every excluded word (`-draft`) holds for every hit; a field joined to
+  the words by `OR` narrows nothing. A query of fields alone is not searched by meaning and lists the matching notes,
+  newest first. `--filter` also checks every meaning candidate: before, it kept only the newest 500 notes it matched,
+  so an older note found by meaning was dropped.
+- **A Drive document's `date:` and its shown `updated_at` are one time.** `date:` read when the store's copy changed,
+  while the hit showed the document's edit time on Drive, so of 20 hits for `date>=30d` 16 showed an older date. Both
+  are now the edit time on Drive when the store has it, and the store's copy otherwise, as `context` evidence already
+  reads it. `date:` on a Drive document therefore matches by its edit time, and the time is always written as
+  `2026-01-01T00:00:00.000Z`, as every other time is, where a front-matter time was shown as written.
+
+### Added
+
+- **`NoteQuery.refs` checks a list of notes against a query, and `NoteHit.at` is the time `date:` read.**
 
 ## 0.495.0 — 31.10.2026
 
