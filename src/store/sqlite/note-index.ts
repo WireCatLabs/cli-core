@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import { CHUNK_CHARS, chunkHash, splitSections, splitText } from "../../conversations/chunks.js"
 import type { EntryEventType } from "../../meetings/index.js"
 import { analyzerIdentity, DEFAULT_STEMMERS, type Stemmer, type Stemmers } from "../../search/stem.js"
@@ -8,6 +9,7 @@ import { dropDocumentPicture } from "./document-pictures.js"
 import { int } from "./events.js"
 import { indexRow } from "./index-state.js"
 import { speech } from "./lucene-fields.js"
+import type { Where } from "./query-filter.js"
 import { savedStemmers } from "./stems.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
@@ -155,6 +157,68 @@ export const noteIndexText = (title: string | null, text: string): string => (ti
 
 const queuedAs = (corpus: Corpus) => corpus.queued ?? corpus.type
 
+const hasTrigrams = (corpus: Corpus): corpus is Corpus & { type: "note" | "document" } =>
+  corpus.type === "note" || corpus.type === "document"
+
+/**
+ * `column` (a note's or document's id) is a row whose title or text holds `search` anywhere, in any letter case;
+ * no condition for an empty `search`. A row the trigrams do not hold yet — waiting in its queue, or stored before
+ * version 40 and not yet reached by `fillTrigrams` — is matched by its text as SQLite's `lower()` reads it.
+ */
+export const holdingText = (type: "note" | "document", column: string, search: string): Where | undefined => {
+  const text = normalize(search)
+  if (text === "") return undefined
+  // A trigram index answers a shorter query with nothing, silently.
+  if ([...text].length < 3) throw new CliError("validation_error", "search needs at least three characters")
+  const queued = `SELECT id FROM ${type}_index_pending WHERE indexable_type = '${type}'`
+  const state = (field: string) => `(SELECT ${field} FROM search_index_state WHERE name = '${type}_trigrams')`
+  return {
+    sql:
+      `${column} IN (SELECT rowid FROM ${type}_trigrams WHERE ${type}_trigrams MATCH ? AND rowid NOT IN (${queued}) ` +
+      `UNION ALL SELECT r.id FROM ${type}s r WHERE (r.id IN (${queued}) OR (r.id > ${state("filled_through")} ` +
+      `AND r.id <= ${state("watermark")})) AND instr(lower(coalesce(r.body, '')), lower(?)) > 0)`,
+    params: [`"${text.replaceAll('"', '""')}"`, search],
+  }
+}
+
+/**
+ * Writes the trigrams of the notes and documents stored before version 40, in short write transactions, up to the
+ * highest id the migration found; later rows get theirs from the drain. Stopping between batches loses nothing.
+ */
+export const fillTrigrams = (
+  database: CacheDatabase,
+  { batch = 200, until = () => false }: { batch?: number; until?: () => boolean } = {},
+): number => {
+  let filled = 0
+  for (const type of ["document", "note"] as const) {
+    const name = `${type}_trigrams`
+    const state = database.prepare("SELECT watermark, filled_through FROM search_index_state WHERE name = ?")
+    const rows = database.prepare(
+      `SELECT id, title, coalesce(body, '') AS body FROM ${type}s WHERE id > ? AND id <= ? AND deleted_at IS NULL ` +
+        "ORDER BY id LIMIT ?",
+    )
+    const drop = database.prepare(`DELETE FROM ${name} WHERE rowid = ?`)
+    const add = database.prepare(`INSERT INTO ${name} (rowid, text) VALUES (?, ?)`)
+    const reached = database.prepare("UPDATE search_index_state SET filled_through = ? WHERE name = ?")
+    for (;;) {
+      const at = state.get(name)
+      const mark = Number(at?.watermark ?? 0)
+      if (Number(at?.filled_through ?? mark) >= mark || until()) break
+      filled += write(database, () => {
+        const page = rows.all(Number(at?.filled_through), mark, batch)
+        for (const row of page) {
+          const text = normalize(noteIndexText(row.title == null ? null : String(row.title), String(row.body)))
+          drop.run(Number(row.id))
+          if (text !== "") add.run(Number(row.id), text)
+        }
+        reached.run(page.length < batch ? mark : Number(page.at(-1)?.id), name)
+        return page.length
+      })
+    }
+  }
+  return filled
+}
+
 export const corpusIndexState = (database: CacheDatabase, corpus: Corpus): NoteIndexState => {
   const row = indexRow(database, corpus.index) as Record<string, unknown>
   const pending = Number(
@@ -197,9 +261,13 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
   const statements = {
     dropWords: database.prepare(`DELETE FROM ${corpus.type}_words WHERE rowid = ?`),
     dropStems: database.prepare(`DELETE FROM ${corpus.type}_stems WHERE rowid = ?`),
+    dropTrigrams: hasTrigrams(corpus) ? database.prepare(`DELETE FROM ${corpus.type}_trigrams WHERE rowid = ?`) : null,
     dropChunks: database.prepare("DELETE FROM chunks WHERE chunkable_type = ? AND chunkable_id = ?"),
     words: database.prepare(`INSERT INTO ${corpus.type}_words (rowid, normalized_text, scope) VALUES (?, ?, ?)`),
     stems: database.prepare(`INSERT INTO ${corpus.type}_stems (rowid, stems, scope) VALUES (?, ?, ?)`),
+    trigrams: hasTrigrams(corpus)
+      ? database.prepare(`INSERT INTO ${corpus.type}_trigrams (rowid, text) VALUES (?, ?)`)
+      : null,
     chunk: database.prepare(
       "INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope, account_id, created_at, updated_at) " +
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -211,13 +279,17 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
     const before = oldHashes.all(corpus.type, id).map((hash) => String(hash.hash))
     statements.dropWords.run(id)
     statements.dropStems.run(id)
+    statements.dropTrigrams?.run(id)
     statements.dropChunks.run(corpus.type, id)
     const live = row !== undefined && Number(row.live) === 1
     const text = live ? noteIndexText(row.title == null ? null : String(row.title), String(row.body)) : ""
     const scope = live ? String(row.scope ?? "personal") : ""
     const terms = corpus.terms && text ? corpus.terms(text, stemmer) : undefined
     const words = terms ? terms.words : normalize(text)
-    if (words !== "") statements.words.run(id, words, scope)
+    if (words !== "") {
+      statements.words.run(id, words, scope)
+      statements.trigrams?.run(id, words)
+    }
     const stems = terms ? terms.stems : text ? stemmer.indexText(text) : ""
     if (stems !== "") statements.stems.run(id, stems, scope)
     if (text.trim() && corpus.pieces !== false) {
@@ -291,14 +363,15 @@ export const drainCorpus = (
   return done
 }
 
-/** Documents, then notes: what a notes search reads. */
+/** Documents, then notes: what a notes search reads; then the trigrams still to fill. */
 export const drainNoteIndex = (
   database: CacheDatabase,
   stemmerFor: (stemmers: Stemmers) => Stemmer,
   options: { batch?: number; until?: () => boolean } = {},
 ): number =>
   drainCorpus(database, CORPORA.document, stemmerFor, options) +
-  drainCorpus(database, CORPORA.note, stemmerFor, options)
+  drainCorpus(database, CORPORA.note, stemmerFor, options) +
+  fillTrigrams(database, options)
 
 /** Queues every document, note and memory again — for `store rebuild`. */
 export const resetNoteIndex = (database: CacheDatabase): boolean => {

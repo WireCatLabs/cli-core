@@ -103,6 +103,18 @@ shape of this file.
   calendar ran 2.5–2.7 times faster (5,000 events: 6.7 → 2.5 s; 50,000: 68 → 28 s). `prepare()` with the same SQL
   now returns the same statement. Bun's driver already cached through `db.query()`.
 
+### Changed — may break callers
+
+- **Notes, documents, knowledge annotations and contacts `--notes` are found by any part of a word, in any letter
+  case (store version 40).** `notes` with a search, `knowledge.annotations` with a search and `contacts` with
+  `notes` used `instr(lower(...))`, which folds only Latin letters and reads every row: a mixed-case Cyrillic word
+  was missed, and a search took 1.5–4 s on a store five times today's size. They now match `note_trigrams` and
+  `document_trigrams`, trigram indexes over the normalized title and text (`ё` as `е`, accents dropped) that the
+  notes drain keeps, and answer in milliseconds. A query of one or two characters is refused with "search needs at
+  least three characters", as message search is; an empty one still filters nothing. The title is searched too,
+  not only the text. The notes and documents stored before version 40 get their trigrams in batches from the
+  notes drain (`search notes`, `store migrate`); until then they are matched as before.
+
 ## 0.488.0 — 30.10.2026
 
 ### Added

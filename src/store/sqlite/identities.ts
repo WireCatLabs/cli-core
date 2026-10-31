@@ -6,8 +6,10 @@ import { fold } from "../normalize.js"
 import type { AccountKey, PersonFacts } from "../types.js"
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "./drizzle/core.js"
 import { folded } from "./folded.js"
+import { holdingText } from "./note-index.js"
 import type { Orm, StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
+import { bound } from "./query-filter.js"
 import {
   accountIdentities,
   accounts,
@@ -299,7 +301,7 @@ export const people = (
 export interface ContactFilter {
   /** Three letters or more of the name, the @username or the local alias. */
   query?: string
-  /** Text in one of the owner's private notes about them; case folds for Latin letters only, as SQLite's lower(). */
+  /** Three characters or more of one of the owner's private notes about them, anywhere, in any letter case. */
   notes?: string
 }
 
@@ -307,6 +309,7 @@ const contactsWhere = (accountKey: number, key: AccountKey, { query, notes }: Co
   if (query !== undefined && query.trim().length < 3) {
     throw new CliError("validation_error", `a contact search takes at least 3 characters, got "${query}"`)
   }
+  const noted = notes === undefined ? undefined : holdingText("note", "n.id", notes)
   return and(
     eq(accountIdentities.accountId, accountKey),
     ne(identities.externalId, key.account),
@@ -318,7 +321,7 @@ const contactsWhere = (accountKey: number, key: AccountKey, { query, notes }: Co
       : sql`(${identities.id} IN (SELECT rowid FROM identities_fts WHERE identities_fts MATCH ${`"${query.trim().replaceAll('"', '""')}"`}) OR EXISTS (SELECT 1 FROM aliases ca WHERE ca.aliasable_type='identity' AND ca.display=1 AND ca.account_id=${accountKey} AND ca.aliasable_id=${identities.id} AND instr(ca.name_folded, ${fold(query.trim())}) > 0))`,
     notes === undefined
       ? undefined
-      : sql`EXISTS (SELECT 1 FROM notes n WHERE n.notable_type='identity' AND n.notable_id=${identities.id} AND n.deleted_at IS NULL AND instr(lower(n.body), lower(${notes})) > 0)`,
+      : sql`EXISTS (SELECT 1 FROM notes n WHERE n.notable_type='identity' AND n.notable_id=${identities.id} AND n.deleted_at IS NULL${noted ? sql` AND ${bound(noted)}` : sql``})`,
   )
 }
 
