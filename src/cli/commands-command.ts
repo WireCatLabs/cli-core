@@ -109,12 +109,22 @@ const scopeOf = (root: Command, all: CommandInfo[], path: string[]) => {
     if (!child || !described) {
       const prefix = selected?.path ?? []
       const choices = available.map(({ name }) => name)
+      const groups = all
+        .filter(({ name, commands }) => commands.length > 0 && name !== "commands")
+        .map(({ name }) => name)
+      // The groups the caller named come first: they are the list of groups this answer is most likely about.
+      const [one, two] = [...new Set([...path.filter((each) => groups.includes(each)), ...groups])].map(
+        (group) => `\`${root.name()} commands ${group} --json\``,
+      )
       throw new CliError(
         "validation_error",
         `unknown command path "${path.join(" ")}" — inspect \`${[root.name(), "commands", ...prefix, "--json"].join(" ")}\`; ` +
           (choices.length ? `available here: ${choices.join(", ")}. ` : "this command has no subcommands. ") +
-          `Give one command path per call, not a list of groups: \`${root.name()} commands messages --json\` ` +
-          `and \`${root.name()} commands chats --json\` are separate calls`,
+          (two
+            ? `Give one command path per call, not a list of groups: ${one} and ${two} are separate calls`
+            : one
+              ? `Give one command path per call, such as ${one}`
+              : "Give one command path per call"),
         { path, at: word, available: choices },
       )
     }

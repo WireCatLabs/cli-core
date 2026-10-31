@@ -126,6 +126,29 @@ describe("scoped command discovery", () => {
     expect(error.details.at).toBe("chats")
     expect(error.details.available).toEqual(["search"])
   })
+
+  it("names the CLI's own groups in its example, not a messenger's", async () => {
+    const calendar = { ...app, command: "gcal", messenger: false }
+    const streams = captureStreams()
+    const leaf = (name: string) => new Command(name).action(() => undefined)
+    const code = await run(
+      ["commands", "chats", "--json"],
+      {
+        app: calendar,
+        commands: () => [
+          commandsCommand(calendar),
+          new Command("calendars").addCommand(leaf("list")),
+          new Command("events").addCommand(leaf("list")),
+          leaf("sync"),
+        ],
+      },
+      { streams, tty: false, env: process.env },
+    )
+    expect(code).toBe(2)
+    const { message } = JSON.parse(streams.stderr.join("\n")).error
+    expect(message).toContain("`gcal commands calendars --json` and `gcal commands events --json` are separate calls")
+    expect(message).not.toMatch(/messages|chats --json/)
+  })
 })
 
 describe("commands as text", () => {
