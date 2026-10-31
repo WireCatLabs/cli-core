@@ -20,8 +20,9 @@ import {
 import {
   decodeCheckpoint,
   encodeCheckpoint,
-  type ProjectFetchState,
+  type ProjectChatFetched,
   type ProjectGatheringCheckpoint,
+  type ProjectGatheringPlan,
   type ProjectGatheringRequest,
   type ProjectLane,
   type ProjectUnitProgress,
@@ -30,16 +31,30 @@ import {
   seenKey,
 } from "./project-gathering-request.js"
 
-/** A connector's history fetch into the store; the store reads that follow find what it saved. */
-export interface ProjectSourceFetcher {
-  fetch(request: { source: ContextSource; after: number; before: number; signal?: AbortSignal }): Promise<{
-    status: "fetched" | "unsupported"
-    history: "complete" | "partial" | "unknown"
-  }>
+/** One linked chat's history into the store, back to `after`; the reads that follow find what it saved. */
+export interface ProjectChatFetchRequest {
+  account: AccountKey
+  chatId: string
+  after: number
+  before: number
+  /** Aborts when the run's fetch budget is spent; a fetcher stops there and keeps what it saved. */
+  signal: AbortSignal
+  /** When that budget ends, by the run's clock: a fetcher that runs a process gives it this much time to stop itself. */
+  until: number
+  onProgress?: (progress: ProjectChatFetchProgress) => void
+}
+export interface ProjectChatFetchProgress {
+  fetched: number
+  oldest: number | null
+}
+export interface ProjectChatFetcher {
+  fetch(request: ProjectChatFetchRequest): Promise<{ state: "complete" | "partial" | "failed"; reason?: string }>
 }
 export interface ProjectGatheringPorts {
   evidence: ContextEvidenceReader
-  fetcher?: ProjectSourceFetcher
+  fetcher?: ProjectChatFetcher
+  /** Each linked chat's fetch as it goes, for a heartbeat; never message text. */
+  onFetchProgress?: (progress: ProjectChatFetchProgress & { chat: string; index: number; of: number }) => void
   index?: ContextIndex
   neighbours?: ProjectNeighbourReader
   /** What the store holds of the named chats of one account, e.g. `chatCoverage` over the store. */
@@ -93,6 +108,87 @@ const contextOf = (lane: ProjectLane): ProjectEvidenceContext =>
         ? "person-only"
         : "project"
 
+type FetchPorts = Required<Pick<ProjectGatheringPorts, "fetcher" | "coverage">> & ProjectGatheringPorts
+
+/** Complete, or up to date with no gaps and held back past the window start: nothing a fetch would add. */
+const heldForWindow = (row: ChatCoverage | undefined, after: number) => {
+  if (!row) return false
+  const { state, upToDate, gaps } = row.completeness
+  if (state === "complete") return upToDate !== false
+  const oldest = row.held.oldestAt === null ? Number.NaN : Date.parse(row.held.oldestAt)
+  return upToDate === true && !gaps && oldest <= after
+}
+
+/**
+ * Brings the linked chats the store does not hold for the window up to date, one at a time, inside one time budget
+ * for all of them. A chat cut by the budget stays partial and the next one is not started, so a run never waits
+ * longer than the budget whatever the fetcher does.
+ */
+const fetchLinkedChats = async (
+  ports: FetchPorts,
+  plan: ProjectGatheringPlan,
+  window: { after: number; before: number },
+  now: () => number,
+  signal: AbortSignal | undefined,
+): Promise<ProjectChatFetched[]> => {
+  const wanted = []
+  for (const linked of plan.linkedChats) {
+    if (linked.source === null) continue
+    const account = { provider: linked.provider, account: linked.account }
+    const [row] = await ports.coverage(account, [linked.chat])
+    if (!heldForWindow(row, window.after)) wanted.push({ ...linked, account })
+  }
+  const deadline = now() + plan.budgets.maxFetchMs
+  const results: ProjectChatFetched[] = []
+  for (const [index, linked] of wanted.entries()) {
+    signal?.throwIfAborted()
+    const started = now()
+    const left = deadline - started
+    if (left <= 0) {
+      results.push({ chat: linked.ref, state: "skipped", reason: "fetch-budget", elapsedMs: 0 })
+      continue
+    }
+    const budget = new AbortController()
+    const timer = setTimeout(() => budget.abort(new CliError("timeout", "the fetch budget ran out")), left)
+    const onProgress = ports.onFetchProgress
+    try {
+      const answer = await ports.fetcher.fetch({
+        account: linked.account,
+        chatId: linked.chat,
+        after: window.after,
+        before: window.before,
+        until: deadline,
+        signal: signal ? AbortSignal.any([signal, budget.signal]) : budget.signal,
+        ...(onProgress
+          ? { onProgress: (progress) => onProgress({ ...progress, chat: linked.ref, index, of: wanted.length }) }
+          : {}),
+      })
+      if (!["complete", "partial", "failed"].includes(answer?.state))
+        throw new CliError("invalid_response", "chat fetch returned an unknown state")
+      const cut = budget.signal.aborted || now() > deadline
+      results.push({
+        chat: linked.ref,
+        state: cut && answer.state === "complete" ? "partial" : answer.state,
+        reason: answer.reason ?? (cut && answer.state !== "failed" ? "fetch-budget" : null),
+        elapsedMs: now() - started,
+      })
+    } catch (error) {
+      signal?.throwIfAborted()
+      if (!(error instanceof CliError)) throw error
+      const cut = budget.signal.aborted
+      results.push({
+        chat: linked.ref,
+        state: cut ? "partial" : "failed",
+        reason: cut ? "fetch-budget" : error.code,
+        elapsedMs: now() - started,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  return results
+}
+
 export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, request: ProjectGatheringRequest) => {
   if (!ports?.evidence || typeof ports.evidence.read !== "function")
     throw new CliError("configuration_error", "stored context reads are unavailable in this store")
@@ -104,40 +200,24 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
   const units = projectUnits(plan, window)
   // A default that cannot finish one round would leave whole searches or sources unread; an explicit one is kept.
   if (request.budgets?.maxReads === undefined) plan.budgets.maxReads = Math.min(512, Math.max(48, units.length))
-  if (previous && (previous.units.length !== units.length || previous.fetched.length !== plan.sources.length))
+  if (previous && previous.units.length !== units.length)
     throw new CliError("validation_error", "invalid project gathering checkpoint", { param: "checkpoint" })
   const progress: ProjectUnitProgress[] =
     previous?.units.map((u) => ({ ...u })) ??
     units.map(() => ({ state: "pending", pages: 0, cursor: null, code: null }))
-  const fetched: ProjectGatheringCheckpoint["fetched"] =
-    previous?.fetched.map((f) => ({ ...f })) ??
-    plan.sources.map(() => ({ state: "not-requested" as ProjectFetchState, history: null, code: null }))
+  let fetched: ProjectChatFetched[] = previous?.fetched.map((f) => ({ ...f })) ?? []
   const seen = new Set(previous?.seen ?? [])
   const signal = plan.signal
   const queries = plan.lanes.flatMap((lane) => (lane.query === null ? [] : [lane.query]))
 
-  if (plan.fetch === "before-read" && !ports.fetcher)
-    throw new CliError("configuration_error", "this host cannot fetch source history; use fetch none", {
+  if (plan.fetch === "before-read" && (!ports.fetcher || !ports.coverage))
+    throw new CliError("configuration_error", "this host cannot fetch chat history; use fetch none", {
       param: "fetch",
     })
-  if (plan.fetch === "before-read" && ports.fetcher)
-    for (const [index, source] of plan.sources.entries()) {
-      if (fetched[index]?.state !== "not-requested") continue
-      signal?.throwIfAborted()
-      try {
-        const answer = await ports.fetcher.fetch({ source, after: window.after, before: window.before, signal })
-        if (
-          !["fetched", "unsupported"].includes(answer?.status) ||
-          !["complete", "partial", "unknown"].includes(answer?.history)
-        )
-          throw new CliError("invalid_response", "source fetch returned an unknown status")
-        fetched[index] = { state: answer.status, history: answer.history, code: null }
-      } catch (error) {
-        signal?.throwIfAborted()
-        if (!(error instanceof CliError)) throw error
-        fetched[index] = { state: "failed", history: null, code: error.code }
-      }
-    }
+  if (plan.fetch === "before-read" && ports.fetcher && ports.coverage && previous === null)
+    fetched = await fetchLinkedChats(ports as FetchPorts, plan, window, now, signal)
+  // The fetch has its own budget; the reads keep theirs whole.
+  const readFrom = now()
 
   const indexed: ProjectIndexCatchUp = { state: "as-is", mail: 0, documents: 0, code: null }
   const kinds = [...new Set(plan.sources.map((source) => source.kind))].filter((kind) => kind !== "message")
@@ -250,7 +330,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
           ? "reads"
           : usage.readBytes >= plan.budgets.maxReadBytes
             ? "read-bytes"
-            : now() - started >= plan.budgets.maxElapsedMs
+            : now() - readFrom >= plan.budgets.maxElapsedMs
               ? "elapsed"
               : usage.items >= plan.budgets.maxItems
                 ? "items"
@@ -427,7 +507,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     scope: { origin: plan.scope, sources: plan.sources },
     lanes: plan.lanes,
     linkedChats: linkedRows,
-    fetch: fetched.map((f, index) => ({ source: index, ...f })),
+    fetch: fetched,
     index: indexed,
     units: units.map((unit, index) => ({
       lane: unit.lane.id,

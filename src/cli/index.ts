@@ -442,6 +442,13 @@ export {
   usableProfileName,
 } from "./profile.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
+export {
+  type ProjectTextHints,
+  projectAnswerParts,
+  projectCutoffTime,
+  projectEvidenceText,
+  projectWindowOf,
+} from "./project-evidence.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {
   type Config,
@@ -503,6 +510,7 @@ export {
   modelsCommand,
   pinCommand,
   pollsCommand,
+  projectsCommand,
   reactionsCommand,
   recipientsCommand,
   repliesCommand,
