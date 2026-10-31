@@ -17,6 +17,150 @@ shape of this file.
   read); a throw there is `ok: false` with `error_code` and `error`, never a failed command. `version` comes from npm
   (the `latestVersion` that `upgrade` uses) when the CLI passes the new `AppDoctorOptions.packageName`; without it that
   check is left out. The command's effects are now `REMOTE_READ`, as the messenger's.
+- **`projects evidence --sync-first` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
+  that mounts it reads a project's evidence from its profile's stored messages; `--sync-first` (off by default, not on
+  MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--sync-time`
+  (3 minutes), one chat at a time. A chat the time cut stays partial with its `missing` and `next`. The command is
+  declared a fetch (`remote: read`, `local: write`) because of `--sync-first`; cli-base fixes effects per command.
+  It prints what people wrote, so the `messages` permission guards it.
+- **`gatherStoredProject`** (services) and **`projectAnswerParts`, `projectEvidenceText`, `projectWindowOf`,
+  `projectCutoffTime`** (cli): memo's `projects evidence` over a store, moved here so memo and the messenger CLIs
+  share it. The host resolves the sources and names its own sync command in the text.
+
+### Changed — may break callers
+
+- **`gatherProjectEvidence`'s fetch port is per linked chat.** `ProjectSourceFetcher` (one fetch per source, no
+  caller) is replaced by `ProjectChatFetcher`: `fetch({ account, chatId, after, before, until, signal, onProgress })` →
+  `{ state: "complete" | "partial" | "failed", reason? }`. `fetch: "before-read"` now needs the `coverage` port too,
+  takes `budgets.maxFetchMs`, and fetches only linked chats the store does not hold for the window. The result's
+  `fetch` lists those chats (`ProjectChatFetched`) instead of one row per source; `ProjectFetchState` is gone. The
+  read budgets, `maxElapsedMs` included, start after the fetch.
+
+## 0.503.0 — 31.10.2026
+
+### Added
+
+- **`session start --credential-storage` in the parity manifest, for max only** (WC-SECR-4). max's token goes through
+  cli-base's `Credentials`; tg's and WhatsApp's sign-ins are the library's own session file, the rule's exception.
+
+## 0.502.0 — 31.10.2026
+
+### Added
+
+- **The event store finds events by their earliest start: `EventFilter.startsFrom`.** It keeps events that start at
+  or after an instant, and `startsFromDate` keeps all-day events by their local date, as `toDate` does (WC-TIME-5).
+  Both stores (SQLite and `memoryEventStore`) answer it, and the event store contract checks the boundary.
+- **`nativeTermLists`** from `@wirecat/cli-core/cli`: as `nativeTerms`, but named fields may repeat
+  (`person:a person:b`), every term kept.
+
+### Changed — may break callers
+
+- **The shared calendar commands take the standard query and the paths the other tools use.** A CLI that mounts
+  `addCalendarCommands` (gcal) gets:
+  - `store status` in place of `status`, and `search events <query…>` in place of `search <words…>`; the permission
+    keys are `store.status` and `search.events`, and the sync's hint names `store status`.
+  - `events list [query…]` (`EVENTS_QUERY`): `starts_at` either way, now including `starts_at>=…` and
+    `starts_at:[a TO b}`, `ends_at>=…`, `changed_at>=…`, `calendar:` and `person:`. The words `today`, `week`,
+    `from:`, `to:`, `changed:` and `overlapping` are refused as query errors.
+  - `calendars busy [query…]` (`BUSY_QUERY`): the window as `start>=…` and `end<=…`, and `calendar:` and `person:`,
+    each repeatable. `today`, `week`, `from:` and `to:` are refused.
+  - `eventsFilter(query, …)` takes the query text in place of words, and `busyQuery(query, …)` as well;
+    `EVENTS_QUERY_HELP` and `BUSY_QUERY_HELP` are gone (`EVENTS_QUERY_NOTE`, `BUSY_QUERY_NOTE`), and `weekFilter`
+    builds `people list`'s week.
+  - `calendarTools`: `status` is `store_status`, and `events_list` takes `query` in place of `words`.
+
+## 0.501.0 — 31.10.2026
+
+### Added
+
+- **Search answers say how many match in all: `page.total`.** `search notes` and `search messages` add
+  `page.total: { value, relation }` to `--json`, and `NotesFound.total` / `SearchFound.total` carry it to a tool that
+  builds its own answer (drive prints it as `item.total`; memo's notes, messages and mail pass it on with their next
+  release). It is shaped as Elasticsearch's `hits.total`: `relation` is `eq` for an exact count and `gte` for a lower bound. The terminal adds a line such as
+  `showing 1–20 of 144` (`144+` for a lower bound). Notes count every note the words find plus every note found by
+  meaning; messages count the strict query's matches, or discovery's candidates with `--discover`. Counting stops at
+  10,000 (`TOTAL_CAP`, Elasticsearch's default), and a query whose leaves are checked row by row (a preset, a
+  pattern) gets the lower bound the page proves. New: `SearchTotal`, `NotesFound.total`, `SearchFound.total`,
+  `NoteSearch.matchingRefs` (refs only, no note read), `NoteSearch.scoreNotes` and `QueriesStore.countMatches`;
+  `listOf` takes `total`, and `shownOf(shown, offset, total)` from `@wirecat/cli-core/cli` writes the terminal line.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.67.** The peer range moves from `>=0.65.0 <0.66.0` to `>=0.67.0 <0.68.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.67 adds `page.total` to the list envelope.
+
+### Fixed
+
+- **Search by meaning inside a filter ranks the filter's own notes.** With a filter that holds at most 2,000 notes
+  (`RANK_WITHIN`), `search notes` scores every one of them by meaning, instead of taking the 50 nearest notes overall
+  and dropping those outside the filter. On the owner's store, Drive's `budget date>=30d` went from 7 hits to a full
+  page of 20, and 50 of the 144 documents in the date range match in all; no hit falls outside the filter, as
+  before. A larger filter keeps the old way, as does one the store cannot list cheaply.
+
+## 0.500.0 — 31.10.2026
+
+### Added
+
+- **A memory or fact can be forgotten for good.** `store.memories.remove(ref)` and `store.facts.remove(ref)` erase the
+  row, every link from or to it, its tags, and its words, pieces and vectors in the search indexes, in one write. The
+  words indexes are merged and freed pages zeroed (`secure_delete`), so the text is not left in the file; the
+  write-ahead log is emptied when no reader holds it. A record that replaced it no longer names it (`supersedes:
+  null`). Removing a fact also erases the soft-deleted memory it was migrated from in version 2, which still held its
+  text. Both answer `{ ref, removed: true, links }`, where `links` counts the links erased.
+- **`store.facts.reject(ref)`** turns down a proposed fact: `FACT_STATUSES` gains `rejected`.
+- **`store.memories.sources(ref)` and `store.facts.sources(ref)`** read each evidence link back as an `EvidenceSource`:
+  `ref`, `kind`, `title`, `sender`, `at`, `excerpt` (280 characters at most), `tool` and `missing`. A source deleted
+  since is still listed, `missing: true` with no excerpt, where `evidence` leaves it out; `ref` is `null` when its row
+  is gone from the store.
+- **`Memory` and `Fact` carry `subjectName` and `subjectIsOwner`.** A person is named by their name, else the
+  owner's alias for them, else an identity's name; a project or organization by its name. The owner has no name in the
+  store, so `subjectName` is `null` and `subjectIsOwner` is `true`. The `memory` and `fact` entities gain optional
+  `subject_name`, `subject_is_owner` and `sources`.
+
+## 0.499.0 — 31.10.2026
+
+### Added
+
+- **`decodeChannels(bytes)` in `@wirecat/cli-core/speech` returns every channel of a recording:**
+  `{ channels: Pcm[], mixed }`. A phone call recorded in stereo keeps one speaker per channel, and `decodeAudio`
+  keeps only the first, so the other speaker was lost. `decodeAudio` is unchanged and now exported too. Opus,
+  Vorbis, FLAC and MP3 keep their channels apart; a format only ffmpeg reads arrives as one channel with
+  `mixed: true`, so a caller can tell a mixed-down call from a mono one.
+- **OpenAI transcription: `transcribeOpenAI(pcm, { apiKey, model, languages, prompt, keywords })`.** It sends one
+  channel to OpenAI's `/audio/transcriptions` (`gpt-transcribe` by default, `languages[]` and `keywords[]` as
+  repeated fields, no SDK) and answers `[{ start, end, text }]` in seconds: one piece per stretch of speech the
+  voice detector found, each sent alone, so two channels merge into a dialogue by `start`. Two stretches the
+  detector split only because speech ran past 20 seconds stay one piece. `gpt-transcribe` gives no timestamps, so
+  the times are the detector's: about 0.1–0.3 s late at the start and 0.5–0.8 s late at the end, and very quiet
+  speech is missed, as it is locally. `bundle: true` trades the turns for fewer requests: up to ten minutes
+  (`LONGEST_REQUEST_SECONDS`) in one. It needs the voice detector file that comes with any speech model
+  (`models download`), except bundled audio of up to ten minutes. A 429 or a server error is tried again, waiting
+  as long as `Retry-After` asks; errors carry `auth.failed` (401), `access.denied` (403, which OpenAI also answers
+  for an unsupported country), `transcription.quota-exhausted` (credit, spend or usage limit; never retried),
+  `transcription.no-key`, `transcription.too-large`, `provider.rate-limited` or `provider.unavailable`, and never
+  the key. A keyword with `<`, `>` or a line break is refused before sending.
+- **`recognizeLocalPieces(model, pcm)` gives the same timed pieces from a local model**, one per stretch of speech
+  the voice detector cut.
+- **`transcribeWith: "openai"` sends voice messages to OpenAI**, with the key `models keys set openai` or
+  `OPENAI_API_KEY` holds and the model in the profile's `transcribeModel` (`gpt-transcribe` when unset). Only when
+  named: `auto` never sends audio off the machine, and a read-only process refuses. A transcript heard this way is
+  kept as `openai:<model>`.
+- **Meeting transcription keeps who spoke.** `MeetingRecognitionSegment.speaker` (trimmed; `null` is none) is stored
+  as the row's speaker, and segments of different speakers may overlap — two people on a call talk over each
+  other. One speaker's own segments still may not, and segments without a speaker are checked as before. A
+  transcript whose `recognition.engine` is `openai` is stored as `openai/<model>`, format `openai-transcription`;
+  local transcripts keep `local/<engine>/<model>` exactly.
+
+### Changed — may break callers
+
+- **An unknown `transcribeWith` in a profile now refuses to transcribe** with `validation_error`, naming the four
+  values. Before, any value other than `local` silently meant asking the messenger first. `models list` and
+  `models download` still read such a profile. Set it to `auto`, `messenger`, `local` or `openai`.
+
+### Fixed
+
+- **`runs list` with nothing recorded no longer says a run is kept only with `--record`.** Every command that does
+  its work is kept by default; `record: false` in the config keeps failures only, and `--no-record` keeps nothing.
 
 ## 0.497.0 — 31.10.2026
 

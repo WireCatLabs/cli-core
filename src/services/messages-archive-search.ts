@@ -1,10 +1,11 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
+import { TOTAL_CAP, totalOf } from "../search/total.js"
 import type { AccountKey, MessageStore, StoredHit } from "../store/store.js"
 import type { Saved } from "./message-resolution.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
-import { type MeaningLane, type RerankLane, searchDiscovery } from "./messages-discovery.js"
-import { type MessageStats, type StatsGrouping, searchLucene, statsLucene } from "./messages-search.js"
+import { discoveryRequest, type MeaningLane, type RerankLane, searchDiscovery } from "./messages-discovery.js"
+import { countLucene, type MessageStats, type StatsGrouping, searchLucene, statsLucene } from "./messages-search.js"
 import { readThreadContext, threadBounds } from "./thread-context.js"
 
 /** How long a search may spend building the word index, then the stems, first (phase 2 plan S3: about 200 ms). */
@@ -75,8 +76,26 @@ export const searchStore = async (
     meaning,
     rerank,
   )
+  const discovery = found.query?.discovery
+  const total = discovery
+    ? totalOf(discovery.candidates, found.items.length, found.hasMore, !discovery.truncated)
+    : totalOf(
+        await countLucene(
+          store,
+          account,
+          { ...(request.discover ? discoveryRequest(request) : request), limit: request.limit + offset },
+          messenger,
+          TOTAL_CAP,
+        ).catch((error: unknown) => {
+          if (isCliError(error) && error.details.reason === "query.too-large") return undefined
+          throw error
+        }),
+        found.items.length,
+        found.hasMore,
+      )
   return {
     ...found,
+    total,
     items: found.items.slice(offset),
     ...(found.hasMore && offset + request.limit <= MAX_SEARCH_OFFSET ? { nextOffset: offset + request.limit } : {}),
   }

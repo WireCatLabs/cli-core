@@ -28,6 +28,9 @@ export {
   type ModelDownloadOptions,
 } from "./model-downloads.js"
 export type {
+  ProjectChatFetcher,
+  ProjectChatFetchProgress,
+  ProjectChatFetchRequest,
   ProjectEvidenceContext,
   ProjectEvidenceItem,
   ProjectEvidencePerson,
@@ -35,7 +38,6 @@ export type {
   ProjectGatheringPorts,
   ProjectGatheringStop,
   ProjectIndexCatchUp,
-  ProjectSourceFetcher,
 } from "./project-gathering.js"
 export { gatherProjectEvidence } from "./project-gathering.js"
 export type { ProjectNeighbour, ProjectNeighbourReader } from "./project-gathering-around.js"
@@ -43,7 +45,7 @@ export { documentPassage, storedMessageNeighbours, storedNeighbours } from "./pr
 export type { EvidenceMention, EvidenceMentions } from "./project-gathering-mentions.js"
 export { findEvidenceMentions } from "./project-gathering-mentions.js"
 export type {
-  ProjectFetchState,
+  ProjectChatFetched,
   ProjectGatheringBudgets,
   ProjectGatheringRequest,
   ProjectLane,
@@ -53,6 +55,12 @@ export type {
   ProjectSender,
   ProjectUnitState,
 } from "./project-gathering-request.js"
+export {
+  canonicalProjectRef,
+  gatherStoredProject,
+  type StoredProjectGathering,
+  type StoredProjectInput,
+} from "./stored-project-gathering.js"
 
 import { type AccountService, accountService } from "./account.js"
 import { type AdminService, adminService } from "./admin.js"
@@ -264,6 +272,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
 export { entriesOfList, type ListContext, type ListedEntry } from "../search/account-list.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
+export { type SearchTotal, TOTAL_CAP } from "../search/total.js"
 export { TASK_KINDS, TASK_ORIGINS, type TaskKind, type TaskOrigin } from "../tasks/index.js"
 export type { AdminFound, AdminQuery, AdminSelection, AdminStatisticsService } from "./admin-statistics.js"
 export { adminStatisticsService } from "./admin-statistics.js"
@@ -373,6 +382,7 @@ export {
   type NotesQuery,
   type NotesSearchRequest,
   nearestNotes,
+  RANK_WITHIN,
   searchNotes,
   searchNotesOf,
   searchNotesQuery,

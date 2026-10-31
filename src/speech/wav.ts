@@ -244,3 +244,24 @@ export const openWavAudio = async (
     throw error
   }
 }
+
+/** PCM16 mono WAV of samples in [-1, 1], for a recognizer that takes a file. */
+export const encodeWav = (samples: Float32Array, sampleRate = 16000): Uint8Array => {
+  const bytes = Buffer.alloc(44 + samples.length * 2)
+  bytes.write("RIFF", 0, "ascii")
+  bytes.writeUInt32LE(bytes.length - 8, 4)
+  bytes.write("WAVEfmt ", 8, "ascii")
+  bytes.writeUInt32LE(16, 16)
+  bytes.writeUInt16LE(1, 20)
+  bytes.writeUInt16LE(1, 22)
+  bytes.writeUInt32LE(sampleRate, 24)
+  bytes.writeUInt32LE(sampleRate * 2, 28)
+  bytes.writeUInt16LE(2, 32)
+  bytes.writeUInt16LE(16, 34)
+  bytes.write("data", 36, "ascii")
+  bytes.writeUInt32LE(samples.length * 2, 40)
+  samples.forEach((sample, index) => {
+    bytes.writeInt16LE(Math.round(Math.max(-1, Math.min(1, sample || 0)) * 32767), 44 + index * 2)
+  })
+  return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.length)
+}

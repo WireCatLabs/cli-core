@@ -359,7 +359,7 @@ const BOT_HOUSEKEEPING = new Set(["auth", "list", "sends", "recipients", "mcp"])
 const STORE_MAINTENANCE = new Set(["info", "check", "copies"])
 
 /** Commands outside `messages` that print what people wrote, so `deny messages` reaches them too. */
-const SHOW_MESSAGES = new Set(["inbox", "review", "watch", "serve", "store", "conversations"])
+const SHOW_MESSAGES = new Set(["inbox", "review", "watch", "serve", "store", "conversations", "projects"])
 
 export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => {
   if (path[0] === "bot") return readKeysForCommand(path.slice(1)).map((key) => `bot.${key}`)

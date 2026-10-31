@@ -5,6 +5,7 @@ import { formatLocator, parseLocator } from "../../domain/locator.js"
 import { senderIsMe } from "../../domain/models.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
 import type { ENTITIES } from "../../entities/index.js"
+import type { SearchTotal } from "../../search/total.js"
 import type { ChatCoverage } from "../../services/chat-coverage.js"
 import { excerpt } from "../../services/excerpt.js"
 import type { FoundMessage, SearchFound } from "../../services/messages.js"
@@ -267,6 +268,12 @@ export interface Paging {
   again?: Record<string, unknown>
 }
 
+/** "showing 20 of 144", for the human view under a page of hits; `+` when the total is a lower bound. */
+export const shownOf = (shown: number, offset: number, total: SearchTotal | undefined): string | undefined =>
+  total === undefined || shown === 0
+    ? undefined
+    : `showing ${offset + 1}–${offset + shown} of ${total.value}${total.relation === "gte" ? "+" : ""}`
+
 /** `search messages` and `search mail`, CLI and MCP alike. */
 export const messagesAnswer = (
   command: string,
@@ -280,6 +287,7 @@ export const messagesAnswer = (
     limit,
     has_more: found.hasMore && (page ?? 1) * limit <= MAX_SEARCH_OFFSET,
     page: page ?? 1,
+    ...(found.total ? { total: found.total } : {}),
     ...(again ? { args: again } : {}),
     ...gapsOf(found),
     meta: metaOf(accounts, found.skipped, coverageGaps(found).missing.length > 0),
@@ -357,6 +365,7 @@ export const notesAnswer = (
     limit,
     has_more: found.has_more && found.next_offset !== undefined,
     page: page ?? 1,
+    total: found.total,
     ...(again ? { args: again } : {}),
     ...meaningGap(found.meaning_skipped, exact),
     meta: metaOf(found.accounts, found.skipped),

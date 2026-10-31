@@ -19,6 +19,7 @@ import {
   offsetOf,
   SOURCE_SEARCHED,
   type SourceSearched,
+  shownOf,
 } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { topicsSearchCommand } from "./topics-command.js"
@@ -226,6 +227,8 @@ const notesCommand = (messenger: Messenger): Command =>
       }
       renderAnswer(this, context, notesAnswer("search notes", found, { limit, page: options.page ?? 1, again }), () => {
         if (found.hits.length === 0) context.renderer.note("no note matches")
+        const shown = shownOf(found.hits.length, ((options.page ?? 1) - 1) * limit, found.total)
+        if (shown) context.renderer.note(shown)
         return found.hits
           .map(
             (hit) =>

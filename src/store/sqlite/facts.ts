@@ -2,11 +2,20 @@ import { CliError } from "@wirecat/cli-base"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { calendarMoment } from "../../domain/moment.js"
 import type { Actor } from "./actors.js"
+import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
-import { type Author, authorActor, authorOf, evidenceOf, linkEvidence } from "./memories.js"
+import {
+  type Author,
+  authorActor,
+  authorOf,
+  dropLinksOf,
+  erase,
+  evidenceOf,
+  linkEvidence,
+  subjectOf,
+} from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
-import { referenceOfThing, storedThing } from "./things.js"
 import { write } from "./transaction.js"
 
 /** What happened, as its evidence shows; its evidence is `links` of kind `evidence`. */
@@ -19,6 +28,8 @@ export interface Fact {
   status: (typeof FACT_STATUSES)[number]
   project: string | null
   subject: string | null
+  subjectName: string | null
+  subjectIsOwner: boolean
   occurredAt: string | null
   supersedes: string | null
   /** `name` is a bot's handle; `null` for a person. */
@@ -63,6 +74,15 @@ export interface FactsStore {
   accept(reference: string): Promise<Fact>
   /** An accepted decision no longer holds and nothing replaced it. */
   reverse(reference: string): Promise<Fact>
+  /** The owner turns down a proposed fact; it stays, marked `rejected`. */
+  reject(reference: string): Promise<Fact>
+  /**
+   * Erases the fact: its row, its links, its tags, and the memory it was migrated from, which still held its text.
+   * A decision that replaced it no longer names it. A backup made before keeps it.
+   */
+  remove(reference: string): Promise<{ ref: string; removed: true; links: number }>
+  /** Each reference it rests on, read back; one deleted since is `missing`. */
+  sources(reference: string): Promise<EvidenceSource[]>
 }
 
 type Row = Record<string, unknown>
@@ -89,10 +109,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     statement: String(row.statement),
     status: row.status as Fact["status"],
     project: row.project_id == null ? null : `project:${row.project_id}`,
-    subject:
-      row.subject_type == null
-        ? null
-        : (referenceOfThing(database, storedThing(row.subject_type, row.subject_id)) ?? null),
+    ...subjectOf(database, row),
     occurredAt: row.occurred_at == null ? null : iso(row.occurred_at),
     supersedes: row.supersedes_id == null ? null : `fact:${row.supersedes_id}`,
     author: authorOf(row),
@@ -228,6 +245,42 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
       return factOf(rowOf(reference))
     },
+    reject: (reference) => {
+      const row = rowOf(reference)
+      if (row.status !== "proposed")
+        throw new CliError(
+          "validation_error",
+          `only a proposed fact can be rejected; this one is ${String(row.status)}`,
+        )
+      database.prepare("UPDATE facts SET status = 'rejected', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+      return factOf(rowOf(reference))
+    },
+    remove: (reference) => {
+      const row = rowOf(reference)
+      const id = Number(row.id)
+      const twin = row.source === "memory" && row.metadata != null ? migratedFrom(String(row.metadata)) : undefined
+      const links = erase(database, () => {
+        database.prepare("UPDATE facts SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
+        const count = dropLinksOf(database, { type: "fact", id })
+        database.prepare("DELETE FROM links WHERE from_type = 'fact' AND from_id = ?").run(id)
+        database.prepare("DELETE FROM taggings WHERE taggable_type = 'fact' AND taggable_id = ?").run(id)
+        database.prepare("DELETE FROM facts WHERE id = ?").run(id)
+        if (twin !== undefined)
+          database.prepare("DELETE FROM memories WHERE id = ? AND deleted_at IS NOT NULL").run(twin)
+        return count
+      })
+      return { ref: `fact:${id}`, removed: true, links }
+    },
+    sources: (reference) => evidenceSourcesOf(database, { type: "fact", id: Number(rowOf(reference).id) }),
+  }
+}
+
+const migratedFrom = (metadata: string): number | undefined => {
+  try {
+    const { memory } = JSON.parse(metadata) as { memory?: unknown }
+    return Number.isInteger(memory) ? Number(memory) : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -239,5 +292,8 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
     list: async (options) => operations.list(options),
     accept: async (reference) => operations.accept(reference),
     reverse: async (reference) => operations.reverse(reference),
+    reject: async (reference) => operations.reject(reference),
+    remove: async (reference) => operations.remove(reference),
+    sources: async (reference) => operations.sources(reference),
   }
 }

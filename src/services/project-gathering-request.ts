@@ -49,6 +49,8 @@ export interface ProjectGatheringBudgets {
   maxPageBytes?: number
   maxElapsedMs?: number
   maxItems?: number
+  /** All `fetch: before-read` chat fetches together. */
+  maxFetchMs?: number
 }
 export type ProjectLaneKind = "project" | "key" | "alias" | "keyword" | "person" | "sender" | "linked-chat"
 export interface ProjectLane {
@@ -69,7 +71,13 @@ export interface ProjectUnitProgress {
   cursor: { at: number; id: number; scope: string } | null
   code: string | null
 }
-export type ProjectFetchState = "fetched" | "unsupported" | "failed" | "not-requested"
+/** A linked chat's fetch before the reads: `skipped` when the budget ran out before it started. */
+export interface ProjectChatFetched {
+  chat: string
+  state: "complete" | "partial" | "failed" | "skipped"
+  reason: string | null
+  elapsedMs: number
+}
 export interface ProjectGatheringCheckpoint {
   version: 1
   runKey: string
@@ -77,7 +85,8 @@ export interface ProjectGatheringCheckpoint {
   after: number
   before: number
   asOf: number
-  fetched: { state: ProjectFetchState; history: "complete" | "partial" | "unknown" | null; code: string | null }[]
+  /** The first invocation's chat fetches, carried so a resumed run reports them without fetching again. */
+  fetched: ProjectChatFetched[]
   units: ProjectUnitProgress[]
   /** Present only when the run reads linked chats: a hash of their references. */
   linkedChats?: string
@@ -103,6 +112,7 @@ const BUDGETS = {
   maxPageBytes: [65536, 262144],
   maxElapsedMs: [60000, 600000],
   maxItems: [100, 500],
+  maxFetchMs: [180000, 1800000],
 } as const
 
 const fail = (message: string, param?: string): never => {

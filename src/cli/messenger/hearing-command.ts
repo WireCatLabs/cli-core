@@ -37,7 +37,13 @@ export const hearForCommand = async (
       transcribe && !offline
         ? {
             choice: {
-              ...choose(messenger, context.settings, model === undefined ? {} : { model }, context.env),
+              ...choose(
+                messenger,
+                context.settings,
+                model === undefined ? {} : { model },
+                context.env,
+                context.keyring,
+              ),
               ...(context.recognizer ? { open: context.recognizer } : {}),
             },
             connect: connect ?? ((work) => context.withMessenger(work)),

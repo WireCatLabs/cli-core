@@ -69,7 +69,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./documents` | `src/documents/`, `src/services/documents/` | Provider-neutral file contracts, scoped ingestion/sync, document knowledge and evidence-backed extraction; existing readers remain available — see [Document workflows](DOCUMENTS.md) |
 | `./store` | `src/store/` | the SQLite seam and the shared message store |
 | `./sends` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
-| `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer and installed-only bounded PCM recognizer; import alone loads no engine |
+| `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer, installed-only bounded PCM recognizer, per-channel decoding, timed local pieces and OpenAI transcription; import alone loads no engine |
 | `./charts` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads ECharts only on demand; a separate lazy PNG encoder uses resvg and bundled fonts |
 | `./models` | `src/models/` | purpose-specific text generation with typed image inputs, OpenAI-compatible and Anthropic adapters, strict options, injected key/consent resolvers; no configured provider means no call |
 | `./services` | `src/services/` | the use cases, once each, that commands and MCP tools call — see [Services](#services) |

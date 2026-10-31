@@ -159,9 +159,7 @@ export type CorpusQuery = Pick<NoteQuery, "root" | "limit" | "offset" | "newest"
   ids?: number[]
 }
 
-/** Notes matching a parsed query, by the same language as messages: files and written notes, merged. */
-export const searchNotes = (context: StoreContext, query: NoteQuery): { items: NoteHit[]; hasMore: boolean } => {
-  const offset = query.offset ?? 0
+const matchedRows = (context: StoreContext, query: NoteQuery): CorpusRow[] => {
   const chosen = CORPORA.filter(
     ({ type }) =>
       (query.source === undefined || (query.source === "file") === (type === "document")) &&
@@ -188,6 +186,13 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
         (b.at ?? 0) - (a.at ?? 0) ||
         a.id - b.id,
   )
+  return rows
+}
+
+/** Notes matching a parsed query, by the same language as messages: files and written notes, merged. */
+export const searchNotes = (context: StoreContext, query: NoteQuery): { items: NoteHit[]; hasMore: boolean } => {
+  const offset = query.offset ?? 0
+  const rows = matchedRows(context, query)
   const read = {
     document: context.database.prepare("SELECT * FROM documents WHERE id = ?"),
     note: context.database.prepare("SELECT * FROM notes WHERE id = ?"),
@@ -206,6 +211,15 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
     }),
     hasMore: rows.length > offset + query.limit,
   }
+}
+
+/** The refs of the newest `limit` notes matching a query, without reading the notes themselves. */
+export const matchingNoteRefs = (
+  context: StoreContext,
+  query: Omit<NoteQuery, "offset" | "newest">,
+): { refs: string[]; hasMore: boolean } => {
+  const rows = matchedRows(context, { ...query, newest: true })
+  return { refs: rows.slice(0, query.limit).map(({ type, id }) => `${type}:${id}`), hasMore: rows.length > query.limit }
 }
 
 export const searchCorpus = (context: StoreContext, query: CorpusQuery, corpus: Corpus): CorpusRow[] => {
@@ -405,7 +419,7 @@ export const searchCorpus = (context: StoreContext, query: CorpusQuery, corpus: 
     const window = tests.size ? QUERY_LIMITS.candidates + 1 : query.limit + offset + 1
     const rows = database
       .prepare(
-        `${ctes.length ? `WITH ${ctes.join(", ")} ` : ""}SELECT n.*, ${ranking ? "f.rank" : "NULL"} AS relevance${exactTier ? ", n.id IN (SELECT id FROM x) AS exact" : ""}${projection}
+        `${ctes.length ? `WITH ${ctes.join(", ")} ` : ""}SELECT ${tests.size ? "n.*" : "n.id, n.at"}, ${ranking ? "f.rank" : "NULL"} AS relevance${exactTier ? ", n.id IN (SELECT id FROM x) AS exact" : ""}${projection}
            FROM ${corpus.view} n${ranking ? " LEFT JOIN f ON f.id = n.id" : ""} WHERE ${where.sql} ORDER BY ${order} LIMIT ?`,
       )
       .all(
@@ -466,6 +480,8 @@ export interface NearestNote {
 export interface NoteSearch extends DocumentPictureStore {
   /** Indexes what was written since, then searches; a note written a moment ago is found. */
   search(query: NoteQuery): Promise<{ items: NoteHit[]; hasMore: boolean }>
+  /** The refs of the newest `limit` notes matching the query; `hasMore` when more match. */
+  matchingRefs(query: Omit<NoteQuery, "offset" | "newest">): Promise<{ refs: string[]; hasMore: boolean }>
   indexState(): Promise<NoteIndexState | undefined>
   /** Live notes' chunks with no vector of `model`, by hash from `after`, each with its text cut again. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<NoteChunkToEmbed[]>
@@ -480,6 +496,11 @@ export interface NoteSearch extends DocumentPictureStore {
     query: Float32Array,
     options: { limit: number; folderIds?: string[]; withInternal?: boolean; source?: Note["source"] },
   ): Promise<NearestNote[]>
+  /**
+   * Each of `refs` scored by its best chunk, best first, every chunk compared: a filter's own notes ranked, not the
+   * nearest overall. A note with no vector of `model` is left out; the notes themselves are not read.
+   */
+  scoreNotes(model: string, query: Float32Array, refs: string[]): Promise<{ ref: string; score: number }[]>
 }
 
 const SCAN_PAGE = 5_000
@@ -520,6 +541,10 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
     search: async (query) => {
       drain()
       return searchNotes(context, query)
+    },
+    matchingRefs: async (query) => {
+      drain()
+      return matchingNoteRefs(context, query)
     },
     indexState: async () => noteIndexState(database),
     chunksToEmbed: async (model, { after, limit }) => {
@@ -647,6 +672,29 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
         const note = read(String(type), Number(id))
         return note ? [{ ref: note.ref, note, score, range: { start, end } }] : []
       })
+    },
+    scoreNotes: async (model, query, refs) => {
+      drain()
+      const scope = live(undefined, undefined, true)
+      const owned = database.prepare(
+        `SELECT k.chunkable_type AS type, k.chunkable_id AS owner, v.vector
+           FROM chunks k JOIN embeddings v ON v.model = ? AND v.content_hash = k.content_hash
+          WHERE k.chunkable_type = ? AND k.chunkable_id IN (SELECT value FROM json_each(?))${scope.sql}`,
+      )
+      const best = new Map<string, number>()
+      for (const type of ["document", "note"]) {
+        const ids = refs.flatMap((ref) => (ref.startsWith(`${type}:`) ? [Number(ref.slice(type.length + 1))] : []))
+        if (!ids.length) continue
+        for (const row of owned.all(model, type, JSON.stringify(ids), ...scope.params)) {
+          const key = `${row.type}:${row.owner}`
+          const score = dot(query, row.vector as Uint8Array)
+          if (score > (best.get(key) ?? Number.NEGATIVE_INFINITY)) best.set(key, score)
+        }
+      }
+      const order = new Map(refs.map((ref, index) => [ref, index]))
+      return [...best]
+        .map(([ref, score]) => ({ ref, score }))
+        .sort((a, b) => b.score - a.score || (order.get(a.ref) ?? 0) - (order.get(b.ref) ?? 0))
     },
   }
 }

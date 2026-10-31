@@ -343,6 +343,7 @@ export {
   LIST_QUERY_GUIDE,
   listQuery,
   nativeField,
+  nativeTermLists,
   nativeTerms,
   pagedList,
   pageOf,
@@ -407,6 +408,7 @@ export {
   messageHitItem,
   type NoteHitItem,
   noteHitItem,
+  shownOf,
 } from "./messenger/search-answers.js"
 export { SEARCHES_QUERY } from "./messenger/searches-command.js"
 export { servingProfiles } from "./messenger/serve-command.js"
@@ -440,6 +442,13 @@ export {
   usableProfileName,
 } from "./profile.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
+export {
+  type ProjectTextHints,
+  projectAnswerParts,
+  projectCutoffTime,
+  projectEvidenceText,
+  projectWindowOf,
+} from "./project-evidence.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {
   type Config,
@@ -501,6 +510,7 @@ export {
   modelsCommand,
   pinCommand,
   pollsCommand,
+  projectsCommand,
   reactionsCommand,
   recipientsCommand,
   repliesCommand,

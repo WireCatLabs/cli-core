@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import type { Missing } from "@wirecat/cli-base/standards"
 import { recalledAccount } from "../cli/messenger/accounts.js"
 import type { Messenger } from "../cli/messenger/context.js"
@@ -6,7 +6,7 @@ import type { Settings } from "../cli/settings.js"
 import type { Message } from "../domain/models.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { openStore } from "../store/store.js"
-import { type Choice, choose, hearLocally, hearOnline, isAudioFile } from "./transcribe.js"
+import { type Choice, choose, hearLocally, hearOnline, isAudioFile, keptSource } from "./transcribe.js"
 
 /** `--model` chooses who hears what `--transcribe` asks for; alone it would quietly do nothing. */
 export const modelWith = (transcribe: boolean | undefined, model: string | undefined): string | undefined => {
@@ -112,7 +112,7 @@ export const hearVoices = async (
       const heard = answer instanceof Uint8Array ? await hearLocally(answer, voice.messageId, choice) : answer
       if (heard.pending || heard.text.trim() === "") continue
       transcripts.set(keyOf(voice), heard.text)
-      await kept.keep(voice, heard.text, heard.model ?? heard.via)
+      await kept.keep(voice, heard.text, keptSource(heard))
     } catch (error) {
       problem ??= error instanceof Error ? error.message : String(error)
     }
@@ -139,7 +139,11 @@ export const hearForTool = async (
   connect: <T>(work: (adapter: MessengerAdapter) => Promise<T>) => Promise<T>,
   messages: readonly Message[],
   transcribe: boolean,
-  { settings, env }: { settings: Pick<Settings, "configured" | "shared" | "profile">; env: NodeJS.ProcessEnv },
+  {
+    settings,
+    env,
+    keyring,
+  }: { settings: Pick<Settings, "configured" | "shared" | "profile">; env: NodeJS.ProcessEnv; keyring?: KeyringStore },
   model?: string,
 ): Promise<Hearing | undefined> => {
   if (!messages.some(hasAudio)) return undefined
@@ -151,7 +155,7 @@ export const hearForTool = async (
       kept,
       transcribe
         ? {
-            choice: choose(messenger, settings, model === undefined ? {} : { model }, env),
+            choice: choose(messenger, settings, model === undefined ? {} : { model }, env, keyring),
             connect,
           }
         : undefined,

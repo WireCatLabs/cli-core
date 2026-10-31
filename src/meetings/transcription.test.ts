@@ -267,4 +267,57 @@ describe("local meeting transcription", () => {
     await expect(transcribeMeeting(fixture.source, fixture.store, target, { apply: true })).rejects.toBe(error)
     expect(fixture.store.appendTranscriptsWithReceipt).toHaveBeenCalledTimes(1)
   })
+
+  it("**keeps who spoke** and lets two speakers talk over each other, never one speaker over themself", async () => {
+    const dialogue = await setup([
+      { startMs: 0, endMs: 3000, text: "Hello", speaker: "manager" },
+      { startMs: 2000, endMs: 4000, text: "Hi there", speaker: "client" },
+      { startMs: 3500, endMs: 5000, text: "So", speaker: "manager " },
+      { startMs: 5000, endMs: 6000, text: "Noted", speaker: null },
+    ])
+    await transcribeMeeting(dialogue.source, dialogue.store, target, { apply: true })
+    expect(
+      dialogue.store.appendTranscriptsWithReceipt.mock.calls[0]?.[0].transcripts[0]?.rows.map(
+        ({ speakerName, startMs }) => [speakerName, startMs],
+      ),
+    ).toEqual([
+      ["manager", 0],
+      ["client", 2000],
+      ["manager", 3500],
+      [null, 5000],
+    ])
+
+    for (const segments of [
+      [
+        { startMs: 0, endMs: 3000, text: "Hello", speaker: "manager" },
+        { startMs: 2000, endMs: 4000, text: "again", speaker: " manager" },
+      ],
+      [
+        { startMs: 0, endMs: 3000, text: "Hello" },
+        { startMs: 2000, endMs: 4000, text: "again" },
+      ],
+      [
+        { startMs: 2000, endMs: 3000, text: "Hello", speaker: "manager" },
+        { startMs: 1000, endMs: 4000, text: "earlier", speaker: "client" },
+      ],
+    ]) {
+      const fixture = await setup(segments)
+      await expect(transcribeMeeting(fixture.source, fixture.store, target, { apply: true })).rejects.toMatchObject({
+        code: "invalid_response",
+      })
+    }
+  })
+
+  it("names OpenAI as the source of what it recognized", async () => {
+    const fixture = await setup()
+    fixture.source.describe.mockResolvedValue({
+      ...media(),
+      recognition: { engine: "openai", model: "gpt-transcribe" },
+    })
+    await transcribeMeeting(fixture.source, fixture.store, target, { apply: true })
+    expect(fixture.store.appendTranscriptsWithReceipt.mock.calls[0]?.[0].transcripts[0]).toMatchObject({
+      source: "openai/gpt-transcribe",
+      format: "openai-transcription",
+    })
+  })
 })

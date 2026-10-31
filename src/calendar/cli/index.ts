@@ -12,12 +12,13 @@ import type { EventStore } from "../../meetings/index.js"
 import { searchEvents } from "../../services/events-search.js"
 import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
-import { BUSY_QUERY_HELP, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
+import { BUSY_QUERY, BUSY_QUERY_NOTE, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
 import {
   CALENDAR_UNTRUSTED_FIELDS,
   calendarIn,
   calendarItem,
-  EVENTS_QUERY_HELP,
+  EVENTS_QUERY,
+  EVENTS_QUERY_NOTE,
   eventAnswer,
   eventIdOf,
   eventOf,
@@ -27,6 +28,7 @@ import {
   peopleAnswer,
   resolveAnswer,
   reviewsAnswer,
+  weekFilter,
 } from "../reads.js"
 import { REPEAT_HELP } from "../recurrence.js"
 import { serverSearchAnswer } from "../server-search.js"
@@ -180,15 +182,16 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
 
   if (deps.freeBusy)
     example(
-      annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false })
-        .description(
+      withQuery(
+        annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false }).description(
           "when calendars and people are taken, asked of the provider and not stored; with --duration-minutes, " +
             "the free stretches they share",
-        )
-        .argument("[words...]", "today, week, from:<date>, to:<date>, calendar:<id>, person:<email>")
-        .addHelpText("after", BUSY_QUERY_HELP),
-      "calendars busy week person:ana@example.com --json",
-      "calendars busy from:2026-11-02 to:2026-11-06 person:ana@example.com --duration-minutes 30 --hours 10:00-16:00",
+        ),
+        BUSY_QUERY,
+      ).addHelpText("after", BUSY_QUERY_NOTE),
+      "calendars busy person:ana@example.com --json",
+      "calendars busy start>=2026-11-02 end<=2026-11-06 person:ana@example.com --duration-minutes 30 " +
+        "--hours 10:00-16:00",
     )
       .option("--duration-minutes <minutes>", "find free stretches at least this long, 5–1440", minutes)
       .option(
@@ -271,7 +274,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
               },
             ]
           : undefined
-      const progressAt = lineOf(command, "status")
+      const progressAt = lineOf(command, "store status")
       report.hint = stuck
         ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
         : report.state === "partial"
@@ -306,11 +309,14 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
     })
 
+  const store = annotate(program.command("store").description("the local store of calendar events"), {
+    effects: GROUP,
+  })
   example(
-    annotate(program.command("status"), { effects: LOCAL_READ }).description(
+    annotate(store.command("status"), { effects: LOCAL_READ }).description(
       "how far each synced calendar's sync is: entries done, partial or complete, and when it last moved",
     ),
-    "status --json",
+    "store status --json",
   ).action(async (_opts: unknown, command: Command) => {
     print(
       await calendarStatus(deps.store, deps.accountId, {
@@ -323,12 +329,12 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
 
   const events = annotate(program.command("events").description("the account's stored events"), { effects: GROUP })
   example(
-    annotate(events.command("list"), { effects: LOCAL_READ })
-      .description("list stored events, earliest first")
-      .argument("[words...]", "today, week, from:<date>, to:<date>, person:<who>, calendar:<id>")
-      .addHelpText("after", EVENTS_QUERY_HELP),
-    "events list week --json",
-    "events list from:2026-11-02 to:2026-11-06 person:ana@example.com",
+    withQuery(
+      annotate(events.command("list"), { effects: LOCAL_READ }).description("list stored events, earliest first"),
+      EVENTS_QUERY,
+    ).addHelpText("after", EVENTS_QUERY_NOTE),
+    "events list starts_at>=2026-11-02 starts_at<2026-11-07 --json",
+    "events list ends_at>=today person:ana@example.com",
   )
     .option("--limit <n>", "events at most, 1–1000", integer, 100)
     .action(async (words: string[], opts: { limit: number }, command: Command) => {
@@ -354,17 +360,20 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     print({ ...shown, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
   })
 
+  const searches = annotate(program.command("search").description("find stored things by text: events"), {
+    effects: GROUP,
+  })
   const search = example(
-    annotate(program.command("search"), { effects: deps.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
+    annotate(searches.command("events"), { effects: deps.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
       .description(
         deps.serverSearch
           ? "find stored events by words, and by meaning when its model is downloaded; with --backend server, ask " +
               "the provider instead"
           : "find stored events by words, and by meaning when its model is downloaded",
       )
-      .argument("<words...>", "what to find in titles, descriptions, places and attendees"),
-    "search roadmap planning --json",
-    ...(deps.serverSearch ? ["search --backend server quarterly review"] : []),
+      .argument("<query...>", "what to find in titles, descriptions, places and attendees"),
+    "search events roadmap planning --json",
+    ...(deps.serverSearch ? ["search events --backend server quarterly review"] : []),
   )
     .option("--limit <n>", "events per page", integer, 20)
     .option("--cursor <cursor>", "continue from a page's next_offset", (text) => (text === "0" ? 0 : integer(text)), 0)
@@ -389,20 +398,24 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       if (opts.backend === "both")
         throw new CliError(
           "validation_error",
-          "search --backend both is not offered: the store's search and the provider's rank and page events " +
+          "search events --backend both is not offered: the store's search and the provider's rank and page events " +
             "differently, so one merged list would have no single order or next page; run --backend archive and " +
             "--backend server",
           { reason: "search.one-backend" },
         )
       if (opts.backend === "server") {
         if (command.optsWithGlobals<{ offline?: boolean }>().offline)
-          throw new CliError("permission_error", "search --backend server asks the provider; leave out --offline", {
-            reason: "search.offline",
-          })
+          throw new CliError(
+            "permission_error",
+            "search events --backend server asks the provider; leave out --offline",
+            {
+              reason: "search.offline",
+            },
+          )
         if (opts.exact || opts.cursor || opts.newest)
           throw new CliError(
             "validation_error",
-            "search --backend server takes neither --exact, --cursor nor --newest: the provider ranks and pages it",
+            "search events --backend server takes neither --exact, --cursor nor --newest: the provider ranks and pages it",
             { reason: "search.server-options" },
           )
         const found = await serverSearchAnswer(source(), deps.store, {
@@ -444,10 +457,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   ).action(async (words: string[], _opts: unknown, command: Command) => {
     const reference = queryTerms(words, PEOPLE_QUERY, "people list").get("event")
     const event = reference === undefined ? undefined : eventIdOf(reference)
-    const filter =
-      event === undefined
-        ? await eventsFilter(["week"], { store: deps.store, accountId: deps.accountId, zone: zone(), now: now() })
-        : undefined
+    const filter = event === undefined ? weekFilter(deps.accountId, zone(), now()) : undefined
     const people = await peopleAnswer(deps.store, deps.accountId, {
       ...(event === undefined ? {} : { event }),
       ...(filter ? { filter } : {}),

@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { expect, it, vi } from "vitest"
 import type { LocalSpeechBackend } from "./local.js"
-import { localSpeechRecognitionModel, openLocalSpeechRecognizer } from "./local.js"
+import { localSpeechRecognitionModel, openLocalSpeechRecognizer, recognizeLocalPieces } from "./local.js"
 
 const defaultBackend = vi.hoisted(() => ({ opened: 0, freed: 0 }))
 vi.mock("./recognize.js", async (original) => {
@@ -260,4 +260,17 @@ it("yields between bounded windows so queued cancellation runs before synchronou
   } finally {
     await recognizer.close()
   }
+})
+it("hears a whole channel as timed pieces from an installed model, and frees the engine", async () => {
+  const pieces = [{ start: 0.5, end: 2, text: "Alice Example" }]
+  const native = { ...backend(), pieces: vi.fn((_pcm: Float32Array) => pieces) }
+  const audio = { samples: new Float32Array(16000), rate: 16000 }
+
+  expect(await recognizeLocalPieces("tiny-example", audio, { directory: await installed(), open: () => native })).toBe(
+    pieces,
+  )
+  expect(native.pieces.mock.calls[0]?.[0]).toHaveLength(8000 + 16000)
+  expect(native.free).toHaveBeenCalledOnce()
+  const directory = await mkdtemp(join(tmpdir(), "messaging-test-missing-speech-"))
+  await expect(recognizeLocalPieces("tiny-example", audio, { directory })).rejects.toMatchObject({ code: "not_found" })
 })

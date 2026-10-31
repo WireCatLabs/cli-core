@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
@@ -19,6 +19,7 @@ import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
+import { type SearchTotal, TOTAL_CAP, totalOf } from "../search/total.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
@@ -236,26 +237,33 @@ export const embedMail = (store: MessageStore, options: NotesEmbedOptions & { co
 export const nearestNotes = async (
   store: MessageStore,
   query: string,
-  {
-    model: choice,
-    limit,
-    folderIds,
-    withInternal,
-    source,
-    env,
-    threads,
-    command,
-    embedders,
-  }: Omit<NotesEmbedOptions, "maxChunks"> & {
-    limit: number
-    folderIds?: string[]
-    withInternal?: boolean
-    source?: Note["source"]
-    command?: string
-    /** The search's own, when another part of it loads the same model. */
-    embedders?: Pick<WarmEmbedders, "get">
-  },
+  options: NearestOptions,
 ): Promise<NearestNote[]> => {
+  const { key, vector, floor } = await queryVector(store, query, options)
+  const nearest = await store.notes.nearest(key, vector, {
+    limit: options.limit,
+    ...(options.folderIds ? { folderIds: options.folderIds } : {}),
+    ...(options.withInternal ? { withInternal: true } : {}),
+    ...(options.source ? { source: options.source } : {}),
+  })
+  return nearest.filter(({ score }) => score > floor)
+}
+
+type NearestOptions = Omit<NotesEmbedOptions, "maxChunks"> & {
+  limit: number
+  folderIds?: string[]
+  withInternal?: boolean
+  source?: Note["source"]
+  command?: string
+  /** The search's own, when another part of it loads the same model. */
+  embedders?: Pick<WarmEmbedders, "get">
+}
+
+const queryVector = async (
+  store: MessageStore,
+  query: string,
+  { model: choice, folderIds, withInternal, source, env, threads, command, embedders }: Omit<NearestOptions, "limit">,
+): Promise<{ key: string; vector: Float32Array; floor: number }> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the notes")
   const { model, directory, key } = localModel(choice, env, command)
   const scope = {
@@ -266,14 +274,18 @@ export const nearestNotes = async (
   if (!(await store.notes.embedded(key, scope)))
     throw new CliError("not_found", `nothing searched here has vectors of ${model.id} yet, so only words were matched`)
   const [vector] = await withLocal(model, directory, threads, (embedder) => embedder.embed([query], "query"), embedders)
-  const floor = meaningFloor(key)
-  const nearest = await store.notes.nearest(key, vector as Float32Array, {
-    limit,
-    ...(folderIds ? { folderIds } : {}),
-    ...(withInternal ? { withInternal: true } : {}),
-    ...(source ? { source } : {}),
-  })
-  return nearest.filter(({ score }) => score > floor)
+  return { key, vector: vector as Float32Array, floor: meaningFloor(key) }
+}
+
+/** Every note of `refs` nearer in meaning than the model's floor, best first. */
+const nearestAmong = async (
+  store: MessageStore,
+  query: string,
+  refs: string[],
+  options: Omit<NearestOptions, "limit">,
+): Promise<{ ref: string; score: number }[]> => {
+  const { key, vector, floor } = await queryVector(store, query, options)
+  return (await store.notes.scoreNotes(key, vector, refs)).filter(({ score }) => score > floor)
 }
 
 export interface FoundNote {
@@ -313,6 +325,8 @@ export interface NotesFound {
   /** Why meaning was not searched, when it was not. */
   meaning_skipped?: string
   hits: FoundNote[]
+  /** How many notes match the query, every page together, as Elasticsearch's `hits.total`. */
+  total?: SearchTotal
   has_more: boolean
   next_offset?: number
   /** What the notes found link to, most linked first. */
@@ -527,6 +541,82 @@ const matching = async (
 }
 
 /**
+ * The most notes a filter may hold for meaning to rank all of them, each by its best chunk. Above it, meaning ranks
+ * the nearest notes overall and keeps those inside the filter, so a narrow filter over a large store loses some. On
+ * the owner's store (1,454 documents, 23,308 chunks) scoring all of them took ~0.5 s against ~0.17 s for the
+ * nearest 50 overall, and the cost grows with chunks, so 2,000 notes keeps it under a second at that density.
+ */
+export const RANK_WITHIN = 2000
+
+/** The notes of a filter, newest first, when there are at most `RANK_WITHIN`; `undefined` when more, or too costly. */
+const filterRefs = async (
+  store: MessageStore,
+  narrowing: QueryNode,
+  scope: Pick<NotesSearchRequest, "folderIds" | "withInternal" | "source" | "timezone">,
+): Promise<string[] | undefined> => {
+  const resolved = await resolvedQuery(store, narrowing, scope.timezone)
+  try {
+    const found = await store.notes.matchingRefs({
+      root: resolved.root,
+      limit: RANK_WITHIN,
+      ...(scope.folderIds ? { folderIds: scope.folderIds } : {}),
+      ...(scope.withInternal ? { withInternal: true } : {}),
+      ...(scope.source ? { source: scope.source } : {}),
+      ...(resolved.stemmer ? { stemmer: resolved.stemmer } : {}),
+    })
+    return found.hasMore ? undefined : found.refs
+  } catch (error) {
+    if (tooLarge(error)) return undefined
+    throw error
+  }
+}
+
+const tooLarge = (error: unknown) => isCliError(error) && error.details.reason === "query.too-large"
+
+/**
+ * The notes the words find, with those found by meaning: every note the search would list, paged to the end. Never
+ * below what the page already showed; a count the store refuses as too costly is that lower bound.
+ */
+const notesTotal = async (
+  store: MessageStore,
+  text: string,
+  {
+    exact,
+    scope,
+    shown,
+    hasMore,
+  }: {
+    exact: boolean
+    scope: Pick<NotesSearchRequest, "folderIds" | "withInternal" | "source" | "timezone">
+    shown: number
+    hasMore: boolean
+  },
+  others: string[],
+  othersComplete: boolean,
+): Promise<SearchTotal> => {
+  let words: { refs: string[]; hasMore: boolean }
+  try {
+    const { root, stemmer } = await storeQuery(store, text, {
+      exact,
+      ...(scope.timezone ? { timezone: scope.timezone } : {}),
+    })
+    words = await store.notes.matchingRefs({
+      root,
+      limit: TOTAL_CAP,
+      ...(scope.folderIds ? { folderIds: scope.folderIds } : {}),
+      ...(scope.withInternal ? { withInternal: true } : {}),
+      ...(scope.source ? { source: scope.source } : {}),
+      ...(stemmer ? { stemmer } : {}),
+    })
+  } catch (error) {
+    if (tooLarge(error)) return totalOf(undefined, shown, hasMore)
+    throw error
+  }
+  const count = new Set([...words.refs, ...others]).size + (words.hasMore ? 1 : 0)
+  return totalOf(count, shown, hasMore, othersComplete)
+}
+
+/**
  * `search notes`: words and stems, and meaning when the local model is there, merged by reciprocal rank;
  * each hit says which half found it, and the answer lists what the notes found link to. Every field of the query and
  * of `filter` holds for every hit, found by words or by meaning; a query of fields alone is not searched by meaning.
@@ -575,18 +665,31 @@ export const searchNotes = async (
   }
   let meaningSkipped: string | undefined
   let meaning: { ref: string; note: Note; at: string }[] | undefined
+  /** Every note found by meaning; `meaningComplete` is false when the nearest overall were cut at the depth. */
+  let meaningRefs: Set<string> | undefined
+  let meaningComplete = true
   if (exact) meaningSkipped = "--exact searches words as written"
   else if (words) {
+    const lane = {
+      command,
+      ...(env === undefined ? {} : { env }),
+      ...(embedders === undefined ? {} : { embedders }),
+      ...(folderIds === undefined ? {} : { folderIds }),
+      ...(withInternal ? { withInternal: true } : {}),
+      ...(source === undefined ? {} : { source }),
+    }
+    const depth = Math.max(window, CANDIDATES)
     try {
-      const nearest = await nearestNotes(store, words, {
-        limit: Math.max(window, CANDIDATES),
-        command,
-        ...(env === undefined ? {} : { env }),
-        ...(embedders === undefined ? {} : { embedders }),
-        ...(folderIds === undefined ? {} : { folderIds }),
-        ...(withInternal ? { withInternal: true } : {}),
-        ...(source === undefined ? {} : { source }),
-      })
+      const within = narrowing === undefined ? undefined : await filterRefs(store, narrowing, scope)
+      let nearest: { ref: string }[]
+      if (within === undefined) {
+        nearest = await nearestNotes(store, words, { ...lane, limit: depth })
+        meaningComplete = nearest.length < depth
+      } else {
+        const ranked = within.length ? await nearestAmong(store, words, within, lane) : []
+        meaningRefs = new Set(ranked.map(({ ref }) => ref))
+        nearest = ranked.slice(0, depth)
+      }
       const allowed = await matching(
         store,
         nearest.map(({ ref }) => ref),
@@ -597,6 +700,7 @@ export const searchNotes = async (
         const found = allowed.get(ref)
         return found ? [{ ref, ...found }] : []
       })
+      meaningRefs ??= new Set(meaning.map(({ ref }) => ref))
     } catch (error) {
       if (!(error instanceof CliError && error.code === "not_found")) throw error
       meaningSkipped = error.message
@@ -638,6 +742,13 @@ export const searchNotes = async (
   ]
   const page = slice ? ordered : ordered.slice(offset, window)
   const hasMore = slice ? matched.hasMore : ordered.length > window || matched.hasMore || titled.hasMore
+  const total = await notesTotal(
+    store,
+    text,
+    { exact, scope, shown: offset + page.length, hasMore },
+    [...tier.map(({ ref }) => ref), ...(meaningRefs ?? [])],
+    meaningComplete,
+  )
   const hits: FoundNote[] = []
   const counts = new Map<string, LinkedRecord>()
   const accounts = await store.accounts.storedAccounts()
@@ -712,6 +823,7 @@ export const searchNotes = async (
     by: meaning === undefined ? "words" : "words and meaning",
     ...(meaningSkipped === undefined ? {} : { meaning_skipped: meaningSkipped }),
     hits,
+    total,
     has_more: hasMore,
     ...(hasMore && window <= MAX_NOTES_OFFSET ? { next_offset: window } : {}),
     linked: [...counts.values()].sort(

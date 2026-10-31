@@ -49,7 +49,11 @@ export const runsCommand = (app: AppIdentity): Command => {
           args: words.length ? { query: typedQuery(words) } : {},
         }),
       )
-      if (runs.length === 0) renderer.note("nothing recorded — a run is kept with `--record`, or when it fails")
+      if (runs.length === 0)
+        renderer.note(
+          "nothing recorded — a command that does its work is kept unless the config says `record: false` (then only " +
+            "failures) or it ran with `--no-record`",
+        )
     })
 
   annotate(command.command("show"), {

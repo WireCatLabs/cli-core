@@ -2,8 +2,10 @@ import { createHash } from "node:crypto"
 import { isAbsolute } from "node:path"
 import { setImmediate } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
+import type { Pcm } from "./decode.js"
 import { isInstalled, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { type SpeechModel, speechModel, VAD } from "./models.js"
+import type { TimedText } from "./recognize.js"
 
 export interface LocalSpeechRecognitionModel {
   engine: "sherpa-onnx"
@@ -14,6 +16,7 @@ export interface LocalSpeechRecognitionModel {
 }
 export interface LocalSpeechBackend {
   recognize(pcm: Float32Array): string
+  pieces?(pcm: Float32Array): TimedText[]
   free(): void
 }
 export interface LocalSpeechRecognizer extends LocalSpeechRecognitionModel {
@@ -48,6 +51,35 @@ export const localSpeechRecognitionModel = (id: string): Readonly<LocalSpeechRec
     .digest("hex")
   return Object.freeze({ engine: "sherpa-onnx", model: model.id, version, sampleRate: 16000, maxChunkSamples: 480000 })
 }
+const notInstalled = (id: string) =>
+  new CliError(
+    "not_found",
+    `speech model ${id} is not installed; download it explicitly with a WireCat messenger's models download command`,
+    { reason: "model.not-downloaded", model: id },
+  )
+
+/**
+ * A whole recording, one channel of it, cut at pauses by the voice detector: each piece's text with where it lies,
+ * in seconds. Two channels heard this way merge into a dialogue by `start`. Existing installed models only.
+ */
+export const recognizeLocalPieces = async (
+  id: string,
+  audio: Pcm,
+  options: Pick<LocalSpeechRecognizerOptions, "directory" | "env" | "open"> = {},
+): Promise<TimedText[]> => {
+  const model = speechModel(id)
+  const directory = options.directory ?? modelsDirectory(options.env)
+  if (!isInstalled(model, directory)) throw notInstalled(model.id)
+  const { openRecognizer, toModelRate } = await import("./recognize.js")
+  const engine = (options.open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory))
+  try {
+    if (!engine.pieces) throw new CliError("configuration_error", "this speech backend gives no timed pieces")
+    return engine.pieces(toModelRate(audio.samples, audio.rate))
+  } finally {
+    engine.free()
+  }
+}
+
 /** Existing installed models only. Synchronous inference cancels between bounded windows. */
 export const openLocalSpeechRecognizer = async (
   id: string,
@@ -68,12 +100,7 @@ export const openLocalSpeechRecognizer = async (
   )
     throw new CliError("validation_error", "local speech requires an absolute model directory and bounded output bytes")
   cancelled(options.signal)
-  if (!isInstalled(model, directory))
-    throw new CliError(
-      "not_found",
-      `speech model ${description.model} is not installed; download it explicitly with a WireCat messenger's models download command`,
-      { reason: "model.not-downloaded", model: description.model },
-    )
+  if (!isInstalled(model, directory)) throw notInstalled(description.model)
   const { openRecognizer, toModelRate } = await import("./recognize.js")
   cancelled(options.signal)
   const engine = (options.open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory))

@@ -45,7 +45,7 @@ export const calendarTools = [
     required: [],
   },
   {
-    name: "status",
+    name: "store_status",
     description:
       "how far each synced calendar's sync is: done, state partial or complete, and cursor_age_ms, which grows while " +
       "nothing moves it",
@@ -55,10 +55,10 @@ export const calendarTools = [
   {
     name: "events_list",
     description:
-      "stored events, earliest first; `words` takes today, week, from:<date>, to:<date>, calendar:<id>, " +
-      "changed:<date> (events new, moved or cancelled since, each with change and was) and overlapping (events " +
-      "that clash, each with overlaps); a date in the zone given, UTC when absent",
-    properties: { account_id: integer, words: text, timezone: text, limit: { ...integer, maximum: 1000 } },
+      "stored events, earliest first; `query` takes field terms joined by AND: starts_at (>=, <, or " +
+      "[a TO b}), ends_at>=, changed_at>= (events new, moved or cancelled since, each with change and was), " +
+      "calendar:<id>; a date in the zone given, UTC when absent; without starts_at or ends_at, from today on",
+    properties: { account_id: integer, query: text, timezone: text, limit: { ...integer, maximum: 1000 } },
     required: [],
   },
   {
@@ -199,7 +199,7 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       throw new CliError("validation_error", `${key} must be a positive integer`)
     else if (
       [
-        "words",
+        "query",
         "timezone",
         "event",
         "calendar",
@@ -283,7 +283,7 @@ export const callCalendarTool = async (
       case "calendars_list":
         answer = listed((await Promise.all(accounts.map((id) => store.calendars(id)))).flat().map(calendarItem))
         break
-      case "status":
+      case "store_status":
         answer = listed(
           (
             await Promise.all(
@@ -295,13 +295,12 @@ export const callCalendarTool = async (
         )
         break
       case "events_list": {
-        const words = typeof args.words === "string" ? args.words.trim().split(/\s+/u) : []
         const limit = (args.limit as number | undefined) ?? 100
         const lists = await Promise.all(
           accounts.map(async (accountId) =>
             eventsAnswer(
               store,
-              await eventsFilter(words, {
+              await eventsFilter(args.query as string | undefined, {
                 store,
                 accountId,
                 zone: (args.timezone as string | undefined) ?? "UTC",

@@ -60,7 +60,7 @@ describe("calendar MCP tools", () => {
   it("without account_id a tool reads every account it serves and names them", async () => {
     const { store } = await setup()
     const listed = body(
-      await callCalendarTool(store, "events_list", { words: "today" }, { accountIds: [1, 2], now: NOW }),
+      await callCalendarTool(store, "events_list", { query: "starts_at:today" }, { accountIds: [1, 2], now: NOW }),
     )
     expect(listed.accounts).toEqual([1, 2])
     expect((listed.items as unknown[]).length).toBe(2)
@@ -71,12 +71,12 @@ describe("calendar MCP tools", () => {
     expect((one.items as { external_id: string }[]).map(({ external_id }) => external_id)).toEqual(["cal-2"])
   })
 
-  it("status answers each account's synced calendars in the shared progress shape", async () => {
+  it("store_status answers each account's synced calendars in the shared progress shape", async () => {
     const { store } = await setup()
     const status = body(
       await callCalendarTool(
         store,
-        "status",
+        "store_status",
         {},
         { accountIds: [1, 2], now: NOW, profileOf: (id) => (id === 1 ? "personal" : "work") },
       ),
@@ -108,7 +108,7 @@ describe("calendar MCP tools", () => {
     }
     expect(await refused("calendars_list", { account_id: 3 }, [1, 2])).toBe("not_found")
     expect(await refused("event_show", { event: String(ids[1]) }, [1])).toBe("not_found")
-    expect(await refused("events_list", { query: "x" }, [1])).toBe("validation_error")
+    expect(await refused("events_list", { query: "today" }, [1])).toBe("validation_error")
     expect(await refused("event_links_review", [], [1])).toBe("validation_error")
   })
 
