@@ -331,7 +331,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       .argument("<task>", "the task's id or key, as tasks list shows it")
       .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`)
       .option(
-        "--priority <label>",
+        "--priority <n>",
         `${PRIORITY_LABELS.join(", ")} or none; 0 (urgent) … 4 (low) still read as before`,
         priorityOf,
       )
