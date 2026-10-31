@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { freeSlots, workingHoursOf } from "./busy.js"
 import { addCalendarCommands } from "./cli/index.js"
 import { repeatRule } from "./recurrence.js"
+import { checkCalendarAnswer } from "./testing/answers.js"
 import { fakeCalendarSource, memoryEventStore } from "./testing/index.js"
 
 const HOUR = 3_600_000
@@ -23,7 +24,11 @@ const setup = async (options: { freeBusy?: boolean } = { freeBusy: true }) => {
   source.setBusy("ana@example.com", [{ from: Date.UTC(2026, 10, 2, 11), to: Date.UTC(2026, 10, 2, 12) }])
   source.setBusy("bo@example.com", { error: "notFound" })
   const written: Record<string, unknown>[] = []
-  const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
+  const root = new Command("gcal")
+    .exitOverride()
+    .configureOutput({ writeErr: () => undefined })
+    .option("--json")
+    .option("--jsonl")
   addCalendarCommands(root, {
     store,
     accountId: 1,
@@ -36,6 +41,7 @@ const setup = async (options: { freeBusy?: boolean } = { freeBusy: true }) => {
   })
   const cli = async (...args: string[]) => {
     await root.parseAsync([...args, "--json"], { from: "user" })
+    checkCalendarAnswer(root, args, written.at(-1))
     return written.at(-1) as Record<string, unknown>
   }
   return { cli, root }

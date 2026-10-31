@@ -8,6 +8,8 @@ export interface FakeCalendarSourceOptions {
   calendars?: CalendarInput[]
   /** Entries per page of `changes()`. */
   pageSize?: number
+  /** Answer `search()`: an entry whose title, description or place holds the query, case aside, in any window. */
+  search?: boolean
 }
 
 /**
@@ -121,6 +123,17 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
             return (occurrences.get(seriesExternalId) ?? [])
               .filter((entry) => inside(entry, window))
               .map((entry) => structuredClone(entry))
+          },
+        }
+      : {}),
+    ...(options.search
+      ? {
+          async search(calendar: StoredCalendar, { query, limit }: { query: string; limit: number }) {
+            const words = query.toLowerCase()
+            const found = [...of(calendar.externalId).values()].filter((entry) =>
+              [entry.title, entry.description, entry.location].some((text) => text?.toLowerCase().includes(words)),
+            )
+            return { entries: found.slice(0, limit).map((entry) => structuredClone(entry)), more: found.length > limit }
           },
         }
       : {}),

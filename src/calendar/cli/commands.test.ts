@@ -3,18 +3,22 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, errorObjectOf } from "@wirecat/cli-base"
+import { describeProgram, flatten } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { commandsCommand } from "../../cli/commands-command.js"
+import { contractEvidence } from "../../cli/contract-evidence.js"
 import { itemOf } from "../../cli/envelope.js"
 import { commandPathKey, commandPermissions, knownPermissionKeys } from "../../cli/permission-keys.js"
 import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
 import { failureContext } from "../../errors/reasons.js"
+import { toolsFromCommands } from "../../mcp/agent.js"
 import { answered } from "../../mcp/tool.js"
 import type { EntryInput } from "../../meetings/index.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { CALENDAR_UNTRUSTED_FIELDS } from "../reads.js"
+import { checkCalendarAnswer } from "../testing/answers.js"
 import { fakeCalendarSource, fakeCalendarWriter } from "../testing/index.js"
 import { addCalendarCommands, type CalendarCommandDeps } from "./index.js"
 
@@ -73,6 +77,9 @@ const setup = async (deps: Partial<CalendarCommandDeps> = {}) => {
     const root = new Command("gcal")
       .exitOverride()
       .configureOutput({ writeErr: () => undefined, ...(out ? { writeOut: out } : {}) })
+      .option("--json")
+      .option("--jsonl")
+      .option("--offline")
     addCalendarCommands(root, {
       store: store.calendar,
       accountId,
@@ -87,7 +94,10 @@ const setup = async (deps: Partial<CalendarCommandDeps> = {}) => {
     return root
   }
   const cli = async (...args: string[]) => {
-    await program().parseAsync(args, { from: "user" })
+    const root = program()
+    const before = written.length
+    await root.parseAsync(args, { from: "user" })
+    if (written.length > before) checkCalendarAnswer(root, args, written.at(-1))
     return written.at(-1) as Record<string, unknown> & { items: Record<string, unknown>[] }
   }
   return { store, accountId, source, cli, program, written }
@@ -301,7 +311,8 @@ describe("calendar commands", () => {
     const { cli } = await setup()
     await cli("sync")
     const [first] = (await cli("events", "list", "today")).items
-    expect((await cli("people", "list", String(first?.id))).items).toHaveLength(3)
+    expect((await cli("people", "list", `event:${first?.id}`)).items).toHaveLength(3)
+    await expect(cli("people", "list", String(first?.id))).rejects.toMatchObject({ code: "validation_error" })
     expect((await cli("people", "list")).items).toEqual([
       expect.objectContaining({ email: "ana@example.com", events: 1 }),
     ])
@@ -384,8 +395,13 @@ describe("calendar commands", () => {
 
   it("sync --embed embeds after the sync; a calendar that fails makes the run partial", async () => {
     const embedded: number[] = []
-    const { cli, source, written } = await setup({ embed: async (max) => embedded.push(max) })
-    expect(await cli("sync", "--embed")).toMatchObject({ embeddings: 1 })
+    const { cli, source, written } = await setup({
+      embed: async (max) => {
+        embedded.push(max)
+        return { model: "example-model", embedded: 2, left: false }
+      },
+    })
+    expect(await cli("sync", "--embed")).toMatchObject({ embeddings: { embedded: 2 } })
     expect(embedded).toEqual([600])
     source.failAfter(0)
     const printed = written.length
@@ -441,6 +457,102 @@ describe("calendar commands", () => {
     expect(refused.stderr.join("")).toContain("sync starts over with --rescan")
   })
 
+  it("search asks the provider with --backend server when the CLI says its source can, and refuses what it cannot do", async () => {
+    const source = fakeCalendarSource({ search: true })
+    source.put("primary", planning(), { ...planning(), externalId: "e9", title: "Old roadmap", status: "cancelled" })
+    const { cli } = await setup({ source, serverSearch: true })
+    await expect(cli("search", "--backend", "server", "roadmap")).rejects.toMatchObject({
+      details: { reason: "search.no-calendars" },
+    })
+    await cli("sync")
+    expect(await cli("search", "--backend", "server", "roadmap")).toEqual({
+      query: "roadmap",
+      by: "server",
+      hits: [
+        {
+          provider: "example-calendar",
+          account: "owner-1",
+          calendar: "primary",
+          external_id: "e1",
+          title: "Example roadmap planning",
+          starts_at: new Date(NOW + 2 * HOUR).toISOString(),
+          ends_at: new Date(NOW + 3 * HOUR).toISOString(),
+          all_day: false,
+          status: "confirmed",
+          location: null,
+          found_by: ["server"],
+        },
+      ],
+      has_more: false,
+      untrusted: ["hits.title", "hits.location"],
+    })
+    for (const [args, reason] of [
+      [["--exact"], "search.server-options"],
+      [["--newest"], "search.server-options"],
+      [["--offline"], "search.offline"],
+    ] as const)
+      await expect(cli("search", "--backend", "server", ...args, "roadmap")).rejects.toMatchObject({
+        details: { reason },
+      })
+    await expect(cli("search", "--backend", "both", "roadmap")).rejects.toMatchObject({
+      details: { reason: "search.one-backend" },
+    })
+    expect((await cli("search", "roadmap")).hits).toEqual([expect.objectContaining({ found_by: ["words"] })])
+  })
+
+  it("search takes no --backend when the CLI's source has no search of its own", async () => {
+    const { cli } = await setup()
+    await expect(cli("search", "--backend", "server", "roadmap")).rejects.toMatchObject({
+      code: "commander.unknownOption",
+    })
+  })
+
+  it("calendars list narrows the provider's whole list by synced, primary and access_role", async () => {
+    const { cli } = await setup()
+    expect((await cli("calendars", "list")).items.map(({ external_id }) => external_id)).toEqual(["primary", "team"])
+    expect((await cli("calendars", "list", "synced:false")).items.map(({ external_id }) => external_id)).toEqual([
+      "team",
+    ])
+    expect(
+      (await cli("calendars", "list", "primary:true", "access_role:owner")).items.map(({ external_id }) => external_id),
+    ).toEqual(["primary"])
+    await expect(cli("calendars", "list", "title:Work")).rejects.toMatchObject({ code: "validation_error" })
+  })
+
+  it("each declare the entity it answers with, and commands info carries its schema", () => {
+    const root = new Command("gcal")
+    addCalendarCommands(root, {
+      store: {} as never,
+      accountId: 1,
+      account,
+      freeBusy: true,
+      serverSearch: true,
+      write: () => undefined,
+      writes: { writer: fakeCalendarWriter(), app: {} as never, settings: () => ({}) as never },
+    })
+    const infos = flatten(describeProgram(root)).filter(({ commands }) => commands.length === 0)
+    expect(infos.filter(({ output }) => output === undefined).map(({ path }) => path.join(" "))).toEqual([])
+    const { schemas } = contractEvidence(root)
+    for (const { output } of infos) expect(schemas).toHaveProperty([output?.entity as string])
+  })
+
+  it("leave --json and --jsonl to the host, so no MCP tool takes json or jsonl (BUG-459)", () => {
+    const root = new Command("gcal")
+    addCalendarCommands(root, {
+      store: {} as never,
+      accountId: 1,
+      account,
+      freeBusy: true,
+      write: () => undefined,
+      writes: { writer: fakeCalendarWriter(), app: {} as never, settings: () => ({}) as never },
+    })
+    const tools = toolsFromCommands(describeProgram(root))
+    expect(tools.length).toBeGreaterThan(10)
+    expect(
+      tools.filter(({ input }) => "json" in input.entries || "jsonl" in input.entries).map(({ command }) => command),
+    ).toEqual([])
+  })
+
   it("prints help and exits 0 for every calendar command", async () => {
     const { program } = await setup()
     const leaves = (command: Command, path: string[] = []): string[][] =>
@@ -458,7 +570,8 @@ describe("calendar commands", () => {
   })
 
   // The vocabulary has no calendars, people, unsync, review or resolve yet, nor the event flags (--calendar,
-  // --series, --attendee, --location, --end-time, --id), and these lists take words, not a query.
+  // --series, --attendee, --location, --end-time, --id), and events list takes words, not a query, until its word
+  // language is decided.
   it("pass the command lint every CLI runs on its tree, apart from list-without-query", async () => {
     const app = { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" }
     const definition = {

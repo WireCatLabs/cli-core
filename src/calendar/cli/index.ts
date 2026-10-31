@@ -2,9 +2,10 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
-import { Argument, type Command, InvalidArgumentError } from "commander"
+import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
+import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
@@ -28,6 +29,7 @@ import {
   reviewsAnswer,
 } from "../reads.js"
 import { REPEAT_HELP } from "../recurrence.js"
+import { serverSearchAnswer } from "../server-search.js"
 import type { CalendarExpander, CalendarSource } from "../source.js"
 import { calendarStatus, syncCalendars } from "../sync.js"
 import type { EventResponse } from "../writer.js"
@@ -42,6 +44,7 @@ import {
   updateEvent,
   type WriteContext,
 } from "../writes.js"
+import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
 
 export interface CalendarCommandDeps {
   store: EventStore
@@ -60,10 +63,15 @@ export interface CalendarCommandDeps {
    * build only once a profile is open.
    */
   freeBusy?: boolean
+  /**
+   * The source answers `search`: `search` takes `--backend server` and asks the provider. A flag, as `freeBusy`, so the
+   * source can stay unbuilt until a profile is open.
+   */
+  serverSearch?: boolean
   /** For a source with `expands: "local"`. */
   expand?: CalendarExpander
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
-  embed?: (max: number) => Promise<unknown>
+  embed?: (max: number) => Promise<{ model: string; embedded: number; left: boolean }>
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
   now?: () => number
   /** The zone `today`, `week` and a bare date are read in; the computer's when absent. */
@@ -76,6 +84,7 @@ const LOCAL_READ: Effects = { remote: "none", local: "read" }
 const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 const FETCH: Effects = { remote: "read", local: "write" }
 const REMOTE_READ: Effects = { remote: "read", local: "none" }
+const LOCAL_OR_REMOTE_READ: Effects = { remote: "read", local: "read" }
 const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 const GROUP: Effects = { remote: "none", local: "none" }
 /** How many pieces one `sync --embed` embeds, as drive's. */
@@ -86,6 +95,7 @@ const EVENT_ITEM_UNTRUSTED = ["title", "description", "location"]
 const ATTENDEE_UNTRUSTED = ["name"]
 const REVIEW_UNTRUSTED = ["candidates.title"]
 const SEARCH_UNTRUSTED = ["hits.title", "hits.location", "hits.excerpt"]
+const SERVER_SEARCH_UNTRUSTED = ["hits.title", "hits.location"]
 
 const eachMarked = <T extends { items: object[] }>(answer: T, untrusted: string[]) => ({
   ...answer,
@@ -105,16 +115,9 @@ const minutes = (text: string) => {
 }
 
 const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDeps): void => {
+  const mounted = new Set(program.commands)
   const now = () => deps.now?.() ?? Date.now()
   const zone = () => timezoneOf(deps.timezone)
-  const output = (command: Command) =>
-    command
-      .option("--json", "one JSON value")
-      .option("--jsonl", "one JSON object per item")
-      .hook("preAction", (cmd) => {
-        const opts = cmd.optsWithGlobals()
-        if (opts.json && opts.jsonl) throw new CliError("validation_error", "choose --json or --jsonl")
-      })
   const print = (value: unknown, command: Command) => {
     const opts = command.optsWithGlobals()
     deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
@@ -143,28 +146,32 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   }
 
   const calendars = annotate(program.command("calendars").description("the account's calendars"), { effects: GROUP })
-  output(
+  withQuery(
     example(
       annotate(calendars.command("list"), { effects: FETCH, offline: false }).description(
         "list the account's calendars from the provider, and which of them sync",
       ),
       "calendars list --json",
+      "calendars list synced:true",
     ),
-  ).action(async (_opts: unknown, command: Command) => {
+    CALENDARS_QUERY,
+  ).action(async (words: string[], _opts: unknown, command: Command) => {
+    const terms = [...queryTerms(words, CALENDARS_QUERY, "calendars list")]
     const listed = await deps.store.saveCalendars(deps.accountId, await source().calendars(), now())
-    print({ items: listed.map(calendarItem), page: 1, limit: listed.length, hasMore: false }, command)
+    const items = listed
+      .map(calendarItem)
+      .filter((item) => terms.every(([field, value]) => String(item[field as keyof typeof item]) === value))
+    print({ items, page: 1, limit: items.length, hasMore: false }, command)
   })
   for (const [name, synced] of [
     ["sync", true],
     ["unsync", false],
   ] as const)
-    output(
-      example(
-        annotate(calendars.command(name), { effects: LOCAL_WRITE })
-          .description(synced ? "sync this calendar from now on" : "stop syncing this calendar; what is stored stays")
-          .argument("<calendar>", "the calendar's id, or the provider's id"),
-        `calendars ${name} 3`,
-      ),
+    example(
+      annotate(calendars.command(name), { effects: LOCAL_WRITE })
+        .description(synced ? "sync this calendar from now on" : "stop syncing this calendar; what is stored stays")
+        .argument("<calendar>", "the calendar's id, or the provider's id"),
+      `calendars ${name} 3`,
     ).action(async (reference: string, _opts: unknown, command: Command) => {
       const calendar = await calendarIn(deps.store, deps.accountId, reference)
       await deps.store.setCalendarSynced(calendar.id, synced, now())
@@ -172,18 +179,16 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     })
 
   if (deps.freeBusy)
-    output(
-      example(
-        annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false })
-          .description(
-            "when calendars and people are taken, asked of the provider and not stored; with --duration-minutes, " +
-              "the free stretches they share",
-          )
-          .argument("[words...]", "today, week, from:<date>, to:<date>, calendar:<id>, person:<email>")
-          .addHelpText("after", BUSY_QUERY_HELP),
-        "calendars busy week person:ana@example.com --json",
-        "calendars busy from:2026-11-02 to:2026-11-06 person:ana@example.com --duration-minutes 30 --hours 10:00-16:00",
-      ),
+    example(
+      annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false })
+        .description(
+          "when calendars and people are taken, asked of the provider and not stored; with --duration-minutes, " +
+            "the free stretches they share",
+        )
+        .argument("[words...]", "today, week, from:<date>, to:<date>, calendar:<id>, person:<email>")
+        .addHelpText("after", BUSY_QUERY_HELP),
+      "calendars busy week person:ana@example.com --json",
+      "calendars busy from:2026-11-02 to:2026-11-06 person:ana@example.com --duration-minutes 30 --hours 10:00-16:00",
     )
       .option("--duration-minutes <minutes>", "find free stretches at least this long, 5–1440", minutes)
       .option(
@@ -208,21 +213,19 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         )
       })
 
-  output(
-    example(
-      annotate(program.command("sync"), {
-        effects: FETCH,
-        offline: false,
-        cooperative: true,
-        partial: true,
-      }).description(
-        "bring the synced calendars up to date: what changed since the last sync, or everything with --rescan; a run " +
-          "stops before its deadline or --max-pages and the next one goes on from there",
-      ),
-      "sync",
-      "sync --rescan --embed",
-      "sync --timeout 2m",
+  example(
+    annotate(program.command("sync"), {
+      effects: FETCH,
+      offline: false,
+      cooperative: true,
+      partial: true,
+    }).description(
+      "bring the synced calendars up to date: what changed since the last sync, or everything with --rescan; a run " +
+        "stops before its deadline or --max-pages and the next one goes on from there",
     ),
+    "sync",
+    "sync --rescan --embed",
+    "sync --timeout 2m",
   )
     .option("--rescan", "list every synced calendar's window again, dropping a round in progress")
     .option(
@@ -303,13 +306,11 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
     })
 
-  output(
-    example(
-      annotate(program.command("status"), { effects: LOCAL_READ }).description(
-        "how far each synced calendar's sync is: entries done, partial or complete, and when it last moved",
-      ),
-      "status --json",
+  example(
+    annotate(program.command("status"), { effects: LOCAL_READ }).description(
+      "how far each synced calendar's sync is: entries done, partial or complete, and when it last moved",
     ),
+    "status --json",
   ).action(async (_opts: unknown, command: Command) => {
     print(
       await calendarStatus(deps.store, deps.accountId, {
@@ -321,15 +322,13 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   })
 
   const events = annotate(program.command("events").description("the account's stored events"), { effects: GROUP })
-  output(
-    example(
-      annotate(events.command("list"), { effects: LOCAL_READ, output: { entity: "event" } })
-        .description("list stored events, earliest first")
-        .argument("[words...]", "today, week, from:<date>, to:<date>, person:<who>, calendar:<id>")
-        .addHelpText("after", EVENTS_QUERY_HELP),
-      "events list week --json",
-      "events list from:2026-11-02 to:2026-11-06 person:ana@example.com",
-    ),
+  example(
+    annotate(events.command("list"), { effects: LOCAL_READ })
+      .description("list stored events, earliest first")
+      .argument("[words...]", "today, week, from:<date>, to:<date>, person:<who>, calendar:<id>")
+      .addHelpText("after", EVENTS_QUERY_HELP),
+    "events list week --json",
+    "events list from:2026-11-02 to:2026-11-06 person:ana@example.com",
   )
     .option("--limit <n>", "events at most, 1–1000", integer, 100)
     .action(async (words: string[], opts: { limit: number }, command: Command) => {
@@ -345,63 +344,105 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         command,
       )
     })
-  output(
-    example(
-      annotate(events.command("show"), { effects: LOCAL_READ })
-        .description("one event: its calendar copies, attendees with their person, Drive files and history")
-        .argument("<event>", "the event's id, or event:<id>"),
-      "events show event:42 --json",
-    ),
+  example(
+    annotate(events.command("show"), { effects: LOCAL_READ })
+      .description("one event: its calendar copies, attendees with their person, Drive files and history")
+      .argument("<event>", "the event's id, or event:<id>"),
+    "events show event:42 --json",
   ).action(async (reference: string, _opts: unknown, command: Command) => {
     const shown = await eventAnswer(await eventOf(deps.store, deps.accountId, eventIdOf(reference)), personOfEmail)
     print({ ...shown, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
   })
 
-  output(
-    example(
-      annotate(program.command("search"), { effects: LOCAL_READ })
-        .description("find stored events by words, and by meaning when its model is downloaded")
-        .argument("<words...>", "what to find in titles, descriptions, places and attendees"),
-      "search roadmap planning --json",
-    ),
+  const search = example(
+    annotate(program.command("search"), { effects: deps.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
+      .description(
+        deps.serverSearch
+          ? "find stored events by words, and by meaning when its model is downloaded; with --backend server, ask " +
+              "the provider instead"
+          : "find stored events by words, and by meaning when its model is downloaded",
+      )
+      .argument("<words...>", "what to find in titles, descriptions, places and attendees"),
+    "search roadmap planning --json",
+    ...(deps.serverSearch ? ["search --backend server quarterly review"] : []),
   )
     .option("--limit <n>", "events per page", integer, 20)
     .option("--cursor <cursor>", "continue from a page's next_offset", (text) => (text === "0" ? 0 : integer(text)), 0)
     .option("--exact", "every word as written, no word stems")
     .option("--newest", "latest start first instead of best first")
-    .action(
-      async (
-        words: string[],
-        opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean },
-        command: Command,
-      ) => {
-        const found = await searchEvents(messages("search"), words.join(" "), {
-          accounts: [deps.account],
-          limit: opts.limit,
-          offset: opts.cursor,
-          timezone: zone(),
-          command: program.name(),
-          ...(opts.exact ? { exact: true } : {}),
-          ...(opts.newest ? { newest: true } : {}),
-        })
-        print({ ...found, untrusted: SEARCH_UNTRUSTED }, command)
-      },
+  if (deps.serverSearch)
+    search.addOption(
+      new Option(
+        "--backend <archive|server|both>",
+        "where to search: archive, the local store, or server, the provider's own search over the synced calendars, " +
+          "earliest first",
+      )
+        .choices(["archive", "server", "both"])
+        .default("archive"),
     )
+  search.action(
+    async (
+      words: string[],
+      opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean; backend?: string },
+      command: Command,
+    ) => {
+      if (opts.backend === "both")
+        throw new CliError(
+          "validation_error",
+          "search --backend both is not offered: the store's search and the provider's rank and page events " +
+            "differently, so one merged list would have no single order or next page; run --backend archive and " +
+            "--backend server",
+          { reason: "search.one-backend" },
+        )
+      if (opts.backend === "server") {
+        if (command.optsWithGlobals<{ offline?: boolean }>().offline)
+          throw new CliError("permission_error", "search --backend server asks the provider; leave out --offline", {
+            reason: "search.offline",
+          })
+        if (opts.exact || opts.cursor || opts.newest)
+          throw new CliError(
+            "validation_error",
+            "search --backend server takes neither --exact, --cursor nor --newest: the provider ranks and pages it",
+            { reason: "search.server-options" },
+          )
+        const found = await serverSearchAnswer(source(), deps.store, {
+          accountId: deps.accountId,
+          account: deps.account,
+          query: words.join(" "),
+          limit: opts.limit,
+        })
+        print({ ...found, untrusted: SERVER_SEARCH_UNTRUSTED }, command)
+        return
+      }
+      const found = await searchEvents(messages("search"), words.join(" "), {
+        accounts: [deps.account],
+        limit: opts.limit,
+        offset: opts.cursor,
+        timezone: zone(),
+        command: program.name(),
+        ...(opts.exact ? { exact: true } : {}),
+        ...(opts.newest ? { newest: true } : {}),
+      })
+      print({ ...found, untrusted: SEARCH_UNTRUSTED }, command)
+    },
+  )
 
-  if (deps.writes) addEventWrites(events, deps.writes, { deps, now, zone, output, print, example })
+  if (deps.writes) addEventWrites(events, deps.writes, { deps, now, zone, print, example })
 
   const people = annotate(program.command("people").description("the people in the account's events"), {
     effects: GROUP,
   })
-  output(
+  withQuery(
     example(
-      annotate(people.command("list"), { effects: LOCAL_READ })
-        .description("one event's attendees, or everyone attending this week's events")
-        .argument("[event]", "the event's id, or event:<id>"),
+      annotate(people.command("list"), { effects: LOCAL_READ }).description(
+        "one event's attendees, or everyone attending this week's events",
+      ),
       "people list --json",
       "people list event:42",
     ),
-  ).action(async (reference: string | undefined, _opts: unknown, command: Command) => {
+    PEOPLE_QUERY,
+  ).action(async (words: string[], _opts: unknown, command: Command) => {
+    const reference = queryTerms(words, PEOPLE_QUERY, "people list").get("event")
     const event = reference === undefined ? undefined : eventIdOf(reference)
     const filter =
       event === undefined
@@ -414,14 +455,12 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     })
     print(eachMarked(people, ATTENDEE_UNTRUSTED), command)
   })
-  output(
-    example(
-      annotate(people.command("link"), { effects: LOCAL_WRITE })
-        .description("join an attendee to a person the owner knows elsewhere")
-        .argument("<person>", "an attendee's address as email:<address>, or a person:<id>")
-        .argument("<other>", "the same person in another tool, as <provider>:<person>, or me"),
-      "people link email:ana@example.com telegram:12345",
-    ),
+  example(
+    annotate(people.command("link"), { effects: LOCAL_WRITE })
+      .description("join an attendee to a person the owner knows elsewhere")
+      .argument("<person>", "an attendee's address as email:<address>, or a person:<id>")
+      .argument("<other>", "the same person in another tool, as <provider>:<person>, or me"),
+    "people link email:ana@example.com telegram:12345",
   ).action(async (person: string, other: string, _opts: unknown, command: Command) => {
     const linked = await linkPeople(messages("people link"), deps.account, person, other)
     print(
@@ -437,45 +476,40 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   const links = annotate(program.command("links").description("calendar copies the rules could not join alone"), {
     effects: GROUP,
   })
-  output(
-    example(
-      annotate(links.command("review"), { effects: LOCAL_READ }).description(
-        "copies that fit two or more events equally well, waiting for the owner's choice",
-      ),
-      "links review --json",
+  example(
+    annotate(links.command("review"), { effects: LOCAL_READ }).description(
+      "copies that fit two or more events equally well, waiting for the owner's choice",
     ),
+    "links review --json",
   ).action(async (_opts: unknown, command: Command) => {
     print(eachMarked(await reviewsAnswer(deps.store), REVIEW_UNTRUSTED), command)
   })
-  output(
-    example(
-      annotate(links.command("resolve"), { effects: LOCAL_WRITE })
-        .description("join a copy to the event you choose, or keep it apart")
-        .argument("<review>", "the review's id from links review")
-        .argument("<choice>", "one of its candidates, as event:<id>, or apart"),
-      "links resolve 7 event:42",
-    ),
+  example(
+    annotate(links.command("resolve"), { effects: LOCAL_WRITE })
+      .description("join a copy to the event you choose, or keep it apart")
+      .argument("<review>", "the review's id from links review")
+      .argument("<choice>", "one of its candidates, as event:<id>, or apart"),
+    "links resolve 7 event:42",
   ).action(async (review: string, choice: string, _opts: unknown, command: Command) => {
     print(await resolveAnswer(deps.store, deps.accountId, review, choice, now()), command)
   })
+
+  const leaves = (command: Command): Command[] =>
+    command.commands.length ? command.commands.flatMap(leaves) : [command]
+  declareCalendarAnswers(program, program.commands.filter((one) => !mounted.has(one)).flatMap(leaves))
 }
 
 interface WriteHelpers {
   deps: CalendarCommandDeps
   now: () => number
   zone: () => string
-  output: (command: Command) => Command
   print: (value: unknown, command: Command) => void
   example: (command: Command, ...lines: string[]) => Command
 }
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
 
-const addEventWrites = (
-  events: Command,
-  writes: CalendarWrites,
-  { deps, now, zone, output, print, example }: WriteHelpers,
-) => {
+const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zone, print, example }: WriteHelpers) => {
   const context = (command: Command): WriteContext => ({
     store: deps.store,
     accountId: deps.accountId,
@@ -538,19 +572,17 @@ const addEventWrites = (
       .argument("<event>", "the event's id, or event:<id>")
       .option("--calendar <id>", "the calendar, when the event is on more than one of the account's")
 
-  output(
-    example(
-      notify(
-        fields(write("create"), false)
-          .description("add an event to a calendar; with --repeat, one that repeats")
-          .argument("<calendar>", "the calendar's id, or the provider's id"),
-      ).option("--id <id>", "the id a create that ended in outcome_unknown named: a retry finds that event"),
-      "events create 3 --title 'Example planning' --start-time 2026-11-02T10:00 --end-time 2026-11-02T11:00",
-      "events create 3 --title 'Example review' --start-date 2026-11-03 --end-date 2026-11-03 " +
-        "--attendee ana@example.com --no-notify",
-      "events create 3 --title 'Example standup' --start-time 2026-11-02T09:30 --end-time 2026-11-02T09:45 " +
-        "--repeat 'FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12'",
-    ),
+  example(
+    notify(
+      fields(write("create"), false)
+        .description("add an event to a calendar; with --repeat, one that repeats")
+        .argument("<calendar>", "the calendar's id, or the provider's id"),
+    ).option("--id <id>", "the id a create that ended in outcome_unknown named: a retry finds that event"),
+    "events create 3 --title 'Example planning' --start-time 2026-11-02T10:00 --end-time 2026-11-02T11:00",
+    "events create 3 --title 'Example review' --start-date 2026-11-03 --end-date 2026-11-03 " +
+      "--attendee ana@example.com --no-notify",
+    "events create 3 --title 'Example standup' --start-time 2026-11-02T09:30 --end-time 2026-11-02T09:45 " +
+      "--repeat 'FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12'",
   ).action(async (calendar: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
     const { notify: choice, id, ...rest } = opts
     printWritten(
@@ -561,26 +593,24 @@ const addEventWrites = (
       command,
     )
   })
-  output(
-    example(
-      notify(
-        target(fields(write("update"), true))
-          .description(
-            "change an event; with --series every occurrence of the repeating event, with --following this " +
-              "occurrence and every later one; new times or dates switch it between timed and all-day",
-          )
-          .option("--series", "change the whole repeating event, not only this occurrence")
-          .option(
-            "--following",
-            "change this occurrence and every later one: the repeating event ends before it and a new one starts " +
-              "with the change",
-          )
-          .option("--id <id>", "with --following, the id an outcome_unknown named: a retry finds that new series"),
-      ),
-      "events update event:42 --start-time 2026-11-02T14:00 --end-time 2026-11-02T15:00 --notify",
-      "events update event:42 --series --repeat 'FREQ=WEEKLY;BYDAY=TU;UNTIL=20261231T230000Z' --no-notify",
-      "events update event:42 --following --start-time 2026-11-09T10:00 --end-time 2026-11-09T10:30 --no-notify",
+  example(
+    notify(
+      target(fields(write("update"), true))
+        .description(
+          "change an event; with --series every occurrence of the repeating event, with --following this " +
+            "occurrence and every later one; new times or dates switch it between timed and all-day",
+        )
+        .option("--series", "change the whole repeating event, not only this occurrence")
+        .option(
+          "--following",
+          "change this occurrence and every later one: the repeating event ends before it and a new one starts " +
+            "with the change",
+        )
+        .option("--id <id>", "with --following, the id an outcome_unknown named: a retry finds that new series"),
     ),
+    "events update event:42 --start-time 2026-11-02T14:00 --end-time 2026-11-02T15:00 --notify",
+    "events update event:42 --series --repeat 'FREQ=WEEKLY;BYDAY=TU;UNTIL=20261231T230000Z' --no-notify",
+    "events update event:42 --following --start-time 2026-11-09T10:00 --end-time 2026-11-09T10:30 --no-notify",
   ).action(async (reference: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
     const { calendar: _calendar, series: _series, following: _following, notify: _notify, id, ...rest } = opts
     printWritten(
@@ -591,34 +621,30 @@ const addEventWrites = (
       command,
     )
   })
-  output(
-    example(
-      notify(
-        target(write("delete"))
-          .description(
-            "delete an event; a whole repeating event, or every later occurrence, needs events.delete.series " +
-              "allowed first",
-          )
-          .option("--series", "delete the whole repeating event, not only this occurrence")
-          .option("--following", "delete this occurrence and every later one: the repeating event ends before it"),
-      ),
-      "events delete event:42 --no-notify",
-      "events delete event:42 --following --no-notify",
+  example(
+    notify(
+      target(write("delete"))
+        .description(
+          "delete an event; a whole repeating event, or every later occurrence, needs events.delete.series " +
+            "allowed first",
+        )
+        .option("--series", "delete the whole repeating event, not only this occurrence")
+        .option("--following", "delete this occurrence and every later one: the repeating event ends before it"),
     ),
+    "events delete event:42 --no-notify",
+    "events delete event:42 --following --no-notify",
   ).action(async (reference: string, opts: Choices, command: Command) => {
     printWritten(await deleteEvent(context(command), reference, choicesOf(opts)), command)
   })
   if (writes.writer.move)
-    output(
-      example(
-        notify(
-          target(write("move"))
-            .description("move an event, with its id, to another calendar of the account; a repeating one moves whole")
-            .requiredOption("--to-calendar <id>", "the calendar to move it to: its id, or the provider's id")
-            .option("--series", "move the whole repeating event an occurrence belongs to"),
-        ),
-        "events move event:42 --to-calendar 4 --no-notify",
+    example(
+      notify(
+        target(write("move"))
+          .description("move an event, with its id, to another calendar of the account; a repeating one moves whole")
+          .requiredOption("--to-calendar <id>", "the calendar to move it to: its id, or the provider's id")
+          .option("--series", "move the whole repeating event an occurrence belongs to"),
       ),
+      "events move event:42 --to-calendar 4 --no-notify",
     ).action(async (reference: string, opts: Choices & { toCalendar: string }, command: Command) => {
       const { series, calendar, notify } = opts
       printWritten(
@@ -626,15 +652,13 @@ const addEventWrites = (
         command,
       )
     })
-  output(
-    example(
-      notify(
-        target(write("respond"))
-          .description("answer an invitation; the organiser is told only with --notify")
-          .addArgument(new Argument("<response>", "the answer").choices(EVENT_RESPONSES)),
-      ),
-      "events respond event:42 accepted --notify",
+  example(
+    notify(
+      target(write("respond"))
+        .description("answer an invitation; the organiser is told only with --notify")
+        .addArgument(new Argument("<response>", "the answer").choices(EVENT_RESPONSES)),
     ),
+    "events respond event:42 accepted --notify",
   ).action(async (reference: string, response: EventResponse, opts: Choices, command: Command) => {
     printWritten(await respondToEvent(context(command), reference, response, choicesOf(opts)), command)
   })

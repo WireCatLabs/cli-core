@@ -13,6 +13,7 @@ import type { GuardSettings } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { CALENDAR_UNTRUSTED_FIELDS } from "../reads.js"
+import { checkCalendarAnswer } from "../testing/answers.js"
 import { fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
 import { CALENDAR_WRITE_KEYS } from "../writer.js"
 import { type CalendarWrites, createEvent, newEventId, updateEvent } from "../writes.js"
@@ -103,7 +104,7 @@ const setup = async (
   const written: Record<string, unknown>[] = []
   const program = () => {
     const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
-    root.option("--yes").option("--dry-run")
+    root.option("--yes").option("--dry-run").option("--json").option("--jsonl")
     addCalendarCommands(root, {
       store,
       accountId: 1,
@@ -116,7 +117,10 @@ const setup = async (
     return root
   }
   const parse = async (args: string[]) => {
-    await program().parseAsync(args, { from: "user" })
+    const root = program()
+    const before = written.length
+    await root.parseAsync(args, { from: "user" })
+    if (written.length > before) checkCalendarAnswer(root, args, written.at(-1))
     return written.at(-1) as Record<string, unknown>
   }
   const cli = (...args: string[]) => parse([...args, "--json"])

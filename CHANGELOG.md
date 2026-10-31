@@ -7,6 +7,45 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A calendar source can offer its provider's own search, and the shared `search` uses it.** `CalendarSource.search(calendar,
+  { query, limit })` is optional and answers `{ entries, more }` (new type `SearchPage`). With `serverSearch: true` in
+  `CalendarCommandDeps` (a flag, as `freeBusy`, so the source can stay unbuilt until a profile is open), `search` takes
+  `--backend <archive|server|both>`: `archive`, the default, is the stored search as before; `server` asks the provider
+  over each synced calendar and answers `{ query, by: "server", hits, has_more, untrusted }`, earliest first, cancelled
+  events left out, each hit with `provider`, `account`, `calendar`, `external_id`, `title`, `starts_at`, `ends_at`,
+  `all_day`, `status`, `location`, `url` when there is one, and `found_by: ["server"]`; `both` is refused. New reasons:
+  `search.offline`, `search.no-calendars`, `search.server-options`, `search.one-backend`. `fakeCalendarSource({ search:
+  true })` answers it in tests. A CLI that replaced the shared `search` to reach its provider can drop that
+  ([WC-ARCH-6](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-6--replace-a-use-case-not-a-command)).
+- **Every shared calendar command declares the entity it answers with, with its schema**
+  ([WC-CMD-19](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-19--declare-the-entity-a-command-answers-with)),
+  so `commands --json` names it, `commands info --json` exports it and `--fields` can project it: `calendar`
+  (`calendars list`, `sync`, `unsync`), `calendar_busy`, `calendar_sync`, `calendar_sync_progress` (`status`), `event`
+  (`events list`, as before), `calendar_event` (`events show`), `calendar_event_write` (every `events` write),
+  `calendar_search_hit` (a stored or a server hit), `calendar_attendee` (`people list`), `calendar_linked_person`
+  (`people link`), `calendar_link_review` and `calendar_link_resolution`. Each describes the item a host prints, keys
+  in snake_case. The shared `event` entity takes the optional `change`, `changed_at`, `was` and `overlaps` that
+  `events list changed:` and `overlapping` add.
+- **`calendars list` takes a query over the `calendar` entity**: `synced:`, `primary:` and `access_role:` narrow the
+  whole list the provider answered, as `[query...]` after the options
+  ([WC-CMD-20](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-20--give-a-list-one-query-over-its-entitys-fields-as-its-last-argument)).
+  `events list` keeps its words for now.
+
+### Changed — may break callers
+
+- **The shared calendar commands no longer add their own `--json` and `--jsonl`.** They read the host program's global
+  flags, as every other command does ([WC-CMD-14](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-14--keep-the-shared-global-flags-at-their-meaning)).
+  The per-command copies showed up in `commands --json` and as `json` and `jsonl` inputs of every calendar MCP tool,
+  and an agent that sent `jsonl: true` was refused with "choose --json or --jsonl", because the MCP runner always adds
+  `--json`. A host that mounts `addCalendarCommands` on a program without global `--json`/`--jsonl` must define them.
+- **`people list` takes `[query...]` instead of `[event]`**: one event's attendees are `people list event:42`, and a
+  bare `people list 42` is now refused as a word with no field. Its MCP tool's input is `query` (`"event:42"`), no
+  longer `event` (WC-CMD-20).
+- **`CalendarCommandDeps.embed` returns `{ model, embedded, left }`**, which `embedEvents` already answers, so
+  `calendar_sync` can describe `embeddings`. It was `Promise<unknown>`.
+
 ## 0.496.0 — 31.10.2026
 
 ### Changed — may break callers
