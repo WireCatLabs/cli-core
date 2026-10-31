@@ -39,6 +39,8 @@ shape of this file.
   `next-check` (a follow-up time used to leave no event). The event id only grows, so it orders changes.
 - **`priority:` and `agent:` query fields** on the board: `priority:high`, `priority:none`, `priority:[medium TO
   critical]`, `priority:[0.6 TO 1]`; `agent:hermes`, `agent:none`.
+- **The `task` entity** may carry `priority_label`, `agent`, `revision`, `assignments`, `ready` and `blocked_by`, as a
+  project task list gives them.
 - **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
 
 ### Changed — may break callers
