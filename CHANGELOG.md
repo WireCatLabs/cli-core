@@ -11,6 +11,14 @@ shape of this file.
 
 ### Added
 
+- **`appDoctorCommand` takes `--online`, and a messenger's and an app's `doctor` now say one thing.** Both use the
+  summary "the state this installation is in, without connecting unless --online" and the option text "also connect
+  once and read the account; sends nothing" (one constant, `doctor-text.ts`). Without the flag the answer is as before
+  and nothing is called. With it, `online` joins the answer: `{ ok, duration_ms, version: { current, latest, newer } }`,
+  plus the fields of the new `AppDoctorOptions.online(env)` hook, where a CLI checks its own service (a login, a folder
+  read); a throw there is `ok: false` with `error_code` and `error`, never a failed command. `version` comes from npm
+  (the `latestVersion` that `upgrade` uses) when the CLI passes the new `AppDoctorOptions.packageName`; without it that
+  check is left out. The command's effects are now `REMOTE_READ`, as the messenger's.
 - **`projects evidence --sync-first` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
   that mounts it reads a project's evidence from its profile's stored messages; `--sync-first` (off by default, not on
   MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--sync-time`

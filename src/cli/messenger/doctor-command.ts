@@ -11,6 +11,7 @@ import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
+import { DOCTOR_ONLINE_OPTION, DOCTOR_SUMMARY } from "../doctor-text.js"
 import { destroysNothing, LOCAL_WRITE, NO_EFFECTS, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { unknownPermissionIssues } from "../permission-keys.js"
@@ -30,8 +31,8 @@ import { storeSummary } from "./store-maintenance-command.js"
  */
 export const doctorCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("doctor"), { effects: REMOTE_READ })
-    .description("the state this installation is in, without connecting unless --online")
-    .option("--online", "also connect once and read the account; sends nothing")
+    .description(DOCTOR_SUMMARY)
+    .option("--online", DOCTOR_ONLINE_OPTION)
     .action(async function (this: Command) {
       const { online } = this.opts<{ online?: boolean }>()
       const { report, renderer, fixes = [] } = await diagnose(this, messenger)
