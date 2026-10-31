@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.495.0 — 31.10.2026
+
 ### Changed — may break callers
 
 - **`gatherProjectEvidence` says what the store holds of each linked chat, and which ones the run never reached.** A new
