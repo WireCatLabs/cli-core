@@ -13,6 +13,11 @@ shape of this file.
   write lock past its 5 s busy timeout, the sync used to fail with `database is locked`; it now waits 2 s, 4 s, ... (at
   most 5 times, each a request of the budget) and reads the round again. When the budget has no room the run ends as
   `partial`. `options.wait` lets a test skip the pause.
+- **A bot token, a bot's named secret or an AI provider's key the owner sets again goes back to the keyring.** After
+  one keyring failure such a secret stayed in the private file for good, as cli-base 0.68.0 keeps a plain write where
+  the secret is. `BotTokenStore.write`, `writeSecret` and `embeddingKeys().write` now write with `{ signIn: true }`:
+  the keyring is tried and, once it takes the secret, the file copy is removed (WC-SECR-4). `writeKeyring` was
+  keyring-only already; the CAS key is only read here.
 
 ## 0.507.0 — 31.10.2026
 
