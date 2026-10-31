@@ -83,8 +83,8 @@ interface Options {
   catchUp: boolean
   beforeN: number
   afterN: number
-  fetch?: boolean
-  fetchTime: string
+  syncFirst?: boolean
+  syncTime: string
 }
 
 /** Off MCP: a tool call ends at about a minute, too soon for a sync, which would fail the whole answer. */
@@ -100,8 +100,8 @@ export const projectsCommand = (messenger: Messenger): Command => {
   projects.addCommand(
     annotate(new Command("evidence"), {
       output: { entity: "project_evidence" },
-      examples: [`${app} personal projects evidence "Harbour" --since-time 30d --fetch`],
-      // Declared as a fetch for --fetch; without it nothing leaves this machine, and a fetch is never a write elsewhere.
+      examples: [`${app} personal projects evidence "Harbour" --since-time 30d --sync-first`],
+      // Declared as a fetch for --sync-first; without it nothing leaves this machine, and a fetch is never a write elsewhere.
       effects: FETCH,
       cooperative: true,
       partial: true,
@@ -111,7 +111,7 @@ export const projectsCommand = (messenger: Messenger): Command => {
         "cited references about a project in this profile's stored messages. The project's name, key, each alias and " +
           "each --alias, --context-query and --contact name is its own search; their hits are joined. Every message of " +
           "a chat confirmed as the project's is read too, and so is what a confirmed person member wrote. Reads what the " +
-          "store holds; with --fetch it first syncs the project's linked chats the store does not hold for the window",
+          "store holds; with --sync-first it first syncs the project's linked chats the store does not hold for the window",
       )
       .argument("<project>", "an existing project's id, key, exact name or alias, or a new project's name")
       .option("--alias <name>", "another name of the project, searched on its own; repeat for more", collect, [])
@@ -127,15 +127,17 @@ export const projectsCommand = (messenger: Messenger): Command => {
       .option("--no-catch-up", "read the search index as it is, without indexing new text first")
       .addOption(
         cliOnly(
-          "--fetch",
+          "--sync-first",
           "first sync the linked chats this account does not hold back to --since-time; off by default",
         ),
       )
-      .addOption(cliOnly("--fetch-time <duration>", "time for all of --fetch's syncs together; 3m if not given", "3m"))
+      .addOption(
+        cliOnly("--sync-time <duration>", "time for all of --sync-first's syncs together; 3m if not given", "3m"),
+      )
       .action(async function (this: Command, project: string) {
         const options = this.opts<Options>()
         const context = messengerContext(this, messenger)
-        const maxFetchMs = parseDuration(options.fetchTime, "--fetch-time")
+        const maxFetchMs = parseDuration(options.syncTime, "--sync-time")
         const gather = (store: MessageStore, account: AccountKey, fetcher?: ProjectChatFetcher) =>
           sourcesOf(store, account).then((sources) =>
             gatherStoredProject(store, {
@@ -155,7 +157,7 @@ export const projectsCommand = (messenger: Messenger): Command => {
               ...(fetcher ? { fetcher, maxFetchMs, onFetchProgress: progressNote(context.renderer.note) } : {}),
             }),
           )
-        const fetcher = options.fetch
+        const fetcher = options.syncFirst
           ? archiveFetcher((work) => context.withServices(work, { name: "projects evidence fetch" }), messenger)
           : undefined
         const found = await context.withStore((store, account) => gather(store, account, fetcher))
@@ -164,7 +166,7 @@ export const projectsCommand = (messenger: Messenger): Command => {
           projectEvidenceText(found, {
             sync: (one, since) =>
               one.provider === messenger.provider
-                ? lineOf(this, `projects evidence ${quote(project)} --since-time ${since} --fetch`)
+                ? lineOf(this, `projects evidence ${quote(project)} --since-time ${since} --sync-first`)
                 : null,
             showDocument: "the notes app that imported it",
           }),

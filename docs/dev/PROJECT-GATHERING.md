@@ -74,7 +74,7 @@ const result = await gatherProjectEvidence(
 - **Stored project.** `gatherStoredProject(store, input)` is the whole `projects evidence` over a store: the
   project's name, key and aliases, confirmed person members and confirmed linked chats, in the sources the host
   resolved; `projectsCommand(messenger)` from `@wirecat/cli-core/cli` mounts it as `projects evidence` in a
-  messenger CLI, with `--fetch` syncing through the profile's own connection.
+  messenger CLI, with `--sync-first` syncing through the profile's own connection.
 
 - **Index.** New mail and imported documents wait in a queue before the word index holds them, and the
   context reader reads only the index. With `index: "update"` (the default) the service first runs the host's

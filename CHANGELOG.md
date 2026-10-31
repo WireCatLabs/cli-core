@@ -9,11 +9,11 @@ shape of this file.
 
 ### Added
 
-- **`projects evidence --fetch` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
-  that mounts it reads a project's evidence from its profile's stored messages; `--fetch` (off by default, not on
-  MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--fetch-time`
+- **`projects evidence --sync-first` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
+  that mounts it reads a project's evidence from its profile's stored messages; `--sync-first` (off by default, not on
+  MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--sync-time`
   (3 minutes), one chat at a time. A chat the time cut stays partial with its `missing` and `next`. The command is
-  declared a fetch (`remote: read`, `local: write`) because of `--fetch`; cli-base fixes effects per command.
+  declared a fetch (`remote: read`, `local: write`) because of `--sync-first`; cli-base fixes effects per command.
 - **`gatherStoredProject`** (services) and **`projectAnswerParts`, `projectEvidenceText`, `projectWindowOf`,
   `projectCutoffTime`** (cli): memo's `projects evidence` over a store, moved here so memo and the messenger CLIs
   share it. The host resolves the sources and names its own sync command in the text.

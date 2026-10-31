@@ -77,13 +77,13 @@ it("reads only the store and names the fetch for a linked chat it does not hold"
   expect(code).toBe(0)
   expect(asked).toEqual([])
   expect(stdout).toContain(
-    "chat:chat/500/7: never fetched — sync it: chat default projects evidence Harbour --since-time 2025-11-30 --fetch",
+    "chat:chat/500/7: never fetched — sync it: chat default projects evidence Harbour --since-time 2025-11-30 --sync-first",
   )
 })
 
-it("with --fetch syncs the linked chat back to the window first, then reads it as held", async () => {
+it("with --sync-first syncs the linked chat back to the window first, then reads it as held", async () => {
   const { call, asked } = await setUp()
-  const { code, stdout, stderr } = await call("projects", "evidence", "Harbour", ...WINDOW, "--fetch", "--json")
+  const { code, stdout, stderr } = await call("projects", "evidence", "Harbour", ...WINDOW, "--sync-first", "--json")
   expect(code).toBe(0)
   expect(asked.length).toBeGreaterThan(0)
   const body = JSON.parse(stdout)
