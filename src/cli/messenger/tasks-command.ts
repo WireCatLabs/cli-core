@@ -58,6 +58,8 @@ const card = (task: TaskCard) =>
   [
     `${task.key}  ${task.status}  ${task.type}  ${task.category ?? "—"}  ${task.title}`,
     `due ${when(task.dueAt)}  next check ${when(task.nextCheckAt)}  source ${task.source ?? "—"}`,
+    ...(task.priorityLabel === null ? [] : [`priority ${task.priorityLabel}`]),
+    ...(task.agent === null ? [] : [`agent ${task.agent}`]),
     ...(task.claimedBy === null ? [] : [`claimed by ${task.claimedBy} until ${when(task.claimedUntil)}`]),
     ...task.assignments.filter((one) => one.role === "assignee").map((one) => `assignee ${one.to}`),
     ...(task.closeSuggestion === null ? [] : [suggestionLine(task.closeSuggestion)]),
