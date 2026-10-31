@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.501.0 — 31.10.2026
+
 ### Added
 
 - **Search answers say how many match in all: `page.total`.** `search notes` and `search messages` add
