@@ -71,16 +71,49 @@ describe.each(stores)("events list on the %s store", (_name, open) => {
     ["UTC", ["Nov 2", "Nov 2 20:00Z"]],
     ["America/Los_Angeles", ["Nov 2", "Nov 2 20:00Z"]],
     ["Asia/Tokyo", ["Nov 2"]],
-  ])("from:2026-11-02 to:2026-11-02 in %s holds only all-day events dated that day", async (zone, titles) => {
+  ])("starts_at:2026-11-02 in %s holds only the events that start that day there", async (zone, titles) => {
     const { store, accountId } = await seeded(open, [
       madridAllDay("2026-11-01", "2026-11-02", "Nov 1"),
       madridAllDay("2026-11-02", "2026-11-03", "Nov 2"),
       madridAllDay("2026-11-03", "2026-11-04", "Nov 3"),
       timed("2026-11-02T20:00:00Z", "Nov 2 20:00Z"),
     ])
-    const filter = await eventsFilter(["from:2026-11-02", "to:2026-11-02"], { store, accountId, zone, now: 0 })
+    const filter = await eventsFilter("starts_at:2026-11-02", { store, accountId, zone, now: 0 })
     const answer = await eventsAnswer(store, filter)
     expect(answer.items.map(({ title }) => title)).toEqual(titles)
+  })
+
+  it("starts_at>= keeps the event that starts exactly then; ends_at>= leaves out the one that ends exactly then", async () => {
+    const { store, accountId } = await seeded(open, [
+      timed("2026-11-02T09:00:00Z", "at nine"),
+      timed("2026-11-02T08:59:59.999Z", "just before"),
+      timed("2026-11-02T08:00:00Z", "ends at nine"),
+      madridAllDay("2026-11-02", "2026-11-03", "Nov 2"),
+      madridAllDay("2026-11-01", "2026-11-02", "Nov 1"),
+    ])
+    const titles = async (query: string, zone = "UTC") =>
+      (await eventsAnswer(store, await eventsFilter(query, { store, accountId, zone, now: 0 }))).items
+        .map(({ title }) => title)
+        .sort()
+    expect(await titles(`starts_at>="2026-11-02T09:00:00Z"`)).toEqual(["at nine"])
+    expect(await titles("starts_at>=2026-11-02", "Europe/Madrid")).toEqual(
+      ["Nov 2", "at nine", "ends at nine", "just before"].sort(),
+    )
+    expect(await titles("starts_at:[2026-11-01 TO 2026-11-02}", "Europe/Madrid")).toEqual(["Nov 1"])
+    expect(await titles(`ends_at>="2026-11-02T09:00:00Z"`)).toEqual(["Nov 2", "at nine", "just before"].sort())
+  })
+
+  it("refuses a range ends_at and changed_at cannot answer, and a word that is not a field", async () => {
+    const { store, accountId } = await seeded(open, [])
+    const refused = (query: string) =>
+      eventsFilter(query, { store, accountId, zone: "UTC", now: 0 }).then(
+        () => "answered",
+        (error: { details?: { reason?: string } }) => error.details?.reason,
+      )
+    expect(await refused("ends_at<2026-11-02")).toBe("query.unsupported-operator")
+    expect(await refused("changed_at:[2026-10-01 TO 2026-10-02]")).toBe("query.unsupported-operator")
+    expect(await refused("week")).toMatch(/^query\./u)
+    expect(await refused("starts_at>=2026-11-02 starts_at<2026-11-07")).toBe("query.unsupported-placement")
   })
 
   it("has_more is true only while another event follows the page", async () => {
@@ -89,7 +122,7 @@ describe.each(stores)("events list on the %s store", (_name, open) => {
       timed("2026-11-02T09:00:00Z", "b"),
       timed("2026-11-02T10:00:00Z", "c"),
     ])
-    const filter = await eventsFilter(["from:2026-11-01"], { store, accountId, zone: "UTC", now: 0 })
+    const filter = await eventsFilter("ends_at>=2026-11-01", { store, accountId, zone: "UTC", now: 0 })
     const cut = await eventsAnswer(store, filter && { ...filter, limit: 2 })
     expect(cut).toMatchObject({ limit: 2, hasMore: true })
     expect(cut.items.map(({ title }) => title)).toEqual(["a", "b"])

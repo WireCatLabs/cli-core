@@ -1,16 +1,17 @@
 import { CliError } from "@wirecat/cli-base"
-import { dayBoundary, zonedMoment } from "@wirecat/cli-base/query"
+import {
+  dayBoundary,
+  type Predicate,
+  type QueryRegistry,
+  queryError,
+  queryFieldsOf,
+  zonedMoment,
+} from "@wirecat/cli-base/query"
+import { LIST_QUERY_GUIDE, listQuery, nativeTermLists, type QueryWords, typedQuery } from "../cli/list-query.js"
 import type { EventStore, StoredCalendar } from "../meetings/index.js"
-import { calendarIn, plusDays } from "./reads.js"
+import { calendarBusy } from "./cli/answers.js"
+import { calendarIn, plusDays, timeWindow } from "./reads.js"
 import type { BusyTimes, CalendarSource, SyncWindow } from "./source.js"
-
-export const BUSY_QUERY_HELP = `
-Words, any order:
-  today | week            today, or today and the next six days, in your time zone
-  from:<date> to:<date>   from the start of one day through the end of another (or a time with a zone)
-  calendar:<id>           one of the account's calendars, by its id or the provider's id; repeat for more
-  person:<email>          someone else, by email address; repeat for more
-Without a time word: this week. Without calendar:, every calendar that syncs.`
 
 /** Google answers for 50 calendars at most (`calendarExpansionMax`, reference/freebusy/query). */
 const MOST = 50
@@ -29,37 +30,78 @@ const localDate = (at: number, zone: string) =>
 
 const span = (text: string) => ({ start: 0, end: text.length })
 
+const BUSY = "calendars busy"
+
+const bound = (field: string, side: "lower" | "upper", example: string) => (node: Predicate) => {
+  const open = node.operator === "range" && (side === "lower" ? node.upper === "*" : node.value === "*")
+  if (!open)
+    queryError(
+      "query.unsupported-operator",
+      node.span,
+      `${field} takes only ${side === "lower" ? "the window's start" : "the window's end"}, such as ${example}`,
+      { command: BUSY, guide: LIST_QUERY_GUIDE },
+    )
+}
+
+/**
+ * `calendars busy`'s query: the window by the answer's own `start` and `end`, and whom to ask. `calendar` and
+ * `person` repeat, and every one named is asked: the free stretches are those they all share.
+ */
+export const BUSY_QUERY: QueryRegistry = {
+  entity: "calendar_busy",
+  backend: "native",
+  fields: queryFieldsOf(calendarBusy, {
+    native: ["start", "end", "calendar", "person"],
+    relations: {
+      calendar: {
+        type: "kw",
+        example: "calendar:3",
+        relation: "one of the account's calendars, by its id or the provider's id; repeat for more",
+      },
+      person: { type: "kw", example: "person:ana@example.com", relation: "someone else, by address; repeat for more" },
+    },
+    examples: { start: "start>=2026-11-02", end: "end<=2026-11-06" },
+    validate: {
+      start: bound("start", "lower", "start>=2026-11-02"),
+      end: bound("end", "upper", "end<=2026-11-06"),
+    },
+  }).map((field) =>
+    field.native
+      ? { ...field, operators: field.type === "time" ? (["range"] as const) : (["term", "phrase"] as const) }
+      : field,
+  ),
+}
+
+export const BUSY_QUERY_NOTE =
+  "\nWithout start: from the start of today, in your time zone. Without end: seven days after the start. " +
+  "Without calendar: every calendar that syncs."
+
 export const busyQuery = async (
-  words: readonly string[],
+  query: QueryWords,
   context: { store: EventStore; accountId: number; zone: string; now: number },
 ): Promise<BusyQuery> => {
-  const today = localDate(context.now, context.zone)
-  const day = (date: string) => dayBoundary(date, context.zone, false, span(date))
+  const { zone, now } = context
+  const today = localDate(now, zone)
   let from: number | undefined
   let to: number | undefined
   const calendars: StoredCalendar[] = []
   const people = new Set<string>()
-  for (const word of words) {
-    const [, field, value = ""] = /^([a-z]+):(.+)$/u.exec(word) ?? []
-    if (word === "today" || word === "week") {
-      from = day(today)
-      to = day(plusDays(today, word === "today" ? 1 : 7))
-    } else if (field === "from") from = zonedMoment(value, context.zone, span(value))
-    else if (field === "to") to = zonedMoment(value, context.zone, span(value), { end: true }) + 1
-    else if (field === "calendar") {
-      const calendar = await calendarIn(context.store, context.accountId, value)
-      if (!calendars.some(({ id }) => id === calendar.id)) calendars.push(calendar)
-    } else if (field === "person") {
-      const email = value.trim().toLowerCase()
-      if (!EMAIL.test(email)) throw new CliError("validation_error", `${value} is not an email address`)
-      people.add(email)
-    } else
-      throw new CliError("validation_error", `${word} is not a calendars busy word${BUSY_QUERY_HELP}`, {
-        reason: "query.unknown_word",
-      })
-  }
-  from ??= day(today)
-  to ??= from === day(today) ? day(plusDays(today, 7)) : from + 7 * 86_400_000
+  const terms = nativeTermLists(listQuery(typedQuery(query), BUSY_QUERY, BUSY), BUSY, ["calendar", "person"])
+  for (const [field, nodes] of terms)
+    for (const node of nodes) {
+      if (field === "start") from = timeWindow(node, zone, now).lower
+      else if (field === "end") to = timeWindow(node, zone, now).upper
+      else if (field === "calendar") {
+        const calendar = await calendarIn(context.store, context.accountId, node.value)
+        if (!calendars.some(({ id }) => id === calendar.id)) calendars.push(calendar)
+      } else if (field === "person") {
+        const email = node.value.trim().toLowerCase()
+        if (!EMAIL.test(email)) throw new CliError("validation_error", `${node.value} is not an email address`)
+        people.add(email)
+      }
+    }
+  from ??= dayBoundary(today, zone, false, span(today))
+  to ??= from + 7 * 86_400_000
   if (to <= from) throw new CliError("validation_error", "the window ends before it starts")
   const asked = calendars.length
     ? calendars

@@ -1,10 +1,19 @@
 import { CliError } from "@wirecat/cli-base"
-import { dayBoundary, zonedMoment } from "@wirecat/cli-base/query"
+import {
+  dateRange,
+  dayBoundary,
+  type Predicate,
+  type QueryRegistry,
+  queryError,
+  queryFieldsOf,
+} from "@wirecat/cli-base/query"
+import { LIST_QUERY_GUIDE, listQuery, nativeTerms, type QueryWords, typedQuery } from "../cli/list-query.js"
 import {
   type Event,
   type EventDetails,
   type EventFilter,
   type EventStore,
+  event,
   eventChange,
   eventItem,
   type LinkReview,
@@ -69,22 +78,76 @@ export const plusDays = (date: string, days: number) => {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
 }
 
-export const EVENTS_QUERY_HELP = `
-Words, any order:
-  today | week            today, or today and the next six days, in your time zone
-  from:<date> to:<date>   from the start of one day through the end of another (or a time with a zone)
-  person:<email|id>       events one person attends: an address, or a person id from search
-  calendar:<id>           one calendar, by its id or the provider's id
-  changed:<date>          events new, moved or cancelled since then, each with what changed (from the local copy)
-  overlapping             events that clash with another: timed, not cancelled, not declined, not marked free
-Without a time word: events from the start of today on.`
+const LIST = "events list"
+
+const oneSided = (field: string, example: string) => (node: Predicate) => {
+  if (node.operator !== "range" || node.upper !== "*")
+    queryError("query.unsupported-operator", node.span, `${field} takes only an earliest moment, such as ${example}`, {
+      command: LIST,
+      guide: LIST_QUERY_GUIDE,
+    })
+}
+
+/** `events list`'s query. The store answers `ends_at` and `changed_at` from below only; `starts_at` either way. */
+export const EVENTS_QUERY: QueryRegistry = {
+  entity: "event",
+  backend: "native",
+  fields: queryFieldsOf(event, {
+    native: ["starts_at", "ends_at", "changed_at", "calendar", "person"],
+    relations: {
+      calendar: { type: "kw", example: "calendar:3", relation: "one calendar, by its id or the provider's id" },
+      person: {
+        type: "kw",
+        example: "person:ana@example.com",
+        relation: "events one person attends: an address, or a person id from search",
+      },
+    },
+    examples: {
+      starts_at: "starts_at:[2026-11-02 TO 2026-11-07}",
+      ends_at: "ends_at>=2026-11-02",
+      changed_at: "changed_at>=2026-10-01",
+    },
+    validate: {
+      ends_at: oneSided("ends_at", "ends_at>=2026-11-02; for the latest, write starts_at<2026-11-07"),
+      changed_at: oneSided("changed_at", "changed_at>=2026-10-01"),
+    },
+  }).map((field) =>
+    field.native
+      ? { ...field, operators: field.type === "time" ? (["term", "range"] as const) : (["term", "phrase"] as const) }
+      : field,
+  ),
+}
+
+export const EVENTS_QUERY_NOTE =
+  "\nends_at keeps events that end after its moment, so one that ends exactly then is left out. Without starts_at " +
+  "or ends_at: events that end after the start of today, in your time zone."
+
+/** A time term as epoch ms: from `lower` on, and before `upper`. */
+export const timeWindow = (node: Predicate, zone: string, now: number): { lower?: number; upper?: number } => {
+  const range =
+    node.operator === "range"
+      ? dateRange(
+          node.value,
+          node.upper ?? "*",
+          node.lower_inclusive !== false,
+          node.upper_inclusive !== false,
+          zone,
+          node.span,
+          now,
+        )
+      : dateRange(node.value, node.value, true, true, zone, node.span, now)
+  return {
+    ...(range.lower === undefined ? {} : { lower: range.lower_inclusive ? range.lower : range.lower + 1 }),
+    ...(range.upper === undefined ? {} : { upper: range.upper_inclusive ? range.upper + 1 : range.upper }),
+  }
+}
 
 /**
- * `events list` words into a store filter, for one account. A person named by address is found through the shared
- * store; one nobody knows matches no event.
+ * `events list`'s query into a store filter, for one account. A person named by address is found through the
+ * shared store; one nobody knows matches no event.
  */
 export const eventsFilter = async (
-  words: readonly string[],
+  query: QueryWords,
   context: {
     store: EventStore
     accountId: number
@@ -94,38 +157,52 @@ export const eventsFilter = async (
   },
 ): Promise<EventFilter | null> => {
   const filter: EventFilter = { accountId: context.accountId }
-  const today = localDate(context.now, context.zone)
+  const { zone, now } = context
   const span = (text: string) => ({ start: 0, end: text.length })
-  const day = (date: string) => dayBoundary(date, context.zone, false, span(date))
-  let timed = false
-  for (const word of words) {
-    const [, field, value = ""] = /^([a-z]+):(.+)$/u.exec(word) ?? []
-    if (word === "today" || word === "week") {
-      filter.from = day(today)
-      filter.to = day(plusDays(today, word === "today" ? 1 : 7))
-      timed = true
-    } else if (field === "from") {
-      filter.from = zonedMoment(value, context.zone, span(value))
-      timed = true
-    } else if (field === "to") {
-      filter.to = zonedMoment(value, context.zone, span(value), { end: true }) + 1
-      timed = true
-    } else if (field === "changed") filter.changedSince = zonedMoment(value, context.zone, span(value))
-    else if (word === "overlapping") filter.overlapping = true
-    else if (field === "calendar") filter.calendarId = (await calendarIn(context.store, context.accountId, value)).id
+  const day = (date: string) => dayBoundary(date, zone, false, span(date))
+  for (const [field, node] of nativeTerms(listQuery(typedQuery(query), EVENTS_QUERY, LIST), LIST)) {
+    if (field === "starts_at") {
+      const { lower, upper } = timeWindow(node, zone, now)
+      if (lower !== undefined) filter.startsFrom = lower
+      if (upper !== undefined) filter.to = upper
+    } else if (field === "ends_at") {
+      // Strictly after, as the default window: `ends_at>=today` leaves out yesterday's all-day event, which ends at
+      // today's midnight.
+      const { lower } = timeWindow(node, zone, now)
+      if (lower !== undefined) filter.from = lower
+    } else if (field === "changed_at") {
+      const { lower } = timeWindow(node, zone, now)
+      if (lower !== undefined) filter.changedSince = lower
+    } else if (field === "calendar")
+      filter.calendarId = (await calendarIn(context.store, context.accountId, node.value)).id
     else if (field === "person") {
       if (!context.personOf) throw new CliError("configuration_error", "this tool cannot look people up")
-      const person = await context.personOf(value)
+      const person = await context.personOf(node.value)
       if (person === null) return null
       filter.personId = person
-    } else
-      throw new CliError("validation_error", `${word} is not an events list word${EVENTS_QUERY_HELP}`, {
-        reason: "query.unknown_word",
-      })
+    }
   }
-  if (!timed) filter.from = day(today)
-  if (filter.from !== undefined) filter.fromDate = localDate(filter.from, context.zone)
-  if (filter.to !== undefined) filter.toDate = plusDays(localDate(filter.to - 1, context.zone), 1)
+  if (filter.from === undefined && filter.startsFrom === undefined && filter.to === undefined)
+    filter.from = day(localDate(now, zone))
+  return datedFilter(filter, zone)
+}
+
+/** Events that end after the start of today and start within seven days, in `zone`. */
+export const weekFilter = (accountId: number, zone: string, now: number): EventFilter => {
+  const today = localDate(now, zone)
+  const day = (date: string) => dayBoundary(date, zone, false, { start: 0, end: date.length })
+  return datedFilter({ accountId, from: day(today), to: day(plusDays(today, 7)) }, zone)
+}
+
+/** The local days an all-day event is compared by, from the filter's instants. */
+const datedFilter = (filter: EventFilter, zone: string): EventFilter => {
+  if (filter.from !== undefined) filter.fromDate = localDate(filter.from, zone)
+  if (filter.to !== undefined) filter.toDate = plusDays(localDate(filter.to - 1, zone), 1)
+  if (filter.startsFrom !== undefined) {
+    const date = localDate(filter.startsFrom, zone)
+    const midnight = dayBoundary(date, zone, false, { start: 0, end: date.length })
+    filter.startsFromDate = midnight < filter.startsFrom ? plusDays(date, 1) : date
+  }
   return filter
 }
 
