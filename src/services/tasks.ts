@@ -21,6 +21,7 @@ import {
   type ClosedState,
   createTaskService,
   type GroupStats,
+  isClosedState,
   TASK_KINDS,
   TASK_STATES,
   type Task,
@@ -361,7 +362,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
   }
   const planOf = async (store: MessageStore, id: string, plan: TaskPlan, by: TaskOrigin) => {
     if (plan.category !== undefined) plan = { ...plan, category: await categoryOf(store, plan.category) }
-    const open = (await store.tasks.details(id)).status === "open"
+    const open = !isClosedState((await store.tasks.details(id)).status)
     if (!open && (plan.dueAt != null || plan.nextCheckAt != null))
       throw new CliError("validation_error", "a closed task takes no due date or next check; it stays closed")
     const { assignees, ...fields } = plan
@@ -390,7 +391,9 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
    * the review list, never to a merge, and the link stands whatever they score. A closed task is not checked.
    */
   const reviewAfterLink = async (store: MessageStore, id: string): Promise<number> =>
-    (await store.tasks.get(id))?.state === "open" ? store.tasks.reviewDuplicates(id, { linked: true }) : 0
+    !isClosedState((await store.tasks.get(id))?.state ?? "done")
+      ? store.tasks.reviewDuplicates(id, { linked: true })
+      : 0
 
   return {
     list: ({ query, limit, offset, previews }) =>
@@ -576,7 +579,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
     close: (id, { as, reason, by, agent, certainty, suggestOnly }) =>
       inStore(async (store, account) => {
         const existing = await owned(store, account, id)
-        const suggested = existing.state === "open" ? await store.tasks.closeSuggestion(id) : null
+        const suggested = !isClosedState(existing.state) ? await store.tasks.closeSuggestion(id) : null
         const state = as ?? (by === "owner" ? suggested?.as : undefined)
         if (state === undefined)
           throw new CliError("validation_error", "say how the task is closed: --as done, or --as dismissed")
@@ -585,7 +588,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
           const { closeCertainty, closeSuggestion } = await store.tasks.details(task.id)
           return { ...(await taskView(store, account, task)), closeCertainty, closeSuggestion }
         }
-        if (by === "agent" && existing.state === "open") {
+        if (by === "agent" && !isClosedState(existing.state)) {
           if (certainty === undefined)
             throw new CliError(
               "validation_error",

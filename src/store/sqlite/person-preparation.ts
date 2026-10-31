@@ -95,7 +95,7 @@ export const personPreparation = (
       .prepare(
         `SELECT t.id,t.title,t.due_at,t.project_id,t.source_locator,t.created_at,group_concat(DISTINCT ta.role) AS role
         FROM task_assignments ta JOIN tasks t ON t.id=ta.task_id JOIN main.projects p ON p.id=t.project_id
-        WHERE ta.assignee_type='person' AND ta.assignee_id=? AND t.deleted_at IS NULL AND t.status='open'
+        WHERE ta.assignee_type='person' AND ta.assignee_id=? AND t.deleted_at IS NULL AND t.status NOT IN ('done','dismissed')
         AND p.deleted_at IS NULL AND (p.account_id IS NULL OR p.account_id IN (SELECT a.id FROM accounts a
           JOIN json_each(?) k ON a.provider=json_extract(k.value,'$.provider')
           AND a.external_id=json_extract(k.value,'$.account')))

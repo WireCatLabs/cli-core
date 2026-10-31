@@ -119,6 +119,9 @@ describe("tasks made in the store", () => {
       "title",
       "priority",
     ])
+    await expect(store.tasks.edit(task.id, { status: "in_progress" }, "owner")).rejects.toThrow(
+      "todo and in_progress are for a project task",
+    )
     await store.close()
   })
 })

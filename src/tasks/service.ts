@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type ClosedState, closeTask, type Task, type TaskKind, type TaskOrigin } from "./model.js"
+import { type ClosedState, closeTask, isClosedState, type Task, type TaskKind, type TaskOrigin } from "./model.js"
 import type { TaskFilter, TaskStore } from "./store.js"
 
 export interface NewTask {
@@ -72,7 +72,7 @@ export function createTaskService({
       const byGroup = new Map<string, Task[]>()
       for (const task of await store.list(filter)) byGroup.set(task.group, [...(byGroup.get(task.group) ?? []), task])
       return [...byGroup].map(([group, tasks]) => {
-        const open = tasks.filter((task) => task.state === "open")
+        const open = tasks.filter((task) => !isClosedState(task.state))
         const closeMs = tasks.flatMap((task) =>
           task.closedAt ? [task.closedAt.getTime() - task.createdAt.getTime()] : [],
         )

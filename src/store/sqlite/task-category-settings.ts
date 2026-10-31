@@ -23,7 +23,7 @@ export const unlistedTaskCategories = (database: CacheDatabase, list: readonly T
   const listed = new Set(list.map(({ name }) => name))
   return database
     .prepare(
-      "SELECT category, COUNT(*) AS total, SUM(status = 'open') AS open FROM tasks " +
+      "SELECT category, COUNT(*) AS total, SUM(status NOT IN ('done', 'dismissed')) AS open FROM tasks " +
         "WHERE category IS NOT NULL AND deleted_at IS NULL GROUP BY category ORDER BY category",
     )
     .all()

@@ -1,0 +1,134 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { parseLucene } from "@wirecat/cli-base/query"
+import { describe, expect, it } from "vitest"
+import { openCache } from "./open.js"
+import { openStore } from "./store.js"
+
+const query = (text: string) => parseLucene(text, { defaultField: "text" })
+
+const board = async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "task-board-")), "messages.db")
+  const store = await openStore({ path })
+  await store.knowledge.addProject({ name: "Harbour launch", key: "HRB", type: "work" })
+  await store.knowledge.addProject({ name: "Operations", key: "OPS", type: "work" })
+  const database = await openCache(path)
+  database.exec(
+    "INSERT INTO persons (id, name, owner, created_at, updated_at) VALUES (21, 'Ana Ruiz', 0, 0, 0), (22, 'Kai Sample', 0, 0, 0)",
+  )
+  database.close()
+  const add = (project: string, title: string, more: { priority?: number; dueAt?: Date; description?: string } = {}) =>
+    store.tasks.create({ project, title, type: "chore", ...more }, "owner")
+  const keys = (page: { items: { key: string }[] }) => page.items.map(({ key }) => key)
+  return { store, add, keys }
+}
+
+describe("a task's work states", () => {
+  it("moves through todo and in_progress without closing, and reopens a closed task", async () => {
+    const { store, add } = await board()
+    const task = await add("HRB", "Write the press note")
+    await store.tasks.claim(task.id, "claude-code:1", new Date(Date.now() + 60_000))
+
+    const doing = await store.tasks.edit(task.id, { status: "in_progress" }, "owner")
+    expect(doing).toMatchObject({ status: "in_progress", closedAt: null, claimedBy: "claude-code:1" })
+
+    await store.tasks.edit(task.id, { status: "dismissed", reason: "not needed" }, "owner")
+    const reopened = await store.tasks.edit(task.id, { status: "todo" }, "owner")
+    expect(reopened).toMatchObject({ status: "todo", closedAt: null, reason: null })
+    expect(
+      (await store.tasks.events(task.id)).filter(({ kind }) => kind === "status").map(({ changes }) => changes),
+    ).toEqual([
+      { status: ["open", "in_progress"] },
+      { status: ["in_progress", "dismissed"] },
+      { status: ["dismissed", "todo"] },
+    ])
+  })
+
+  it("counts todo and in_progress as open work for readiness and claims", async () => {
+    const { store, add } = await board()
+    const blocker = await add("HRB", "Pick the venue")
+    const task = await add("HRB", "Book the venue")
+    await store.tasks.linkTask(task.id, blocker.id, "blocked-by", "owner")
+    await store.tasks.edit(blocker.id, { status: "in_progress" }, "owner")
+    await store.tasks.edit(task.id, { status: "todo" }, "owner")
+
+    expect(await store.tasks.taskReadiness(task.id)).toMatchObject({ ready: false })
+    await store.tasks.edit(blocker.id, { status: "done" }, "owner")
+    expect(await store.tasks.taskReadiness(task.id)).toEqual({ ready: true, blockers: [] })
+    expect((await store.tasks.readyTasks("HRB")).items.map(({ key }) => key)).toEqual(["HRB-2"])
+    await expect(store.tasks.claim(task.id, "hermes", new Date(Date.now() + 60_000))).resolves.toMatchObject({
+      claimedBy: "hermes",
+    })
+  })
+})
+
+describe("the task board", () => {
+  it("lists every owner project, narrowed by fields, OR within a field, and words", async () => {
+    const { store, add, keys } = await board()
+    const invoice = await add("HRB", "Send the invoice", { priority: 0, description: "to the harbour office" })
+    await add("HRB", "Print badges", { priority: 3 })
+    const ops = await add("OPS", "Renew the domain", { dueAt: new Date("2020-01-01T00:00:00Z") })
+    await store.tasks.assign(invoice.id, { to: "person:21", role: "assignee" }, "owner")
+    await store.tasks.assign(ops.id, { to: "person:22", role: "assignee" }, "owner")
+    await store.tasks.edit(ops.id, { status: "in_progress" }, "owner")
+    const list = async (text: string) => keys(await store.tasks.board(query(text), { limit: 50 }))
+
+    expect(await list("project:*")).toEqual(["HRB-1", "HRB-2", "OPS-1"])
+    expect(await list('assignee:("person:21" OR 22)')).toEqual(["HRB-1", "OPS-1"])
+    expect(await list("assignee:none")).toEqual(["HRB-2"])
+    expect(await list("priority:[0 TO 1]")).toEqual(["HRB-1"])
+    expect(await list("NOT priority:*")).toEqual(["OPS-1"])
+    expect(await list("overdue:true")).toEqual(["OPS-1"])
+    expect(await list("state:(todo OR in_progress)")).toEqual(["OPS-1"])
+    expect(await list("harb")).toEqual(["HRB-1"])
+    expect(await list("ops-1")).toEqual(["OPS-1"])
+    expect(await list("project:OPS")).toEqual(["OPS-1"])
+  })
+
+  it("sorts by the chosen field, pages by offset and totals every page", async () => {
+    const { store, add, keys } = await board()
+    await add("HRB", "A", { priority: 2, dueAt: new Date("2026-12-01T00:00:00Z") })
+    await add("HRB", "B", { priority: 1 })
+    await add("OPS", "C", { priority: 4, dueAt: new Date("2026-11-01T00:00:00Z") })
+
+    expect(keys(await store.tasks.board(undefined, { limit: 10 }))).toEqual(["HRB-2", "HRB-1", "OPS-1"])
+    expect(keys(await store.tasks.board(undefined, { limit: 10, sort: "due" }))).toEqual(["OPS-1", "HRB-1", "HRB-2"])
+    expect(keys(await store.tasks.board(undefined, { limit: 10, sort: "key", descending: true }))).toEqual([
+      "OPS-1",
+      "HRB-2",
+      "HRB-1",
+    ])
+    const second = await store.tasks.board(undefined, { limit: 2, offset: 2 })
+    expect({ keys: keys(second), total: second.total }).toEqual({ keys: ["OPS-1"], total: 3 })
+    await expect(store.tasks.board(undefined, { limit: 501 })).rejects.toThrow("1–500")
+  })
+
+  it("counts each picker's values without that picker's own terms", async () => {
+    const { store, add } = await board()
+    const a = await add("HRB", "A", { priority: 0 })
+    await add("HRB", "B")
+    const c = await add("OPS", "C", { priority: 0 })
+    await store.tasks.assign(a.id, { to: "person:21", role: "assignee" }, "owner")
+    await store.tasks.edit(c.id, { status: "done" }, "owner")
+
+    const counts = await store.tasks.boardCounts(query("project:HRB state:open"))
+    expect(counts.total).toBe(2)
+    expect(counts.project).toEqual([{ value: "HRB", name: "Harbour launch", count: 2 }])
+    expect(counts.state).toEqual([
+      { value: "open", count: 2 },
+      { value: "todo", count: 0 },
+      { value: "in_progress", count: 0 },
+      { value: "done", count: 0 },
+      { value: "dismissed", count: 0 },
+    ])
+    expect(counts.assignee).toEqual([
+      { value: "none", name: null, count: 1 },
+      { value: "person:21", name: "Ana Ruiz", count: 1 },
+    ])
+    expect(counts.priority.filter(({ count }) => count > 0)).toEqual([
+      { value: 0, count: 1 },
+      { value: null, count: 1 },
+    ])
+  })
+})

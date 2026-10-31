@@ -63,11 +63,16 @@ export const commandPath = (command: Command): string => {
 
 /**
  * The query as typed, validated against the list's fields, with each default whose field it does not name;
- * `undefined` when nothing narrows the list. CLI and MCP read a list's query through this one function.
+ * `undefined` when nothing narrows the list. A bare word is refused unless the list names a `defaultField` for it. CLI and MCP read a list's query through this one function.
  */
-export const listQuery = (text: string, registry: QueryRegistry, command: string): QueryAst | undefined => {
+export const listQuery = (
+  text: string,
+  registry: QueryRegistry,
+  command: string,
+  { defaultField = "none" }: { defaultField?: string } = {},
+): QueryAst | undefined => {
   const context = { command, guide: LIST_QUERY_GUIDE }
-  const typed = text.trim() === "" ? undefined : parseLucene(text, { defaultField: "none", ...context })
+  const typed = text.trim() === "" ? undefined : parseLucene(text, { defaultField, ...context })
   if (typed) validateQuery(typed, registry, context)
   const named = typed ? fieldsNamed(typed) : new Set<string>()
   const defaults = (registry.defaults ?? [])
