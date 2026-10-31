@@ -2,7 +2,7 @@
 
 The steps max-cli and tg-cli release by, written once. Each CLI's `release` and `test-live` skills
 (`.claude/skills/` in that repository) link here and add what is theirs: their changelog headings,
-their pages, their live accounts, and whether the owner signs a report.
+their pages and their live accounts. A messenger CLI is released after the owner says yes (WC-REL-10).
 
 A release is reliable when two halves agree: **`pnpm release:check`**, everything a program can
 decide, and **the judgement half**, the steps below. The automatic half is
