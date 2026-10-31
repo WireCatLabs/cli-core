@@ -34,7 +34,16 @@ export type {
   MeetingFindingsReceipt,
   MeetingTaskFinding,
 } from "../meetings/index.js"
-export { CLOSED_STATES, isClosedState, TASK_STATES } from "../tasks/index.js"
+export {
+  CLOSED_STATES,
+  isClosedState,
+  PRIORITY_LABELS,
+  type PriorityLabel,
+  priorityLabel,
+  priorityOf,
+  TASK_STATES,
+  type TaskState,
+} from "../tasks/index.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
 export type {
   DocumentTransferOptions,
@@ -223,10 +232,13 @@ export type {
   BoardCounts,
   BoardOptions,
   NewWorkTask,
+  RevisionCheck,
   TaskAssignment,
   TaskDetails,
   TaskEvent,
   TaskFields,
+  TaskMove,
+  TaskMoved,
   TaskRole,
   TaskType,
   WorkTaskType,

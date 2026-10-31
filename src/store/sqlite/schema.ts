@@ -1582,7 +1582,11 @@ export const tasks = sqliteTable(
     description: text("description"),
     type: text("type").notNull(),
     status: text("status").notNull(),
+    /** 0 urgent … 4 low, derived from `priority_score` (0 to 1) for builds before store version 41. */
     priority: integer("priority"),
+    priorityScore: real("priority_score"),
+    agent: text("agent"),
+    revision: integer("revision").notNull().default(1),
     parentId: integer("parent_id").references((): AnySQLiteColumn => tasks.id),
     dueAt: integer("due_at"),
     startedAt: integer("started_at"),

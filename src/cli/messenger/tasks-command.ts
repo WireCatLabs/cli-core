@@ -21,6 +21,7 @@ import {
   taskTypeOf,
 } from "../../services/tasks.js"
 import type { CloseSuggestion, TaskPair } from "../../store/index.js"
+import { PRIORITY_LABELS, priorityOf } from "../../tasks/index.js"
 import { actorOf, holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption } from "../effects.js"
@@ -181,7 +182,7 @@ const HOLDER_HELP =
   "who you are for claims: a session id or a chat id; default WIRECAT_HOLDER, else Claude Code's session, else the agent's name"
 
 const planFrom = (options: {
-  priority?: number
+  priority?: number | null
   parent?: string
   title?: string
   description?: string
@@ -329,10 +330,11 @@ export const tasksCommand = (messenger: Messenger): Command => {
       )
       .argument("<task>", "the task's id or key, as tasks list shows it")
       .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`)
-      .option("--priority <n>", "priority from 0 (urgent) through 4 (low)", (value) => {
-        if (!/^[0-4]$/.test(value)) throw new CliError("validation_error", "--priority takes 0 through 4")
-        return Number(value)
-      })
+      .option(
+        "--priority <label>",
+        `${PRIORITY_LABELS.join(", ")} or none; 0 (urgent) … 4 (low) still read as before`,
+        priorityOf,
+      )
       .option("--parent <id>", "parent task in the same project; none clears it"),
     "send Alex the API token",
   ).action(async function (this: Command, id: string) {

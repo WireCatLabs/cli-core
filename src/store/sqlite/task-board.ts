@@ -10,7 +10,7 @@ import {
 } from "@wirecat/cli-base/query"
 import { TASK_TYPES } from "../../domain/knowledge.js"
 import { taskWordsOf } from "../../search/task-similarity.js"
-import { TASK_STATES } from "../../tasks/index.js"
+import { PRIORITY_LABELS, type PriorityLabel, priorityBand, TASK_STATES } from "../../tasks/index.js"
 import type { ColumnMap, Where } from "./query-filter.js"
 import { INBOX_KEY_LENGTH } from "./task-keys.js"
 
@@ -35,7 +35,12 @@ export const PROJECT_TASK_FIELDS: readonly FieldSpec[] = [
   field("assignee", "kw", 'assignee:"person:12"', {
     relation: "who does it: any, none, or a person (person:12 in quotes, or the bare 12)",
   }),
-  field("priority", "num", "priority:[0 TO 1]", { relation: "0 urgent … 4 low; NOT priority:* has none" }),
+  field("priority", "kw", "priority:high", {
+    operators: ["term", "range", "wildcard"],
+    relation:
+      "low, medium, high, critical or none; a range of labels or of the 0–1 number: priority:[high TO critical]",
+  }),
+  field("agent", "kw", "agent:hermes", { relation: "the agent working on it, by name; none or any" }),
   field("due", "time", "due:[today TO 2026-12-31]", { relation: "the due date; NOT due:* has none" }),
   field("overdue", "bool", "overdue:true", { relation: "open work whose due date has passed" }),
   field("closed", "time", "closed:>=14d", { relation: "when it was done or dismissed" }),
@@ -87,6 +92,64 @@ const assigneeWhere = (node: Predicate): Where => {
   return { sql: `EXISTS (${ASSIGNED} AND a.assignee_id = ?)`, params: [Number(id)] }
 }
 
+const bound = (value: string, side: "from" | "to", node: Predicate): number | undefined => {
+  const word = value.trim().toLowerCase()
+  if (word === "*") return undefined
+  if ((PRIORITY_LABELS as readonly string[]).includes(word)) return priorityBand(word as PriorityLabel)[side]
+  const number = Number(word)
+  if (word === "" || !Number.isFinite(number) || number < 0 || number > 1)
+    throw new CliError(
+      "validation_error",
+      `priority: takes ${PRIORITY_LABELS.join(", ")}, none, or 0 to 1, not "${node.value}"`,
+    )
+  return number
+}
+
+/** A label is its quarter; critical takes 1 itself. */
+const priorityWhere = (node: Predicate): Where => {
+  const score = "t.priority_score"
+  if (node.operator === "wildcard") {
+    if (node.value === "*") return { sql: `${score} IS NOT NULL`, params: [] }
+    throw new CliError("validation_error", "priority: takes a label, none, or a range")
+  }
+  if (node.operator !== "range") {
+    const word = node.value.trim().toLowerCase()
+    if (word === "none") return { sql: `${score} IS NULL`, params: [] }
+    if (!(PRIORITY_LABELS as readonly string[]).includes(word))
+      throw new CliError(
+        "validation_error",
+        `priority: takes ${PRIORITY_LABELS.join(", ")} or none; a number goes in a range`,
+      )
+    const { from, to } = priorityBand(word as PriorityLabel)
+    return { sql: `${score} >= ? AND ${score} ${to === 1 ? "<=" : "<"} ?`, params: [from, to] }
+  }
+  const lower = bound(node.value, "from", node)
+  const upperWord = (node.upper ?? "*").trim().toLowerCase()
+  const upper = bound(upperWord, "to", node)
+  const labelUpper = (PRIORITY_LABELS as readonly string[]).includes(upperWord)
+  const parts = [`${score} IS NOT NULL`]
+  const params: number[] = []
+  if (lower !== undefined) {
+    parts.push(`${score} ${node.lower_inclusive === false ? ">" : ">="} ?`)
+    params.push(lower)
+  }
+  if (upper !== undefined) {
+    parts.push(`${score} ${labelUpper ? (upper === 1 ? "<=" : "<") : node.upper_inclusive === false ? "<" : "<="} ?`)
+    params.push(upper)
+  }
+  return { sql: parts.join(" AND "), params }
+}
+
+const agentWhere = (node: Predicate): Where => {
+  const value = node.value.trim().toLowerCase()
+  if (value === "none") return { sql: "t.agent IS NULL", params: [] }
+  if (value === "any" || (node.operator === "wildcard" && value === "*"))
+    return { sql: "t.agent IS NOT NULL", params: [] }
+  return node.operator === "wildcard"
+    ? { sql: "lower(t.agent) GLOB ?", params: [value] }
+    : { sql: "lower(t.agent) = ?", params: [value] }
+}
+
 const truth = (node: Predicate, sql: string): Where => ({
   sql: node.value.toLowerCase() === "true" ? sql : `NOT (${sql})`,
   params: [],
@@ -98,7 +161,8 @@ export const projectTaskColumns = (now: number): ColumnMap => ({
   kind: { type: "enum", sql: "t.type" },
   project: { where: projectWhere },
   assignee: { where: assigneeWhere },
-  priority: { type: "num", sql: "t.priority" },
+  priority: { where: priorityWhere },
+  agent: { where: agentWhere },
   due: { type: "time", sql: "t.due_at" },
   closed: { type: "time", sql: "t.closed_at" },
   overdue: { where: (node) => truth(node, `${OPEN} AND t.due_at IS NOT NULL AND t.due_at < ${Number(now)}`) },
@@ -125,14 +189,14 @@ const STATE_ORDER = `CASE t.status ${TASK_STATES.map((state, at) => `WHEN '${sta
 export const boardOrder = (sort: TaskSort, descending: boolean): string => {
   const direction = descending ? "DESC" : "ASC"
   const first = {
-    priority: [`coalesce(t.priority, 5) ${direction}`],
+    priority: ["t.priority_score IS NULL", `t.priority_score ${descending ? "ASC" : "DESC"}`],
     due: ["t.due_at IS NULL", `t.due_at ${direction}`],
     created: [`t.created_at ${direction}`],
     updated: [`t.updated_at ${direction}`],
     key: [`(SELECT key FROM projects WHERE id = t.project_id) ${direction}`, `t.number ${direction}`],
     state: [`${STATE_ORDER} ${direction}`],
   }[sort]
-  return [...first, "coalesce(t.priority, 5)", "t.created_at", "t.id"].join(", ")
+  return [...first, "t.priority_score IS NULL", "t.priority_score DESC", "t.created_at", "t.id"].join(", ")
 }
 
 /** The query without its required terms on `name`: a picker counts the choices its own filter hides. */

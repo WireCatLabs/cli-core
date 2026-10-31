@@ -14,6 +14,16 @@ export {
   type TaskVerdict,
 } from "./model.js"
 export {
+  checkedScore,
+  LEGACY_PRIORITY_SCORES,
+  legacyPriority,
+  PRIORITY_LABELS,
+  type PriorityLabel,
+  priorityBand,
+  priorityLabel,
+  priorityOf,
+} from "./priority.js"
+export {
   type CloseOptions,
   createTaskService,
   type GroupStats,

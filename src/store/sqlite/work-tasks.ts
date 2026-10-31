@@ -1,7 +1,18 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import { TASK_TYPES, WORK_TASK_TYPES } from "../../domain/knowledge.js"
-import { isClosedState, TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
+import {
+  checkedScore,
+  isClosedState,
+  legacyPriority,
+  PRIORITY_LABELS,
+  type PriorityLabel,
+  priorityBand,
+  priorityLabel,
+  TASK_STATES,
+  type TaskState,
+  type TaskVerdict,
+} from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"
 import { folded } from "./folded.js"
@@ -33,6 +44,10 @@ export const TASK_EVENT_KINDS = [
   "unlinked",
   "category",
   "close-suggestion",
+  "agent",
+  "claimed",
+  "released",
+  "next-check",
 ] as const
 
 export type WorkTaskType = (typeof WORK_TASK_TYPES)[number]
@@ -42,8 +57,10 @@ export type TaskRole = (typeof TASK_ROLES)[number]
 export interface TaskFields {
   title?: string
   description?: string | null
-  /** 0 urgent … 4 low. */
+  /** 0 to 1, higher first: `priorityOf` reads a label or the old 0–4. */
   priority?: number | null
+  /** The agent working on it, by name; `null` clears it. */
+  agent?: string | null
   /** A task reference (`task:<id>`) or id in the same project; `null` makes it top-level. */
   parent?: string | null
   dueAt?: Date | null
@@ -78,7 +95,12 @@ export interface TaskDetails {
   description: string | null
   type: TaskType
   status: TaskState
+  /** 0 to 1, higher first. */
   priority: number | null
+  priorityLabel: PriorityLabel | null
+  agent: string | null
+  /** Bumped by every write; give it back to refuse a write made on a stale copy. */
+  revision: number
   parent: string | null
   /** What a task found in a message points at; null for a task made here. */
   source: string | null
@@ -100,6 +122,25 @@ export interface TaskDetails {
   updatedAt: string
 }
 
+export interface RevisionCheck {
+  /** The revision the caller read; a write on any other is refused (`task.stale`). */
+  revision?: number
+}
+
+export interface TaskMove {
+  status?: TaskState
+  before?: string
+  after?: string
+}
+
+export interface TaskMoved {
+  task: TaskDetails
+  /** The labels before and after, which differ when the move crossed a band edge. */
+  label: { from: PriorityLabel | null; to: PriorityLabel | null; changed: boolean }
+  /** Other tasks of the column given a new priority to make room, by key. */
+  renumbered: string[]
+}
+
 export interface BoardOptions {
   limit: number
   offset?: number
@@ -115,7 +156,8 @@ export interface BoardCounts {
   project: { value: string; name: string; count: number }[]
   /** `person:<id>`, or `none` for the tasks nobody is assigned. */
   assignee: { value: string; name: string | null; count: number }[]
-  priority: { value: number | null; count: number }[]
+  /** By label; `none` for the tasks with no priority. */
+  priority: { value: PriorityLabel | "none"; count: number }[]
   state: { value: TaskState; count: number }[]
 }
 
@@ -130,9 +172,15 @@ export interface TaskEvent {
 /** Tasks beyond the package's four message kinds, and the fields the package does not know, on any task. */
 export interface WorkTasks extends TaskRelationsStore {
   create(input: NewWorkTask, by: Author): Promise<TaskDetails>
-  edit(id: string, fields: TaskFields, by: Author): Promise<TaskDetails>
-  assign(id: string, assignment: TaskAssignment, by: Author): Promise<TaskDetails>
-  unassign(id: string, assignment: TaskAssignment, by: Author): Promise<TaskDetails>
+  edit(id: string, fields: TaskFields, by: Author, check?: RevisionCheck): Promise<TaskDetails>
+  assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
+  unassign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
+  /**
+   * Puts a project task just before or after another in a board column, by giving it a priority between its new
+   * neighbours; `status` moves it to that column in the same write. When the neighbours leave no room, that
+   * priority band of the column is spread out again, and each task given a new number is named.
+   */
+  move(id: string, move: TaskMove, by: Author, check?: RevisionCheck): Promise<TaskMoved>
   /** `person:<id>` of whoever sent the task's source message; `undefined` for the owner, a note or an unknown sender. */
   sourceSender(id: string): Promise<string | undefined>
   details(id: string): Promise<TaskDetails>
@@ -198,15 +246,19 @@ const claimOf = (row: Row, at: number): Pick<TaskDetails, "claimedBy" | "claimed
     ? { claimedBy: String(row.claimed_by), claimedUntil: iso(row.claimed_until) }
     : { claimedBy: null, claimedUntil: null }
 
-const priorityOf = (value: number | null): number | null => {
-  if (value !== null && !(Number.isInteger(value) && value >= 0 && value <= 4))
-    throw new CliError("validation_error", "a priority is 0 (urgent) to 4 (low)")
-  return value
+/** What a write made on a stale copy is refused with: the revision the caller read is not the task's now. */
+export const checkRevision = (row: Row, expected: number | undefined): void => {
+  if (expected === undefined || Number(row.revision) === expected) return
+  throw new CliError(
+    "configuration_error",
+    `task ${String(row.key)} changed since revision ${expected}; it is at ${String(row.revision)}: read it again`,
+    { reason: "task.stale", revision: Number(row.revision) },
+  )
 }
 
 type WorkTaskOperations = Omit<WorkTasks, "create" | "assign"> & {
   create(input: NewWorkTask, by: Author): TaskDetails
-  assign(id: string, assignment: TaskAssignment, by: Author): TaskDetails
+  assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): TaskDetails
 }
 
 export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperations => {
@@ -258,7 +310,10 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       description: row.description == null ? null : String(row.description),
       type: row.type as TaskType,
       status: row.status as TaskState,
-      priority: row.priority == null ? null : Number(row.priority),
+      priority: row.priority_score == null ? null : Number(row.priority_score),
+      priorityLabel: priorityLabel(row.priority_score == null ? null : Number(row.priority_score)),
+      agent: row.agent == null ? null : String(row.agent),
+      revision: Number(row.revision),
       parent: row.parent_id == null ? null : reference(Number(row.parent_id)),
       source: row.source_locator == null ? null : String(row.source_locator),
       dueAt: iso(row.due_at),
@@ -281,6 +336,8 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     }
   }
   const stemmerFor = stemmerCache()
+  const touch = (task: number, at: number) =>
+    database.prepare("UPDATE tasks SET updated_at = ? WHERE id = ?").run(at, task)
   const boardWhere = (query: QueryAst | undefined, zone: string | undefined, at: number): Where => {
     if (query === undefined) return { sql: BOARD_SCOPE, params: [] }
     const where = queryFilter(query, projectTaskColumns(at), {
@@ -300,11 +357,11 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     const at = now()
     const set: string[] = []
     const values: SqlValue[] = []
-    const change = (column: string, value: SqlValue, event?: TaskEvent["kind"]) => {
+    const change = (column: string, value: SqlValue, event?: TaskEvent["kind"], key = column) => {
       if ((before[column] ?? null) === value) return
       set.push(`${column} = ?`)
       values.push(value)
-      if (event) recordTaskEvent(database, task, actor, event, { [column]: [before[column] ?? null, value] }, at)
+      if (event) recordTaskEvent(database, task, actor, event, { [key]: [before[column] ?? null, value] }, at)
     }
     if (fields.title !== undefined) {
       const title = textOf(fields.title, "a task's title", 300)
@@ -317,13 +374,18 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         fields.description === null ? null : textOf(fields.description, "a description", 20000),
         created ? undefined : "description",
       )
-    if (fields.priority !== undefined) change("priority", priorityOf(fields.priority), "priority")
+    if (fields.priority !== undefined) {
+      const score = fields.priority === null ? null : checkedScore(fields.priority)
+      change("priority_score", score, "priority", "priority")
+      change("priority", legacyPriority(score))
+    }
+    if (fields.agent !== undefined)
+      change("agent", fields.agent === null ? null : textOf(fields.agent, "an agent's name", 100), "agent")
     if (fields.parent !== undefined)
       change("parent_id", fields.parent === null ? null : parentOf(task, Number(before.project_id), fields.parent))
     if (fields.dueAt !== undefined) change("due_at", fields.dueAt === null ? null : fields.dueAt.getTime(), "due")
-    // Moved on every look, so no event: the history would be mostly check-ins.
     if (fields.nextCheckAt !== undefined)
-      change("next_check_at", fields.nextCheckAt === null ? null : fields.nextCheckAt.getTime())
+      change("next_check_at", fields.nextCheckAt === null ? null : fields.nextCheckAt.getTime(), "next-check")
     if (fields.status !== undefined) {
       if (!TASK_STATES.includes(fields.status))
         throw new CliError("validation_error", `a task's status is one of ${TASK_STATES.join(", ")}`)
@@ -366,6 +428,75 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     if (fields.category !== undefined) change("category", fields.category, "category")
     if (set.length === 0) return
     database.prepare(`UPDATE tasks SET ${set.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, at, task)
+  }
+
+  /** The column's tasks in board order, the moving one left out; no priority reads as 0, the bottom of low. */
+  const columnOf = (task: number, status: TaskState) =>
+    database
+      .prepare(
+        `SELECT t.id, t.key, coalesce(t.priority_score, 0) AS score FROM tasks t WHERE ${BOARD_SCOPE} ` +
+          `AND t.status = ? AND t.id <> ? ORDER BY ${boardOrder("priority", false)}`,
+      )
+      .all(status, task)
+      .map((row) => ({ id: Number(row.id), key: String(row.key), score: Number(row.score) }))
+
+  const moveTask = (task: number, row: Row, move: TaskMove, actor: Actor): Omit<TaskMoved, "task"> => {
+    if (move.before !== undefined && move.after !== undefined)
+      throw new CliError("validation_error", "give --before or --after, not both")
+    if (!database.prepare(`SELECT 1 FROM tasks t WHERE t.id = ? AND ${BOARD_SCOPE}`).get(task))
+      throw new CliError("validation_error", "only a project task moves on the board")
+    const status = move.status ?? (row.status as TaskState)
+    const column = columnOf(task, status)
+    const neighbour = move.before ?? move.after
+    if (neighbour === undefined) {
+      if (column.length > 0 || move.status === undefined)
+        throw new CliError("validation_error", "say where it goes: --before <key> or --after <key>")
+      const from = priorityLabel(row.priority_score == null ? null : Number(row.priority_score))
+      edit(task, { status: move.status }, actor)
+      return { label: { from, to: from, changed: false }, renumbered: [] }
+    }
+    const target = required(neighbour)
+    const at = column.findIndex(({ id }) => id === target)
+    if (at === -1)
+      throw new CliError(
+        "validation_error",
+        `${move.before ?? move.after} is not a ${status} task of a project; a task moves beside one in its column`,
+      )
+    const index = move.before === undefined ? at + 1 : at
+    const above = column[index - 1]
+    const below = column[index]
+    const STEP = 1 / 64
+    const score =
+      above === undefined
+        ? Math.min(1, (below?.score ?? 0) + STEP)
+        : below === undefined
+          ? Math.max(0, above.score - STEP)
+          : (above.score + below.score) / 2
+    const roomy = (above === undefined || score < above.score) && (below === undefined || score > below.score)
+    const from = priorityLabel(row.priority_score == null ? null : Number(row.priority_score))
+    const renumbered: string[] = []
+    let given = score
+    if (!roomy || (above !== undefined && below !== undefined && above.score - below.score < 1e-9)) {
+      const label = priorityLabel((above ?? below)?.score ?? 0) as PriorityLabel
+      const band = priorityBand(label)
+      const inBand = (one: { score: number }) => priorityLabel(one.score) === label
+      const ordered = [...column.slice(0, index), { id: task, key: String(row.key), score }, ...column.slice(index)]
+      const spread = ordered.filter((one) => one.id === task || inBand(one))
+      const gap = (band.to - band.from) / (spread.length + 1)
+      spread.forEach((one, place) => {
+        const value = band.to - gap * (place + 1)
+        if (one.id === task) {
+          given = value
+          return
+        }
+        if (one.score === value) return
+        edit(one.id, { priority: value }, actor)
+        renumbered.push(one.key)
+      })
+    }
+    edit(task, { priority: given, ...(move.status === undefined ? {} : { status: move.status }) }, actor)
+    const to = priorityLabel(given) as PriorityLabel
+    return { label: { from, to, changed: from !== to }, renumbered }
   }
 
   return {
@@ -414,16 +545,29 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       })
       return details(made)
     },
-    edit: async (id, fields, by) => {
+    edit: async (id, fields, by, check = {}) => {
       const task = required(id)
-      write(database, () => edit(task, fields, authorActor(context, by).actor))
+      write(database, () => {
+        checkRevision(rowById(task), check.revision)
+        edit(task, fields, authorActor(context, by).actor)
+      })
       return details(task)
     },
-    assign: (id, { to, role }, by) => {
+    move: async (id, move, by, check = {}) => {
+      const task = required(id)
+      return write(database, () => {
+        const row = rowById(task)
+        checkRevision(row, check.revision)
+        const moved = moveTask(task, row, move, authorActor(context, by).actor)
+        return { ...moved, task: details(task) }
+      })
+    },
+    assign: (id, { to, role }, by, check = {}) => {
       if (!TASK_ROLES.includes(role))
         throw new CliError("validation_error", `a role is one of ${TASK_ROLES.join(", ")}`)
       const task = required(id)
       write(database, () => {
+        checkRevision(rowById(task), check.revision)
         const person = personOf(to)
         const held = database
           .prepare(
@@ -437,6 +581,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
             "INSERT INTO task_assignments (task_id, assignee_type, assignee_id, role, created_at, updated_at) VALUES (?, 'person', ?, ?, ?, ?)",
           )
           .run(task, person, role, at, at)
+        touch(task, at)
         const changes = { [role]: [null, `person:${person}`] as [unknown, unknown] }
         recordTaskEvent(database, task, authorActor(context, by).actor, "assigned", changes, at)
       })
@@ -462,9 +607,10 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         .get(thing.id)
       return row ? `person:${String(row.id)}` : undefined
     },
-    unassign: async (id, { to, role }, by) => {
+    unassign: async (id, { to, role }, by, check = {}) => {
       const task = required(id)
       write(database, () => {
+        checkRevision(rowById(task), check.revision)
         const person = personOf(to)
         const removed = database
           .prepare(
@@ -472,8 +618,10 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           )
           .run(task, person, role).changes
         if (removed === 0) return
+        const at = now()
+        touch(task, at)
         const changes = { [role]: [`person:${person}`, null] as [unknown, unknown] }
-        recordTaskEvent(database, task, authorActor(context, by).actor, "unassigned", changes, now())
+        recordTaskEvent(database, task, authorActor(context, by).actor, "unassigned", changes, at)
       })
       return details(task)
     },
@@ -499,7 +647,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           "SELECT * FROM tasks t WHERE deleted_at IS NULL AND (? IS NULL OR project_id = ?) AND (? IS NULL OR type = ?) " +
             "AND (? IS NULL OR status = ?) AND (? IS NULL OR EXISTS (SELECT 1 FROM task_assignments a " +
             "WHERE a.task_id = t.id AND a.assignee_type = 'person' AND a.assignee_id = ?)) " +
-            `AND (${where?.sql || "1"}) ORDER BY coalesce(priority, 5), created_at, id LIMIT ?`,
+            `AND (${where?.sql || "1"}) ORDER BY priority_score IS NULL, priority_score DESC, created_at, id LIMIT ?`,
         )
         .all(
           projectId,
@@ -518,14 +666,17 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     claim: async (id, holder, until) => {
       const task = required(id)
       const at = now()
-      const won = write(database, () =>
-        database
+      const won = write(database, () => {
+        const before = claimOf(rowById(task), at).claimedBy
+        const claimed = database
           .prepare(
             "UPDATE tasks SET claimed_by = ?, claimed_until = ?, updated_at = ? " +
               "WHERE id = ? AND status NOT IN ('done', 'dismissed') AND (claimed_by IS NULL OR claimed_until < ? OR claimed_by = ?) RETURNING id",
           )
-          .get(holder, until.getTime(), at, task, at, holder),
-      )
+          .get(holder, until.getTime(), at, task, at, holder)
+        if (claimed) recordTaskEvent(database, task, null, "claimed", { claimed_by: [before, holder] }, at)
+        return claimed
+      })
       if (!won) {
         const row = rowById(task)
         if (isClosedState(String(row.status)))
@@ -555,9 +706,11 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
               reason: "task.claimed",
             },
           )
+        const at = now()
         database
           .prepare("UPDATE tasks SET claimed_by = NULL, claimed_until = NULL, updated_at = ? WHERE id = ?")
-          .run(now(), task)
+          .run(at, task)
+        if (claimedBy !== null) recordTaskEvent(database, task, null, "released", { claimed_by: [claimedBy, null] }, at)
       })
       return details(task)
     },
@@ -598,15 +751,20 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           count: Number(row.n),
         }))
         .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
-      const priorities = new Map(
-        grouped("priority", "t.priority", "", "t.priority").map((row) => [row.priority, Number(row.n)]),
-      )
+      const priorities = new Map<string, number>()
+      for (const row of grouped("priority", "t.priority_score", "", "t.priority_score")) {
+        const label = priorityLabel(row.priority_score == null ? null : Number(row.priority_score)) ?? "none"
+        priorities.set(label, (priorities.get(label) ?? 0) + Number(row.n))
+      }
       const states = new Map(grouped("state", "t.status", "", "t.status").map((row) => [row.status, Number(row.n)]))
       return {
         total: countOf(boardWhere(query, zone, at)),
         project,
         assignee,
-        priority: [0, 1, 2, 3, 4, null].map((value) => ({ value, count: priorities.get(value) ?? 0 })),
+        priority: [...[...PRIORITY_LABELS].reverse(), "none" as const].map((value) => ({
+          value,
+          count: priorities.get(value) ?? 0,
+        })),
         state: TASK_STATES.map((value) => ({ value, count: states.get(value) ?? 0 })),
       }
     },
@@ -655,6 +813,6 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
   return {
     ...operations,
     create: async (input, by) => operations.create(input, by),
-    assign: async (id, assignment, by) => operations.assign(id, assignment, by),
+    assign: async (id, assignment, by, check) => operations.assign(id, assignment, by, check),
   }
 }
