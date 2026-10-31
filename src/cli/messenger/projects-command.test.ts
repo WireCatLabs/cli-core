@@ -5,6 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
+import { keyForCommand } from "../../sends/permissions.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -94,4 +95,8 @@ it("with --sync-first syncs the linked chat back to the window first, then reads
   expect(body.item.items.length).toBe(10)
   expect(body.missing).toBeUndefined()
   expect(stderr).toMatch(/chat 1 of 1 · chat:chat\/500\/7 · \d+ messages so far/)
+})
+
+it("is guarded by the messages permission: it prints what people wrote", () => {
+  expect(keyForCommand(["projects", "evidence"])).toBe("messages")
 })

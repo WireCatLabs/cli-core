@@ -14,6 +14,7 @@ shape of this file.
   MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--sync-time`
   (3 minutes), one chat at a time. A chat the time cut stays partial with its `missing` and `next`. The command is
   declared a fetch (`remote: read`, `local: write`) because of `--sync-first`; cli-base fixes effects per command.
+  It prints what people wrote, so the `messages` permission guards it.
 - **`gatherStoredProject`** (services) and **`projectAnswerParts`, `projectEvidenceText`, `projectWindowOf`,
   `projectCutoffTime`** (cli): memo's `projects evidence` over a store, moved here so memo and the messenger CLIs
   share it. The host resolves the sources and names its own sync command in the text.
