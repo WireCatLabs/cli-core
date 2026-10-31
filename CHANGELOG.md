@@ -18,6 +18,14 @@ shape of this file.
   (the `latestVersion` that `upgrade` uses) when the CLI passes the new `AppDoctorOptions.packageName`; without it that
   check is left out. The command's effects are now `REMOTE_READ`, as the messenger's.
 
+### Fixed
+
+- **A forgotten memory's or fact's number is never given to a new one.** SQLite gave the next row the highest id + 1,
+  so after `memories.remove` or `facts.remove` of the newest record, the next one took its number and a stale
+  `memory:N` or `fact:N` named it. A remove now keeps the highest id handed out in `store_settings`
+  (`ids.memories.highest`, `ids.facts.highest`), and new memories and facts, restored project facts included, take
+  the next id above it. No schema change.
+
 ## 0.504.0 — 31.10.2026
 
 ### Added
