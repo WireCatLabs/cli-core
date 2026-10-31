@@ -4,7 +4,10 @@ import { type ContextEvidenceReader, type ContextSource, contextEvidenceFingerpr
 import { normalize } from "../store/normalize.js"
 import { drainNoteIndex } from "../store/sqlite/note-index.js"
 import { stemmerCache } from "../store/sqlite/stems.js"
+import { historyStartKey } from "../store/store.js"
+import type { AccountKey } from "../store/types.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
+import { chatCoverage } from "./chat-coverage.js"
 import { gatherProjectEvidence, type ProjectSourceFetcher } from "./project-gathering.js"
 import { storedMessageNeighbours, storedNeighbours } from "./project-gathering-around.js"
 import { findEvidenceMentions } from "./project-gathering-mentions.js"
@@ -420,7 +423,7 @@ it("reads a large document on resume when the read budget ran out before its own
   expect(first.usage.readBytes).toBe(0)
   const next = await gatherProjectEvidence(
     { evidence: f.port },
-    { ...request, checkpoint: present(first.checkpoint), budgets: { maxReads: 2 } },
+    { ...request, checkpoint: present(first.checkpoint), budgets: { maxReads: 3 } },
   )
   expect(next.items.map((i) => i.ref)).toContain(`document:${note.id}`)
 })
@@ -853,4 +856,70 @@ it("counts who wrote the run's items by stored person, joining a person's identi
     },
   ])
   expect(result.peopleOmitted).toBe(0)
+})
+
+const coveragePort = (f: Awaited<ReturnType<typeof fixture>>) => (account: AccountKey, chatIds: string[]) =>
+  chatCoverage(f.store, account, chatIds)
+
+it("reads the first page of every linked chat even when a busy word lane fills the item budget", async () => {
+  const f = await fixture()
+  const insert = f.db.prepare(
+    "INSERT INTO messages(chat_id,account_id,external_id,sent_at,text,normalized_text,normalizer_version,created_at,updated_at,source) VALUES(?,?,?,?,?,?,1,0,0,'history')",
+  )
+  for (let n = 0; n < 300; n++)
+    insert.run(f.accountId, f.accountId, `w${n}`, 500 + n, `Harbour hit ${n}`, normalize(`Harbour hit ${n}`))
+  const chats = Array.from({ length: 12 }, (_, n) => linkedChat(f, f.accountId, [`Crew ${n} says hi`], `crew${n}`))
+  const result = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...f.request, sources: [present(f.sources[0])], linkedChats: chats, budgets: { maxItems: 100 } },
+  )
+  expect(result.linkedChats.filter((c) => c.state === "pending")).toEqual([])
+  expect(result.linkedChats.filter((c) => c.state === "in-scope" && c.items === 0 && !c.capped)).toEqual([])
+})
+
+it("marks a linked chat the run stopped before reaching pending, without an item count", async () => {
+  const f = await fixture()
+  const chats = ["first", "second", "third"].map((name) => linkedChat(f, f.accountId, [`${name} says hi`], name))
+  const request = { ...f.request, sources: [present(f.sources[0])], linkedChats: chats, budgets: { maxReads: 3 } }
+  const run = await gatherProjectEvidence({ evidence: f.port, coverage: coveragePort(f) }, request)
+  expect(run.linkedChats.map((c) => [c.chat, c.state])).toEqual([
+    ["first", "in-scope"],
+    ["second", "pending"],
+    ["third", "pending"],
+  ])
+  expect(run.linkedChats[1]).not.toHaveProperty("items")
+  const done = await gatherProjectEvidence(
+    { evidence: f.port },
+    { ...request, budgets: undefined, checkpoint: present(run.checkpoint) },
+  )
+  expect(done.linkedChats.map((c) => c.state)).toEqual(["in-scope", "in-scope", "in-scope"])
+})
+
+it("says per linked chat what the store holds, and rolls the run up without calling unknown complete", async () => {
+  const f = await fixture()
+  const account = { provider: "example-calendar", account: "AliceExample" }
+  const [partial, whole, never] = [
+    linkedChat(f, f.accountId, ["a1", "a2", "a3", "a4"], "partial"),
+    linkedChat(f, f.accountId, ["b1", "b2"], "whole"),
+    { ...linkedChat(f, f.accountId, [], "never") },
+  ]
+  await f.store.sync.markRange(account, "partial", 2, 4)
+  await f.store.sync.markRange(account, "whole", 1, 2)
+  await f.store.sync.setSyncState(account, historyStartKey("whole"), "1")
+  const request = { ...f.request, sources: [present(f.sources[0])] }
+  const ports = { evidence: f.port, coverage: coveragePort(f) }
+
+  const result = await gatherProjectEvidence(ports, { ...request, linkedChats: [partial, whole, never] })
+  const rows = result.linkedChats.map((c) => [c.chat, c.completeness?.state, c.held?.messages])
+  expect(rows).toEqual([
+    ["partial", "partial", 4],
+    ["whole", "complete", 2],
+    ["never", "unknown", 0],
+  ])
+  expect(result).toMatchObject({ complete: true, completeness: "partial" })
+  expect((await gatherProjectEvidence(ports, { ...request, linkedChats: [whole] })).completeness).toBe("complete")
+  expect((await gatherProjectEvidence(ports, { ...request, linkedChats: [never] })).completeness).toBe("unknown")
+  expect((await gatherProjectEvidence({ evidence: f.port }, { ...request, linkedChats: [whole] })).completeness).toBe(
+    "unknown",
+  )
 })
