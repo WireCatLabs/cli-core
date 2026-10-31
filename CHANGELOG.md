@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Needs `@wirecat/cli-base` 0.68.1** (peer range `>=0.68.1 <0.69.0`, from `>=0.68.0 <0.69.0`). 0.68.1 adds only the
+  cross-CLI audit's `absent` declarations (memo has no profiles of its own), which mail-cli's release audit needs;
+  cli-core's code is unchanged.
+
 ## 0.507.0 — 31.10.2026
 
 ### Added
@@ -44,9 +50,6 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **Needs `@wirecat/cli-base` 0.68.1** (peer range `>=0.68.1 <0.69.0`, from `>=0.68.0 <0.69.0`). 0.68.1 adds only the
-  cross-CLI audit's `absent` declarations (memo has no profiles of its own), which mail-cli's release audit needs;
-  cli-core's code is unchanged.
 - **`search messages --discover` searches by meaning when the query uses `-`, `NOT`, `OR`, groups, phrases or
   `exact:`.** Such a query used to run strict search alone, with no meaning hits. Now its words are still matched by
   the whole query, as strict search does (`discovery.method: "lexical-strict"`), and the messages nearest in meaning
