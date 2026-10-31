@@ -106,7 +106,7 @@ export const projectsCommand = (messenger: Messenger): Command => {
       cooperative: true,
       partial: true,
     })
-      .summary("find what this account's stored messages hold about a project: names, words, people, linked chats")
+      .summary("what this account's stored messages hold about a project, linked chats included")
       .description(
         "cited references about a project in this profile's stored messages. The project's name, key, each alias and " +
           "each --alias, --context-query and --contact name is its own search; their hits are joined. Every message of " +
