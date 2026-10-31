@@ -85,6 +85,14 @@ describe("running a messenger CLI", () => {
     expect(JSON.parse(json.stderr[0] ?? "").error.message).toContain("give a command")
   })
 
+  it("**points a script at the group's own help** when a group is given no subcommand (WC-CMD-3)", async () => {
+    const { code, stdout, stderr } = await call(["chats"])
+
+    expect(code).toBe(2)
+    expect(stdout).toEqual([])
+    expect(JSON.parse(stderr[0] ?? "").error.message).toBe("give a command — run `app chats --help` for the commands")
+  })
+
   it("**shows a group's own help at a terminal** when it is given no subcommand", async () => {
     const terminal = captureStreams()
     const code = await run(

@@ -641,7 +641,8 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           streams.diagnostic(help.replace(/\n$/, ""))
           return exitCodeFor("validation_error")
         }
-        message = `give a command — run \`${command} --help\` for the commands`
+        const group = commandPath(program, rest)
+        message = `give a command — run \`${[command, group, "--help"].filter(Boolean).join(" ")}\` for the commands`
       }
       if (
         profile !== undefined &&
