@@ -114,6 +114,10 @@ shape of this file.
   such queries went from 0 meaning hits to 10–17 of 20, with no hit breaking the query.
 ### Fixed
 
+- **The parity manifest lists `projects` and `projects evidence`**, with their options and the new `--alias` and
+  `--context-query`. Without the rows, `cli-core-parity` failed max and tg once they mounted `projectsCommand` from
+  0.504.0. All three are marked planned, so the check passes with or without the command; a follow-up marks max and
+  tg as having it once tg-cli#798 and max-cli#886 are merged.
 - **Search by meaning inside a filter ranks the filter's own messages.** With fields that hold at most 100,000
   messages (`RANK_WITHIN_MESSAGES`), `--discover` scores every one of them that has a vector, instead of taking the
   100 nearest messages overall and dropping those outside the filter. On the owner's store, `chat:<id>` with a chat of
