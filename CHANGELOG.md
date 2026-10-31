@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.493.0 — 31.10.2026
+
 ### Added
 
 - **`chatCoverage(store, account, chatIds)` says what the store holds of each chat.** Per chat, in the order asked:
