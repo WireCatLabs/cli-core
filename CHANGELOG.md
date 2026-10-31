@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.513.0 — 01.11.2026
+
 ### Added
 
 - **`tasks.board(query, { limit, offset, sort, descending, zone })` and `tasks.boardCounts(query)`** list the owner's
