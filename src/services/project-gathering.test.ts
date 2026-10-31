@@ -923,3 +923,20 @@ it("says per linked chat what the store holds, and rolls the run up without call
     "unknown",
   )
 })
+
+it("takes a linked chat's title from its chat row, and gives a chat the store lacks none", async () => {
+  const f = await fixture()
+  const empty = linkedChat(f, f.accountId, [], "empty")
+  const absent = { ...empty, chat: "nowhere" }
+  const request = {
+    ...f.request,
+    sources: [present(f.sources[0])],
+    linkedChats: [empty, absent],
+    budgets: { maxReads: 2 },
+  }
+  const run = await gatherProjectEvidence({ evidence: f.port, coverage: coveragePort(f) }, request)
+  expect(run.linkedChats.map((c) => [c.chat, c.state, c.title, c.completeness?.state, c.held?.messages])).toEqual([
+    ["empty", "pending", "Crew", "unknown", 0],
+    ["nowhere", "pending", null, "unknown", 0],
+  ])
+})

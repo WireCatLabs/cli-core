@@ -67,6 +67,8 @@ export interface ChatsStore {
   renamedChatId(key: AccountKey, chatId: Id): Promise<Id | undefined>
   /** A stored chat's kind, with or without messages; `undefined` when the store does not know the chat. */
   chatKind(key: AccountKey, chatId: Id): Promise<ChatKind | undefined>
+  /** A stored chat's title, with or without messages; `null` when it has none or the store does not know the chat. */
+  chatTitle(key: AccountKey, chatId: Id): Promise<string | null>
   /** Per chat that spoke since `since` (ms): its newest message and who sent it when stored, never the text. */
   /** `where` is a `tasks agenda` query compiled over `AGENDA_COLUMNS`. */
   chatActivity(
@@ -177,6 +179,15 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
         .prepare("SELECT kind FROM chats WHERE account_id = ? AND external_id = ?")
         .get(accountKey, chatId)
       return row ? (String(row.kind) as ChatKind) : undefined
+    },
+
+    chatTitle: async (key, chatId) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) return null
+      const row = context.database
+        .prepare("SELECT title FROM chats WHERE account_id = ? AND external_id = ?")
+        .get(accountKey, chatId)
+      return row?.title == null ? null : String(row.title)
     },
 
     chatActivity: async (key, since, where) => {

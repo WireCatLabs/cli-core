@@ -11,12 +11,13 @@ shape of this file.
 
 - **`gatherProjectEvidence` says what the store holds of each linked chat, and which ones the run never reached.** A new
   optional port `coverage(account, chatIds)` (pass `chatCoverage` over the store) fills each `linkedChats` row with
-  `title`, `completeness` and `held`; without it they are `null` and `completeness` stays `"unknown"`. The top-level
+  `title` (the chat row's, also for a chat with no stored message), `completeness` and `held`; without it they are `null` and `completeness` stays `"unknown"`. The top-level
   `completeness` is `partial` when any linked chat is `partial`, `unknown` when none is but one is `unknown` (a chat the
   store has no row for counts), and `complete` only when every linked chat in scope is. `complete` keeps its meaning,
   "the planned reads finished"; a host's `meta.complete` is `complete && completeness === "complete"`. A linked chat
   none of whose reads has started is `state: "pending"` and has no `items` or `capped`, where it said `in-scope` with
-  `items: 0, capped: false`.
+  `items: 0, capped: false`. `ChatCoverage.title` now comes from the chat row when the chat has no message, through the
+  new `store.chats.chatTitle`.
 
 ## 0.493.0 — 31.10.2026
 
