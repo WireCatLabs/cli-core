@@ -57,6 +57,9 @@ shape of this file.
 
 ### Fixed
 
+- **`commands <path>` names the CLI's own groups when the path is unknown.** Its example of one path per call was
+  always `commands messages --json` and `commands chats --json`, even in a calendar CLI that has neither; it now names
+  the groups the caller typed, then the CLI's first groups.
 - **Discovery search keeps the colons of a quoted timestamp in a date filter.** 0.492.0 turned a colon between digits
   into a space so that "22:00" in a question would not fail, but it also did so inside quotes, and
   `date:["2026-08-21T21:30:00Z" TO "…"]` failed with `query.invalid-date` under `discover`. Quoted text is now left as is.
