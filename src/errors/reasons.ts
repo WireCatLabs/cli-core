@@ -73,6 +73,10 @@ const OTHERS: Entry[] = [
   ["calendar.read-only", "permission_error", "the calendar takes no new events from this account"],
   ["busy.offline", "permission_error", "calendars busy asks the provider; --offline was given"],
   validation("busy.no-calendars", "no calendar syncs and no person was named, so there is nobody to ask"),
+  ["search.offline", "permission_error", "search --backend server asks the provider; --offline was given"],
+  validation("search.no-calendars", "no calendar of this profile syncs yet, so the provider has nothing to search"),
+  validation("search.server-options", "search --backend server takes neither --exact, --cursor nor --newest"),
+  validation("search.one-backend", "search answers from one backend at a time: archive or server"),
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [

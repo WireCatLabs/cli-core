@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
-import { Argument, type Command, InvalidArgumentError } from "commander"
+import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
@@ -28,6 +28,7 @@ import {
   reviewsAnswer,
 } from "../reads.js"
 import { REPEAT_HELP } from "../recurrence.js"
+import { serverSearchAnswer } from "../server-search.js"
 import type { CalendarExpander, CalendarSource } from "../source.js"
 import { calendarStatus, syncCalendars } from "../sync.js"
 import type { EventResponse } from "../writer.js"
@@ -60,6 +61,11 @@ export interface CalendarCommandDeps {
    * build only once a profile is open.
    */
   freeBusy?: boolean
+  /**
+   * The source answers `search`: `search` takes `--backend server` and asks the provider. A flag, as `freeBusy`, so the
+   * source can stay unbuilt until a profile is open.
+   */
+  serverSearch?: boolean
   /** For a source with `expands: "local"`. */
   expand?: CalendarExpander
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
@@ -76,6 +82,7 @@ const LOCAL_READ: Effects = { remote: "none", local: "read" }
 const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 const FETCH: Effects = { remote: "read", local: "write" }
 const REMOTE_READ: Effects = { remote: "read", local: "none" }
+const LOCAL_OR_REMOTE_READ: Effects = { remote: "read", local: "read" }
 const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 const GROUP: Effects = { remote: "none", local: "none" }
 /** How many pieces one `sync --embed` embeds, as drive's. */
@@ -86,6 +93,7 @@ const EVENT_ITEM_UNTRUSTED = ["title", "description", "location"]
 const ATTENDEE_UNTRUSTED = ["name"]
 const REVIEW_UNTRUSTED = ["candidates.title"]
 const SEARCH_UNTRUSTED = ["hits.title", "hits.location", "hits.excerpt"]
+const SERVER_SEARCH_UNTRUSTED = ["hits.title", "hits.location"]
 
 const eachMarked = <T extends { items: object[] }>(answer: T, untrusted: string[]) => ({
   ...answer,
@@ -335,34 +343,78 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     print({ ...shown, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
   })
 
-  example(
-    annotate(program.command("search"), { effects: LOCAL_READ })
-      .description("find stored events by words, and by meaning when its model is downloaded")
+  const search = example(
+    annotate(program.command("search"), { effects: deps.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
+      .description(
+        deps.serverSearch
+          ? "find stored events by words, and by meaning when its model is downloaded; with --backend server, ask " +
+              "the provider instead"
+          : "find stored events by words, and by meaning when its model is downloaded",
+      )
       .argument("<words...>", "what to find in titles, descriptions, places and attendees"),
     "search roadmap planning --json",
+    ...(deps.serverSearch ? ["search --backend server quarterly review"] : []),
   )
     .option("--limit <n>", "events per page", integer, 20)
     .option("--cursor <cursor>", "continue from a page's next_offset", (text) => (text === "0" ? 0 : integer(text)), 0)
     .option("--exact", "every word as written, no word stems")
     .option("--newest", "latest start first instead of best first")
-    .action(
-      async (
-        words: string[],
-        opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean },
-        command: Command,
-      ) => {
-        const found = await searchEvents(messages("search"), words.join(" "), {
-          accounts: [deps.account],
-          limit: opts.limit,
-          offset: opts.cursor,
-          timezone: zone(),
-          command: program.name(),
-          ...(opts.exact ? { exact: true } : {}),
-          ...(opts.newest ? { newest: true } : {}),
-        })
-        print({ ...found, untrusted: SEARCH_UNTRUSTED }, command)
-      },
+  if (deps.serverSearch)
+    search.addOption(
+      new Option(
+        "--backend <archive|server|both>",
+        "where to search: archive, the local store, or server, the provider's own search over the synced calendars, " +
+          "earliest first",
+      )
+        .choices(["archive", "server", "both"])
+        .default("archive"),
     )
+  search.action(
+    async (
+      words: string[],
+      opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean; backend?: string },
+      command: Command,
+    ) => {
+      if (opts.backend === "both")
+        throw new CliError(
+          "validation_error",
+          "search --backend both is not offered: the store's search and the provider's rank and page events " +
+            "differently, so one merged list would have no single order or next page; run --backend archive and " +
+            "--backend server",
+          { reason: "search.one-backend" },
+        )
+      if (opts.backend === "server") {
+        if (command.optsWithGlobals<{ offline?: boolean }>().offline)
+          throw new CliError("permission_error", "search --backend server asks the provider; leave out --offline", {
+            reason: "search.offline",
+          })
+        if (opts.exact || opts.cursor || opts.newest)
+          throw new CliError(
+            "validation_error",
+            "search --backend server takes neither --exact, --cursor nor --newest: the provider ranks and pages it",
+            { reason: "search.server-options" },
+          )
+        const found = await serverSearchAnswer(source(), deps.store, {
+          accountId: deps.accountId,
+          account: deps.account,
+          query: words.join(" "),
+          limit: opts.limit,
+        })
+        print({ ...found, untrusted: SERVER_SEARCH_UNTRUSTED }, command)
+        return
+      }
+      const found = await searchEvents(messages("search"), words.join(" "), {
+        accounts: [deps.account],
+        limit: opts.limit,
+        offset: opts.cursor,
+        timezone: zone(),
+        command: program.name(),
+        ...(opts.exact ? { exact: true } : {}),
+        ...(opts.newest ? { newest: true } : {}),
+      })
+      print({ ...found, untrusted: SEARCH_UNTRUSTED }, command)
+    },
+  )
 
   if (deps.writes) addEventWrites(events, deps.writes, { deps, now, zone, print, example })
 

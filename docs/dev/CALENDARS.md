@@ -18,6 +18,7 @@ them and `./meetings` keeps them.
 | `changes(calendar, { cursor, page, window })` | one page: `{ entries, removed, nextPage }`, the last page with `cursor`; `cursor: null` asks for a full list of the window; a dead cursor answers `{ reset: true }` |
 | `occurrences(calendar, seriesId, window)` | only with `expands: "on-request"` |
 | `freeBusy({ calendars, people, window })` | optional: each calendar's (by the provider's id) and each person's (by address) busy times inside the window, as `BusyTimes` (`{ id, busy, error? }`); a calendar the provider will not show has `error`, never an empty `busy` alone. Never stored |
+| `search(calendar, { query, limit })` | optional: the provider's own text search over one calendar, at most `limit` entries, also outside the sync window, as `{ entries, more }`. Never stored |
 
 Every value an adapter returns is already neutral: the words of the table in `src/meetings/event-store.ts`, IANA
 zones, RFC 5545 recurrence lines, a join link without its query, no passcode or PIN. `removed` names only entries the
@@ -124,7 +125,7 @@ shows the event's own fields (title, time) and only this account's copies, atten
 | `status` | local read | each synced calendar's sync in the WC-LIFE-14 shape (`progressOf`): `done`, `total: null`, `remaining: null`, `state`, `updated_at`, `cursor_age_ms`, plus `round` in progress and `line` (`progressLine`); `profile` is `deps.profile` |
 | `events list [today\|week\|from:… to:…] [person:…] [calendar:…] [changed:…] [overlapping]` | local read | stored events, earliest first; without a time word from the start of today. `changed:<date>` keeps the events `eventChange` finds new, moved or cancelled since then, each with `change`, `changed_at` and, when moved, `was`; it reads the copies' `created_at`, `deleted_at` and revisions, so it sees what the syncs saw. `overlapping` keeps timed events that clash with another one that takes the owner's time (not cancelled, all-day, declined or free), each with `overlaps` |
 | `events show <event>` | local read | its calendar copies, attendees with their `person:`, Drive files, history |
-| `search <words…>` | local read | `searchEvents` from `./services` over this account, never a copy of it |
+| `search <words…> [--backend archive\|server]` | local read; provider read with `--backend server` | `searchEvents` from `./services` over this account, never a copy of it. Only when `deps.serverSearch` is set, `--backend server` asks `source.search` for each synced calendar instead (`serverSearchAnswer`): cancelled entries left out, earliest first, `found_by: ["server"]`, nothing stored; it refuses `--offline` (`search.offline`), `--exact`, `--cursor` and `--newest` (`search.server-options`), and `--backend both` (`search.one-backend`) |
 | `people list [<event>]` | local read | one event's attendees, or everyone in this week's events with how many they attend |
 | `people link <person> <other>` | local write | `linkPeople` from `./services`, the people service's own link (`email:ana@x.com telegram:12`) |
 | `links review` / `links resolve <review> <choice>` | local read / write | copies that fit two events equally well, and the owner's choice (`event:<id>` or `apart`); the choices are kept per store, so every account's are listed, but only the profile's own account resolves one (`LinkReview.calendarId`) |

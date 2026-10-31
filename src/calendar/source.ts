@@ -54,6 +54,13 @@ export interface BusyTimes {
   error?: string
 }
 
+/** What the provider's own text search found on one calendar: one page, read and never stored. */
+export interface SearchPage {
+  entries: EntryInput[]
+  /** The provider has more matches on this calendar than it returned. */
+  more: boolean
+}
+
 /** One provider's calendars, as an adapter reads them. The engine never sees a provider word. */
 export interface CalendarSource {
   /** The registry name: `google-calendar`, `outlook-calendar`, `caldav`, `ics`. */
@@ -69,6 +76,11 @@ export interface CalendarSource {
   occurrences?(calendar: StoredCalendar, seriesExternalId: string, window: SyncWindow): Promise<EntryInput[]>
   /** When calendars and people are taken, read from the provider and never stored. Absent: no `calendars busy`. */
   freeBusy?(request: FreeBusyRequest): Promise<BusyTimes[]>
+  /**
+   * The provider's own text search over one calendar, at most `limit` entries; it also finds events outside the sync
+   * window. Absent: no `search --backend server`.
+   */
+  search?(calendar: StoredCalendar, request: { query: string; limit: number }): Promise<SearchPage>
 }
 
 /**

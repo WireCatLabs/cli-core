@@ -30,6 +30,7 @@ export type {
   ChangePage,
   ChangeResult,
   FreeBusyRequest,
+  SearchPage,
   SyncWindow,
 } from "./source.js"
 export {

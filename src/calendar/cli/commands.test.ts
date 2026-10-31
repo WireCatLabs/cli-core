@@ -77,6 +77,7 @@ const setup = async (deps: Partial<CalendarCommandDeps> = {}) => {
       .configureOutput({ writeErr: () => undefined, ...(out ? { writeOut: out } : {}) })
       .option("--json")
       .option("--jsonl")
+      .option("--offline")
     addCalendarCommands(root, {
       store: store.calendar,
       accountId,
@@ -443,6 +444,56 @@ describe("calendar commands", () => {
     const refused = captureStreams()
     expect(await run(["sync", "--full", "--json"], definition, { streams: refused, tty: false, env })).toBe(2)
     expect(refused.stderr.join("")).toContain("sync starts over with --rescan")
+  })
+
+  it("search asks the provider with --backend server when the CLI says its source can, and refuses what it cannot do", async () => {
+    const source = fakeCalendarSource({ search: true })
+    source.put("primary", planning(), { ...planning(), externalId: "e9", title: "Old roadmap", status: "cancelled" })
+    const { cli } = await setup({ source, serverSearch: true })
+    await expect(cli("search", "--backend", "server", "roadmap")).rejects.toMatchObject({
+      details: { reason: "search.no-calendars" },
+    })
+    await cli("sync")
+    expect(await cli("search", "--backend", "server", "roadmap")).toEqual({
+      query: "roadmap",
+      by: "server",
+      hits: [
+        {
+          provider: "example-calendar",
+          account: "owner-1",
+          calendar: "primary",
+          external_id: "e1",
+          title: "Example roadmap planning",
+          starts_at: new Date(NOW + 2 * HOUR).toISOString(),
+          ends_at: new Date(NOW + 3 * HOUR).toISOString(),
+          all_day: false,
+          status: "confirmed",
+          location: null,
+          found_by: ["server"],
+        },
+      ],
+      has_more: false,
+      untrusted: ["hits.title", "hits.location"],
+    })
+    for (const [args, reason] of [
+      [["--exact"], "search.server-options"],
+      [["--newest"], "search.server-options"],
+      [["--offline"], "search.offline"],
+    ] as const)
+      await expect(cli("search", "--backend", "server", ...args, "roadmap")).rejects.toMatchObject({
+        details: { reason },
+      })
+    await expect(cli("search", "--backend", "both", "roadmap")).rejects.toMatchObject({
+      details: { reason: "search.one-backend" },
+    })
+    expect((await cli("search", "roadmap")).hits).toEqual([expect.objectContaining({ found_by: ["words"] })])
+  })
+
+  it("search takes no --backend when the CLI's source has no search of its own", async () => {
+    const { cli } = await setup()
+    await expect(cli("search", "--backend", "server", "roadmap")).rejects.toMatchObject({
+      code: "commander.unknownOption",
+    })
   })
 
   it("leave --json and --jsonl to the host, so no MCP tool takes json or jsonl (BUG-459)", () => {
