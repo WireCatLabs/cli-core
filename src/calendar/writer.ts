@@ -26,8 +26,14 @@ export interface EventDraft {
  */
 export type EventPatch = Partial<EventDraft>
 
-/** `this`: the one entry named; `series`: the repeating event it belongs to, named by the series' own id. */
+/**
+ * `this`: the one entry named; `series`: the repeating event it belongs to, named by the series' own id. A writer
+ * receives only these two: cli-core makes `following` of a series change and a create (`FollowingScope`).
+ */
 export type WriteScope = "this" | "series"
+
+/** A write's scope as the owner chooses it: `following` is this occurrence and every later one. */
+export type FollowingScope = WriteScope | "following"
 
 export type EventResponse = Extract<ParticipantResponse, "accepted" | "tentative" | "declined">
 
@@ -61,10 +67,21 @@ export interface CalendarWriter {
     response: EventResponse,
     options: { etag: string; notify: boolean },
   ): Promise<EntryInput>
+  /**
+   * Optional: moves the event, keeping its id, to `target`, another calendar of the same account. `etag` is checked
+   * before the move; a provider whose move takes no precondition reads the event first. A retry after
+   * `outcome_unknown` that finds the event already on `target` returns it.
+   */
+  move?(
+    calendar: StoredCalendar,
+    externalId: string,
+    target: StoredCalendar,
+    options: { etag: string; notify: boolean },
+  ): Promise<EntryInput>
 }
 
 /** Which write a command makes, for `CalendarWrites.extraKeys`. */
-export type CalendarWrite = "create" | "update" | "delete" | "respond"
+export type CalendarWrite = "create" | "update" | "delete" | "respond" | "move"
 
 /** Mailing the other attendees: an agent may write to the calendar and still not to people (WC-PERM-14's spirit). */
 export const EVENTS_NOTIFY_KEY: PermissionKey = "events.notify"
@@ -73,11 +90,15 @@ export const EVENTS_DELETE_SERIES_KEY: PermissionKey = "events.delete.series"
 /** The keys the calendar writes check beyond their command paths, for a CLI's `commandPermissions({ extra })`. */
 export const CALENDAR_WRITE_KEYS: readonly PermissionKey[] = [EVENTS_NOTIFY_KEY, EVENTS_DELETE_SERIES_KEY]
 
-/** Built in, and only ever tightening (WC-PERM-7): one change asks, a whole series is not deleted, nobody is mailed. */
+/**
+ * Built in, and only ever tightening (WC-PERM-7). A change that is easy to undo goes ahead, as tg's and drive's writes
+ * do; a deletion asks; a whole series is not deleted, and nobody is mailed.
+ */
 export const CALENDAR_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = {
-  "events.create": "ask",
-  "events.update": "ask",
-  "events.respond": "ask",
+  "events.create": "allow",
+  "events.update": "allow",
+  "events.respond": "allow",
+  "events.move": "allow",
   "events.delete": "ask",
   [EVENTS_DELETE_SERIES_KEY]: "deny",
   [EVENTS_NOTIFY_KEY]: "deny",

@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-108 tables, 23 full-text indexes.
+108 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -1024,6 +1024,14 @@ Stem index, the pair of document_words.
 CREATE VIRTUAL TABLE document_stems USING fts5(stems, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
 ```
 
+### `document_trigrams`
+
+Trigram index over the normalized title and text of documents, rowid = document id: a search finds any part of a word, in any letter case.
+
+```sql
+CREATE VIRTUAL TABLE document_trigrams USING fts5(text, content = '', contentless_delete = 1, tokenize = 'trigram')
+```
+
 ### `document_index_pending`
 
 Rows of documents waiting to be indexed: triggers enqueue, JS normalizes, stems and writes the index.
@@ -1084,6 +1092,14 @@ Stem index, the pair of note_words.
 
 ```sql
 CREATE VIRTUAL TABLE note_stems USING fts5(stems, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
+```
+
+### `note_trigrams`
+
+Trigram index over the normalized title and text of notes, rowid = note id: a search finds any part of a word, in any letter case.
+
+```sql
+CREATE VIRTUAL TABLE note_trigrams USING fts5(text, content = '', contentless_delete = 1, tokenize = 'trigram')
 ```
 
 ### `note_index_pending`

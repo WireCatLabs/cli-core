@@ -3,11 +3,13 @@ import type { EntryInput, StoredCalendar } from "../../meetings/index.js"
 import { type CalendarWriter, calendarConflict, type EventDraft, type EventPatch } from "../writer.js"
 
 export interface FakeCalendarWriterCall {
-  write: "create" | "update" | "remove" | "respond"
+  write: "create" | "update" | "remove" | "respond" | "move"
   calendar: string
   externalId: string
   notify: boolean
   scope?: "this" | "series"
+  /** A move's calendar. */
+  target?: string
 }
 
 /**
@@ -115,6 +117,16 @@ export const fakeCalendarWriter = (options: { provider?: string } = {}): FakeCal
           : {}),
       })
       of(calendar.externalId).set(externalId, entry)
+      return answer(entry)
+    },
+    async move(calendar, externalId, target, { etag, notify }) {
+      calls.push({ write: "move", calendar: calendar.externalId, externalId, notify, target: target.externalId })
+      const arrived = of(target.externalId).get(externalId)
+      // A retry after a lost answer: the event left this calendar on the first try.
+      if (arrived && !of(calendar.externalId).has(externalId)) return arrived
+      const entry = stamp(current(calendar, externalId, etag))
+      of(calendar.externalId).delete(externalId)
+      of(target.externalId).set(externalId, entry)
       return answer(entry)
     },
   }

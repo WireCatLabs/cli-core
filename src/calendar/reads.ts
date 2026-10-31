@@ -1,9 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import { dayBoundary, zonedMoment } from "@wirecat/cli-base/query"
 import {
+  type Event,
   type EventDetails,
   type EventFilter,
   type EventStore,
+  eventChange,
   eventItem,
   type LinkReview,
   listed,
@@ -26,6 +28,7 @@ export const CALENDAR_UNTRUSTED_FIELDS = [
   "candidates.title",
   "entries.title",
   "entry.title",
+  "ended.title",
   "history.title",
   "history.location",
   "attachments.title",
@@ -72,6 +75,8 @@ Words, any order:
   from:<date> to:<date>   from the start of one day through the end of another (or a time with a zone)
   person:<email|id>       events one person attends: an address, or a person id from search
   calendar:<id>           one calendar, by its id or the provider's id
+  changed:<date>          events new, moved or cancelled since then, each with what changed (from the local copy)
+  overlapping             events that clash with another: timed, not cancelled, not declined, not marked free
 Without a time word: events from the start of today on.`
 
 /**
@@ -105,7 +110,9 @@ export const eventsFilter = async (
     } else if (field === "to") {
       filter.to = zonedMoment(value, context.zone, span(value), { end: true }) + 1
       timed = true
-    } else if (field === "calendar") filter.calendarId = (await calendarIn(context.store, context.accountId, value)).id
+    } else if (field === "changed") filter.changedSince = zonedMoment(value, context.zone, span(value))
+    else if (word === "overlapping") filter.overlapping = true
+    else if (field === "calendar") filter.calendarId = (await calendarIn(context.store, context.accountId, value)).id
     else if (field === "person") {
       if (!context.personOf) throw new CliError("configuration_error", "this tool cannot look people up")
       const person = await context.personOf(value)
@@ -225,10 +232,15 @@ export const peopleAnswer = async (
   const counted = new Map<string, { participant: StoredParticipant; events: number }>()
   const mine = await calendarIds(store, accountId)
   const { rows, hasMore } = await page(store, { ...options.filter, accountId, limit: EVENTS_COUNTED })
+  const byEvent = new Map<number, StoredParticipant[]>()
+  for (const { eventId, ...one } of await store.participantsOf(
+    rows.map(({ id }) => id),
+    [...mine],
+  ))
+    byEvent.set(eventId, [...(byEvent.get(eventId) ?? []), one])
   for (const event of rows) {
-    const details = await store.event(event.id)
     const seen = new Set<string>()
-    for (const one of details ? ownCopies(details, mine).participants : []) {
+    for (const one of byEvent.get(event.id) ?? []) {
       if (one.resource || one.self || seen.has(one.email)) continue
       seen.add(one.email)
       const held = counted.get(one.email)
@@ -276,9 +288,21 @@ export const reviewsAnswer = async (store: EventStore) => {
   }
 }
 
-export const resolveAnswer = async (store: EventStore, review: string, choice: string, now: number) => {
+export const resolveAnswer = async (
+  store: EventStore,
+  accountId: number,
+  review: string,
+  choice: string,
+  now: number,
+) => {
   if (!/^[1-9]\d*$/u.test(review)) throw new CliError("validation_error", "a review is its id from links review")
   const decision = choice === "apart" ? { apart: true as const } : { choose: eventIdOf(choice) }
+  const found = (await store.reviews()).find(({ id }) => id === Number(review))
+  if (found && (found.calendarId === null || !(await calendarIds(store, accountId)).has(found.calendarId)))
+    throw new CliError(
+      "permission_error",
+      `review ${review} is about a copy on another account's calendar; resolve it from that account's profile`,
+    )
   const resolved = await store.resolveReview(Number(review), decision, now)
   return {
     id: String(resolved.id),
@@ -287,8 +311,71 @@ export const resolveAnswer = async (store: EventStore, review: string, choice: s
   }
 }
 
+/** What changed about each listed event since the filter's instant, from its own copies. */
+const changesOf = async (store: EventStore, rows: Event[], filter: EventFilter, since: number) => {
+  const mine = filter.accountId === undefined ? [] : [...(await calendarIds(store, filter.accountId))]
+  const { entries, revisions } = await store.historyOf(
+    rows.map(({ id }) => id),
+    mine,
+    since,
+  )
+  return new Map(
+    rows.map((event) => [
+      event.id,
+      eventChange(
+        event,
+        entries.filter(({ eventId }) => eventId === event.id),
+        revisions,
+        since,
+      ),
+    ]),
+  )
+}
+
+/** The other listed-kind events each one overlaps: those `overlapping` finds across the page's whole span. */
+const overlapsOf = async (store: EventStore, rows: Event[], filter: EventFilter) => {
+  const timed = rows.filter((one) => one.startsAt !== null && one.endsAt !== null)
+  if (!timed.length) return new Map<number, Event[]>()
+  const others = await store.events({
+    ...(filter.accountId === undefined ? {} : { accountId: filter.accountId }),
+    from: Math.min(...timed.map(({ startsAt }) => startsAt as number)),
+    to: Math.max(...timed.map(({ endsAt }) => endsAt as number)),
+    overlapping: true,
+    limit: 1000,
+  })
+  return new Map(
+    timed.map((event) => [
+      event.id,
+      others.filter(
+        (other) =>
+          other.id !== event.id &&
+          (other.startsAt as number) < (event.endsAt as number) &&
+          (other.endsAt as number) > (event.startsAt as number),
+      ),
+    ]),
+  )
+}
+
 export const eventsAnswer = async (store: EventStore, filter: EventFilter | null) => {
   if (filter === null) return listed([])
   const { rows, limit, hasMore } = await page(store, filter)
-  return listed(rows.map(eventItem), { limit, hasMore })
+  const changes = filter.changedSince === undefined ? null : await changesOf(store, rows, filter, filter.changedSince)
+  const overlaps = filter.overlapping ? await overlapsOf(store, rows, filter) : null
+  return listed(
+    rows.map((event) => {
+      const change = changes?.get(event.id)
+      return {
+        ...eventItem(event),
+        ...(change
+          ? {
+              change: change.change,
+              changed_at: iso(change.at),
+              ...(change.was ? { was: { starts_at: iso(change.was.startsAt), ends_at: iso(change.was.endsAt) } } : {}),
+            }
+          : {}),
+        ...(overlaps ? { overlaps: (overlaps.get(event.id) ?? []).map(({ id }) => `event:${id}`) } : {}),
+      }
+    }),
+    { limit, hasMore },
+  )
 }

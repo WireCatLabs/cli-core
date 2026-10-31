@@ -10,7 +10,14 @@ import type {
   StoredEntry,
   StoredParticipant,
 } from "../../meetings/index.js"
-import { calendarText, type Event, joinKeyOf, joinUrlWithoutQuery } from "../../meetings/index.js"
+import {
+  calendarText,
+  type Event,
+  entryInWindow,
+  eventChange,
+  joinKeyOf,
+  joinUrlWithoutQuery,
+} from "../../meetings/index.js"
 
 type Entry = StoredEntry & { updatedAt: number }
 
@@ -96,6 +103,7 @@ export const memoryEventStore = (): EventStore => {
           id: nextId++,
           linkableType: "calendar_entry",
           linkableId: entry.id,
+          calendarId: entry.calendarId,
           entityType: entity,
           candidates: ids,
           reason: "ical-uid",
@@ -256,6 +264,7 @@ export const memoryEventStore = (): EventStore => {
       recurrence: input.recurrence ?? null,
       recurrenceEndsAt: input.recurrenceEndsAt ?? null,
       eventType: input.eventType ?? null,
+      transparency: input.transparency ?? null,
       ownResponse: input.ownResponse ?? null,
       organizerIdentityId: input.organizer ? contactOf(input.organizer.email) : null,
       joinUrl,
@@ -273,7 +282,7 @@ export const memoryEventStore = (): EventStore => {
       if (TRACKED.some((key) => !same(found[key], values[key]))) revise(found, now)
       Object.assign(found, values)
     } else {
-      entry = { id: nextId++, calendarId, eventId: null, eventSeriesId: null, ...values }
+      entry = { id: nextId++, calendarId, eventId: null, eventSeriesId: null, createdAt: now, ...values }
       entries.push(entry)
     }
     const id = entry.id
@@ -329,7 +338,7 @@ export const memoryEventStore = (): EventStore => {
     return entry
   }
 
-  return {
+  const store: EventStore = {
     async saveCalendars(accountId, list, now) {
       return list.map((one) => {
         let calendar = calendars.find((held) => held.accountId === accountId && held.externalId === one.externalId)
@@ -414,18 +423,70 @@ export const memoryEventStore = (): EventStore => {
           one.calendarId === calendarId &&
           one.deletedAt === null &&
           (one.seenAt === null || one.seenAt < seenBefore) &&
-          (one.kind !== "occurrence" ||
-            one.exception ||
-            (one.originalStartsAt !== null && one.originalStartsAt >= window.from && one.originalStartsAt < window.to)),
+          entryInWindow(one, window),
       )
       for (const one of marked) Object.assign(one, { deletedAt: now, updatedAt: now })
       for (const eventId of new Set(marked.map(({ eventId }) => eventId)))
         if (eventId !== null) refreshEvent(eventId, now)
       return marked.length
     },
+    async restoreUnseen(calendarId, windowAt, now) {
+      const restored = entries.filter(
+        (one) =>
+          one.calendarId === calendarId && one.deletedAt !== null && !entryInWindow(one, windowAt(one.deletedAt)),
+      )
+      for (const one of restored) Object.assign(one, { deletedAt: null, updatedAt: now })
+      refreshAround(
+        restored.map(({ id }) => id),
+        now,
+      )
+      return restored.length
+    },
     async entry(calendarId, externalId) {
       const found = entries.find((one) => one.calendarId === calendarId && one.externalId === externalId)
       return found ? stored(found) : null
+    },
+    async slotsOf(calendarId, seriesExternalId, window) {
+      return entries
+        .filter(
+          (one) =>
+            one.calendarId === calendarId &&
+            one.kind === "occurrence" &&
+            one.seriesExternalId === seriesExternalId &&
+            one.originalStartsAt !== null &&
+            one.originalStartsAt >= window.from &&
+            one.originalStartsAt < window.to &&
+            one.deletedAt === null,
+        )
+        .sort((a, b) => (a.originalStartsAt as number) - (b.originalStartsAt as number))
+        .map(stored)
+    },
+    async saveSlots(calendarId, groups, window, cursor, now) {
+      let [saved, removed] = [0, 0]
+      for (const { series, slots } of groups) {
+        const held = entries.filter(
+          (one) =>
+            one.calendarId === calendarId &&
+            one.kind === "occurrence" &&
+            one.seriesExternalId === series &&
+            one.originalStartsAt !== null &&
+            one.originalStartsAt >= window.from &&
+            one.originalStartsAt < window.to &&
+            one.deletedAt === null,
+        )
+        if (slots === null) {
+          for (const one of held) one.seenAt = now
+          continue
+        }
+        if (slots.length) saved += (await store.saveEntries(calendarId, slots, now)).length
+        const given = new Set(slots.map(({ externalId }) => externalId))
+        const stale = held
+          .filter((one) => !one.exception && one.status !== "cancelled" && !given.has(one.externalId))
+          .map(({ externalId }) => externalId)
+        if (stale.length) removed += await store.removeEntries(calendarId, stale, now)
+      }
+      await store.setCursor(calendarId, cursor, now)
+      return { saved, removed }
     },
     async cursor(calendarId) {
       return cursors.get(calendarId) ?? null
@@ -442,6 +503,25 @@ export const memoryEventStore = (): EventStore => {
         throw new CliError("validation_error", "limit takes 1–1000 and offset 0 or more")
       const has = (event: Event, check: (entry: Entry) => boolean) =>
         entries.some((one) => one.eventId === event.id && check(one))
+      const copiesOf = (event: Event) =>
+        entries.filter(
+          (one) =>
+            one.eventId === event.id &&
+            (filter.accountId === undefined || calendarOf(one.calendarId).accountId === filter.accountId),
+        )
+      const busy = (event: Event) =>
+        event.deletedAt === null &&
+        event.status !== "cancelled" &&
+        !event.allDay &&
+        event.startsAt !== null &&
+        event.endsAt !== null &&
+        copiesOf(event).some(
+          (one) =>
+            one.deletedAt === null &&
+            one.status !== "cancelled" &&
+            one.ownResponse !== "declined" &&
+            one.transparency !== "transparent",
+        )
       return [...events.values()]
         .filter(
           (event) =>
@@ -458,11 +538,47 @@ export const memoryEventStore = (): EventStore => {
             (filter.accountId === undefined ||
               has(event, (one) => calendarOf(one.calendarId).accountId === filter.accountId)) &&
             (filter.personId === undefined ||
-              has(event, (one) => participants.some((p) => p.entryId === one.id && p.identityId === filter.personId))),
+              has(event, (one) =>
+                participants.some((p) => p.entryId === one.id && p.identityId === filter.personId),
+              )) &&
+            (filter.changedSince === undefined ||
+              eventChange(event, copiesOf(event), revisions, filter.changedSince) !== null) &&
+            (!filter.overlapping ||
+              (busy(event) &&
+                [...events.values()].some(
+                  (other) =>
+                    other.id !== event.id &&
+                    busy(other) &&
+                    (other.startsAt as number) < (event.endsAt as number) &&
+                    (other.endsAt as number) > (event.startsAt as number),
+                ))),
         )
         .sort((a, b) => ((a.startsAt ?? -1) - (b.startsAt ?? -1) || a.id - b.id) * (filter.newest ? -1 : 1))
         .slice(offset, offset + limit)
         .map((event) => ({ ...event }))
+    },
+    async historyOf(eventIds, calendarIds, since) {
+      const copies = entries.filter(
+        (one) => one.eventId !== null && eventIds.includes(one.eventId) && calendarIds.includes(one.calendarId),
+      )
+      const ids = new Set(copies.map(({ id }) => id))
+      return {
+        entries: copies.map(stored),
+        revisions: revisions.filter((one) => ids.has(one.entryId) && one.createdAt >= since).map((one) => ({ ...one })),
+      }
+    },
+    async participantsOf(eventIds, calendarIds) {
+      const wanted = new Map(
+        entries
+          .filter(
+            (one) => one.eventId !== null && eventIds.includes(one.eventId) && calendarIds.includes(one.calendarId),
+          )
+          .map((one) => [one.id, one.eventId as number]),
+      )
+      return participants
+        .filter((one) => wanted.has(one.entryId))
+        .map((one) => ({ ...one, eventId: wanted.get(one.entryId) as number }))
+        .sort((a, b) => a.eventId - b.eventId || a.entryId - b.entryId || a.email.localeCompare(b.email))
     },
     async event(id) {
       const event = events.get(id)
@@ -519,4 +635,5 @@ export const memoryEventStore = (): EventStore => {
       return { ...review, candidates: [...review.candidates] }
     },
   }
+  return store
 }

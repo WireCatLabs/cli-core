@@ -38,6 +38,118 @@ shape of this file.
 - **`messages list --offline --json` may carry `meta.complete: false`, `missing` and `next`** for a chat held in part.
   `messages list` is declared `partial`: the exit code stays 0.
 
+## 0.490.0 — 31.10.2026
+
+### Changed — may break callers
+
+- **Notes, documents, knowledge annotations and contacts `--notes` are found by any part of a word, in any letter
+  case (store version 40).** `notes` with a search, `knowledge.annotations` with a search and `contacts` with
+  `notes` used `instr(lower(...))`, which folds only Latin letters and reads every row: a mixed-case Cyrillic word
+  was missed, and a search took 1.5–4 s on a store five times today's size. They now match `note_trigrams` and
+  `document_trigrams`, trigram indexes over the normalized title and text (`ё` as `е`, accents dropped) that the
+  notes drain keeps, and answer in milliseconds. A query of one or two characters is refused with "search needs at
+  least three characters", as message search is; an empty one still filters nothing. The title is searched too,
+  not only the text. The notes and documents stored before version 40 get their trigrams in batches from the
+  notes drain (`search notes`, `store migrate`); until then they are matched as before.
+
+## 0.489.0 — 31.10.2026
+
+### Added
+
+- **`events list changed:<date>`: what changed since a date.** It keeps the events first stored, moved, or cancelled
+  or removed since then, from the local copy, each with `change` (`new`, `moved`, `cancelled`), `changed_at` and, for
+  a moved one, `was` (`starts_at`, `ends_at`). A move counts when a copy's time now differs from its time at the date,
+  so a meeting moved and moved back is no change. MCP `events_list` takes the same word. New `EventFilter.changedSince`,
+  `EventStore.historyOf` and `eventChange`, from `@wirecat/cli-core/meetings`.
+- **`events list overlapping`: meetings that clash.** It keeps timed events that overlap another one, each with
+  `overlaps` (`event:<id>` of the others). An event counts only when it takes the owner's time: not cancelled, not
+  all-day, with a copy the owner did not decline or mark free. New `EventFilter.overlapping`.
+- **Changing or deleting "this and all following" occurrences.** `events update <occurrence> --following` (MCP
+  `following: true`) ends the series with UNTIL just before the occurrence and starts a new series there with the
+  change. The new series keeps the attendees, and the EXDATE and RDATE dates from the split on. It is built from the
+  writer's `create` and `update`, so no adapter needs code for it. The new series is made first, under an id
+  journaled before the call; if ending the old series then fails, the error names that id, and a retry with `--id`
+  finds the series instead of making a second one. A COUNT series needs `--repeat` for the new part
+  (`event.repeat-count`). `events delete <occurrence> --following` only ends the series. `WriteScope` stays
+  `this | series` for writers; `FollowingScope` adds `following`.
+- **Moving an event to another calendar of the same account.** `CalendarWriter` gains an optional
+  `move(calendar, externalId, target, { etag, notify })`. With it, `events move <event> --to-calendar <id>` (MCP
+  `event_move`, `to_calendar`) moves the event with its id. Its key is `events.move`, plus `extraKeys("move")`;
+  `CalendarWrite` gains `move`. It refuses a calendar of another account, the same calendar, a read-only calendar
+  (`calendar.read-only`), an event type other than `default` (`event.unmovable`), and an occurrence without
+  `--series`. The store cancels the old copy and saves the new one under the same UID.
+- **The contract kits cover both.** `calendarWriterContract` runs the "following" split over `memoryEventStore`
+  (earlier slots kept, the new series from the occurrence, no second series on a retry after a lost answer). With
+  `CalendarWriterFixture.target` and a writer that has `move`, it also checks a move: id kept, old etag a conflict,
+  retry finds the event. `fakeCalendarWriter` moves.
+
+### Changed — may break callers
+
+- **Calendar writes that are easy to undo go ahead by default, as tg's and drive's writes do.** In
+  `CALENDAR_WRITE_DEFAULTS`, `events.create`, `events.update`, `events.respond` and the new `events.move` are
+  `allow` (were `ask`). `events.delete` stays `ask`, and it also covers `--following`. `events.delete.series` and
+  `events.notify` stay `deny`, so mailing attendees still needs the owner's yes. A profile that wants a question
+  first sets the key to `ask`.
+- **A calendar series update whose new rule ends it sooner also needs `events.delete.series`,** which is `deny` by
+  default. `events update --series --repeat` with a COUNT or UNTIL that drops slots the series had (a bound added, an
+  earlier UNTIL, a smaller COUNT, or a bound of the other kind) deleted the later slots under `events.update` alone; it
+  now takes the same key as deleting the series. A rule with no end, or a later one, still needs only
+  `events.update`.
+- **A calendar `sync` with a failed calendar prints nothing on stdout, and `sync.partial` carries the whole result.**
+  It printed the report and then failed, so stdout held an answer and the run was a failure (WC-OUT-14). Now the
+  error's message lists each failed calendar as `calendar <id> (<title>): <error>`, `details.calendars` holds every
+  synced calendar's `calendar_id`, `external_id`, `title`, `round`, `state`, `saved`, `removed`, `occurrences` and, on a
+  failed one, `error`, and the error says `retry.safe: true` (`retryable: true`, `sent: false`: a sync sends the
+  provider no write). A host that queues the report and prints it before the error must stop doing so.
+- **`EventStore` gains `slotsOf`, and `LinkReview` gains `calendarId`** (the calendar of a `calendar_entry` review's
+  copy). `resolveAnswer` takes the account id after the store.
+- **`EventStore` gains `saveSlots`**, which saves several series' slots and the sync cursor in one transaction.
+
+- **`EventStore` gains `participantsOf(eventIds, calendarIds)`**: the participants of those events' copies on those
+  calendars, in one read.
+
+- **`StoredEntry` gains `createdAt` and `transparency`, and `EventStore` gains `historyOf`.**
+
+### Fixed
+
+- **A calendar sync commits a few times per calendar, not twice per repeating event.** The slots of up to 50 series
+  (250 slots) and the cursor go in one transaction. On a 20,000-event store with 819 weekly series (engine and SQLite
+  store, fake provider): 123 write transactions instead of 1,663 for a full round.
+- **The daily full round asks only the series that changed for their slots.** A series with the stored etag and slots
+  stored in the window keeps them; every series is asked again once a week, and on `--rescan`. On the same store the
+  next day's full round made 0 `instances` requests instead of 819 and took 6.7 s instead of 15.1 s. A series that does
+  not change lacks at most 7 days of slots at the window's far end, three months ahead.
+
+- **The daily full calendar sync no longer marks events outside its window as deleted.** A full list returns only
+  what falls in the window (a year back, three months ahead), but `markUnseen` limited only plain occurrences to it,
+  so every older or later single event, moved occurrence and ended series was marked deleted, and its event cancelled
+  or marked gone at the source. It now marks only what `entryInWindow` (new, from `@wirecat/cli-core/meetings`) puts
+  in the window. Stores already damaged heal on their next sync: each calendar runs the new
+  `EventStore.restoreUnseen` once, which brings back the entries marked outside the window of the list that marked
+  them, with their events. A rescan cannot do this, since it never lists them again. Implementations of `EventStore`
+  outside cli-core need `restoreUnseen`.
+- **A repeating event moved to another time no longer keeps its slots at the old time.** An incremental sync saved the
+  slots the provider gave for the series and left the old ones scheduled. Now the series' stored plain slots in the
+  window that the provider no longer gives are cancelled.
+- **A `sync --rescan` its budget stopped no longer leaves calendars it did not reach on incremental rounds.** The rescan
+  is saved as each calendar's round before the first request, so the next plain `sync` lists those in full.
+- **A create the provider made but the store failed to save names the event's id.** The error carries
+  `operation_id` and `id` and says to sync, or to repeat with `--id`, which finds the event instead of making it again.
+  The same for the new series of `events update --following`.
+- **`links resolve` no longer changes a link choice of another account's calendar.** It refuses with
+  `permission_error`; `links review` still lists every account's choices.
+- **`events list` by time seeks the time index, and `people list` reads attendees in one query.** The list query put
+  both time bounds inside `CASE WHEN all_day`, so SQLite scanned the events from the start of the window; plain bounds
+  on `starts_at`, wider than the exact ones (back by the longest stored event plus a day, forward by a day), now let it
+  seek. `people list` read each of up to 1,000 events with five queries. On a 20,000-event store: `events list` today
+  12.5 → 2 ms, `people list` for a week 83 → 15 ms, same answers.
+
+- **The store's `node:sqlite` driver prepares each SQL text once per connection.** It prepared every statement again
+  on every call, which was a quarter of a gcal sync's time. Each connection now keeps up to 1,000 prepared
+  statements (least recently used out first) and finalizes them on `close()`. gcal 0.1.1's first sync of a synthetic
+  calendar ran 2.5–2.7 times faster (5,000 events: 6.7 → 2.5 s; 50,000: 68 → 28 s). `prepare()` with the same SQL
+  now returns the same statement. Bun's driver already cached through `db.query()`.
+
 ## 0.488.0 — 30.10.2026
 
 ### Added

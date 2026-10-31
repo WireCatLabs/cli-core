@@ -155,6 +155,10 @@ export interface StoredEntry {
   etag: string | null
   seenAt: number | null
   deletedAt: number | null
+  /** When this copy was first stored. */
+  createdAt: number
+  /** `transparent`: the copy does not take the owner's time. */
+  transparency: EntryTransparency | null
 }
 
 export interface StoredParticipant {
@@ -198,6 +202,13 @@ export interface EventFilter {
   to?: number
   /** All-day events, which have dates and no instant, ending after this local day (`YYYY-MM-DD`); `from` without it. */
   fromDate?: string
+  /** Events `eventChange` finds new, moved or cancelled at or after this instant. */
+  changedSince?: number
+  /**
+   * Events whose time overlaps another's. Only timed events that take the owner's time count: not cancelled, and with
+   * a live copy the owner did not decline or mark free.
+   */
+  overlapping?: boolean
   /** All-day events starting before this local day (exclusive); `to` without it. */
   toDate?: string
   accountId?: number
@@ -211,10 +222,18 @@ export interface EventFilter {
 }
 
 /** Pairs the rules left unlinked because two or more entities fit equally well (requirements 3.6). */
+/** One series' slots for `EventStore.saveSlots`: what the provider gave, or `null` to keep what is stored. */
+export interface SeriesSlots {
+  series: string
+  slots: EntryInput[] | null
+}
+
 export interface LinkReview {
   id: number
   linkableType: string
   linkableId: number
+  /** The calendar of a `calendar_entry` review's copy, so a choice is made only from that calendar's account. */
+  calendarId: number | null
   entityType: string
   candidates: number[]
   reason: string
@@ -245,10 +264,20 @@ export interface EventStore {
    */
   removeEntries(calendarId: number, externalIds: string[], now: number): Promise<number>
   /**
-   * After a full list: entries not seen since `seenBefore` get `deleted_at`. Plain occurrences come only from the
-   * window fetched, so only those inside it count. Events, series and links stay.
+   * After a full list: entries not seen since `seenBefore` get `deleted_at`. A full list holds only what falls in the
+   * window, so only entries `entryInWindow` puts there count. Events, series and links stay.
    */
   markUnseen(calendarId: number, seenBefore: number, window: { from: number; to: number }, now: number): Promise<number>
+  /**
+   * Takes `deleted_at` off the entries a full list marked although they were outside the window it listed:
+   * `windowAt(deletedAt)` is the window of the list that marked one. Their events take their fields again. Returns how
+   * many came back.
+   */
+  restoreUnseen(
+    calendarId: number,
+    windowAt: (deletedAt: number) => { from: number; to: number },
+    now: number,
+  ): Promise<number>
   /**
    * Where the calendar's last sync stopped, as the sync engine wrote it (`{"v":1,"token":…,"window":…,"fullAt":…}`),
    * or `null` before the first one.
@@ -258,12 +287,121 @@ export interface EventStore {
   setCursor(calendarId: number, value: string | null, now: number): Promise<void>
   /** One entry by the provider's id; a series, which no event holds, is found only this way. */
   entry(calendarId: number, externalId: string): Promise<StoredEntry | null>
+  /**
+   * Several series' slots in the window and the sync cursor, in one transaction: a sync commits once for many series
+   * instead of twice for each. A series' slots replace its stored plain slots in the window (one it no longer has is
+   * cancelled, as `removeEntries` does); `slots: null` keeps them and counts them as seen now.
+   */
+  saveSlots(
+    calendarId: number,
+    groups: SeriesSlots[],
+    window: { from: number; to: number },
+    cursor: string,
+    now: number,
+  ): Promise<{ saved: number; removed: number }>
+  /** The series' stored slots, moved ones too, whose original start falls in the window; deleted ones left out. */
+  slotsOf(calendarId: number, seriesExternalId: string, window: { from: number; to: number }): Promise<StoredEntry[]>
   events(filter?: EventFilter): Promise<Event[]>
   event(id: number): Promise<EventDetails | null>
+  /** These events' copies on these calendars, deleted ones too, and their revisions since the instant, for `eventChange`. */
+  historyOf(
+    eventIds: number[],
+    calendarIds: number[],
+    since: number,
+  ): Promise<{ entries: StoredEntry[]; revisions: EntryRevision[] }>
+  /** The participants of these events' copies on these calendars, deleted copies too, as `event` gives them. */
+  participantsOf(eventIds: number[], calendarIds: number[]): Promise<(StoredParticipant & { eventId: number })[]>
   /** The owner's link of an entry to an event; no rule replaces it. */
   linkEntry(entryId: number, eventId: number, now: number): Promise<void>
   /** The owner's unlink: the rules leave the entry alone after it. */
   unlinkEntry(entryId: number, now: number): Promise<void>
   reviews(filter?: { status?: LinkReview["status"] }): Promise<LinkReview[]>
   resolveReview(id: number, decision: ReviewDecision, now: number): Promise<LinkReview>
+}
+
+const UNTIL = /(?:^|;)UNTIL=(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z?)?(?:;|$)/iu
+
+/** The last moment a series can have a slot, when its rule says; a COUNT rule or none repeats as far as this knows. */
+const seriesEnd = (entry: Pick<StoredEntry, "recurrence" | "recurrenceEndsAt">): number => {
+  if (entry.recurrenceEndsAt !== null) return entry.recurrenceEndsAt
+  const rule = entry.recurrence?.find((line) => /^RRULE:/iu.test(line))
+  const until = rule === undefined ? null : UNTIL.exec(rule.slice("RRULE:".length))
+  if (!until) return Number.POSITIVE_INFINITY
+  const [, year, month, day, hour = "23", minute = "59", second = "59"] = until
+  // A floating or zoned UNTIL is read as UTC; a day later keeps a series near the edge counted as inside.
+  return (
+    Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) + 86_400_000
+  )
+}
+
+/**
+ * Whether a full list of the window would return the entry: a single or a moved slot by its own time, a plain slot by
+ * the time its series gave it, a series while it repeats into the window. An entry with no time is never counted.
+ */
+export const entryInWindow = (
+  entry: Pick<
+    StoredEntry,
+    "kind" | "exception" | "startsAt" | "endsAt" | "originalStartsAt" | "recurrence" | "recurrenceEndsAt"
+  >,
+  window: { from: number; to: number },
+): boolean => {
+  if (entry.kind === "occurrence" && !entry.exception)
+    return (
+      entry.originalStartsAt !== null && entry.originalStartsAt >= window.from && entry.originalStartsAt < window.to
+    )
+  const start = entry.startsAt ?? (entry.kind === "occurrence" ? entry.originalStartsAt : null)
+  if (start === null || start >= window.to) return false
+  if (entry.kind === "series") return seriesEnd(entry) >= window.from
+  return Math.max(entry.endsAt ?? start, start + 1) > window.from
+}
+
+/** What happened to an event at or after an instant, from its copies: first stored, a new time, or cancelled. */
+export interface EventChange {
+  change: "new" | "moved" | "cancelled"
+  /** When the store saw it. */
+  at: number
+  /** The time a moved event had at the instant. */
+  was?: { startsAt: number | null; endsAt: number | null }
+}
+
+/**
+ * The event's change since `since`, from its copies and their revisions (each revision holds the fields before one
+ * change): cancelled when the event is gone and a copy was cancelled or removed since; new when its first copy was
+ * stored since; moved when a live copy's time now differs from its time at `since`. `null` when none of these.
+ */
+export const eventChange = (
+  event: Pick<Event, "status" | "sourceDeletedAt">,
+  entries: readonly StoredEntry[],
+  revisions: readonly EntryRevision[],
+  since: number,
+): EventChange | null => {
+  const after = (entryId: number) =>
+    revisions
+      .filter((one) => one.entryId === entryId && one.createdAt >= since)
+      .sort((a, b) => a.createdAt - b.createdAt)
+  if (event.status === "cancelled" || event.sourceDeletedAt !== null) {
+    const times = entries.flatMap((entry) => [
+      ...(entry.deletedAt !== null && entry.deletedAt >= since ? [entry.deletedAt] : []),
+      ...(entry.status === "cancelled"
+        ? after(entry.id)
+            .filter((one) => one.status !== "cancelled")
+            .map(({ createdAt }) => createdAt)
+        : []),
+    ])
+    if (times.length) return { change: "cancelled", at: Math.max(...times) }
+  }
+  const first = Math.min(...entries.map(({ createdAt }) => createdAt))
+  if (entries.length && first >= since) return { change: "new", at: first }
+  for (const entry of entries) {
+    if (entry.deletedAt !== null || entry.status === "cancelled") continue
+    const changes = after(entry.id)
+    const [was] = changes
+    if (was && (was.startsAt !== entry.startsAt || was.endsAt !== entry.endsAt))
+      return {
+        change: "moved",
+        at: (changes.at(-1) as EntryRevision).createdAt,
+        was: { startsAt: was.startsAt, endsAt: was.endsAt },
+      }
+  }
+  return null
 }

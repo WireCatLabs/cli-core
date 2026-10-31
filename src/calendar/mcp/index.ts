@@ -23,6 +23,7 @@ import {
   deleteEvent,
   EVENT_RESPONSES,
   type EventFields,
+  moveEvent,
   respondToEvent,
   updateEvent,
 } from "../writes.js"
@@ -54,8 +55,9 @@ export const calendarTools = [
   {
     name: "events_list",
     description:
-      "stored events, earliest first; `words` takes today, week, from:<date>, to:<date>, calendar:<id> " +
-      "(a date in the zone given, UTC when absent)",
+      "stored events, earliest first; `words` takes today, week, from:<date>, to:<date>, calendar:<id>, " +
+      "changed:<date> (events new, moved or cancelled since, each with change and was) and overlapping (events " +
+      "that clash, each with overlaps); a date in the zone given, UTC when absent",
     properties: { account_id: integer, words: text, timezone: text, limit: { ...integer, maximum: 1000 } },
     required: [],
   },
@@ -86,6 +88,11 @@ export const calendarTools = [
 
 const anyText = { type: "string" }
 const flag = { type: "boolean" }
+const following = {
+  type: "boolean",
+  description: "this occurrence and every later one: the series ends before it, and a new one starts with the change",
+}
+const newId = { ...text, description: "the id an outcome_unknown named: a retry finds that event instead of a new one" }
 const notify = {
   type: "boolean",
   description: "whether the provider mails the other attendees; required when there are any",
@@ -121,24 +128,40 @@ export const calendarWriteTools = [
       calendar: text,
       ...fields,
       notify,
-      id: { ...text, description: "the id an outcome_unknown named: a retry finds that event instead of a new one" },
+      id: newId,
     },
     required: ["calendar", "title"],
     destructive: false,
   },
   {
     name: "event_update",
-    description: "change an event, or with series every occurrence of its repeating event and its repeat rule",
-    properties: { ...target, ...fields, series: flag, notify },
+    description:
+      "change an event, with series every occurrence of its repeating event and its repeat rule, or with following " +
+      "this occurrence and every later one",
+    properties: { ...target, ...fields, series: flag, following, notify, id: newId },
     required: ["event"],
     destructive: true,
   },
   {
     name: "event_delete",
-    description: "delete an event; deleting a whole repeating event (series) is denied unless the owner allowed it",
-    properties: { ...target, series: flag, notify },
+    description:
+      "delete an event; deleting a whole repeating event (series) or every later occurrence (following) is denied " +
+      "unless the owner allowed it",
+    properties: { ...target, series: flag, following, notify },
     required: ["event"],
     destructive: true,
+  },
+  {
+    name: "event_move",
+    description: "move an event, with its id, to another calendar of the same account; a repeating one moves whole",
+    properties: {
+      ...target,
+      to_calendar: { ...text, description: "the calendar to move it to" },
+      series: flag,
+      notify,
+    },
+    required: ["event", "to_calendar"],
+    destructive: false,
   },
   {
     name: "event_respond",
@@ -187,13 +210,14 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
         "end_date",
         "id",
         "repeat",
+        "to_calendar",
       ].includes(key) &&
       (typeof value !== "string" || !value.trim())
     )
       throw new CliError("validation_error", `${key} must not be empty`)
     else if (["location", "description"].includes(key) && typeof value !== "string")
       throw new CliError("validation_error", `${key} must be text`)
-    else if (["notify", "series"].includes(key) && typeof value !== "boolean")
+    else if (["notify", "series", "following"].includes(key) && typeof value !== "boolean")
       throw new CliError("validation_error", `${key} must be true or false`)
     else if (key === "attendees" && (!Array.isArray(value) || value.some((one) => typeof one !== "string")))
       throw new CliError("validation_error", "attendees must be a list of email addresses")
@@ -397,12 +421,20 @@ const writeTool = async (
     ask: async () => {},
     now,
     zone: (args.timezone as string | undefined) ?? "UTC",
-    names: { notify: "notify: true or false", id: "id", calendar: "calendar", series: "series", repeat: "repeat" },
+    names: {
+      notify: "notify: true or false",
+      id: "id",
+      calendar: "calendar",
+      series: "series",
+      following: "following",
+      repeat: "repeat",
+    },
   }
   const choice = args.notify === undefined ? {} : { notify: args.notify as boolean }
   const on = {
     ...(args.calendar === undefined || creating ? {} : { calendar: args.calendar as string }),
     ...(args.series === true ? { series: true } : {}),
+    ...(args.following === true ? { following: true } : {}),
   }
   const result =
     name === "event_create"
@@ -411,9 +443,18 @@ const writeTool = async (
           ...(args.id === undefined ? {} : { id: args.id as string }),
         })
       : name === "event_update"
-        ? await updateEvent(context, args.event as string, fieldsOf(args), { ...on, ...choice })
+        ? await updateEvent(context, args.event as string, fieldsOf(args), {
+            ...on,
+            ...choice,
+            ...(args.id === undefined ? {} : { id: args.id as string }),
+          })
         : name === "event_delete"
           ? await deleteEvent(context, args.event as string, { ...on, ...choice })
-          : await respondToEvent(context, args.event as string, args.response as EventResponse, { ...on, ...choice })
+          : name === "event_move"
+            ? await moveEvent(context, args.event as string, args.to_calendar as string, { ...on, ...choice })
+            : await respondToEvent(context, args.event as string, args.response as EventResponse, {
+                ...on,
+                ...choice,
+              })
   return { account, result }
 }
