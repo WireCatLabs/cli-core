@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { CliError } from "@wirecat/cli-base"
 import { parseLucene } from "@wirecat/cli-base/query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Embedder } from "../embeddings/embed.js"
@@ -152,6 +153,60 @@ describe("field terms in the query hold for hits found by meaning", () => {
     await vectors(store, (text) => text.includes("lighthouse"))
     const found = await search(store, "beacon", { filter: "tag:work" })
     expect(found.hits[0]).toMatchObject({ title: "Lighthouse", found_by: ["meaning"] })
+  })
+})
+
+describe("meaning inside a narrow filter", () => {
+  const MID = Float32Array.from([0.6, 0.8, 0, 0])
+  // 60 notes outside the filter are nearer than the 3 inside, so the nearest 50 overall hold none of the filter's.
+  const crowded = async () => {
+    const store = await seeded([
+      ...Array.from({ length: 3 }, (_, index) => ({
+        title: `Inside ${index}`,
+        text: `inside ${index}`,
+        tags: ["work"],
+      })),
+      ...Array.from({ length: 60 }, (_, index) => ({ title: `Outside ${index}`, text: `outside ${index}` })),
+    ])
+    const key = vectorModelKey(tiny)
+    const chunks = await store.notes.chunksToEmbed(key, { limit: 10_000 })
+    await store.vectors.saveVectors(
+      key,
+      tiny.dims,
+      chunks.map(({ hash, text }) => ({ hash, vector: text.includes("inside") ? MID : NEAR })),
+    )
+    return store
+  }
+
+  it("ranks every note of the filter by meaning, not only those among the nearest overall", async () => {
+    const store = await crowded()
+    const found = await search(store, "beacon tag:work")
+    expect(found.titles).toEqual(["Inside 0", "Inside 1", "Inside 2"])
+    expect(found.hits.every(({ found_by }) => found_by.includes("meaning"))).toBe(true)
+    expect(found.total).toEqual({ value: 3, relation: "eq" })
+  })
+
+  it("falls back to the nearest overall when listing the filter's notes is too costly", async () => {
+    const store = await crowded()
+    vi.spyOn(store.notes, "matchingRefs").mockRejectedValueOnce(
+      new CliError("validation_error", "too large", { reason: "query.too-large" }),
+    )
+    expect((await search(store, "beacon tag:work")).titles).toEqual([])
+  })
+
+  it("a total past the nearest notes it read is a lower bound", async () => {
+    const store = await crowded()
+    expect((await search(store, "beacon")).total).toEqual({ value: 50, relation: "gte" })
+  })
+})
+
+describe("the total of a notes search", () => {
+  it("counts the notes the words find and those found by meaning, every page together", async () => {
+    const store = await seeded(NOTES)
+    await vectors(store)
+    expect((await search(store, "tag:work", { limit: 1 })).total).toEqual({ value: 2, relation: "eq" })
+    expect((await search(store, "plan tag:work", { limit: 1 })).total).toEqual({ value: 2, relation: "eq" })
+    expect((await search(store, "plan", { exact: true })).total).toEqual({ value: 2, relation: "eq" })
   })
 })
 

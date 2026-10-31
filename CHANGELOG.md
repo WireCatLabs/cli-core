@@ -24,6 +24,28 @@ shape of this file.
   owner's alias for them, else an identity's name; a project or organization by its name. The owner has no name in the
   store, so `subjectName` is `null` and `subjectIsOwner` is `true`. The `memory` and `fact` entities gain optional
   `subject_name`, `subject_is_owner` and `sources`.
+- **Search answers say how many match in all: `page.total`.** `search notes` (and `drive <profile> search`), `search
+  messages` and `memo search mail` add `page.total: { value, relation }` to `--json`, shaped as Elasticsearch's
+  `hits.total`: `relation` is `eq` for an exact count and `gte` for a lower bound. The terminal adds a line such as
+  `showing 1–20 of 144` (`144+` for a lower bound). Notes count every note the words find plus every note found by
+  meaning; messages count the strict query's matches, or discovery's candidates with `--discover`. Counting stops at
+  10,000 (`TOTAL_CAP`, Elasticsearch's default), and a query whose leaves are checked row by row (a preset, a
+  pattern) gets the lower bound the page proves. New: `SearchTotal`, `NotesFound.total`, `SearchFound.total`,
+  `NoteSearch.matchingRefs` (refs only, no note read), `NoteSearch.scoreNotes` and `QueriesStore.countMatches`;
+  `listOf` takes `total`.
+
+### Changed — may break callers
+
+- **cli-core needs `@wirecat/cli-base` 0.67.** The peer range moves from `>=0.65.0 <0.66.0` to `>=0.67.0 <0.68.0`. A
+  CLI that pins cli-base moves its pin with this release. cli-base 0.67 adds `page.total` to the list envelope.
+
+### Fixed
+
+- **Search by meaning inside a filter ranks the filter's own notes.** With a filter that holds at most 2,000 notes
+  (`RANK_WITHIN`), `search notes` scores every one of them by meaning, instead of taking the 50 nearest notes overall
+  and dropping those outside the filter. On the owner's store, Drive's `budget date>=30d` went from 7 hits to a full
+  page of 20, with 50 found by meaning among the 144 documents in the date range; no hit falls outside the filter,
+  as before. A larger filter keeps the old way, as does one the store cannot list cheaply.
 
 ## 0.499.0 — 31.10.2026
 

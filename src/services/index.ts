@@ -264,6 +264,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
 export { entriesOfList, type ListContext, type ListedEntry } from "../search/account-list.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
+export { type SearchTotal, TOTAL_CAP } from "../search/total.js"
 export { TASK_KINDS, TASK_ORIGINS, type TaskKind, type TaskOrigin } from "../tasks/index.js"
 export type { AdminFound, AdminQuery, AdminSelection, AdminStatisticsService } from "./admin-statistics.js"
 export { adminStatisticsService } from "./admin-statistics.js"
@@ -373,6 +374,7 @@ export {
   type NotesQuery,
   type NotesSearchRequest,
   nearestNotes,
+  RANK_WITHIN,
   searchNotes,
   searchNotesOf,
   searchNotesQuery,
