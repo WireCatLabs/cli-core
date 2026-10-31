@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A budgeted `syncMail` waits out a locked store.** When another process (memo's scheduled sync) holds the store's
+  write lock past its 5 s busy timeout, the sync used to fail with `database is locked`; it now waits 2 s, 4 s, ... (at
+  most 5 times, each a request of the budget) and reads the round again. When the budget has no room the run ends as
+  `partial`. `options.wait` lets a test skip the pause.
+
 ## 0.507.0 — 31.10.2026
 
 ### Added

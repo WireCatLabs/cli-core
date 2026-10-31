@@ -4,6 +4,7 @@ import { importEngine } from "../attachments/extract.js"
 import type { BudgetStop, RunBudget } from "../background/budget.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { AccountKey, EmailLocationInput, FolderEmail, MessageStore, ThreadSave } from "../store/index.js"
+import { isBusy } from "../store/sqlite/transaction.js"
 import { addressOf, FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { BULK, bulkBox } from "./bulk.js"
 import { factsOf } from "./facts.js"
@@ -124,6 +125,8 @@ export interface MailSyncOptions {
    * is tried once more at the end of the run and, if it still fails, left for the next one. `max` defaults to no limit.
    */
   budget?: RunBudget
+  /** Pauses before a round is read again after the store was locked; tests pass one that does not wait. */
+  wait?: (ms: number) => Promise<void>
 }
 
 /** What a budgeted run carries from one round to the next. */
@@ -137,6 +140,8 @@ interface Plan extends QuickPlan {
 }
 
 const LIST_SLICE = 200
+const STORE_BUSY_TRIES = 5
+const STORE_BUSY_WAIT_MS = 2_000
 
 export const syncMail = async (
   source: MailSource,
@@ -161,10 +166,12 @@ export const syncMail = async (
     asked: 0,
   }
   const rounds: MailSyncResult[] = []
+  let busyWaits = 0
   const goOn = async () => {
     for (;;) {
       plan.asked = 0
       plan.remaining = 0
+      const triedBefore = plan.tried.size
       try {
         rounds.push(
           await syncRound(
@@ -175,6 +182,20 @@ export const syncMail = async (
           ),
         )
       } catch (error) {
+        // Another process (memo's scheduled sync) held the store's write lock past its busy timeout. The slices this
+        // run committed stay; the round's messages are asked for again after a pause, while the budget has room.
+        if (isBusy(error) && busyWaits < STORE_BUSY_TRIES && !options.signal?.aborted) {
+          busyWaits++
+          for (const key of [...plan.tried].slice(triedBefore)) plan.tried.delete(key)
+          const stop = budget.take()
+          if (stop === null) {
+            await (options.wait ?? setTimeout)(STORE_BUSY_WAIT_MS * busyWaits)
+            continue
+          }
+          plan.stopped = stop
+          plan.remaining = Math.max(plan.remaining, 1)
+          return
+        }
         // A request cut at the deadline, or failed after the budget was spent, is the run's end, not its failure: what
         // earlier rounds saved is kept and the next run goes on. While the budget has room the error is real.
         const transient = error instanceof CliError && (error.code === "timeout" || error.code === "network_error")
