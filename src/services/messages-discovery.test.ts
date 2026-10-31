@@ -294,6 +294,12 @@ describe("discovery follow-ups", () => {
     expect(found.query?.discovery?.followUps).toBeGreaterThan(0)
     const item = messageHitItem(decision as FoundMessage)
     expect(item.follow_ups?.[0]).toMatchObject({ ref: "msg:synthetic/500/102/3", chat_title: "Ops" })
+    const later = (decision as FoundMessage).followUps?.[0] as FoundMessage
+    const long = messageHitItem({
+      ...(decision as FoundMessage),
+      followUps: [{ ...later, text: "Brightwell ".repeat(200) }],
+    })
+    expect(long.follow_ups?.[0]?.excerpt.length).toBeLessThanOrEqual(242)
     expect(v.safeParse(ENTITIES["message.hit"], item).success).toBe(true)
   })
   it("links no word held by more than three messages, and nothing earlier than the hit", async () => {

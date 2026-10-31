@@ -68,7 +68,7 @@ export const message = v.strictObject({
   ),
   /**
    * A discovery hit's later messages, from any chat the search reads, that share a rare word with it, latest first:
-   * one may change or cancel what the hit says.
+   * one may change or cancel what the hit says. An excerpt, as the hit's own: `messages context <ref>` has the whole text.
    */
   follow_ups: v.optional(
     v.array(
@@ -77,7 +77,7 @@ export const message = v.strictObject({
         chat_title: v.nullable(text),
         timestamp: time,
         sender_name: v.nullable(text),
-        text,
+        excerpt: text,
       }),
     ),
   ),

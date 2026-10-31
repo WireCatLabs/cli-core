@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A discovery follow-up carries an `excerpt` of up to 240 characters, as the hit itself, instead of its whole
+  `text`.** On a real archive one follow-up (a pasted long write-up) added 7 KB to a five-hit answer, a sixth of it.
+  `items[].follow_ups[].text` is now `items[].follow_ups[].excerpt`; `messages context <ref>` shows the whole message.
+  The terminal output is unchanged.
+
 ### Fixed
 
 - **Discovery search keeps the colons of a quoted timestamp in a date filter.** 0.492.0 turned a colon between digits
