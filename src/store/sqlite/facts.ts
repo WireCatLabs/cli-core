@@ -11,7 +11,9 @@ import {
   dropLinksOf,
   erase,
   evidenceOf,
+  keepHighestId,
   linkEvidence,
+  nextId,
   subjectOf,
 } from "./memories.js"
 import { requiredThing } from "./notes.js"
@@ -172,11 +174,12 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         const made = Number(
           database
             .prepare(
-              "INSERT INTO facts (type, statement, status, project_id, subject_type, subject_id, occurred_at, supersedes_id, " +
+              "INSERT INTO facts (id, type, statement, status, project_id, subject_type, subject_id, occurred_at, supersedes_id, " +
                 "author_type, author_id, model, scope, source, created_at, updated_at) " +
-                "VALUES (?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "VALUES (?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
+              nextId(database, "facts"),
               type,
               statement,
               project?.id ?? null,
@@ -260,6 +263,8 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       const id = Number(row.id)
       const twin = row.source === "memory" && row.metadata != null ? migratedFrom(String(row.metadata)) : undefined
       const links = erase(database, () => {
+        keepHighestId(database, "facts", now())
+        if (twin !== undefined) keepHighestId(database, "memories", now())
         database.prepare("UPDATE facts SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
         const count = dropLinksOf(database, { type: "fact", id })
         database.prepare("DELETE FROM links WHERE from_type = 'fact' AND from_id = ?").run(id)

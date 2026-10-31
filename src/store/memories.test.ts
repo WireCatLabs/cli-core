@@ -373,4 +373,35 @@ describe("facts", () => {
     ).toEqual([{ twin: 0, links: 0, facts: 3, notes: 1 }])
     expect(fileHolds(path, "quokkamarch")).toBe(false)
   })
+
+  it("never hand a forgotten memory's or fact's number to the next one, across a reopen", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
+    const store = await open(path)
+    const note = await store.notes.addNote({ text: "Synthetic evidence" })
+    const memory = () =>
+      store.memories.add({ kind: "summary", body: "x", scope: "work", evidence: [note.ref], author: agent })
+    const fact = () => store.facts.add({ type: "fact", statement: "y", by: agent, evidence: [note.ref] })
+    await memory()
+    const highestMemory = await memory()
+    await fact()
+    const highestFact = await fact()
+    await store.memories.remove(highestMemory.ref)
+    await store.facts.remove(highestFact.ref)
+    await store.close()
+    live.splice(live.indexOf(store), 1)
+
+    const reopened = await open(path)
+    const nextMemory = await reopened.memories.add({
+      kind: "summary",
+      body: "z",
+      scope: "work",
+      evidence: [note.ref],
+      author: agent,
+    })
+    const nextFact = await reopened.facts.add({ type: "fact", statement: "w", by: agent, evidence: [note.ref] })
+    expect(Number(nextMemory.id)).toBe(Number(highestMemory.id) + 1)
+    expect(Number(nextFact.id)).toBe(Number(highestFact.id) + 1)
+    await expect(reopened.memories.get(highestMemory.ref)).rejects.toMatchObject({ code: "not_found" })
+    await expect(reopened.facts.get(highestFact.ref)).rejects.toMatchObject({ code: "not_found" })
+  })
 })
