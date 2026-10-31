@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.503.0 — 31.10.2026
+
 ### Added
 
 - **`session start --credential-storage` in the parity manifest, for max only** (WC-SECR-4). max's token goes through
