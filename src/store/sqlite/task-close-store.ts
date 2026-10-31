@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { isClosedState } from "../../tasks/index.js"
 import { type Author, authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import {
@@ -55,7 +56,7 @@ export const taskCloseOver = (context: StoreContext): TaskCloseStore => {
     suggestClose: async (id, suggestion, by) =>
       write(database, () => {
         const row = liveRow(id)
-        if (row.status !== "open")
+        if (isClosedState(String(row.status)))
           throw new CliError("validation_error", `task ${String(row.key)} is already ${String(row.status)}`, {
             reason: "task.closed",
           })

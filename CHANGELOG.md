@@ -7,6 +7,29 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A project task has two more open states: `todo` and `in_progress`.** `TASK_STATES` is `open`, `todo`,
+  `in_progress`, `done`, `dismissed`; `CLOSED_STATES` and `isClosedState` name the closed ones. `tasks.edit` moves a
+  project task between any two of them, records each move as a `status` event, sets `started_at` the first time it
+  enters `in_progress`, and reopens a closed task: `closed_at`, who closed it and its reason are cleared. Readiness,
+  `readyTasks`, claims, a person's open tasks, reminders, duplicate checks and category counts treat both new states as
+  open work. A task from a message stays open or closed.
+- **`tasks.board(query, { limit, offset, sort, descending, zone })` and `tasks.boardCounts(query)`** list the owner's
+  project tasks across every project (an account's inbox is left out) with a Lucene query over `PROJECT_TASK_FIELDS`:
+  `state`, `kind`, `project` (`project:*` for all), `assignee` (`any`, `none`, `"person:12"`), `priority` with
+  ranges, `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
+  (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
+  hold each project, assignee, priority and state, each without the query's own terms on that field.
+- **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
+- **`tasks.events(id)`** names who acted: `actor.name` is the person's or the bot's name, or null.
+- **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
+
+### Changed — may break callers
+
+- **`ClosedState` is `done | dismissed`**, no longer every state but `open`; a check of `state === "open"` for "not
+  closed" misses `todo` and `in_progress` — use `isClosedState`.
+
 ## 0.511.0 — 31.10.2026
 
 ## 0.510.0 — 31.10.2026

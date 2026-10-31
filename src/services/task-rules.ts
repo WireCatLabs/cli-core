@@ -1,7 +1,7 @@
 import { formatLocator } from "../domain/locator.js"
 import type { ChatKind, Id, Message, ReviewChat } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
-import { createTaskService, type TaskKind, type TaskStore } from "../tasks/index.js"
+import { createTaskService, isClosedState, type TaskKind, type TaskStore } from "../tasks/index.js"
 import { questions } from "./questions.js"
 import { categorize, type TaskCategory } from "./task-categories.js"
 
@@ -117,7 +117,7 @@ export const applyTaskRules = async (
   }
   const close = async (message: Message, kind: TaskKind, answer?: Message) => {
     for (const task of await store.findBySource(owner, sourceOf(message))) {
-      if (task.kind !== kind || task.state !== "open") continue
+      if (task.kind !== kind || isClosedState(task.state)) continue
       result.closed += 1
       if (dryRun) continue
       await tasks.close(task.id, { as: "done", by: "rule" })

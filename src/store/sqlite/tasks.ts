@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { TaskCategory, UnlistedCategory } from "../../domain/task-categories.js"
 import {
+  isClosedState,
   matches,
   TASK_KINDS,
   TASK_ORIGINS,
@@ -257,8 +258,9 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
           .prepare(
             "UPDATE tasks SET status = ?, close_reason = ?, close_reason_folded = ?, due_at = ?, closed_at = ?, " +
               "closed_by_type = ?, closed_by_id = ?, updated_at = ?, " +
-              "claimed_by = CASE WHEN ? = 'open' THEN claimed_by END, claimed_until = CASE WHEN ? = 'open' THEN claimed_until END, " +
-              "close_certainty = CASE WHEN ? = 'open' THEN NULL ELSE close_certainty END " +
+              "claimed_by = CASE WHEN ? NOT IN ('done', 'dismissed') THEN claimed_by END, " +
+              "claimed_until = CASE WHEN ? NOT IN ('done', 'dismissed') THEN claimed_until END, " +
+              "close_certainty = CASE WHEN ? NOT IN ('done', 'dismissed') THEN NULL ELSE close_certainty END " +
               "WHERE id = ?",
           )
           .run(
@@ -275,7 +277,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             task.state,
             row,
           )
-        if (task.state !== "open") database.prepare(`UPDATE tasks SET ${CLEAR_SUGGESTION} WHERE id = ?`).run(row)
+        if (isClosedState(task.state)) database.prepare(`UPDATE tasks SET ${CLEAR_SUGGESTION} WHERE id = ?`).run(row)
         if (before.status !== task.state)
           recordTaskEvent(database, row, closedBy ?? null, "status", { status: [before.status, task.state] }, at)
         if ((before.due_at ?? null) !== time(task.dueAt))

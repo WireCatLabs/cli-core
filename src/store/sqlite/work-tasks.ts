@@ -1,15 +1,19 @@
 import { CliError } from "@wirecat/cli-base"
+import type { QueryAst } from "@wirecat/cli-base/query"
 import { TASK_TYPES, WORK_TASK_TYPES } from "../../domain/knowledge.js"
-import { TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
+import { isClosedState, TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"
 import { folded } from "./folded.js"
 import { type Author, authorActor } from "./memories.js"
+import { CORPORA, drainCorpus } from "./note-index.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
-import type { Where } from "./query-filter.js"
+import { queryFilter, type Where } from "./query-filter.js"
+import { stemmerCache } from "./stems.js"
+import { BOARD_SCOPE, boardOrder, projectTaskColumns, type TaskSort, withoutField } from "./task-board.js"
 import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
-import { inboxKey } from "./task-keys.js"
+import { INBOX_KEY_LENGTH, inboxKey } from "./task-keys.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { taskIdOf, taskRowOf, thingOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -96,9 +100,29 @@ export interface TaskDetails {
   updatedAt: string
 }
 
+export interface BoardOptions {
+  limit: number
+  offset?: number
+  sort?: TaskSort
+  descending?: boolean
+  /** The zone `due:today` and bare dates are read in. */
+  zone?: string
+}
+
+/** How many tasks match, and how many hold each value: the board's pickers show these beside their choices. */
+export interface BoardCounts {
+  total: number
+  project: { value: string; name: string; count: number }[]
+  /** `person:<id>`, or `none` for the tasks nobody is assigned. */
+  assignee: { value: string; name: string | null; count: number }[]
+  priority: { value: number | null; count: number }[]
+  state: { value: TaskState; count: number }[]
+}
+
 export interface TaskEvent {
   kind: (typeof TASK_EVENT_KINDS)[number]
-  actor: Actor | null
+  /** `name`: the person's or the bot's, as the store holds it now. */
+  actor: (Actor & { name: string | null }) | null
   changes: Record<string, [unknown, unknown]> | null
   at: string
 }
@@ -128,6 +152,12 @@ export interface WorkTasks extends TaskRelationsStore {
     limit?: number
   }): Promise<TaskDetails[]>
   events(id: string): Promise<TaskEvent[]>
+  /** The owner's project tasks, every project at once, narrowed by a query over `PROJECT_TASK_FIELDS`. */
+  board(query: QueryAst | undefined, options: BoardOptions): Promise<{ items: TaskDetails[]; total: number }>
+  /** The owner and everyone who holds a role on a live task, by name: who the board offers to assign. */
+  taskPeople(): Promise<{ person: string; name: string | null; owner: boolean; tasks: number }[]>
+  /** Each count leaves out the query's own terms on that field, so a chosen project does not hide the others. */
+  boardCounts(query: QueryAst | undefined, options?: Pick<BoardOptions, "zone">): Promise<BoardCounts>
   /**
    * Takes an open task for `holder` until `until`, unless someone else holds it now — a lapsed claim holds nothing,
    * and the holder's own claim is extended.
@@ -250,6 +280,18 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       updatedAt: iso(row.updated_at) as string,
     }
   }
+  const stemmerFor = stemmerCache()
+  const boardWhere = (query: QueryAst | undefined, zone: string | undefined, at: number): Where => {
+    if (query === undefined) return { sql: BOARD_SCOPE, params: [] }
+    const where = queryFilter(query, projectTaskColumns(at), {
+      command: "tasks list",
+      now: at,
+      ...(zone ? { zone } : {}),
+    })
+    return { sql: `${BOARD_SCOPE} AND (${where.sql})`, params: where.params }
+  }
+  const countOf = (where: Where) =>
+    Number(database.prepare(`SELECT count(*) AS n FROM tasks t WHERE ${where.sql}`).get(...where.params)?.n ?? 0)
   const rowById = (id: number) => database.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Row
   const details = (id: number) => detailsOf(rowById(id))
 
@@ -285,17 +327,35 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     if (fields.status !== undefined) {
       if (!TASK_STATES.includes(fields.status))
         throw new CliError("validation_error", `a task's status is one of ${TASK_STATES.join(", ")}`)
-      const closed = fields.status !== "open"
+      if (
+        (fields.status === "todo" || fields.status === "in_progress") &&
+        String(database.prepare("SELECT key FROM projects WHERE id = ?").get(Number(before.project_id))?.key).length ===
+          INBOX_KEY_LENGTH
+      )
+        throw new CliError(
+          "validation_error",
+          "a task from a message is open, done or dismissed; todo and in_progress are for a project task",
+        )
+      const closed = isClosedState(fields.status)
+      const reopened = !closed && isClosedState(String(before.status))
       if (before.status !== fields.status) {
         change("status", fields.status, "status")
-        change("closed_at", closed ? at : null)
-        change("closed_by_type", closed ? actor.type : null)
-        change("closed_by_id", closed ? actor.id : null)
+        if (fields.status === "in_progress" && before.started_at == null) change("started_at", at)
+        if (closed || reopened) {
+          change("closed_at", closed ? at : null)
+          change("closed_by_type", closed ? actor.type : null)
+          change("closed_by_id", closed ? actor.id : null)
+        }
         if (closed) {
           change("claimed_by", null)
           change("claimed_until", null)
           for (const column of SUGGESTION_COLUMNS) change(column, null)
         } else change("close_certainty", null)
+        // Why it was closed no longer holds once it is open again.
+        if (reopened && fields.reason === undefined) {
+          change("close_reason", null)
+          change("close_reason_folded", null)
+        }
       }
     }
     if (fields.reason !== undefined) {
@@ -462,13 +522,13 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         database
           .prepare(
             "UPDATE tasks SET claimed_by = ?, claimed_until = ?, updated_at = ? " +
-              "WHERE id = ? AND status = 'open' AND (claimed_by IS NULL OR claimed_until < ? OR claimed_by = ?) RETURNING id",
+              "WHERE id = ? AND status NOT IN ('done', 'dismissed') AND (claimed_by IS NULL OR claimed_until < ? OR claimed_by = ?) RETURNING id",
           )
           .get(holder, until.getTime(), at, task, at, holder),
       )
       if (!won) {
         const row = rowById(task)
-        if (row.status !== "open")
+        if (isClosedState(String(row.status)))
           throw new CliError(
             "validation_error",
             `task ${String(row.key)} is ${String(row.status)}; only an open task is claimed`,
@@ -501,15 +561,89 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       })
       return details(task)
     },
+    board: async (query, { limit, offset = 0, sort = "priority", descending = false, zone }) => {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
+        throw new CliError("validation_error", "a page of tasks holds 1–500")
+      drainCorpus(database, CORPORA.task, stemmerFor)
+      const where = boardWhere(query, zone, now())
+      const rows = database
+        .prepare(`SELECT t.* FROM tasks t WHERE ${where.sql} ORDER BY ${boardOrder(sort, descending)} LIMIT ? OFFSET ?`)
+        .all(...where.params, limit, offset)
+      return { items: rows.map(detailsOf), total: countOf(where) }
+    },
+    boardCounts: async (query, { zone } = {}) => {
+      drainCorpus(database, CORPORA.task, stemmerFor)
+      const at = now()
+      const without = (name: string) => boardWhere(withoutField(query, name), zone, at)
+      const grouped = (name: string, select: string, from: string, group: string) => {
+        const where = without(name)
+        return database
+          .prepare(`SELECT ${select}, count(*) AS n FROM tasks t ${from} WHERE ${where.sql} GROUP BY ${group}`)
+          .all(...where.params)
+      }
+      const project = grouped("project", "p.key, p.name", "JOIN projects p ON p.id = t.project_id", "p.id")
+        .map((row) => ({ value: String(row.key), name: String(row.name), count: Number(row.n) }))
+        .sort((a, b) => a.value.localeCompare(b.value))
+      const assigned = grouped(
+        "assignee",
+        "a.assignee_id AS person, pe.name",
+        "LEFT JOIN task_assignments a ON a.task_id = t.id AND a.assignee_type = 'person' AND a.role = 'assignee' " +
+          "LEFT JOIN persons pe ON pe.id = a.assignee_id",
+        "a.assignee_id",
+      )
+      const assignee = assigned
+        .map((row) => ({
+          value: row.person == null ? "none" : `person:${row.person}`,
+          name: row.name == null ? null : String(row.name),
+          count: Number(row.n),
+        }))
+        .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+      const priorities = new Map(
+        grouped("priority", "t.priority", "", "t.priority").map((row) => [row.priority, Number(row.n)]),
+      )
+      const states = new Map(grouped("state", "t.status", "", "t.status").map((row) => [row.status, Number(row.n)]))
+      return {
+        total: countOf(boardWhere(query, zone, at)),
+        project,
+        assignee,
+        priority: [0, 1, 2, 3, 4, null].map((value) => ({ value, count: priorities.get(value) ?? 0 })),
+        state: TASK_STATES.map((value) => ({ value, count: states.get(value) ?? 0 })),
+      }
+    },
+    taskPeople: async () =>
+      database
+        .prepare(
+          "SELECT p.id, p.name, p.owner, count(DISTINCT t.id) AS n FROM persons p " +
+            "LEFT JOIN task_assignments a ON a.assignee_type = 'person' AND a.assignee_id = p.id " +
+            "LEFT JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL " +
+            "WHERE p.owner = 1 OR t.id IS NOT NULL GROUP BY p.id ORDER BY p.owner DESC, p.name COLLATE NOCASE, p.id",
+        )
+        .all()
+        .map((row) => ({
+          person: `person:${row.id}`,
+          name: row.name == null ? null : String(row.name),
+          owner: Number(row.owner) === 1,
+          tasks: Number(row.n),
+        })),
     events: async (id) =>
       database
         .prepare(
-          "SELECT actor_type, actor_id, kind, changes, created_at FROM task_events WHERE task_id = ? ORDER BY id",
+          "SELECT e.actor_type, e.actor_id, e.kind, e.changes, e.created_at, " +
+            "CASE e.actor_type WHEN 'person' THEN p.name WHEN 'bot' THEN b.name END AS actor_name FROM task_events e " +
+            "LEFT JOIN persons p ON e.actor_type = 'person' AND p.id = e.actor_id " +
+            "LEFT JOIN bots b ON e.actor_type = 'bot' AND b.id = e.actor_id WHERE e.task_id = ? ORDER BY e.id",
         )
         .all(required(id))
         .map((row) => ({
           kind: row.kind as TaskEvent["kind"],
-          actor: row.actor_type == null ? null : { type: row.actor_type as Actor["type"], id: Number(row.actor_id) },
+          actor:
+            row.actor_type == null
+              ? null
+              : {
+                  type: row.actor_type as Actor["type"],
+                  id: Number(row.actor_id),
+                  name: row.actor_name == null ? null : String(row.actor_name),
+                },
           changes: row.changes == null ? null : JSON.parse(String(row.changes)),
           at: iso(row.created_at) as string,
         })),

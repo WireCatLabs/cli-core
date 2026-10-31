@@ -1,6 +1,8 @@
 export {
+  CLOSED_STATES,
   type ClosedState,
   closeTask,
+  isClosedState,
   TASK_KINDS,
   TASK_ORIGINS,
   TASK_STATES,
