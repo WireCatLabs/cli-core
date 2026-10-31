@@ -700,6 +700,21 @@
       }
     },
     {
+      "includes": ["src/store/sqlite/emails.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": {
+              "level": "error",
+              "options": {
+                "maxLines": 1010
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/store/sqlite/lucene.ts"],
       "linter": {
         "rules": {

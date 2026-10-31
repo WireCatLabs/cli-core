@@ -192,6 +192,7 @@ export {
   type SearchIndexState,
   searchIndexState,
 } from "./sqlite/search-index.js"
+export type { SyncStateSave } from "./sqlite/sync.js"
 export type { TagCreationOptions, TagCreationReview } from "./sqlite/tag-creation.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
 export type { SimilarSubject, SimilarTask, TaskDraft } from "./sqlite/task-candidates.js"

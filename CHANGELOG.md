@@ -13,6 +13,10 @@ shape of this file.
   lists a filter's messages once meaning can run: together they rank a filter's own messages. `fieldsOfQuery` and
   `meaningWords` live in `src/search/lucene/meaning-parts.ts`, shared by notes and messages.
 
+- **`MailStore.saveThreads(inputs, states?)`.** Saves several threads and sync state (`{ accountId, name, value }`,
+  as `setSyncState` saves it) in one write transaction: all of it commits or none of it does. Like
+  `EventStore.saveSlots`, it lets a sync commit a slice of work with its resume point.
+
 ### Changed — may break callers
 
 - **`search messages --discover` searches by meaning when the query uses `-`, `NOT`, `OR`, groups, phrases or
@@ -22,7 +26,6 @@ shape of this file.
   every field of the query and every excluded word, as notes do since 0.496.0. A field joined to the words by `OR`
   narrows nothing. A query with no word to embed (`date:today`, `Helix*`) stays strict. On the owner's store, 6
   such queries went from 0 meaning hits to 10–17 of 20, with no hit breaking the query.
-
 ### Fixed
 
 - **Search by meaning inside a filter ranks the filter's own messages.** With fields that hold at most 100,000
@@ -32,6 +35,10 @@ shape of this file.
   cannot list in one query (a preset, a pattern), keeps the old way.
 - **`--discover` works on a read-only store.** Its follow-up step created a temporary table to count rare words,
   which a read-only connection refuses; it now counts them with a bounded query.
+- **`mail sync` no longer holds the store's one writer lock for each email in turn.** It saves fetched mail in slices of
+  50 emails, each with the resume point in the same transaction, and pauses 100 ms between slices, so `memo sync` or
+  another process next to it can take the lock instead of failing with "database is locked". A run that fails resumes
+  after the last committed slice.
 - **A long fill or rebuild in one process no longer makes another process's write fail with "database is locked".**
   `writeBatch` pauses 2 ms after each batch it commits. Without the pause, the next batch took the lock again within
   microseconds, and a write waiting in another process (a command run during `store rebuild` or a migration's fill)

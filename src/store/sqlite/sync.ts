@@ -12,7 +12,19 @@ export const syncStateOf = ({ orm }: StoreContext, accountKey: number, name: str
   return row ? { value: row.value, at: toIso(row.at) as string } : undefined
 }
 
-export const writeState = ({ orm, now }: StoreContext, accountKey: number, name: string, value: string): void => {
+/** A sync state value saved with `MailStore.saveThreads`, by the account's row id. */
+export interface SyncStateSave {
+  accountId: number
+  name: string
+  value: string
+}
+
+export const writeState = (
+  { orm, now }: Pick<StoreContext, "orm" | "now">,
+  accountKey: number,
+  name: string,
+  value: string,
+): void => {
   orm
     .insert(syncCursors)
     .values({ accountId: accountKey, key: name, value, createdAt: now(), updatedAt: now() })
