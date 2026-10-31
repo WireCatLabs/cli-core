@@ -6,6 +6,7 @@ import {
   isMovedRun,
   keyringService,
   systemKeyring,
+  type WriteOptions,
 } from "@wirecat/cli-base"
 import type { OAuthClient, TokenSet } from "./provider.js"
 
@@ -41,7 +42,8 @@ export interface TokenStorage {
   /** Throws when the entry cannot be saved, so a sign-in fails before the browser, not after consent. */
   probe(): void
   read(): StoredTokens | undefined
-  write(input: Omit<EncodeInput, "previous">): void
+  /** `signIn` moves an entry the file holds back to the keyring when it takes it (WC-SECR-4); a refresh leaves it. */
+  write(input: Omit<EncodeInput, "previous">, options?: WriteOptions): void
   remove(): CredentialSource[]
 }
 
@@ -227,9 +229,9 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
       throw keyringFailure(error)
     }
   }
-  const save = (value: string) => {
+  const save = (value: string, writeOptions?: WriteOptions) => {
     try {
-      credentials.write(account, value)
+      credentials.write(account, value, writeOptions)
     } catch (error) {
       throw keyringFailure(error, value)
     }
@@ -256,7 +258,7 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
       const value = current()
       return value === undefined ? undefined : codec.decode(value)
     },
-    write: (input) => save(codec.encode({ ...input, previous: raw(account) })),
+    write: (input, writeOptions) => save(codec.encode({ ...input, previous: raw(account) }), writeOptions),
     remove: () => {
       try {
         return credentials.remove(account)

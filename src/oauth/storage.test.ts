@@ -215,6 +215,26 @@ describe("new entries", () => {
     expect(storage.read()).toBeUndefined()
   })
 
+  it("stay in the file on a refresh and move back to the keyring on a sign-in", () => {
+    const configDir = folder()
+    const keyring = memoryKeyring()
+    const storageIn = (storage: "auto" | "file") =>
+      credentialStorage({
+        credentials: { service: "cal-cli", configDir, storage, keyring, env: {}, warn: () => {} },
+        account: oauthAccount("google", "personal"),
+        codec: standardCodec("google"),
+      })
+    const tokens = { accessToken: "a", refreshToken: "r", expiresAt: NOW, scopes: ["s"], tokenType: "Bearer" }
+    storageIn("file").write({ tokens, client: { clientId: "c" } })
+
+    storageIn("auto").write({ tokens: { ...tokens, accessToken: "refreshed" }, client: { clientId: "c" } })
+    expect(keyring.get("cal-cli", "oauth:google:personal")).toBeNull()
+
+    storageIn("auto").write({ tokens, client: { clientId: "c" } }, { signIn: true })
+    expect(keyring.get("cal-cli", "oauth:google:personal")).not.toBeNull()
+    expect(storageIn("file").read()).toBeUndefined()
+  })
+
   it("need a profile and a keyring passed in", () => {
     expect(() => oauthAccount("google", " ")).toThrow(/profile/)
     expect(() =>
