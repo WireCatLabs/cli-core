@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.499.0 — 31.10.2026
+
 ### Added
 
 - **`decodeChannels(bytes)` in `@wirecat/cli-core/speech` returns every channel of a recording:**
