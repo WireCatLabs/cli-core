@@ -5,6 +5,21 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`search messages --discover` shows follow-ups: later messages that may cancel or change a hit.** Each of the
+  first five hits gets up to two later messages, from any chat the search reads and passing its filters, that
+  share a word of three letters or more whose stem at most three messages of the store hold; latest first, a
+  message already shown above is not repeated. `items[].follow_ups` in `--json` and MCP (`ref`, `chat_title`,
+  `timestamp`, `sender_name`, `text`, all untrusted), `later, shares a rare word` lines in the terminal, and the
+  SDK's `query.discovery.followUps` counts them. The counts come from the stem index through a temporary `fts5vocab`
+  table, so the store does not change; while the stems are being built there are no follow-ups. On a benchmark
+  split written by an agent that never saw the method, cancelled decisions in the first three went from 7 to 11
+  of 15 and no answer was lost
+  ([evidence pipeline](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/evidence-pipeline)).
+
 ## 0.491.0 — 31.10.2026
 
 ### Fixed

@@ -2,13 +2,18 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { parseLucene } from "@wirecat/cli-base/query"
+import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { messageHitItem } from "../cli/messenger/search-answers.js"
 import type { Message } from "../domain/models.js"
+import { ENTITIES } from "../entities/index.js"
 import { QUERY_LIMITS } from "../search/lucene/types.js"
 import type { StoreContext } from "../store/sqlite/open.js"
 import { directReplies } from "../store/sqlite/search.js"
 import { type MessageStore, openStore } from "../store/store.js"
+import type { FoundMessage } from "./messages.js"
 import { searchStore } from "./messages-archive-search.js"
+import { FOLLOW_UP_HITS } from "./messages-discovery.js"
 
 const account = { provider: "synthetic", account: "500" }
 const stores: MessageStore[] = []
@@ -208,5 +213,107 @@ describe("archive discovery", () => {
       database: { prepare: vi.fn(() => ({ all: () => [{ pk: 1, bytes: QUERY_LIMITS.bodyBytes + 1 }] })) },
     } as unknown as StoreContext
     expect(() => directReplies(context, [{ account, chatId: "101", id: "1" }], 100)).toThrow("bodyBytes")
+  })
+})
+
+describe("discovery follow-ups", () => {
+  const day = (d: number) => `2026-10-${String(d).padStart(2, "0")}T12:00:00.000Z`
+  const project = async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "follow-ups-test-")), "synthetic.db") })
+    stores.push(store)
+    await store.chats.saveChats(
+      account,
+      ["101", "102", "103"].map((id) => ({
+        id,
+        title: { "101": "Supply", "102": "Ops", "103": "General" }[id] ?? id,
+        kind: "group" as const,
+        unreadCount: 0,
+        lastMessageAt: null,
+        participantsCount: 10,
+      })),
+    )
+    await store.messages.saveMessages(
+      account,
+      "101",
+      [
+        msg("1", "Which supplier for the crates? Contract draft attached.", { timestamp: day(1) }),
+        msg("2", "Decision: the supplier is Brightwell, contract for one year.", { timestamp: day(2) }),
+        msg("3", "Contract template is in the drive.", { timestamp: day(3) }),
+      ],
+      { via: "synthetic" },
+    )
+    await store.messages.saveMessages(
+      account,
+      "102",
+      [
+        msg("1", "Brightwell sent a price list.", { chatId: "102", timestamp: day(1) }),
+        msg("2", "Contract review moved to Friday.", { chatId: "102", timestamp: day(4) }),
+        msg("3", "Brightwell is out, they cannot ship before spring.", { chatId: "102", timestamp: day(5) }),
+      ],
+      { via: "synthetic" },
+    )
+    // Common words must be common: in a store of six messages every word would be rare.
+    await store.messages.saveMessages(
+      account,
+      "103",
+      ["1", "2", "3", "4"].map((id) =>
+        msg(id, "Which supplier is the one for the contract, they say, and what about next year?", {
+          chatId: "103",
+          timestamp: "2026-09-20T12:00:00.000Z",
+        }),
+      ),
+      { via: "synthetic" },
+    )
+    await store.searchIndex.fillSearchIndex({})
+    await store.searchIndex.fillStems({})
+    return store
+  }
+  const question = request("Which supplier did we pick for the crates?")
+  const hitOf = (found: { items: FoundMessage[] }, locator: string) => found.items.find((m) => m.locator === locator)
+
+  it("shows a later message from another chat that shares a rare word with a hit", async () => {
+    const store = await project()
+    const found = await searchStore(store, account, question)
+    const decision = hitOf(found, "msg:synthetic/500/101/2")
+    expect(found.items.indexOf(decision as FoundMessage)).toBeLessThan(FOLLOW_UP_HITS)
+    expect(decision?.followUps?.map((m) => m.locator)).toEqual(["msg:synthetic/500/102/3"])
+    expect(found.query?.discovery?.followUps).toBeGreaterThan(0)
+    const item = messageHitItem(decision as FoundMessage)
+    expect(item.follow_ups?.[0]).toMatchObject({ ref: "msg:synthetic/500/102/3", chat_title: "Ops" })
+    expect(v.safeParse(ENTITIES["message.hit"], item).success).toBe(true)
+  })
+  it("links no word held by more than three messages, and nothing earlier than the hit", async () => {
+    const store = await project()
+    const later = await store.messages.laterSharingRare(
+      [
+        { account, chatId: "101", id: "1" },
+        { account, chatId: "102", id: "1" },
+      ],
+      { rareAt: 3, limit: 20 },
+    )
+    expect(later[0]).toEqual([])
+    expect(later[1]?.map((m) => m.locator)).toEqual(["msg:synthetic/500/102/3", "msg:synthetic/500/101/2"])
+  })
+  it("keeps to the accounts and filters the search reads", async () => {
+    const store = await project()
+    const other = { provider: "synthetic", account: "600" }
+    await store.chats.saveChats(other, [
+      { id: "101", title: "Other", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 10 },
+    ])
+    await store.messages.markDeleted(account, ["3"], { chatId: "102" })
+    await store.messages.saveMessages(
+      other,
+      "101",
+      [msg("7", "Brightwell again, other account.", { timestamp: day(6) })],
+      {
+        via: "synthetic",
+      },
+    )
+    await store.searchIndex.fillSearchIndex({})
+    await store.searchIndex.fillStems({})
+    const found = await searchStore(store, account, question)
+    expect(hitOf(found, "msg:synthetic/500/101/2")?.followUps).toBeUndefined()
+    const scoped = await searchStore(store, account, request("Which supplier did we pick for the crates? chat:101"))
+    expect(scoped.items.every((m) => !m.followUps)).toBe(true)
   })
 })
