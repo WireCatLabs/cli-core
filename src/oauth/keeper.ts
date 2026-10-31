@@ -41,6 +41,7 @@ export interface TokenKeeper {
 }
 
 const inFlight = new Map<string, Promise<unknown>>()
+const refreshedInMemory = new Map<string, TokenSet>()
 
 export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
   const { provider, storage, signal, log } = options
@@ -120,21 +121,34 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
     return started
   }
 
+  const remembered = (saved: TokenSet) => {
+    const kept = refreshedInMemory.get(lockPath)
+    return kept && fresh(kept) && kept.refreshToken === saved.refreshToken ? kept : undefined
+  }
+  const forget = () => refreshedInMemory.delete(lockPath)
+
   const tokens = async (): Promise<TokenSet> => {
     const seen = storage.read()
     if (!seen) throw notSignedIn()
     if (fresh(seen.tokens)) return seen.tokens
+    const kept = remembered(seen.tokens)
+    if (kept) return kept
     return shared(async () => {
       const current = storage.read()
       if (!current) throw notSignedIn()
       // Another process refreshed while this one waited for the lock: its result is the one to use.
       if (fresh(current.tokens) || current.tokens.refreshToken !== seen.tokens.refreshToken) return current.tokens
+      const keptMeanwhile = remembered(current.tokens)
+      if (keptMeanwhile) return keptMeanwhile
       const client = clientOf(current)
       const refreshed = await exchange(
         { grant_type: "refresh_token", refresh_token: current.tokens.refreshToken },
         context(client, current.tokens),
       )
-      storage.write({ tokens: refreshed, client })
+      // A rotated refresh token is saved even so: kept only in memory, it would die with the process.
+      if (storage.moved && refreshed.refreshToken === current.tokens.refreshToken)
+        refreshedInMemory.set(lockPath, refreshed)
+      else storage.write({ tokens: refreshed, client })
       return refreshed
     })
   }
@@ -160,15 +174,20 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
         context(client),
       )
       const extra = (await accept?.(received)) ?? undefined
-      await locked(async () => storage.write({ tokens: received, client, ...(extra ? { extra } : {}) }))
+      await locked(async () => {
+        forget()
+        storage.write({ tokens: received, client, ...(extra ? { extra } : {}) })
+      })
       return { scopes: received.scopes }
     },
     save: (saved, extra) =>
-      locked(async () =>
-        storage.write({ tokens: saved, client: clientOf(storage.read()), ...(extra ? { extra } : {}) }),
-      ),
+      locked(async () => {
+        forget()
+        storage.write({ tokens: saved, client: clientOf(storage.read()), ...(extra ? { extra } : {}) })
+      }),
     signOut: ({ revoke = false } = {}) =>
       locked(async () => {
+        forget()
         const current = storage.read()
         let revoked = false
         if (revoke && current) {

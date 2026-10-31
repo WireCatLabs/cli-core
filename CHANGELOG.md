@@ -19,6 +19,18 @@ shape of this file.
   `items: 0, capped: false`. `ChatCoverage.title` now comes from the chat row when the chat has no message, through the
   new `store.chats.chatTitle`.
 
+## 0.494.0 — 31.10.2026
+
+### Security
+
+- **A run with moved folders no longer copies the owner's sign-in into the keyring when it refreshes a token.** Since
+  cli-base 0.65.5 such a run (`<PREFIX>_*_DIR` overrides, or `HOME` or XDG folders away from the account's home) writes
+  to a temporary entry `<app>:<config folder>`, so every refresh of an expired Google token left a full copy of the
+  owner's sign-in there until `session end`. `tokenKeeper` now keeps such a refresh in memory for the rest of the
+  process and saves nothing; a new sign-in, a token saved by the CLI's own flow, and a refresh that rotated the
+  refresh token are still saved. `credentialStorage` also no longer copies an older account's entry to the new
+  account in such a run. New optional `TokenStorage.moved`.
+
 ## 0.493.0 — 31.10.2026
 
 ### Added

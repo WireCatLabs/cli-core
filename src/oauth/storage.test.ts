@@ -151,7 +151,7 @@ describe("zm's existing entry", () => {
   }
   const zmStorage = (keyring: ReturnType<typeof memoryKeyring>, configDir: string) =>
     credentialStorage({
-      credentials: { service: "zoom-cli", configDir, isolated: true, storage: "keyring", keyring },
+      credentials: { service: "zoom-cli", configDir, storage: "keyring", keyring },
       account: "zm-client:personal",
       legacyAccounts: ["zm-client"],
       codec: zoomTokenCodec,
@@ -159,7 +159,7 @@ describe("zm's existing entry", () => {
 
   it("is read under zm's own service and account, and refreshed into the same shape", async () => {
     const configDir = folder()
-    const keyring = memoryKeyring({ [`zoom-cli:${configDir}:zm-client:personal`]: JSON.stringify(zmEntry) })
+    const keyring = memoryKeyring({ "zoom-cli:zm-client:personal": JSON.stringify(zmEntry) })
     const calls: URLSearchParams[] = []
     const keeper = tokenKeeper({
       provider: provider({ client: { clientId: "zm-client" } }),
@@ -175,7 +175,7 @@ describe("zm's existing entry", () => {
     })
     expect(await keeper.tokens()).toMatchObject({ scopes: ["meeting:read"], refreshToken: "synthetic-refresh-2" })
     expect(calls[0]?.get("client_id")).toBe("zm-client")
-    const raw = keyring.get(`zoom-cli:${configDir}`, "zm-client:personal") ?? ""
+    const raw = keyring.get("zoom-cli", "zm-client:personal") ?? ""
     expect(zmAccepts(raw)).toBe(true)
     expect(JSON.parse(raw)).toEqual({
       accessToken: "synthetic-access-new",
@@ -187,10 +187,10 @@ describe("zm's existing entry", () => {
 
   it("copies the legacy entry to the profile's account and leaves it in place", () => {
     const configDir = folder()
-    const keyring = memoryKeyring({ [`zoom-cli:${configDir}:zm-client`]: JSON.stringify(zmEntry) })
+    const keyring = memoryKeyring({ "zoom-cli:zm-client": JSON.stringify(zmEntry) })
     expect(zmStorage(keyring, configDir).read()?.tokens).toEqual(zmEntry)
-    expect(keyring.get(`zoom-cli:${configDir}`, "zm-client:personal")).toBe(JSON.stringify(zmEntry))
-    expect(keyring.get(`zoom-cli:${configDir}`, "zm-client")).toBe(JSON.stringify(zmEntry))
+    expect(keyring.get("zoom-cli", "zm-client:personal")).toBe(JSON.stringify(zmEntry))
+    expect(keyring.get("zoom-cli", "zm-client")).toBe(JSON.stringify(zmEntry))
   })
 })
 
