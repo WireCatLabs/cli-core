@@ -23,6 +23,10 @@
     "--ai": {
       "meaning": "call the configured reply model with stored message data; requires reply consent, otherwise uses fallback"
     },
+    "--alias": {
+      "value": "<name>",
+      "meaning": "another name of the project, searched on its own; repeat for more"
+    },
     "--all": {
       "meaning": "every row, no paging",
       "note": "chats requests confirm and reject take every pending request instead — counted against the hourly limit first — so it differs on purpose (Help text rule 4)"
@@ -260,6 +264,10 @@
     "--context": {
       "value": "<n>",
       "meaning": "messages before and after each hit"
+    },
+    "--context-query": {
+      "value": "<words>",
+      "meaning": "more words that all appear in one text; repeat for another"
     },
     "--correct": {
       "value": "<n>",
@@ -3667,6 +3675,33 @@
           "in": ["tg", "wa"],
           "reason": "max-cli does not list who voted in a poll"
         }
+      }
+    },
+    "projects": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount projectsCommand once wa is on cli-core 0.504.0"
+      }
+    },
+    "projects evidence": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount projectsCommand once wa is on cli-core 0.504.0"
+      },
+      "options": {
+        "--after-n": "all",
+        "--alias": "all",
+        "--before-n": "all",
+        "--before-time": "all",
+        "--contact": "all",
+        "--context-query": "all",
+        "--cursor": "all",
+        "--limit": "all",
+        "--max-pages": "all",
+        "--no-catch-up": "all",
+        "--since-time": "all",
+        "--sync-first": "all",
+        "--sync-time": "all"
       }
     },
     "reactions": {

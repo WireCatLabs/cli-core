@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **The parity manifest lists `projects` and `projects evidence`**, in max and tg, with their options and the new
+  `--alias` and `--context-query`. Without the rows, `cli-core-parity` failed both CLIs once they mounted
+  `projectsCommand` from 0.504.0. wa is marked as planned.
+
 ## 0.504.0 — 31.10.2026
 
 ### Added
