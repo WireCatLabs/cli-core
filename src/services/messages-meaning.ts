@@ -27,11 +27,12 @@ export const meaningLane =
     try {
       const ranked: MeaningRanked = []
       if (words) {
+        const pks = await within?.()
         const lookUp = async (embedder: Embedder) => {
           const [query] = await embedder.embed([words], "query")
           for (const one of ready) {
-            const near = within
-              ? await store.vectors.scoreMessages(one, { model: target.key, query: query as Float32Array, pks: within })
+            const near = pks
+              ? await store.vectors.scoreMessages(one, { model: target.key, query: query as Float32Array, pks })
               : await store.vectors.nearestMessages(one, {
                   model: target.key,
                   limit: MEANING_DEPTH,

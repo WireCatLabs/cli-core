@@ -70,8 +70,11 @@ export type MeaningLane = (
   question: string,
   accounts: AccountKey[],
   embedders?: Pick<WarmEmbedders, "get">,
-  /** The store keys of a filter's own messages, to rank all of them instead of the nearest overall. */
-  within?: number[],
+  /**
+   * The store keys of a filter's own messages, to rank all of them instead of the nearest overall; `undefined` when
+   * the filter is too large. Asked only once meaning can run, so a search without the model never lists the filter.
+   */
+  within?: () => Promise<number[] | undefined>,
 ) => Promise<{ model: string; ranked: MeaningRanked; partly?: MeaningSkipped } | { skipped: MeaningSkipped }>
 
 /**
@@ -155,8 +158,8 @@ export const searchDiscovery = async (
   const scope: Scope = root === undefined ? (plan.scope ? { text: plan.scope } : {}) : scopeOf(narrowing)
   // Before the clock starts: loading the model alone takes about a second of the word search's budget.
   const within =
-    meaning && (scope.text !== undefined || scope.ast !== undefined)
-      ? await filterPks(store, account, { ...request, text: undefined, ast: undefined, ...scope }, messenger)
+    scope.text !== undefined || scope.ast !== undefined
+      ? () => filterPks(store, account, { ...request, text: undefined, ast: undefined, ...scope }, messenger)
       : undefined
   const lane = meaning ? await meaning(question, original.scopeAccounts, undefined, within) : undefined
   let started = performance.now()
