@@ -7,24 +7,14 @@ shape of this file.
 
 ## Unreleased
 
-## 0.512.0 — 01.11.2026
-
 ### Added
 
-- **A project task has two more open states: `todo` and `in_progress`.** `TASK_STATES` is `open`, `todo`,
-  `in_progress`, `done`, `dismissed`; `CLOSED_STATES` and `isClosedState` name the closed ones. `tasks.edit` moves a
-  project task between any two of them, records each move as a `status` event, sets `started_at` the first time it
-  enters `in_progress`, and reopens a closed task: `closed_at`, who closed it and its reason are cleared. Readiness,
-  `readyTasks`, claims, a person's open tasks, reminders, duplicate checks and category counts treat both new states as
-  open work. A task from a message stays open or closed.
 - **`tasks.board(query, { limit, offset, sort, descending, zone })` and `tasks.boardCounts(query)`** list the owner's
   project tasks across every project (an account's inbox is left out) with a Lucene query over `PROJECT_TASK_FIELDS`:
   `state`, `kind`, `project` (`project:*` for all), `assignee` (`any`, `none`, `"person:12"`), `priority`,
   `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
   (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
   hold each project, assignee, priority and state, each without the query's own terms on that field.
-- **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
-- **`tasks.events(id)`** names who acted: `actor.name` is the person's or the bot's name, or null.
 - **Store version 41: a decimal priority, an agent and a revision on every task** (`minCompatible` stays 34).
   `tasks.priority_score` holds 0 to 1, higher first; `priorityLabel` reads it as low, medium, high or critical by
   quarters. The old 0 (urgent) … 4 (low) became 0.875, 0.625, 0.375, 0.1875 and 0.0625, and the integer `priority`
@@ -44,6 +34,31 @@ shape of this file.
   critical]`, `priority:[0.6 TO 1]`; `agent:hermes`, `agent:none`.
 - **The `task` entity** may carry `priority_label`, `agent`, `revision`, `assignments`, `ready` and `blocked_by`, as a
   project task list gives them.
+
+### Changed — may break callers
+
+- **A task's `priority` is a number from 0 to 1, higher first**, in `TaskDetails`, `TaskFields` and the task card
+  (`priority_label` beside it); it was 0 (urgent) … 4 (low). Lists order by it highest first. `tasks update
+  --priority` takes low, medium, high, critical or none, and still reads 0–4 as before.
+
+## 0.512.0 — 01.11.2026
+
+### Added
+
+- **A project task has two more open states: `todo` and `in_progress`.** `TASK_STATES` is `open`, `todo`,
+  `in_progress`, `done`, `dismissed`; `CLOSED_STATES` and `isClosedState` name the closed ones. `tasks.edit` moves a
+  project task between any two of them, records each move as a `status` event, sets `started_at` the first time it
+  enters `in_progress`, and reopens a closed task: `closed_at`, who closed it and its reason are cleared. Readiness,
+  `readyTasks`, claims, a person's open tasks, reminders, duplicate checks and category counts treat both new states as
+  open work. A task from a message stays open or closed.
+- **`tasks.board(query, { limit, offset, sort, descending, zone })` and `tasks.boardCounts(query)`** list the owner's
+  project tasks across every project (an account's inbox is left out) with a Lucene query over `PROJECT_TASK_FIELDS`:
+  `state`, `kind`, `project` (`project:*` for all), `assignee` (`any`, `none`, `"person:12"`), `priority` with
+  ranges, `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
+  (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
+  hold each project, assignee, priority and state, each without the query's own terms on that field.
+- **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
+- **`tasks.events(id)`** names who acted: `actor.name` is the person's or the bot's name, or null.
 - **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
 - **`events_list` takes `page`**, as `events list --page` does. Without `account_id` each page is cut from every
   account's events merged in time order, so it reads at most each account's first 1000 events; a page past that is
@@ -51,9 +66,6 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **A task's `priority` is a number from 0 to 1, higher first**, in `TaskDetails`, `TaskFields` and the task card
-  (`priority_label` beside it); it was 0 (urgent) … 4 (low). Lists order by it highest first. `tasks update
-  --priority` takes low, medium, high, critical or none, and still reads 0–4 as before.
 - **`ClosedState` is `done | dismissed`**, no longer every state but `open`; a check of `state === "open"` for "not
   closed" misses `todo` and `in_progress` — use `isClosedState`.
 - **The calendar MCP tools `event_create` and `event_update` take `operation_id`, not `id`**, as `events create` and
