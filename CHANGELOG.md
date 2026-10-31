@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.502.0 — 31.10.2026
+
 ### Added
 
 - **The event store finds events by their earliest start: `EventFilter.startsFrom`.** It keeps events that start at
