@@ -39,6 +39,8 @@ export interface ProjectChatFetchRequest {
   before: number
   /** Aborts when the run's fetch budget is spent; a fetcher stops there and keeps what it saved. */
   signal: AbortSignal
+  /** When that budget ends, by the run's clock: a fetcher that runs a process gives it this much time to stop itself. */
+  until: number
   onProgress?: (progress: ProjectChatFetchProgress) => void
 }
 export interface ProjectChatFetchProgress {
@@ -155,6 +157,7 @@ const fetchLinkedChats = async (
         chatId: linked.chat,
         after: window.after,
         before: window.before,
+        until: deadline,
         signal: signal ? AbortSignal.any([signal, budget.signal]) : budget.signal,
         ...(onProgress
           ? { onProgress: (progress) => onProgress({ ...progress, chat: linked.ref, index, of: wanted.length }) }

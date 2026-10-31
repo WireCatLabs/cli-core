@@ -21,7 +21,7 @@ shape of this file.
 ### Changed — may break callers
 
 - **`gatherProjectEvidence`'s fetch port is per linked chat.** `ProjectSourceFetcher` (one fetch per source, no
-  caller) is replaced by `ProjectChatFetcher`: `fetch({ account, chatId, after, before, signal, onProgress })` →
+  caller) is replaced by `ProjectChatFetcher`: `fetch({ account, chatId, after, before, until, signal, onProgress })` →
   `{ state: "complete" | "partial" | "failed", reason? }`. `fetch: "before-read"` now needs the `coverage` port too,
   takes `budgets.maxFetchMs`, and fetches only linked chats the store does not hold for the window. The result's
   `fetch` lists those chats (`ProjectChatFetched`) instead of one row per source; `ProjectFetchState` is gone. The

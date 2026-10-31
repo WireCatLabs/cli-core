@@ -62,7 +62,7 @@ const result = await gatherProjectEvidence(
   its content happened.
 - **Fetch.** `fetch: "before-read"` needs the host's `coverage` and `fetcher` (`ProjectChatFetcher`). Before the
   first read of a run (never on a resume) it asks `coverage` what the store holds of each linked chat in `sources`,
-  and calls `fetcher.fetch({ account, chatId, after, before, signal, onProgress })` for each chat it does not hold for
+  and calls `fetcher.fetch({ account, chatId, after, before, until, signal, onProgress })` for each chat it does not hold for
   the window: not `complete`, and not up to date with no gaps back past `after`. One at a time, inside one budget
   for all of them, `budgets.maxFetchMs` (default 3 minutes, at most 30); `signal` aborts when it runs out. The
   answer is `complete`, `partial` or `failed` with an optional `reason`. A chat cut by the budget is `partial`
