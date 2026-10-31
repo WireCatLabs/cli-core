@@ -7,6 +7,44 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`decodeChannels(bytes)` in `@wirecat/cli-core/speech` returns every channel of a recording:**
+  `{ channels: Pcm[], mixed }`. A phone call recorded in stereo keeps one speaker per channel, and `decodeAudio`
+  keeps only the first, so the other speaker was lost. `decodeAudio` is unchanged and now exported too. Opus,
+  Vorbis, FLAC and MP3 keep their channels apart; a format only ffmpeg reads arrives as one channel with
+  `mixed: true`, so a caller can tell a mixed-down call from a mono one.
+- **OpenAI transcription: `transcribeOpenAI(pcm, { apiKey, model, languages, prompt, keywords })`.** It sends one
+  channel to OpenAI's `/audio/transcriptions` (`gpt-transcribe` by default, `languages[]` and `keywords[]` as
+  repeated fields, no SDK) and answers `[{ start, end, text }]` in seconds: one piece per stretch of speech the
+  voice detector found, each sent alone, so two channels merge into a dialogue by `start`. Two stretches the
+  detector split only because speech ran past 20 seconds stay one piece. `gpt-transcribe` gives no timestamps, so
+  the times are the detector's: about 0.1–0.3 s late at the start and 0.5–0.8 s late at the end, and very quiet
+  speech is missed, as it is locally. `bundle: true` trades the turns for fewer requests: up to ten minutes
+  (`LONGEST_REQUEST_SECONDS`) in one. It needs the voice detector file that comes with any speech model
+  (`models download`), except bundled audio of up to ten minutes. A 429 or a server error is tried again, waiting
+  as long as `Retry-After` asks; errors carry `auth.failed` (401), `access.denied` (403, which OpenAI also answers
+  for an unsupported country), `transcription.quota-exhausted` (credit, spend or usage limit; never retried),
+  `transcription.no-key`, `transcription.too-large`, `provider.rate-limited` or `provider.unavailable`, and never
+  the key. A keyword with `<`, `>` or a line break is refused before sending.
+- **`recognizeLocalPieces(model, pcm)` gives the same timed pieces from a local model**, one per stretch of speech
+  the voice detector cut.
+- **`transcribeWith: "openai"` sends voice messages to OpenAI**, with the key `models keys set openai` or
+  `OPENAI_API_KEY` holds and the model in the profile's `transcribeModel` (`gpt-transcribe` when unset). Only when
+  named: `auto` never sends audio off the machine, and a read-only process refuses. A transcript heard this way is
+  kept as `openai:<model>`.
+- **Meeting transcription keeps who spoke.** `MeetingRecognitionSegment.speaker` (trimmed; `null` is none) is stored
+  as the row's speaker, and segments of different speakers may overlap — two people on a call talk over each
+  other. One speaker's own segments still may not, and segments without a speaker are checked as before. A
+  transcript whose `recognition.engine` is `openai` is stored as `openai/<model>`, format `openai-transcription`;
+  local transcripts keep `local/<engine>/<model>` exactly.
+
+### Changed — may break callers
+
+- **An unknown `transcribeWith` in a profile now refuses to transcribe** with `validation_error`, naming the four
+  values. Before, any value other than `local` silently meant asking the messenger first. `models list` and
+  `models download` still read such a profile. Set it to `auto`, `messenger`, `local` or `openai`.
+
 ### Fixed
 
 - **`runs list` with nothing recorded no longer says a run is kept only with `--record`.** Every command that does

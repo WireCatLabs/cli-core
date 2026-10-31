@@ -134,7 +134,7 @@ const downloadAudioModel = async (command: Command, messenger: Messenger, id: st
       } finally {
         recognizer.free()
       }
-      const chosen = choose(messenger, context.settings, {}, context.env).model.id
+      const chosen = choose(messenger, context.settings, {}, context.env, context.keyring).model.id
       renderAnswer(command, context, itemOf(audioItem(model, directory, chosen)), downloaded)
     },
     { unbounded: true },
@@ -256,7 +256,8 @@ export const modelsCommand = (messenger: Messenger): Command => {
           kinds === undefined || kinds === "reranker"
             ? RERANK_MODELS.filter((model) => id === undefined || model.id === id)
             : []
-        const chosen = audioModels.length > 0 ? choose(messenger, context.settings, {}, context.env).model.id : ""
+        const chosen =
+          audioModels.length > 0 ? choose(messenger, context.settings, {}, context.env, context.keyring).model.id : ""
         const catalogue = [
           ...audioModels.map((model) => audioItem(model, modelsDirectory(context.env), chosen)),
           ...textModels.map((model) => textItem(model, textModelsDirectory(context.env))),

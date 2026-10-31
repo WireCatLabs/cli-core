@@ -143,6 +143,9 @@ export const MODELS: SpeechModel[] = [
   },
 ]
 
+/** OpenAI's recommended transcription model (speech-to-text guide, read 2026-10-31). */
+export const OPENAI_TRANSCRIBE_MODEL = "gpt-transcribe"
+
 /** Cuts speech at pauses. Every model needs it: five minutes in one piece crash the WebAssembly build. */
 export const VAD: ModelFile = {
   name: "silero_vad.onnx",

@@ -2,9 +2,18 @@ import { createRequire } from "node:module"
 import type { SpeechModel } from "./models.js"
 import { checkOggDuration } from "./ogg-limit.js"
 
+/** Seconds from the start of the recording. */
+export interface TimedText {
+  start: number
+  end: number
+  text: string
+}
+
 /** What transcription needs from a speech engine — small enough for a test to stand in for it. */
 export interface Recognizer {
   recognize(pcm: Float32Array): string
+  /** Each stretch of speech the voice detector cut, with where it lies; the same input as `recognize`. */
+  pieces?(pcm: Float32Array): TimedText[]
   free(): void
 }
 
@@ -34,16 +43,15 @@ export const toModelRate = (samples: Float32Array, rate: number): Float32Array =
   return pcm
 }
 
-export const decodeOgg = async (bytes: Uint8Array): Promise<{ samples: Float32Array; rate: number }> => {
+export const decodeOgg = async (bytes: Uint8Array): Promise<{ samples: Float32Array; rate: number }[]> => {
   checkOggDuration(bytes)
   const { OggOpusDecoder } = await import("ogg-opus-decoder")
   const decoder = new OggOpusDecoder()
   await decoder.ready
   try {
     const { channelData, sampleRate, samplesDecoded } = await decoder.decodeFile(bytes)
-    const samples = channelData[0]
-    if (!samples || samplesDecoded === 0) throw new Error("no Ogg Opus audio in it")
-    return { samples, rate: sampleRate }
+    if (!channelData[0] || samplesDecoded === 0) throw new Error("no Ogg Opus audio in it")
+    return channelData.map((samples) => ({ samples, rate: sampleRate }))
   } finally {
     decoder.free()
   }
@@ -63,7 +71,7 @@ interface Sherpa {
   createVad(config: object): {
     acceptWaveform(samples: Float32Array): void
     isEmpty(): boolean
-    front(): { samples: Float32Array }
+    front(): { start: number; samples: Float32Array }
     pop(): void
     flush(): void
     reset(): void
@@ -91,6 +99,59 @@ export const detector = (vadModel: string) => ({
   debug: 0,
   bufferSizeInSeconds: 30,
 })
+
+export interface SpeechSpan {
+  start: number
+  end: number
+  samples: Float32Array
+}
+
+type Vad = ReturnType<Sherpa["createVad"]>
+
+/**
+ * `pcm` as `toModelRate` made it: the detector's sample offsets count its half-second lead, the recording does not.
+ * Each stretch goes to `each` as it is cut, so an hour of speech is never held twice.
+ */
+const cut = (vad: Vad, pcm: Float32Array, each: (span: SpeechSpan) => void): void => {
+  // One detector can hear several recordings in a row; nothing of the last may leak into this one.
+  vad.reset()
+  const last = Math.max(0, pcm.length - LEAD)
+  const drain = () => {
+    for (; !vad.isEmpty(); vad.pop()) {
+      const { start, samples } = vad.front()
+      each({
+        start: Math.min(last, Math.max(0, start - LEAD)) / SAMPLE_RATE,
+        end: Math.min(last, Math.max(0, start + samples.length - LEAD)) / SAMPLE_RATE,
+        samples,
+      })
+    }
+  }
+  for (let i = 0; i + WINDOW <= pcm.length; i += WINDOW) {
+    vad.acceptWaveform(pcm.subarray(i, i + WINDOW))
+    drain()
+  }
+  vad.flush()
+  drain()
+}
+
+export interface SpeechCutter {
+  /** Where the speech is, in seconds of the recording; `pcm` as `toModelRate` made it. */
+  cut(pcm: Float32Array): { start: number; end: number }[]
+  free(): void
+}
+
+/** The voice detector alone, for a recognizer that is not on this machine. */
+export const openSpeechCutter = (vadModel: string): SpeechCutter => {
+  const vad = loadSherpa().createVad(detector(vadModel))
+  return {
+    cut: (pcm) => {
+      const spans: { start: number; end: number }[] = []
+      cut(vad, pcm, ({ start, end }) => spans.push({ start, end }))
+      return spans
+    },
+    free: () => vad.free(),
+  }
+}
 
 /**
  * The model, and a voice detector that cuts the audio at pauses into pieces of at most 20 seconds.
@@ -141,25 +202,21 @@ export const openRecognizer = (model: SpeechModel, path: (name: string) => strin
     }
   }
 
+  const pieces = (pcm: Float32Array): TimedText[] => {
+    const heard: TimedText[] = []
+    cut(vad, pcm, ({ start, end, samples }) => {
+      const text = piece(samples)
+      if (text) heard.push({ start, end, text })
+    })
+    return heard
+  }
+
   return {
-    recognize: (pcm) => {
-      // One recognizer can hear several recordings in a row; nothing of the last may leak into this one.
-      vad.reset()
-      const parts: string[] = []
-      const drain = () => {
-        while (!vad.isEmpty()) {
-          parts.push(piece(vad.front().samples))
-          vad.pop()
-        }
-      }
-      for (let i = 0; i + WINDOW <= pcm.length; i += WINDOW) {
-        vad.acceptWaveform(pcm.subarray(i, i + WINDOW))
-        drain()
-      }
-      vad.flush()
-      drain()
-      return parts.filter(Boolean).join(" ")
-    },
+    recognize: (pcm) =>
+      pieces(pcm)
+        .map(({ text }) => text)
+        .join(" "),
+    pieces,
     free: () => {
       vad.free()
       engine.free()

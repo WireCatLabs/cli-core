@@ -22,6 +22,11 @@ export interface MeetingRecognitionSegment {
   startMs: number
   endMs: number
   text: string
+  /**
+   * Who spoke, when the source knows — a channel of a two-channel call. Speakers may overlap; one speaker may not.
+   * Trimmed; `null` is no speaker.
+   */
+  speaker?: string | null
 }
 
 export interface MeetingTranscriptionContext {
@@ -65,6 +70,9 @@ const identifier = (value: unknown): string => {
     throw new CliError("validation_error", "transcription identifiers must be bounded nonempty strings")
   return value
 }
+/** Recognized off this machine: the stored source names the provider rather than `local/`. */
+const REMOTE_ENGINES = new Set(["openai"])
+
 const cancelled = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
     if (signal.reason instanceof CliError) throw signal.reason
@@ -122,23 +130,38 @@ export const transcribeMeeting = async (
   const outcome = await dispatchMeetingMutation(mutation, async () => {
     const rows: UnlinkedTranscriptInput["rows"] = []
     let textBytes = 0
-    let end = 0
+    let start = 0
+    const ends = new Map<string | undefined, number>()
     let provided = 0
     for await (const segment of source.segments(media, context)) {
       cancelled(context.signal)
       provided++
+      const given = segment.speaker ?? undefined
+      if (
+        given !== undefined &&
+        (typeof given !== "string" || !given.trim() || given.length > 200 || /[\0\r\n]/.test(given))
+      )
+        throw new CliError("invalid_response", "invalid recognition segment speaker")
+      const speaker = given?.trim()
+      // Without speakers, nothing may overlap; with them, only one speaker's own segments may not.
+      const overlapping =
+        speaker === undefined
+          ? [...ends.values()].reduce((latest, end) => Math.max(latest, end), 0)
+          : Math.max(ends.get(undefined) ?? 0, ends.get(speaker) ?? 0)
       if (
         provided > maxSegments ||
         !Number.isSafeInteger(segment.startMs) ||
         !Number.isSafeInteger(segment.endMs) ||
-        segment.startMs < end ||
+        segment.startMs < start ||
+        segment.startMs < overlapping ||
         segment.endMs <= segment.startMs ||
         segment.endMs > media.durationMs ||
         typeof segment.text !== "string" ||
         segment.text.includes("\0")
       )
         throw new CliError("invalid_response", "invalid or excessive recognition segments")
-      end = segment.endMs
+      start = segment.startMs
+      ends.set(speaker, Math.max(ends.get(speaker) ?? 0, segment.endMs))
       const text = segment.text.trim()
       if (text.length > maxTextBytes - textBytes)
         throw new CliError("validation_error", "transcript exceeds its byte limit")
@@ -149,7 +172,7 @@ export const transcribeMeeting = async (
           position: rows.length,
           startMs: segment.startMs,
           endMs: segment.endMs,
-          speakerName: null,
+          speakerName: speaker ?? null,
           text,
           normalizedText: null,
           metadata: null,
@@ -172,8 +195,15 @@ export const transcribeMeeting = async (
       now,
       transcripts: [
         {
-          source: `local/${encodeURIComponent(media.recognition.engine)}/${encodeURIComponent(media.recognition.model)}`,
-          format: "local-transcription",
+          ...(REMOTE_ENGINES.has(media.recognition.engine)
+            ? {
+                source: `${encodeURIComponent(media.recognition.engine)}/${encodeURIComponent(media.recognition.model)}`,
+                format: `${media.recognition.engine}-transcription`,
+              }
+            : {
+                source: `local/${encodeURIComponent(media.recognition.engine)}/${encodeURIComponent(media.recognition.model)}`,
+                format: "local-transcription",
+              }),
           language: null,
           contentHash: hash,
           externalCreatedAt: null,
