@@ -33,6 +33,19 @@ shape of this file.
 - **`--discover` works on a read-only store.** Its follow-up step created a temporary table to count rare words,
   which a read-only connection refuses; it now counts them with a bounded query.
 
+## 0.505.0 — 31.10.2026
+
+### Added
+
+- **`appDoctorCommand` takes `--online`, and a messenger's and an app's `doctor` now say one thing.** Both use the
+  summary "the state this installation is in, without connecting unless --online" and the option text "also connect
+  once and read the account; sends nothing" (one constant, `doctor-text.ts`). Without the flag the answer is as before
+  and nothing is called. With it, `online` joins the answer: `{ ok, duration_ms, version: { current, latest, newer } }`,
+  plus the fields of the new `AppDoctorOptions.online(env)` hook, where a CLI checks its own service (a login, a folder
+  read); a throw there is `ok: false` with `error_code` and `error`, never a failed command. `version` comes from npm
+  (the `latestVersion` that `upgrade` uses) when the CLI passes the new `AppDoctorOptions.packageName`; without it that
+  check is left out. The command's effects are now `REMOTE_READ`, as the messenger's.
+
 ## 0.504.0 — 31.10.2026
 
 ### Added
