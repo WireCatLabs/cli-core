@@ -9,6 +9,7 @@ import { threadIdOf } from "../domain/thread.js"
 import { type After, capability, type Download, type MessengerAdapter, type Sent } from "../ports/messenger.js"
 import type { MediaOption, MessengerTraits } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
+import type { SearchTotal } from "../search/total.js"
 import { codeOf, guardedWrite, type Operated, sentIds } from "../sends/guarded.js"
 import type { PermissionKey } from "../sends/permissions.js"
 import { sendAsCheck } from "../sends/send-as.js"
@@ -133,6 +134,8 @@ export type FoundMessage = StoredHit & {
 export interface SearchFound extends Page<FoundMessage> {
   /** Where the next page starts, as `offset`; absent on the last page. */
   nextOffset?: number
+  /** How many messages match, every page together, as Elasticsearch's `hits.total`; set by the archive search. */
+  total?: SearchTotal
   refreshed?: SearchRefreshed
   server?: ServerSearched
   query?: QueryMetadata

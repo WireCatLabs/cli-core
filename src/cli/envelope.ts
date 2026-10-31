@@ -11,6 +11,7 @@ import {
   type Missing,
   type NextStep,
   type StepInput,
+  type Total,
 } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import * as v from "valibot"
@@ -33,6 +34,8 @@ export interface ListInput<T> {
   paging?: "cursor"
   /** The page shown, from 1, for a list paged by `--page`. */
   page?: number
+  /** How many match, every page together, for a search that counts them. */
+  total?: Total
   /** The command's own arguments and query, so `page.next` reruns the same list. */
   args?: Record<string, unknown>
   next?: NextStep[]
@@ -51,7 +54,7 @@ const capped = (steps: NextStep[]) => (steps.length > 0 ? { next: steps.slice(0,
  * page where the source has no cursor.
  */
 export const listOf = <T>(command: string, input: ListInput<T>): ListBody<T> => {
-  const { items, limit, has_more, cursor, paging, page, args = {}, next = [], missing, meta } = input
+  const { items, limit, has_more, cursor, paging, page, total, args = {}, next = [], missing, meta } = input
   const byCursor = paging === "cursor" || cursor !== undefined
   const more = has_more
     ? [
@@ -65,8 +68,20 @@ export const listOf = <T>(command: string, input: ListInput<T>): ListBody<T> => 
   const body: ListBody<T> = {
     items,
     page: byCursor
-      ? { mode: "cursor", limit, has_more, ...(has_more && cursor !== undefined ? { next_cursor: cursor } : {}) }
-      : { mode: "page", limit, has_more, ...(has_more ? { next_page: (page ?? 1) + 1 } : {}) },
+      ? {
+          mode: "cursor",
+          limit,
+          has_more,
+          ...(has_more && cursor !== undefined ? { next_cursor: cursor } : {}),
+          ...(total ? { total } : {}),
+        }
+      : {
+          mode: "page",
+          limit,
+          has_more,
+          ...(has_more ? { next_page: (page ?? 1) + 1 } : {}),
+          ...(total ? { total } : {}),
+        },
     ...capped([...more, ...next]),
     ...(missing && missing.length > 0 ? { missing } : {}),
     ...(meta ? { meta } : {}),

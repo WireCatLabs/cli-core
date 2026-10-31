@@ -511,6 +511,31 @@ export const searchLucene = async (
       : {}),
   }
 }
+/**
+ * How many messages the query matches, mail included, each counted no further than `cap + 1`; `undefined` when only
+ * the search itself could tell.
+ */
+export const countLucene = async (
+  store: MessageStore,
+  account: AccountKey,
+  request: SearchQuery,
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">>,
+  cap: number,
+): Promise<number | undefined> => {
+  const prepared = await prepareLucene(store, account, request, messenger)
+  if (!prepared.scopeAccounts.length) return 0
+  const count = (execution: QueryExecution) => store.queries.countMatches(execution, cap)
+  const mailAccounts = prepared.scopeAccounts.filter(({ provider }) => provider === MAIL)
+  const messages = await count(prepared.execution)
+  let mail: number | undefined = 0
+  if (mailAccounts.length)
+    try {
+      mail = await count({ ...prepared.execution, accounts: mailAccounts, corpus: "mail" })
+    } catch (error) {
+      if (!(request.kind !== "mail" && error instanceof CliError && error.code === "validation_error")) throw error
+    }
+  return messages === undefined || mail === undefined ? undefined : messages + mail
+}
 /** The garbled spellings voice-note hits were found through, one entry per query word. */
 const correctionsOf = (items: ScoredHit[]): SearchFound["corrections"] => {
   const found = new Map<string, Set<string>>()

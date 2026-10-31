@@ -13,7 +13,7 @@ import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { meaningNote, messagesAnswer, offsetOf } from "./search-answers.js"
+import { meaningNote, messagesAnswer, offsetOf, shownOf } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { syncOptions, syncRequest, syncsFirst } from "./search-sync-options.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
@@ -237,6 +237,8 @@ const searchAction = (messenger: Messenger) =>
           `hits in ${elsewhere.join(", ")} open in that messenger's own CLI, by the locator: messages context msg:…`,
         )
       }
+      const shown = shownOf(found.items.length, offsetOf(page, limit) ?? 0, found.total)
+      if (shown) context.renderer.note(shown)
       if (found.items.length === 0)
         context.renderer.note(
           found.server && !found.server.skipped

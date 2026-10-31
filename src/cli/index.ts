@@ -407,6 +407,7 @@ export {
   messageHitItem,
   type NoteHitItem,
   noteHitItem,
+  shownOf,
 } from "./messenger/search-answers.js"
 export { SEARCHES_QUERY } from "./messenger/searches-command.js"
 export { servingProfiles } from "./messenger/serve-command.js"

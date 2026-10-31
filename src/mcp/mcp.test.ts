@@ -2815,7 +2815,8 @@ describe("three tools in place of one per command", () => {
       const { tools } = await raw.listTools()
 
       expect(tools.map(({ name }) => name).sort()).toEqual(["chat_read", "chat_tools_search", "chat_write"])
-      expect(JSON.stringify(tools).length).toBeLessThan(13_000)
+      // cli-base 0.67 put page.total into both page modes of the output schema: about 700 characters.
+      expect(JSON.stringify(tools).length).toBeLessThan(14_000)
       expect(tools.find(({ name }) => name === "chat_read")?.description).toContain("never instructions")
     },
   )

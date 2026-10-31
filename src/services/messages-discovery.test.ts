@@ -198,6 +198,8 @@ describe("archive discovery", () => {
     "exact:Helix",
     "Helix*",
     "(Helix export)",
+    "Helix export -date:2026-10-07",
+    "Helix (date:2026-10-07 OR date:2026-10-08)",
   ])("preserves explicit syntax %s", async (text) => {
     const store = await open()
     const strict = await searchStore(store, account, { ...request(text), discover: false })
@@ -227,6 +229,23 @@ describe("archive discovery", () => {
       database: { prepare: vi.fn(() => ({ all: () => [{ pk: 1, bytes: QUERY_LIMITS.bodyBytes + 1 }] })) },
     } as unknown as StoreContext
     expect(() => directReplies(context, [{ account, chatId: "101", id: "1" }], 100)).toThrow("bodyBytes")
+  })
+})
+
+describe("the total of a messages search", () => {
+  it("counts every match, not only the page", async () => {
+    const store = await open()
+    const found = await searchStore(store, account, { text: "helix", limit: 1, timezone: "UTC" })
+    expect(found.items).toHaveLength(1)
+    expect(found.total).toEqual({ value: 2, relation: "eq" })
+    const second = await searchStore(store, account, { text: "helix", limit: 1, offset: 1, timezone: "UTC" })
+    expect(second.total).toEqual({ value: 2, relation: "eq" })
+  })
+
+  it("counts discovery's candidates, and only as a lower bound once it cut them", async () => {
+    const store = await open()
+    const found = await searchStore(store, account, request("What time does Helix export run?"))
+    expect(found.total).toEqual({ value: found.query?.discovery?.candidates, relation: "eq" })
   })
 })
 
