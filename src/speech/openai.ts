@@ -8,11 +8,11 @@ import { OPENAI_TRANSCRIBE_MODEL, VAD } from "./models.js"
 import { SAMPLE_RATE, type SpeechCutter, type TimedText, toModelRate } from "./recognize.js"
 import { encodeWav } from "./wav.js"
 
-/** OpenAI's limit per file (speech-to-text guide, read 2026-10-31). */
-export const OPENAI_LARGEST_FILE = 25 * 1024 * 1024
-
-/** Ten minutes of 16 kHz PCM16 is 19 MB: under the limit with room for the header. */
-const LONGEST_PIECE_SECONDS = 600
+/**
+ * Ten minutes of 16 kHz PCM16 is 19.2 MB: under OpenAI's 25 MB per file (speech-to-text guide, read 2026-10-31)
+ * whichever megabyte it means, with room for the multipart body around it.
+ */
+export const LONGEST_REQUEST_SECONDS = 600
 
 /** Speech the detector cut only because it ran past 20 seconds, with no pause between: never a place to split. */
 const JOINED_SECONDS = 0.05
@@ -35,7 +35,7 @@ export interface OpenAITranscription {
   fetch?: Fetch
   /**
    * Cut at pauses into pieces of at most this many seconds, each sent alone, so each piece has its own time: what
-   * merging two channels into a dialogue needs. Without it the recording goes in one request when it fits.
+   * merging two channels into a dialogue needs. Without it a recording of up to ten minutes goes in one request.
    */
   pieceSeconds?: number
   /** The voice detector model, needed whenever the audio is cut; the shared models directory's when not given. */
@@ -51,7 +51,13 @@ export interface OpenAITranscription {
 const RETRY: RetryConfig = { ...DEFAULT_RETRY, retries: 4 }
 
 const sleeping = (ms: number, signal?: AbortSignal): Promise<void> =>
-  wait(ms, undefined, signal ? { signal } : {}).then(() => undefined)
+  wait(ms, undefined, signal ? { signal } : {}).then(
+    () => undefined,
+    (error: unknown) => {
+      interrupted(signal)
+      throw error
+    },
+  )
 
 const interrupted = (signal?: AbortSignal): void => {
   if (!signal?.aborted) return
@@ -143,7 +149,7 @@ export const piecesOf = (spans: readonly { start: number; end: number }[], limit
     const last = pieces.at(-1)
     const joined = last !== undefined && span.start - last.end < JOINED_SECONDS
     const fits = last !== undefined && span.end - last.start <= limit
-    if (last && (fits || (joined && span.end - last.start <= LONGEST_PIECE_SECONDS))) last.end = span.end
+    if (last && (fits || (joined && span.end - last.start <= LONGEST_REQUEST_SECONDS))) last.end = span.end
     else pieces.push({ start: span.start, end: span.end })
   }
   return pieces
@@ -157,7 +163,7 @@ const openCutter = async (vadModel: string): Promise<SpeechCutter> => {
 /**
  * Speech to text by OpenAI's `/audio/transcriptions`, from one channel's samples. The answer is the recording's
  * pieces with their times: one piece for a recording sent whole, or one per piece the voice detector cut at pauses —
- * when `pieceSeconds` asks for it, or when the whole recording is over OpenAI's 25 MB. A piece is never cut mid-word.
+ * when `pieceSeconds` asks for it, or when the recording is longer than `LONGEST_REQUEST_SECONDS`. A piece is never cut mid-word.
  * `gpt-transcribe` gives no timestamps of its own, so a piece's time is where the detector found it.
  */
 export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription): Promise<TimedText[]> => {
@@ -170,7 +176,7 @@ export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription)
   interrupted(options.signal)
   const pcm = toModelRate(audio.samples, audio.rate)
   const duration = (pcm.length - LEAD) / SAMPLE_RATE
-  if (options.pieceSeconds === undefined && 44 + (pcm.length - LEAD) * 2 <= OPENAI_LARGEST_FILE) {
+  if (options.pieceSeconds === undefined && duration <= LONGEST_REQUEST_SECONDS) {
     const text = await send(encodeWav(pcm.subarray(LEAD)), options)
     return text ? [{ start: 0, end: duration, text }] : []
   }
@@ -188,7 +194,7 @@ export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription)
   } finally {
     cutter.free()
   }
-  const pieces = piecesOf(spans, Math.min(options.pieceSeconds ?? LONGEST_PIECE_SECONDS, LONGEST_PIECE_SECONDS))
+  const pieces = piecesOf(spans, Math.min(options.pieceSeconds ?? LONGEST_REQUEST_SECONDS, LONGEST_REQUEST_SECONDS))
   const heard: TimedText[] = []
   for (const [index, piece] of pieces.entries()) {
     const from = Math.max(piece.start - PAD_SECONDS, pieces[index - 1]?.end ?? 0)
