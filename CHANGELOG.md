@@ -11,8 +11,7 @@ shape of this file.
 
 - **The parity manifest lists `projects` and `projects evidence`**, with their options and the new `--alias` and
   `--context-query`. Without the rows, `cli-core-parity` failed max and tg once they mounted `projectsCommand` from
-  0.504.0. All three are marked planned, so the check passes with or without the command; a follow-up marks max and
-  tg as having it once tg-cli#798 and max-cli#886 are merged.
+  0.504.0. max and tg have it (tg-cli#798, max-cli#886); wa is planned.
 
 ## 0.504.0 — 31.10.2026
 
