@@ -373,7 +373,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       .description(
         deps.serverSearch
           ? "find stored events by words, and by meaning when its model is downloaded; with --backend server, ask " +
-              "the provider instead, with --backend both, both"
+              "the provider instead, or with --backend both, ask both"
           : "find stored events by words, and by meaning when its model is downloaded",
       )
       .argument("<query...>", "what to find in titles, descriptions, places and attendees"),

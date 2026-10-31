@@ -28,6 +28,7 @@ shape of this file.
   as one hit, while a provider such as Google answers the series and each moved occurrence apart, so 0.508.0 left the
   stored hit without `server` and listed the provider's copies again below it. A provider hit is now matched through
   its stored copy's series, and the stored hit takes `server` once.
+- **`search events --help`** says what `--backend both` does in words ("ask both").
 
 ## 0.508.0 — 31.10.2026
 
