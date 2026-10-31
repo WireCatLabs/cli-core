@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.497.0 — 31.10.2026
+
 ### Added
 
 - **A calendar source can offer its provider's own search, and the shared `search` uses it.** `CalendarSource.search(calendar,
