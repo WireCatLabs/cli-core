@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.507.0 — 31.10.2026
+
 ### Added
 
 - **`messages sync --json` prints its progress on stderr**, for a window to draw a bar instead of an endless one
