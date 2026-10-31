@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.492.0 — 31.10.2026
+
 ### Added
 
 - **`search messages --discover` shows follow-ups: later messages that may cancel or change a hit.** Each of the
