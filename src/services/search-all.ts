@@ -14,6 +14,7 @@ import { excerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { MAX_SEARCH_OFFSET, searchStore } from "./messages-archive-search.js"
 import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-discovery.js"
+import type { SearchCoverage } from "./messages-search.js"
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
@@ -75,6 +76,8 @@ export interface SearchAllFound {
   messages?: { by: "words" | "words and meaning"; meaningSkipped?: MeaningSkipped }
   /** The messenger's server step for messages, as `search messages` reports it. */
   server?: ServerSearched
+  /** What the store held of the chats the messages were searched in; absent when messages were not searched. */
+  coverage?: SearchCoverage
 }
 
 export interface SearchAllRequest {
@@ -153,6 +156,7 @@ export const searchAll = async (
   let events: SearchAllFound["events"]
   let messagesBy: SearchAllFound["messages"]
   let server: ServerSearched | undefined
+  let coverage: SearchCoverage | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
     const given = request.scope?.[kind]
@@ -177,6 +181,7 @@ export const searchAll = async (
     const found =
       kind === "messages" ? await searchMessages(query) : await searchStore(store, account, query, messenger)
     if (found.server) server = found.server
+    if (kind === "messages" && found.coverage) coverage = found.coverage
     hasMore ||= found.hasMore
     const read =
       found.coverage?.accounts ??
@@ -341,5 +346,6 @@ export const searchAll = async (
     ...(events === undefined ? {} : { events }),
     ...(messagesBy === undefined ? {} : { messages: messagesBy }),
     ...(server === undefined ? {} : { server }),
+    ...(coverage === undefined ? {} : { coverage }),
   }
 }

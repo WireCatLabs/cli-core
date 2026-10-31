@@ -71,10 +71,62 @@ describe("allAnswer", () => {
     expect(answer.next?.filter(({ step }) => step === "models.download")).toHaveLength(1)
   })
 
+  it("names the chat the messages were searched in when the store holds it only in part", () => {
+    const answer = allAnswer(
+      "search all",
+      {
+        ...found({ by: "words and meaning" }),
+        coverage: {
+          state: "partial",
+          lastSyncedAt: null,
+          inventoryComplete: true,
+          accounts: [],
+          coveredChats: 2,
+          messages: 262,
+          chats: { complete: 1, partial: 1, neverFetched: 0, behind: 0, withGaps: 0 },
+          attention: [{ chatId: "63488582", title: "Synthetic", state: "partial", gaps: false, behind: false }],
+          next: "chat messages sync 63488582",
+        },
+      },
+      { limit: 10 },
+    )
+
+    expect(answer.next).toMatchObject([{ step: "messages.sync", args: { chat: "63488582" } }])
+    expect(answer.missing).toMatchObject([{ field: "coverage", step: "messages.sync" }])
+    expect(answer.meta?.complete).toBe(false)
+  })
+
   it("adds nothing once messages were searched by meaning", () => {
     const answer = allAnswer("search all", found({ by: "words and meaning" }), { limit: 10 })
 
     expect(JSON.stringify(answer)).not.toContain("conversations.rebuild")
+  })
+})
+
+describe("messagesAnswer", () => {
+  const coverage = (neverFetched: number, next: string | null) => ({
+    state: "partial" as const,
+    lastSyncedAt: null,
+    inventoryComplete: true,
+    accounts: [],
+    coveredChats: 2,
+    messages: 262,
+    chats: { complete: 2 - neverFetched, partial: 0, neverFetched, behind: 0, withGaps: 0 },
+    attention: neverFetched
+      ? [{ chatId: "7", title: null, state: "unknown" as const, gaps: false, behind: false }]
+      : [],
+    next,
+  })
+  const answer = (cover: ReturnType<typeof coverage>) =>
+    messagesAnswer(
+      "search messages",
+      { items: [], hasMore: false, skipped: [], coverage: cover } as unknown as SearchFound,
+      { limit: 10 },
+    )
+
+  it("is incomplete when a chat searched is partial or never fetched, and complete when the archive holds what it can", () => {
+    expect(answer(coverage(1, "chat messages sync 7")).meta?.complete).toBe(false)
+    expect(answer(coverage(0, null)).meta?.complete).toBe(true)
   })
 })
 

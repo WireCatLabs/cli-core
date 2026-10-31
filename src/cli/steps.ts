@@ -24,6 +24,7 @@ export const STEPS = defineSteps([
     args: [
       { name: "chat", required: false },
       { name: "all", required: false },
+      { name: "since_time", required: false },
       { name: "background", required: false },
     ],
     why: "the local copy is missing messages; syncing brings them in",

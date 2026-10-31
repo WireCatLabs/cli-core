@@ -7,6 +7,37 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`chatCoverage(store, account, chatIds)` says what the store holds of each chat.** Per chat, in the order asked:
+  `completeness` (`complete`, `partial` or `unknown`, up to date, gaps, start reached, last fetch) and `held` (messages,
+  oldest, newest), never text. It reads only the chats named, so a store of thousands of chats costs what the ids cost.
+  `coverageGaps` also takes a list of these rows and answers `missing` (`field: "history"`) and `next`: for the first
+  incomplete chat, `messages sync <chat> --since-time <start of the window>` when the answer has a window, then
+  `messages sync <chat>`. The step `messages.sync` takes `since_time`.
+- **`messages list --offline` says when the store holds only part of the chat.** A chat that is `partial` or was never
+  fetched gives `meta.complete: false`, exit code 0, `missing` and `next`, as an offline read of 262 of 777 messages
+  must not pass for the whole chat. Online reads are unchanged.
+- **`tasks agenda` says how much of each listed chat the store holds.** Each row of `owed`, `waiting` and `unsynced` has
+  `completeness` and `held`; a chat held only in part is marked `[partial]` or `[never fetched]` in the text, with one
+  line above the lists. The answer then has `meta.complete: false`, `missing` and `next` (bounded sync over the
+  `--within` window, then the whole chat).
+- **`search all` names the chat to sync** when the store holds the chats its messages were searched in only in part:
+  `missing` (`field: "coverage"`) and `next`, from the same coverage `search messages` reports. `SearchAllFound` gains
+  `coverage`.
+
+### Changed — may break callers
+
+- **`tasks agenda --json` rows gain `completeness` and `held`**, and the answer may carry `meta.complete: false` with
+  `missing` and `next`; a caller that stops on anything but `meta.complete: true` now sees a store that holds chats in
+  part as incomplete. `tasks agenda` is declared `partial`, so the exit code stays 0. `AgendaChat` gains `coverage`
+  and `Agenda` gains `since`.
+- **`search messages`, `search mail` and `search all` answer `meta.complete: false` when a chat searched is partial or
+  never fetched**, where they kept `true` and put the gap only in `missing` and `next`. Exit code stays 0 (the commands
+  are declared `partial`). A caller that read `meta.complete` as "no source failed" must read `missing` for the reason.
+- **`messages list --offline --json` may carry `meta.complete: false`, `missing` and `next`** for a chat held in part.
+  `messages list` is declared `partial`: the exit code stays 0.
+
 ## 0.492.0 — 31.10.2026
 
 ### Added

@@ -199,13 +199,11 @@ describe("read hearing lifecycle", () => {
       ["1", question],
       ["2", undefined],
     ])
-    expect(answer.body.missing).toEqual([
-      {
-        field: "transcript",
-        why: "--offline reads only transcripts already stored; 1 voice message(s) have none: chat default messages transcribe 9 2",
-        step: "messages.transcribe",
-      },
-    ])
+    expect(answer.body.missing).toContainEqual({
+      field: "transcript",
+      why: "--offline reads only transcripts already stored; 1 voice message(s) have none: chat default messages transcribe 9 2",
+      step: "messages.transcribe",
+    })
   })
 
   it("excludes a voice question answered by an admin", async () => {

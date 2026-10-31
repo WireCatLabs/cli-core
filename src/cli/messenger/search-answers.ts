@@ -5,6 +5,7 @@ import { formatLocator, parseLocator } from "../../domain/locator.js"
 import { senderIsMe } from "../../domain/models.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
 import type { ENTITIES } from "../../entities/index.js"
+import type { ChatCoverage } from "../../services/chat-coverage.js"
 import { excerpt } from "../../services/excerpt.js"
 import type { FoundMessage, SearchFound } from "../../services/messages.js"
 import { MAX_SEARCH_OFFSET } from "../../services/messages-archive-search.js"
@@ -114,19 +115,55 @@ const accountName = ({ provider, account }: { provider: string; account: string 
 const metaOf = (
   accounts: readonly { provider: string; account: string }[],
   skipped: readonly { source?: string; resource?: string; code: ErrorCode }[] = [],
+  heldInPart = false,
 ): Partial<Meta> => ({
   accounts: accounts.map(accountName),
-  complete: skipped.length === 0,
+  complete: skipped.length === 0 && !heldInPart,
   ...(skipped.length
     ? { issues: skipped.map(({ source, resource, code }) => ({ code, source: source ?? resource ?? "" })) }
     : {}),
 })
 
-/** What the archive lacked for this answer, and the step that would fill it. */
+const day = (at: string | null) => at?.slice(0, 10) ?? "no date"
+
+/**
+ * The steps for chats the store holds only in part. Bounded first, when the answer's window is known, then the whole
+ * chat; both name the first chat only, because a download is the owner's call. Counts and dates only, never text.
+ */
+const chatGaps = (rows: ChatCoverage[], since?: string): { next: NextStep[]; missing: Missing[] } => {
+  const open = rows.filter(({ completeness }) => completeness.state !== "complete")
+  const [first] = open
+  if (!first) return { next: [], missing: [] }
+  const held = first.completeness.state === "unknown" ? "never fetched" : `held from ${day(first.held.oldestAt)} only`
+  const steps = (args: Record<string, string>, why: string): NextStep => ({
+    ...nextStep("messages.sync", { args: { chat: first.chatId, ...args } }),
+    why,
+  })
+  return {
+    next: [
+      ...(since === undefined ? [] : [steps({ since_time: since }, `${held}; this reads back to ${day(since)}`)]),
+      steps({}, "reads the chat back to its first message; a big group can take minutes"),
+    ],
+    missing: [
+      {
+        field: "history",
+        why: `${open.length} of ${rows.length} chats hold only part of their history; the first is ${held}`,
+        step: "messages.sync",
+      },
+    ],
+  }
+}
+
+/**
+ * What the archive lacked for this answer, and the step that would fill it. From a search's coverage, or from the
+ * chats an answer is about (`since` is the start of the window it was asked for).
+ */
 export const coverageGaps = (
-  found: Pick<SearchFound, "coverage" | "refreshed">,
-  shown: number,
+  found: Pick<SearchFound, "coverage" | "refreshed"> | ChatCoverage[],
+  shown = 0,
+  since?: string,
 ): { next: NextStep[]; missing: Missing[] } => {
+  if (Array.isArray(found)) return chatGaps(found, since)
   const coverage = found.coverage
   const stale = found.refreshed?.complete === false
   if (!coverage?.next && !stale) return { next: [], missing: [] }
@@ -245,7 +282,7 @@ export const messagesAnswer = (
     page: page ?? 1,
     ...(again ? { args: again } : {}),
     ...gapsOf(found),
-    meta: metaOf(accounts, found.skipped),
+    meta: metaOf(accounts, found.skipped, coverageGaps(found).missing.length > 0),
   })
 }
 
@@ -335,6 +372,7 @@ export const allAnswer = (
   const scan = found.meetings?.complete === false ? found.meetings : undefined
   const notes = meaningGap(found.notes?.meaningSkipped, exact)
   const messages = messageMeaningGap(found.messages?.meaningSkipped, "found_by")
+  const archive = coverageGaps({ coverage: found.coverage }, found.items.length)
   return listOf(command, {
     items: found.items.map(allHitItem),
     limit,
@@ -353,6 +391,7 @@ export const allAnswer = (
         : []),
       ...notes.next,
       ...messages.next.filter((step) => !notes.next.some((asked) => JSON.stringify(asked) === JSON.stringify(step))),
+      ...archive.next,
     ],
     missing: [
       ...(scan
@@ -366,7 +405,8 @@ export const allAnswer = (
         : []),
       ...notes.missing,
       ...messages.missing,
+      ...archive.missing,
     ],
-    meta: metaOf(found.accounts, found.skipped),
+    meta: metaOf(found.accounts, found.skipped, archive.missing.length > 0),
   })
 }
