@@ -707,6 +707,56 @@ describe("syncMail with a request budget", () => {
     await expect(roomLeft).resolves.toMatchObject({ saved: 7, complete: true })
   })
 
+  const lockedOnSave = (real: MessageStore, failing: number) => {
+    let saves = 0
+    return {
+      ...real,
+      mail: {
+        ...real.mail,
+        saveThreads: async (...args: Parameters<MessageStore["mail"]["saveThreads"]>) => {
+          if (++saves === failing)
+            throw Object.assign(new Error("database is locked"), { code: "ERR_SQLITE_ERROR", errcode: 5 })
+          return real.mail.saveThreads(...args)
+        },
+      },
+    } as MessageStore
+  }
+
+  it.each([
+    ["listed by headers", false],
+    ["listed quickly", true],
+  ])("waits out a store another process has locked and reads the round again (%s)", async (_, quick) => {
+    const { env } = setup(twelve, { listBatch: 5, fetchBatch: 5, quick })
+    const waits: number[] = []
+
+    const result = await syncMail(sourceOf(env), lockedOnSave(await store(env), 3), {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({}),
+      wait: async (ms) => void waits.push(ms),
+    })
+
+    expect(result).toMatchObject({ complete: true, state: "complete" })
+    expect(waits).toEqual([2000])
+    expect(await emails(env)).toHaveLength(12)
+  })
+
+  it("ends as partial when the store stays locked and the budget has no room to wait", async () => {
+    const { env } = setup(twelve, { listBatch: 5, fetchBatch: 5 })
+
+    const result = await syncMail(sourceOf(env), lockedOnSave(await store(env), 2), {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({ requests: 5 }),
+      wait: async () => {},
+    })
+
+    expect(result).toMatchObject({ state: "partial", stopped: "requests" })
+    expect(await emails(env)).toHaveLength(5)
+  })
+
   it("does not let a failed message hide behind the resume point", async () => {
     const { env, box } = setup(twelve, { unreadable: ["105"], listBatch: 20, fetchBatch: 20 })
     await budgeted(env, undefined)

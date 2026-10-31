@@ -9,7 +9,7 @@ type Connection = { depth: number; reading: boolean; stemmerFor: (stemmers: Stem
 const SQLITE_BUSY = 5
 const pause = new Int32Array(new SharedArrayBuffer(4))
 
-const isBusy = (error: unknown): boolean => {
+export const isBusy = (error: unknown): boolean => {
   const { errcode, errno } = (error ?? {}) as { errcode?: unknown; errno?: unknown }
   const code = errcode ?? errno
   return typeof code === "number" && (code & 0xff) === SQLITE_BUSY

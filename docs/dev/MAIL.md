@@ -69,7 +69,9 @@ account `{ provider: "email", account: <address, lower case> }`.
   return from `list`, or answered with an Error from `fetchRaw`, is asked for once more at the end of the run; if it
   still fails it is in `unreadable` and not in the resume point, so the next run asks again. A pass that read the
   window in parts proves no deletion (`deletionsSkipped` says so), except when one round listed all of it. The source
-  spends the budget on its own retries through the `canRetry` it was given.
+  spends the budget on its own retries through the `canRetry` it was given. A store another process has locked past its
+  5 s busy timeout (memo's scheduled sync does) is waited out: 2 s, 4 s, ... up to 5 times, each a request of the
+  budget, and the round is read again; the slices earlier saved stay saved.
 - **`retryAttachments`.** Reads again, by provider id through `find`, only the stored mail whose attachment a missing
   reader left unread (`RETRYABLE_ATTACHMENTS`). It lists nothing and moves no resume point.
 - **`index(store, key)`.** Runs after the save; what it answers is `result.indexed`. The engine embeds nothing itself:
