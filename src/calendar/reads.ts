@@ -433,9 +433,10 @@ const overlapsOf = async (store: EventStore, rows: Event[], filter: EventFilter)
   )
 }
 
-export const eventsAnswer = async (store: EventStore, filter: EventFilter | null) => {
+/** One page of the events, from 1: `filter.limit` events each. */
+export const eventsAnswer = async (store: EventStore, filter: EventFilter | null, number = 1) => {
   if (filter === null) return listed([])
-  const { rows, limit, hasMore } = await page(store, filter)
+  const { rows, limit, hasMore } = await page(store, { ...filter, offset: (number - 1) * (filter.limit ?? 100) })
   const changes = filter.changedSince === undefined ? null : await changesOf(store, rows, filter, filter.changedSince)
   const overlaps = filter.overlapping ? await overlapsOf(store, rows, filter) : null
   return listed(
@@ -453,6 +454,6 @@ export const eventsAnswer = async (store: EventStore, filter: EventFilter | null
         ...(overlaps ? { overlaps: (overlaps.get(event.id) ?? []).map(({ id }) => `event:${id}`) } : {}),
       }
     }),
-    { limit, hasMore },
+    { limit, hasMore, page: number },
   )
 }

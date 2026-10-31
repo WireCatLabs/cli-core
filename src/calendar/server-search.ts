@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { EventStore } from "../meetings/index.js"
+import type { EventsFound, FoundEvent } from "../services/events-search.js"
 import type { AccountKey } from "../store/store.js"
 import type { CalendarSource } from "./source.js"
 
@@ -45,4 +46,40 @@ export const serverSearchAnswer = async (
   }
   hits.sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""))
   return { query, by: "server" as const, hits: hits.slice(0, limit), has_more: more || hits.length > limit }
+}
+
+type FoundBy = FoundEvent["found_by"][number] | "server"
+type ServerFound = Awaited<ReturnType<typeof serverSearchAnswer>>
+
+/**
+ * `--backend both`: the stored search's hits in its own order, each one the provider also found marked `server`, then
+ * what only the provider found, earliest first. One page and no cursor: the two sides rank and page differently.
+ * A provider hit is matched by its stored copy, so an occurrence the store keeps under another id shows twice.
+ */
+export const bothSearchAnswer = async (
+  store: EventStore,
+  accountId: number,
+  archived: EventsFound,
+  served: ServerFound,
+  limit: number,
+) => {
+  const calendars = new Map((await store.calendars(accountId)).map((calendar) => [calendar.externalId, calendar]))
+  const hits: (Omit<FoundEvent, "found_by"> & { found_by: FoundBy[] })[] = archived.hits.map((hit) => ({ ...hit }))
+  const byRef = new Map(hits.map((hit) => [hit.ref, hit]))
+  const onlyServer: ServerFound["hits"] = []
+  for (const hit of served.hits) {
+    const calendar = calendars.get(hit.calendar)
+    const entry = calendar ? await store.entry(calendar.id, hit.external_id) : null
+    const held = entry?.eventId == null ? undefined : byRef.get(`event:${entry.eventId}`)
+    if (held) held.found_by = [...held.found_by, "server"]
+    else onlyServer.push(hit)
+  }
+  const merged = [...hits, ...onlyServer]
+  return {
+    query: archived.query,
+    by: "both" as const,
+    ...(archived.meaning_skipped === undefined ? {} : { meaning_skipped: archived.meaning_skipped }),
+    hits: merged.slice(0, limit),
+    has_more: archived.has_more || served.has_more || merged.length > limit,
+  }
 }
