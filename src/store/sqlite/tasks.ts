@@ -291,7 +291,9 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
       const row = required(id)
       const at = now()
       write(database, () => {
+        const before = database.prepare("SELECT resolution FROM tasks WHERE id = ?").get(row)?.resolution ?? null
         database.prepare("UPDATE tasks SET resolution = ?, updated_at = ? WHERE id = ?").run(text, at, row)
+        if (before !== text) recordTaskEvent(database, row, null, "resolution", { resolution: [before, text] }, at)
         if (!by) return
         database
           .prepare(`DELETE FROM links WHERE from_type = 'task' AND from_id = ? AND kind = ${linkKind("answered-by")}`)
@@ -309,7 +311,13 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     judge: async (id, verdict) => {
       if (verdict !== null && !TASK_VERDICTS.includes(verdict))
         throw new CliError("validation_error", `a verdict is one of ${TASK_VERDICTS.join(", ")}`)
-      database.prepare("UPDATE tasks SET verdict = ?, updated_at = ? WHERE id = ?").run(verdict, now(), required(id))
+      const row = required(id)
+      write(database, () => {
+        const at = now()
+        const before = database.prepare("SELECT verdict FROM tasks WHERE id = ?").get(row)?.verdict ?? null
+        database.prepare("UPDATE tasks SET verdict = ?, updated_at = ? WHERE id = ?").run(verdict, at, row)
+        if (before !== verdict) recordTaskEvent(database, row, null, "verdict", { verdict: [before, verdict] }, at)
+      })
     },
   }
 }

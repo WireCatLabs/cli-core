@@ -217,4 +217,19 @@ describe("the task board", () => {
     const scores = (await store.tasks.board(undefined, { limit: 10 })).items.map(({ priority }) => priority)
     expect(scores).toEqual([0.1875, 0.125, 0.0625])
   })
+
+  it("records a task's tags and close certainty in its history", async () => {
+    const { store, add } = await board()
+    const task = await add("HRB", "A")
+    expect(await store.knowledge.addTags(null, { type: "task", id: task.id }, ["venue"])).toEqual(["venue"])
+    await store.knowledge.removeTags(null, { type: "task", id: task.id }, ["venue"])
+    await store.tasks.recordCloseCertainty(task.id, 0.8)
+    const events = (await store.tasks.events(task.id)).map(({ kind, changes }) => [kind, changes])
+    expect(events.slice(1)).toEqual([
+      ["tags", { tags: [[], ["venue"]] }],
+      ["tags", { tags: [["venue"], []] }],
+      ["close-certainty", { close_certainty: [null, 0.8] }],
+    ])
+    expect((await store.tasks.details(task.id)).revision).toBe(task.revision + 3)
+  })
 })

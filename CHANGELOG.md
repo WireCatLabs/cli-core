@@ -35,8 +35,9 @@ shape of this file.
 - **A stale write is refused**: `edit`, `assign`, `unassign` and `move` take `{ revision }` and refuse another with
   `configuration_error`, reason `task.stale`, and the task's current revision. `assign` and `unassign` now bump the
   task's revision too.
-- **Every task write is in `task_events`**, in the same transaction: new kinds `agent`, `claimed`, `released` and
-  `next-check` (a follow-up time used to leave no event). The event id only grows, so it orders changes.
+- **Every task write is in `task_events`**, in the same transaction: new kinds `agent`, `claimed`, `released`,
+  `next-check` (a follow-up time used to leave no event), `resolution`, `verdict`, `close-certainty` and `tags` (a
+  tag added to or removed from a task). The event id only grows, so it orders changes.
 - **`priority:` and `agent:` query fields** on the board: `priority:high`, `priority:none`, `priority:[medium TO
   critical]`, `priority:[0.6 TO 1]`; `agent:hermes`, `agent:none`.
 - **The `task` entity** may carry `priority_label`, `agent`, `revision`, `assignments`, `ready` and `blocked_by`, as a

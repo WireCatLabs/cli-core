@@ -48,6 +48,10 @@ export const TASK_EVENT_KINDS = [
   "claimed",
   "released",
   "next-check",
+  "resolution",
+  "verdict",
+  "close-certainty",
+  "tags",
 ] as const
 
 export type WorkTaskType = (typeof WORK_TASK_TYPES)[number]

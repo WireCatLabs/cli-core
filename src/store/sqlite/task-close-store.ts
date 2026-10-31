@@ -89,9 +89,17 @@ export const taskCloseOver = (context: StoreContext): TaskCloseStore => {
     recordCloseCertainty: async (id, certainty) =>
       write(database, () => {
         const row = liveRow(id)
-        database
-          .prepare("UPDATE tasks SET close_certainty = ? WHERE id = ?")
-          .run(certaintyOf(certainty), Number(row.id))
+        const value = certaintyOf(certainty)
+        database.prepare("UPDATE tasks SET close_certainty = ? WHERE id = ?").run(value, Number(row.id))
+        if ((row.close_certainty ?? null) !== value)
+          recordTaskEvent(
+            database,
+            Number(row.id),
+            null,
+            "close-certainty",
+            { close_certainty: [row.close_certainty ?? null, value] },
+            now(),
+          )
       }),
   }
 }
