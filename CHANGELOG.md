@@ -9,6 +9,14 @@ shape of this file.
 
 ### Added
 
+- **`events list changed:<date>`: what changed since a date.** It keeps the events first stored, moved, or cancelled
+  or removed since then, from the local copy, each with `change` (`new`, `moved`, `cancelled`), `changed_at` and, for
+  a moved one, `was` (`starts_at`, `ends_at`). A move counts when a copy's time now differs from its time at the date,
+  so a meeting moved and moved back is no change. MCP `events_list` takes the same word. New `EventFilter.changedSince`,
+  `EventStore.historyOf` and `eventChange`, from `@wirecat/cli-core/meetings`.
+- **`events list overlapping`: meetings that clash.** It keeps timed events that overlap another one, each with
+  `overlaps` (`event:<id>` of the others). An event counts only when it takes the owner's time: not cancelled, not
+  all-day, with a copy the owner did not decline or mark free. New `EventFilter.overlapping`.
 - **Changing or deleting "this and all following" occurrences.** `events update <occurrence> --following` (MCP
   `following: true`) ends the series with UNTIL just before the occurrence and starts a new series there with the
   change. The new series keeps the attendees, and the EXDATE and RDATE dates from the split on. It is built from the
@@ -52,6 +60,8 @@ shape of this file.
 
 - **`EventStore` gains `participantsOf(eventIds, calendarIds)`**: the participants of those events' copies on those
   calendars, in one read.
+
+- **`StoredEntry` gains `createdAt` and `transparency`, and `EventStore` gains `historyOf`.**
 
 ### Fixed
 

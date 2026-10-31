@@ -55,8 +55,9 @@ export const calendarTools = [
   {
     name: "events_list",
     description:
-      "stored events, earliest first; `words` takes today, week, from:<date>, to:<date>, calendar:<id> " +
-      "(a date in the zone given, UTC when absent)",
+      "stored events, earliest first; `words` takes today, week, from:<date>, to:<date>, calendar:<id>, " +
+      "changed:<date> (events new, moved or cancelled since, each with change and was) and overlapping (events " +
+      "that clash, each with overlaps); a date in the zone given, UTC when absent",
     properties: { account_id: integer, words: text, timezone: text, limit: { ...integer, maximum: 1000 } },
     required: [],
   },

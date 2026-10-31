@@ -309,6 +309,35 @@ describe("calendar commands", () => {
     expect(linked.identities).toContain("email:ana@example.com")
   })
 
+  it("events list changed:<date> says what changed since then, and overlapping names the clash", async () => {
+    const { cli, store } = await setup()
+    await cli("sync")
+    const [primary] = await store.calendar.calendars(1)
+    const id = primary?.id as number
+    await store.calendar.saveEntries(id, [planning({ startsAt: NOW + 3 * HOUR, endsAt: NOW + 4 * HOUR })], NOW + HOUR)
+    await store.calendar.saveEntries(
+      id,
+      [planning({ externalId: "clash", title: "Budget sync", startsAt: NOW + 3 * HOUR, endsAt: NOW + 4 * HOUR })],
+      NOW + HOUR,
+    )
+    const changed = await cli("events", "list", "week", "changed:2026-10-27T09:30Z")
+    expect(changed.items).toEqual([
+      expect.objectContaining({
+        title: "Example roadmap planning",
+        change: "moved",
+        changed_at: new Date(NOW + HOUR).toISOString(),
+        was: { starts_at: new Date(NOW + 2 * HOUR).toISOString(), ends_at: new Date(NOW + 3 * HOUR).toISOString() },
+      }),
+      expect.objectContaining({ title: "Budget sync", change: "new" }),
+    ])
+    const clash = await cli("events", "list", "week", "overlapping")
+    const [a, b] = clash.items as { id: string; overlaps: string[] }[]
+    expect(clash.items).toHaveLength(2)
+    expect(a?.overlaps).toEqual([`event:${b?.id}`])
+    expect(b?.overlaps).toEqual([`event:${a?.id}`])
+    await expect(cli("events", "list", "changed:yesterday-ish")).rejects.toMatchObject({ code: "validation_error" })
+  })
+
   it("links review and resolve: a copy that fits two events waits for the owner", async () => {
     const { cli, store, accountId } = await setup()
     const calendars = await store.calendar.saveCalendars(

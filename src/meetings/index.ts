@@ -38,6 +38,7 @@ export type {
   EntryStatus,
   EntryTransparency,
   EntryVisibility,
+  EventChange,
   EventDetails,
   EventFilter,
   EventStore,
@@ -49,7 +50,7 @@ export type {
   StoredEntry,
   StoredParticipant,
 } from "./event-store.js"
-export { entryInWindow } from "./event-store.js"
+export { entryInWindow, eventChange } from "./event-store.js"
 export { linkEvent } from "./events.js"
 export {
   exportMeeting,
