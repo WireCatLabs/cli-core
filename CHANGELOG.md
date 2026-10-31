@@ -9,10 +9,9 @@ shape of this file.
 
 ### Added
 
-- **`QueriesStore.matchingPks`, `AccountVectors.scoreMessages` and `MeaningLane`'s fourth argument `within`** (lists a
-  filter's messages when meaning can run), for
-  ranking a filter's own messages. `fieldsOfQuery` and `meaningWords` live in `src/search/lucene/meaning-parts.ts`,
-  shared by notes and messages.
+- **`QueriesStore.matchingPks`, `AccountVectors.scoreMessages` and `MeaningLane`'s fourth argument `within`**, which
+  lists a filter's messages once meaning can run: together they rank a filter's own messages. `fieldsOfQuery` and
+  `meaningWords` live in `src/search/lucene/meaning-parts.ts`, shared by notes and messages.
 
 ### Changed — may break callers
 
