@@ -96,6 +96,15 @@ describe("archive discovery", () => {
     for (const text of ["Do Helix logs expire before 22:00?", "Helix logs at a 1:1 ratio expire when?"])
       await expect(searchStore(store, account, request(text))).resolves.toBeDefined()
   })
+  it("keeps the colons of a quoted timestamp in a date filter", async () => {
+    const store = await open()
+    const found = await searchStore(
+      store,
+      account,
+      request('Can operators run Helix export? date:["2020-01-01T21:30:00Z" TO "2099-01-01T21:30:00Z"]'),
+    )
+    expect(ids(found)).toContain("2")
+  })
   it("retrieves partial evidence for permission questions while retaining sender filters", async () => {
     const store = await open()
     for (const text of ["Can operators run Helix export?", "Могут операторы выполнить Helix export?"]) {

@@ -80,11 +80,16 @@ export const searchDiscovery = async (
 ): Promise<SearchFound> => {
   // A question's own "?" would parse as a one-character wildcard and send it to strict search (BUG-395); the
   // colon of a time or ratio ("22:00", "1:1") would parse as a field and fail the whole search, and escaped it is
-  // syntax again, so it splits the numbers (BUG-450).
+  // syntax again, so it splits the numbers (BUG-450). A quoted timestamp keeps its colons (BUG-458).
   const request =
     asked.ast !== undefined || asked.exact || !asked.text
       ? asked
-      : { ...asked, text: asked.text.replace(/(?<=\p{L})\?(?=\s|$)/gu, "").replace(/(?<=\d):(?=\d)/gu, " ") }
+      : {
+          ...asked,
+          text: asked.text
+            .replace(/(?<=\p{L})\?(?=\s|$)/gu, "")
+            .replace(/"(?:[^"\\]|\\.)*"|(?<=\d):(?=\d)/gu, (found) => (found === ":" ? " " : found)),
+        }
   const original = await prepareLucene(store, account, request, messenger)
   const text = request.text ?? ""
   const plan = planQuestion(text, request.ast !== undefined || !!request.exact || !!request.newest)

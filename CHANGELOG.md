@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Discovery search keeps the colons of a quoted timestamp in a date filter.** 0.492.0 turned a colon between digits
+  into a space so that "22:00" in a question would not fail, but it also did so inside quotes, and
+  `date:["2026-08-21T21:30:00Z" TO "…"]` failed with `query.invalid-date` under `discover`. Quoted text is now left as is.
+
 ## 0.495.0 — 31.10.2026
 
 ### Changed — may break callers
