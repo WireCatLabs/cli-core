@@ -17,6 +17,17 @@ shape of this file.
   Only in machine output (`--json`, `--jsonl`, or stdout not a terminal) and not in a `--background` job's log;
   stdout still carries the one answer. Archive services take an optional `onChat` for the same counts.
 
+### Changed — may break callers
+
+- **Needs `@wirecat/cli-base` 0.68.0** (peer range `>=0.68.0 <0.69.0`). cli-base's `Credentials` in `auto` now reads
+  a sign-in the private file holds before the keyring and keeps its refreshes there (WC-SECR-4).
+
+### Fixed
+
+- **A new OAuth sign-in moves a file sign-in back to the keyring.** `TokenStorage.write` takes `{ signIn: true }`, and
+  the keeper's `signIn` and `save` pass it: the keyring is tried again and, once it takes the sign-in, the file copy
+  is removed. A refresh stays where the sign-in is, so a locked keyring is not tried for it on every refresh.
+
 ## 0.506.0 — 31.10.2026
 
 ### Added
