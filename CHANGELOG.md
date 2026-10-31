@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A budgeted mail sync now finishes locating a large folder stored before email locations existed.** It listed
+  the same newest messages every run, so a 16,100-message INBOX never got every UID stored and never switched to
+  the quick UID listing. Each budgeted run now leaves out the mail already done and located and lists the next
+  part; once the rest is listed whole, the folder is located. Such a run checks no deletions.
+
 ## 0.490.0 — 31.10.2026
 
 ### Changed — may break callers

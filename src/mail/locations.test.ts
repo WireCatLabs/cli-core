@@ -236,6 +236,45 @@ describe("mail stored before locations existed", () => {
     expect(await store.live()).toEqual(["9001", "9003"])
   })
 
+  it("goes on from where the last budgeted run stopped, so a mailbox larger than one run gets located", async () => {
+    const messages = Array.from({ length: 18 }, (_, i) => mail(i + 1))
+    const { box, sync, reset, inStore } = harness(messages, { quick: false, listBatch: 3 })
+    await sync()
+    box.quick = true
+
+    let runs = 0
+    while ((await (await inStore()).point("INBOX")).located === undefined && runs < 10) {
+      runs++
+      await sync({ budget: runBudget({ requests: 4 }) })
+    }
+
+    expect(runs).toBeLessThanOrEqual(2)
+    expect(await (await inStore()).uids("INBOX")).toHaveLength(18)
+    reset()
+    await sync({ budget: runBudget({ requests: 4 }) })
+    expect(box.calls).toMatchObject({ list: 0, quick: 1 })
+  })
+
+  it("takes no mail left out of a backfill's listing for deleted", async () => {
+    const { box, sync, inStore } = harness(
+      Array.from({ length: 10 }, (_, i) => mail(i + 1)),
+      {
+        quick: false,
+        listBatch: 1,
+      },
+    )
+    await sync()
+    box.quick = true
+    await sync({ budget: runBudget({ requests: 2 }) })
+    box.listBatch = 20
+
+    const rest = await sync({ budget: runBudget({ requests: 2 }) })
+
+    expect(rest).toMatchObject({ deleted: 0, complete: true })
+    expect(await (await inStore()).live()).toHaveLength(10)
+    expect((await (await inStore()).point("INBOX")).located).toBe(SINCE.toISOString())
+  })
+
   it("is listed in full again when the window is wider than the one located", async () => {
     const { box, sync, reset } = harness([mail(1), mail(2)])
     await sync({ since: new Date("2026-09-05T00:00:00Z") })
