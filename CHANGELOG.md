@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`search messages --discover` no longer fails on a question with a time or a ratio.** "Do we meet until 22:00?"
+  or "a 1:1 with Anna" read the colon as a field filter and ended the whole search with `query.invalid-syntax`.
+  In a question, a colon between two digits now splits the numbers, as a space would. Explicit query syntax is
+  unchanged. A question with a bare number still runs as strict search until cli-core takes cli-base 0.66.1, where a
+  number counts as a word of the question.
+
 ## 0.491.0 — 31.10.2026
 
 ### Fixed
