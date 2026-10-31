@@ -7,6 +7,24 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A memory or fact can be forgotten for good.** `store.memories.remove(ref)` and `store.facts.remove(ref)` erase the
+  row, every link from or to it, its tags, and its words, pieces and vectors in the search indexes, in one write. The
+  words indexes are merged and freed pages zeroed (`secure_delete`), so the text is not left in the file; the
+  write-ahead log is emptied when no reader holds it. A record that replaced it no longer names it (`supersedes:
+  null`). Removing a fact also erases the soft-deleted memory it was migrated from in version 2, which still held its
+  text. Both answer `{ ref, removed: true, links }`, where `links` counts the links erased.
+- **`store.facts.reject(ref)`** turns down a proposed fact: `FACT_STATUSES` gains `rejected`.
+- **`store.memories.sources(ref)` and `store.facts.sources(ref)`** read each evidence link back as an `EvidenceSource`:
+  `ref`, `kind`, `title`, `sender`, `at`, `excerpt` (280 characters at most), `tool` and `missing`. A source deleted
+  since is still listed, `missing: true` with no excerpt, where `evidence` leaves it out; `ref` is `null` when its row
+  is gone from the store.
+- **`Memory` and `Fact` carry `subjectName` and `subjectIsOwner`.** A person is named by their name, else the
+  owner's alias for them, else an identity's name; a project or organization by its name. The owner has no name in the
+  store, so `subjectName` is `null` and `subjectIsOwner` is `true`. The `memory` and `fact` entities gain optional
+  `subject_name`, `subject_is_owner` and `sources`.
+
 ## 0.499.0 — 31.10.2026
 
 ### Added
