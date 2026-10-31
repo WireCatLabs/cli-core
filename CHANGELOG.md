@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.512.0 — 01.11.2026
+
 ### Added
 
 - **A project task has two more open states: `todo` and `in_progress`.** `TASK_STATES` is `open`, `todo`,
