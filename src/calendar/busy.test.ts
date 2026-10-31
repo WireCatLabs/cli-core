@@ -56,7 +56,7 @@ describe("calendars busy", () => {
 
   it("answers the synced calendars and each person named, with only their busy times", async () => {
     const { cli } = await setup()
-    const answer = await cli("calendars", "busy", "today", "person:Ana@example.com")
+    const answer = await cli("calendars", "busy", "start>=today", "end<=today", "person:Ana@example.com")
     expect(answer).toEqual({
       start: "2026-11-02T00:00:00.000Z",
       end: "2026-11-03T00:00:00.000Z",
@@ -79,7 +79,7 @@ describe("calendars busy", () => {
   it("finds the free stretches everyone shares in working hours, and names whom the provider could not see", async () => {
     const { cli } = await setup()
     const answer = await cli(
-      ...["calendars", "busy", "today", "person:ana@example.com", "person:bo@example.com"],
+      ...["calendars", "busy", "end<=2026-11-02", "person:ana@example.com", "person:bo@example.com"],
       ...["--duration-minutes", "60", "--hours", "08:00-13:00"],
     )
     expect(answer.slots).toEqual([
@@ -102,10 +102,31 @@ describe("calendars busy", () => {
     await expect(cli("--offline", "calendars", "busy")).rejects.toMatchObject({ details: { reason: "busy.offline" } })
   })
 
-  it("refuses a word it does not know and an address that is not one", async () => {
+  it("asks for a week from today without a window, and a week from its start with start alone", async () => {
     const { cli } = await setup()
-    await expect(cli("calendars", "busy", "soon")).rejects.toMatchObject({ details: { reason: "query.unknown_word" } })
-    await expect(cli("calendars", "busy", "person:ana")).rejects.toMatchObject({ code: "validation_error" })
+    expect(await cli("calendars", "busy")).toMatchObject({
+      start: "2026-11-02T00:00:00.000Z",
+      end: "2026-11-09T00:00:00.000Z",
+    })
+    expect(await cli("calendars", "busy", "start>=2026-11-04")).toMatchObject({
+      start: "2026-11-04T00:00:00.000Z",
+      end: "2026-11-11T00:00:00.000Z",
+    })
+  })
+
+  it("refuses a word that is not a field, a window side it cannot take, and an address that is not one", async () => {
+    const { cli } = await setup()
+    const reason = (...words: string[]) =>
+      cli("calendars", "busy", ...words).then(
+        () => "answered",
+        (error: { code?: string; details?: { reason?: string } }) => error.details?.reason ?? error.code,
+      )
+    expect(await reason("week")).toMatch(/^query\./u)
+    expect(await reason("from:2026-11-02")).toMatch(/^query\./u)
+    expect(await reason("start<2026-11-02")).toBe("query.unsupported-operator")
+    expect(await reason("end>=2026-11-02")).toBe("query.unsupported-operator")
+    expect(await reason("start>=2026-11-02", "start>=2026-11-03")).toBe("query.unsupported-placement")
+    expect(await reason("person:ana")).toBe("validation_error")
   })
 })
 

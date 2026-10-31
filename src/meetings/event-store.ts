@@ -200,6 +200,10 @@ export interface EventFilter {
   from?: number
   /** Events that start before this instant. */
   to?: number
+  /** Events that start at or after this instant. */
+  startsFrom?: number
+  /** All-day events starting on or after this local day (`YYYY-MM-DD`); `startsFrom` without it. */
+  startsFromDate?: string
   /** All-day events, which have dates and no instant, ending after this local day (`YYYY-MM-DD`); `from` without it. */
   fromDate?: string
   /** Events `eventChange` finds new, moved or cancelled at or after this instant. */

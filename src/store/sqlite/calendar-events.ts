@@ -25,6 +25,7 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
   }
   dated("end_date > ?", filter.fromDate, "coalesce(e.ends_at, e.starts_at + 1) > ?", filter.from)
   dated("start_date < ?", filter.toDate, "e.starts_at < ?", filter.to)
+  dated("start_date >= ?", filter.startsFromDate, "e.starts_at >= ?", filter.startsFrom)
   // Bounds on starts_at alone let SQLite seek its index; the CASE above cannot. They are wider than the CASE: by the
   // longest stored event back, and by a day each way for an all-day event's zone.
   const longest = () =>
@@ -39,6 +40,10 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
   if (filter.to !== undefined && filter.toDate !== undefined) {
     clauses.push("e.starts_at < ?")
     params.push(filter.to + DAY)
+  }
+  if (filter.startsFrom !== undefined && filter.startsFromDate !== undefined) {
+    clauses.push("e.starts_at >= ?")
+    params.push(filter.startsFrom - DAY)
   }
   if (filter.calendarId !== undefined) {
     clauses.push(entries("ce.calendar_id = ?"))

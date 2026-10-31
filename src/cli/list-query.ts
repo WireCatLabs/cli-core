@@ -141,8 +141,19 @@ export const queryArgument = (registry: QueryRegistry) => {
  * The terms of a query a provider answers: field:value joined by AND, each field once. Anything else is a
  * question the source cannot ask, so it is refused rather than answered from a part of the list.
  */
-export const nativeTerms = (ast: QueryAst | undefined, command: string): Map<string, Predicate> => {
-  const terms = new Map<string, Predicate>()
+export const nativeTerms = (ast: QueryAst | undefined, command: string): Map<string, Predicate> =>
+  new Map([...nativeTermLists(ast, command)].map(([field, [node]]) => [field, node as Predicate]))
+
+/**
+ * As `nativeTerms`, but each `repeatable` field may be named again, every term kept in order: `person:a person:b`
+ * asks for both, as AND reads.
+ */
+export const nativeTermLists = (
+  ast: QueryAst | undefined,
+  command: string,
+  repeatable: readonly string[] = [],
+): Map<string, Predicate[]> => {
+  const terms = new Map<string, Predicate[]>()
   if (!ast) return terms
   const context = { command, guide: LIST_QUERY_GUIDE }
   // listQuery wraps a typed `a:x b:y` as one clause beside the defaults, so an all-AND group nests.
@@ -160,9 +171,10 @@ export const nativeTerms = (ast: QueryAst | undefined, command: string): Map<str
       }
       return
     }
-    if (terms.has(node.field))
+    const held = terms.get(node.field)
+    if (held && !repeatable.includes(node.field))
       queryError("query.unsupported-placement", node.span, `${node.field} only once here`, context)
-    terms.set(node.field, node)
+    terms.set(node.field, [...(held ?? []), node])
   }
   add(ast.root)
   return terms

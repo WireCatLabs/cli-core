@@ -7,6 +7,30 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The event store finds events by their earliest start: `EventFilter.startsFrom`.** It keeps events that start at
+  or after an instant, and `startsFromDate` keeps all-day events by their local date, as `toDate` does (WC-TIME-5).
+  Both stores (SQLite and `memoryEventStore`) answer it, and the event store contract checks the boundary.
+- **`nativeTermLists`** from `@wirecat/cli-core/cli`: as `nativeTerms`, but named fields may repeat
+  (`person:a person:b`), every term kept.
+
+### Changed — may break callers
+
+- **The shared calendar commands take the standard query and the paths the other tools use.** A CLI that mounts
+  `addCalendarCommands` (gcal) gets:
+  - `store status` in place of `status`, and `search events <query…>` in place of `search <words…>`; the permission
+    keys are `store.status` and `search.events`, and the sync's hint names `store status`.
+  - `events list [query…]` (`EVENTS_QUERY`): `starts_at` either way, now including `starts_at>=…` and
+    `starts_at:[a TO b}`, `ends_at>=…`, `changed_at>=…`, `calendar:` and `person:`. The words `today`, `week`,
+    `from:`, `to:`, `changed:` and `overlapping` are refused as query errors.
+  - `calendars busy [query…]` (`BUSY_QUERY`): the window as `start>=…` and `end<=…`, and `calendar:` and `person:`,
+    each repeatable. `today`, `week`, `from:` and `to:` are refused.
+  - `eventsFilter(query, …)` takes the query text in place of words, and `busyQuery(query, …)` as well;
+    `EVENTS_QUERY_HELP` and `BUSY_QUERY_HELP` are gone (`EVENTS_QUERY_NOTE`, `BUSY_QUERY_NOTE`), and `weekFilter`
+    builds `people list`'s week.
+  - `calendarTools`: `status` is `store_status`, and `events_list` takes `query` in place of `words`.
+
 ## 0.501.0 — 31.10.2026
 
 ### Added

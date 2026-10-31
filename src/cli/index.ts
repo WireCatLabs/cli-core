@@ -343,6 +343,7 @@ export {
   LIST_QUERY_GUIDE,
   listQuery,
   nativeField,
+  nativeTermLists,
   nativeTerms,
   pagedList,
   pageOf,

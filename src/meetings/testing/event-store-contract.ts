@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { type EntryInput, type EventStore, eventChange } from "../event-store.js"
+import { type EntryInput, type EventFilter, type EventStore, eventChange } from "../event-store.js"
 import type { ContractCase } from "../store.js"
 
 /** A fresh, empty store and one calendar account in it. */
@@ -399,6 +399,37 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
         { from: later, to: later + day, fromDate: day0, toDate: day1 },
       ])
         assert.deepEqual((await store.events(filter)).map(({ title }) => title).length, 3, JSON.stringify(filter))
+    }),
+    test("a list from a start keeps the event that starts exactly then, and an all-day event by its local date", async ({
+      store,
+      calendar,
+    }) => {
+      const day = 24 * HOUR
+      const day1 = new Date(later + day).toISOString().slice(0, 10)
+      const day0 = new Date(later).toISOString().slice(0, 10)
+      // Midnight of day1 an hour east of UTC; the all-day events are stored at a midnight three hours east.
+      const startsFrom = Date.parse(day1) - HOUR
+      const allDay = (id: string, date: string, next: string) =>
+        single(id, Date.parse(date) - 3 * HOUR, {
+          title: id,
+          allDay: true,
+          startDate: date,
+          endDate: next,
+          endsAt: Date.parse(next) - 3 * HOUR,
+        })
+      await store.saveEntries(
+        calendar,
+        [
+          single("at", startsFrom, { title: "at" }),
+          single("before", startsFrom - 1, { title: "before" }),
+          allDay("on", day1, new Date(later + 2 * day).toISOString().slice(0, 10)),
+          allDay("day before", day0, day1),
+        ],
+        2,
+      )
+      const titles = async (filter: EventFilter) => (await store.events(filter)).map(({ title }) => title).sort()
+      assert.deepEqual(await titles({ startsFrom, startsFromDate: day1 }), ["at", "on"])
+      assert.deepEqual(await titles({ startsFrom }), ["at"])
     }),
     test("a list of changes since an instant finds events new, moved or cancelled since, and says which", async ({
       store,
