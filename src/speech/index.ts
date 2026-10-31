@@ -36,9 +36,5 @@ export {
   speechModel,
   VAD,
 } from "./models.js"
-export {
-  OPENAI_LARGEST_FILE,
-  type OpenAITranscription,
-  transcribeOpenAI,
-} from "./openai.js"
+export { LONGEST_REQUEST_SECONDS, type OpenAITranscription, transcribeOpenAI } from "./openai.js"
 export type { TimedText } from "./recognize.js"

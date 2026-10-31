@@ -102,6 +102,7 @@ it("stores a two-speaker OpenAI transcript whose speakers overlap", async () => 
     create: { title: "Call", startedAt: 1000, timezone: null },
     transcripts: sampleMeeting().transcripts.map(({ rows, ...transcript }) => ({
       ...transcript,
+      contentHash: "sample-call",
       rows: rows.map(({ speakerParticipantPosition: _position, ...row }) => row),
     })),
   })
