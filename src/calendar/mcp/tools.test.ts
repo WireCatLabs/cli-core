@@ -112,6 +112,25 @@ describe("calendar MCP tools", () => {
     expect(await refused("event_links_review", [], [1])).toBe("validation_error")
   })
 
+  it("events_list pages the merge of every account, and page.next reads on with the same query", async () => {
+    const { store } = await setup()
+    const list = async (input: object) =>
+      body(await callCalendarTool(store, "events_list", input, { accountIds: [1, 2], now: NOW }))
+    const first = await list({ query: "starts_at:today", limit: 1 })
+    expect((first.items as { title: string }[]).map(({ title }) => title)).toEqual([
+      expect.stringContaining("Planning 1"),
+    ])
+    expect(first.page).toEqual({ mode: "page", limit: 1, has_more: true, next_page: 2 })
+    expect(first.next).toMatchObject([{ step: "page.next", args: { query: "starts_at:today", page: 2, limit: 1 } }])
+    const second = await list({ query: "starts_at:today", limit: 1, page: 2 })
+    expect((second.items as { title: string }[]).map(({ title }) => title)).toEqual([
+      expect.stringContaining("Planning 2"),
+    ])
+    expect(second.page).toEqual({ mode: "page", limit: 1, has_more: false })
+    expect((await list({ query: "starts_at:today", limit: 1, page: 2, account_id: 2 })).items).toEqual([])
+    expect((await list({ limit: 1000, page: 2 })).error).toMatchObject({ code: "validation_error" })
+  })
+
   it("lists open link choices across the store and says so", async () => {
     const { store } = await setup()
     const review = body(await callCalendarTool(store, "event_links_review", {}, { accountIds: [1] }))
@@ -163,6 +182,22 @@ describe("calendar MCP tools", () => {
       expect(writer.calls).toEqual([expect.objectContaining({ write: "create", calendar: "cal-2", notify: false })])
       const calendar = (await store.calendars(2))[0]?.id as number
       expect((await store.entry(calendar, made.operation_id as string))?.title).toBe("Example planning")
+    })
+
+    it("a lost create names its operation_id, and a retry with it finds the event instead of making another", async () => {
+      const { call, writer } = await writable()
+      writer.loseNextAnswer()
+      const lost = body(await call("event_create", { calendar: "cal-1", ...planning }))
+      const error = lost.error as { code: string; message: string; details: { operation_id: string } }
+      expect(error.code).toBe("outcome_unknown")
+      expect(error.message).toContain(`repeat with operation_id ${error.details.operation_id}`)
+      const retried = body(
+        await call("event_create", { calendar: "cal-1", ...planning, operation_id: error.details.operation_id }),
+      )
+      expect(retried.operation_id).toBe(error.details.operation_id)
+      expect(writer.held("cal-1")).toHaveLength(1)
+      const old = await call("event_create", { calendar: "cal-1", ...planning, id: error.details.operation_id })
+      expect(body(old).error).toMatchObject({ code: "validation_error", message: "unknown argument: id" })
     })
 
     it("mailing attendees stays denied for an agent, and the provider is never called", async () => {
