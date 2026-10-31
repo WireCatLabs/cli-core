@@ -447,6 +447,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--allow-remote` |  | switch | consent to sending the stored data to the configured remote model |  |
 | `--answerer` | `<person>` | string | a person whose reply counts as an answer; repeat it for more |  |
 | `--browser` | `<program>` | string | the browser program to open for sign-in |  |
+| `--credential-storage` | `<storage>` | choice | where a sign-in is kept: keyring, which falls back to a private file by itself, or file (WC-SECR-4) |  |
 | `--checkpoint` | `<file>` | path | keep resume progress in this file |  |
 | `--expected-event-id` | `<id>` | id | refuse unless the linked event is still this one, or none |  |
 | `--expected-person` | `<uid>` | id | refuse unless the linked person is still this one, or none |  |

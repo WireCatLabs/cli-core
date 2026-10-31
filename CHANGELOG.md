@@ -31,6 +31,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **cli-base 0.68.1.** The development pin is `0.68.1` and the peer range `>=0.68.1 <0.69.0`, so a CLI can take
+  cli-base 0.68.x and none can stay on 0.67. cli-base 0.68.0 moves the file fallback of `Credentials` in `auto` into the class: a secret the
+  file holds is read from the file before the keyring, and a sign-in (`write(account, secret, { signIn: true })`)
+  removes the file copy once the keyring takes it. cli-core's own `Credentials` uses needed no change.
 - **`search messages --discover` searches by meaning when the query uses `-`, `NOT`, `OR`, groups, phrases or
   `exact:`.** Such a query used to run strict search alone, with no meaning hits. Now its words are still matched by
   the whole query, as strict search does (`discovery.method: "lexical-strict"`), and the messages nearest in meaning
