@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { freeSlots, workingHoursOf } from "./busy.js"
 import { addCalendarCommands } from "./cli/index.js"
 import { repeatRule } from "./recurrence.js"
+import { checkCalendarAnswer } from "./testing/answers.js"
 import { fakeCalendarSource, memoryEventStore } from "./testing/index.js"
 
 const HOUR = 3_600_000
@@ -40,6 +41,7 @@ const setup = async (options: { freeBusy?: boolean } = { freeBusy: true }) => {
   })
   const cli = async (...args: string[]) => {
     await root.parseAsync([...args, "--json"], { from: "user" })
+    checkCalendarAnswer(root, args, written.at(-1))
     return written.at(-1) as Record<string, unknown>
   }
   return { cli, root }

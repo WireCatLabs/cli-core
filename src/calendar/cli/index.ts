@@ -43,6 +43,7 @@ import {
   updateEvent,
   type WriteContext,
 } from "../writes.js"
+import { declareCalendarAnswers } from "./answers.js"
 
 export interface CalendarCommandDeps {
   store: EventStore
@@ -69,7 +70,7 @@ export interface CalendarCommandDeps {
   /** For a source with `expands: "local"`. */
   expand?: CalendarExpander
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
-  embed?: (max: number) => Promise<unknown>
+  embed?: (max: number) => Promise<{ model: string; embedded: number; left: boolean }>
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
   now?: () => number
   /** The zone `today`, `week` and a bare date are read in; the computer's when absent. */
@@ -113,6 +114,7 @@ const minutes = (text: string) => {
 }
 
 const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDeps): void => {
+  const mounted = new Set(program.commands)
   const now = () => deps.now?.() ?? Date.now()
   const zone = () => timezoneOf(deps.timezone)
   const print = (value: unknown, command: Command) => {
@@ -312,7 +314,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
 
   const events = annotate(program.command("events").description("the account's stored events"), { effects: GROUP })
   example(
-    annotate(events.command("list"), { effects: LOCAL_READ, output: { entity: "event" } })
+    annotate(events.command("list"), { effects: LOCAL_READ })
       .description("list stored events, earliest first")
       .argument("[words...]", "today, week, from:<date>, to:<date>, person:<who>, calendar:<id>")
       .addHelpText("after", EVENTS_QUERY_HELP),
@@ -478,6 +480,10 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   ).action(async (review: string, choice: string, _opts: unknown, command: Command) => {
     print(await resolveAnswer(deps.store, deps.accountId, review, choice, now()), command)
   })
+
+  const leaves = (command: Command): Command[] =>
+    command.commands.length ? command.commands.flatMap(leaves) : [command]
+  declareCalendarAnswers(program, program.commands.filter((one) => !mounted.has(one)).flatMap(leaves))
 }
 
 interface WriteHelpers {

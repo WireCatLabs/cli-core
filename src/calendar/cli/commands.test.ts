@@ -3,10 +3,11 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, errorObjectOf } from "@wirecat/cli-base"
-import { describeProgram } from "@wirecat/cli-base/commands"
+import { describeProgram, flatten } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { commandsCommand } from "../../cli/commands-command.js"
+import { contractEvidence } from "../../cli/contract-evidence.js"
 import { itemOf } from "../../cli/envelope.js"
 import { commandPathKey, commandPermissions, knownPermissionKeys } from "../../cli/permission-keys.js"
 import { run } from "../../cli/program.js"
@@ -17,6 +18,7 @@ import { answered } from "../../mcp/tool.js"
 import type { EntryInput } from "../../meetings/index.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { CALENDAR_UNTRUSTED_FIELDS } from "../reads.js"
+import { checkCalendarAnswer } from "../testing/answers.js"
 import { fakeCalendarSource, fakeCalendarWriter } from "../testing/index.js"
 import { addCalendarCommands, type CalendarCommandDeps } from "./index.js"
 
@@ -92,7 +94,10 @@ const setup = async (deps: Partial<CalendarCommandDeps> = {}) => {
     return root
   }
   const cli = async (...args: string[]) => {
-    await program().parseAsync(args, { from: "user" })
+    const root = program()
+    const before = written.length
+    await root.parseAsync(args, { from: "user" })
+    if (written.length > before) checkCalendarAnswer(root, args, written.at(-1))
     return written.at(-1) as Record<string, unknown> & { items: Record<string, unknown>[] }
   }
   return { store, accountId, source, cli, program, written }
@@ -389,8 +394,13 @@ describe("calendar commands", () => {
 
   it("sync --embed embeds after the sync; a calendar that fails makes the run partial", async () => {
     const embedded: number[] = []
-    const { cli, source, written } = await setup({ embed: async (max) => embedded.push(max) })
-    expect(await cli("sync", "--embed")).toMatchObject({ embeddings: 1 })
+    const { cli, source, written } = await setup({
+      embed: async (max) => {
+        embedded.push(max)
+        return { model: "example-model", embedded: 2, left: false }
+      },
+    })
+    expect(await cli("sync", "--embed")).toMatchObject({ embeddings: { embedded: 2 } })
     expect(embedded).toEqual([600])
     source.failAfter(0)
     const printed = written.length
@@ -494,6 +504,23 @@ describe("calendar commands", () => {
     await expect(cli("search", "--backend", "server", "roadmap")).rejects.toMatchObject({
       code: "commander.unknownOption",
     })
+  })
+
+  it("each declare the entity it answers with, and commands info carries its schema", () => {
+    const root = new Command("gcal")
+    addCalendarCommands(root, {
+      store: {} as never,
+      accountId: 1,
+      account,
+      freeBusy: true,
+      serverSearch: true,
+      write: () => undefined,
+      writes: { writer: fakeCalendarWriter(), app: {} as never, settings: () => ({}) as never },
+    })
+    const infos = flatten(describeProgram(root)).filter(({ commands }) => commands.length === 0)
+    expect(infos.filter(({ output }) => output === undefined).map(({ path }) => path.join(" "))).toEqual([])
+    const { schemas } = contractEvidence(root)
+    for (const { output } of infos) expect(schemas).toHaveProperty([output?.entity as string])
   })
 
   it("leave --json and --jsonl to the host, so no MCP tool takes json or jsonl (BUG-459)", () => {

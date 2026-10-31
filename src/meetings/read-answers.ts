@@ -227,6 +227,13 @@ export const event = v.strictObject({
   updated_at: isoTime,
   /** The fields whoever sent the invitation wrote, on a calendar CLI's `events list`: an agent reads them as data. */
   untrusted: v.optional(v.array(text)),
+  /** On a calendar CLI's `events list changed:<date>`: what changed since then, and when the store saw it. */
+  change: v.optional(v.picklist(["new", "moved", "cancelled"])),
+  changed_at: v.optional(v.nullable(isoTime)),
+  /** The times a moved event had at that date. */
+  was: v.optional(v.strictObject({ starts_at: v.nullable(isoTime), ends_at: v.nullable(isoTime) })),
+  /** On a calendar CLI's `events list overlapping`: the events it clashes with, as `event:<id>`. */
+  overlaps: v.optional(v.array(text)),
 })
 
 export const eventItem = (one: Event): v.InferOutput<typeof event> => ({
