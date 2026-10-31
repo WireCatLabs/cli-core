@@ -21,7 +21,7 @@ const seeded = async () => {
   database
     .prepare("INSERT INTO accounts (id, provider, external_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1)")
     .run(1, "email", "owner@example.com", "Owner Example")
-  return { database, mail: mailStoreOver({ database, orm }) }
+  return { database, mail: mailStoreOver({ database, orm, now: () => 1 }) }
 }
 
 const email = (overrides: Partial<EmailInput> = {}): EmailInput => ({
@@ -43,6 +43,23 @@ const email = (overrides: Partial<EmailInput> = {}): EmailInput => ({
 const thread = (emails: EmailInput[], now = 2000): ThreadSave => ({ accountId: 1, externalId: "thread-1", emails, now })
 
 describe("mail store", () => {
+  it("saves several threads and the sync state in one transaction, or none of them", async () => {
+    const { mail, database } = await seeded()
+    const state = (value: string) => [{ accountId: 1, name: "cursor", value }]
+    const saved = await mail.saveThreads(
+      [thread([email()]), { ...thread([email({ externalId: "<two@example.com>" })]), externalId: "thread-2" }],
+      state("a"),
+    )
+    expect(saved.map(({ thread }) => thread.externalId)).toEqual(["thread-1", "thread-2"])
+
+    const broken = { ...thread([email({ externalId: "<three@example.com>" })]), externalId: "thread-3" }
+    await expect(mail.saveThreads([broken, { ...thread([email()]), accountId: 0 }], state("b"))).rejects.toThrow(
+      "Invalid thread key",
+    )
+    expect((await mail.threads()).map(({ externalId }) => externalId).sort()).toEqual(["thread-1", "thread-2"])
+    expect(database.prepare("SELECT value FROM sync_cursors WHERE key = 'cursor'").get()).toMatchObject({ value: "a" })
+  })
+
   it("saves a thread with its emails, recipients and mailboxes, and a resave changes nothing", async () => {
     const { mail } = await seeded()
     const first = await mail.saveThread(thread([email()]))

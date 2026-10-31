@@ -33,6 +33,7 @@ import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
 import type { Orm, StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
+import { type SyncStateSave, writeState } from "./sync.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
@@ -281,6 +282,8 @@ export interface SenderScore {
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
 export interface MailStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
+  /** Several threads and sync state in one transaction: a slice of mail commits with its resume point, or not at all. */
+  saveThreads(inputs: ThreadSave[], states?: SyncStateSave[]): Promise<ThreadDetails[]>
   /** Newest activity first. */
   threads(filter?: MailFilter): Promise<EmailThread[]>
   thread(id: number): Promise<ThreadDetails | null>
@@ -793,13 +796,21 @@ export const emailHitsByPk = (database: CacheDatabase, pks: number[]): StoredHit
  * the threads they belong to into pieces for search by meaning.
  */
 export const mailStoreOver = (
-  { database, orm }: Pick<StoreContext, "database" | "orm">,
+  { database, orm, now }: Pick<StoreContext, "database" | "orm" | "now">,
   stemmerFor: (stemmers: Stemmers) => Stemmer = stemmerCache(),
 ): MailStore => ({
   rules: mailRulesOver(database),
   async saveThread(input) {
     const id = write(database, () => saveThread(database, orm, input))
     return threadDetails(database, id) as ThreadDetails
+  },
+  async saveThreads(inputs, states = []) {
+    const ids = write(database, () => {
+      const saved = inputs.map((input) => saveThread(database, orm, input))
+      for (const { accountId, name, value } of states) writeState({ orm, now }, accountId, name, value)
+      return saved
+    })
+    return ids.map((id) => threadDetails(database, id) as ThreadDetails)
   },
   async threads(filter = {}) {
     const [limit, offset] = page(filter)
