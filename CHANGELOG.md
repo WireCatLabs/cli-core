@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.494.0 — 31.10.2026
+
 ### Security
 
 - **A run with moved folders no longer copies the owner's sign-in into the keyring when it refreshes a token.** Since
