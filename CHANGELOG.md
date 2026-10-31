@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.490.0 — 31.10.2026
+
 ### Changed — may break callers
 
 - **Notes, documents, knowledge annotations and contacts `--notes` are found by any part of a word, in any letter
