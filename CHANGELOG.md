@@ -14,7 +14,7 @@ shape of this file.
   microseconds, and a write waiting in another process (a command run during `store rebuild` or a migration's fill)
   could miss every gap until its 5 s wait ran out.
 
-## 0.504.0 — 31.10.2026
+## 0.505.0 — 31.10.2026
 
 ### Added
 
@@ -26,6 +26,11 @@ shape of this file.
   read); a throw there is `ok: false` with `error_code` and `error`, never a failed command. `version` comes from npm
   (the `latestVersion` that `upgrade` uses) when the CLI passes the new `AppDoctorOptions.packageName`; without it that
   check is left out. The command's effects are now `REMOTE_READ`, as the messenger's.
+
+## 0.504.0 — 31.10.2026
+
+### Added
+
 - **`projects evidence --sync-first` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
   that mounts it reads a project's evidence from its profile's stored messages; `--sync-first` (off by default, not on
   MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--sync-time`
