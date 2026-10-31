@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.489.0 — 31.10.2026
+
 ### Added
 
 - **`events list changed:<date>`: what changed since a date.** It keeps the events first stored, moved, or cancelled
