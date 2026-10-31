@@ -13,6 +13,7 @@ import { storedDeps } from "./deps.js"
 import { embeddingsService } from "./embeddings.js"
 import { messagesService } from "./messages.js"
 import { searchStore } from "./messages-archive-search.js"
+import { MEANING_DEPTH } from "./messages-discovery.js"
 import { meaningLane } from "./messages-meaning.js"
 import { embedNotes } from "./notes-search.js"
 import { searchAll } from "./search-all.js"
@@ -166,8 +167,8 @@ describe("discovery by meaning", () => {
     expect(found.items.map(({ chatId }) => chatId)).toEqual(["10"])
   })
 
-  describe("searches strictly, words only, when the filters are more than plain terms", () => {
-    const strict = async (text: string) => {
+  describe("meaning hits obey the whole query when it uses -, NOT, OR or groups", () => {
+    const explicit = async (text: string) => {
       download()
       const { store, discover, embeddings } = await setUp()
       await store.messages.saveMessages(account, "9", [{ ...message("5", "kitten"), senderId: "200" }], {
@@ -175,26 +176,60 @@ describe("discovery by meaning", () => {
       })
       await embeddings.refresh({ threads: 1 })
       const found = await discover(text)
-      expect(found.query?.discovery).toBeUndefined()
-      expect(found.items.some(({ discovery }) => discovery?.foundBy)).toBe(false)
-      return found.items.map(({ id }) => id).sort()
+      expect(found.query?.discovery?.method).toBe("lexical-strict")
+      return {
+        ids: found.items.map(({ id }) => id).sort(),
+        meaning: found.items.filter(({ discovery }) => discovery?.foundBy?.includes("meaning")).map(({ id }) => id),
+      }
     }
 
     it("a negated chat leaves its messages out", async () => {
-      expect(await strict("kitten -chat:10")).toEqual(["2", "5"])
+      const found = await explicit("cat -chat:10")
+      expect(found.meaning.length).toBeGreaterThan(0)
+      expect(found.ids).toEqual(["1", "2", "3", "5"])
     })
 
     it("a negated sender leaves theirs out", async () => {
-      expect(await strict("kitten -from:200")).toEqual(["2", "4"])
+      expect((await explicit("cat -from:200")).ids).toEqual(["1", "2", "3", "4"])
     })
 
-    it("a filter under OR with the words", async () => {
-      expect(await strict("cat OR chat:10")).toEqual(["1", "4"])
+    it("an excluded word leaves out the messages that hold it", async () => {
+      expect((await explicit("cat NOT kitten")).ids).toEqual(["1", "3"])
     })
 
-    it("a group of filters", async () => {
-      expect(await strict("kitten -(chat:9 from:200)")).toEqual(["2", "4"])
+    it("a filter under OR with the words narrows nothing", async () => {
+      expect((await explicit("cat OR chat:10")).ids).toEqual(["1", "2", "3", "4", "5"])
     })
+
+    it("an excluded group of filters", async () => {
+      expect((await explicit("cat -(chat:9 from:200)")).ids).toEqual(["1", "2", "3", "4"])
+    })
+
+    it("a group of filters joined by OR", async () => {
+      expect((await explicit("cat (chat:10 OR from:200)")).ids).toEqual(["4", "5"])
+    })
+  })
+
+  it("ranks a narrow filter's own messages, not only the nearest overall", async () => {
+    download()
+    const { store, discover, embeddings } = await setUp()
+    await store.chats.saveChats(account, [
+      { id: "11", title: "Chat 11", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(
+      account,
+      "9",
+      Array.from({ length: MEANING_DEPTH + 20 }, (_, index) => message(String(100 + index), "kitten")),
+      { via: "history" },
+    )
+    await store.messages.saveMessages(account, "11", [message("300", "kitten", "11")], { via: "history" })
+    await store.searchIndex.fillSearchIndex({})
+    await embeddings.refresh({ threads: 1 })
+
+    const found = await discover("cat chat:11")
+
+    expect(found.items.map(({ id }) => id)).toEqual(["300"])
+    expect(found.items[0]?.discovery?.foundBy).toEqual(["meaning"])
   })
 
   it("re-embeds an edited message and forgets a deleted one", async () => {

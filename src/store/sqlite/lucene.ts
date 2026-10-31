@@ -82,21 +82,25 @@ export const countQuery = (
 /** All matching message keys, without materializing message bodies or imposing a hit-page limit. */
 export const queryMessagePks = (context: StoreContext, execution: QueryExecution): Promise<number[]> =>
   runQuery(context, execution, "pks") as Promise<number[]>
+/** How many messages match, counting no further than `cap + 1`; `undefined` as `matchingPks` says. */
+export const countMatches = (context: StoreContext, execution: QueryExecution, cap: number): number | undefined =>
+  matchingPks(context, execution, cap)?.length
+
 /**
- * How many messages match, counting no further than `cap + 1`: one SQL count, unranked. `undefined` when a leaf is
- * checked row by row (a preset, a pattern), where a count would cost as much as the search itself.
+ * The keys of the messages that match, no more than `cap + 1`: one SQL query, unranked. `undefined` when a leaf is
+ * checked row by row (a preset, a pattern), where it would cost as much as the search itself.
  */
-export const countMatches = (context: StoreContext, execution: QueryExecution, cap: number): number | undefined => {
+export const matchingPks = (context: StoreContext, execution: QueryExecution, cap: number): number[] | undefined => {
   const { database, check, where, from, withRanking, ranked, leaves } = compileQuery(context, {
     ...execution,
     newest: true,
   })
   if (leaves.some(({ test }) => test)) return undefined
-  const row = database
-    .prepare(`SELECT count(*) AS n FROM (${withRanking}SELECT m.id ${from} WHERE ${where.sql} LIMIT ?)`)
-    .get(...ranked.params, ...where.params, cap + 1)
+  const rows = database
+    .prepare(`${withRanking}SELECT m.id ${from} WHERE ${where.sql} LIMIT ?`)
+    .all(...ranked.params, ...where.params, cap + 1)
   check()
-  return Number(row?.n ?? 0)
+  return rows.map(({ id }) => Number(id))
 }
 const compileQuery = (context: StoreContext, execution: QueryExecution, boundedAttachments = false) => {
   const { database } = context

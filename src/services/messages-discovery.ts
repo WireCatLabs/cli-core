@@ -1,10 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
-import { implicitTextTerms, walkQuery } from "@wirecat/cli-base/query"
+import { implicitTextTerms, parseLucene, type QueryNode, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import type { MessengerTraits } from "../ports/traits.js"
-import { exhausted, QUERY_LIMITS } from "../search/lucene/types.js"
+import { fieldsOfQuery, meaningWords } from "../search/lucene/meaning-parts.js"
+import { validateFields } from "../search/lucene/registry.js"
+import { exhausted, MESSAGE_PARSING, QUERY_LIMITS } from "../search/lucene/types.js"
 import { planQuestion, words } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
@@ -68,7 +70,38 @@ export type MeaningLane = (
   question: string,
   accounts: AccountKey[],
   embedders?: Pick<WarmEmbedders, "get">,
+  /**
+   * The store keys of a filter's own messages, to rank all of them instead of the nearest overall; `undefined` when
+   * the filter is too large. Asked only once meaning can run, so a search without the model never lists the filter.
+   */
+  within?: () => Promise<number[] | undefined>,
 ) => Promise<{ model: string; ranked: MeaningRanked; partly?: MeaningSkipped } | { skipped: MeaningSkipped }>
+
+/**
+ * The most messages a filter may hold for meaning to rank every one of them that has a vector; above it, meaning
+ * takes the nearest overall and keeps those inside the filter, so a narrow filter loses some. Listing the filter costs
+ * ~2 µs a message and scoring ~22 µs a vector: on the owner's store (205k messages, 4% with vectors) a 30-day filter
+ * of 91k messages took ~0.2 s in all (cli-testing performance/search/messages-meaning-filters). Most messages have no
+ * vector, so the limit counts messages, not vectors; a store where all 100k have one would spend ~2 s.
+ */
+export const RANK_WITHIN_MESSAGES = 100_000
+
+/** Every message matches it: a wanted word's stand-in, and what a search with no text runs. */
+const EVERY_MESSAGE = {
+  kind: "predicate",
+  field: "date",
+  operator: "range",
+  value: "*",
+  upper: "*",
+  lower_inclusive: true,
+  upper_inclusive: true,
+} as const
+
+/** What a hit not found by the query's words must match: as a search request's text or AST. */
+type Scope = Pick<SearchQuery, "text" | "ast">
+
+const scopeOf = (root: QueryNode | undefined): Scope =>
+  root === undefined ? {} : { ast: { version: 1, language: "lucene-v1", root } }
 
 /**
  * The query discovery searches. A question's own "?" would parse as a one-character wildcard and send it to strict
@@ -97,23 +130,38 @@ export const searchDiscovery = async (
   const original = await prepareLucene(store, account, request, messenger)
   const text = request.text ?? ""
   const plan = planQuestion(text, request.ast !== undefined || !!request.exact || !!request.newest)
-  if (request.ast !== undefined || request.exact || request.newest || implicitTextTerms(text).size === 0)
+  if (request.ast !== undefined || request.exact || request.newest)
     return searchLucene(store, account, request, messenger)
   const implicit = implicitTextTerms(text)
-  if (
-    !plan.changed &&
-    walkQuery(original.execution.root).some(
-      (node) =>
-        (node.field === "text" || node.field === "exact") &&
-        (node.operator !== "term" || node.field === "exact" || !implicit.has(node.span.start)),
-    )
-  )
-    return searchLucene(store, account, request, messenger)
-  const terms = [...new Set(plan.terms.concat(plan.aliases.flatMap((alias) => words(alias.split(" -> ")[1] ?? ""))))]
+  // Explicit syntax (-, OR, NOT, groups, phrases, exact:, wildcards) keeps the whole query for the words; meaning
+  // reads only its wanted words, and its hits must still match every field and every excluded word.
+  const explicit =
+    implicit.size === 0 ||
+    (!plan.changed &&
+      walkQuery(original.execution.root).some(
+        (node) =>
+          (node.field === "text" || node.field === "exact") &&
+          (node.operator !== "term" || node.field === "exact" || !implicit.has(node.span.start)),
+      ))
+  const root = explicit
+    ? validateFields(parseLucene(text, { ...MESSAGE_PARSING, defaultField: "text" })).root
+    : undefined
+  const question = root === undefined ? text : meaningWords(root)
+  if (!question) return searchLucene(store, account, request, messenger)
+  const terms =
+    root === undefined
+      ? [...new Set(plan.terms.concat(plan.aliases.flatMap((alias) => words(alias.split(" -> ")[1] ?? ""))))]
+      : [...new Set(words(question))]
   if (!terms.length) return searchLucene(store, account, request, messenger)
   if (terms.length > 64) exhausted("discovery terms")
+  const narrowing = root === undefined ? undefined : fieldsOfQuery(root, EVERY_MESSAGE)
+  const scope: Scope = root === undefined ? (plan.scope ? { text: plan.scope } : {}) : scopeOf(narrowing)
   // Before the clock starts: loading the model alone takes about a second of the word search's budget.
-  const lane = meaning ? await meaning(text, original.scopeAccounts) : undefined
+  const within =
+    scope.text !== undefined || scope.ast !== undefined
+      ? () => filterPks(store, account, { ...request, text: undefined, ast: undefined, ...scope }, messenger)
+      : undefined
+  const lane = meaning ? await meaning(question, original.scopeAccounts, undefined, within) : undefined
   let started = performance.now()
   const check = () => {
     if (request.signal?.aborted)
@@ -129,7 +177,7 @@ export const searchDiscovery = async (
       union.set(m.locator, { ...previous, ...m, fused: (previous?.fused ?? 0) + 1 / (60 + rank + 1) })
     })
   // Natural questions use one ranked partial lookup; repeated all-word lookups cannot rescue their wording gaps.
-  for (const query of plan.changed ? [] : plan.queries) {
+  for (const query of plan.changed || root !== undefined ? [] : plan.queries) {
     check()
     const found = await searchCombined(store, account, { ...request, text: query, limit: 300 }, messenger, {
       candidateDepth: 300,
@@ -142,7 +190,7 @@ export const searchDiscovery = async (
     truncated ||= found.hasMore || found.query.combined.truncated
   }
   check()
-  const relaxed = `(${terms.join(" OR ")})${plan.scope ? ` ${plan.scope}` : ""}`
+  const relaxed = root === undefined ? `(${terms.join(" OR ")})${plan.scope ? ` ${plan.scope}` : ""}` : text
   const partialRequest = { ...request, text: relaxed, ast: undefined, limit: 300, context: 0, thread: undefined }
   const partial = await searchLucene(store, account, partialRequest, messenger)
   add(partial.items)
@@ -181,8 +229,9 @@ export const searchDiscovery = async (
         account,
         {
           ...request,
-          text: plan.scope || undefined,
+          text: undefined,
           ast: undefined,
+          ...scope,
           limit: 500,
           only,
           context: 0,
@@ -247,7 +296,7 @@ export const searchDiscovery = async (
     )
   let meaningCandidates = 0
   if (lane && "ranked" in lane) {
-    const near = await nearEligible(store, account, request, messenger, lane.ranked, plan.scope)
+    const near = await nearEligible(store, account, request, messenger, lane.ranked, scope)
     meaningCandidates = near.length
     candidates = fusedWithMeaning(candidates, near, described)
   }
@@ -300,7 +349,7 @@ export const searchDiscovery = async (
     started += performance.now() - opening
   }
   check()
-  const followUps = await followUpsOf(store, account, request, messenger, candidates, plan.scope)
+  const followUps = await followUpsOf(store, account, request, messenger, candidates, scope)
   const items = await Promise.all(
     candidates.slice(0, request.limit).map(async ({ fused: _fused, ...hit }) => {
       const later = followUps.get(hit.locator)
@@ -326,14 +375,14 @@ export const searchDiscovery = async (
     query: {
       ...partial.query,
       discovery: {
-        method: "lexical-partial",
+        method: root === undefined ? "lexical-partial" : "lexical-strict",
         candidateDepth: 300,
         candidates: candidates.length,
         repliesAdded: replyCount,
         followUps: [...followUps.values()].reduce((sum, later) => sum + later.length, 0),
         truncated,
         terms,
-        queries: [...(plan.changed ? [] : plan.queries), relaxed],
+        queries: [...(plan.changed || root !== undefined ? [] : plan.queries), relaxed],
         ...(lane && "ranked" in lane ? { meaning: { model: lane.model, candidates: meaningCandidates } } : {}),
         ...(reranked ? { rerank: reranked } : {}),
       },
@@ -354,7 +403,7 @@ const followUpsOf = async (
   request: SearchQuery,
   messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">>,
   candidates: Ranked[],
-  scope: string,
+  scope: Scope,
 ): Promise<Map<string, FoundMessage[]>> => {
   const head = candidates.slice(0, Math.min(FOLLOW_UP_HITS, request.limit))
   const later = await store.messages.laterSharingRare(
@@ -371,7 +420,7 @@ const followUpsOf = async (
   const eligible = await searchLucene(
     store,
     account,
-    { ...request, text: scope || undefined, ast: undefined, limit: only.length, only, context: 0, thread: undefined },
+    { ...request, text: undefined, ast: undefined, ...scope, limit: only.length, only, context: 0, thread: undefined },
     messenger,
   )
   const allowed = new Map(eligible.items.map((m) => [m.locator, m]))
@@ -388,6 +437,21 @@ const followUpsOf = async (
   return out
 }
 
+/**
+ * The store keys of the messages a filter holds, when there are at most `RANK_WITHIN_MESSAGES`; `undefined` when more,
+ * or when only a full search could list them.
+ */
+const filterPks = async (
+  store: MessageStore,
+  account: AccountKey,
+  request: SearchQuery,
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">>,
+): Promise<number[] | undefined> => {
+  const { execution } = await prepareLucene(store, account, request, messenger)
+  const pks = await store.queries.matchingPks(execution, RANK_WITHIN_MESSAGES)
+  return pks === undefined || pks.length > RANK_WITHIN_MESSAGES ? undefined : pks
+}
+
 /** The nearest messages the question's filters allow, as hits, nearest first. */
 export const nearEligible = async (
   store: MessageStore,
@@ -395,7 +459,7 @@ export const nearEligible = async (
   request: SearchQuery,
   messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">>,
   ranked: MeaningRanked,
-  scope: string,
+  scope: Scope,
 ): Promise<(FoundMessage & { cosine: number })[]> => {
   const keyOf = (one: AccountKey & { chatId: Id; id: Id }) =>
     JSON.stringify([one.provider, one.account, one.chatId, one.id])
@@ -407,7 +471,7 @@ export const nearEligible = async (
   const eligible = await searchLucene(
     store,
     account,
-    { ...request, text: scope || undefined, ast: undefined, limit: only.length, only, context: 0, thread: undefined },
+    { ...request, text: undefined, ast: undefined, ...scope, limit: only.length, only, context: 0, thread: undefined },
     messenger,
   )
   const hits = new Map(

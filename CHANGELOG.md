@@ -7,8 +7,31 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`QueriesStore.matchingPks`, `AccountVectors.scoreMessages` and `MeaningLane`'s fourth argument `within`**, which
+  lists a filter's messages once meaning can run: together they rank a filter's own messages. `fieldsOfQuery` and
+  `meaningWords` live in `src/search/lucene/meaning-parts.ts`, shared by notes and messages.
+
+### Changed — may break callers
+
+- **`search messages --discover` searches by meaning when the query uses `-`, `NOT`, `OR`, groups, phrases or
+  `exact:`.** Such a query used to run strict search alone, with no meaning hits. Now its words are still matched by
+  the whole query, as strict search does (`discovery.method: "lexical-strict"`), and the messages nearest in meaning
+  to its wanted words join them; every hit found by meaning, and every reply and follow-up discovery adds, matches
+  every field of the query and every excluded word, as notes do since 0.496.0. A field joined to the words by `OR`
+  narrows nothing. A query with no word to embed (`date:today`, `Helix*`) stays strict. On the owner's store, 6
+  such queries went from 0 meaning hits to 10–17 of 20, with no hit breaking the query.
+
 ### Fixed
 
+- **Search by meaning inside a filter ranks the filter's own messages.** With fields that hold at most 100,000
+  messages (`RANK_WITHIN_MESSAGES`), `--discover` scores every one of them that has a vector, instead of taking the
+  100 nearest messages overall and dropping those outside the filter. On the owner's store, `chat:<id>` with a chat of
+  1,000 messages went from 3 meaning candidates to 100 and from 9 hits to 20. A larger filter, or one the store
+  cannot list in one query (a preset, a pattern), keeps the old way.
+- **`--discover` works on a read-only store.** Its follow-up step created a temporary table to count rare words,
+  which a read-only connection refuses; it now counts them with a bounded query.
 - **A long fill or rebuild in one process no longer makes another process's write fail with "database is locked".**
   `writeBatch` pauses 2 ms after each batch it commits. Without the pause, the next batch took the lock again within
   microseconds, and a write waiting in another process (a command run during `store rebuild` or a migration's fill)
