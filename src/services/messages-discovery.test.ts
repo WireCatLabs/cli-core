@@ -190,20 +190,30 @@ describe("archive discovery", () => {
     await store.messages.markDeleted(account, ["1"], { chatId: "101" })
     expect((await store.messages.directReplies?.([{ account, chatId: "101", id: "1" }], 100))?.items).toEqual([])
   })
+  it.each(["Helix*", "date:2026-10-08"])(
+    "leaves a query with no word to search by meaning strict: %s",
+    async (text) => {
+      const store = await open()
+      const strict = await searchStore(store, account, { ...request(text), discover: false })
+      expect(await searchStore(store, account, request(text))).toEqual(strict)
+    },
+  )
   it.each([
-    "Helix AND export",
-    '"Helix export"',
-    "Helix OR logs",
-    "Helix NOT logs",
-    "exact:Helix",
-    "Helix*",
-    "(Helix export)",
-    "Helix export -date:2026-10-07",
-    "Helix (date:2026-10-07 OR date:2026-10-08)",
-  ])("preserves explicit syntax %s", async (text) => {
+    ["Helix AND export", () => true],
+    ['"Helix export"', () => true],
+    ["Helix OR logs", () => true],
+    ["Helix NOT logs", (m: FoundMessage) => !/logs/i.test(m.text)],
+    ["exact:Helix", () => true],
+    ["(Helix export)", () => true],
+    ["Helix export -date:2026-10-07", (m: FoundMessage) => !m.timestamp?.startsWith("2026-10-07")],
+    ["Helix (date:2026-10-07 OR date:2026-10-08)", () => true],
+  ])("keeps every strict hit of %s, and adds only what its fields and exclusions allow", async (text, allowed) => {
     const store = await open()
     const strict = await searchStore(store, account, { ...request(text), discover: false })
-    expect(await searchStore(store, account, request(text))).toEqual(strict)
+    const found = await searchStore(store, account, request(text))
+    expect(found.query?.discovery).toMatchObject({ method: "lexical-strict", queries: [text] })
+    expect(ids(found)).toEqual(expect.arrayContaining(ids(strict)))
+    expect(found.items.every(allowed)).toBe(true)
   })
   it("preserves exact/newest/AST and surrounding context", async () => {
     const store = await open()
@@ -251,8 +261,8 @@ describe("the total of a messages search", () => {
 
 describe("discovery follow-ups", () => {
   const day = (d: number) => `2026-10-${String(d).padStart(2, "0")}T12:00:00.000Z`
-  const project = async () => {
-    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "follow-ups-test-")), "synthetic.db") })
+  const project = async (path = join(mkdtempSync(join(tmpdir(), "follow-ups-test-")), "synthetic.db")) => {
+    const store = await openStore({ path })
     stores.push(store)
     await store.chats.saveChats(
       account,
@@ -303,6 +313,17 @@ describe("discovery follow-ups", () => {
   }
   const question = request("Which supplier did we pick for the crates?")
   const hitOf = (found: { items: FoundMessage[] }, locator: string) => found.items.find((m) => m.locator === locator)
+
+  it("finds the same follow-ups on a read-only connection", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "follow-ups-test-")), "synthetic.db")
+    const expected = await searchStore(await project(path), account, question)
+    const readOnly = await openStore({ path, readOnly: true })
+    stores.push(readOnly)
+    Object.assign(readOnly.searchIndex, { fillSearchIndex: async () => undefined, fillStems: async () => undefined })
+    const found = await searchStore(readOnly, account, question)
+    expect(found.query?.discovery?.followUps).toBeGreaterThan(0)
+    expect(found.items).toEqual(expected.items)
+  })
 
   it("shows a later message from another chat that shares a rare word with a hit", async () => {
     const store = await project()

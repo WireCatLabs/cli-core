@@ -15,6 +15,7 @@ import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
 import type { AppIdentity } from "../ports/app.js"
 import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
+import { fieldsOfQuery as fieldsOf, meaningWords } from "../search/lucene/meaning-parts.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
@@ -462,46 +463,10 @@ export const noteSourceOfQuery = (query: string): { source?: Note["source"]; res
   return { source, rest }
 }
 
-const WORD_FIELDS = new Set(["text", "exact"])
+/** `in:notes` holds for every note and document. */
+const EVERY_NOTE = { kind: "predicate", field: "in", operator: "term", value: "notes" } as const
 
-/**
- * What a note found by meaning must still match: the query with each word it asks for taken as matched, since the
- * meaning half stands in for those. Words it excludes, and every other field, stay. `undefined` when nothing but
- * wanted words is left, so any note found by meaning fits.
- */
-export const fieldsOfQuery = (root: QueryNode): QueryNode | undefined => {
-  let narrows = false
-  const kept = (node: QueryNode): QueryNode => {
-    if (node.kind === "boolean")
-      return {
-        ...node,
-        clauses: node.clauses.map(({ occur, node }) => {
-          if (occur !== "must_not") return { occur, node: kept(node) }
-          narrows = true
-          return { occur, node }
-        }),
-      }
-    if (!WORD_FIELDS.has(node.field)) {
-      narrows = true
-      return node
-    }
-    // `in:notes` holds for every note and document; an empty clause list would match nothing.
-    return { kind: "predicate", field: "in", operator: "term", value: "notes", span: node.span }
-  }
-  const fields = kept(root)
-  return narrows ? fields : undefined
-}
-
-/** The words and phrases the query asks for, for the meaning half to embed; none it excludes, no field. */
-export const meaningWords = (root: QueryNode): string => {
-  const wanted = (node: QueryNode): string[] =>
-    node.kind === "boolean"
-      ? node.clauses.flatMap(({ occur, node }) => (occur === "must_not" ? [] : wanted(node)))
-      : WORD_FIELDS.has(node.field) && (node.operator === "term" || node.operator === "phrase")
-        ? [node.value]
-        : []
-  return wanted(root).join(" ").trim()
-}
+export const fieldsOfQuery = (root: QueryNode): QueryNode | undefined => fieldsOf(root, EVERY_NOTE)
 
 const allOf = (nodes: QueryNode[]): QueryNode | undefined =>
   nodes.length <= 1
@@ -523,11 +488,7 @@ const matching = async (
   scope: Pick<NotesSearchRequest, "folderIds" | "withInternal" | "source" | "timezone">,
 ): Promise<Map<string, { note: Note; at: string }>> => {
   if (refs.length === 0) return new Map()
-  const resolved = await resolvedQuery(
-    store,
-    root ?? { kind: "predicate", field: "in", operator: "term", value: "notes", span: { start: 0, end: 0 } },
-    scope.timezone,
-  )
+  const resolved = await resolvedQuery(store, root ?? { ...EVERY_NOTE, span: { start: 0, end: 0 } }, scope.timezone)
   const found = await store.notes.search({
     root: resolved.root,
     refs,

@@ -32,7 +32,8 @@ import type { SearchRefreshed } from "./search-refresh.js"
 export interface QueryMetadata {
   language: "lucene-v1"
   discovery?: {
-    method: "lexical-partial"
+    /** `lexical-strict` when the query's own syntax (-, OR, NOT, groups…) chose the word hits, not a relaxed OR. */
+    method: "lexical-partial" | "lexical-strict"
     candidateDepth: number
     candidates: number
     repliesAdded: number

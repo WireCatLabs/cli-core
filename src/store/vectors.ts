@@ -69,6 +69,14 @@ export interface AccountVectors {
     key: AccountKey,
     options: { chatId?: Id; model: string; since?: string; before?: string; limit: number; query: Float32Array },
   ): Promise<{ chatId: Id; messageId: Id; score: number }[]>
+  /**
+   * The account's messages among `pks` (store keys, as a query's matches give them) scored against `query` by their
+   * own vector of `model`, best first: a filter's own messages ranked, not the nearest overall.
+   */
+  scoreMessages(
+    key: AccountKey,
+    options: { model: string; query: Float32Array; pks: number[] },
+  ): Promise<{ chatId: Id; messageId: Id; score: number }[]>
   /** The current build's distinct chunks, and how many have a vector of `model`. */
   vectorStatus(key: AccountKey, chatId: Id, model: string): Promise<{ chunks: number; embedded: number }>
   /** Drops the chat's vectors, or one model's; a vector another chat's chunk shares stays. */
@@ -266,6 +274,11 @@ export const accountVectorsOver = (context: StoreContext, mail: () => MailStore)
         limit,
         query,
       })
+    },
+
+    scoreMessages: async (key, options) => {
+      const accountPk = findAccountPk(key)
+      return accountPk === undefined ? [] : messageChunks.scoreMessages(context, accountPk, options)
     },
 
     vectorStatus: async (key, chatId, model) => {
