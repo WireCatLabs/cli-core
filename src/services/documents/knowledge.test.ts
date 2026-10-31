@@ -202,14 +202,9 @@ describe("shared document knowledge", () => {
       expect((await f.k.fact(f.principal, f.ref, replacement.ref, "reverse")).status).toBe("reversed")
       const ordinary = await f.k.addFact(f.principal, f.ref, { statement: "Budget discussed", type: "fact" })
       await expect(f.k.fact(f.principal, f.ref, ordinary.ref, "reverse")).rejects.toThrow()
-      await expect(
-        f.k.addFact(f.principal, f.ref, {
-          statement: "Invalid replacement",
-          type: "fact",
-          supersedes: ordinary.ref,
-        }),
-      ).rejects.toThrow()
-      expect(await f.k.facts(f.principal, f.ref)).toHaveLength(4)
+      await f.k.addFact(f.principal, f.ref, { statement: "Budget agreed", type: "fact", supersedes: ordinary.ref })
+      expect((await f.k.fact(f.principal, f.ref, ordinary.ref)).status).toBe("superseded")
+      expect(await f.k.facts(f.principal, f.ref)).toHaveLength(5)
     } finally {
       await f.index.close()
     }
