@@ -935,6 +935,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--context` | `<n>` | messages before and after each hit |  | `search messages`, `searches create` |
 | `--correct` | `<n>` | with --quiz: the right answer's position, from 1 |  | `polls create` (tg-only) |
 | `--counters` | `<names>` | the counter fields: views,reactions,comments |  | `stats messages counters show`, `stats messages counters sync` |
+| `--credential-storage` | `<storage>` | where the sign-in secret is kept: keyring, which falls back to a private file by itself when no keyring works, or file, not recommended | `keyring` | `session start` (max-only) |
 | `--cursor` | `<cursor>` | continue from the extraction or ranking-evidence cursor |  | `attachments extract`, `chats media` (planned), `contacts events`, `messages comments` (tg, wa only), `messages evidence`, `messages list`, `reactions list` (tg, wa only), `stats contacts evidence`, `stats messages evidence` |
 | `--days` | `<days>` | days of the working window, such as mon-fri or sat,sun |  | `replies edit` |
 | `--debug` |  | on a failure, its whole record — cause and stack — in place of the short line |  | every command |
