@@ -5,7 +5,7 @@ import { PassThrough } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { appDoctorCommand } from "./app-doctor-command.js"
 import { type AppMcpOptions, appMcpCommand } from "./app-mcp-command.js"
 import { outputFor } from "./context.js"
@@ -205,5 +205,44 @@ describe("appDoctorCommand", () => {
     const streams = captureStreams()
     await run(["doctor", "--json"], definition(), { streams, tty: false, env })
     expect(JSON.stringify(JSON.parse(streams.stdout[0] ?? "{}").item.config.issues)).toContain("evnts.delete")
+  })
+
+  describe("--online", () => {
+    const answer = async (
+      options: Parameters<typeof appDoctorCommand>[2],
+      argv: string[],
+      fetch?: typeof globalThis.fetch,
+    ) => {
+      const streams = captureStreams()
+      const program = { ...definition(), commands: () => [appDoctorCommand(app, configuration, options)] }
+      const code = await run(["doctor", "--json", ...argv], program, {
+        streams,
+        tty: false,
+        env: home(),
+        ...(fetch ? { fetch } : {}),
+      } as never)
+      return { code, item: JSON.parse(streams.stdout[0] ?? "{}").item }
+    }
+    const npm = (version: string) => (async () => Response.json({ version })) as unknown as typeof globalThis.fetch
+
+    it("makes no call and adds no `online` without the flag", async () => {
+      const online = vi.fn()
+      const { item } = await answer({ packageName: "@x/cal", online }, [], npm("9.0.0"))
+      expect(item.online).toBeUndefined()
+      expect(online).not.toHaveBeenCalled()
+    })
+
+    it("without a hook, says whether a newer version is published", async () => {
+      const { item } = await answer({ packageName: "@x/cal" }, ["--online"], npm("9.0.0"))
+      expect(item.online).toMatchObject({ ok: true, version: { current: "1.0.0", latest: "9.0.0", newer: true } })
+    })
+
+    it("joins the hook's fields, and a throw is a failed check, not a failed command", async () => {
+      const fine = await answer({ online: async () => ({ ok: true, account: "me@x" }) }, ["--online"])
+      expect(fine.item.online).toMatchObject({ ok: true, account: "me@x" })
+      const broken = await answer({ online: async () => Promise.reject(new Error("login refused")) }, ["--online"])
+      expect(broken.code).toBe(0)
+      expect(broken.item.online).toMatchObject({ ok: false, error_code: "generic_failure", error: "login refused" })
+    })
   })
 })

@@ -2,11 +2,14 @@ import { existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { CliError, configFilePath, resolvePaths } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import type { FetchLike } from "@wirecat/cli-base/http"
+import { isNewer, latestVersion } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import { storePath } from "../store/path.js"
-import { environmentOf, outputFor } from "./context.js"
-import { LOCAL_READ } from "./effects.js"
+import { type BaseEnvironment, environmentOf, outputFor } from "./context.js"
+import { DOCTOR_ONLINE_OPTION, DOCTOR_SUMMARY } from "./doctor-text.js"
+import { REMOTE_READ } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { privateFiles } from "./messenger/private-files.js"
 import { unknownPermissionIssues } from "./permission-keys.js"
@@ -19,6 +22,44 @@ export interface AppDoctorOptions {
    * files only. A throw is reported as its message.
    */
   oauthClient?: (env: NodeJS.ProcessEnv) => { client: "wirecat" | "own" }
+  /** The npm package, so `--online` can say whether a newer version is published; without it that check is left out. */
+  packageName?: string
+  /**
+   * What `--online` checks of the service: a login, a folder read. Its fields join the `online` answer, and `ok: false`
+   * (or a throw, reported as `error_code` and `error`) makes the whole check fail without failing the command.
+   */
+  online?: (env: NodeJS.ProcessEnv) => Promise<{ ok: boolean } & Record<string, unknown>>
+}
+
+const onlineCheck = async (app: AppIdentity, env: NodeJS.ProcessEnv, fetcher: FetchLike, options: AppDoctorOptions) => {
+  const started = Date.now()
+  let service: Record<string, unknown> = { ok: true }
+  if (options.online)
+    try {
+      service = await options.online(env)
+    } catch (error) {
+      service = {
+        ok: false,
+        error_code: error instanceof CliError ? error.code : "generic_failure",
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  const latest = options.packageName
+    ? await latestVersion(options.packageName, fetcher, { timeoutMs: 3000 })
+    : undefined
+  return {
+    ...service,
+    duration_ms: Date.now() - started,
+    ...(options.packageName
+      ? {
+          version: {
+            current: app.version,
+            latest: latest ?? null,
+            newer: latest !== undefined && isNewer(latest, app.version),
+          },
+        }
+      : {}),
+  }
 }
 
 const failure = (error: unknown) => {
@@ -100,19 +141,28 @@ export const appDoctorReport = (
   }
 }
 
-/** `doctor` for a CLI that is not a messenger: gcal, drive, zoom. A messenger's is `doctorCommand(messenger)`. */
+/**
+ * `doctor` for a CLI that is not a messenger: gcal, drive, zoom. A messenger's is `doctorCommand(messenger)`, and both
+ * say the same thing: the state from disk, and only with `--online` a call out. Here that call is `options.online`
+ * and, with `options.packageName`, whether npm has a newer version.
+ */
 export const appDoctorCommand = (app: AppIdentity, configuration: Configuration, options: AppDoctorOptions = {}) =>
   profileFree(
     annotate(new Command("doctor"), {
-      effects: LOCAL_READ,
+      effects: REMOTE_READ,
       examples: [`${app.command} doctor`, `${app.command} doctor --json`],
     }),
   )
-    .description("check this installation: version, paths, config, profiles, store; no keyring or network")
-    .action(function (this: Command) {
-      const env = environmentOf(this).env ?? process.env
+    .description(DOCTOR_SUMMARY)
+    .option("--online", DOCTOR_ONLINE_OPTION)
+    .action(async function (this: Command) {
+      const environment = environmentOf<BaseEnvironment & { fetch?: FetchLike }>(this)
+      const env = environment.env ?? process.env
       const { report, fixes } = appDoctorReport(app, configuration, env, this, options)
+      const online = this.opts<{ online?: boolean }>().online
+        ? await onlineCheck(app, env, environment.fetch ?? fetch, options)
+        : undefined
       const output = outputFor(this)
-      renderAnswer(this, output, itemOf(report))
+      renderAnswer(this, output, itemOf(online ? { ...report, online } : report))
       for (const fix of fixes) output.renderer.note(`to make it private: ${fix}`)
     })
