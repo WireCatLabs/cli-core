@@ -66,6 +66,21 @@ export const message = v.strictObject({
   context: v.optional(
     v.array(v.strictObject({ ref: reference, timestamp: time, sender_name: v.nullable(text), text })),
   ),
+  /**
+   * A discovery hit's later messages, from any chat the search reads, that share a rare word with it, latest first:
+   * one may change or cancel what the hit says.
+   */
+  follow_ups: v.optional(
+    v.array(
+      v.strictObject({
+        ref: reference,
+        chat_title: v.nullable(text),
+        timestamp: time,
+        sender_name: v.nullable(text),
+        text,
+      }),
+    ),
+  ),
   outgoing: v.nullable(v.boolean()),
   attachments: v.array(attachment),
   reply_to: v.nullable(quoted),

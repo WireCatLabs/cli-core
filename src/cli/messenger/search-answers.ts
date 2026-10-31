@@ -32,7 +32,16 @@ export const offsetOf = (page: number | undefined, limit: number): number | unde
   page === undefined || page <= 1 ? undefined : (page - 1) * limit
 
 /** Who wrote it and what, the chat's title, the mail's headers: others write them; the owner's own messages too. */
-const MESSAGE_HIT_UNTRUSTED = ["chat_title", "sender_name", "excerpt", "context.sender_name", "context.text"]
+const MESSAGE_HIT_UNTRUSTED = [
+  "chat_title",
+  "sender_name",
+  "excerpt",
+  "context.sender_name",
+  "context.text",
+  "follow_ups.chat_title",
+  "follow_ups.sender_name",
+  "follow_ups.text",
+]
 const MAIL_HIT_UNTRUSTED = [
   "email.subject",
   "email.from.name",
@@ -84,6 +93,13 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
       : undefined,
     context: around?.map((one) => ({
       ref: formatLocator({ ...at, message: one.id }),
+      timestamp: one.timestamp,
+      sender_name: one.senderName,
+      text: one.text,
+    })),
+    follow_ups: hit.followUps?.map((one) => ({
+      ref: one.locator,
+      chat_title: one.chatTitle ?? null,
       timestamp: one.timestamp,
       sender_name: one.senderName,
       text: one.text,

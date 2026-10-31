@@ -222,7 +222,13 @@ const searchAction = (messenger: Messenger) =>
             hit.matchedIn && hit.matchedIn !== "text" && "excerpt" in hit
               ? `\n  found in the ${PLACES[hit.matchedIn]}: ${String(hit.excerpt)}`
               : ""
-          return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${place}${links ? `\n${links}` : ""}`
+          const later = (hit.followUps ?? [])
+            .map(
+              (one) =>
+                `\n  later, shares a rare word · ${one.chatTitle ?? one.chatId}  ${one.locator}\n${renderMessages([one], options)}`,
+            )
+            .join("")
+          return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${place}${later}${links ? `\n${links}` : ""}`
         })
         .join("\n\n")
       const elsewhere = [...new Set(hits.map(({ at }) => at.provider))].filter((one) => one !== messenger.provider)
