@@ -22,6 +22,13 @@ shape of this file.
   for the owner's), the old one becomes `superseded` whether it was proposed or accepted; a proposed one used to stay
   proposed.
 
+### Fixed
+
+- **`search events --backend both` marks a repeating event the provider also found.** The stored search shows a series
+  as one hit, while a provider such as Google answers the series and each moved occurrence apart, so 0.508.0 left the
+  stored hit without `server` and listed the provider's copies again below it. A provider hit is now matched through
+  its stored copy's series, and the stored hit takes `server` once.
+
 ## 0.508.0 — 31.10.2026
 
 ### Added
