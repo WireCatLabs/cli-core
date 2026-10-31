@@ -23,7 +23,11 @@ const setup = async (options: { freeBusy?: boolean } = { freeBusy: true }) => {
   source.setBusy("ana@example.com", [{ from: Date.UTC(2026, 10, 2, 11), to: Date.UTC(2026, 10, 2, 12) }])
   source.setBusy("bo@example.com", { error: "notFound" })
   const written: Record<string, unknown>[] = []
-  const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
+  const root = new Command("gcal")
+    .exitOverride()
+    .configureOutput({ writeErr: () => undefined })
+    .option("--json")
+    .option("--jsonl")
   addCalendarCommands(root, {
     store,
     accountId: 1,
