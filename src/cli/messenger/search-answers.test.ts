@@ -223,7 +223,7 @@ describe("untrusted text in search answers", () => {
       "context.text",
       "follow_ups.chat_title",
       "follow_ups.sender_name",
-      "follow_ups.text",
+      "follow_ups.excerpt",
       "email.subject",
       "email.from.name",
       "email.to.name",

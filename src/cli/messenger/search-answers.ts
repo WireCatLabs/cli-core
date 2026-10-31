@@ -41,7 +41,7 @@ const MESSAGE_HIT_UNTRUSTED = [
   "context.text",
   "follow_ups.chat_title",
   "follow_ups.sender_name",
-  "follow_ups.text",
+  "follow_ups.excerpt",
 ]
 const MAIL_HIT_UNTRUSTED = [
   "email.subject",
@@ -103,7 +103,7 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
       chat_title: one.chatTitle ?? null,
       timestamp: one.timestamp,
       sender_name: one.senderName,
-      text: one.text,
+      excerpt: excerpt(one.text, query),
     })),
     untrusted: hit.email ? [...MESSAGE_HIT_UNTRUSTED, ...MAIL_HIT_UNTRUSTED] : MESSAGE_HIT_UNTRUSTED,
   })

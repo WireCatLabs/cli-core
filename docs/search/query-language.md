@@ -73,7 +73,7 @@ Statistics reports also accept report predicates such as `message_kind:posts`, `
 читает поиск, где есть редкое слово найденного — слово из трёх букв и больше, чья основа есть не более чем в
 трёх сообщениях архива (поставщик, код, название). Так видно, если решение потом отменили или поменяли, а
 отмена не была ответом на него. Сначала самые поздние; сообщение, уже показанное выше, не повторяется. В
-`--json` это `items[].follow_ups` (`ref`, `chat_title`, время, автор, текст), в терминале — строки
+`--json` это `items[].follow_ups` (`ref`, `chat_title`, время, автор, отрывок до 240 знаков, как у самой находки), в терминале — строки
 `later, shares a rare word`, в SDK `query.discovery.followUps` — сколько их всего. Пока основы слов строятся,
 продолжений нет. Замер: на слепом наборе бенчмарка отменённые решения в первых трёх 7 → 11 из 15, ни один
 ответ не потерян ([evidence pipeline](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/evidence-pipeline)).
