@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, errorObjectOf } from "@wirecat/cli-base"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { commandsCommand } from "../../cli/commands-command.js"
@@ -11,6 +12,7 @@ import { commandPathKey, commandPermissions, knownPermissionKeys } from "../../c
 import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
 import { failureContext } from "../../errors/reasons.js"
+import { toolsFromCommands } from "../../mcp/agent.js"
 import { answered } from "../../mcp/tool.js"
 import type { EntryInput } from "../../meetings/index.js"
 import { type MessageStore, openStore } from "../../store/store.js"
@@ -73,6 +75,8 @@ const setup = async (deps: Partial<CalendarCommandDeps> = {}) => {
     const root = new Command("gcal")
       .exitOverride()
       .configureOutput({ writeErr: () => undefined, ...(out ? { writeOut: out } : {}) })
+      .option("--json")
+      .option("--jsonl")
     addCalendarCommands(root, {
       store: store.calendar,
       accountId,
@@ -439,6 +443,23 @@ describe("calendar commands", () => {
     const refused = captureStreams()
     expect(await run(["sync", "--full", "--json"], definition, { streams: refused, tty: false, env })).toBe(2)
     expect(refused.stderr.join("")).toContain("sync starts over with --rescan")
+  })
+
+  it("leave --json and --jsonl to the host, so no MCP tool takes json or jsonl (BUG-459)", () => {
+    const root = new Command("gcal")
+    addCalendarCommands(root, {
+      store: {} as never,
+      accountId: 1,
+      account,
+      freeBusy: true,
+      write: () => undefined,
+      writes: { writer: fakeCalendarWriter(), app: {} as never, settings: () => ({}) as never },
+    })
+    const tools = toolsFromCommands(describeProgram(root))
+    expect(tools.length).toBeGreaterThan(10)
+    expect(
+      tools.filter(({ input }) => "json" in input.entries || "jsonl" in input.entries).map(({ command }) => command),
+    ).toEqual([])
   })
 
   it("prints help and exits 0 for every calendar command", async () => {

@@ -103,7 +103,7 @@ const setup = async (
   const written: Record<string, unknown>[] = []
   const program = () => {
     const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
-    root.option("--yes").option("--dry-run")
+    root.option("--yes").option("--dry-run").option("--json").option("--jsonl")
     addCalendarCommands(root, {
       store,
       accountId: 1,
