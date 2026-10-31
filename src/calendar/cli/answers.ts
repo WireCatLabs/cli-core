@@ -1,4 +1,5 @@
 import { annotate } from "@wirecat/cli-base/commands"
+import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
@@ -247,3 +248,35 @@ export const declareCalendarAnswers = (program: Command, commands: readonly Comm
 }
 
 export const CALENDAR_ANSWER_PATHS = Object.keys(ANSWERS)
+
+const wholeValues = (registry: QueryRegistry): QueryRegistry => ({
+  ...registry,
+  fields: registry.fields.map((field) =>
+    field.native ? { ...field, operators: field.operators.filter((one) => one === "term" || one === "phrase") } : field,
+  ),
+})
+
+/** The provider answers the whole list, never a page, so the terms narrow every calendar it has. */
+export const CALENDARS_QUERY = wholeValues({
+  entity: "calendar",
+  backend: "native",
+  fields: queryFieldsOf(calendar, {
+    native: ["synced", "primary", "access_role"],
+    examples: { synced: "synced:true", primary: "primary:true", access_role: "access_role:owner" },
+  }),
+})
+
+export const PEOPLE_QUERY = wholeValues({
+  entity: "calendar_attendee",
+  backend: "native",
+  fields: queryFieldsOf(calendarAttendee, {
+    native: ["event"],
+    relations: {
+      event: {
+        type: "kw",
+        example: "event:42",
+        relation: "one event's attendees, by its id; without it, everyone in this week's events",
+      },
+    },
+  }),
+})

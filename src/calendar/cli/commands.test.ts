@@ -311,7 +311,8 @@ describe("calendar commands", () => {
     const { cli } = await setup()
     await cli("sync")
     const [first] = (await cli("events", "list", "today")).items
-    expect((await cli("people", "list", String(first?.id))).items).toHaveLength(3)
+    expect((await cli("people", "list", `event:${first?.id}`)).items).toHaveLength(3)
+    await expect(cli("people", "list", String(first?.id))).rejects.toMatchObject({ code: "validation_error" })
     expect((await cli("people", "list")).items).toEqual([
       expect.objectContaining({ email: "ana@example.com", events: 1 }),
     ])
@@ -506,6 +507,18 @@ describe("calendar commands", () => {
     })
   })
 
+  it("calendars list narrows the provider's whole list by synced, primary and access_role", async () => {
+    const { cli } = await setup()
+    expect((await cli("calendars", "list")).items.map(({ external_id }) => external_id)).toEqual(["primary", "team"])
+    expect((await cli("calendars", "list", "synced:false")).items.map(({ external_id }) => external_id)).toEqual([
+      "team",
+    ])
+    expect(
+      (await cli("calendars", "list", "primary:true", "access_role:owner")).items.map(({ external_id }) => external_id),
+    ).toEqual(["primary"])
+    await expect(cli("calendars", "list", "title:Work")).rejects.toMatchObject({ code: "validation_error" })
+  })
+
   it("each declare the entity it answers with, and commands info carries its schema", () => {
     const root = new Command("gcal")
     addCalendarCommands(root, {
@@ -557,7 +570,8 @@ describe("calendar commands", () => {
   })
 
   // The vocabulary has no calendars, people, unsync, review or resolve yet, nor the event flags (--calendar,
-  // --series, --attendee, --location, --end-time, --id), and these lists take words, not a query.
+  // --series, --attendee, --location, --end-time, --id), and events list takes words, not a query, until its word
+  // language is decided.
   it("pass the command lint every CLI runs on its tree, apart from list-without-query", async () => {
     const app = { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "synthetic", version: "1.0.0" }
     const definition = {

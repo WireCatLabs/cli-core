@@ -5,6 +5,7 @@ import type { Effects } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
+import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
@@ -43,7 +44,7 @@ import {
   updateEvent,
   type WriteContext,
 } from "../writes.js"
-import { declareCalendarAnswers } from "./answers.js"
+import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
 
 export interface CalendarCommandDeps {
   store: EventStore
@@ -145,14 +146,22 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   }
 
   const calendars = annotate(program.command("calendars").description("the account's calendars"), { effects: GROUP })
-  example(
-    annotate(calendars.command("list"), { effects: FETCH, offline: false }).description(
-      "list the account's calendars from the provider, and which of them sync",
+  withQuery(
+    example(
+      annotate(calendars.command("list"), { effects: FETCH, offline: false }).description(
+        "list the account's calendars from the provider, and which of them sync",
+      ),
+      "calendars list --json",
+      "calendars list synced:true",
     ),
-    "calendars list --json",
-  ).action(async (_opts: unknown, command: Command) => {
+    CALENDARS_QUERY,
+  ).action(async (words: string[], _opts: unknown, command: Command) => {
+    const terms = [...queryTerms(words, CALENDARS_QUERY, "calendars list")]
     const listed = await deps.store.saveCalendars(deps.accountId, await source().calendars(), now())
-    print({ items: listed.map(calendarItem), page: 1, limit: listed.length, hasMore: false }, command)
+    const items = listed
+      .map(calendarItem)
+      .filter((item) => terms.every(([field, value]) => String(item[field as keyof typeof item]) === value))
+    print({ items, page: 1, limit: items.length, hasMore: false }, command)
   })
   for (const [name, synced] of [
     ["sync", true],
@@ -423,13 +432,17 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   const people = annotate(program.command("people").description("the people in the account's events"), {
     effects: GROUP,
   })
-  example(
-    annotate(people.command("list"), { effects: LOCAL_READ })
-      .description("one event's attendees, or everyone attending this week's events")
-      .argument("[event]", "the event's id, or event:<id>"),
-    "people list --json",
-    "people list event:42",
-  ).action(async (reference: string | undefined, _opts: unknown, command: Command) => {
+  withQuery(
+    example(
+      annotate(people.command("list"), { effects: LOCAL_READ }).description(
+        "one event's attendees, or everyone attending this week's events",
+      ),
+      "people list --json",
+      "people list event:42",
+    ),
+    PEOPLE_QUERY,
+  ).action(async (words: string[], _opts: unknown, command: Command) => {
+    const reference = queryTerms(words, PEOPLE_QUERY, "people list").get("event")
     const event = reference === undefined ? undefined : eventIdOf(reference)
     const filter =
       event === undefined
