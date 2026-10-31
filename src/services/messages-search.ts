@@ -36,6 +36,8 @@ export interface QueryMetadata {
     candidateDepth: number
     candidates: number
     repliesAdded: number
+    /** Later messages shown with the first hits because they share a rare word with one. */
+    followUps: number
     truncated: boolean
     terms: string[]
     queries: string[]

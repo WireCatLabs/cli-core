@@ -23,6 +23,10 @@ None open.
 
 ## Next (P2)
 
+- **CORE-42** · P2 · Take cli-base ≥ 0.66.1 so a bare number counts as a word of a `--discover` question: today any
+  number ("after 21 days") sends the question to strict search, which usually finds nothing (cli-base#409). Moves the
+  `@wirecat/cli-base` peer range to 0.66, so the tools built on Core move with it. `src/services/messages-discovery.ts`.
+
 - **CORE-36** · P2 · 🚧 `fix/shared-contract-audit` Enforce shared command contracts by default; exact, reasoned overrides only. Export actual schemas/reasons for complete cross-CLI audits.
 
 - **CORE-40** · P2 · 🚩 Start a command without loading every command: `./cli` still loads ~880 files (~400 ms) for

@@ -13,6 +13,7 @@ import type {
 import { keysOver } from "./keys.js"
 import { applyCounterObservations } from "./sqlite/counters.js"
 import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
+import { laterSharingRare } from "./sqlite/follow-ups.js"
 import * as messageWrites from "./sqlite/messages.js"
 import type { StoreContext } from "./sqlite/open.js"
 import * as personLinks from "./sqlite/person-links.js"
@@ -147,6 +148,11 @@ export interface MessagesStore extends AccountMessages {
    */
   find(filter: MessageFilter): Promise<Page<StoredHit>>
   directReplies(parents: { account: AccountKey; chatId: Id; id: Id }[], limit: number): Promise<Page<StoredHit>>
+  /** Per message, later messages sharing a word at most `rareAt` messages hold, latest first; empty until stems are built. */
+  laterSharingRare(
+    wanted: { account: AccountKey; chatId: Id; id: Id }[],
+    options: { rareAt: number; limit: number },
+  ): Promise<StoredHit[][]>
 }
 
 export const accountMessagesOver = (context: StoreContext): AccountMessages => {
@@ -319,4 +325,5 @@ export const messagesStoreOver = (context: StoreContext, keyed: AccountMessages)
     search.find(context, { text: query, limit, ...(account ? { account } : {}) }),
   find: async (filter) => search.find(context, filter),
   directReplies: async (parents, limit) => search.directReplies(context, parents, limit),
+  laterSharingRare: async (wanted, options) => laterSharingRare(context, wanted, options),
 })

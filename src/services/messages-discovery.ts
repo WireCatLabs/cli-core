@@ -26,6 +26,17 @@ const RERANK_CHUNK = 5
  */
 export const RERANK_MILLISECONDS = 15_000
 
+/**
+ * Follow-ups: each of the first 5 hits gets up to 2 later messages that share a word at most 3 messages hold. A
+ * blind benchmark split found 4 more of 15 cancelled decisions this way and lost no answer (cli-testing
+ * performance/search/evidence-pipeline, "Cancelled decisions and long messages").
+ */
+export const FOLLOW_UP_HITS = 5
+const FOLLOW_UPS_PER_HIT = 2
+const RARE_AT = 3
+/** Later messages read per hit before the search's filters; the latest that pass are kept. */
+const FOLLOW_UP_CANDIDATES = 20
+
 /** The reranker, opened; or why discovery keeps its own order. */
 export type RerankLane = () => Promise<
   | { model: string; score(question: string, passages: string[]): Promise<number[]>; done(): Promise<void> }
@@ -67,11 +78,13 @@ export const searchDiscovery = async (
   meaning?: MeaningLane,
   rerank?: RerankLane,
 ): Promise<SearchFound> => {
-  // A question's own "?" would parse as a one-character wildcard and send it to strict search (BUG-395).
+  // A question's own "?" would parse as a one-character wildcard and send it to strict search (BUG-395); the
+  // colon of a time or ratio ("22:00", "1:1") would parse as a field and fail the whole search, and escaped it is
+  // syntax again, so it splits the numbers (BUG-450).
   const request =
     asked.ast !== undefined || asked.exact || !asked.text
       ? asked
-      : { ...asked, text: asked.text.replace(/(?<=\p{L})\?(?=\s|$)/gu, "") }
+      : { ...asked, text: asked.text.replace(/(?<=\p{L})\?(?=\s|$)/gu, "").replace(/(?<=\d):(?=\d)/gu, " ") }
   const original = await prepareLucene(store, account, request, messenger)
   const text = request.text ?? ""
   const plan = planQuestion(text, request.ast !== undefined || !!request.exact || !!request.newest)
@@ -278,8 +291,11 @@ export const searchDiscovery = async (
     started += performance.now() - opening
   }
   check()
+  const followUps = await followUpsOf(store, account, request, messenger, candidates, plan.scope)
   const items = await Promise.all(
-    candidates.slice(0, request.limit).map(async ({ fused: _fused, ...m }) => {
+    candidates.slice(0, request.limit).map(async ({ fused: _fused, ...hit }) => {
+      const later = followUps.get(hit.locator)
+      const m = later?.length ? { ...hit, followUps: later } : hit
       if (!request.context) return m
       check()
       const owner = parseLocator(m.locator)
@@ -305,6 +321,7 @@ export const searchDiscovery = async (
         candidateDepth: 300,
         candidates: candidates.length,
         repliesAdded: replyCount,
+        followUps: [...followUps.values()].reduce((sum, later) => sum + later.length, 0),
         truncated,
         terms,
         queries: [...(plan.changed ? [] : plan.queries), relaxed],
@@ -316,6 +333,50 @@ export const searchDiscovery = async (
     ...(lane && "skipped" in lane ? { meaningSkipped: lane.skipped } : {}),
     ...(lane && "partly" in lane && lane.partly ? { meaningSkipped: lane.partly } : {}),
   }
+}
+
+/**
+ * The follow-ups of the first hits that the question's filters allow, by hit. A message already shown above — a hit
+ * or an earlier hit's follow-up — is not shown again, as the benchmark skipped it.
+ */
+const followUpsOf = async (
+  store: MessageStore,
+  account: AccountKey,
+  request: SearchQuery,
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">>,
+  candidates: Ranked[],
+  scope: string,
+): Promise<Map<string, FoundMessage[]>> => {
+  const head = candidates.slice(0, Math.min(FOLLOW_UP_HITS, request.limit))
+  const later = await store.messages.laterSharingRare(
+    head.map((hit) => ({ account: accountOfHit(hit), chatId: hit.chatId, id: hit.id })),
+    { rareAt: RARE_AT, limit: FOLLOW_UP_CANDIDATES },
+  )
+  const only = [...new Map(later.flat().map((m) => [m.locator, m])).values()].map((m) => ({
+    ...accountOfHit(m),
+    chatId: m.chatId,
+    id: m.id,
+  }))
+  const out = new Map<string, FoundMessage[]>()
+  if (!only.length) return out
+  const eligible = await searchLucene(
+    store,
+    account,
+    { ...request, text: scope || undefined, ast: undefined, limit: only.length, only, context: 0, thread: undefined },
+    messenger,
+  )
+  const allowed = new Map(eligible.items.map((m) => [m.locator, m]))
+  const shown = new Set<string>()
+  head.forEach((hit, i) => {
+    shown.add(hit.locator)
+    const picked = (later[i] ?? [])
+      .flatMap((m) => allowed.get(m.locator) ?? [])
+      .slice(0, FOLLOW_UPS_PER_HIT)
+      .filter((m) => !shown.has(m.locator))
+    for (const m of picked) shown.add(m.locator)
+    if (picked.length) out.set(hit.locator, picked)
+  })
+  return out
 }
 
 /** The nearest messages the question's filters allow, as hits, nearest first. */

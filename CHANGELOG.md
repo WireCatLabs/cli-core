@@ -38,6 +38,31 @@ shape of this file.
 - **`messages list --offline --json` may carry `meta.complete: false`, `missing` and `next`** for a chat held in part.
   `messages list` is declared `partial`: the exit code stays 0.
 
+## 0.492.0 — 31.10.2026
+
+### Added
+
+- **`search messages --discover` shows follow-ups: later messages that may cancel or change a hit.** Each of the
+  first five hits gets up to two later messages, from any chat the search reads and passing its filters, that
+  share a word of three letters or more whose stem at most three messages of the store hold; latest first, a
+  message already shown above is not repeated. `items[].follow_ups` in `--json` and MCP (`ref`, `chat_title`,
+  `timestamp`, `sender_name`, `text`, all untrusted), `later, shares a rare word` lines in the terminal, and the
+  SDK's `query.discovery.followUps` counts them. The counts come from the stem index through a temporary `fts5vocab`
+  table, so the store does not change; while the stems are being built there are no follow-ups. On a benchmark
+  split written by an agent that never saw the method, cancelled decisions in the first three went from 7 to 11
+  of 15 and no answer was lost
+  ([evidence pipeline](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/evidence-pipeline)).
+
+### Fixed
+
+- **`search messages --discover` no longer fails on a question with a time or a ratio.** "Do we meet until 22:00?"
+  or "a 1:1 with Anna" read the colon as a field filter and ended the whole search with `query.invalid-syntax`.
+  In a question, a colon between two digits now splits the numbers, as a space would. Explicit query syntax is
+  unchanged. A question with a bare number still runs as strict search until cli-core takes cli-base 0.66.1, where a
+  number counts as a word of the question.
+
+## 0.491.0 — 31.10.2026
+
 ### Fixed
 
 - **A budgeted mail sync now finishes locating a large folder stored before email locations existed.** It listed

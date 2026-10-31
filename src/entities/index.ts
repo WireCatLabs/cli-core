@@ -392,6 +392,7 @@ export const ENTITIES = {
       "found_in",
       "discovery",
       "context",
+      "follow_ups",
       "email",
     ]).entries,
     untrusted,

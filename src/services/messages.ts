@@ -125,6 +125,8 @@ export type FoundMessage = StoredHit & {
   exact?: boolean
   source?: HitSource
   context?: WindowedMessage[]
+  /** A discovery hit's later messages that share a rare word with it, latest first; one may change or cancel it. */
+  followUps?: FoundMessage[]
   thread?: ThreadContext
 }
 
