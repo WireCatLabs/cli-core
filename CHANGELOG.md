@@ -19,12 +19,31 @@ shape of this file.
   open work. A task from a message stays open or closed.
 - **`tasks.board(query, { limit, offset, sort, descending, zone })` and `tasks.boardCounts(query)`** list the owner's
   project tasks across every project (an account's inbox is left out) with a Lucene query over `PROJECT_TASK_FIELDS`:
-  `state`, `kind`, `project` (`project:*` for all), `assignee` (`any`, `none`, `"person:12"`), `priority` with
-  ranges, `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
+  `state`, `kind`, `project` (`project:*` for all), `assignee` (`any`, `none`, `"person:12"`), `priority`,
+  `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
   (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
   hold each project, assignee, priority and state, each without the query's own terms on that field.
 - **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
 - **`tasks.events(id)`** names who acted: `actor.name` is the person's or the bot's name, or null.
+- **Store version 41: a decimal priority, an agent and a revision on every task** (`minCompatible` stays 34).
+  `tasks.priority_score` holds 0 to 1, higher first; `priorityLabel` reads it as low, medium, high or critical by
+  quarters. The old 0 (urgent) … 4 (low) became 0.875, 0.625, 0.375, 0.1875 and 0.0625, and the integer `priority`
+  column is still written from the score, so an older build reads a familiar number; when an older build writes the
+  integer, a trigger moves the score with it. `tasks.agent` names the agent working on a task, apart from its
+  assignees and its claim. `tasks.revision` is bumped by a trigger on every update, by any build.
+- **`tasks.move(id, { status, before | after }, by)`** puts a project task beside another in its board column by giving
+  it a priority between its neighbours; the answer says when the label changed, and which tasks were spread out again
+  when the neighbours left no room. Into an empty column it needs no neighbour.
+- **A stale write is refused**: `edit`, `assign`, `unassign` and `move` take `{ revision }` and refuse another with
+  `configuration_error`, reason `task.stale`, and the task's current revision. `assign` and `unassign` now bump the
+  task's revision too.
+- **Every task write is in `task_events`**, in the same transaction: new kinds `agent`, `claimed`, `released`,
+  `next-check` (a follow-up time used to leave no event), `resolution`, `verdict`, `close-certainty` and `tags` (a
+  tag added to or removed from a task). The event id only grows, so it orders changes.
+- **`priority:` and `agent:` query fields** on the board: `priority:high`, `priority:none`, `priority:[medium TO
+  critical]`, `priority:[0.6 TO 1]`; `agent:hermes`, `agent:none`.
+- **The `task` entity** may carry `priority_label`, `agent`, `revision`, `assignments`, `ready` and `blocked_by`, as a
+  project task list gives them.
 - **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
 - **`events_list` takes `page`**, as `events list --page` does. Without `account_id` each page is cut from every
   account's events merged in time order, so it reads at most each account's first 1000 events; a page past that is
@@ -32,6 +51,9 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **A task's `priority` is a number from 0 to 1, higher first**, in `TaskDetails`, `TaskFields` and the task card
+  (`priority_label` beside it); it was 0 (urgent) … 4 (low). Lists order by it highest first. `tasks update
+  --priority` takes low, medium, high, critical or none, and still reads 0–4 as before.
 - **`ClosedState` is `done | dismissed`**, no longer every state but `open`; a check of `state === "open"` for "not
   closed" misses `todo` and `in_progress` — use `isClosedState`.
 - **The calendar MCP tools `event_create` and `event_update` take `operation_id`, not `id`**, as `events create` and

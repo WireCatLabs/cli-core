@@ -66,8 +66,8 @@ describe("a task's work states", () => {
 describe("the task board", () => {
   it("lists every owner project, narrowed by fields, OR within a field, and words", async () => {
     const { store, add, keys } = await board()
-    const invoice = await add("HRB", "Send the invoice", { priority: 0, description: "to the harbour office" })
-    await add("HRB", "Print badges", { priority: 3 })
+    const invoice = await add("HRB", "Send the invoice", { priority: 0.875, description: "to the harbour office" })
+    await add("HRB", "Print badges", { priority: 0.1875 })
     const ops = await add("OPS", "Renew the domain", { dueAt: new Date("2020-01-01T00:00:00Z") })
     await store.tasks.assign(invoice.id, { to: "person:21", role: "assignee" }, "owner")
     await store.tasks.assign(ops.id, { to: "person:22", role: "assignee" }, "owner")
@@ -77,7 +77,9 @@ describe("the task board", () => {
     expect(await list("project:*")).toEqual(["HRB-1", "HRB-2", "OPS-1"])
     expect(await list('assignee:("person:21" OR 22)')).toEqual(["HRB-1", "OPS-1"])
     expect(await list("assignee:none")).toEqual(["HRB-2"])
-    expect(await list("priority:[0 TO 1]")).toEqual(["HRB-1"])
+    expect(await list("priority:critical")).toEqual(["HRB-1"])
+    expect(await list("priority:[low TO medium]")).toEqual(["HRB-2"])
+    expect(await list("priority:[0.8 TO 1]")).toEqual(["HRB-1"])
     expect(await list("NOT priority:*")).toEqual(["OPS-1"])
     expect(await list("overdue:true")).toEqual(["OPS-1"])
     expect(await list("state:(todo OR in_progress)")).toEqual(["OPS-1"])
@@ -88,9 +90,9 @@ describe("the task board", () => {
 
   it("sorts by the chosen field, pages by offset and totals every page", async () => {
     const { store, add, keys } = await board()
-    await add("HRB", "A", { priority: 2, dueAt: new Date("2026-12-01T00:00:00Z") })
-    await add("HRB", "B", { priority: 1 })
-    await add("OPS", "C", { priority: 4, dueAt: new Date("2026-11-01T00:00:00Z") })
+    await add("HRB", "A", { priority: 0.375, dueAt: new Date("2026-12-01T00:00:00Z") })
+    await add("HRB", "B", { priority: 0.625 })
+    await add("OPS", "C", { priority: 0.0625, dueAt: new Date("2026-11-01T00:00:00Z") })
 
     expect(keys(await store.tasks.board(undefined, { limit: 10 }))).toEqual(["HRB-2", "HRB-1", "OPS-1"])
     expect(keys(await store.tasks.board(undefined, { limit: 10, sort: "due" }))).toEqual(["OPS-1", "HRB-1", "HRB-2"])
@@ -106,9 +108,9 @@ describe("the task board", () => {
 
   it("counts each picker's values without that picker's own terms", async () => {
     const { store, add } = await board()
-    const a = await add("HRB", "A", { priority: 0 })
+    const a = await add("HRB", "A", { priority: 0.875 })
     await add("HRB", "B")
-    const c = await add("OPS", "C", { priority: 0 })
+    const c = await add("OPS", "C", { priority: 0.875 })
     await store.tasks.assign(a.id, { to: "person:21", role: "assignee" }, "owner")
     await store.tasks.edit(c.id, { status: "done" }, "owner")
 
@@ -126,9 +128,12 @@ describe("the task board", () => {
       { value: "none", name: null, count: 1 },
       { value: "person:21", name: "Ana Ruiz", count: 1 },
     ])
-    expect(counts.priority.filter(({ count }) => count > 0)).toEqual([
-      { value: 0, count: 1 },
-      { value: null, count: 1 },
+    expect(counts.priority).toEqual([
+      { value: "critical", count: 1 },
+      { value: "high", count: 0 },
+      { value: "medium", count: 0 },
+      { value: "low", count: 0 },
+      { value: "none", count: 1 },
     ])
   })
 
@@ -141,5 +146,90 @@ describe("the task board", () => {
     expect(people.filter(({ owner }) => !owner)).toEqual([
       { person: "person:22", name: "Kai Sample", owner: false, tasks: 1 },
     ])
+  })
+
+  it("refuses a write made on a stale revision, and records claims in the history", async () => {
+    const { store, add } = await board()
+    const task = await add("HRB", "A")
+    await store.tasks.claim(task.id, "hermes", new Date(Date.now() + 60_000))
+    await expect(store.tasks.edit(task.id, { title: "B" }, "owner", { revision: task.revision })).rejects.toMatchObject(
+      {
+        code: "configuration_error",
+        details: { reason: "task.stale", revision: task.revision + 1 },
+      },
+    )
+    await expect(
+      store.tasks.assign(task.id, { to: "person:21", role: "assignee" }, "owner", { revision: task.revision }),
+    ).rejects.toMatchObject({ details: { reason: "task.stale" } })
+    const fresh = await store.tasks.details(task.id)
+    const assigned = await store.tasks.assign(task.id, { to: "person:21", role: "assignee" }, "owner", fresh)
+    expect(assigned.revision).toBe(fresh.revision + 1)
+    await store.tasks.release(task.id, "hermes")
+    const kinds = (await store.tasks.events(task.id)).map(({ kind }) => kind)
+    expect(kinds).toEqual(["created", "claimed", "assigned", "released"])
+  })
+
+  it("keeps an agent apart from the assignees, and finds tasks by it", async () => {
+    const { store, add, keys } = await board()
+    const task = await add("HRB", "A")
+    await add("HRB", "B")
+    expect(await store.tasks.edit(task.id, { agent: "hermes" }, "owner")).toMatchObject({
+      agent: "hermes",
+      assignments: [],
+    })
+    expect(keys(await store.tasks.board(query("agent:Hermes"), { limit: 10 }))).toEqual(["HRB-1"])
+    expect(keys(await store.tasks.board(query("agent:none"), { limit: 10 }))).toEqual(["HRB-2"])
+    expect((await store.tasks.edit(task.id, { agent: null }, "owner")).agent).toBeNull()
+  })
+
+  it("moves a task between two others by priority, across a band edge, and into another column", async () => {
+    const { store, add, keys } = await board()
+    await add("HRB", "A", { priority: 0.875 })
+    await add("HRB", "B", { priority: 0.6 })
+    await add("OPS", "C", { priority: 0.3 })
+    const column = async () => keys(await store.tasks.board(query("state:open"), { limit: 10 }))
+
+    const up = await store.tasks.move("OPS-1", { before: "HRB-2" }, "owner")
+    expect(up.label).toEqual({ from: "medium", to: "high", changed: true })
+    expect(up.task.priority).toBeCloseTo(0.7375)
+    expect(await column()).toEqual(["HRB-1", "OPS-1", "HRB-2"])
+
+    const top = await store.tasks.move("HRB-2", { before: "HRB-1" }, "owner")
+    expect(top.label).toEqual({ from: "high", to: "critical", changed: true })
+    expect(await column()).toEqual(["HRB-2", "HRB-1", "OPS-1"])
+
+    await add("HRB", "D")
+    await store.tasks.move("OPS-1", { status: "in_progress" }, "owner")
+    const doing = await store.tasks.move("HRB-3", { status: "in_progress", after: "OPS-1" }, "owner")
+    expect(doing).toMatchObject({ renumbered: [], task: { status: "in_progress" } })
+    await expect(store.tasks.move("HRB-1", { after: "HRB-3" }, "owner")).rejects.toThrow("is not a open task")
+  })
+
+  it("spreads a band out again when two neighbours leave no room", async () => {
+    const { store, add, keys } = await board()
+    await add("HRB", "A")
+    await add("HRB", "B")
+    await add("HRB", "C")
+    const moved = await store.tasks.move("HRB-3", { before: "HRB-2" }, "owner")
+    expect(moved.label).toEqual({ from: null, to: "low", changed: true })
+    expect(moved.renumbered).toEqual(["HRB-1", "HRB-2"])
+    expect(keys(await store.tasks.board(undefined, { limit: 10 }))).toEqual(["HRB-1", "HRB-3", "HRB-2"])
+    const scores = (await store.tasks.board(undefined, { limit: 10 })).items.map(({ priority }) => priority)
+    expect(scores).toEqual([0.1875, 0.125, 0.0625])
+  })
+
+  it("records a task's tags and close certainty in its history", async () => {
+    const { store, add } = await board()
+    const task = await add("HRB", "A")
+    expect(await store.knowledge.addTags(null, { type: "task", id: task.id }, ["venue"])).toEqual(["venue"])
+    await store.knowledge.removeTags(null, { type: "task", id: task.id }, ["venue"])
+    await store.tasks.recordCloseCertainty(task.id, 0.8)
+    const events = (await store.tasks.events(task.id)).map(({ kind, changes }) => [kind, changes])
+    expect(events.slice(1)).toEqual([
+      ["tags", { tags: [[], ["venue"]] }],
+      ["tags", { tags: [["venue"], []] }],
+      ["close-certainty", { close_certainty: [null, 0.8] }],
+    ])
+    expect((await store.tasks.details(task.id)).revision).toBe(task.revision + 3)
   })
 })

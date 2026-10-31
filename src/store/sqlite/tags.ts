@@ -195,6 +195,29 @@ export const ensureTag = (context: StoreContext, name: string): TagRow => {
 }
 
 /** The tags it did not have before, in the order given; a tag the owner adds becomes the owner's. */
+/** A task's tag change is part of its history, and of its revision. */
+const taskTagsChanged = (
+  context: StoreContext,
+  thing: Thing,
+  changes: { added?: string[]; removed?: string[] },
+  author?: Actor,
+) => {
+  if (thing.type !== "task" || [...(changes.added ?? []), ...(changes.removed ?? [])].length === 0) return
+  const at = context.now()
+  context.database.prepare("UPDATE tasks SET updated_at = ? WHERE id = ?").run(at, thing.id)
+  context.database
+    .prepare(
+      "INSERT INTO task_events (task_id, actor_type, actor_id, kind, changes, created_at) VALUES (?, ?, ?, 'tags', ?, ?)",
+    )
+    .run(
+      thing.id,
+      author?.type ?? null,
+      author?.id ?? null,
+      JSON.stringify({ tags: [changes.removed ?? [], changes.added ?? []] }),
+      at,
+    )
+}
+
 export const addTags = (
   context: StoreContext,
   thing: Thing,
@@ -211,7 +234,7 @@ export const addTags = (
     "UPDATE taggings SET source = 'owner', updated_at = ? WHERE tag_id = ? AND taggable_type = ? AND taggable_id = ? AND source <> 'owner'",
   )
   const at = now()
-  return tags.filter((name) => {
+  const fresh = tags.filter((name) => {
     const tag = ensureTag(context, name)
     const held = database
       .prepare(
@@ -230,17 +253,20 @@ export const addTags = (
     if (!added && source === "owner") claim.run(at, tag.id, thing.type, thing.id)
     return added && held.length === 0
   })
+  taskTagsChanged(context, thing, { added: fresh }, author)
+  return fresh
 }
 
 /** An explicit removal withdraws the effective label, restricted to the requested origin when supplied. */
 export const removeTags = (
-  { database }: StoreContext,
+  context: StoreContext,
   thing: Thing,
   tags: string[],
   source?: "manual" | "auto",
 ): string[] => {
+  const { database } = context
   const remove = database.prepare("DELETE FROM taggings WHERE tag_id=? AND taggable_type=? AND taggable_id=?")
-  return tags.filter((name) => {
+  const removed = tags.filter((name) => {
     const tag = canonicalTagNamed(database, name)
     if (!tag) return false
     let changed = false
@@ -273,6 +299,8 @@ export const removeTags = (
     }
     return changed
   })
+  taskTagsChanged(context, thing, { removed })
+  return removed
 }
 
 export interface Label {

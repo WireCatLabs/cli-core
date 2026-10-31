@@ -1617,6 +1617,9 @@ export const tasks = sqliteTable(
     closeSuggestedCertainty: real("close_suggested_certainty"),
     closeSuggestedReason: text("close_suggested_reason"),
     closeSuggestedAt: integer("close_suggested_at"),
+    priorityScore: real("priority_score"),
+    agent: text("agent"),
+    revision: integer("revision").notNull().default(1),
   },
   (table) => [
     unique().on(table.projectId, table.number),
