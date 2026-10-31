@@ -3,7 +3,9 @@ import {
   type CredentialSource,
   Credentials,
   type CredentialsOptions,
+  isMovedRun,
   keyringService,
+  systemKeyring,
 } from "@wirecat/cli-base"
 import type { OAuthClient, TokenSet } from "./provider.js"
 
@@ -31,6 +33,11 @@ export interface TokenCodec {
 export interface TokenStorage {
   /** Names the entry across processes; the lock is keyed by it. */
   readonly key: string
+  /**
+   * A run with moved folders: cli-base sends its writes to a temporary keyring entry, so a refresh is kept in memory
+   * instead of copying the owner's sign-in there. Only a new sign-in is saved.
+   */
+  readonly moved?: boolean
   /** Throws when the entry cannot be saved, so a sign-in fails before the browser, not after consent. */
   probe(): void
   read(): StoredTokens | undefined
@@ -203,6 +210,11 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
     throw new CliError("configuration_error", "a sign-in store needs its keyring passed in, never a default")
   const credentials = new Credentials(options.credentials)
   const { account, codec } = options
+  // cli-base also counts a moved HOME as moved, but only with the system keyring; the sandboxed tests move HOME.
+  const moved =
+    options.credentials.isolated === true ||
+    (options.credentials.keyring === systemKeyring &&
+      isMovedRun({ appName: options.credentials.service, env: options.credentials.env ?? process.env }))
   const service = keyringService(
     options.credentials.service,
     options.credentials.configDir,
@@ -229,13 +241,14 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
       const found = raw(legacy)
       if (found === undefined) continue
       codec.decode(found)
-      save(found)
+      if (!moved) save(found)
       return found
     }
     return undefined
   }
   return {
     key: `${service}\u0000${account}`,
+    moved,
     probe: () => {
       raw(account)
     },
