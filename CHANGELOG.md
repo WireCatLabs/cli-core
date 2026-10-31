@@ -5,6 +5,13 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`runs list` with nothing recorded no longer says a run is kept only with `--record`.** Every command that does
+  its work is kept by default; `record: false` in the config keeps failures only, and `--no-record` keeps nothing.
+
 ## 0.497.0 — 31.10.2026
 
 ### Added
