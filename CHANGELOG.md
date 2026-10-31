@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A long fill or rebuild in one process no longer makes another process's write fail with "database is locked".**
+  `writeBatch` pauses 2 ms after each batch it commits. Without the pause, the next batch took the lock again within
+  microseconds, and a write waiting in another process (a command run during `store rebuild` or a migration's fill)
+  could miss every gap until its 5 s wait ran out.
+
 ## 0.505.0 — 31.10.2026
 
 ### Added

@@ -18,7 +18,8 @@ const isBusy = (error: unknown): boolean => {
 /**
  * Takes the write lock, waiting as long as the connection's `busy_timeout`. SQLite's own wait sleeps 1 ms, then up to
  * 100 ms between tries, so a process that commits and begins again at once is never seen free and the waiter fails
- * with "database is locked" after the full timeout. Trying every millisecond sees the gap between two writes.
+ * with "database is locked" after the full timeout. Trying every millisecond sees a gap of a fraction of a
+ * millisecond between two writes; a writer that leaves none still starves it, hence `writeBatch`'s pause.
  */
 const beginImmediate = (database: CacheDatabase): void => {
   const timeout = Number(database.prepare("PRAGMA busy_timeout").get()?.timeout ?? 0)
@@ -65,9 +66,17 @@ export const write = <T>(
 /**
  * A write to tables that queue no derived work, in a loop that budgets its lock time or reports what it did: a fill,
  * a backfill, a rebuild. It drains nothing, so it neither does nor hides another write's work; the queues wait for
- * the next `write`.
+ * the next `write`. The outermost pauses 2 ms after it commits: a loop that begins again at once leaves another
+ * process's `write` a gap of microseconds, and it misses that gap until its 5 s wait runs out.
  */
-export const writeBatch = <T>(database: CacheDatabase, body: () => T): T => transact(database, body, false)
+export const writeBatch = <T>(database: CacheDatabase, body: () => T): T => {
+  const outer = connectionOf(database).depth === 0
+  const result = transact(database, body, false)
+  if (outer) Atomics.wait(pause, 0, 0, BATCH_PAUSE_MS)
+  return result
+}
+
+const BATCH_PAUSE_MS = 2
 
 const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, beforeCommit?: () => void): T => {
   const connection = connectionOf(database)
