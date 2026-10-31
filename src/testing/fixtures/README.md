@@ -33,6 +33,18 @@ ffmpeg -i tone.ogg -ac 1 -c:a libvorbis -q:a 0 -map_metadata -1 tone.vorbis.ogg
 ffmpeg -i tone.ogg -ac 1 -c:a aac -b:a 32k -f adts -map_metadata -1 tone.aac
 ```
 
+## `stereo.mp3`
+
+One second of a two-channel MP3 at 8 kHz — a 440 Hz tone on the left, pink noise on the right — the shape of a
+recorded phone call with one speaker per channel, for the channel test in `src/speech/decode.test.ts`:
+
+```sh
+ffmpeg -f lavfi -i "sine=frequency=440:duration=1:sample_rate=8000" \
+  -f lavfi -i "anoisesrc=d=1:c=pink:r=8000:a=0.3:seed=1" \
+  -filter_complex "[0:a][1:a]join=inputs=2:channel_layout=stereo[a]" -map "[a]" \
+  -c:a libmp3lame -b:a 32k -map_metadata -1 stereo.mp3
+```
+
 ## `silero_vad.onnx`
 
 The voice detector model the speech code downloads (`VAD` in `src/speech/models.ts`, same sha256), so

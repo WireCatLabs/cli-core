@@ -150,7 +150,7 @@ export const openRemote = (
 }
 
 /** The provider's error code, never its message: a message can quote the request. */
-const errorCode = async (response: Response): Promise<string> => {
+export const errorCode = async (response: Response): Promise<string> => {
   try {
     const body = (await response.json()) as { error?: { code?: unknown; type?: unknown } }
     const code = body.error?.code ?? body.error?.type

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { CliError } from "@wirecat/cli-base"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
@@ -182,7 +183,9 @@ describe("the voice detector", () => {
   it("**keeps a quietly spoken sentence between two loud ones**, which the default setting dropped", async () => {
     // A LibriVox reading (public domain) with "На славу вышел кисель. Всем по нраву пришёлся, всем угодил."
     // at 10.6–16.7 s made 25 dB quieter: fixtures/README.md.
-    const { samples, rate } = await decodeOgg(new Uint8Array(readFileSync(fixture("quiet-middle.ogg"))))
+    const [{ samples, rate }] = (await decodeOgg(new Uint8Array(readFileSync(fixture("quiet-middle.ogg"))))) as [
+      { samples: Float32Array; rate: number },
+    ]
     const pcm = toModelRate(samples, rate)
     const config = detector(fileURLToPath(fixture("silero_vad.onnx")))
     const kept = heard(pcm, config)
@@ -195,7 +198,7 @@ describe("the voice detector", () => {
 
 describe("which model", () => {
   const messenger = (speechModels?: string[]) =>
-    ({ app: { command: "chat" }, provider: "chat", speechModels }) as Messenger
+    ({ app: { command: "chat", appName: "chat", envPrefix: "CHAT" }, provider: "chat", speechModels }) as Messenger
   const none = { configured: {}, shared: {} }
 
   it("**puts Parakeet first unless the CLI names its own order**", () => {
@@ -215,6 +218,29 @@ describe("which model", () => {
     })
     expect(choose(messenger(), none, { local: true }).with).toBe("local")
     expect(() => choose(messenger(), none, { model: "whisper" })).toThrow(/no speech model "whisper"/)
+  })
+
+  it("**takes OpenAI only by name**, from the flag or the profile, with the key from OPENAI_API_KEY", () => {
+    const keyed = { OPENAI_API_KEY: "sk-synthetic" }
+    const keyring = memoryKeyring()
+    const profile = { configured: { transcribeWith: "openai", transcribeModel: "gpt-transcribe-mini" }, shared: {} }
+
+    expect(choose(messenger(), none, {}, keyed, keyring)).not.toHaveProperty("apiKey")
+    expect(choose(messenger(), none, {}, keyed, keyring).with).toBe("auto")
+    expect(choose(messenger(), none, { with: "openai" }, keyed, keyring)).toMatchObject({
+      with: "openai",
+      apiKey: "sk-synthetic",
+      transcribeModel: "gpt-transcribe",
+    })
+    expect(choose(messenger(), profile, {}, keyed, keyring)).toMatchObject({
+      with: "openai",
+      transcribeModel: "gpt-transcribe-mini",
+    })
+    expect(choose(messenger(), profile, { local: true }, keyed, keyring).with).toBe("local")
+    expect(choose(messenger(), profile, {}, {}, keyring).refusal?.message).toMatch(/no OpenAI key/)
+    expect(choose(messenger(), profile, {}, { ...keyed, CHAT_READ_ONLY: "1" }, keyring).refusal?.message).toMatch(
+      /read-only/,
+    )
   })
 })
 
@@ -292,6 +318,41 @@ describe("hearing a voice message", () => {
     const open = () => ({ recognize: () => "handed in", free: () => {} })
 
     expect((await hearLocally(tone, "5", choice({ open }))).text).toBe("handed in")
+  })
+
+  it("**never sends audio to OpenAI on auto**, even with a key at hand", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ text: "remote" })))
+    const auto = choice({ apiKey: "sk-synthetic", fetch })
+
+    const bytes = await hearOnline(messenger, adapter(refusing), "7", "5", auto)
+
+    expect((await hearLocally(bytes as Uint8Array, "5", auto)).via).toBe("local")
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it("**sends a voice message to OpenAI when chosen**, without asking the messenger or needing a local model", async () => {
+    let asked = false
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ text: "remote" })))
+    const openai = choice({ with: "openai", apiKey: "sk-synthetic", fetch, directory: directoryWithVad() })
+    const counting = adapter(async () => {
+      asked = true
+      return { text: "", pending: false }
+    })
+
+    const bytes = await hearOnline(messenger, counting, "7", "5", openai)
+
+    expect(asked).toBe(false)
+    expect(await hearLocally(bytes as Uint8Array, "5", openai)).toEqual({
+      messageId: "5",
+      text: "remote",
+      pending: false,
+      via: "openai",
+      model: "gpt-transcribe",
+    })
+    const refused = new CliError("authentication_error", "no OpenAI key")
+    await expect(hearOnline(messenger, counting, "7", "5", choice({ with: "openai", refusal: refused }))).rejects.toBe(
+      refused,
+    )
   })
 
   it("**names the download command instead of downloading** a missing model", async () => {

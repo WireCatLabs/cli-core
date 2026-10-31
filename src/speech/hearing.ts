@@ -6,7 +6,7 @@ import type { Settings } from "../cli/settings.js"
 import type { Message } from "../domain/models.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { openStore } from "../store/store.js"
-import { type Choice, choose, hearLocally, hearOnline, isAudioFile } from "./transcribe.js"
+import { type Choice, choose, hearLocally, hearOnline, isAudioFile, keptSource } from "./transcribe.js"
 
 /** `--model` chooses who hears what `--transcribe` asks for; alone it would quietly do nothing. */
 export const modelWith = (transcribe: boolean | undefined, model: string | undefined): string | undefined => {
@@ -112,7 +112,7 @@ export const hearVoices = async (
       const heard = answer instanceof Uint8Array ? await hearLocally(answer, voice.messageId, choice) : answer
       if (heard.pending || heard.text.trim() === "") continue
       transcripts.set(keyOf(voice), heard.text)
-      await kept.keep(voice, heard.text, heard.model ?? heard.via)
+      await kept.keep(voice, heard.text, keptSource(heard))
     } catch (error) {
       problem ??= error instanceof Error ? error.message : String(error)
     }

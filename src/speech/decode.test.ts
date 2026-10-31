@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it, vi } from "vitest"
-import { decodeAudio, formatOf, LONGEST_AUDIO_SECONDS, runFfmpeg } from "./decode.js"
+import { decodeAudio, decodeChannels, formatOf, LONGEST_AUDIO_SECONDS, runFfmpeg } from "./decode.js"
 import { SAMPLE_RATE } from "./recognize.js"
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`../testing/fixtures/${name}`, import.meta.url)))
@@ -20,6 +20,23 @@ describe("decoding audio for the model", () => {
 
     expect(formatOf(bytes)).toBe(format)
     expect(seconds(await decodeAudio(bytes, refusing))).toBeCloseTo(1, 0)
+  })
+
+  it("**keeps each channel of a stereo call apart**, and hands the first to callers that want one", async () => {
+    const channels = await decodeChannels(fixture("stereo.mp3"), refusing)
+    const loudness = (samples: Float32Array) => Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length)
+
+    expect(channels).toHaveLength(2)
+    const [left, right] = channels.map(({ samples }) => samples) as [Float32Array, Float32Array]
+    expect(left.length).toBe(right.length)
+    expect(loudness(left.map((x, i) => x - (right[i] ?? 0)))).toBeGreaterThan(0.1)
+    expect((await decodeAudio(fixture("stereo.mp3"), refusing)).samples).toEqual(left)
+  })
+
+  it("gets one mixed channel from ffmpeg", async () => {
+    const ffmpeg = vi.fn(async () => ({ samples: new Float32Array(SAMPLE_RATE), rate: SAMPLE_RATE }))
+
+    expect(await decodeChannels(fixture("tone.aac"), ffmpeg)).toHaveLength(1)
   })
 
   it("**hands raw AAC to ffmpeg**, though its frames start like MP3's", async () => {
