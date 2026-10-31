@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.508.0 — 31.10.2026
+
 ### Added
 
 - **`events list --page <n>`: the next page of stored events.** `events list` said `hasMore` and had no way to read on;
