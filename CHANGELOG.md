@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.506.0 — 31.10.2026
+
 ### Added
 
 - **`QueriesStore.matchingPks`, `AccountVectors.scoreMessages` and `MeaningLane`'s fourth argument `within`**, which
