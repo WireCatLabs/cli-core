@@ -116,6 +116,8 @@ while (Date.now() < end) {
   const stop = Date.now() + 20
   while (Date.now() < stop);
   db.exec("COMMIT")
+  const next = performance.now() + 0.3
+  while (performance.now() < next);
 }
 `,
     )
@@ -133,7 +135,7 @@ while (Date.now() < end) {
       await new Promise((resolve) => setTimeout(resolve, 200))
       const started = Date.now()
       write(database, () => saveMessage(database))
-      expect(Date.now() - started).toBeLessThan(2000)
+      expect(Date.now() - started).toBeLessThan(1000)
       expect(database.prepare("PRAGMA busy_timeout").get()).toEqual({ timeout: 5000 })
     } finally {
       other.kill()
