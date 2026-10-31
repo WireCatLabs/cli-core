@@ -1167,6 +1167,17 @@ describe("a run with no profile named", () => {
     expect(named).toMatchObject({ command: "chats list", profile: "default" })
   })
 
+  it("**keeps a success without `--record`**, and nothing with `--no-record`", async () => {
+    const kept = sandbox()
+    const refused = sandbox()
+
+    await go(["personal", "chats", "list"], false, kept)
+    await go(["personal", "chats", "list", "--no-record"], false, refused)
+
+    expect(runs(kept)).toMatchObject([{ command: "chats list", status: "success" }])
+    expect(runs(refused)).toEqual([])
+  })
+
   it.each([
     [["runs list"], {}],
     [["Jane Doe", "chats", "list"], {}],
