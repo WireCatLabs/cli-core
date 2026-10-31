@@ -36,7 +36,11 @@ interface Call {
 }
 
 const setup = (
-  options: { saved?: Record<string, unknown>; respond?: (call: Call) => Promise<Response> | Response } = {},
+  options: {
+    saved?: Record<string, unknown>
+    respond?: (call: Call) => Promise<Response> | Response
+    isolated?: boolean
+  } = {},
 ) => {
   const keyring = memoryKeyring(
     options.saved
@@ -60,7 +64,13 @@ const setup = (
       : Response.json({ access_token: "synthetic-access-new", expires_in: 3600 })
   }) as typeof globalThis.fetch
   const storage = credentialStorage({
-    credentials: { service: "example-cli", configDir: folder(), storage: "keyring", keyring },
+    credentials: {
+      service: "example-cli",
+      configDir: folder(),
+      storage: "keyring",
+      keyring,
+      ...(options.isolated ? { isolated: true } : {}),
+    },
     account: oauthAccount("example", "personal"),
     codec: standardCodec("example"),
   })
@@ -179,6 +189,31 @@ describe("tokens", () => {
   })
 })
 
+describe("a run with moved folders", () => {
+  const saved = { accessToken: "old", refreshToken: "synthetic-refresh", expiresAt: NOW - 1000 }
+
+  it("keeps a refresh in memory for the rest of the process and leaves the keyring as it was", async () => {
+    const { keeper, calls, keyring } = setup({ saved, isolated: true })
+    const before = keyring.get("example-cli", "oauth:example:personal")
+    const lockDir = folder()
+    expect(await keeper({ lockDir }).accessToken()).toBe("synthetic-access-new")
+    expect(await keeper({ lockDir }).accessToken()).toBe("synthetic-access-new")
+    expect(calls).toHaveLength(1)
+    expect(keyring.get("example-cli", "oauth:example:personal")).toBe(before)
+  })
+
+  it("still saves a refresh that rotated the refresh token", async () => {
+    const { keeper, keyring } = setup({
+      saved,
+      isolated: true,
+      respond: () =>
+        Response.json({ access_token: "synthetic-access-new", refresh_token: "synthetic-refresh-2", expires_in: 60 }),
+    })
+    await keeper().accessToken()
+    expect(stored(keyring)).toMatchObject({ refreshToken: "synthetic-refresh-2" })
+  })
+})
+
 describe("signIn", () => {
   const visit = async (url: string, change: (query: URLSearchParams) => void) => {
     const authorization = new URL(url)
@@ -225,6 +260,15 @@ describe("signIn", () => {
     })
     expect(calls[0]?.body.get("code_verifier")).toMatch(/^[\w-]{64}$/)
     expect(stored(keyring)).toMatchObject({ account: "example-account", refreshToken: "r", scopes: ["one", "two"] })
+  })
+
+  it("saves a new sign-in in a run with moved folders", async () => {
+    const { keeper, keyring } = setup({
+      isolated: true,
+      respond: () => Response.json({ access_token: "a", refresh_token: "r", expires_in: 60 }),
+    })
+    await keeper().signIn({ scopes: [], openBrowser: async (url) => void (await visit(url, () => {})) })
+    expect(stored(keyring)).toMatchObject({ refreshToken: "r" })
   })
 
   it("saves nothing when accept refuses, or when no refresh token comes back", async () => {

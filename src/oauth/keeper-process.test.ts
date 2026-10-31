@@ -28,7 +28,7 @@ const child = (module: string) => `
   const keeper = tokenKeeper({
     provider: { id: "zoom", name: "Zoom", authorizeUrl: tokenUrl, tokenUrl, client: { clientId: "zm-client" }, redirect: { kind: "loopback" } },
     storage: credentialStorage({
-      credentials: { service: "zoom-cli", configDir, isolated: true, storage: "keyring", keyring },
+      credentials: { service: "zoom-cli", configDir, storage: "keyring", keyring },
       account: "zm-client:personal",
       codec: zoomTokenCodec,
     }),
@@ -77,7 +77,7 @@ it("two processes refreshing one entry at once send one refresh, and both get it
   })
   const configDir = join(folder, "config")
   const keyringFile = join(folder, "keyring.json")
-  const account = `zoom-cli:${configDir}|zm-client:personal`
+  const account = "zoom-cli|zm-client:personal"
   await writeFile(
     keyringFile,
     JSON.stringify({

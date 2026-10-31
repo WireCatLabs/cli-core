@@ -247,7 +247,7 @@
     "@types/node": "^22.20.5",
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^5.0.5",
-    "@wirecat/cli-base": "0.65.2",
+    "@wirecat/cli-base": "0.65.5",
     "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.414.0",
     "commander": "15.0.0",
     "cspell": "10.4.0",
