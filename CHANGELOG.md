@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.509.0 — 31.10.2026
+
 ### Changed — may break callers
 
 - **The MCP agent log names the agent that made the call, not the server.** A row in `agent_actions` was always the
