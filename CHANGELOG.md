@@ -63,6 +63,17 @@ shape of this file.
   `config unset --personal|--bot`.** Only a messenger has bots, and with them the file's personal and bot sections; a
   calendar or notes CLI offered the options, in its help, `commands --json` and its MCP tools, with nothing behind
   them. A script that passes one there is now refused as an unknown option.
+
+### Fixed
+
+- **`config show` with moved folders no longer says a session made without them reads as none.** That was true
+  before cli-base 0.65.5; a moved run now reads the usual keyring entry, and keeps a sign-in it makes in a temporary
+  entry that `session end` removes. The note says so.
+
+## 0.496.0 — 31.10.2026
+
+### Changed — may break callers
+
 - **A discovery follow-up carries an `excerpt` of up to 240 characters, as the hit itself, instead of its whole
   `text`.** On a real archive one follow-up (a pasted long write-up) added 7 KB to a five-hit answer, a sixth of it.
   `items[].follow_ups[].text` is now `items[].follow_ups[].excerpt`; `messages context <ref>` shows the whole message.
@@ -70,9 +81,6 @@ shape of this file.
 
 ### Fixed
 
-- **`config show` with moved folders no longer says a session made without them reads as none.** That was true
-  before cli-base 0.65.5; a moved run now reads the usual keyring entry, and keeps a sign-in it makes in a temporary
-  entry that `session end` removes. The note says so.
 - **Discovery search keeps the colons of a quoted timestamp in a date filter.** 0.492.0 turned a colon between digits
   into a space so that "22:00" in a question would not fail, but it also did so inside quotes, and
   `date:["2026-08-21T21:30:00Z" TO "…"]` failed with `query.invalid-date` under `discover`. Quoted text is now left as is.
@@ -91,8 +99,6 @@ shape of this file.
 
 ### Added
 
-- **The shared `config show --json` names the profile's `kind`, `permissions` and `permission_sources` at the top**,
-  as a messenger's own `config show` does, so an agent reads one shape from every CLI.
 - **`NoteQuery.refs` checks a list of notes against a query, and `NoteHit.at` is the time `date:` read.**
 
 ## 0.495.0 — 31.10.2026
