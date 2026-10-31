@@ -24,14 +24,16 @@ export const laterSharingRare = (
   const stemmers = storeStemmers(database)
   if (!wanted.length || !stemmers || !stemsState(database)?.ready) return wanted.map(() => [])
   const stemmer = stemmerFor(stemmers)
-  // A temporary table: reading the index's own counts needs no migration, and it leaves with the connection.
-  database.exec("CREATE VIRTUAL TABLE IF NOT EXISTS temp.message_stem_counts USING fts5vocab(main, message_stems, col)")
-  const count = database.prepare("SELECT doc FROM temp.message_stem_counts WHERE term = ? AND col = 'stems'")
+  // Counted only up to one past `rareAt`, so a common word costs no more than a rare one. Not an fts5vocab table:
+  // creating one is a write, which a read-only connection refuses.
+  const count = database.prepare(
+    "SELECT count(*) AS doc FROM (SELECT rowid FROM message_stems WHERE message_stems MATCH ? LIMIT ?)",
+  )
   const counts = new Map<string, number>()
   const countOf = (stem: string) => {
     let found = counts.get(stem)
     if (found === undefined) {
-      found = Number(count.get(stem)?.doc ?? 0)
+      found = Number(count.get(`stems : "${stem.replaceAll('"', '""')}"`, rareAt + 1)?.doc ?? 0)
       counts.set(stem, found)
     }
     return found

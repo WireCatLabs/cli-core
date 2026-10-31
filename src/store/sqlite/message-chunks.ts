@@ -114,6 +114,24 @@ const messageRows = (
         }`,
   )
 
+/** Each of the account's messages among `pks` that has a vector of `model`, scored against `query`, best first. */
+export const scoreMessages = (
+  { orm }: StoreContext,
+  accountPk: number,
+  { model, query, pks }: { model: string; query: Float32Array; pks: number[] },
+): NearestMessage[] =>
+  orm
+    .all<{ chatId: string; messageId: string; vector: Uint8Array }>(
+      sql`SELECT ch.external_id AS chatId, m.external_id AS messageId, v.vector
+        FROM chunks k CROSS JOIN messages m ON m.id = k.chunkable_id AND m.deleted_at IS NULL
+          JOIN chats ch ON ch.id = m.chat_id AND ch.searchable = 1
+          JOIN embeddings v ON v.model = ${model} AND v.content_hash = k.content_hash
+        WHERE k.chunkable_type = 'message' AND k.position = 0 AND k.account_id = ${accountPk}
+          AND k.chunkable_id IN (SELECT value FROM json_each(${JSON.stringify(pks)}))`,
+    )
+    .map(({ chatId, messageId, vector }) => ({ chatId, messageId, score: dot(query, vector) }))
+    .sort((a, b) => b.score - a.score)
+
 /** The account's live messages nearest to `query` by their vector of `model`, best first. */
 export const nearestMessages = (
   context: StoreContext,

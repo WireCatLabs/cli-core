@@ -225,7 +225,7 @@ export const searchAll = async (
       return byWords
     }
     messagesBy = { by: "words and meaning", ...(lane.partly ? { meaningSkipped: lane.partly } : {}) }
-    const near = await nearEligible(store, account, query, messenger, lane.ranked, filters ?? "")
+    const near = await nearEligible(store, account, query, messenger, lane.ranked, filters ? { text: filters } : {})
     // One list per resource, as notes give theirs, so messages get no second vote against mail.
     const fused = new Map<string, { item: SearchAllItem; score: number }>()
     byWords.forEach((item, rank) => {

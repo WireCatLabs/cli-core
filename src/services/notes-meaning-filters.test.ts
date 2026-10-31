@@ -7,9 +7,10 @@ import { parseLucene } from "@wirecat/cli-base/query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Embedder } from "../embeddings/embed.js"
 import { type TextModel, vectorModelKey } from "../embeddings/models.js"
+import { meaningWords } from "../search/lucene/meaning-parts.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { type MessageStore, openStore } from "../store/store.js"
-import { fieldsOfQuery, meaningWords, searchNotes } from "./notes-search.js"
+import { fieldsOfQuery, searchNotes } from "./notes-search.js"
 
 const tiny: TextModel = {
   id: "e5-small",
