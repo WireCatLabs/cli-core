@@ -53,6 +53,7 @@ shape of this file.
   the groups the caller typed, then the CLI's first groups.
 - **A group given no subcommand points a script at its own help.** In machine mode `tg chats` answered "run `tg
   --help` for the commands"; it now says `tg chats --help`
+  ([WC-CMD-3](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-3--give-a-group-without-a-leaf-only-its-help-never-a-hidden-default-action)).
 
 ## 0.496.0 — 31.10.2026
 
