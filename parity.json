@@ -3678,14 +3678,18 @@
       }
     },
     "projects": {
-      "in": ["max", "tg"],
+      "in": [],
       "planned": {
+        "max": "max-cli#886, on the cli-core release with this row",
+        "tg": "tg-cli#798, on the cli-core release with this row",
         "wa": "wa backlog: mount projectsCommand once wa is on cli-core 0.504.0"
       }
     },
     "projects evidence": {
-      "in": ["max", "tg"],
+      "in": [],
       "planned": {
+        "max": "max-cli#886, on the cli-core release with this row",
+        "tg": "tg-cli#798, on the cli-core release with this row",
         "wa": "wa backlog: mount projectsCommand once wa is on cli-core 0.504.0"
       },
       "options": {
