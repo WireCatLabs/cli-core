@@ -1,7 +1,8 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { openCache } from "./open.js"
 import type { MemoryInput } from "./sqlite/memories.js"
 import { type MessageStore, openStore } from "./store.js"
 
@@ -9,11 +10,27 @@ const live: MessageStore[] = []
 afterEach(async () => {
   for (const store of live.splice(0)) await store.close()
 })
-const open = async () => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "memories-")), "store.db") })
+const open = async (path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")) => {
+  const store = await openStore({ path })
   live.push(store)
   return store
 }
+const sql = async (path: string, statement: string) => {
+  const database = await openCache(path)
+  try {
+    return database.prepare(statement).all()
+  } finally {
+    database.close()
+  }
+}
+const fileHolds = (path: string, word: string) =>
+  [path, `${path}-wal`].some((file) => {
+    try {
+      return readFileSync(file).includes(word)
+    } catch {
+      return false
+    }
+  })
 const agent = { bot: "digest-writer", model: "synthetic-model-1" }
 
 describe("memories", () => {
@@ -100,6 +117,136 @@ describe("memories", () => {
   })
 })
 
+describe("forgetting a memory", () => {
+  it("erases its row, words, pieces, vector and links, and the text from the file; the rest stays", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
+    const store = await open(path)
+    const note = await store.notes.addNote({ text: "Kai Sample asked for calls on Fridays" })
+    const wrong = await store.memories.add({
+      kind: "preference",
+      body: "Kai Sample prefers zanzibarcalls",
+      scope: "work",
+      evidence: [note.ref],
+      author: agent,
+    })
+    expect((await store.memories.search("zanzibarcalls")).map(({ ref }) => ref)).toEqual([wrong.ref])
+    const [piece] = (await sql(
+      path,
+      `SELECT content_hash FROM chunks WHERE chunkable_type = 'memory' AND chunkable_id = ${wrong.id}`,
+    )) as { content_hash: string }[]
+    const database = await openCache(path)
+    database.exec(
+      `INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at) VALUES ('m', '${piece?.content_hash}', 1, x'00000000', 1, 1)`,
+    )
+    database.close()
+    expect(fileHolds(path, "zanzibarcalls")).toBe(true)
+    const right = await store.memories.add({
+      kind: "preference",
+      body: "Kai Sample prefers Friday calls",
+      scope: "work",
+      evidence: [note.ref],
+      author: "owner",
+      status: "confirmed",
+      supersedes: wrong.ref,
+    })
+    const kept = await store.memories.add({
+      kind: "summary",
+      body: "Kai Sample runs the harbour project",
+      scope: "work",
+      evidence: [note.ref, wrong.ref],
+      author: agent,
+    })
+    await store.memories.search("harbour")
+
+    expect(await store.memories.remove(wrong.ref)).toEqual({ ref: wrong.ref, removed: true, links: 2 })
+
+    await expect(store.memories.get(wrong.ref)).rejects.toMatchObject({ code: "not_found" })
+    expect(await store.memories.get(right.ref)).toMatchObject({ supersedes: null, status: "confirmed" })
+    expect(await store.memories.get(kept.ref)).toMatchObject({ evidence: [note.ref] })
+    expect((await store.memories.search("friday")).map(({ ref }) => ref)).toEqual([right.ref])
+    expect(await store.notes.note(note.ref)).toMatchObject({ ref: note.ref })
+    const id = Number(wrong.id)
+    expect(
+      await sql(
+        path,
+        `SELECT (SELECT count(*) FROM memories WHERE id = ${id}) AS rows,
+          (SELECT count(*) FROM links WHERE (from_type = 'memory' AND from_id = ${id}) OR (to_type = 'memory' AND to_id = ${id})) AS links,
+          (SELECT count(*) FROM chunks WHERE chunkable_type = 'memory' AND chunkable_id = ${id}) AS pieces,
+          (SELECT count(*) FROM memory_words_vocab WHERE term LIKE 'zanzibar%') AS words,
+          (SELECT count(*) FROM embeddings WHERE content_hash = '${piece?.content_hash}') AS vectors,
+          (SELECT count(*) FROM memories) AS memories, (SELECT count(*) FROM notes) AS notes`,
+      ),
+    ).toEqual([{ rows: 0, links: 0, pieces: 0, words: 0, vectors: 0, memories: 2, notes: 1 }])
+    expect(fileHolds(path, "zanzibarcalls")).toBe(false)
+    await expect(store.memories.remove(wrong.ref)).rejects.toMatchObject({ code: "not_found" })
+
+    expect(await store.memories.remove(kept.ref)).toMatchObject({ removed: true, links: 1 })
+    expect(await store.memories.search("harbour")).toEqual([])
+    expect(await sql(path, "SELECT count(*) AS n FROM memory_words_vocab WHERE term LIKE 'harbour%'")).toEqual([
+      { n: 0 },
+    ])
+    expect(fileHolds(path, "harbour")).toBe(false)
+  })
+
+  it("read back each source with an excerpt, and say which one was deleted since", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
+    const store = await open(path)
+    const stays = await store.notes.addNote({ title: "Call notes", text: "Kai Sample: Fridays work best for me" })
+    const goes = await store.notes.addNote({ text: "Kai Sample: maybe Thursdays" })
+    const memory = await store.memories.add({
+      kind: "preference",
+      body: "Kai Sample prefers Friday calls",
+      scope: "work",
+      evidence: [stays.ref, goes.ref],
+      author: agent,
+    })
+    await sql(path, `UPDATE notes SET deleted_at = 1 WHERE id = ${goes.ref.replace("note:", "")}`)
+
+    expect(await store.memories.sources(memory.ref)).toEqual([
+      {
+        ref: stays.ref,
+        kind: "note",
+        title: "Call notes",
+        sender: null,
+        at: expect.any(String),
+        excerpt: "Kai Sample: Fridays work best for me",
+        tool: "notes",
+        missing: false,
+      },
+      expect.objectContaining({ ref: goes.ref, kind: "note", excerpt: null, missing: true }),
+    ])
+  })
+
+  it("name the subject: a person by name or identity, a project by name, the owner as the owner", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
+    const store = await open(path)
+    const project = await store.knowledge.addProject({ name: "Project Harbour", type: "work" })
+    await sql(path, "INSERT INTO persons (id, name, owner, created_at, updated_at) VALUES (21, 'Kai Sample', 0, 0, 0)")
+    await sql(path, "INSERT INTO persons (id, name, owner, created_at, updated_at) VALUES (22, NULL, 0, 0, 0)")
+    await sql(
+      path,
+      "INSERT INTO identities (id, provider, external_id, name, created_at, updated_at) VALUES (5, 'telegram', '77', 'Ana Ruiz', 0, 0)",
+    )
+    await sql(
+      path,
+      "INSERT INTO identity_links (identity_id, person_id, method, confidence, created_at, author, updated_at) " +
+        "VALUES (5, 22, 'manual', 1, 0, 'owner', 0)",
+    )
+    const [owner] = (await sql(path, "SELECT id FROM persons WHERE owner = 1")) as { id: number }[]
+    const note = await store.notes.addNote({ text: "Synthetic evidence" })
+    const about = (subject: string) =>
+      store.memories.add({ kind: "summary", body: "x", scope: "work", evidence: [note.ref], author: agent, subject })
+
+    expect(await about("person:21")).toMatchObject({ subjectName: "Kai Sample", subjectIsOwner: false })
+    expect(await about("person:22")).toMatchObject({ subjectName: "Ana Ruiz", subjectIsOwner: false })
+    expect(await about(`person:${owner?.id}`)).toMatchObject({ subjectName: null, subjectIsOwner: true })
+    expect(await about(project.ref)).toMatchObject({ subjectName: "Project Harbour" })
+    expect(await store.facts.add({ type: "fact", statement: "y", by: "owner", subject: "person:21" })).toMatchObject({
+      subjectName: "Kai Sample",
+    })
+  })
+})
+
 describe("facts", () => {
   it("wait as proposed from an agent, hold once accepted, and a decision stops holding when replaced", async () => {
     const store = await open()
@@ -177,5 +324,53 @@ describe("facts", () => {
     expect((await store.facts.list({ subject: note.ref })).map(({ ref }) => ref)).toEqual([question.ref])
     expect((await store.facts.list({ status: "proposed" })).map(({ ref }) => ref)).toEqual([statement.ref])
     expect(await store.facts.list({ project: person.ref })).toEqual([])
+  })
+
+  it("reject only a proposed fact, and forget one with its links and the memory it was migrated from", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
+    const store = await open(path)
+    const note = await store.notes.addNote({ text: "Ana Ruiz promised the draft" })
+    const proposed = await store.facts.add({
+      type: "promise",
+      statement: "Ana sends the draft",
+      by: agent,
+      evidence: [note.ref],
+    })
+    const owned = await store.facts.add({ type: "fact", statement: "The draft is due", by: "owner" })
+    await expect(store.facts.reject(owned.ref)).rejects.toMatchObject({ code: "validation_error" })
+    expect(await store.facts.reject(proposed.ref)).toMatchObject({ status: "rejected" })
+    expect((await store.facts.list({ status: "rejected" })).map(({ ref }) => ref)).toEqual([proposed.ref])
+
+    const first = await store.facts.add({
+      type: "decision",
+      statement: "Ship in quokkamarch",
+      by: "owner",
+      evidence: [note.ref],
+    })
+    const second = await store.facts.add({
+      type: "decision",
+      statement: "Ship in April",
+      by: "owner",
+      supersedes: first.ref,
+    })
+    await sql(
+      path,
+      "INSERT INTO memories (id, kind, body, author_type, author_id, status, scope, created_at, updated_at, deleted_at) " +
+        "VALUES (90, 'summary', 'Ship in quokkamarch', 'person', 1, 'confirmed', 'work', 0, 0, 1)",
+    )
+    await sql(path, `UPDATE facts SET source = 'memory', metadata = '{"memory":90}' WHERE id = ${first.id}`)
+
+    expect(await store.facts.remove(first.ref)).toEqual({ ref: first.ref, removed: true, links: 1 })
+    await expect(store.facts.get(first.ref)).rejects.toMatchObject({ code: "not_found" })
+    expect(await store.facts.get(second.ref)).toMatchObject({ supersedes: null, status: "accepted" })
+    expect(
+      await sql(
+        path,
+        `SELECT (SELECT count(*) FROM memories WHERE id = 90) AS twin,
+          (SELECT count(*) FROM links WHERE from_type = 'fact' AND from_id = ${first.id}) AS links,
+          (SELECT count(*) FROM facts) AS facts, (SELECT count(*) FROM notes) AS notes`,
+      ),
+    ).toEqual([{ twin: 0, links: 0, facts: 3, notes: 1 }])
+    expect(fileHolds(path, "quokkamarch")).toBe(false)
   })
 })

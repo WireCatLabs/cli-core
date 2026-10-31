@@ -132,6 +132,7 @@ export {
   type EventSearch,
   type NearestEvent,
 } from "./sqlite/event-search.js"
+export type { EvidenceSource } from "./sqlite/evidence-sources.js"
 export type { Fact, FactInput, FactsStore } from "./sqlite/facts.js"
 export type { FileListQuery, FilesStore, StoredFile } from "./sqlite/files.js"
 export { IMPORTED_DOCUMENT_QUERY, type ImportedDocuments } from "./sqlite/imported-documents.js"

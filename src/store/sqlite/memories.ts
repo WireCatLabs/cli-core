@@ -3,6 +3,7 @@ import { MEMORY_KINDS, MEMORY_SCOPES, type MEMORY_STATUSES } from "../../domain/
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import { normalize } from "../normalize.js"
 import { type Actor, botNamed, ownerPerson } from "./actors.js"
+import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
 import { requiredThing } from "./notes.js"
@@ -21,6 +22,10 @@ export interface Memory {
   body: string
   /** What it is about, as a reference; `null` for a general fact. */
   subject: string | null
+  /** What the subject is called; `null` for the owner, who has no name in the store, and for a nameless row. */
+  subjectName: string | null
+  /** The subject is the owner. */
+  subjectIsOwner: boolean
   /** `name` is a bot's handle; `null` for a person. */
   author: { type: Actor["type"]; id: string; name: string | null }
   model: string | null
@@ -64,6 +69,13 @@ export interface MemoriesStore {
   confirm(reference: string): Promise<Memory>
   /** Its evidence no longer holds. */
   markStale(reference: string): Promise<Memory>
+  /**
+   * Erases the memory: its row, its text in the search and meaning indexes, and every link from or to it. A memory
+   * that replaced it no longer names it. A backup made before keeps it.
+   */
+  remove(reference: string): Promise<{ ref: string; removed: true; links: number }>
+  /** Each reference it rests on, read back; one deleted since is `missing`. */
+  sources(reference: string): Promise<EvidenceSource[]>
   /** Indexes what was written since, then finds memories holding every word or a longer one it starts, best first. */
   search(text: string, options?: { subject?: string; scope?: Memory["scope"]; limit?: number }): Promise<Memory[]>
   indexState(): Promise<NoteIndexState>
@@ -120,6 +132,63 @@ export const evidenceOf = (context: StoreContext, from: { type: string; id: numb
     .all(from.type, from.id)
     .flatMap((row) => referenceOfThing(context.database, storedThing(row.to_type, row.to_id)) ?? [])
 
+const SUBJECT_NAMES: Record<string, string> = {
+  person:
+    "SELECT p.owner, coalesce(p.name, (SELECT a.name FROM aliases a WHERE a.aliasable_type = 'person' " +
+    "AND a.aliasable_id = p.id ORDER BY a.display DESC, a.id LIMIT 1), (SELECT i.name FROM identity_links l " +
+    "JOIN identities i ON i.id = l.identity_id WHERE l.person_id = p.id AND i.name IS NOT NULL ORDER BY i.id LIMIT 1)) " +
+    "AS name FROM persons p WHERE p.id = ?",
+  project: "SELECT 0 AS owner, name FROM projects WHERE id = ?",
+  organization: "SELECT 0 AS owner, name FROM organizations WHERE id = ?",
+}
+
+/** What a memory's or fact's subject is called, for a reader who should not have to look the reference up. */
+export const subjectOf = (
+  database: StoreContext["database"],
+  row: Row,
+): Pick<Memory, "subject" | "subjectName" | "subjectIsOwner"> => {
+  if (row.subject_type == null) return { subject: null, subjectName: null, subjectIsOwner: false }
+  const thing = storedThing(row.subject_type, row.subject_id)
+  const read = SUBJECT_NAMES[thing.type]
+  const named = read === undefined ? undefined : database.prepare(read).get(thing.id)
+  return {
+    subject: referenceOfThing(database, thing) ?? null,
+    subjectName: named?.name == null ? null : String(named.name),
+    subjectIsOwner: Number(named?.owner) === 1,
+  }
+}
+
+/** Counts every link from or to a row and drops the ones its delete trigger does not: those pointing at it. */
+export const dropLinksOf = (database: StoreContext["database"], thing: { type: string; id: number }): number => {
+  const count = Number(
+    database
+      .prepare("SELECT count(*) AS n FROM links WHERE (from_type = ? AND from_id = ?) OR (to_type = ? AND to_id = ?)")
+      .get(thing.type, thing.id, thing.type, thing.id)?.n,
+  )
+  database.prepare("DELETE FROM links WHERE to_type = ? AND to_id = ?").run(thing.type, thing.id)
+  return count
+}
+
+/**
+ * Runs a delete so the text does not linger in the file: freed pages are zeroed, the words indexes merged so no
+ * segment still holds the erased words, and the write-ahead log emptied when no reader holds it.
+ */
+export const erase = <T>(database: StoreContext["database"], work: () => T): T => {
+  database.exec("PRAGMA secure_delete = ON")
+  try {
+    const done = write(database, () => {
+      const result = work()
+      for (const index of ["memory_words", "memory_stems"])
+        database.prepare(`INSERT INTO ${index} (${index}) VALUES ('optimize')`).run()
+      return result
+    })
+    database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+    return done
+  } finally {
+    database.exec("PRAGMA secure_delete = OFF")
+  }
+}
+
 export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
   const { database, now } = context
   const stemmerFor: (stemmers: Stemmers) => Stemmer = stemmerCache()
@@ -128,10 +197,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     ref: `memory:${row.id}`,
     kind: row.kind as Memory["kind"],
     body: String(row.body),
-    subject:
-      row.subject_type == null
-        ? null
-        : (referenceOfThing(database, storedThing(row.subject_type, row.subject_id)) ?? null),
+    ...subjectOf(database, row),
     author: authorOf(row),
     model: row.model == null ? null : String(row.model),
     confidence: row.confidence == null ? null : Number(row.confidence),
@@ -242,6 +308,17 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     },
     confirm: async (reference) => setStatus(reference, "confirmed", true),
     markStale: async (reference) => setStatus(reference, "stale", false),
+    remove: async (reference) => {
+      const id = Number(rowOf(reference).id)
+      const links = erase(database, () => {
+        database.prepare("UPDATE memories SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
+        const count = dropLinksOf(database, { type: "memory", id })
+        database.prepare("DELETE FROM memories WHERE id = ?").run(id)
+        return count
+      })
+      return { ref: `memory:${id}`, removed: true, links }
+    },
+    sources: async (reference) => evidenceSourcesOf(database, { type: "memory", id: Number(rowOf(reference).id) }),
     search: async (text, { subject: subjectRef, scope, limit = 20 } = {}) => {
       const subject = subjectRef === undefined ? undefined : requiredThing(database, subjectRef)
       drainCorpus(database, CORPORA.memory, stemmerFor)

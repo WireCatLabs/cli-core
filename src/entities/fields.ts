@@ -15,6 +15,18 @@ export const untrusted = v.optional(v.array(text))
 
 export const providerMetadata = v.optional(v.record(v.string(), v.unknown()))
 
+/** A reference a memory or fact rests on, read back; `missing` once it was deleted since. */
+export const evidenceSource = v.strictObject({
+  ref: v.nullable(reference),
+  kind: text,
+  title: v.nullable(text),
+  sender: v.nullable(text),
+  at: v.nullable(time),
+  excerpt: v.nullable(text),
+  tool: v.nullable(text),
+  missing: v.boolean(),
+})
+
 export const author = v.strictObject({
   type: v.picklist(["person", "bot"]),
   id,
