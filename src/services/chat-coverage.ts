@@ -4,7 +4,7 @@ import type { AccountKey, ChatCompleteness, MessageStore } from "../store/store.
 /** What the store holds of one chat, and how far that goes: never message text. */
 export interface ChatCoverage {
   chatId: Id
-  /** `null` while the store holds no message of the chat: titles come with the stats. */
+  /** The chat row's title; `null` when the store has no row for the chat or the row has none. */
   title: string | null
   completeness: ChatCompleteness
   held: { messages: number; oldestAt: string | null; newestAt: string | null }
@@ -25,6 +25,7 @@ export const chatCoverage = async (
   return Promise.all(
     ids.map(async (chatId) => {
       const [stats] = await store.chats.chatStats(account, chatId)
+      const title = stats?.title ?? (await store.chats.chatTitle(account, chatId))
       const completeness = found.get(chatId) ?? {
         chatId,
         state: "unknown" as const,
@@ -35,7 +36,7 @@ export const chatCoverage = async (
       }
       return {
         chatId,
-        title: stats?.title ?? null,
+        title,
         completeness,
         held: { messages: stats?.messages ?? 0, oldestAt: stats?.oldestAt ?? null, newestAt: stats?.newestAt ?? null },
       }

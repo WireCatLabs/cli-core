@@ -7,6 +7,8 @@ import type {
   ContextSource,
 } from "../context/evidence.js"
 import { CONTEXT_MAX_READ_BYTES, contextEvidenceFingerprint } from "../context/evidence.js"
+import type { AccountKey } from "../store/types.js"
+import type { ChatCoverage } from "./chat-coverage.js"
 import { createContextEvidenceReader } from "./context-evidence.js"
 import { excerpt } from "./excerpt.js"
 import {
@@ -40,6 +42,8 @@ export interface ProjectGatheringPorts {
   fetcher?: ProjectSourceFetcher
   index?: ContextIndex
   neighbours?: ProjectNeighbourReader
+  /** What the store holds of the named chats of one account, e.g. `chatCoverage` over the store. */
+  coverage?: (account: AccountKey, chatIds: string[]) => Promise<ChatCoverage[]>
   now?: () => number
 }
 export interface ProjectIndexCatchUp {
@@ -339,6 +343,19 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
 
   const people = peopleOf(items, senderOf)
 
+  const coverageOf = new Map<string, ChatCoverage>()
+  if (ports.coverage) {
+    const byAccount = new Map<string, { account: AccountKey; chats: string[] }>()
+    for (const { provider, account, chat, source } of plan.linkedChats) {
+      if (source === null) continue
+      const group = byAccount.get(JSON.stringify([provider, account])) ?? { account: { provider, account }, chats: [] }
+      group.chats.push(chat)
+      byAccount.set(JSON.stringify([provider, account]), group)
+    }
+    for (const [key, { account, chats }] of byAccount)
+      for (const row of await ports.coverage(account, chats)) coverageOf.set(`${key}${row.chatId}`, row)
+  }
+
   const totals = {
     reads: (previous?.totals.reads ?? 0) + usage.reads,
     readBytes: (previous?.totals.readBytes ?? 0) + usage.readBytes,
@@ -359,6 +376,40 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     seen: [...seen],
     totals,
   }
+  const linkedRows = plan.linkedChats.map(({ provider, account, chat, ref, source, lane }) => {
+    const laneUnits = units.flatMap((unit, index) => (unit.lane.id === lane ? [progress[index]] : []))
+    const state =
+      source === null
+        ? ("out-of-scope" as const)
+        : laneUnits.every((u) => u?.state === "unavailable")
+          ? ("unavailable" as const)
+          : laneUnits.every((u) => u?.state === "pending")
+            ? ("pending" as const)
+            : ("in-scope" as const)
+    const row = coverageOf.get(`${JSON.stringify([provider, account])}${chat}`)
+    return {
+      provider,
+      account,
+      chat,
+      ref,
+      source,
+      lane,
+      state,
+      title: row?.title ?? null,
+      completeness: row?.completeness ?? null,
+      held: row?.held ?? null,
+      ...(state === "pending" ? {} : { items: lane === null ? 0 : (linkedTaken.get(lane) ?? 0) }),
+      ...(state === "pending" ? {} : { capped: lane !== null && capped.has(lane) }),
+    }
+  })
+  const states = linkedRows.flatMap((row) => (row.completeness ? [row.completeness.state] : []))
+  const completeness = !states.length
+    ? ("unknown" as const)
+    : states.includes("partial")
+      ? ("partial" as const)
+      : states.includes("unknown") || states.length < linkedRows.filter((row) => row.source !== null).length
+        ? ("unknown" as const)
+        : ("complete" as const)
   return {
     schemaVersion: 1 as const,
     runKey: plan.runKey,
@@ -375,22 +426,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     },
     scope: { origin: plan.scope, sources: plan.sources },
     lanes: plan.lanes,
-    linkedChats: plan.linkedChats.map(({ provider, account, chat, ref, source, lane }) => ({
-      provider,
-      account,
-      chat,
-      ref,
-      source,
-      lane,
-      state:
-        source === null
-          ? ("out-of-scope" as const)
-          : units.every((unit, index) => unit.lane.id !== lane || progress[index]?.state === "unavailable")
-            ? ("unavailable" as const)
-            : ("in-scope" as const),
-      items: lane === null ? 0 : (linkedTaken.get(lane) ?? 0),
-      capped: lane !== null && capped.has(lane),
-    })),
+    linkedChats: linkedRows,
     fetch: fetched.map((f, index) => ({ source: index, ...f })),
     index: indexed,
     units: units.map((unit, index) => ({
@@ -411,7 +447,7 @@ export const gatherProjectEvidence = async (ports: ProjectGatheringPorts, reques
     totals,
     stopped,
     complete: !resumable,
-    completeness: "unknown" as const,
+    completeness,
     checkpoint: resumable ? encodeCheckpoint(checkpoint) : null,
   }
 }
