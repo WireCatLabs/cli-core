@@ -4238,6 +4238,10 @@
           "in": ["tg"],
           "reason": "Telegram asks each client for its own app from my.telegram.org; MAX has no such step; WhatsApp has no application registration"
         },
+        "--credential-storage": {
+          "in": ["max"],
+          "reason": "WC-SECR-4's discouraged file choice for the sign-in secret; max's token goes through cli-base's Credentials, while tg's and WhatsApp's sign-ins are the library's own session file (the rule's exception)"
+        },
         "--sms": {
           "in": ["tg"],
           "reason": "asks Telegram to resend its login code by SMS; MAX has no such choice; WhatsApp links a device by QR or pairing code, never by an SMS code"
