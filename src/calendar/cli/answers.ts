@@ -154,7 +154,10 @@ const hitFields = {
   untrusted,
 }
 
-/** A hit of the stored search, or with `--backend server` one the provider's own search found and nothing stored. */
+/**
+ * A hit of the stored search (with `--backend both`, `server` too when the provider also found it), or one the
+ * provider's own search found and nothing stored.
+ */
 export const calendarSearchHit = v.union([
   v.strictObject({
     ...hitFields,
@@ -162,7 +165,7 @@ export const calendarSearchHit = v.union([
     excerpt: text,
     occurrences: count,
     updated_at: time,
-    found_by: v.array(v.picklist(["words", "meaning"])),
+    found_by: v.array(v.picklist(["words", "meaning", "server"])),
   }),
   v.strictObject({
     ...hitFields,

@@ -60,7 +60,7 @@ export class BotTokenStore {
   }
 
   write(token: string): CredentialSource {
-    return this.#credentials.write(this.#account, token)
+    return this.#credentials.write(this.#account, token, { signIn: true })
   }
 
   readKeyring(): string | undefined {
@@ -93,7 +93,7 @@ export class BotTokenStore {
   }
 
   writeSecret(name: string, secret: string): CredentialSource {
-    return this.#secretOf(name).write(`${this.#account}:${name}`, secret)
+    return this.#secretOf(name).write(`${this.#account}:${name}`, secret, { signIn: true })
   }
 
   removeSecret(name: string): CredentialSource[] {

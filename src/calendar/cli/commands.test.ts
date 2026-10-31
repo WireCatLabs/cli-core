@@ -494,10 +494,32 @@ describe("calendar commands", () => {
       await expect(cli("search", "events", "--backend", "server", ...args, "roadmap")).rejects.toMatchObject({
         details: { reason },
       })
-    await expect(cli("search", "events", "--backend", "both", "roadmap")).rejects.toMatchObject({
-      details: { reason: "search.one-backend" },
-    })
     expect((await cli("search", "events", "roadmap")).hits).toEqual([expect.objectContaining({ found_by: ["words"] })])
+  })
+
+  it("search --backend both marks a stored hit the provider also found, then adds what only the provider found", async () => {
+    const source = fakeCalendarSource({ search: true })
+    source.put("primary", planning())
+    const { cli } = await setup({ source, serverSearch: true })
+    await cli("sync")
+    source.put("primary", { ...planning(), externalId: "e9", title: "Later roadmap review", startsAt: NOW + 5 * HOUR })
+
+    const found = await cli("search", "events", "--backend", "both", "roadmap")
+
+    expect(found).toMatchObject({ query: "roadmap", by: "both", has_more: false })
+    expect(found.hits).toEqual([
+      expect.objectContaining({ ref: expect.stringMatching(/^event:/), found_by: ["words", "server"] }),
+      expect.objectContaining({ external_id: "e9", found_by: ["server"] }),
+    ])
+    expect((await cli("search", "events", "--backend", "both", "--limit", "1", "roadmap")).has_more).toBe(true)
+    for (const [args, reason] of [
+      [["--cursor", "1"], "search.server-options"],
+      [["--newest"], "search.server-options"],
+      [["--offline"], "search.offline"],
+    ] as const)
+      await expect(cli("search", "events", "--backend", "both", ...args, "roadmap")).rejects.toMatchObject({
+        details: { reason },
+      })
   })
 
   it("search takes no --backend when the CLI's source has no search of its own", async () => {

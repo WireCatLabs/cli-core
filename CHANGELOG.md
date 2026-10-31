@@ -7,12 +7,39 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`events list --page <n>`: the next page of stored events.** `events list` said `hasMore` and had no way to read on;
+  it now takes `--page` from 1 with `--limit` events a page (100), and the answer's `page` is the number shown, so a
+  host's `listOf` can offer `page.next` (WC-OUT-5). `eventsAnswer` takes the page as a third argument.
+- **`search events --backend both`** asks the store and the provider's own search together, where `--backend` is
+  offered (`deps.serverSearch`). The stored hits come first in the stored search's order, `found_by` gaining
+  `server` on each the provider also found; then the hits only the provider found, earliest first. One page, with no
+  `next_offset`; `has_more` when either side has more. It refuses `--offline`, `--cursor` and `--newest` as
+  `--backend server` does, and takes `--exact` for the stored side. `calendar_search_hit` allows `server` in a stored
+  hit's `found_by`. An occurrence the store keeps under another id than the provider's search names shows twice.
+
+### Changed — may break callers
+
+- **`events create --id` and `events update --following --id` are now `--operation-id`** (WC-CMD-10, WC-OUT-10): the
+  value is the `operation_id` the answer and an `outcome_unknown` already name. `--id` is refused as an unknown
+  option; errors name `--operation-id`. The calendar MCP tools keep their `id` argument.
+- **`search events` no longer refuses `--backend both`** with `search.one-backend`; see Added.
+
 ### Fixed
+
+- **`search events --cursor` help** said "a page's next_offset", a key the answer a host prints does not have; it now
+  says to go on from where the last page stopped, as `page.next` gives it.
 
 - **A budgeted `syncMail` waits out a locked store.** When another process (memo's scheduled sync) holds the store's
   write lock past its 5 s busy timeout, the sync used to fail with `database is locked`; it now waits 2 s, 4 s, ... (at
   most 5 times, each a request of the budget) and reads the round again. When the budget has no room the run ends as
   `partial`. `options.wait` lets a test skip the pause.
+- **A bot token, a bot's named secret or an AI provider's key the owner sets again goes back to the keyring.** After
+  one keyring failure such a secret stayed in the private file for good, as cli-base 0.68.0 keeps a plain write where
+  the secret is. `BotTokenStore.write`, `writeSecret` and `embeddingKeys().write` now write with `{ signIn: true }`:
+  the keyring is tried and, once it takes the secret, the file copy is removed (WC-SECR-4). `writeKeyring` was
+  keyring-only already; the CAS key is only read here.
 
 ## 0.507.0 — 31.10.2026
 

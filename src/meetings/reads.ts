@@ -51,7 +51,7 @@ export const meetingShow = async (store: MeetingStore, id: number, accountId?: n
 }
 export const listed = <T>(
   items: T[],
-  page: { limit: number; hasMore: boolean } = { limit: items.length, hasMore: false },
+  page: { limit: number; hasMore: boolean; page?: number } = { limit: items.length, hasMore: false },
 ) => ({
   items,
   page: 1,

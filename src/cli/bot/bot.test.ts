@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { memoryKeyring } from "@wirecat/cli-base"
@@ -63,6 +63,35 @@ describe("a bot's token", () => {
     expect([...keyring.entries.keys()]).toEqual(["tg-cli:bot:sales"])
     expect(new BotTokenStore({ app: TG, profile: "support", env, configDir, keyring }).read()).toBeUndefined()
   })
+
+  it("moves a token and a named secret the keyring once refused back to it when the owner sets them again", () => {
+    const memory = memoryKeyring()
+    let locked = true
+    const keyring = {
+      get: (service: string, account: string) => {
+        if (locked) throw new Error("locked")
+        return memory.get(service, account)
+      },
+      set: (service: string, account: string, secret: string) => {
+        if (locked) throw new Error("locked")
+        memory.set(service, account, secret)
+      },
+      delete: (service: string, account: string) => memory.delete(service, account),
+    }
+    const store = () => new BotTokenStore({ app: TG, profile: "sales", env, configDir, keyring })
+
+    expect(store().write("one")).toBe("file")
+    expect(store().writeSecret("app-secret", "first")).toBe("file")
+    locked = false
+
+    expect(store().write("two")).toBe("keyring")
+    expect(store().writeSecret("app-secret", "second")).toBe("keyring")
+    expect(store().read()).toEqual({ token: "two", source: "keyring" })
+    expect(store().readSecret("app-secret")).toEqual({ secret: "second", source: "keyring" })
+    const file = join(configDir, "credentials.json")
+    expect(existsSync(file) ? readFileSync(file, "utf8") : "").not.toContain("bot:sales")
+  })
+
   it("stores returned credentials only in the keyring and never falls back or exposes a keyring error", () => {
     const keyring = memoryKeyring()
     const store = new BotTokenStore({
