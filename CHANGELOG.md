@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.504.0 — 31.10.2026
+
 ### Added
 
 - **`projects evidence --sync-first` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
