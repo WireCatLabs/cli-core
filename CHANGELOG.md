@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.500.0 — 31.10.2026
+
 ### Added
 
 - **A memory or fact can be forgotten for good.** `store.memories.remove(ref)` and `store.facts.remove(ref)` erase the
