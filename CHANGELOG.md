@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.505.0 — 31.10.2026
+
 ### Added
 
 - **`appDoctorCommand` takes `--online`, and a messenger's and an app's `doctor` now say one thing.** Both use the
