@@ -176,14 +176,17 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
       const extra = (await accept?.(received)) ?? undefined
       await locked(async () => {
         forget()
-        storage.write({ tokens: received, client, ...(extra ? { extra } : {}) })
+        storage.write({ tokens: received, client, ...(extra ? { extra } : {}) }, { signIn: true })
       })
       return { scopes: received.scopes }
     },
     save: (saved, extra) =>
       locked(async () => {
         forget()
-        storage.write({ tokens: saved, client: clientOf(storage.read()), ...(extra ? { extra } : {}) })
+        storage.write(
+          { tokens: saved, client: clientOf(storage.read()), ...(extra ? { extra } : {}) },
+          { signIn: true },
+        )
       }),
     signOut: ({ revoke = false } = {}) =>
       locked(async () => {

@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.507.0 — 31.10.2026
+
 ### Added
 
 - **`messages sync --json` prints its progress on stderr**, for a window to draw a bar instead of an endless one
@@ -16,6 +18,17 @@ shape of this file.
   page with `chats` and `chats_done` `null`. At most about two a second; the first and last of `--all` always come.
   Only in machine output (`--json`, `--jsonl`, or stdout not a terminal) and not in a `--background` job's log;
   stdout still carries the one answer. Archive services take an optional `onChat` for the same counts.
+
+### Changed — may break callers
+
+- **Needs `@wirecat/cli-base` 0.68.0** (peer range `>=0.68.0 <0.69.0`). cli-base's `Credentials` in `auto` now reads
+  a sign-in the private file holds before the keyring and keeps its refreshes there (WC-SECR-4).
+
+### Fixed
+
+- **A new OAuth sign-in moves a file sign-in back to the keyring.** `TokenStorage.write` takes `{ signIn: true }`, and
+  the keeper's `signIn` and `save` pass it: the keyring is tried again and, once it takes the sign-in, the file copy
+  is removed. A refresh stays where the sign-in is, so a locked keyring is not tried for it on every refresh.
 
 ## 0.506.0 — 31.10.2026
 
@@ -31,10 +44,9 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **cli-base 0.68.1.** The development pin is `0.68.1` and the peer range `>=0.68.1 <0.69.0`, so a CLI can take
-  cli-base 0.68.x and none can stay on 0.67. cli-base 0.68.0 moves the file fallback of `Credentials` in `auto` into the class: a secret the
-  file holds is read from the file before the keyring, and a sign-in (`write(account, secret, { signIn: true })`)
-  removes the file copy once the keyring takes it. cli-core's own `Credentials` uses needed no change.
+- **Needs `@wirecat/cli-base` 0.68.1** (peer range `>=0.68.1 <0.69.0`, from `>=0.68.0 <0.69.0`). 0.68.1 adds only the
+  cross-CLI audit's `absent` declarations (memo has no profiles of its own), which mail-cli's release audit needs;
+  cli-core's code is unchanged.
 - **`search messages --discover` searches by meaning when the query uses `-`, `NOT`, `OR`, groups, phrases or
   `exact:`.** Such a query used to run strict search alone, with no meaning hits. Now its words are still matched by
   the whole query, as strict search does (`discovery.method: "lexical-strict"`), and the messages nearest in meaning
