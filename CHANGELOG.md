@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The MCP agent log names the agent that made the call, not the server.** A row in `agent_actions` was always the
+  bot `<command>-mcp` (`tg-mcp`); it is now the client as it named itself (`clientInfo.name` from `initialize`, or the
+  per-request `io.modelcontextprotocol/clientInfo`), else the coding agent whose environment started a stdio server
+  (`claude-code`), else `<command>-mcp`. A filter on `tg-mcp` no longer finds new rows. The name is the client's own
+  claim: a label, never a permission. `callingAgent(fallback, caller?)` from `@wirecat/cli-core/mcp` gives the same
+  name to a CLI that runs its own server, and `Registration.log` receives the call's caller.
+- **Any proposed or accepted fact can be corrected.** `facts.add({ supersedes })` took only a decision; it now takes a
+  fact of any type, and refuses one already superseded, reversed or rejected. When the new fact is accepted (at once,
+  for the owner's), the old one becomes `superseded` whether it was proposed or accepted; a proposed one used to stay
+  proposed.
+
 ## 0.508.0 — 31.10.2026
 
 ### Added

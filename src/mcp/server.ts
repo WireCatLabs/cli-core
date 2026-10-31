@@ -30,7 +30,7 @@ import { levelFor, type PermissionKey, readKeysForCommand } from "../sends/permi
 import { openStore } from "../store/store.js"
 import { type AgentAnswer, type AgentProgram, type AgentTool, runCommandForAgent, toolsFromCommands } from "./agent.js"
 import { agentLog } from "./agent-log.js"
-import { type CallerSource, callerOf, withCaller } from "./caller.js"
+import { type CallerSource, callerOf, callingAgent, withCaller } from "./caller.js"
 import type { HttpOptions } from "./http/serve.js"
 import { mcpHttpMarker } from "./http/state.js"
 import { instructions } from "./instructions.js"
@@ -224,9 +224,9 @@ export const createServer = (
   })
   const skill = messenger.skill ? skillResource(app, messenger.skill) : undefined
   const log = agentLog(() => openStore({ env: context.env, command: app.command, version: app.version }))
-  const audit = async (call: ToolCall) => {
+  const audit = async (call: ToolCall, caller: RunCaller | undefined) => {
     if (!recalledAccount(app, provider, settings.profile, context.env)) return
-    await log.record({ actor: { bot: `${app.command}-mcp` }, ...call })
+    await log.record({ actor: { bot: callingAgent(`${app.command}-mcp`, caller) }, ...call })
   }
   const targets = judgedTargets(root)
   const passed = Object.fromEntries(Object.entries(environment).filter(([key]) => !PER_RUN.has(key)))
@@ -320,13 +320,16 @@ export const createServer = (
               }
             })()
       // The audit row must not cost the agent its answer: a store that cannot be written is not this call's failure.
-      await audit({
-        tool: keyOfCommand(one.command),
-        tier: tierOf(keyOfCommand(one.command), { annotations: one.writes ? WRITE : READ }, messenger),
-        ...outcomeOf(result),
-        startedAt,
-        finishedAt: Date.now(),
-      }).catch(() => undefined)
+      await audit(
+        {
+          tool: keyOfCommand(one.command),
+          tier: tierOf(keyOfCommand(one.command), { annotations: one.writes ? WRITE : READ }, messenger),
+          ...outcomeOf(result),
+          startedAt,
+          finishedAt: Date.now(),
+        },
+        caller,
+      ).catch(() => undefined)
       return result
     },
   })

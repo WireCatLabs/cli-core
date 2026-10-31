@@ -26,7 +26,7 @@ export interface Fact {
   ref: string
   type: (typeof FACT_TYPES)[number]
   statement: string
-  /** Every fact is proposed or accepted; only a decision is also superseded or reversed. */
+  /** Proposed, then accepted or rejected; a correction supersedes it; only a decision is reversed. */
   status: (typeof FACT_STATUSES)[number]
   project: string | null
   subject: string | null
@@ -56,7 +56,7 @@ export interface FactInput {
   occurredAt?: string
   evidence?: string[]
   scope?: Fact["scope"] & string
-  /** A decision only: the decision this one replaces, `superseded` once this one is accepted. */
+  /** The proposed or accepted fact this one corrects, `superseded` once this one is accepted. */
   supersedes?: string
   /** The memory an agent drew it from: a `created-from` link. */
   createdFrom?: string
@@ -72,7 +72,7 @@ export interface FactsStore {
     status?: Fact["status"]
     limit?: number
   }): Promise<Fact[]>
-  /** The owner accepts a proposed fact; a decision it supersedes stops holding. */
+  /** The owner accepts a proposed fact; the fact it supersedes stops holding. */
   accept(reference: string): Promise<Fact>
   /** An accepted decision no longer holds and nothing replaced it. */
   reverse(reference: string): Promise<Fact>
@@ -134,7 +134,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
   const accept = (id: number) => {
     const row = database.prepare("SELECT * FROM facts WHERE id = ?").get(id) as Row
     if (row.status !== "proposed" && row.status !== "accepted")
-      throw new CliError("validation_error", `a ${String(row.status)} decision cannot be accepted`)
+      throw new CliError("validation_error", `a ${String(row.status)} fact cannot be accepted`)
     const { actor } = authorActor(context, "owner")
     const at = now()
     database
@@ -144,7 +144,9 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       .run(actor.type, actor.id, at, id)
     if (row.supersedes_id != null)
       database
-        .prepare("UPDATE facts SET status = 'superseded', updated_at = ? WHERE id = ? AND status = 'accepted'")
+        .prepare(
+          "UPDATE facts SET status = 'superseded', updated_at = ? WHERE id = ? AND status IN ('proposed', 'accepted')",
+        )
         .run(at, Number(row.supersedes_id))
   }
 
@@ -158,16 +160,17 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       const occurredAt = input.occurredAt === undefined ? null : calendarMoment(input.occurredAt, "occurredAt")
       if (occurredAt !== null && !Number.isFinite(occurredAt))
         throw new CliError("validation_error", "occurredAt takes an ISO timestamp")
-      if (input.supersedes !== undefined && type !== "decision")
-        throw new CliError("validation_error", "only a decision supersedes another")
       const id = write(database, () => {
         const project = input.project === undefined ? undefined : requiredThing(database, input.project, "the project")
         if (project && project.type !== "project")
           throw new CliError("validation_error", `${input.project} is not a project`)
         const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
         const replaced = input.supersedes === undefined ? undefined : rowOf(input.supersedes)
-        if (replaced && replaced.type !== "decision")
-          throw new CliError("validation_error", `${input.supersedes} is not a decision`)
+        if (replaced && replaced.status !== "proposed" && replaced.status !== "accepted")
+          throw new CliError(
+            "validation_error",
+            `${input.supersedes} is ${String(replaced.status)}; only a proposed or accepted fact can be corrected`,
+          )
         const owner = input.by === "owner"
         const { actor, model } = authorActor(context, input.by)
         const at = now()

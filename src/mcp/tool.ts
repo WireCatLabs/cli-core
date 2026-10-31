@@ -24,7 +24,7 @@ import { type AppErrors, failureContext } from "../errors/reasons.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { startRecording } from "../runs/recording.js"
 import { newRunId } from "../runs/run.js"
-import { keepsSuccess, runContextOf } from "../runs/run-context.js"
+import { keepsSuccess, type RunCaller, runContextOf } from "../runs/run-context.js"
 import { inRun } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
 import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
@@ -188,7 +188,7 @@ export interface Registration {
   /** A host's permission scope encloses local reads and online calls alike. */
   around?: <T>(name: string, definition: AnyTool, work: () => Promise<T>) => Promise<T>
   /** Keeps one audit row per call — tool, tier, outcome, times — never the arguments or the answer. */
-  log?: (call: ToolCall) => Promise<void>
+  log?: (call: ToolCall, caller: RunCaller | undefined) => Promise<void>
   /** The CLI's commands, by which an answer's next steps are judged safe to run unasked. */
   targets?: NonNullable<StepInput["targets"]>
   /** How a call's caller is worked out on this connection (`callerOf`); without it the environment's agent is kept. */
@@ -354,13 +354,16 @@ export const entryRunner = (registration: Registration): RunEntry => {
       } else await recording.succeed(result.structuredContent).catch(() => undefined)
     }
     // The audit row must not cost the agent its answer: a store that cannot be written is not this call's failure.
-    await log?.({
-      tool: key,
-      tier: tierOf(key, definition, registration.messenger),
-      ...outcomeOf(result),
-      startedAt,
-      finishedAt: Date.now(),
-    })?.catch(() => undefined)
+    await log?.(
+      {
+        tool: key,
+        tier: tierOf(key, definition, registration.messenger),
+        ...outcomeOf(result),
+        startedAt,
+        finishedAt: Date.now(),
+      },
+      caller,
+    )?.catch(() => undefined)
     return result
   }
 }

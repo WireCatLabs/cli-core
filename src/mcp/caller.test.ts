@@ -1,7 +1,7 @@
 import { CLIENT_INFO_META_KEY } from "@modelcontextprotocol/server"
 import { describe, expect, it } from "vitest"
 import { clientHash, keepsSuccess, runContextOf } from "../runs/run-context.js"
-import { CALLER_META_KEY, callerOf, PROXY_CLIENT_NAME } from "./caller.js"
+import { CALLER_META_KEY, callerOf, callingAgent, PROXY_CLIENT_NAME } from "./caller.js"
 
 const claude = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "synthetic-session" }
 const stdio = { env: claude, client: () => ({ name: "claude-code", version: "2.1" }), connectionId: "conn-1" }
@@ -91,5 +91,18 @@ describe("keepsSuccess", () => {
 
   it("keeps an MCP call's success even on a server WireCat Desktop started", () => {
     expect(keepsSuccess({ record: true, fromFlag: false, env: desktop, caller: { via: "mcp-http" } })).toBe(true)
+  })
+})
+
+describe("callingAgent", () => {
+  it("names the client, else the agent that started a stdio server, else the server", () => {
+    const named = (client?: { name: string }) =>
+      callingAgent("tg-mcp", callerOf(undefined, "t", { env: claude, ...(client ? { client: () => client } : {}) }))
+    expect(named({ name: "hermes" })).toBe("hermes")
+    expect(named()).toBe("claude-code")
+    expect(callingAgent("tg-mcp", callerOf(undefined, "t", { env: {}, client: () => ({ name: "$bad" }) }))).toBe(
+      "tg-mcp",
+    )
+    expect(callingAgent("tg-mcp", undefined)).toBe("tg-mcp")
   })
 })
