@@ -32,7 +32,7 @@ shape of this file.
   10,000 (`TOTAL_CAP`, Elasticsearch's default), and a query whose leaves are checked row by row (a preset, a
   pattern) gets the lower bound the page proves. New: `SearchTotal`, `NotesFound.total`, `SearchFound.total`,
   `NoteSearch.matchingRefs` (refs only, no note read), `NoteSearch.scoreNotes` and `QueriesStore.countMatches`;
-  `listOf` takes `total`.
+  `listOf` takes `total`, and `shownOf(shown, offset, total)` from `@wirecat/cli-core/cli` writes the terminal line.
 
 ### Changed — may break callers
 
