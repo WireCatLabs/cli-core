@@ -13,8 +13,12 @@ shape of this file.
   `--context-query`. Without the rows, `cli-core-parity` failed max and tg once they mounted `projectsCommand` from
   0.504.0. All three are marked planned, so the check passes with or without the command; a follow-up marks max and
   tg as having it once tg-cli#798 and max-cli#886 are merged.
+- **A long fill or rebuild in one process no longer makes another process's write fail with "database is locked".**
+  `writeBatch` pauses 2 ms after each batch it commits. Without the pause, the next batch took the lock again within
+  microseconds, and a write waiting in another process (a command run during `store rebuild` or a migration's fill)
+  could miss every gap until its 5 s wait ran out.
 
-## 0.504.0 — 31.10.2026
+## 0.505.0 — 31.10.2026
 
 ### Added
 
@@ -26,6 +30,19 @@ shape of this file.
   read); a throw there is `ok: false` with `error_code` and `error`, never a failed command. `version` comes from npm
   (the `latestVersion` that `upgrade` uses) when the CLI passes the new `AppDoctorOptions.packageName`; without it that
   check is left out. The command's effects are now `REMOTE_READ`, as the messenger's.
+
+### Fixed
+
+- **A forgotten memory's or fact's number is never given to a new one.** SQLite gave the next row the highest id + 1,
+  so after `memories.remove` or `facts.remove` of the newest record, the next one took its number and a stale
+  `memory:N` or `fact:N` named it. A remove now keeps the highest id handed out in `store_settings`
+  (`ids.memories.highest`, `ids.facts.highest`), and new memories and facts, restored project facts included, take
+  the next id above it. No schema change.
+
+## 0.504.0 — 31.10.2026
+
+### Added
+
 - **`projects evidence --sync-first` in messenger CLIs: `projectsCommand(messenger)`.** A CLI
   that mounts it reads a project's evidence from its profile's stored messages; `--sync-first` (off by default, not on
   MCP) first syncs the project's linked chats the store does not hold back to `--since-time`, within `--sync-time`
