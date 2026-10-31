@@ -153,6 +153,8 @@ export interface WorkTasks extends TaskRelationsStore {
   events(id: string): Promise<TaskEvent[]>
   /** The owner's project tasks, every project at once, narrowed by a query over `PROJECT_TASK_FIELDS`. */
   board(query: QueryAst | undefined, options: BoardOptions): Promise<{ items: TaskDetails[]; total: number }>
+  /** The owner and everyone who holds a role on a live task, by name: who the board offers to assign. */
+  taskPeople(): Promise<{ person: string; name: string | null; owner: boolean; tasks: number }[]>
   /** Each count leaves out the query's own terms on that field, so a chosen project does not hide the others. */
   boardCounts(query: QueryAst | undefined, options?: Pick<BoardOptions, "zone">): Promise<BoardCounts>
   /**
@@ -607,6 +609,21 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         state: TASK_STATES.map((value) => ({ value, count: states.get(value) ?? 0 })),
       }
     },
+    taskPeople: async () =>
+      database
+        .prepare(
+          "SELECT p.id, p.name, p.owner, count(DISTINCT t.id) AS n FROM persons p " +
+            "LEFT JOIN task_assignments a ON a.assignee_type = 'person' AND a.assignee_id = p.id " +
+            "LEFT JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL " +
+            "WHERE p.owner = 1 OR t.id IS NOT NULL GROUP BY p.id ORDER BY p.owner DESC, p.name COLLATE NOCASE, p.id",
+        )
+        .all()
+        .map((row) => ({
+          person: `person:${row.id}`,
+          name: row.name == null ? null : String(row.name),
+          owner: Number(row.owner) === 1,
+          tasks: Number(row.n),
+        })),
     events: async (id) =>
       database
         .prepare(

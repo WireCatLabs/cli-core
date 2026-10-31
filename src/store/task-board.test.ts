@@ -131,4 +131,15 @@ describe("the task board", () => {
       { value: null, count: 1 },
     ])
   })
+
+  it("offers the owner and everyone who holds a role on a task", async () => {
+    const { store, add } = await board()
+    const task = await add("HRB", "A")
+    await store.tasks.assign(task.id, { to: "person:22", role: "reviewer" }, "owner")
+    const people = await store.tasks.taskPeople()
+    expect(people.find(({ owner }) => owner)).toMatchObject({ tasks: 0 })
+    expect(people.filter(({ owner }) => !owner)).toEqual([
+      { person: "person:22", name: "Kai Sample", owner: false, tasks: 1 },
+    ])
+  })
 })

@@ -21,6 +21,7 @@ shape of this file.
   ranges, `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
   (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
   hold each project, assignee, priority and state, each without the query's own terms on that field.
+- **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
 - **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
 
 ### Changed — may break callers
