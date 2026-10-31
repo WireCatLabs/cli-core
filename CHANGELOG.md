@@ -32,6 +32,8 @@ shape of this file.
   whole list the provider answered, as `[query...]` after the options
   ([WC-CMD-20](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-20--give-a-list-one-query-over-its-entitys-fields-as-its-last-argument)).
   `events list` keeps its words for now.
+- **The shared `config show --json` names the profile's `kind`, `permissions` and `permission_sources` at the top**,
+  as a messenger's own `config show` does, so an agent reads one shape from every CLI.
 
 ### Changed — may break callers
 
@@ -54,6 +56,13 @@ shape of this file.
 - **A group given no subcommand points a script at its own help.** In machine mode `tg chats` answered "run `tg
   --help` for the commands"; it now says `tg chats --help`
   ([WC-CMD-3](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-3--give-a-group-without-a-leaf-only-its-help-never-a-hidden-default-action)).
+- **A CLI that is not a messenger (`messenger: false`) no longer shows `config show --bot` or `config set|unset
+  --personal|--bot`.** Only a messenger has bots, and with them the file's personal and bot sections; a calendar or
+  notes CLI listed the options in its help, `commands --json` and its MCP tools with nothing behind them. They are
+  hidden there and still accepted, so a script that passes one keeps working.
+- **`config show` with moved folders no longer says a session made without them reads as none.** That was true
+  before cli-base 0.65.5; a moved run now reads the usual keyring entry, and keeps a sign-in it makes in a temporary
+  entry that `session end` removes. The note says so.
 
 ## 0.496.0 — 31.10.2026
 
