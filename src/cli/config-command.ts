@@ -34,51 +34,59 @@ export const configCommand = (
 ): Command => {
   const command = new Command("config").description("the settings in force, and where each one came from")
 
-  annotate(command.command("show"), { effects: LOCAL_READ, examples: [`${app.command} personal config show`] })
-    .description("the profile, the profiles that exist, and each setting with where it came from")
-    .option("--bot", "the settings a bot command on this profile gets, rather than the personal account's")
-    .action(async function (this: Command) {
-      const bot = this.opts<{ bot?: boolean }>().bot === true
-      const context = baseContext(this, (flags, options) =>
-        config.resolveSettings(flags, {
-          ...options,
-          needsProfile: false,
-          withIssues: true,
-          ...(bot ? { kind: "bot" } : {}),
-        }),
-      )
-      const { settings, renderer, env } = context
-      const overridden = pathsAreOverridden({ appName: app.appName, prefix: app.envPrefix, env })
+  // Only a messenger has bots, and with them the personal and bot sections of the file.
+  const bots = app.messenger !== false
+  const show = annotate(command.command("show"), {
+    effects: LOCAL_READ,
+    examples: [`${app.command} personal config show`],
+  }).description("the profile, the profiles that exist, and each setting with where it came from")
+  if (bots) show.option("--bot", "the settings a bot command on this profile gets, rather than the personal account's")
+  show.action(async function (this: Command) {
+    const bot = this.opts<{ bot?: boolean }>().bot === true
+    const context = baseContext(this, (flags, options) =>
+      config.resolveSettings(flags, {
+        ...options,
+        needsProfile: false,
+        withIssues: true,
+        ...(bot ? { kind: "bot" } : {}),
+      }),
+    )
+    const { settings, renderer, env } = context
+    const overridden = pathsAreOverridden({ appName: app.appName, prefix: app.envPrefix, env })
 
-      renderAnswer(
-        this,
-        context,
-        itemOf({
-          profile: settings.sources.profile === NONE_NAMED ? null : settings.profile,
-          profile_from: settings.sources.profile,
-          profiles: settings.profilesHere,
-          config_file: settings.configPath,
-          config_found: settings.configFound,
-          paths_overridden: overridden,
-          settings: [...config.allSettings, "command_timeout_ms"]
-            .filter((setting) => bot || setting !== "read_other_bots")
-            .map((setting) => sourced(settings, setting)),
-          store_settings: await storeSettings(env),
-        }),
-      )
+    renderAnswer(
+      this,
+      context,
+      itemOf({
+        profile: settings.sources.profile === NONE_NAMED ? null : settings.profile,
+        profile_from: settings.sources.profile,
+        kind: settings.kind,
+        permissions: settings.permissions,
+        permission_sources: settings.permissionSources,
+        profiles: settings.profilesHere,
+        config_file: settings.configPath,
+        config_found: settings.configFound,
+        paths_overridden: overridden,
+        settings: [...config.allSettings, "command_timeout_ms"]
+          .filter((setting) => bot || setting !== "read_other_bots")
+          .map((setting) => sourced(settings, setting)),
+        store_settings: await storeSettings(env),
+      }),
+    )
 
-      for (const issue of [
-        ...(settings.configIssues ?? []),
-        ...unknownPermissionIssues(this, settings, app.command, permissionKey),
-      ])
-        renderer.warn(`${issue.what}, so it is left out${issue.fix ? ` — \`${issue.fix}\` removes it` : ""}`)
-      if (overridden) {
-        renderer.note(
-          `${envName(app, "CONFIG_DIR")}, ${envName(app, "STATE_DIR")} or ${envName(app, "CACHE_DIR")} is set — ` +
-            "a profile's keyring entry is not the usual one, so a session made without them reads as none",
-        )
-      }
-    })
+    for (const issue of [
+      ...(settings.configIssues ?? []),
+      ...unknownPermissionIssues(this, settings, app.command, permissionKey),
+    ])
+      renderer.warn(`${issue.what}, so it is left out${issue.fix ? ` — \`${issue.fix}\` removes it` : ""}`)
+    if (overridden) {
+      renderer.note(
+        `${envName(app, "CONFIG_DIR")}, ${envName(app, "STATE_DIR")} or ${envName(app, "CACHE_DIR")} is set — ` +
+          "a session is still read from the usual keyring entry, but a sign-in made with them is kept apart, in a " +
+          "temporary entry that session end removes",
+      )
+    }
+  })
 
   for (const action of ["set", "unset"] as const) {
     const sub = grantsAuthority(
@@ -89,8 +97,10 @@ export const configCommand = (
     )
       .argument("<setting>", `one of: ${[...config.allSettings, ...storeSettingsOf(app)].join(", ")}`)
       .option("--defaults", "change what every profile gets, rather than this profile")
-      .option("--personal", "only for personal accounts — the personal section of the file")
-      .option("--bot", "only for bots — the bot section of the file")
+    if (bots)
+      sub
+        .option("--personal", "only for personal accounts — the personal section of the file")
+        .option("--bot", "only for bots — the bot section of the file")
     if (action === "set")
       sub
         .argument("<value>", "a number, true or false; for a group tg:work,max:Alice,email:me@x")
