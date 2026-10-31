@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import type { Missing } from "@wirecat/cli-base/standards"
 import { recalledAccount } from "../cli/messenger/accounts.js"
 import type { Messenger } from "../cli/messenger/context.js"
@@ -139,7 +139,11 @@ export const hearForTool = async (
   connect: <T>(work: (adapter: MessengerAdapter) => Promise<T>) => Promise<T>,
   messages: readonly Message[],
   transcribe: boolean,
-  { settings, env }: { settings: Pick<Settings, "configured" | "shared" | "profile">; env: NodeJS.ProcessEnv },
+  {
+    settings,
+    env,
+    keyring,
+  }: { settings: Pick<Settings, "configured" | "shared" | "profile">; env: NodeJS.ProcessEnv; keyring?: KeyringStore },
   model?: string,
 ): Promise<Hearing | undefined> => {
   if (!messages.some(hasAudio)) return undefined
@@ -151,7 +155,7 @@ export const hearForTool = async (
       kept,
       transcribe
         ? {
-            choice: choose(messenger, settings, model === undefined ? {} : { model }, env),
+            choice: choose(messenger, settings, model === undefined ? {} : { model }, env, keyring),
             connect,
           }
         : undefined,

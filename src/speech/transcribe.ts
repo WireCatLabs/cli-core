@@ -41,9 +41,11 @@ export interface Choice {
   /** The profile's `transcribeModel` for `openai`, else `gpt-transcribe`. */
   transcribeModel?: string
   apiKey?: string
-  /** Why `openai` cannot run here: no key, or a read-only process. Thrown before anything is fetched. */
+  /** Why nothing can be heard: an unknown `transcribeWith`, or for `openai` no key or a read-only process. */
   refusal?: CliError
   fetch?: (url: string, init: RequestInit) => Promise<Response>
+  /** The command's own cancel and deadline, for a request that leaves the machine. */
+  signal?: AbortSignal
 }
 
 /** A voice note, or an audio file someone sent — an iPhone recording reaches WhatsApp as `audio/mp4`. */
@@ -63,14 +65,22 @@ export const choose = (
     flags.local || flags.model !== undefined
       ? "local"
       : (flags.with ?? fromFile<TranscribeWith>(settings, "transcribeWith", "auto").value)
-  if (!TRANSCRIBE_WITH.includes(chosen))
-    throw new CliError("validation_error", `transcribeWith is one of ${TRANSCRIBE_WITH.join(", ")}`)
+  // Refused only where something is heard: `models list` reads the same profile for its model alone.
+  const known = TRANSCRIBE_WITH.includes(chosen)
   return {
     directory: modelsDirectory(env),
-    with: chosen,
+    with: known ? chosen : "auto",
+    ...(known
+      ? {}
+      : {
+          refusal: new CliError(
+            "validation_error",
+            `the profile's transcribeWith is one of ${TRANSCRIBE_WITH.join(", ")}`,
+          ),
+        }),
     model: model === undefined ? (orderedModels(messenger.speechModels)[0] as SpeechModel) : speechModel(model),
     transcribeModel: fromFile<string>(settings, "transcribeModel", OPENAI_TRANSCRIBE_MODEL).value,
-    ...(chosen === "openai" ? openaiAccess(messenger, env, keyring) : {}),
+    ...(known && chosen === "openai" ? openaiAccess(messenger, env, keyring) : {}),
   }
 }
 
@@ -153,7 +163,10 @@ export const hearLocally = async (bytes: Uint8Array, messageId: string, choice: 
         apiKey: choice.apiKey ?? "",
         model: transcribeModel,
         vadModel: vadPath(directory),
+        // A voice message wants its text, not its turns: one request, and no voice detector needed.
+        bundle: true,
         ...(choice.fetch ? { fetch: choice.fetch } : {}),
+        ...(choice.signal ? { signal: choice.signal } : {}),
       },
     )
     return {

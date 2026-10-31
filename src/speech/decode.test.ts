@@ -23,20 +23,21 @@ describe("decoding audio for the model", () => {
   })
 
   it("**keeps each channel of a stereo call apart**, and hands the first to callers that want one", async () => {
-    const channels = await decodeChannels(fixture("stereo.mp3"), refusing)
+    const { channels, mixed } = await decodeChannels(fixture("dialogue.mp3"), refusing)
     const loudness = (samples: Float32Array) => Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length)
 
-    expect(channels).toHaveLength(2)
+    expect([channels.length, mixed]).toEqual([2, false])
     const [left, right] = channels.map(({ samples }) => samples) as [Float32Array, Float32Array]
     expect(left.length).toBe(right.length)
-    expect(loudness(left.map((x, i) => x - (right[i] ?? 0)))).toBeGreaterThan(0.1)
-    expect((await decodeAudio(fixture("stereo.mp3"), refusing)).samples).toEqual(left)
+    expect(loudness(left.map((x, i) => x - (right[i] ?? 0)))).toBeGreaterThan(0.01)
+    expect((await decodeAudio(fixture("dialogue.mp3"), refusing)).samples).toEqual(left)
   })
 
-  it("gets one mixed channel from ffmpeg", async () => {
+  it("**says when ffmpeg mixed the channels into one**", async () => {
     const ffmpeg = vi.fn(async () => ({ samples: new Float32Array(SAMPLE_RATE), rate: SAMPLE_RATE }))
 
-    expect(await decodeChannels(fixture("tone.aac"), ffmpeg)).toHaveLength(1)
+    expect(await decodeChannels(fixture("tone.aac"), ffmpeg)).toMatchObject({ mixed: true, channels: [{}] })
+    expect((await decodeChannels(fixture("tone.mp3"), refusing)).mixed).toBe(false)
   })
 
   it("**hands raw AAC to ffmpeg**, though its frames start like MP3's", async () => {

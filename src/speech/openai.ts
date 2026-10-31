@@ -1,7 +1,7 @@
 import { setTimeout as wait } from "node:timers/promises"
 import { backoffMs, CliError, DEFAULT_RETRY, type RetryConfig } from "@wirecat/cli-base"
 import { providerWaitMs } from "@wirecat/cli-base/http"
-import { errorCode, type Fetch, OPENAI_URL } from "../embeddings/remote.js"
+import { type Fetch, OPENAI_URL } from "../embeddings/remote.js"
 import type { Pcm } from "./decode.js"
 import { filesPresent, modelsDirectory, vadPath } from "./install.js"
 import { OPENAI_TRANSCRIBE_MODEL, VAD } from "./models.js"
@@ -14,13 +14,25 @@ import { encodeWav } from "./wav.js"
  */
 export const LONGEST_REQUEST_SECONDS = 600
 
-/** Speech the detector cut only because it ran past 20 seconds, with no pause between: never a place to split. */
-const JOINED_SECONDS = 0.05
+/**
+ * The detector cuts speech that runs past 20 seconds with no pause; on real speech that cut left 0.074 s between the
+ * two stretches, and the shortest real pause it found was 0.43 s. Below this the two are one stretch, cut mid-word.
+ */
+const JOINED_SECONDS = 0.2
 
 /** Kept around each piece so its first and last sounds are not clipped; never reaches into the next piece. */
 const PAD_SECONDS = 0.2
 
 const LEAD = SAMPLE_RATE / 2
+
+/** OpenAI's codes for money or limits run out (error-codes guide, read 2026-10-31): waiting does not help. */
+const EXHAUSTED = new Set([
+  "insufficient_quota",
+  "credit_balance_exhausted",
+  "organization_spend_limit_exceeded",
+  "project_spend_limit_exceeded",
+  "organization_usage_limit_exceeded",
+])
 
 export interface OpenAITranscription {
   apiKey: string
@@ -29,16 +41,18 @@ export interface OpenAITranscription {
   /** ISO-639-1 codes the speech may be in. Sent as `languages`; the singular `language` is never sent with it. */
   languages?: readonly string[]
   prompt?: string
+  /** Literal terms expected in the speech; OpenAI refuses the whole request if one holds `<`, `>` or a line break. */
   keywords?: readonly string[]
   baseUrl?: string
   signal?: AbortSignal
   fetch?: Fetch
   /**
-   * Cut at pauses into pieces of at most this many seconds, each sent alone, so each piece has its own time: what
-   * merging two channels into a dialogue needs. Without it a recording of up to ten minutes goes in one request.
+   * Fewer, longer requests for a caller that wants the text and not the turns: a recording of up to ten minutes in
+   * one request, a longer one in pieces of up to ten minutes joined across pauses. Each piece then spans the silence
+   * between its utterances, so two channels heard this way do not merge into a dialogue.
    */
-  pieceSeconds?: number
-  /** The voice detector model, needed whenever the audio is cut; the shared models directory's when not given. */
+  bundle?: boolean
+  /** The voice detector model; the shared models directory's when not given. */
   vadModel?: string
   env?: NodeJS.ProcessEnv
   /** Seams for tests: the detector, the retry policy and the clock. */
@@ -50,6 +64,13 @@ export interface OpenAITranscription {
 
 const RETRY: RetryConfig = { ...DEFAULT_RETRY, retries: 4 }
 
+const interrupted = (signal?: AbortSignal): void => {
+  if (!signal?.aborted) return
+  if (signal.reason instanceof CliError) throw signal.reason
+  const timeout = signal.reason instanceof Error && signal.reason.name === "TimeoutError"
+  throw new CliError(timeout ? "timeout" : "cancelled", "the transcription was interrupted")
+}
+
 const sleeping = (ms: number, signal?: AbortSignal): Promise<void> =>
   wait(ms, undefined, signal ? { signal } : {}).then(
     () => undefined,
@@ -58,13 +79,6 @@ const sleeping = (ms: number, signal?: AbortSignal): Promise<void> =>
       throw error
     },
   )
-
-const interrupted = (signal?: AbortSignal): void => {
-  if (!signal?.aborted) return
-  if (signal.reason instanceof CliError) throw signal.reason
-  const timeout = signal.reason instanceof Error && signal.reason.name === "TimeoutError"
-  throw new CliError(timeout ? "timeout" : "cancelled", "the transcription was interrupted")
-}
 
 const formOf = (wav: Uint8Array, options: OpenAITranscription): FormData => {
   const form = new FormData()
@@ -75,6 +89,21 @@ const formOf = (wav: Uint8Array, options: OpenAITranscription): FormData => {
   for (const keyword of options.keywords ?? []) form.append("keywords[]", keyword)
   if (options.prompt) form.append("prompt", options.prompt)
   return form
+}
+
+const safe = (value: unknown): string | undefined =>
+  typeof value === "string" && /^[\w.-]{1,64}$/.test(value) ? value : undefined
+
+/** OpenAI's error code and type, never its message: a message can quote the request. */
+const failureOf = async (response: Response): Promise<{ code?: string; type?: string }> => {
+  try {
+    const body = (await response.json()) as { error?: { code?: unknown; type?: unknown } }
+    const code = safe(body.error?.code)
+    const type = safe(body.error?.type)
+    return { ...(code ? { code } : {}), ...(type ? { type } : {}) }
+  } catch {
+    return {}
+  }
 }
 
 /** One file, one request. 429, 408 and server errors are tried again; the provider's `Retry-After` beats our backoff. */
@@ -102,25 +131,38 @@ const send = async (wav: Uint8Array, options: OpenAITranscription): Promise<stri
       continue
     }
     if (response.ok) {
-      const body = (await response.json().catch(() => undefined)) as { text?: unknown } | undefined
+      const body = (await response.json().catch(() => interrupted(options.signal))) as { text?: unknown } | undefined
       if (typeof body?.text !== "string")
         throw new CliError("invalid_response", "OpenAI answered without a transcript", {
           reason: "provider.invalid-response",
         })
       return body.text.trim()
     }
-    const code = await errorCode(response)
+    const { code, type } = await failureOf(response)
     const status = response.status
-    if (status === 401 || status === 403)
+    const said = `HTTP ${status}${code ? `, ${code}` : type ? `, ${type}` : ""}`
+    if (status === 401)
       throw new CliError(
         "authentication_error",
-        `OpenAI refused the key (HTTP ${status}${code}) — set it again with \`models keys set openai\``,
+        `OpenAI refused the key (${said}) — set it again with \`models keys set openai\``,
         { reason: "auth.failed" },
       )
+    if (status === 403)
+      throw new CliError(
+        "permission_error",
+        `OpenAI refused the request (${said}) — it answers this when the country or region is not supported, or the key's project may not use the model`,
+        { reason: "access.denied" },
+      )
     if (status === 413)
-      throw new CliError("validation_error", `OpenAI refused the audio as too large (HTTP 413${code})`, {
+      throw new CliError("validation_error", `OpenAI refused the audio as too large (${said})`, {
         reason: "transcription.too-large",
       })
+    if (EXHAUSTED.has(code ?? "") || EXHAUSTED.has(type ?? ""))
+      throw new CliError(
+        "permission_error",
+        `OpenAI refused: the account's credit, spend limit or usage limit is used up (${said}) — see the billing page`,
+        { reason: "transcription.quota-exhausted" },
+      )
     const again = status === 408 || status === 429 || status >= 500
     const asked = providerWaitMs(response.headers, () => new Date())
     if (again && attempt <= retry.retries && (asked === undefined || asked <= retry.maxRetryAfterMs)) {
@@ -128,27 +170,31 @@ const send = async (wav: Uint8Array, options: OpenAITranscription): Promise<stri
       continue
     }
     if (status === 429)
-      throw new CliError("rate_limited", `OpenAI answered HTTP 429${code}`, {
+      throw new CliError("rate_limited", `OpenAI answered ${said}`, {
         reason: "provider.rate-limited",
         ...(asked === undefined ? {} : { retry_after_ms: asked }),
       })
     if (status >= 500)
       throw new CliError(
         [502, 503, 504].includes(status) ? "provider_unavailable" : "provider_error",
-        `OpenAI answered HTTP ${status}${code}`,
+        `OpenAI answered ${said}`,
         { reason: [502, 503, 504].includes(status) ? "provider.unavailable" : "provider.refused" },
       )
-    throw new CliError("provider_error", `OpenAI answered HTTP ${status}${code}`, { reason: "provider.refused" })
+    throw new CliError("provider_error", `OpenAI answered ${said}`, { reason: "provider.refused" })
   }
 }
 
-/** Neighbouring stretches of speech, joined while the piece stays within `limit`; a stretch longer than it stays alone. */
-export const piecesOf = (spans: readonly { start: number; end: number }[], limit: number) => {
+/**
+ * Each stretch of speech the detector found is a piece of its own: on one channel of a call, a pause is often the
+ * other person talking. Two stretches the detector split without a pause stay one. With `limit`, neighbours are also
+ * joined across pauses while the piece stays within it.
+ */
+export const piecesOf = (spans: readonly { start: number; end: number }[], limit?: number) => {
   const pieces: { start: number; end: number }[] = []
   for (const span of spans) {
     const last = pieces.at(-1)
     const joined = last !== undefined && span.start - last.end < JOINED_SECONDS
-    const fits = last !== undefined && span.end - last.start <= limit
+    const fits = last !== undefined && limit !== undefined && span.end - last.start <= limit
     if (last && (fits || (joined && span.end - last.start <= LONGEST_REQUEST_SECONDS))) last.end = span.end
     else pieces.push({ start: span.start, end: span.end })
   }
@@ -160,23 +206,30 @@ const openCutter = async (vadModel: string): Promise<SpeechCutter> => {
   return openSpeechCutter(vadModel)
 }
 
+const checkKeywords = (keywords: readonly string[] = []): void => {
+  const bad = keywords.find((keyword) => typeof keyword !== "string" || !keyword.trim() || /[<>\r\n]/.test(keyword))
+  if (bad !== undefined)
+    throw new CliError(
+      "validation_error",
+      "a keyword must be a non-empty single line without < or > — OpenAI refuses the whole request otherwise",
+    )
+}
+
 /**
- * Speech to text by OpenAI's `/audio/transcriptions`, from one channel's samples. The answer is the recording's
- * pieces with their times: one piece for a recording sent whole, or one per piece the voice detector cut at pauses —
- * when `pieceSeconds` asks for it, or when the recording is longer than `LONGEST_REQUEST_SECONDS`. A piece is never cut mid-word.
- * `gpt-transcribe` gives no timestamps of its own, so a piece's time is where the detector found it.
+ * Speech to text by OpenAI's `/audio/transcriptions`, from one channel's samples: one piece per stretch of speech the
+ * voice detector found, each sent alone, with where it lies in seconds. Two channels heard this way merge into a
+ * dialogue by `start`. `gpt-transcribe` gives no timestamps of its own, so the times are the detector's.
  */
 export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription): Promise<TimedText[]> => {
   if (!options.apiKey)
     throw new CliError("authentication_error", "no OpenAI key — `models keys set openai`, or OPENAI_API_KEY", {
       reason: "transcription.no-key",
     })
-  if (options.pieceSeconds !== undefined && !(options.pieceSeconds > 0))
-    throw new CliError("validation_error", "pieceSeconds must be a positive number of seconds")
+  checkKeywords(options.keywords)
   interrupted(options.signal)
   const pcm = toModelRate(audio.samples, audio.rate)
   const duration = (pcm.length - LEAD) / SAMPLE_RATE
-  if (options.pieceSeconds === undefined && duration <= LONGEST_REQUEST_SECONDS) {
+  if (options.bundle && duration <= LONGEST_REQUEST_SECONDS) {
     const text = await send(encodeWav(pcm.subarray(LEAD)), options)
     return text ? [{ start: 0, end: duration, text }] : []
   }
@@ -184,7 +237,7 @@ export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription)
   if (!options.cutter && !filesPresent([[VAD, vadModel]]))
     throw new CliError(
       "not_found",
-      "the voice detector that cuts long audio at pauses is not on this machine — it comes with any speech model: `models download`",
+      "the voice detector that finds the speech is not on this machine — it comes with any speech model: `models download`",
       { reason: "model.not-downloaded", model: "silero_vad" },
     )
   const cutter = await (options.cutter ?? openCutter)(vadModel)
@@ -194,14 +247,15 @@ export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription)
   } finally {
     cutter.free()
   }
-  const pieces = piecesOf(spans, Math.min(options.pieceSeconds ?? LONGEST_REQUEST_SECONDS, LONGEST_REQUEST_SECONDS))
+  const pieces = piecesOf(spans, options.bundle ? LONGEST_REQUEST_SECONDS : undefined)
   const heard: TimedText[] = []
   for (const [index, piece] of pieces.entries()) {
+    const end = Math.min(piece.end, duration)
     const from = Math.max(piece.start - PAD_SECONDS, pieces[index - 1]?.end ?? 0)
-    const to = Math.min(piece.end + PAD_SECONDS, pieces[index + 1]?.start ?? duration)
+    const to = Math.min(end + PAD_SECONDS, pieces[index + 1]?.start ?? duration)
     const samples = pcm.subarray(LEAD + Math.floor(from * SAMPLE_RATE), LEAD + Math.ceil(to * SAMPLE_RATE))
     const text = await send(encodeWav(samples), options)
-    if (text) heard.push({ start: piece.start, end: piece.end, text })
+    if (text) heard.push({ start: Math.min(piece.start, end), end, text })
   }
   return heard
 }

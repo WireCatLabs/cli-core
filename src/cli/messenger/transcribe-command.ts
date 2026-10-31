@@ -12,6 +12,7 @@ import {
   keptSource,
   notDownloaded,
 } from "../../speech/transcribe.js"
+import { environmentOf } from "../context.js"
 import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -44,6 +45,7 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
           context.keyring,
         ),
         ...(context.recognizer ? { open: context.recognizer } : {}),
+        ...signalOf(this),
       }
       // Before connecting: a missing model or OpenAI key should not cost a login.
       if (choice.refusal) throw choice.refusal
@@ -81,3 +83,9 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
       }
       renderAnswer(this, context, heardAnswer(heard, chatId), () => `${heard.text}\n`)
     })
+
+const signalOf = (command: Command): { signal?: AbortSignal } => {
+  const { signal, commandSignal } = environmentOf(command)
+  const signals = [signal, commandSignal].filter((one): one is AbortSignal => one !== undefined)
+  return signals.length ? { signal: AbortSignal.any(signals) } : {}
+}

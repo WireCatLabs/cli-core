@@ -22,8 +22,11 @@ export interface MeetingRecognitionSegment {
   startMs: number
   endMs: number
   text: string
-  /** Who spoke, when the source knows — a channel of a two-channel call. Speakers may overlap; one speaker may not. */
-  speaker?: string
+  /**
+   * Who spoke, when the source knows — a channel of a two-channel call. Speakers may overlap; one speaker may not.
+   * Trimmed; `null` is no speaker.
+   */
+  speaker?: string | null
 }
 
 export interface MeetingTranscriptionContext {
@@ -133,12 +136,13 @@ export const transcribeMeeting = async (
     for await (const segment of source.segments(media, context)) {
       cancelled(context.signal)
       provided++
-      const speaker = segment.speaker
+      const given = segment.speaker ?? undefined
       if (
-        speaker !== undefined &&
-        (typeof speaker !== "string" || !speaker.trim() || speaker.length > 200 || /[\0\r\n]/.test(speaker))
+        given !== undefined &&
+        (typeof given !== "string" || !given.trim() || given.length > 200 || /[\0\r\n]/.test(given))
       )
         throw new CliError("invalid_response", "invalid recognition segment speaker")
+      const speaker = given?.trim()
       // Without speakers, nothing may overlap; with them, only one speaker's own segments may not.
       const overlapping =
         speaker === undefined

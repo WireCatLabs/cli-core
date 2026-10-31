@@ -172,26 +172,34 @@ const BUNDLED: Record<Exclude<Format, "other">, (bytes: Uint8Array) => Promise<P
 
 const tooLong = (pcm: Pcm): boolean => pcm.samples.length / pcm.rate > LONGEST_AUDIO_SECONDS
 
+export interface DecodedChannels {
+  channels: Pcm[]
+  /** True when ffmpeg read the file: whatever channels it had arrive mixed into one, so one speaker per channel is lost. */
+  mixed: boolean
+}
+
 /**
  * Every channel the file has, one `Pcm` each: a phone call recorded in stereo keeps one speaker per channel.
- * Only the bundled decoders keep channels apart; what ffmpeg reads arrives mixed down to one.
+ * Only the bundled decoders keep channels apart; what ffmpeg reads arrives mixed down to one, and says so.
  */
-export const decodeChannels = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmpeg): Promise<Pcm[]> => {
+export const decodeChannels = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmpeg): Promise<DecodedChannels> => {
   const format = formatOf(bytes)
-  const channels =
+  const decoded =
     format === "other"
-      ? [await ffmpeg(bytes)]
-      : await BUNDLED[format](bytes).catch((error: unknown) =>
-          ffmpeg(bytes).then(
-            (pcm) => [pcm],
-            () => {
-              throw error
-            },
-          ),
+      ? { channels: [await ffmpeg(bytes)], mixed: true }
+      : await BUNDLED[format](bytes).then(
+          (channels) => ({ channels, mixed: false }),
+          (error: unknown) =>
+            ffmpeg(bytes).then(
+              (pcm) => ({ channels: [pcm], mixed: true }),
+              () => {
+                throw error
+              },
+            ),
         )
-  if (channels.some(tooLong))
+  if (decoded.channels.some(tooLong))
     throw new CliError("validation_error", `the audio is longer than ${LONGEST_AUDIO_SECONDS / 60} minutes`)
-  return channels
+  return decoded
 }
 
 /**
@@ -199,4 +207,4 @@ export const decodeChannels = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmp
  * when the machine has it. The bundled decoder's error wins: it names the file's own problem. The first channel only.
  */
 export const decodeAudio = async (bytes: Uint8Array, ffmpeg: Ffmpeg = runFfmpeg): Promise<Pcm> =>
-  (await decodeChannels(bytes, ffmpeg))[0] as Pcm
+  (await decodeChannels(bytes, ffmpeg)).channels[0] as Pcm

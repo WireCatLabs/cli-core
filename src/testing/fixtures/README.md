@@ -33,16 +33,18 @@ ffmpeg -i tone.ogg -ac 1 -c:a libvorbis -q:a 0 -map_metadata -1 tone.vorbis.ogg
 ffmpeg -i tone.ogg -ac 1 -c:a aac -b:a 32k -f adts -map_metadata -1 tone.aac
 ```
 
-## `stereo.mp3`
+## `dialogue.mp3`
 
-One second of a two-channel MP3 at 8 kHz — a 440 Hz tone on the left, pink noise on the right — the shape of a
-recorded phone call with one speaker per channel, for the channel test in `src/speech/decode.test.ts`:
+A 14.3-second two-channel MP3 at 8 kHz, cut from `quiet-middle.ogg`, shaped like a recorded sales call: the left
+channel speaks at 0–4 s and 11–14.3 s, the right at 5–10.7 s, so the turns interleave. For the channel test in
+`src/speech/decode.test.ts` and the dialogue test in `src/speech/openai.test.ts`:
 
 ```sh
-ffmpeg -f lavfi -i "sine=frequency=440:duration=1:sample_rate=8000" \
-  -f lavfi -i "anoisesrc=d=1:c=pink:r=8000:a=0.3:seed=1" \
-  -filter_complex "[0:a][1:a]join=inputs=2:channel_layout=stereo[a]" -map "[a]" \
-  -c:a libmp3lame -b:a 32k -map_metadata -1 stereo.mp3
+ffmpeg -i quiet-middle.ogg -filter_complex "[0:a]aresample=8000,asplit=3[a][b][c];\
+[a]atrim=0:4,asetpts=N/SR/TB[A];[b]atrim=4.7:10.4,asetpts=N/SR/TB[B];[c]atrim=17:20.3,asetpts=N/SR/TB[C];\
+anullsrc=r=8000:cl=mono,atrim=0:7[s7];anullsrc=r=8000:cl=mono,atrim=0:5[s5];anullsrc=r=8000:cl=mono,atrim=0:3.6[s36];\
+[A][s7][C]concat=n=3:v=0:a=1[L];[s5][B][s36]concat=n=3:v=0:a=1[R];[L][R]join=inputs=2:channel_layout=stereo[out]" \
+  -map "[out]" -c:a libmp3lame -b:a 32k -map_metadata -1 dialogue.mp3
 ```
 
 ## `silero_vad.onnx`

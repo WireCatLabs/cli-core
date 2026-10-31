@@ -241,6 +241,9 @@ describe("which model", () => {
     expect(choose(messenger(), profile, {}, { ...keyed, CHAT_READ_ONLY: "1" }, keyring).refusal?.message).toMatch(
       /read-only/,
     )
+    const unknown = choose(messenger(), { configured: { transcribeWith: "whisper" }, shared: {} }, {}, keyed, keyring)
+    expect(unknown.model.id).toBe("parakeet-v3")
+    expect(unknown.refusal?.message).toMatch(/transcribeWith is one of/)
   })
 })
 

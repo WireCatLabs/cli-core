@@ -272,7 +272,8 @@ describe("local meeting transcription", () => {
     const dialogue = await setup([
       { startMs: 0, endMs: 3000, text: "Hello", speaker: "manager" },
       { startMs: 2000, endMs: 4000, text: "Hi there", speaker: "client" },
-      { startMs: 3500, endMs: 5000, text: "So", speaker: "manager" },
+      { startMs: 3500, endMs: 5000, text: "So", speaker: "manager " },
+      { startMs: 5000, endMs: 6000, text: "Noted", speaker: null },
     ])
     await transcribeMeeting(dialogue.source, dialogue.store, target, { apply: true })
     expect(
@@ -283,12 +284,13 @@ describe("local meeting transcription", () => {
       ["manager", 0],
       ["client", 2000],
       ["manager", 3500],
+      [null, 5000],
     ])
 
     for (const segments of [
       [
         { startMs: 0, endMs: 3000, text: "Hello", speaker: "manager" },
-        { startMs: 2000, endMs: 4000, text: "again", speaker: "manager" },
+        { startMs: 2000, endMs: 4000, text: "again", speaker: " manager" },
       ],
       [
         { startMs: 0, endMs: 3000, text: "Hello" },

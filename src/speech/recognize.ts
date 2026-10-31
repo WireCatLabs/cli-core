@@ -115,12 +115,13 @@ type Vad = ReturnType<Sherpa["createVad"]>
 const cut = (vad: Vad, pcm: Float32Array, each: (span: SpeechSpan) => void): void => {
   // One detector can hear several recordings in a row; nothing of the last may leak into this one.
   vad.reset()
+  const last = Math.max(0, pcm.length - LEAD)
   const drain = () => {
     for (; !vad.isEmpty(); vad.pop()) {
       const { start, samples } = vad.front()
       each({
-        start: Math.max(0, start - LEAD) / SAMPLE_RATE,
-        end: Math.max(0, start + samples.length - LEAD) / SAMPLE_RATE,
+        start: Math.min(last, Math.max(0, start - LEAD)) / SAMPLE_RATE,
+        end: Math.min(last, Math.max(0, start + samples.length - LEAD)) / SAMPLE_RATE,
         samples,
       })
     }
