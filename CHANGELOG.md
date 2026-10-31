@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`chatCoverage` and `ChatCoverage` are exported from `@wirecat/cli-core/services`, and `coverageGaps` from
+  `@wirecat/cli-core/cli`.** A CLI can now pass `ports.coverage` to `gatherProjectEvidence` and build `missing` and
+  `next` for chats held in part, as cli-core's own agenda and search do.
+
 ## 0.495.0 — 31.10.2026
 
 ### Changed — may break callers

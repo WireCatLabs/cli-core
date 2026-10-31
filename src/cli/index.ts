@@ -401,6 +401,7 @@ export {
 export {
   allAnswer,
   allHitItem,
+  coverageGaps,
   type HitItem,
   type MessageHitItem,
   messageHitItem,
