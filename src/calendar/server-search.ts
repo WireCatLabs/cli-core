@@ -51,10 +51,15 @@ export const serverSearchAnswer = async (
 type FoundBy = FoundEvent["found_by"][number] | "server"
 type ServerFound = Awaited<ReturnType<typeof serverSearchAnswer>>
 
+/** As the stored search groups hits: the occurrences of one series are one hit. */
+const groupOf = (eventId: number | null, eventSeriesId: number | null) =>
+  eventSeriesId !== null ? `s${eventSeriesId}` : eventId !== null ? `e${eventId}` : undefined
+
 /**
  * `--backend both`: the stored search's hits in its own order, each one the provider also found marked `server`, then
  * what only the provider found, earliest first. One page and no cursor: the two sides rank and page differently.
- * A provider hit is matched by its stored copy, so an occurrence the store keeps under another id shows twice.
+ * A provider hit is matched through its stored copy: a series, or any of its occurrences, to the stored hit of that
+ * series. A provider hit the store does not hold is listed on its own.
  */
 export const bothSearchAnswer = async (
   store: EventStore,
@@ -65,14 +70,20 @@ export const bothSearchAnswer = async (
 ) => {
   const calendars = new Map((await store.calendars(accountId)).map((calendar) => [calendar.externalId, calendar]))
   const hits: (Omit<FoundEvent, "found_by"> & { found_by: FoundBy[] })[] = archived.hits.map((hit) => ({ ...hit }))
-  const byRef = new Map(hits.map((hit) => [hit.ref, hit]))
+  const byGroup = new Map<string, (typeof hits)[number]>()
+  for (const hit of hits) {
+    const details = await store.event(Number(hit.ref.slice("event:".length)))
+    const group = details && groupOf(details.event.id, details.event.eventSeriesId)
+    if (group) byGroup.set(group, hit)
+  }
   const onlyServer: ServerFound["hits"] = []
   for (const hit of served.hits) {
     const calendar = calendars.get(hit.calendar)
     const entry = calendar ? await store.entry(calendar.id, hit.external_id) : null
-    const held = entry?.eventId == null ? undefined : byRef.get(`event:${entry.eventId}`)
-    if (held) held.found_by = [...held.found_by, "server"]
-    else onlyServer.push(hit)
+    const group = entry ? groupOf(entry.eventId, entry.eventSeriesId) : undefined
+    const held = group === undefined ? undefined : byGroup.get(group)
+    if (!held) onlyServer.push(hit)
+    else if (!held.found_by.includes("server")) held.found_by = [...held.found_by, "server"]
   }
   const merged = [...hits, ...onlyServer]
   return {
