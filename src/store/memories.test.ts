@@ -295,7 +295,7 @@ describe("facts", () => {
     expect(await store.facts.reverse(replacement.ref)).toMatchObject({ status: "reversed" })
   })
 
-  it("supersede and reverse only decisions, and list by type and subject", async () => {
+  it("reverse only decisions, and list by type and subject", async () => {
     const store = await open()
     const note = await store.notes.addNote({ text: "Bob Sample asked when the review is" })
     const person = await store.knowledge.addProject({ name: "Review", type: "work" })
@@ -311,12 +311,6 @@ describe("facts", () => {
     expect(question).toMatchObject({ status: "accepted", subject: note.ref, scope: "work" })
     expect(statement.status).toBe("proposed")
     await expect(store.facts.reverse(question.ref)).rejects.toMatchObject({ code: "validation_error" })
-    await expect(
-      store.facts.add({ type: "statement", statement: "x", by: "owner", supersedes: question.ref }),
-    ).rejects.toMatchObject({ code: "validation_error" })
-    await expect(
-      store.facts.add({ type: "decision", statement: "x", by: "owner", supersedes: question.ref }),
-    ).rejects.toMatchObject({ code: "validation_error" })
     await expect(store.facts.add({ type: "rumour" as "fact", statement: "x", by: "owner" })).rejects.toMatchObject({
       code: "validation_error",
     })
@@ -324,6 +318,36 @@ describe("facts", () => {
     expect((await store.facts.list({ subject: note.ref })).map(({ ref }) => ref)).toEqual([question.ref])
     expect((await store.facts.list({ status: "proposed" })).map(({ ref }) => ref)).toEqual([statement.ref])
     expect(await store.facts.list({ project: person.ref })).toEqual([])
+  })
+
+  it("correct a fact of any kind, proposed or accepted, and the old one is superseded once the new one holds", async () => {
+    const store = await open()
+    const statement = await store.facts.add({ type: "statement", statement: "The review moved", by: agent })
+    const question = await store.facts.add({ type: "question", statement: "When is it?", by: "owner" })
+
+    const fixed = await store.facts.add({
+      type: "statement",
+      statement: "The review moved to May",
+      by: "owner",
+      supersedes: statement.ref,
+    })
+    expect(fixed).toMatchObject({ status: "accepted", supersedes: statement.ref })
+    expect(await store.facts.get(statement.ref)).toMatchObject({ status: "superseded" })
+
+    const proposal = await store.facts.add({
+      type: "question",
+      statement: "When in May?",
+      by: agent,
+      supersedes: question.ref,
+    })
+    expect(await store.facts.get(question.ref)).toMatchObject({ status: "accepted" })
+    await store.facts.accept(proposal.ref)
+    expect(await store.facts.get(question.ref)).toMatchObject({ status: "superseded" })
+
+    for (const done of [statement, question])
+      await expect(
+        store.facts.add({ type: "fact", statement: "x", by: "owner", supersedes: done.ref }),
+      ).rejects.toMatchObject({ code: "validation_error" })
   })
 
   it("reject only a proposed fact, and forget one with its links and the memory it was migrated from", async () => {

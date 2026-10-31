@@ -9,6 +9,7 @@ import { itemOf } from "../cli/envelope.js"
 import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { agentLog } from "./agent-log.js"
+import { callingAgent } from "./caller.js"
 import { type AnyTool, entryRunner, READ, type Registration, type ToolCall, tierOf, tool, WRITE } from "./tool.js"
 
 const live: MessageStore[] = []
@@ -64,6 +65,22 @@ describe("the MCP agent log", () => {
     const raw = JSON.stringify(database.prepare("SELECT * FROM agent_actions").all())
     database.close()
     expect(raw).not.toContain("secret")
+  })
+
+  it("names the agent by the client that made the call", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "agent-log-")), "store.db") })
+    live.push(store)
+    const run = entryRunner({
+      log: async (call: ToolCall, caller: Parameters<typeof callingAgent>[1]) => {
+        await store.agentActions.record({ actor: { bot: callingAgent("test-mcp", caller) }, ...call })
+      },
+      callers: { env: {}, client: () => ({ name: "hermes", version: "1" }) },
+      defaults: { settings: {}, env: {} },
+    } as unknown as Registration)
+
+    await run("messages_send", echo as AnyTool, { text: "" }, ctx)
+
+    expect((await store.agentActions.list()).map(({ actor }) => actor.name)).toEqual(["hermes"])
   })
 
   it("logs a pin as a write others see where every pin tells the chat's members", async () => {
