@@ -24,11 +24,20 @@ shape of this file.
 - **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
 - **`tasks.events(id)`** names who acted: `actor.name` is the person's or the bot's name, or null.
 - **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
+- **`events_list` takes `page`**, as `events list --page` does. Without `account_id` each page is cut from every
+  account's events merged in time order, so it reads at most each account's first 1000 events; a page past that is
+  refused with `validation_error` and asks for `account_id`.
 
 ### Changed — may break callers
 
 - **`ClosedState` is `done | dismissed`**, no longer every state but `open`; a check of `state === "open"` for "not
   closed" misses `todo` and `in_progress` — use `isClosedState`.
+- **The calendar MCP tools `event_create` and `event_update` take `operation_id`, not `id`**, as `events create` and
+  `events update --following` take `--operation-id` since 0.510.0. The value is the same: the `operation_id` a lost
+  write's `outcome_unknown` names, and that error now says "repeat with operation_id". `id` is refused as an unknown
+  argument; change agent prompts that pass it.
+- **`events_list` answers the shared list shape**: `page: { mode: "page", limit, has_more, next_page }` and a
+  `page.next` step, where it answered `page: 1` and `hasMore`. Read `page.has_more` instead of `hasMore`.
 
 ## 0.511.0 — 31.10.2026
 

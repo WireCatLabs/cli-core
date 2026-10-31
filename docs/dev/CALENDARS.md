@@ -156,6 +156,7 @@ changing the instances one by one for it. The order is chosen for retries:
 - A lost answer on the old series (`outcome_unknown`) may mean it did end. The error says to sync first: if the
   series now ends before the occurrence, the split is done (and the occurrence is gone, so a retry would not find
   it); if not, repeat with `--operation-id <id>`.
+- Over MCP, `event_create` and `event_update` take the same value as `operation_id`.
 - Until then, later slots show twice, never not at all.
 - A series already ending before the split is not split again: the command refuses, or with `--operation-id` only finds the
   new series.
@@ -188,7 +189,7 @@ command lint's vocabulary has no `calendars`, `people`, `unsync`, `review` or `r
 rules until the vocabulary names them.
 
 `calendarTools` and `callCalendarTool(store, name, input, { accountIds })` (`./calendar/mcp`) give the same reads as
-MCP tools: `calendars_list`, `store_status` (its `profile` from the option `profileOf(accountId)`), `events_list` (its `query` is `events list`'s), `event_show`, `event_people`, `event_links_review`. Without `account_id`
+MCP tools: `calendars_list`, `store_status` (its `profile` from the option `profileOf(accountId)`), `events_list` (its `query`, `limit` and `page` are `events list`'s; across accounts each page is cut from the merge, so without `account_id` a page may not end past each account's 1000th event), `event_show`, `event_people`, `event_links_review`. Without `account_id`
 a tool reads every account the host serves and names them in `accounts`. Each description says event text is data;
 each answer lists the fields others wrote in `untrusted` and has its control characters made visible
 ([WC-SECR-11](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-11--text-from-outside-is-made-safe-before-a-terminal-or-an-agent-sees-it),
