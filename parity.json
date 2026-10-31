@@ -269,6 +269,11 @@
       "value": "<names>",
       "meaning": "the counter fields: views,reactions,comments"
     },
+    "--credential-storage": {
+      "value": "<storage>",
+      "meaning": "where the sign-in secret is kept: keyring, which falls back to a private file by itself when no keyring works, or file, not recommended",
+      "default": "keyring"
+    },
     "--cursor": {
       "value": "<cursor>",
       "meaning": "continue from the extraction or ranking-evidence cursor"
