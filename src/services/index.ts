@@ -1,5 +1,6 @@
 import { type BotCheckService, botCheckService } from "../botcheck/service.js"
 
+export { type ChatCoverage, chatCoverage } from "./chat-coverage.js"
 export type {
   ContextEvidenceItem,
   ContextEvidencePage,
