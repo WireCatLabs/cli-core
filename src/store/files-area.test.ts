@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { useProviders } from "../domain/providers.js"
 import { documentSource } from "../services/document-source.js"
+import { searchNotes } from "../services/notes-search.js"
 import { openCache } from "./open.js"
 import { type MessageStore, openStore, registerProvider } from "./store.js"
 
@@ -52,7 +53,7 @@ describe("store.files", () => {
 })
 
 describe("documentSource", () => {
-  it("takes the link and edit time from the document's file before its front matter", async () => {
+  it("takes the link from the document's file before its front matter, and search shows and filters by its edit time", async () => {
     const { store } = await setup()
     const folder = await store.notes.addFolder({ name: "google-drive:owner-1", format: "markdown" })
     await store.accounts.saveProfile("drive", "personal", { provider: "folder", account: folder.name })
@@ -82,8 +83,13 @@ describe("documentSource", () => {
       provider: "drive",
       account: "personal",
       url: "https://docs.google.com/document/d/file-1",
-      updated_at: "2026-02-01T00:00:00.000Z",
     })
+    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) }
+    const shown = async (query: string) =>
+      (await searchNotes(store, query, { env, timezone: "UTC" })).hits.map(({ updated_at }) => updated_at)
+    expect(await shown("plan")).toEqual(["2026-02-01T00:00:00.000Z"])
+    expect(await shown("date:2026-02-01")).toEqual(["2026-02-01T00:00:00.000Z"])
+    expect(await shown(`date:${fresh.updatedAt.slice(0, 10)}`)).toEqual([])
   })
 
   it("knows a document by its account's provider, with no front matter, once the provider is of kind documents", async () => {

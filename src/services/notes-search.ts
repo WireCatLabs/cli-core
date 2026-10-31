@@ -51,8 +51,17 @@ export const storeQuery = async (
   store: MessageStore,
   text: string,
   { exact, timezone }: { exact?: boolean; timezone?: string } = {},
+): Promise<{ root: ResolvedNode; stemmer?: Stemmer }> => resolvedQuery(store, parsedQuery(text, exact), timezone)
+
+const parsedQuery = (text: string, exact?: boolean): QueryNode =>
+  validateFields(parseLucene(text, { ...SEARCH_QUERY, defaultField: exact ? "exact" : "text" })).root
+
+const resolvedQuery = async (
+  store: MessageStore,
+  root: QueryNode,
+  timezone: string | undefined,
 ): Promise<{ root: ResolvedNode; stemmer?: Stemmer }> => {
-  const ast = validateFields(parseLucene(text, { ...SEARCH_QUERY, defaultField: exact ? "exact" : "text" }))
+  const ast = { root }
   const zone = timezoneOf(timezone)
   const resolve = (node: QueryNode): ResolvedNode => {
     if (node.kind === "boolean")
@@ -278,7 +287,7 @@ export interface FoundNote {
   /** The note's path inside its folder; `null` for a note written in memo. */
   path: string | null
   title: string | null
-  /** When the store's copy last changed. */
+  /** The time `date:` reads: a Drive document's edit time when the store has one, else when the store's copy changed. */
   updated_at: string
   /** The first line holding a word of the query. */
   excerpt: string
@@ -318,7 +327,7 @@ export interface NotesQuery {
   limit?: number
   offset?: number
   tag?: string
-  /** A query in the same language that every hit must also match; it does not change the meaning half. */
+  /** A query in the same language that every hit must also match, as the query's own fields are. */
   filter?: string
   folderIds?: string[]
   /** With `folderIds`, the notes written in memo too: one ranked list, so `offset` pages it. */
@@ -338,14 +347,12 @@ export interface NotesQuery {
   pictureEmbedder?: PictureEmbedder
 }
 
-type Held = { note: Note; score: number; foundBy: ("title" | "words" | "meaning")[] }
+type Held = { note: Note; at: string; score: number; foundBy: ("title" | "words" | "meaning")[] }
 
 const MAX_LINE = 200
 const MAX_NOTES_OFFSET = 1000
 /** How deep each half is read before the two are merged. */
 const CANDIDATES = 50
-/** What a filter may narrow the meaning half to; past this the filter is applied to words only. */
-const FILTERED = 500
 /** Reciprocal rank fusion's usual constant, as conversations use. */
 export const RRF_K = 60
 
@@ -441,9 +448,88 @@ export const noteSourceOfQuery = (query: string): { source?: Note["source"]; res
   return { source, rest }
 }
 
+const WORD_FIELDS = new Set(["text", "exact"])
+
+/**
+ * What a note found by meaning must still match: the query with each word it asks for taken as matched, since the
+ * meaning half stands in for those. Words it excludes, and every other field, stay. `undefined` when nothing but
+ * wanted words is left, so any note found by meaning fits.
+ */
+export const fieldsOfQuery = (root: QueryNode): QueryNode | undefined => {
+  let narrows = false
+  const kept = (node: QueryNode): QueryNode => {
+    if (node.kind === "boolean")
+      return {
+        ...node,
+        clauses: node.clauses.map(({ occur, node }) => {
+          if (occur !== "must_not") return { occur, node: kept(node) }
+          narrows = true
+          return { occur, node }
+        }),
+      }
+    if (!WORD_FIELDS.has(node.field)) {
+      narrows = true
+      return node
+    }
+    // `in:notes` holds for every note and document; an empty clause list would match nothing.
+    return { kind: "predicate", field: "in", operator: "term", value: "notes", span: node.span }
+  }
+  const fields = kept(root)
+  return narrows ? fields : undefined
+}
+
+/** The words and phrases the query asks for, for the meaning half to embed; none it excludes, no field. */
+export const meaningWords = (root: QueryNode): string => {
+  const wanted = (node: QueryNode): string[] =>
+    node.kind === "boolean"
+      ? node.clauses.flatMap(({ occur, node }) => (occur === "must_not" ? [] : wanted(node)))
+      : WORD_FIELDS.has(node.field) && (node.operator === "term" || node.operator === "phrase")
+        ? [node.value]
+        : []
+  return wanted(root).join(" ").trim()
+}
+
+const allOf = (nodes: QueryNode[]): QueryNode | undefined =>
+  nodes.length <= 1
+    ? nodes[0]
+    : {
+        kind: "boolean",
+        clauses: nodes.map((node) => ({ occur: "must" as const, node })),
+        span: { start: 0, end: 0 },
+      }
+
+/**
+ * The notes of `refs` that match `root`, in the order of `refs`, each with the time `date:` read. One store query over
+ * just those notes, so a filter that matches thousands of notes still checks every candidate.
+ */
+const matching = async (
+  store: MessageStore,
+  refs: string[],
+  root: QueryNode | undefined,
+  scope: Pick<NotesSearchRequest, "folderIds" | "withInternal" | "source" | "timezone">,
+): Promise<Map<string, { note: Note; at: string }>> => {
+  if (refs.length === 0) return new Map()
+  const resolved = await resolvedQuery(
+    store,
+    root ?? { kind: "predicate", field: "in", operator: "term", value: "notes", span: { start: 0, end: 0 } },
+    scope.timezone,
+  )
+  const found = await store.notes.search({
+    root: resolved.root,
+    refs,
+    limit: refs.length,
+    ...(scope.folderIds ? { folderIds: scope.folderIds } : {}),
+    ...(scope.withInternal ? { withInternal: true } : {}),
+    ...(scope.source ? { source: scope.source } : {}),
+    ...(resolved.stemmer ? { stemmer: resolved.stemmer } : {}),
+  })
+  return new Map(found.items.map(({ ref, note, at }) => [ref, { note, at }]))
+}
+
 /**
  * `search notes`: words and stems, and meaning when the local model is there, merged by reciprocal rank;
- * each hit says which half found it, and the answer lists what the notes found link to.
+ * each hit says which half found it, and the answer lists what the notes found link to. Every field of the query and
+ * of `filter` holds for every hit, found by words or by meaning; a query of fields alone is not searched by meaning.
  */
 export const searchNotes = async (
   store: MessageStore,
@@ -468,11 +554,17 @@ export const searchNotes = async (
 ): Promise<NotesFound> => {
   const typed = noteSourceOfQuery(query)
   const source = given ?? typed.source
-  const words = typed.source !== undefined && typed.source === source ? typed.rest : query
+  const rest = typed.source !== undefined && typed.source === source ? typed.rest : query
   const label = tag === undefined ? undefined : normalizeTag(tag)
   const filter =
     [expression ? `(${expression})` : "", label === undefined ? "" : `tag:${label}`].filter(Boolean).join(" AND ") ||
     undefined
+  const parsed = query.trim() ? parsedQuery(query, exact) : undefined
+  const words = parsed === undefined ? "" : meaningWords(parsed)
+  const narrowing = allOf([
+    ...(parsed === undefined ? [] : [fieldsOfQuery(parsed)].filter((node) => node !== undefined)),
+    ...(filter === undefined ? [] : [parsedQuery(filter)]),
+  ])
   const text = [query.trim() ? `(${query})` : "", filter ?? ""].filter(Boolean).join(" AND ")
   const window = offset + limit
   const scope = {
@@ -482,9 +574,9 @@ export const searchNotes = async (
     ...(timezone === undefined ? {} : { timezone }),
   }
   let meaningSkipped: string | undefined
-  let meaning: { ref: string; note: Note }[] | undefined
+  let meaning: { ref: string; note: Note; at: string }[] | undefined
   if (exact) meaningSkipped = "--exact searches words as written"
-  else if (words.trim()) {
+  else if (words) {
     try {
       const nearest = await nearestNotes(store, words, {
         limit: Math.max(window, CANDIDATES),
@@ -495,18 +587,22 @@ export const searchNotes = async (
         ...(withInternal ? { withInternal: true } : {}),
         ...(source === undefined ? {} : { source }),
       })
-      if (filter === undefined) meaning = nearest
-      else {
-        const allowed = await searchNotesQuery(store, { text: filter, limit: FILTERED, ...scope })
-        const refs = new Set(allowed.items.map(({ ref }) => ref))
-        meaning = nearest.filter(({ ref }) => refs.has(ref))
-      }
+      const allowed = await matching(
+        store,
+        nearest.map(({ ref }) => ref),
+        narrowing,
+        scope,
+      )
+      meaning = nearest.flatMap(({ ref }) => {
+        const found = allowed.get(ref)
+        return found ? [{ ref, ...found }] : []
+      })
     } catch (error) {
       if (!(error instanceof CliError && error.code === "not_found")) throw error
       meaningSkipped = error.message
     }
   }
-  const titleWords = plainQueryWords(words)
+  const titleWords = plainQueryWords(rest)
   const titled =
     titleWords === undefined
       ? { items: [], hasMore: false }
@@ -526,10 +622,10 @@ export const searchNotes = async (
     ...scope,
   })
   const ranked = new Map<string, Held>()
-  const add = (list: { ref: string; note: Note }[], by: "words" | "meaning") =>
-    list.forEach(({ ref, note }, rank) => {
+  const add = (list: { ref: string; note: Note; at: string }[], by: "words" | "meaning") =>
+    list.forEach(({ ref, note, at }, rank) => {
       if (tierRefs.has(ref)) return
-      const held = ranked.get(ref) ?? { note, score: 0, foundBy: [] }
+      const held = ranked.get(ref) ?? { note, at, score: 0, foundBy: [] }
       held.score += 1 / (RRF_K + rank + 1)
       held.foundBy.push(by)
       ranked.set(ref, held)
@@ -537,7 +633,7 @@ export const searchNotes = async (
   add(matched.items, "words")
   if (meaning !== undefined) add(meaning, "meaning")
   const ordered = [
-    ...tier.map(({ ref, note }): [string, Held] => [ref, { note, score: 0, foundBy: ["title"] }]),
+    ...tier.map(({ ref, note, at }): [string, Held] => [ref, { note, at, score: 0, foundBy: ["title"] }]),
     ...[...ranked.entries()].sort(([, a], [, b]) => b.score - a.score),
   ]
   const page = slice ? ordered : ordered.slice(offset, window)
@@ -546,7 +642,7 @@ export const searchNotes = async (
   const counts = new Map<string, LinkedRecord>()
   const accounts = await store.accounts.storedAccounts()
   const profiles = await store.accounts.profiles()
-  for (const [ref, { note, foundBy }] of page) {
+  for (const [ref, { note, at, foundBy }] of page) {
     const links = (await store.notes.links({ from: ref })).map(({ to, targetText, kind, anchor }) => ({
       to,
       target_text: targetText,
@@ -565,6 +661,7 @@ export const searchNotes = async (
         profiles,
         note.source === "file" ? (await store.files.ofDocument(note.ref))[0] : undefined,
       ),
+      updated_at: at,
       excerpt: firstLine(note.text, words),
       links,
       found_by: foundBy,
@@ -599,6 +696,15 @@ export const searchNotes = async (
         embedder: pictureEmbedder,
       })
     : {}
+  if (lane.pictures && narrowing !== undefined) {
+    const allowed = await matching(
+      store,
+      lane.pictures.map(({ ref }) => ref),
+      narrowing,
+      scope,
+    )
+    lane.pictures = lane.pictures.filter(({ ref }) => allowed.has(ref))
+  }
   return {
     query,
     ...(label === undefined ? {} : { tag: label }),

@@ -387,7 +387,7 @@
     "--filter": {
       "value": "query",
       "meaning": "Strict Lucene filter: any message in the conversation must match; the meaning query stays unchanged",
-      "note": "search notes uses it for a query every note must also match, the meaning half unchanged"
+      "note": "search notes uses it for a query every note must also match, found by words or by meaning"
     },
     "--find-by-phone": {
       "value": "<who>",

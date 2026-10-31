@@ -13,6 +13,7 @@ import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.
 import type { Stemmer } from "../../search/stem.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
+import { contextDocumentTime } from "./context-document-source.js"
 import { type DocumentPictureStore, documentPicturesOver } from "./document-pictures.js"
 import { linkKind } from "./link-kinds.js"
 import { prefixOf } from "./lucene.js"
@@ -33,6 +34,8 @@ export interface NoteQuery {
   /** With `folderIds`, the notes written in memo too, in the same ranked list. */
   withInternal?: boolean
   source?: Note["source"]
+  /** Only these notes (`document:<id>`, `note:<id>`): checks a list found another way against the query. */
+  refs?: string[]
   /** Newest first instead of best first. */
   newest?: boolean
   /** The store's stemmer, set when a leaf is stemmed. */
@@ -47,6 +50,8 @@ export interface NoteHit {
   relevance: number | null
   /** Whether the note holds the exact forms, when the search was stemmed. */
   exact?: boolean
+  /** The time `date:` read: a Drive document's edit time when the store has one, else when the store's copy changed. */
+  at: string
 }
 
 /** The fields a note has. A message-only field (`from:`, `chat:`, …) is refused rather than matching nothing. */
@@ -108,7 +113,7 @@ const CORPORA: Corpus[] = [
     type: "document",
     noun: "note",
     fields: NOTE_FIELDS,
-    view: "(SELECT id, account_id AS folder_id, external_id AS path, title, coalesce(body, '') AS text, metadata, updated_at AS at, deleted_at FROM documents)",
+    view: `(SELECT n.id, n.account_id AS folder_id, n.external_id AS path, n.title, coalesce(n.body, '') AS text, n.metadata, ${contextDocumentTime} AS at, n.deleted_at FROM documents n)`,
     words: "document_words",
     stems: "document_stems",
     live: "coalesce(json_extract(n.metadata, '$.catalog.active'), 1)=1",
@@ -151,6 +156,7 @@ export interface CorpusRow {
 /** What one corpus is searched by; `accountIds` narrows a corpus that has accounts. */
 export type CorpusQuery = Pick<NoteQuery, "root" | "limit" | "offset" | "newest" | "stemmer" | "signal"> & {
   accountIds?: string[]
+  ids?: number[]
 }
 
 /** Notes matching a parsed query, by the same language as messages: files and written notes, merged. */
@@ -161,9 +167,17 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
       (query.source === undefined || (query.source === "file") === (type === "document")) &&
       (!query.folderIds?.length || query.withInternal === true || type === "document"),
   )
-  const rows = chosen.flatMap((corpus) =>
-    searchCorpus(context, { ...query, ...(query.folderIds ? { accountIds: query.folderIds } : {}) }, corpus),
-  )
+  const idsOf = (type: Corpus["type"]) =>
+    query.refs?.flatMap((ref) => (ref.startsWith(`${type}:`) ? [Number(ref.slice(type.length + 1))] : []))
+  const rows = chosen.flatMap((corpus) => {
+    const ids = idsOf(corpus.type)
+    if (ids?.length === 0) return []
+    return searchCorpus(
+      context,
+      { ...query, ...(query.folderIds ? { accountIds: query.folderIds } : {}), ...(ids ? { ids } : {}) },
+      corpus,
+    )
+  })
   const exactFirst = rows.some((row) => row.exact !== undefined)
   rows.sort((a, b) =>
     query.newest
@@ -187,6 +201,7 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
         note,
         relevance: row.relevance,
         ...(row.exact === undefined ? {} : { exact: row.exact }),
+        at: new Date(row.at ?? 0).toISOString(),
       }
     }),
     hasMore: rows.length > offset + query.limit,
@@ -358,6 +373,7 @@ export const searchCorpus = (context: StoreContext, query: CorpusQuery, corpus: 
         bound("n.deleted_at IS NULL"),
         ...(corpus.live ? [bound(corpus.live)] : []),
         ...(query.accountIds?.length && corpus.inAccounts ? [corpus.inAccounts(JSON.stringify(query.accountIds))] : []),
+        ...(query.ids ? [bound("n.id IN (SELECT value FROM json_each(?))", JSON.stringify(query.ids))] : []),
       ],
       "AND",
     )

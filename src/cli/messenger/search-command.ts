@@ -173,7 +173,9 @@ const notesCommand = (messenger: Messenger): Command =>
     )
     .addHelpText(
       "after",
-      "tag: in --filter keeps the notes with that tag and leaves the search by meaning as it is — --filter 'tag:work'. " +
+      "Fields in the query or in --filter (tag:, date:, source:…) hold for every hit, found by words or by meaning; " +
+        "only the words are searched by meaning, and a query of fields alone lists the matching notes, newest first — " +
+        "'budget tag:work', 'date:today'. updated_at is the time date: reads: a Drive document's edit time. " +
         "--json: the list is items; each note's reference is ref.",
     )
     .option(
@@ -181,7 +183,7 @@ const notesCommand = (messenger: Messenger): Command =>
       "only these notes accounts, separated by commas: notes:internal for notes written in memo, notes:<folder id> " +
         "as a hit shows it, notes, documents or group:<name>",
     )
-    .option("--filter <query>", "a query every hit must also match; it does not change the search by meaning")
+    .option("--filter <query>", "a query every hit must also match, found by words or by meaning")
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
     .option("--exact", "words as written only; meaning is not searched")
