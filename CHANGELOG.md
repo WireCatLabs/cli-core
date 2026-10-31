@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.496.0 — 31.10.2026
+
 ### Changed — may break callers
 
 - **A discovery follow-up carries an `excerpt` of up to 240 characters, as the hit itself, instead of its whole
