@@ -287,6 +287,8 @@ const syncRound = async (
   /** Every folder's stored point, valid or not: the widest window outlives what invalidates the rest. */
   const storedPoints = new Map<string, ResumePoint>()
   const resumed = new Set<string>()
+  /** Backfilling folders listed without the mail already done and located: their listing proves no deletion. */
+  const narrowed = new Set<string>()
   let mboxPoint: MboxPoint | undefined
   let mboxStamp: Awaited<ReturnType<NonNullable<MailSource["stamp"]>>> | undefined
   // A rerun lists only what the last left; --rescan, a rule change or a new UIDVALIDITY lists everything again.
@@ -404,6 +406,16 @@ const syncRound = async (
         ) {
           resumed.add(folder)
           wanted = { ...searched, uids: searched.uids.filter((uid) => !within(point.done, Number(uid))) }
+        } else if (backfill && plan !== undefined) {
+          // A budgeted run lists newest first, so a backfill that starts over every run never reaches the oldest mail.
+          const placed = new Set(
+            (await store.mail.folderEmails(accountId, folder, searched.validity as string)).map(({ uid }) => uid),
+          )
+          const left = searched.uids.filter((uid) => !(placed.has(Number(uid)) && within(point.done, Number(uid))))
+          if (left.length < searched.uids.length) {
+            narrowed.add(folder)
+            wanted = { ...searched, uids: left }
+          }
         }
       }
       if (plan !== undefined) {
@@ -520,7 +532,9 @@ const syncRound = async (
       (quickRan.size < folders.length
         ? "folders this run did not list by UID are not checked for deletions; --rescan lists every message and checks them"
         : undefined)
-  } else if (resumed.size > 0)
+  } else if (narrowed.size > 0)
+    skipped = "this run listed only mail whose place is not stored yet; once every place is, deletions are checked"
+  else if (resumed.size > 0)
     skipped =
       "this run listed only mail not read before; a full listing, at least daily or with --rescan, checks deletions"
   else if (previousScope !== undefined && previousScope.value !== scope)
@@ -655,6 +669,7 @@ const syncRound = async (
       const keepFull =
         before !== undefined &&
         (resumed.has(folder) ||
+          narrowed.has(folder) ||
           (Date.parse(before.full.since) < since.getTime() && startedAt - Date.parse(before.full.at) < FULL_PASS_MS))
       const merged = mergeRanges(before?.done ?? ([] as Ranges), rangesOf(done))
       const widest = before === undefined || since.getTime() <= Date.parse(before.window.since)
