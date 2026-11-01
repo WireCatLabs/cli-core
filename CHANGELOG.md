@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`scheduleCommandFor(host)`** mounts the `schedule` command on a CLI that is not a messenger (mail-cli): the host
+  gives its identity and a context with the environment, the profile and the output. `scheduleCommand(messenger)`
+  is the same command, unchanged.
+
 ## 0.518.0 — 01.11.2026
 
 ### Added
