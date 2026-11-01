@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A `serve` unit or launchd agent survives an upgrade with pnpm.** `server install` wrote the script's resolved
+  path, a versioned folder in pnpm's global store that the next upgrade removes, so the unit could not start until it
+  was installed again. It now writes the path the shim gave, a link pnpm points at the new version.
+
 ## 0.532.0 — 01.11.2026
 
 ### Added
@@ -21,12 +27,6 @@ shape of this file.
 - **`messages download` takes a `msg:` locator** in place of chat and id; the chat and id form still works.
 - **`messages link` lists a message's files**: `files: [{ position, kind, name, url, reason }]`. No messenger gives
   a file its own link yet, so `url` is null with reason `unsupported_provider`.
-
-### Fixed
-
-- **A `serve` unit or launchd agent survives an upgrade with pnpm.** `server install` wrote the script's resolved
-  path, a versioned folder in pnpm's global store that the next upgrade removes, so the unit could not start until it
-  was installed again. It now writes the path the shim gave, a link pnpm points at the new version.
 
 ## 0.531.0 — 01.11.2026
 
