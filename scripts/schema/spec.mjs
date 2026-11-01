@@ -1397,7 +1397,7 @@ const NEW = {
         c("agent", "text", { note: "the agent working on it, by name; unlike a claim it does not lapse" }),
         c("revision", "integer", {
           notnull: true,
-          note: "bumped by a trigger on every update; a write made on an older revision is refused",
+          note: "bumped by triggers when a person could conflict: title, description, status, priority, agent, due date, project, parent, assignees or tags; never by a claim, a follow-up time or a close suggestion. A write made on an older revision is refused",
         }),
       ],
       keys: [

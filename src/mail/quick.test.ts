@@ -182,10 +182,10 @@ describe("syncMail over a quick listing", () => {
   it("reads at most max new mails a run, newest first, and goes on with the rest", async () => {
     const { box, sync, reset } = harness([mail(1), mail(2), mail(3)])
 
-    expect((await sync({ max: 2 })).result).toMatchObject({ saved: 2, complete: false })
+    expect((await sync({ max: 2 })).result).toMatchObject({ saved: 2, complete: false, remaining: 1 })
     expect(box.read).toEqual(["103", "102"])
     reset()
-    expect((await sync({ max: 2 })).result).toMatchObject({ saved: 1, complete: true })
+    expect((await sync({ max: 2 })).result).toMatchObject({ saved: 1, complete: true, remaining: 0 })
     expect(box.read).toEqual(["101"])
   })
 

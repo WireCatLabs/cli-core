@@ -31,6 +31,8 @@ export interface QuickRead {
   unreadable: { message: string; reason: string }[]
   /** Mail of the folder is left for a later round or run. */
   capped: boolean
+  /** How many of the open mail `max` left for the next run; an unbudgeted run only. */
+  left: number
 }
 
 /**
@@ -47,7 +49,7 @@ export const readQuick = async (
   plan: QuickPlan | undefined,
   located: ReadonlySet<string>,
 ): Promise<QuickRead> => {
-  const answer: QuickRead = { listing: [], read: [], unreadable: [], capped: false }
+  const answer: QuickRead = { listing: [], read: [], unreadable: [], capped: false, left: 0 }
   let items = plan?.quick.get(folder)
   if (items === undefined) {
     // Mail whose location is known is listed for its flags only; it is never read again.
@@ -79,6 +81,7 @@ export const readQuick = async (
   const slice = open.slice(0, plan === undefined ? max : (source.fetchBatch ?? FETCH_SLICE))
   if (plan !== undefined) plan.remaining += open.length - slice.length
   answer.capped = open.length > slice.length
+  if (plan === undefined) answer.left = open.length - slice.length
   if (slice.length === 0) return answer
   if (plan !== undefined) {
     const stop = plan.budget.take()
