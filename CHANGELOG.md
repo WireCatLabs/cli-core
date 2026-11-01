@@ -7,7 +7,7 @@ shape of this file.
 
 ## Unreleased
 
-### Changed
+### Changed — may break callers
 
 - **Needs `@wirecat/cli-base` 0.70.x** (peer range `>=0.70.0 <0.71.0`, was 0.68.x). 0.70.0 lets `--to` take an e-mail
   address and `--subject` a subject line in the shared command vocabulary, which mail-cli uses. A CLI on cli-base
