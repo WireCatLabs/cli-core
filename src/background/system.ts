@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process"
-import { closeSync, mkdirSync, openSync, realpathSync } from "node:fs"
-import { dirname } from "node:path"
+import { closeSync, mkdirSync, openSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 
@@ -36,7 +36,9 @@ export const runProgram = (argv: string[], env: NodeJS.ProcessEnv): Promise<Ran>
   })
 
 export const thisMachine = (): ServerSystem => {
-  const entry = [process.execPath, realpathSync(process.argv[1] ?? "")]
+  // The path as the package manager's shim gave it, not resolved: pnpm's global link keeps its name across upgrades
+  // while the folder it points at is versioned and removed by the next upgrade, which would leave the unit dead.
+  const entry = [process.execPath, resolve(process.argv[1] ?? "")]
   return {
     platform: process.platform,
     run: runProgram,
