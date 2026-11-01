@@ -115,6 +115,8 @@ export interface MailSyncOptions {
   retryAttachments?: boolean
   /** List every message in the window, not only those an earlier run left: proves deletions, refreshes labels. */
   rescan?: boolean
+  /** `false` for a spot read, like the copy of a sent message: the run leaves the saved coverage as the last full run set it. */
+  saveCoverage?: boolean
   /** A window smaller than this is listed whole every run: it costs seconds and keeps flags and deletions current. */
   resumeFrom?: number
   /** Runs after the mail is saved, so chats and mail still waiting for vectors are indexed; its answer is `indexed`. */
@@ -277,6 +279,7 @@ const syncRound = async (
     loadEngine = importEngine,
     retryAttachments = false,
     rescan = false,
+    saveCoverage = true,
     resumeFrom = RESUME_FROM,
     index,
     signal,
@@ -954,7 +957,7 @@ const syncRound = async (
     state: complete ? ("window" as const) : ("partial" as const),
     identity: account.mode === "imap" ? "message-id-or-uidvalidity-folder-uid" : "gmail-message-id",
   }
-  if (!snapshot) await store.sync.setSyncState(key, "mail_coverage", JSON.stringify(coverage))
+  if (!snapshot && saveCoverage) await store.sync.setSyncState(key, "mail_coverage", JSON.stringify(coverage))
   const tagging = tagger.outcome()
   await settleRuleTags(store, accountId, rules, tagging)
   return {

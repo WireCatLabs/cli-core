@@ -623,6 +623,28 @@ describe("syncMail attachments", () => {
   })
 })
 
+describe("syncMail coverage", () => {
+  it("writes the window it read, unless the run is a spot read", async () => {
+    const { env } = setup([mail(1)])
+    await importInto(env)
+    const opening = await store(env)
+    const coverage = async () => (await opening.sync.syncState(KEY, "mail_coverage"))?.value
+    const full = await coverage()
+    expect(full).toContain(SINCE.toISOString())
+
+    const spot = new Date(NOW - 10 * 60 * 1000)
+    await importMail({
+      store: opening,
+      source: sourceOf(env),
+      account: { address: ME },
+      since: spot,
+      now: () => NOW,
+      saveCoverage: false,
+    })
+    expect(await coverage()).toBe(full)
+  })
+})
+
 describe("syncMail with a request budget", () => {
   const twelve = Array.from({ length: 12 }, (_, i) => mail(i + 1))
   const budgeted = async (env: NodeJS.ProcessEnv, requests: number | undefined, extra: Partial<MailSyncOptions> = {}) =>

@@ -14,6 +14,8 @@ shape of this file.
 - **`parseMail` also returns `messageId`, `references`, `replyTo` and `date`**, and takes a third argument, the most
   attachments to keep (`MAX_ATTACHMENTS`, 50, by default), so a command that lists one message's files can ask for all
   of them.
+- **`syncMail` takes `saveCoverage: false`** for a spot read, such as a CLI storing the copy of a message it just
+  sent: the mail is saved, and the coverage that memo reports for the archive stays what the last full run set.
 
 ## 0.533.0 — 01.11.2026
 
