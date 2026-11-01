@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.522.0 — 01.11.2026
+
 ### Added
 
 - **Mail actions in the send journal.** `AccountAction` takes `message-flag`, `message-move`, `message-copy`,
