@@ -27,10 +27,23 @@ import {
  * configuration accepts can hold a secret — the schema has nowhere to put one.
  */
 
+/**
+ * Settings and permission keys an agent with `mcp.authority` still may not change, beyond the ones that let it in:
+ * where the password goes (a server host), or a permission the app reads only from the owner's file.
+ */
+export interface OwnerOnlySettings {
+  settings?: readonly string[]
+  /** A key here covers the keys under it too: `messages.send.others` covers `messages.send.others.x`. */
+  permissions?: readonly string[]
+}
+
 export const configCommand = (
   app: AppIdentity,
   config: Configuration,
-  { permissionKey = config.permissions }: { permissionKey?: PermissionKeySource | undefined } = {},
+  {
+    permissionKey = config.permissions,
+    ownerOnly = {},
+  }: { permissionKey?: PermissionKeySource | undefined; ownerOnly?: OwnerOnlySettings } = {},
 ): Command => {
   const command = new Command("config").description("the settings in force, and where each one came from")
 
@@ -176,7 +189,7 @@ export const configCommand = (
           `this process is locked to profile ${settings.profile} (${lock}) — ${root ? setting : "--defaults"} changes other profiles`,
         )
       }
-      if (environmentOf(this).agent) refuseGuardedKey(setting, action === "set" ? String(given) : undefined)
+      if (environmentOf(this).agent) refuseGuardedKey(setting, action === "set" ? String(given) : undefined, ownerOnly)
       if (action === "set") refuseUnknownKey(this, setting, String(given), permissionKey)
       const saved = config.changeSetting(settings.configPath, {
         profile: defaults || root ? undefined : settings.profile,
@@ -234,7 +247,11 @@ export const refuseUnknownKey = (
  * profile, in the defaults, or by replacing `permissions` whole. Only the owner, in a terminal, turns it on or off
  * (NEED-1662, NEED-1679).
  */
-const refuseGuardedKey = (setting: string, value: string | undefined): void => {
+const refuseGuardedKey = (setting: string, value: string | undefined, ownerOnly: OwnerOnlySettings): void => {
+  if (ownerOnly.settings?.includes(setting))
+    throw new CliError("permission_error", `an agent cannot change ${setting} — the owner sets it in a terminal`, {
+      setting,
+    })
   const keys = setting.startsWith("permissions.")
     ? [setting.slice("permissions.".length)]
     : setting === "permissions"
@@ -242,11 +259,13 @@ const refuseGuardedKey = (setting: string, value: string | undefined): void => {
         ? ["mcp"]
         : objectKeys(value)
       : []
-  const guarded = keys.some((key) => key === BOT_API_KEY || key.startsWith(`${BOT_API_KEY}.`))
+  const under = (key: string, guarded: string) => key === guarded || key.startsWith(`${guarded}.`)
+  const listed = keys.flatMap((key) => (ownerOnly.permissions ?? []).filter((guarded) => under(key, guarded)))
+  const guarded = keys.some((key) => under(key, BOT_API_KEY))
     ? BOT_API_KEY
-    : keys.some((key) => key === "mcp" || key.startsWith("mcp."))
+    : keys.some((key) => under(key, "mcp"))
       ? AUTHORITY_KEY
-      : undefined
+      : listed[0]
   if (!guarded) return
   throw new CliError(
     "permission_error",

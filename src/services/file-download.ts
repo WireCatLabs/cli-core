@@ -1,11 +1,12 @@
 import { createWriteStream, mkdirSync } from "node:fs"
 import { link, rm } from "node:fs/promises"
-import { basename, join, resolve } from "node:path"
+import { join, resolve } from "node:path"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { CliError } from "@wirecat/cli-base"
 import type { RefreshedFile } from "../domain/attachments.js"
 import type { Id } from "../domain/models.js"
+import { safeName } from "../files/safe-name.js"
 import type { RemoteFile } from "../ports/messenger.js"
 import { batchProgress } from "./batch.js"
 import type { MessagesService } from "./messages.js"
@@ -142,23 +143,7 @@ const EXTENSIONS: Record<string, string> = {
 /** Telegram sends a photo with no name and no type; it is always a JPEG. */
 const BY_KIND: Record<string, string> = { photo: "jpg" }
 
-/**
- * A name another person chose cannot climb out of the folder, cannot be a dot file we would then
- * hide, and carries no control or direction character to rewrite the terminal or disguise its extension.
- */
-export const safeName = (name: string | undefined, platform = process.platform): string | undefined => {
-  let plain =
-    name === undefined
-      ? ""
-      : basename(name.replaceAll("\\", "/"))
-          .replace(/[\p{Cc}​-‏‪-‮⁦-⁩]/gu, "")
-          .replace(/^\.+/, "")
-  if (platform === "win32") {
-    plain = plain.replace(/[<>:"|?*]/g, "_").replace(/[. ]+$/, "")
-    if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(plain)) return undefined
-  }
-  return plain === "" ? undefined : plain
-}
+export { safeName }
 
 /**
  * The bytes go to a temporary name first and are then hard-linked to the real one, which fails if the

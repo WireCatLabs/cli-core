@@ -23,7 +23,11 @@ const app = {
   messenger: false,
 }
 
-const fixture = (saved: Record<string, unknown> = {}, defaults: Record<string, Level> = {}) => {
+const fixture = (
+  saved: Record<string, unknown> = {},
+  defaults: Record<string, Level> = {},
+  ownerOnly: Parameters<typeof configCommand>[2] = {},
+) => {
   const root = mkdtempSync(join(tmpdir(), "command-permissions-"))
   const env = { CAL_CONFIG_DIR: root, CAL_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "w.db") }
   const file = join(root, "config.json")
@@ -39,7 +43,7 @@ const fixture = (saved: Record<string, unknown> = {}, defaults: Record<string, L
     app,
     configuration,
     commands: () => [
-      configCommand(app, configuration),
+      configCommand(app, configuration, ownerOnly),
       new Command("api")
         .addCommand(annotate(new Command("list").action(called), { effects: LOCAL_READ }))
         .addCommand(annotate(new Command("call").argument("<method>").action(called), { effects: REMOTE_WRITE })),
@@ -235,5 +239,27 @@ describe("a CLI that declares its own permission keys", () => {
     const answer = await runCommandForAgent(program, ["api", "list"], {}, { profile: "work", levels, keyOf })
     expect(answer).toMatchObject({ error: { error: { code: "permission_error" } } })
     expect(called).not.toHaveBeenCalled()
+  })
+
+  it("**over MCP, an agent with mcp.authority cannot change the settings the CLI keeps for its owner**", async () => {
+    const ownerOnly = { ownerOnly: { settings: ["limit"], permissions: ["api.call"] } }
+    const { definition, configuration, env, permissions, cal } = fixture({ "mcp.authority": "allow" }, {}, ownerOnly)
+    const commands = describeProgram(createProgram(definition))
+    const levels = () => configuration.resolveSettings({ profile: "work" }, { env }).permissions
+    const program = { commands, run: (argv: string[], given: object) => run(argv, definition, { ...given, env }) }
+    const set = (setting: string, value: string) =>
+      runCommandForAgent(program, ["config", "set"], { setting, value }, { profile: "work", levels })
+    for (const [setting, value, named] of [
+      ["limit", "5", "limit"],
+      ["permissions.api.call", "allow", "permissions.api.call"],
+      ["permissions.api.call.x", "allow", "permissions.api.call"],
+      ["permissions", '{"api.call":"allow"}', "permissions.api.call"],
+    ] as const)
+      expect(await set(setting, value)).toMatchObject({
+        error: { error: { code: "permission_error", message: expect.stringContaining(`cannot change ${named}`) } },
+      })
+    expect(await set("permissions.events.list", "deny")).not.toHaveProperty("error")
+    expect(permissions()).toEqual({ "mcp.authority": "allow", "events.list": "deny" })
+    expect((await cal("work", "config", "set", "permissions.api.call", "allow")).code).toBe(0)
   })
 })
