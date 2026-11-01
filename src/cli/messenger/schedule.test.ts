@@ -20,11 +20,11 @@ import type { Ran, ServerSystem } from "../../background/system.js"
 import type { Chat } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { pickChat } from "../../resolve.js"
-import { type BaseEnvironment, provide } from "../context.js"
+import { type BaseEnvironment, baseContext, provide } from "../context.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
-import { scheduleCommand } from "./schedule-command.js"
+import { scheduleCommand, scheduleCommandFor } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const messenger: Messenger = {
@@ -79,6 +79,35 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, system: ServerSystem
   )
   return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
 }
+
+describe("a CLI that is not a messenger", () => {
+  it("adds and lists a schedule through the host's own context", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux")
+    const resolveSettings = settingsFor(app).resolveSettings
+    const host = {
+      app,
+      context: (command: Command) => {
+        const base = baseContext(command, resolveSettings)
+        return { ...base, profile: base.settings.profile }
+      },
+    }
+    const streams = captureStreams()
+    const code = await run(
+      ["default", "schedule", "command", "sync", "--every", "5m", "--", "sync", "--json"],
+      { app, commands: () => [scheduleCommandFor(host)] },
+      { streams, env, system },
+    )
+    expect(code, streams.stderr.join("")).toBe(0)
+    expect(ran.length).toBeGreaterThan(0)
+    const file = scheduleFile(env.CHAT_STATE_DIR, "sync")
+    expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({
+      argv: ["sync", "--json"],
+      when: { every: 5 },
+      environment: { CHAT_PROFILE: "default" },
+    })
+  })
+})
 
 // Unit text for Linux and macOS holds POSIX paths; on Windows the real timer is checked by schedules.os.test.ts.
 const posix = process.platform !== "win32"

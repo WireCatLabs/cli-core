@@ -18,12 +18,12 @@ import {
 import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { locationVariables } from "../../background/units.js"
 import { parseDuration } from "../../domain/duration.js"
-import { readOnlyLockOf } from "../../ports/app.js"
+import { type AppIdentity, readOnlyLockOf } from "../../ports/app.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
 import { type BaseEnvironment, environmentOf, setExitCode } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
-import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { type AnswerOutput, itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { withQuery } from "../list-query.js"
 import { lineOf } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -84,19 +84,24 @@ const withWhen = (command: Command) =>
     .option("--at <HH:MM>", "every day at this local time")
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
 
+/** What the schedule command needs of a CLI: who it is and, per command, where it prints and which profile runs. */
+export interface ScheduleHost {
+  app: AppIdentity
+  context(command: Command): AnswerOutput & { env: NodeJS.ProcessEnv; profile: string }
+}
+
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd
  * (macOS) or Task Scheduler (Windows). Every timer runs `schedule exec <file>`; the schedule file holds
  * the rest, so what runs and with which variables is the same on all three.
  */
-export const scheduleCommand = (messenger: Messenger): Command => {
-  const { app } = messenger
+export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): Command => {
   const command = new Command("schedule").description(
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
   )
 
   const prepare = (self: Command) => {
-    const context = messengerContext(self, messenger)
+    const context = contextOf(self)
     const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(self).system ?? thisMachine()
     const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: context.env }).state
     const say = (value: object, lines: string[]) => renderAnswer(self, context, itemOf(value), () => lines.join("\n"))
@@ -279,3 +284,6 @@ export const scheduleCommand = (messenger: Messenger): Command => {
 
   return command
 }
+
+export const scheduleCommand = (messenger: Messenger): Command =>
+  scheduleCommandFor({ app: messenger.app, context: (command) => messengerContext(command, messenger) })
