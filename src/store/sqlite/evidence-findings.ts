@@ -49,13 +49,16 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       return invalid("stored findings exceed the read budget")
     return proposals.get(id)
   }
+  /** The one project its findings name, or `null` when none does. */
+  const projectOf = (input: FindingsInput) => input.findings.find((finding) => finding.project)?.project ?? null
   const view = (proposal: ProposedAction): EvidenceFindingsBatch => {
     const input = proposal.payload as StoredInput
-    if (!input || !proposal.target || !["proposed", "approved", "rejected"].includes(proposal.status))
+    if (!input || !["proposed", "approved", "rejected"].includes(proposal.status))
       return invalid("invalid stored findings batch")
     return {
       id: proposal.id,
-      project: proposal.target,
+      project: projectOf(input),
+      subject: proposal.target,
       input: { schemaVersion: 1, key: input.key, extractor: input.extractor, findings: input.findings },
       fingerprint: findingHash({ input, author: proposal.proposedBy.id }),
       status: proposal.status === "proposed" ? "proposed" : "reviewed",
@@ -105,8 +108,11 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
   return {
     stage: async (raw, rawAgent) => {
       const input = validateEvidenceFindings(raw)
-      const projects = new Set(input.findings.map((finding) => finding.project))
-      if (projects.size !== 1) return invalid("an evidence findings batch is about one project")
+      const projects = new Set(input.findings.flatMap((finding) => finding.project ?? []))
+      if (projects.size > 1) return invalid("an evidence findings batch is about one project at most")
+      const subjects = new Set(input.findings.map((finding) => finding.subject))
+      const shared = subjects.size === 1 ? [...subjects][0] : undefined
+      const target = shared ?? [...projects][0]
       const by = findingsAgent(rawAgent)
       return write(database, () => {
         const { actor } = authorActor(context, by)
@@ -130,7 +136,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           proposals.propose({
             kind: EVIDENCE_FINDINGS_KIND,
             by,
-            target: [...projects][0] as string,
+            ...(target === undefined ? {} : { target }),
             payload: { ...input, inputHash, snapshotHash, snapshotParts, agentModel: by.model ?? null },
           }),
         )
@@ -151,12 +157,15 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       if (projectId === undefined) return invalid("a findings list filters by a project reference")
       const ids = database
         .prepare(
-          "SELECT id FROM proposed_actions WHERE account_id IS NULL AND kind=? AND (? IS NULL OR (target_type='project' AND target_id=?)) AND (? IS NULL OR status=?) ORDER BY id DESC LIMIT ? OFFSET ?",
+          "SELECT id FROM proposed_actions WHERE account_id IS NULL AND kind=? AND (? IS NULL OR (target_type='project' AND target_id=?) " +
+            "OR EXISTS (SELECT 1 FROM json_each(payload,'$.findings') f WHERE json_extract(f.value,'$.project')=?)) " +
+            "AND (? IS NULL OR status=?) ORDER BY id DESC LIMIT ? OFFSET ?",
         )
         .all(
           EVIDENCE_FINDINGS_KIND,
           projectId,
           projectId === null ? null : Number(projectId),
+          projectId === null ? null : `project:${projectId}`,
           status ?? null,
           status === "reviewed" ? "approved" : (status ?? null),
           limit + 1,

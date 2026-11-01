@@ -41,9 +41,12 @@ export const priorityOf = (value: string): number | null => {
   if (word === "none") return null
   if ((PRIORITY_LABELS as readonly string[]).includes(word)) return MIDDLE[word as PriorityLabel]
   if (/^[0-4]$/.test(word)) return LEGACY_PRIORITY_SCORES[Number(word)] as number
+  // A bare 0 or 1 is the old scale, where they mean the opposite; the decimal point says a 0–1 score is meant.
+  if (/^(0?\.\d+|[01]\.\d*)$/.test(word) && Number(word) <= 1) return Number(word)
   throw new CliError(
     "validation_error",
-    `a priority is ${PRIORITY_LABELS.join(", ")} or none; 0 (urgent) … 4 (low) still work as critical, high, medium, low, low`,
+    `a priority is ${PRIORITY_LABELS.join(", ")}, none, or a score from 0.0 to 1.0 with its decimal point; ` +
+      "0 (urgent) … 4 (low) still work as critical, high, medium, low, low",
   )
 }
 

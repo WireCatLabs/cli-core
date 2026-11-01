@@ -48,19 +48,25 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
 
   const cited = (
     input: FindingsInput,
-    cite: (evidence: FindingEvidence, finding: Finding, projectId: string, seen: Map<string, unknown>) => void,
+    cite: (evidence: FindingEvidence, finding: Finding, projectId: string | null, seen: Map<string, unknown>) => void,
   ) => {
     const seen = new Map<string, unknown>()
     for (const finding of input.findings) {
-      const project = requiredThing(database, finding.project, "the project")
-      if (project.type !== "project") return invalid("a finding needs an owner project")
-      const projectRow = database
-        .prepare(
-          "SELECT id,key,name,description,type,scope,updated_at FROM projects WHERE id=? AND account_id IS NULL AND deleted_at IS NULL",
-        )
-        .get(project.id)
-      if (!projectRow) throw new CliError("not_found", "the owner project is unavailable")
-      seen.set(finding.project, projectRow)
+      let projectId: string | null = null
+      if (finding.project !== undefined) {
+        const project = requiredThing(database, finding.project, "the project")
+        if (project.type !== "project") return invalid("a finding needs an owner project")
+        const projectRow = database
+          .prepare(
+            "SELECT id,key,name,description,type,scope,updated_at FROM projects WHERE id=? AND account_id IS NULL AND deleted_at IS NULL",
+          )
+          .get(project.id)
+        if (!projectRow) throw new CliError("not_found", "the owner project is unavailable")
+        seen.set(finding.project, projectRow)
+        projectId = String(project.id)
+      }
+      if (finding.subject !== undefined)
+        seen.set(finding.subject, requiredThing(database, finding.subject, "the subject"))
       if (finding.kind === "task" && finding.assignee) {
         const person = requiredThing(database, finding.assignee, "the assignee")
         if (person.type !== "person") return invalid("the assignee must be a stored person")
@@ -68,7 +74,7 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
         if (!personRow) throw new CliError("not_found", "the assignee is unavailable")
         seen.set(finding.assignee, personRow)
       }
-      for (const evidence of finding.evidence) cite(evidence, finding, String(project.id), seen)
+      for (const evidence of finding.evidence) cite(evidence, finding, projectId, seen)
     }
     return seen
   }
@@ -93,12 +99,14 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
       const fact = facts.add({
         type: finding.type,
         statement: finding.statement,
-        project: finding.project,
+        ...(finding.project === undefined ? {} : { project: finding.project }),
+        ...(finding.subject === undefined ? {} : { subject: finding.subject }),
         evidence,
         by: agent,
       })
       return facts.accept(fact.ref).ref
     }
+    if (finding.project === undefined) return invalid("a task finding names the project the task goes in")
     const task = tasks.create(
       {
         project: finding.project,

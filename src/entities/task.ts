@@ -24,6 +24,9 @@ export const task = v.strictObject({
   state: v.picklist(TASK_STATES),
   origin: v.optional(v.picklist(TASK_ORIGINS)),
   project: v.optional(v.nullable(text)),
+  /** The project's key and name, as `tasks counts` names it. */
+  project_key: v.optional(v.nullable(text)),
+  project_name: v.optional(v.nullable(text)),
   account: v.optional(text),
   /** The chat it came from, as a `chat:` reference. */
   chat: v.optional(v.nullable(reference)),

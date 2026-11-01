@@ -426,6 +426,7 @@ export { STEMS_EVERY_MS, STEMS_SLICE_MS, type StemFills, stemFills } from "./mes
 export type { Running, ServerOptions, ServerProcess, ServerSystem } from "./messenger/server-command.js"
 export { storeSummary } from "./messenger/store-maintenance-command.js"
 export { type Saving, stored } from "./messenger/stored.js"
+export { dateOrNone } from "./messenger/tasks-command.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
 export { window, withPaging } from "./paging.js"
 export {

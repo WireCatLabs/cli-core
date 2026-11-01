@@ -54,7 +54,13 @@ const fixture = async () => {
 it("stages one project's cited findings once per key and refuses a reused key with other input", async () => {
   const f = await fixture()
   const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
-  expect(batch).toMatchObject({ project: f.project.ref, status: "proposed", previous: [], receipt: null })
+  expect(batch).toMatchObject({
+    project: f.project.ref,
+    subject: f.project.ref,
+    status: "proposed",
+    previous: [],
+    receipt: null,
+  })
   expect((await f.store.evidenceFindings.stage(await f.input(), agent)).id).toBe(batch.id)
   const changed = await f.input()
   changed.extractor = "other"
@@ -62,7 +68,7 @@ it("stages one project's cited findings once per key and refuses a reused key wi
   const other = await f.store.knowledge.addProject({ name: "Other Example" })
   const mixed = await f.input("run-2")
   mixed.findings[1] = { ...mixed.findings[1], project: other.ref } as FindingsInput["findings"][number]
-  await expect(f.store.evidenceFindings.stage(mixed, agent)).rejects.toThrow("one project")
+  await expect(f.store.evidenceFindings.stage(mixed, agent)).rejects.toThrow("one project at most")
   await expect(f.store.evidenceFindings.stage(await f.input("run-3"), { bot: "owner" })).rejects.toThrow("agent author")
   expect(await f.store.evidenceFindings.list({ project: f.project.ref, status: "proposed" })).toMatchObject({
     items: [{ id: batch.id }],
@@ -212,6 +218,63 @@ it("reads every reference a batch cites back once, with a short excerpt", async 
   })
 })
 
+it("stages findings about a person or about nobody, citing a note, and the owner's pick reads accepted at once", async () => {
+  const f = await fixture()
+  const lena = await f.store.people.add({ name: "Lena Example" })
+  const note = await f.store.notes.addNote({ text: "Call with Lena: she moves to Valencia in March" })
+  const about = (key: string, subject?: string): FindingsInput => ({
+    schemaVersion: 1,
+    key,
+    extractor: "synthetic",
+    findings: [
+      {
+        id: "move",
+        kind: "fact",
+        type: "fact",
+        statement: `Lena moves to Valencia in March (${key})`,
+        ...(subject === undefined ? {} : { subject }),
+        evidence: [],
+      },
+    ],
+  })
+  const person = about("person-1", `person:${lena.uid}`)
+  person.findings[0]?.evidence.push(await f.cite(note.ref))
+  const batch = await f.store.evidenceFindings.stage(person, agent)
+  expect(batch).toMatchObject({ project: null, subject: `person:${lena.uid}`, status: "proposed" })
+  expect(await f.store.evidenceFindings.sources(batch.id)).toMatchObject([{ ref: note.ref, kind: "note" }])
+
+  const reviewed = await f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["move"] })
+  const fact = reviewed.receipt?.items[0]?.reference as string
+  expect(await f.store.facts.get(fact)).toMatchObject({
+    status: "accepted",
+    subject: `person:${lena.uid}`,
+    project: null,
+  })
+
+  const nobody = about("nobody-1")
+  nobody.findings[0]?.evidence.push(await f.cite(note.ref))
+  expect(await f.store.evidenceFindings.stage(nobody, agent)).toMatchObject({ project: null, subject: null })
+
+  const task = await f.input("task-1")
+  const { project: _project, ...homeless } = task.findings[1] as FindingsInput["findings"][number]
+  await expect(
+    f.store.evidenceFindings.stage({ ...task, findings: [homeless as FindingsInput["findings"][number]] }, agent),
+  ).rejects.toThrow("names the project the task goes in")
+})
+
+it("lists a batch about a person under the project its findings name", async () => {
+  const f = await fixture()
+  const lena = await f.store.people.add({ name: "Lena Example" })
+  const input = await f.input("person-project")
+  for (const finding of input.findings) if (finding.kind === "fact") finding.subject = `person:${lena.uid}`
+  input.findings = input.findings.filter((finding) => finding.kind === "fact")
+  const batch = await f.store.evidenceFindings.stage(input, agent)
+  expect(batch).toMatchObject({ project: f.project.ref, subject: `person:${lena.uid}` })
+  expect((await f.store.evidenceFindings.list({ project: f.project.ref })).items.map(({ id }) => id)).toContain(
+    batch.id,
+  )
+})
+
 it("reads a staged batch from snake_case JSON with msg: and document: evidence", () => {
   const fingerprint = "a".repeat(64)
   const input = parseEvidenceFindingsJson(
@@ -259,5 +322,5 @@ it("reads a staged batch from snake_case JSON with msg: and document: evidence",
         ],
       }),
     ),
-  ).toThrow("msg: or document:")
+  ).toThrow("msg:, document: or note:")
 })

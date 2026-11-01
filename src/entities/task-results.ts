@@ -26,6 +26,8 @@ export const taskCard = v.strictObject({
   ref: reference,
   key: text,
   project: reference,
+  project_key: text,
+  project_name: text,
   title: text,
   description: v.nullable(text),
   type: v.picklist(TASK_TYPES),

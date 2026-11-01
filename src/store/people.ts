@@ -62,6 +62,8 @@ export interface PeopleStore extends AccountPeople {
   unlinkIdentity(identity: IdentityRef, options: LinkOptions): Promise<PersonRecord>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
+  /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
+  add(input: { name: string }): Promise<PersonRecord>
 }
 
 export const accountPeopleOver = (context: StoreContext): AccountPeople => {
@@ -124,6 +126,19 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     personOf: async (identity) => personLinks.personOf(context, identity),
     personSeenInAccounts: async (uid, accountIds) => personSeenInAccounts(context, uid, accountIds),
     personByUid: async (uid) => personLinks.personByUid(context, uid),
+    add: async ({ name }) => {
+      const text = typeof name === "string" ? name.trim() : ""
+      if (!text || text.length > 200) throw new CliError("validation_error", "a person's name takes 1–200 characters")
+      const id = write(database, () => {
+        const at = context.now()
+        return Number(
+          database
+            .prepare("INSERT INTO persons (name, owner, created_at, updated_at) VALUES (?, 0, ?, ?) RETURNING id")
+            .get(text, at, at)?.id,
+        )
+      })
+      return personLinks.personByUid(context, String(id)) as PersonRecord
+    },
     owner: async () => {
       try {
         return personLinks.personByUid(context, String(ownerPerson(database).id))

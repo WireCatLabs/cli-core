@@ -53,6 +53,8 @@ const taskCardSample = {
   ref: "task:1",
   key: "Q-1",
   project: "project:1",
+  project_key: "Q",
+  project_name: "Synthetic project",
   title: "Synthetic task",
   description: null,
   type: "question",
