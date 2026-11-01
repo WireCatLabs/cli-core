@@ -71,6 +71,11 @@ export type AccountAction =
   | "chat-mark-unread"
   | "message-star"
   | "message-unstar"
+  | "message-flag"
+  | "message-move"
+  | "message-copy"
+  | "message-delete"
+  | "message-restore"
   | "privacy"
 
 /** One attempt to send. **Never the text** — only its length. */

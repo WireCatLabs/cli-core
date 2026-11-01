@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Mail actions in the send journal.** `AccountAction` takes `message-flag`, `message-move`, `message-copy`,
+  `message-delete` and `message-restore`, so a mail CLI journals its changes to a mailbox under its own words. Like
+  the other `account` actions they count toward no hourly limit: organising mail reaches nobody.
+
 ## 0.521.0 — 01.11.2026
 
 ### Fixed

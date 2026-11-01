@@ -195,6 +195,21 @@ describe("two senders at once", () => {
     }
   })
 
+  it("never counts a mail change toward the hourly limit, however many messages it names", () => {
+    const guard = sendGuard({
+      profile: "mail-organise",
+      sendsPerHour: 1,
+      journal: new SendJournal(sendsPathFor("mail-organise")),
+      recipients: new RecipientList(recipientsPathFor("mail-organise"), app.command),
+      warn: () => {},
+    })
+    for (const action of ["message-flag", "message-move", "message-copy", "message-delete", "message-restore"] as const)
+      for (let at = 0; at < 3; at++) {
+        expect(() => guard.check({ chatId: null, kind: "account", action, count: 500 })).not.toThrow()
+        guard.record({ chatId: null, kind: "account", action, count: 500, outcome: "sent" })
+      }
+  })
+
   it("counts a scheduled message in the hour it goes out, not the hour it was queued", () => {
     const at = "2026-09-24T09:00:00Z"
     guard("g-later", 1, at).check({ chatId: "111", scheduledFor: "2026-09-24T15:00:00Z" })
