@@ -13,6 +13,7 @@ import {
   type QueryAst,
   type QueryNode,
   type QueryRegistry,
+  queryDescription,
   queryError,
   queryFieldsOf,
   timezoneOf,
@@ -26,6 +27,9 @@ import type { Settings } from "./settings.js"
 
 export const LIST_QUERY_GUIDE = "https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md"
 
+/** `[query...]`'s help, which points at the Fields section; an MCP tool has none and says the fields instead. */
+export const QUERY_ARGUMENT = "field:value terms that narrow the list — the fields are below"
+
 /**
  * A list that narrows by one query: `[query...]` last, a Fields section in its help, and the fields in
  * `commands --json`. The registry is checked here, so a field whose example does not run fails at startup.
@@ -36,9 +40,7 @@ export const withQuery = (command: Command, registry: QueryRegistry): Command =>
   const shown = askable(query)
   queryWordsAfterOptions(command).argument(
     "[query...]",
-    shown.length > 0
-      ? "field:value terms that narrow the list — the fields are below"
-      : "field:value terms; this list filters by none yet",
+    shown.length > 0 ? QUERY_ARGUMENT : "field:value terms; this list filters by none yet",
   )
   if (shown.length > 0) command.addHelpText("after", `\n${fieldsHelp({ ...query, fields: shown }, LIST_QUERY_GUIDE)}`)
   return command
@@ -143,24 +145,14 @@ const askable = (registry: QueryRegistry) =>
   registry.backend === "native" ? registry.fields.filter((field) => field.native) : registry.fields
 
 /** An MCP list's `query` argument: the language the CLI list takes after its arguments. */
-export const queryArgument = (registry: QueryRegistry) => {
-  const fields = askable(registry)
-  return v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(QUERY_LIMITS.bytes),
-      v.description(
-        fields.length === 0
-          ? "field:value terms; this list filters by none yet, so any term is refused"
-          : `${
-              registry.backend === "native"
-                ? "field:value terms joined by AND that narrow the list"
-                : "field:value terms that narrow the list (Lucene: AND OR NOT, [a TO b], > <)"
-            }; fields: ${fields.map((field) => field.name).join(", ")}; e.g. ${fields[0]?.example ?? ""}`,
-      ),
-    ),
-  )
-}
+export const queryArgument = (registry: QueryRegistry) =>
+  v.optional(v.pipe(v.string(), v.maxLength(QUERY_LIMITS.bytes), v.description(queryDescription(registry))))
+
+/** The fields a native list can also leave out, `-field:value`: what `nativeTermLists` keeps under `-field`. */
+export const negatableOf = (registry: QueryRegistry): string[] =>
+  askable(registry)
+    .filter((field) => field.negatable)
+    .map((field) => field.name)
 
 /**
  * The terms of a query a provider answers: field:value joined by AND, each field once. Anything else is a

@@ -6,7 +6,7 @@ import { describeProgram } from "@wirecat/cli-base/commands"
 import { skillResource } from "@wirecat/cli-base/skill"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import { type BaseContext, environmentOf } from "../cli/context.js"
-import { changesAuthorityAt, fetchesOnlyAt, judgedTargets } from "../cli/effects.js"
+import { changesAuthorityAt, judgedTargets, readsOverMcpAt } from "../cli/effects.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import type { CommandPermissions } from "../cli/permission-keys.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../cli/settings.js"
@@ -74,7 +74,7 @@ export const createAppServer = (command: Command, context: BaseContext, options:
     currentLevels: levels,
     readOnly: readOnly(),
     authority,
-    fetchOnly: fetchesOnlyAt(root),
+    fetchOnly: readsOverMcpAt(root),
     permissions: options.permissions,
   })
   const availability = (one: (typeof tools)[number]) => (): CommandAvailability => {
