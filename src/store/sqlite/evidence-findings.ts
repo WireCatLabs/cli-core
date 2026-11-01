@@ -195,7 +195,9 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
         }
         const input = proposal.payload as StoredInput
         // Rejecting creates nothing, so a batch whose evidence changed can still be closed. Accepting needs only the
-        // accepted findings' own project, assignee and evidence unchanged; a batch staged before parts were kept needs all.
+        // accepted findings' own evidence and assignee unchanged. The project is left out: every task a sibling batch
+        // creates moves its row, and the project still has to exist, which citing checks. A batch staged before parts
+        // were kept needs all.
         if (accepted.length) {
           const parts = input.snapshotParts
           if (!parts) {
@@ -203,7 +205,8 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           } else {
             const chosen = { ...batch.input, findings: batch.input.findings.filter((f) => accepted.includes(f.id)) }
             const now = core.snapshotParts(chosen, cite())
-            if (Object.entries(now).some(([key, hash]) => parts[key] !== hash)) return stale()
+            if (Object.entries(now).some(([key, hash]) => !key.startsWith("project:") && parts[key] !== hash))
+              return stale()
           }
         }
         if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)

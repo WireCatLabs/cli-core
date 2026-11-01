@@ -101,7 +101,7 @@ it("refuses evidence whose text changed or was never stored", async () => {
   )
 })
 
-it("accepts the findings whose own evidence is unchanged when another finding's text changed", async () => {
+it("accepts the findings whose own evidence is unchanged when another finding's text or the project changed", async () => {
   const f = await fixture()
   const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
   f.db.prepare("UPDATE documents SET body='Launch list moved' WHERE id=?").run(Number(f.doc.id))
@@ -118,9 +118,9 @@ it("accepts the findings whose own evidence is unchanged when another finding's 
   ])
   const renamed = await f.store.evidenceFindings.stage(await f.input("run-2"), agent)
   f.db.prepare("UPDATE projects SET name='Renamed Example' WHERE id=?").run(Number(f.project.ref.slice(8)))
-  await expect(
-    f.store.evidenceFindings.review(renamed.id, { fingerprint: renamed.fingerprint, accept: ["launch"] }),
-  ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
+  expect(
+    await f.store.evidenceFindings.review(renamed.id, { fingerprint: renamed.fingerprint, accept: ["launch"] }),
+  ).toMatchObject({ status: "reviewed" })
 })
 
 it("lets the owner, or an agent with a reason, decide; later batches reuse the decisions", async () => {
@@ -273,6 +273,39 @@ it("lists a batch about a person under the project its findings name", async () 
   expect((await f.store.evidenceFindings.list({ project: f.project.ref })).items.map(({ id }) => id)).toContain(
     batch.id,
   )
+})
+
+it("keeps a batch approvable after a sibling batch of the same project is decided, until its own source changes", async () => {
+  const f = await fixture()
+  const first = await f.store.evidenceFindings.stage(await f.input(), agent)
+  const other = await f.input("run-2")
+  for (const finding of other.findings)
+    if (finding.kind === "fact") finding.statement = "The harbour launch is the fourth one"
+    else finding.title = "Print the launch checklist"
+  const second = await f.store.evidenceFindings.stage(other, agent)
+  await f.store.evidenceFindings.review(first.id, { fingerprint: first.fingerprint, accept: ["launch", "checklist"] })
+  // The fixture's clock stands still; a real decision moves the project's updated_at with the task it creates.
+  f.db.prepare("UPDATE projects SET updated_at = updated_at + 1000").run()
+
+  const third = await f.input("run-3")
+  for (const finding of third.findings)
+    if (finding.kind === "fact") finding.statement = "The harbour launch is the fifth one"
+    else finding.title = "Sign the launch checklist"
+  const stale = await f.store.evidenceFindings.stage(third, agent)
+
+  expect(
+    await f.store.evidenceFindings.review(second.id, {
+      fingerprint: second.fingerprint,
+      accept: ["launch", "checklist"],
+    }),
+  ).toMatchObject({ status: "reviewed", receipt: { accepted: ["checklist", "launch"] } })
+
+  f.db
+    .prepare("UPDATE messages SET text='Harbour launch moved' WHERE account_id=? AND external_id='3'")
+    .run(f.accountId)
+  await expect(
+    f.store.evidenceFindings.review(stale.id, { fingerprint: stale.fingerprint, accept: ["launch"] }),
+  ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
 })
 
 it("reads a staged batch from snake_case JSON with msg: and document: evidence", () => {

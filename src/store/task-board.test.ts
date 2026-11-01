@@ -209,7 +209,18 @@ describe("the task board", () => {
     await expect(store.tasks.edit(parent.id, { project: "OPS" }, "owner")).rejects.toMatchObject({
       details: { reason: "task.has-subtasks", subtasks: [sub.key] },
     })
-    expect(await store.tasks.edit(sub.id, { project: "OPS" }, "owner")).toMatchObject({ key: "OPS-2", parent: null })
+    await expect(store.tasks.edit(sub.id, { project: "OPS" }, "owner")).rejects.toMatchObject({
+      details: { reason: "task.is-subtask", parent: parent.key },
+    })
+    const parentList = async (text: string) =>
+      (await store.tasks.board(query(`project:* ${text}`), { limit: 50 })).items.map(({ key }) => key)
+    expect(await parentList(`parent:${parent.key}`)).toEqual([sub.key])
+    expect(await store.tasks.edit(sub.id, { project: "OPS", parent: null }, "owner")).toMatchObject({
+      key: "OPS-2",
+      parent: null,
+    })
+    expect(await parentList(`parent:${parent.key}`)).toEqual([])
+    expect(await parentList("parent:any")).toEqual([])
   })
 
   it("changes a project task's kind within bug, feature and chore, and the revision moves", async () => {

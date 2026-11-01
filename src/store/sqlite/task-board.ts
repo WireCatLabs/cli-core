@@ -42,6 +42,7 @@ export const PROJECT_TASK_FIELDS: readonly FieldSpec[] = [
       "low, medium, high, critical or none; a range of labels or of the 0–1 number: priority:[high TO critical]",
   }),
   field("agent", "kw", "agent:hermes", { relation: "the agent working on it, by name; none or any" }),
+  field("parent", "kw", "parent:HRB-1", { relation: "the subtasks of a task, by its key; none or any" }),
   field("due", "time", "due:[today TO 2026-12-31]", {
     relation: "the due date; today, tomorrow and yesterday are your calendar days; NOT due:* has none",
   }),
@@ -159,6 +160,20 @@ const agentWhere = (node: Predicate): Where => {
     : { sql: "lower(t.agent) = ?", params: [value] }
 }
 
+/** A key the task had before it moved to another project still names it. */
+const parentWhere = (node: Predicate): Where => {
+  const value = node.value.trim()
+  if (value.toLowerCase() === "none") return { sql: "t.parent_id IS NULL", params: [] }
+  if (value.toLowerCase() === "any") return { sql: "t.parent_id IS NOT NULL", params: [] }
+  const key = value.replace(/^task:/, "")
+  return {
+    sql:
+      "t.parent_id IN (SELECT id FROM tasks WHERE key = ? OR package_id = ? UNION SELECT task_id FROM task_events " +
+      "WHERE kind = 'project' AND json_extract(changes, '$.key[0]') = ?)",
+    params: [key.toUpperCase(), key, key.toUpperCase()],
+  }
+}
+
 const truth = (node: Predicate, sql: string): Where => ({
   sql: node.value.toLowerCase() === "true" ? sql : `NOT (${sql})`,
   params: [],
@@ -198,6 +213,7 @@ export const projectTaskColumns = (now: number, zone: string): ColumnMap => ({
   assignee: { where: assigneeWhere },
   priority: { where: priorityWhere },
   agent: { where: agentWhere },
+  parent: { where: parentWhere },
   due: { type: "time", sql: "t.due_at" },
   closed: { type: "time", sql: "t.closed_at" },
   overdue: { where: (node) => truth(node, dueGroups(now, zone).overdue) },
