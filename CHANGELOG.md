@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.525.0 — 01.11.2026
+
 ### Added
 
 - **Mail server search.** `mailReadCommands({ app, read, server })` gives `search messages` the shared
