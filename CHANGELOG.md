@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.540.0 — 02.11.2026
+
 ### Added
 
 - **`events export` without `--output` is a read over MCP and under the read-only lock.** It only prints the `.ics`
