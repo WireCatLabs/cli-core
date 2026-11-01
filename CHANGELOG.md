@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.519.0 — 01.11.2026
+
 ### Added
 
 - **`scheduleCommandFor(host)`** mounts the `schedule` command on a CLI that is not a messenger (mail-cli): the host
