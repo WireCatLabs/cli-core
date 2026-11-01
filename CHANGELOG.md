@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`messages delete` with no message id refuses with `validation_error`** before it connects. An empty id (`""`
+  or a lone comma) used to reach the messenger as a deletion of nothing and answer success.
+
 ## 0.542.0 — 02.11.2026
 
 ### Added
