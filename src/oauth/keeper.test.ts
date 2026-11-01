@@ -212,6 +212,51 @@ describe("a run with moved folders", () => {
     await keeper().accessToken()
     expect(stored(keyring)).toMatchObject({ refreshToken: "synthetic-refresh-2" })
   })
+
+  it("refreshes a token the server refused though it looked fresh, once for concurrent callers", async () => {
+    const { keeper, calls } = setup({
+      saved: { accessToken: "synthetic-access-refused", refreshToken: "synthetic-refresh", expiresAt: NOW + 600_000 },
+    })
+    const one = keeper()
+    expect(await one.accessToken()).toBe("synthetic-access-refused")
+    expect(await Promise.all([one.accessToken({ refresh: true }), one.accessToken({ refresh: true })])).toEqual([
+      "synthetic-access-new",
+      "synthetic-access-new",
+    ])
+    expect(calls).toHaveLength(1)
+    expect(await one.accessToken()).toBe("synthetic-access-new")
+  })
+
+  it("takes the token another process saved meanwhile instead of refreshing again", async () => {
+    const { keeper, calls, keyring } = setup({
+      saved: { accessToken: "synthetic-access-refused", refreshToken: "synthetic-refresh", expiresAt: NOW + 600_000 },
+    })
+    const stale = keeper()
+    expect(await stale.accessToken()).toBe("synthetic-access-refused")
+    await keeper().accessToken({ refresh: true })
+    expect(calls).toHaveLength(1)
+    const saved = stored(keyring)
+    keyring.set(
+      "example-cli",
+      "oauth:example:personal",
+      JSON.stringify({ ...saved, accessToken: "synthetic-access-other" }),
+    )
+    expect(await stale.accessToken({ refresh: true })).toBe("synthetic-access-other")
+    expect(calls).toHaveLength(1)
+  })
+
+  it("refreshes a refused token in a run with moved folders, in memory only", async () => {
+    const { keeper, calls, keyring } = setup({
+      saved: { accessToken: "synthetic-access-refused", refreshToken: "synthetic-refresh", expiresAt: NOW + 600_000 },
+      isolated: true,
+    })
+    const before = keyring.get("example-cli", "oauth:example:personal")
+    const lockDir = folder()
+    expect(await keeper({ lockDir }).accessToken({ refresh: true })).toBe("synthetic-access-new")
+    expect(await keeper({ lockDir }).accessToken()).toBe("synthetic-access-new")
+    expect(calls).toHaveLength(1)
+    expect(keyring.get("example-cli", "oauth:example:personal")).toBe(before)
+  })
 })
 
 describe("signIn", () => {

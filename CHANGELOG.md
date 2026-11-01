@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`tokenKeeper.tokens({ refresh: true })`** (and `accessToken({ refresh: true })`): after a server refuses an
+  access token whose `expiresAt` still called it fresh (a revoked session), refresh under the shared lock anyway. A
+  different fresh token another process saved meanwhile is answered instead of a second refresh.
+
 ## 0.536.0 — 01.11.2026
 
 ### Fixed
