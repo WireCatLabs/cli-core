@@ -12,6 +12,9 @@ shape of this file.
 - **The request pace from `@wirecat/cli-core/sends`.** `Pacer`, `DEFAULT_PACE`, `PaceRate` and `pacePathFor` were only
   inside the messenger context; a CLI that is not a messenger (mail's SMTP sends) now spaces its writes with the same
   file-shared pace.
+- **`appDoctorCommand` takes a `local` check.** A CLI that is not a messenger can now put what it reads of its own
+  state from disk into `doctor` — a run that stopped half way, an undo window about to close — without `--online`.
+  Its fields join the answer and its notes go to stderr; a throw is reported as `local.error`, never a failed doctor.
 
 ## 0.522.0 — 01.11.2026
 
