@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.534.0 — 01.11.2026
+
 ### Added
 
 - **`parseMail` also returns `messageId`, `references`, `replyTo` and `date`**, and takes a third argument, the most
