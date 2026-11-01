@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`events prepare [event]`, in the shared calendar commands: what the store holds for one meeting.** The event as
+  `events show` gives it, and for each attendee other than the owner their linked identities, latest one-to-one
+  messages and mail, their messages in groups, past events and recorded meetings with them, read in every account that
+  saw them. Without an event, the next meeting with other attendees. `meta.accounts` names what was read, and
+  `meta.complete: false` names a chat the store does not hold whole (`chat.not-read`) or meetings not yet indexed
+  (`meetings.index-pending`); `untrusted` marks all third-party text. It summarises nothing. `recordContext` is
+  `personContext` for a person already found, read in the accounts the caller names.
+
 ### Fixed
 
 - **Mail a server search stores first gets the owner's rule tags.** `searchMailServer` saved new mail without the

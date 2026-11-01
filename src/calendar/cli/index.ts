@@ -10,9 +10,11 @@ import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
 import { searchEvents } from "../../services/events-search.js"
+import { dateWindow } from "../../services/moment.js"
 import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { BUSY_QUERY, BUSY_QUERY_NOTE, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
+import { eventPreparation, nextMeeting, PREPARE_MESSAGES } from "../prepare.js"
 import {
   accountsMeta,
   CALENDAR_UNTRUSTED_FIELDS,
@@ -113,6 +115,12 @@ const integer = (text: string) => {
   if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text)))
     throw new InvalidArgumentError("expected a positive integer")
   return Number(text)
+}
+
+const upTo = (most: number) => (text: string) => {
+  const value = integer(text)
+  if (value > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
+  return value
 }
 
 const minutes = (text: string) => {
@@ -391,6 +399,42 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     const shown = await eventAnswer(await eventOf(deps.store, deps.accountId, eventIdOf(reference)), personOfEmail)
     print({ ...shown, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
   })
+
+  example(
+    annotate(events.command("prepare"), { effects: LOCAL_READ, partial: true })
+      .description(
+        "before a meeting: the event, its attendees with their answer, and each one's latest messages, mail and " +
+          "meetings the store holds; the next meeting when no event is named",
+      )
+      .summary("what the store holds for one meeting and the people in it")
+      .argument("[event]", "the event's id, or event:<id>; the next meeting with other attendees when absent"),
+    "events prepare --json",
+    "events prepare event:42 --limit 3",
+    "events prepare event:42 --since-time 2026-10-01",
+  )
+    .option("--limit <n>", `messages per person in each list, 1–50; ${PREPARE_MESSAGES} if not given`, upTo(50))
+    .option("--since-time <time>", "no message or meeting older than this ISO 8601 time, or 30d ago")
+    .action(async (reference: string | undefined, opts: { limit?: number; sinceTime?: string }, command: Command) => {
+      const window = dateWindow({
+        ...(opts.sinceTime === undefined ? {} : { sinceTime: opts.sinceTime }),
+        zone: zone(),
+        now: now(),
+      })
+      const details =
+        reference === undefined
+          ? await nextMeeting(deps.store, deps.accountId, now())
+          : await eventOf(deps.store, deps.accountId, eventIdOf(reference))
+      const { meta, ...prepared } = await eventPreparation(details, {
+        store: deps.store,
+        messages: messages("events prepare"),
+        account: { id: deps.accountId, key: deps.account },
+        personOf: personOfEmail ?? (async () => null),
+        now: now(),
+        ...(opts.limit === undefined ? {} : { limit: opts.limit }),
+        ...(window.since === undefined ? {} : { since: window.since }),
+      })
+      print({ ...prepared, meta: { ...meta, ...window.meta } }, command)
+    })
 
   const searches = annotate(program.command("search").description("find stored things by text: events"), {
     effects: GROUP,

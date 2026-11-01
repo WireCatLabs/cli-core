@@ -145,7 +145,7 @@ describe("calendar write commands", () => {
     const root = new Command("gcal")
     addCalendarCommands(root, { store: memoryEventStore(), accountId: 1, account: {} as never, write: () => undefined })
     const events = root.commands.find((one) => one.name() === "events")
-    expect(events?.commands.map((one) => one.name())).toEqual(["list", "show"])
+    expect(events?.commands.map((one) => one.name())).toEqual(["list", "show", "prepare"])
   })
 
   it("create asks when the owner set it to, then journals its id before the provider sees it", async () => {

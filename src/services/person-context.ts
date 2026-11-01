@@ -181,11 +181,24 @@ export const personContext = async (
   store: MessageStore,
   asked: AccountKey,
   reference: string,
-  { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since, now = Date.now() }: ContextOptions = {},
+  options: ContextOptions = {},
 ): Promise<PersonContext> => {
   const found = pickPerson(reference, await store.people.people(asked.provider, { account: asked.account }))
   const record = await store.people.personOf({ provider: asked.provider, id: found.id })
   if (!record) throw new CliError("not_found", `no person ${found.id} in the store`)
+  return {
+    person: { ...record, provider: asked.provider, id: found.id },
+    ...(await recordContext(store, record, readsOf(record, asked), options)),
+  }
+}
+
+/** `personContext` of a person already found, read in the identities and accounts `reads` names. */
+export const recordContext = async (
+  store: MessageStore,
+  record: PersonRecord,
+  reads: { key: AccountKey; identity: LinkedIdentity }[],
+  { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since, now = Date.now() }: ContextOptions = {},
+): Promise<Omit<PersonContext, "person">> => {
   const recent = (message: ContextMessage) => since === undefined || Date.parse(message.timestamp) >= since
 
   const shared: SharedChat[] = []
@@ -196,7 +209,7 @@ export const personContext = async (
   const theirs: ContextMessage[] = []
   const mentions: ContextMessage[] = []
   let cut = false
-  for (const { key, identity } of readsOf(record, asked)) {
+  for (const { key, identity } of reads) {
     const chats = await store.chats.chatsWith(key, identity.id)
     for (const chat of chats) {
       shared.push({ ...key, chatId: chat.id, title: chat.title, kind: chat.kind, lastMessageAt: chat.lastMessageAt })
@@ -283,7 +296,6 @@ export const personContext = async (
   const kept = withinBytes(lists, bytes)
 
   return {
-    person: { ...record, provider: asked.provider, id: found.id },
     shared: shared.sort((a, b) => Date.parse(b.lastMessageAt ?? "") - Date.parse(a.lastMessageAt ?? "")),
     last: {
       fromThem: each.find((message) => !message.outgoing) ?? null,

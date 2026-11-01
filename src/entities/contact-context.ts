@@ -5,7 +5,7 @@ import { count, id, reference, text, time } from "./fields.js"
 import { message } from "./message.js"
 
 const contextPerson = v.strictObject({ ...linkedPerson.entries, provider: text, id })
-const contextMessage = v.strictObject({
+export const contextMessage = v.strictObject({
   locator: reference,
   provider: text,
   account: id,
@@ -26,7 +26,7 @@ const sharedChat = v.strictObject({
   kind: chat.entries.kind,
   last_message_at: v.nullable(time),
 })
-const contextEvent = v.strictObject({
+export const contextEvent = v.strictObject({
   ref: reference,
   title: v.nullable(text),
   starts_at: v.nullable(time),
@@ -136,7 +136,7 @@ const coverage = v.strictObject({
   has_more: v.boolean(),
   cut_by: v.nullable(v.picklist(["limit", "bytes"])),
 })
-const meetingCue = v.strictObject({
+export const meetingCue = v.strictObject({
   reference,
   fingerprint: text,
   transcript_id: count,

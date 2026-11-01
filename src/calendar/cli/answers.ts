@@ -3,7 +3,8 @@ import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
-import { count, id, text, time, untrusted } from "../../entities/fields.js"
+import { contextEvent, contextMessage, meetingCue } from "../../entities/contact-context.js"
+import { count, id, reference, text, time, untrusted } from "../../entities/fields.js"
 import { event } from "../../meetings/index.js"
 
 const nullableText = v.nullable(text)
@@ -199,6 +200,35 @@ export const calendarAttendee = v.strictObject({
   untrusted,
 })
 
+/** An attendee of the prepared event other than the owner, with what the store holds of them; `read` false: nothing. */
+const preparedPerson = v.strictObject({
+  email: text,
+  name: nullableText,
+  response: nullableText,
+  organizer: v.boolean(),
+  optional: v.boolean(),
+  person: nullableText,
+  read: v.boolean(),
+  identities: v.array(text),
+  recent: v.strictObject({ direct: v.array(contextMessage), groups: v.array(contextMessage) }),
+  past_events: v.array(contextEvent),
+  meetings: v.array(
+    v.strictObject({
+      reference,
+      cues: v.array(meetingCue),
+      cue_coverage: v.strictObject({ included: count, omitted: v.nullable(count), has_more: v.boolean() }),
+    }),
+  ),
+  has_more: v.boolean(),
+})
+
+export const calendarEventPreparation = v.strictObject({
+  event: calendarEvent,
+  people: v.array(preparedPerson),
+  limits: v.strictObject({ people: count, messages: count, bytes: count }),
+  untrusted,
+})
+
 export const calendarLinkedPerson = v.strictObject({ person: text, name: nullableText, identities: v.array(text) })
 
 export const calendarLinkReview = v.strictObject({
@@ -220,6 +250,7 @@ const ANSWERS: Record<string, { name: string; schema?: v.GenericSchema }> = {
   "store status": { name: "calendar_sync_progress", schema: calendarSyncProgress },
   "events list": { name: "event" },
   "events show": { name: "calendar_event", schema: calendarEvent },
+  "events prepare": { name: "calendar_event_preparation", schema: calendarEventPreparation },
   "events create": { name: "calendar_event_write", schema: calendarEventWrite },
   "events update": { name: "calendar_event_write", schema: calendarEventWrite },
   "events delete": { name: "calendar_event_write", schema: calendarEventWrite },
