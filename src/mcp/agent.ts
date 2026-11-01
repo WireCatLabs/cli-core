@@ -7,11 +7,13 @@ import {
   flatten,
   type OptionInfo,
 } from "@wirecat/cli-base/commands"
+import { queryDescription } from "@wirecat/cli-base/query"
 import { type ErrorObject, writes } from "@wirecat/cli-base/standards"
 import { VOCABULARY } from "@wirecat/cli-base/standards/tables"
 import * as v from "valibot"
 import { type CommandAvailability, commandAvailability } from "../cli/command-availability.js"
 import { changesMessenger } from "../cli/effects.js"
+import { QUERY_ARGUMENT } from "../cli/list-query.js"
 import type { CommandPermissions } from "../cli/permission-keys.js"
 
 export type { CommandAvailability } from "../cli/command-availability.js"
@@ -179,10 +181,18 @@ const optionField = (option: OptionInfo, long: string, negated?: OptionInfo): Fi
   }
 }
 
-const argumentField = (argument: ArgumentInfo): Field => {
+/** A list's query names its fields here: the help's Fields section, which its description points to, is not sent. */
+const argumentField = (argument: ArgumentInfo, query?: CommandInfo["query"]): Field => {
+  const own = argument.description || argument.name
+  const about =
+    query && argument.name === "query"
+      ? own === QUERY_ARGUMENT
+        ? queryDescription(query)
+        : `${own}; ${queryDescription(query)}`
+      : own
   const one = argument.choices
     ? v.pipe(v.picklist(argument.choices as string[]), v.description(argument.description))
-    : text(argument.description || argument.name)
+    : text(about)
   return {
     name: snake(argument.name),
     required: argument.required,
@@ -216,7 +226,7 @@ const fieldsOf = (
   info: CommandInfo,
   { omit = [], offline = false, stdin }: Pick<CatalogueOptions, "omit" | "offline" | "stdin">,
 ) => {
-  const fields: Field[] = info.arguments.map(argumentField)
+  const fields: Field[] = info.arguments.map((argument) => argumentField(argument, info.query))
   const read = stdin?.(info.path)
   if (read) fields.push(stdinField(read))
   const switches = new Map(info.options.filter((one) => !one.takes_value).map((one) => [longOf(one), one]))

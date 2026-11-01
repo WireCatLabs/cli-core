@@ -8,7 +8,14 @@ import {
   queryFieldsOf,
 } from "@wirecat/cli-base/query"
 import type { Issue, Meta } from "@wirecat/cli-base/standards"
-import { LIST_QUERY_GUIDE, listQuery, nativeTermLists, type QueryWords, typedQuery } from "../cli/list-query.js"
+import {
+  LIST_QUERY_GUIDE,
+  listQuery,
+  nativeTermLists,
+  negatableOf,
+  type QueryWords,
+  typedQuery,
+} from "../cli/list-query.js"
 import {
   type EntryEventType,
   type Event,
@@ -140,6 +147,7 @@ export const EVENTS_QUERY: QueryRegistry = {
   backend: "native",
   fields: queryFieldsOf(event, {
     native: ["id", "starts_at", "ends_at", "changed_at", "overlapping", "calendar", "person", "event_type"],
+    negatable: ["event_type"],
     relations: {
       event_type: {
         type: "enum",
@@ -231,7 +239,7 @@ export const eventsFilter = async (
   const { zone, now } = context
   const span = (text: string) => ({ start: 0, end: text.length })
   const day = (date: string) => dayBoundary(date, zone, false, span(date))
-  const terms = nativeTermLists(listQuery(typedQuery(query), EVENTS_QUERY, LIST), LIST, [], ["event_type"])
+  const terms = nativeTermLists(listQuery(typedQuery(query), EVENTS_QUERY, LIST), LIST, [], negatableOf(EVENTS_QUERY))
   const kinds = (nodes: Predicate[] = []) => nodes.map(({ value }) => value.toLowerCase() as EntryEventType)
   const excluded = kinds(terms.get("-event_type"))
   if (excluded.length) filter.notEventTypes = [...new Set(excluded)]

@@ -439,12 +439,18 @@ describe("calendar commands", () => {
 
     const own = await cli("events", "list", "starts_at:today")
     expect(own.items.map(({ title }) => title)).toEqual(["Example roadmap planning"])
-    expect(own.meta).toEqual({ accounts: ["google-calendar:owner-1"], complete: true })
+    expect(own.meta).toEqual({
+      accounts: ["google-calendar:owner-1"],
+      complete: true,
+      now: "2026-10-27T09:00:00.000Z",
+      now_local: "2026-10-27T09:00:00.000+00:00",
+      timezone: "UTC",
+    })
     expect((await cli("events", "list", "starts_at:today", "overlapping:true")).items).toEqual([])
 
     const both = await cli("events", "list", "starts_at:today", "--source", "all")
     expect(both.items.map(({ title }) => title)).toEqual(["Example roadmap planning", "Dentist"])
-    expect(both.meta).toEqual({
+    expect(both.meta).toMatchObject({
       accounts: ["google-calendar:owner-1", "google-calendar:owner-2"],
       complete: false,
       issues: [{ code: "not_found", reason: "calendar.sync-incomplete", source: "google-calendar:owner-2" }],
@@ -743,6 +749,8 @@ describe("calendar commands", () => {
     expect(prepared.meta).toMatchObject({
       complete: false,
       issues: [{ reason: "chat.not-read", source: "telegram:500/11" }],
+      now: new Date(NOW).toISOString(),
+      timezone: "UTC",
     })
 
     await store.sync.markRange(tg, "11", 1, 2)
