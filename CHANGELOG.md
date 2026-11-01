@@ -14,6 +14,13 @@ shape of this file.
 - **`syncMail` takes `saveCoverage: false`** for a spot read, such as a CLI storing the copy of a message it just
   sent: the mail is saved, and the coverage that memo reports for the archive stays what the last full run set.
 
+### Fixed
+
+- **A server mail search that ran out of time says so.** When the server's own deadline cut a search or the read of
+  its finds short, `searchMailServer` reported `search.server-failed` (`provider_unavailable`), as if the server had
+  refused. It now reports `search.server-timeout` (`timeout`), as when `--server-time` ends it, so a caller knows to
+  give it more time.
+
 ## 0.534.0 — 01.11.2026
 
 ### Added
