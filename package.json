@@ -129,6 +129,10 @@
       "types": "./dist/mail/index.d.ts",
       "default": "./dist/mail/index.js"
     },
+    "./mail/cli": {
+      "types": "./dist/mail/cli/index.d.ts",
+      "default": "./dist/mail/cli/index.js"
+    },
     "./mail/testing": {
       "types": "./dist/mail/testing/index.d.ts",
       "default": "./dist/mail/testing/index.js"

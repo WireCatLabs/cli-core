@@ -27,8 +27,10 @@ memo mounts the same ones (`Messenger.accountOf`).
 **Mail is fetched by its own source tool**, `mail-cli`, like messengers and calendars: it signs in, fetches, and writes
 the store through the shared `./mail` engine ([MAIL.md](MAIL.md)). It is a source tool, and the rule that a command lives
 where its data comes from holds for it. tg and max do not read mail: tg has no `search mail` (it is an unknown command
-there), and their `search all` never reads mail. Searching mail and linking it to people and projects stays in the
-knowledge tool.
+there), and their `search all` never reads mail. mail-cli searches and reads its own mailbox (`search messages`,
+`messages show`, `conversations list|show`, from `@wirecat/cli-core/mail/cli`), as tg searches its own messages; search
+across mailboxes and sources, and linking mail to people and projects, stays in the knowledge tool. Both read with the
+same `searchMail` and `showMail`, so a query and an email's JSON are the same in each.
 
 Nobody uses these tools yet (owner, 2026-10-11), so a command moves in one step, with no alias.
 

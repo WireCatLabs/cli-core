@@ -16,6 +16,17 @@ export { PRESET_NAMES, PRESETS, type PresetName, presetMatches } from "./presets
 export { domainsToAge, groupKey, type Probe, type ProbeGroup, probeMail, SUGGEST_RULE } from "./probe.js"
 export { type MailFolderProgress, mailProgress } from "./progress.js"
 export {
+  ATTACHMENT_CHARS,
+  attachmentsText,
+  hitText,
+  lowerSuspicious,
+  type MailSearch,
+  type ShownMail,
+  searchMail,
+  showMail,
+  withAttachmentText,
+} from "./read.js"
+export {
   type FileStamp,
   FULL_PASS_MS,
   MBOX_RESUME,

@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`@wirecat/cli-core/mail/cli`**: `mailReadCommands({ app, read })` mounts `search messages`, `messages show` and
+  `conversations list|show` on a mail CLI, read only and scoped to the profile's mailbox. `conversations list` takes a
+  query over `subject`, `emails_count` and `last_email_at`; `store.mail.threads({ where })` and `THREAD_COLUMNS`
+  answer it in SQL.
+- **`searchMail`, `showMail`, `hitText`, `attachmentsText`, `withAttachmentText`, `lowerSuspicious`** in
+  `@wirecat/cli-core/mail`, moved from memo: mail search with demoted senders last (now also across pages), and an
+  email with the text of its attachments.
+- **`list:`** in the query language: a mailing list by its List-Id, or by a domain for every list under it
+  (`list:github.com`); mail only.
+
 ## 0.519.0 — 01.11.2026
 
 ### Added
