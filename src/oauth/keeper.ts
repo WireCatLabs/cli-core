@@ -31,9 +31,17 @@ export type SignInOptions = Omit<AuthorizeOptions, "provider" | "signal"> & {
   accept?: (tokens: TokenSet) => Promise<Record<string, unknown> | undefined> | Record<string, unknown> | undefined
 }
 
+export interface TokensOptions {
+  /**
+   * The server refused the access token this keeper last answered, though `expiresAt` called it fresh (a revoked
+   * session): refresh under the lock anyway, unless another process already saved a different fresh one.
+   */
+  refresh?: boolean
+}
+
 export interface TokenKeeper {
-  accessToken(): Promise<string>
-  tokens(): Promise<TokenSet>
+  accessToken(options?: TokensOptions): Promise<string>
+  tokens(options?: TokensOptions): Promise<TokenSet>
   signIn(options: SignInOptions): Promise<{ scopes: string[] }>
   /** Saves tokens a CLI got by a flow of its own, under the same lock. */
   save(tokens: TokenSet, extra?: Record<string, unknown>): Promise<void>
@@ -127,36 +135,50 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
   }
   const forget = () => refreshedInMemory.delete(lockPath)
 
-  const tokens = async (): Promise<TokenSet> => {
+  let answered: TokenSet | undefined
+  const answer = (given: TokenSet) => {
+    answered = given
+    return given
+  }
+  const tokens = async ({ refresh = false }: TokensOptions = {}): Promise<TokenSet> => {
     const seen = storage.read()
     if (!seen) throw notSignedIn()
-    if (fresh(seen.tokens)) return seen.tokens
-    const kept = remembered(seen.tokens)
-    if (kept) return kept
-    return shared(async () => {
-      const current = storage.read()
-      if (!current) throw notSignedIn()
-      // Another process refreshed while this one waited for the lock: its result is the one to use.
-      if (fresh(current.tokens) || current.tokens.refreshToken !== seen.tokens.refreshToken) return current.tokens
-      const keptMeanwhile = remembered(current.tokens)
-      if (keptMeanwhile) return keptMeanwhile
-      const client = clientOf(current)
-      const refreshed = await exchange(
-        { grant_type: "refresh_token", refresh_token: current.tokens.refreshToken },
-        context(client, current.tokens),
-      )
-      // A rotated refresh token is saved even so: kept only in memory, it would die with the process.
-      if (storage.moved && refreshed.refreshToken === current.tokens.refreshToken)
-        refreshedInMemory.set(lockPath, refreshed)
-      else storage.write({ tokens: refreshed, client })
-      return refreshed
-    })
+    if (!refresh) {
+      const kept = remembered(seen.tokens)
+      if (kept) return answer(kept)
+      if (fresh(seen.tokens)) return answer(seen.tokens)
+    }
+    const refused = answered ?? remembered(seen.tokens) ?? seen.tokens
+    return answer(
+      await shared(async () => {
+        const current = storage.read()
+        if (!current) throw notSignedIn()
+        const latest = remembered(current.tokens) ?? current.tokens
+        // Another process refreshed while this one waited for the lock: its result is the one to use.
+        if (refresh) {
+          if (latest.accessToken !== refused.accessToken && fresh(latest)) return latest
+        } else {
+          if (latest !== current.tokens) return latest
+          if (fresh(current.tokens) || current.tokens.refreshToken !== seen.tokens.refreshToken) return current.tokens
+        }
+        const client = clientOf(current)
+        const refreshed = await exchange(
+          { grant_type: "refresh_token", refresh_token: current.tokens.refreshToken },
+          context(client, current.tokens),
+        )
+        // A rotated refresh token is saved even so: kept only in memory, it would die with the process.
+        if (storage.moved && refreshed.refreshToken === current.tokens.refreshToken)
+          refreshedInMemory.set(lockPath, refreshed)
+        else storage.write({ tokens: refreshed, client })
+        return refreshed
+      }),
+    )
   }
 
   return {
     tokens,
-    accessToken: async () => {
-      const current = await tokens()
+    accessToken: async (tokensOptions) => {
+      const current = await tokens(tokensOptions)
       if (!current.accessToken) throw notSignedIn()
       return current.accessToken
     },

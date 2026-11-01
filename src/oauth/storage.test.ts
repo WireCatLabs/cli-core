@@ -215,6 +215,19 @@ describe("new entries", () => {
     expect(storage.read()).toBeUndefined()
   })
 
+  it("read back the fields added at sign-in, never a token or the client secret", () => {
+    const keyring = memoryKeyring()
+    const storage = credentialStorage({
+      credentials: { service: "cal-cli", configDir: folder(), storage: "keyring", keyring },
+      account: oauthAccount("google", "personal"),
+      codec: standardCodec("google"),
+    })
+    const tokens = { accessToken: "a", refreshToken: "r", expiresAt: NOW, scopes: ["s"] }
+    storage.write({ tokens, client: { clientId: "c" }, extra: { signedInAt: NOW, clientSecret: "synthetic-secret" } })
+    storage.write({ tokens: { ...tokens, accessToken: "refreshed" }, client: { clientId: "c" } })
+    expect(storage.read()?.extra).toEqual({ signedInAt: NOW })
+  })
+
   it("stay in the file on a refresh and move back to the keyring on a sign-in", () => {
     const configDir = folder()
     const keyring = memoryKeyring()
