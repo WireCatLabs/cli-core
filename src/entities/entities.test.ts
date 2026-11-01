@@ -55,6 +55,7 @@ const taskCardSample = {
   project: "project:1",
   project_key: "Q",
   project_name: "Synthetic project",
+  created_by: { type: "bot", id: "3", name: "synthetic-agent", owner: false },
   title: "Synthetic task",
   description: null,
   type: "question",

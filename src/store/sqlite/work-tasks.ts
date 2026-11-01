@@ -33,6 +33,7 @@ import {
   withoutField,
 } from "./task-board.js"
 import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
+import { addComment, authorNamed, commentsOf, type NamedAuthor, type TaskComment } from "./task-comments.js"
 import { INBOX_KEY_LENGTH, inboxKey } from "./task-keys.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { taskIdOf, taskRowOf, thingOf } from "./things.js"
@@ -61,6 +62,8 @@ export const TASK_EVENT_KINDS = [
   "verdict",
   "close-certainty",
   "tags",
+  "project",
+  "type",
 ] as const
 
 export type WorkTaskType = (typeof WORK_TASK_TYPES)[number]
@@ -83,9 +86,13 @@ export interface TaskFields {
   reason?: string | null
   /** A name the caller checked against its category list; every change is a `category` event. */
   category?: string
+  /** Another owner project, by key or `project:<id>`: the task takes the next key there; its old key still finds it. */
+  project?: string
+  /** A project task's kind, bug, feature or chore. */
+  type?: WorkTaskType
 }
 
-export interface NewWorkTask extends Omit<TaskFields, "reason"> {
+export interface NewWorkTask extends Omit<TaskFields, "reason" | "project" | "type"> {
   /** `project:<id>` or the project's key. */
   project: string
   title: string
@@ -107,6 +114,8 @@ export interface TaskDetails {
   /** The project's key and name, as `boardCounts` names it. */
   projectKey: string
   projectName: string
+  /** Who added it: the owner, or an agent by its bot name; `null` for a row with no author. */
+  createdBy: NamedAuthor | null
   title: string
   description: string | null
   type: TaskType
@@ -221,6 +230,10 @@ export interface WorkTasks extends TaskRelationsStore {
     limit?: number
   }): Promise<TaskDetails[]>
   events(id: string): Promise<TaskEvent[]>
+  /** A note about the task in the author's name, as an agent's comment is the agent's; the revision stays. */
+  comment(id: string, text: string, by: Author): Promise<TaskComment>
+  /** Its comments, oldest first. */
+  comments(id: string): Promise<TaskComment[]>
   /** The owner's project tasks, every project at once, narrowed by a query over `PROJECT_TASK_FIELDS`. */
   board(query: QueryAst | undefined, options: BoardOptions): Promise<{ items: TaskDetails[]; total: number }>
   /** The owner and everyone who holds a role on a live task, by name: who the board offers to assign. */
@@ -349,6 +362,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       key: String(row.key),
       project: `project:${row.project_id}`,
       ...projectNamed(Number(row.project_id)),
+      createdBy: authorNamed(database, row),
       title: String(row.title),
       description: row.description == null ? null : String(row.description),
       type: row.type as TaskType,
@@ -395,11 +409,57 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
   const rowById = (id: number) => database.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Row
   const details = (id: number) => detailsOf(rowById(id))
 
+  const onBoard = (task: number) =>
+    Boolean(database.prepare(`SELECT 1 FROM tasks t WHERE t.id = ? AND ${BOARD_SCOPE}`).get(task))
+
+  /** The task takes the target's next number and key; the source's counter never goes back, so its old key stays unique. */
+  const moveToProject = (task: number, before: Row, target: number, actor: Actor, at: number) => {
+    if (target === Number(before.project_id)) return
+    if (!onBoard(task)) throw new CliError("validation_error", "only a project task moves to another project")
+    const targetRow = database.prepare("SELECT key FROM projects WHERE id = ?").get(target) as Row
+    if (String(targetRow.key).length === INBOX_KEY_LENGTH)
+      throw new CliError("validation_error", "a task moves only into one of your projects")
+    const children = database
+      .prepare("SELECT key FROM tasks WHERE parent_id = ? AND deleted_at IS NULL ORDER BY id")
+      .all(task)
+      .map((row) => String(row.key))
+    if (children.length)
+      throw new CliError(
+        "validation_error",
+        `${String(before.key)} has subtasks (${children.join(", ")}); move or detach them first`,
+        { reason: "task.has-subtasks", subtasks: children },
+      )
+    const counted = database
+      .prepare(
+        "UPDATE projects SET tasks_count = tasks_count + 1, updated_at = ? WHERE id = ? RETURNING key, tasks_count",
+      )
+      .get(at, target) as Row
+    const number = Number(counted.tasks_count)
+    const key = `${String(counted.key)}-${number}`
+    database
+      .prepare("UPDATE tasks SET project_id = ?, number = ?, key = ?, parent_id = NULL, updated_at = ? WHERE id = ?")
+      .run(target, number, key, at, task)
+    recordTaskEvent(
+      database,
+      task,
+      actor,
+      "project",
+      {
+        project: [`project:${before.project_id}`, `project:${target}`],
+        key: [String(before.key), key],
+        ...(before.parent_id == null ? {} : { parent: [`task:${taskIdOf(database, Number(before.parent_id))}`, null] }),
+      },
+      at,
+    )
+  }
+
   const edit = (task: number, fields: TaskFields, actor: Actor, created = false) => {
     const before = rowById(task)
     const at = now()
     const set: string[] = []
     const values: SqlValue[] = []
+    // The revision triggers do not watch `type`, so a kind change bumps it here.
+    let bump = false
     const change = (column: string, value: SqlValue, event?: TaskEvent["kind"], key = column) => {
       if ((before[column] ?? null) === value) return
       set.push(`${column} = ?`)
@@ -469,7 +529,18 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       change("close_reason_folded", folded(reason))
     }
     if (fields.category !== undefined) change("category", fields.category, "category")
-    if (set.length === 0) return
+    if (fields.type !== undefined && fields.type !== before.type) {
+      if (!WORK_TASK_TYPES.includes(fields.type) || !onBoard(task))
+        throw new CliError("validation_error", `a project task's kind is one of ${WORK_TASK_TYPES.join(", ")}`)
+      change("type", fields.type, "type")
+      bump = true
+    }
+    if (fields.project !== undefined) moveToProject(task, before, projectOf(fields.project), actor, at)
+    if (set.length === 0) {
+      if (bump) database.prepare("UPDATE tasks SET revision = revision + 1 WHERE id = ?").run(task)
+      return
+    }
+    if (bump) set.push("revision = revision + 1")
     database.prepare(`UPDATE tasks SET ${set.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, at, task)
   }
 
@@ -852,6 +923,8 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           owner: Number(row.owner) === 1,
           tasks: Number(row.n),
         })),
+    comment: async (id, text, by) => addComment(context, required(id), textOf(text, "a comment", 20000), by),
+    comments: async (id) => commentsOf(database, required(id)),
     events: async (id) =>
       database
         .prepare(

@@ -246,6 +246,8 @@ export interface TasksService {
     origin: TaskOrigin,
     plan?: TaskPlan,
     choice?: DuplicateChoice,
+    /** Who adds it, when an agent is known by name; otherwise the origin says. */
+    author?: Author,
   ): Promise<{
     task: TaskView
     created: boolean
@@ -416,7 +418,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         }
       }),
 
-    add: (message, type, origin, { category: named, ...plan } = {}, choice = {}) =>
+    add: (message, type, origin, { category: named, ...plan } = {}, choice = {}, author = undefined) =>
       inStore(async (store, account) => {
         const chosen = named === undefined ? undefined : await categoryOf(store, named)
         const source = message.trim()
@@ -457,7 +459,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
           ...(plan.dueAt ? { due: plan.dueAt } : {}),
         }
         const subject = { account: taskAccount(account), draft }
-        const by = origin === "owner" ? ("owner" as const) : { bot: origin }
+        const by = author ?? (origin === "owner" ? ("owner" as const) : { bot: origin })
         if (choice.attach !== undefined) {
           const target = await owned(store, account, choice.attach)
           const similarity = await store.tasks.compare(subject, target.id)

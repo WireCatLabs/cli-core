@@ -1,10 +1,12 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { dayBoundary, parseLucene } from "@wirecat/cli-base/query"
+import { dayBoundary, parseLucene, timezoneOf } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
+import { listQuery } from "../cli/list-query.js"
 import { priorityOf } from "../tasks/index.js"
 import { openCache } from "./open.js"
+import { PROJECT_TASK_FIELDS } from "./sqlite/task-board.js"
 import { openStore } from "./store.js"
 
 const query = (text: string) => parseLucene(text, { defaultField: "text" })
@@ -187,6 +189,85 @@ describe("the task board", () => {
     expect(await store.tasks.edit(task.id, { description: null }, "owner")).toMatchObject({ description: null })
     const history = await store.tasks.events(task.id)
     expect(history.find(({ kind }) => kind === "due")?.changes).toEqual({ due_at: [null, due.toISOString()] })
+  })
+
+  it("moves a task to another project under a new key, and the old key still finds it", async () => {
+    const { store, add } = await board()
+    const task = await add("HRB", "Book the venue")
+    const parent = await add("HRB", "Launch")
+    const sub = await store.tasks.create({ project: "HRB", title: "Sub", type: "chore", parent: parent.id }, "owner")
+    const moved = await store.tasks.edit(task.id, { project: "OPS" }, "owner", { revision: task.revision })
+    expect(moved).toMatchObject({ key: "OPS-1", id: "OPS-1", ref: "task:OPS-1", projectKey: "OPS" })
+    expect(moved.revision).toBeGreaterThan(task.revision)
+    expect((await store.tasks.details("HRB-1")).key).toBe("OPS-1")
+    expect((await store.tasks.events("OPS-1")).at(-1)).toMatchObject({
+      kind: "project",
+      changes: { project: ["project:1", "project:2"], key: ["HRB-1", "OPS-1"] },
+    })
+    expect((await add("HRB", "Next")).key).toBe("HRB-4")
+
+    await expect(store.tasks.edit(parent.id, { project: "OPS" }, "owner")).rejects.toMatchObject({
+      details: { reason: "task.has-subtasks", subtasks: [sub.key] },
+    })
+    expect(await store.tasks.edit(sub.id, { project: "OPS" }, "owner")).toMatchObject({ key: "OPS-2", parent: null })
+  })
+
+  it("changes a project task's kind within bug, feature and chore, and the revision moves", async () => {
+    const { store, add } = await board()
+    const task = await add("HRB", "Fix the form")
+    const bug = await store.tasks.edit(task.id, { type: "bug" }, "owner")
+    expect(bug).toMatchObject({ type: "bug" })
+    expect(bug.revision).toBe(task.revision + 1)
+    await expect(store.tasks.edit(task.id, { type: "question" as never }, "owner")).rejects.toThrow("bug, feature")
+    expect((await store.tasks.events(task.id)).at(-1)).toMatchObject({
+      kind: "type",
+      changes: { type: ["chore", "bug"] },
+    })
+  })
+
+  it("names who added a task, and keeps an agent's comment in the agent's name", async () => {
+    const { store } = await board()
+    const task = await store.tasks.create({ project: "HRB", title: "Book", type: "chore" }, { bot: "claude-desktop" })
+    expect(task.createdBy).toMatchObject({ type: "bot", name: "claude-desktop", owner: false })
+    expect(
+      (await store.tasks.create({ project: "HRB", title: "Mine", type: "chore" }, "owner")).createdBy,
+    ).toMatchObject({ type: "person", owner: true })
+
+    await store.tasks.comment(task.id, "Asked for two rooms", { bot: "hermes" })
+    const mine = await store.tasks.comment(task.id, "Fine by me", "owner")
+    expect(mine).toMatchObject({ text: "Fine by me", author: { owner: true }, at: expect.any(String) })
+    expect((await store.tasks.comments(task.id)).map(({ text, author }) => [text, author?.name ?? "owner"])).toEqual([
+      ["Asked for two rooms", "hermes"],
+      ["Fine by me", "owner"],
+    ])
+    expect((await store.tasks.details(task.id)).revision).toBe(task.revision)
+    await expect(store.tasks.comment(task.id, " ", "owner")).rejects.toThrow("a comment")
+  })
+
+  it("reads tomorrow in due: as the next calendar day, through the list query", async () => {
+    const { store, add } = await board()
+    const zone = timezoneOf()
+    const now = Date.now()
+    await add("HRB", "Tomorrow noon", { dueAt: new Date(dayStart(zone, now, 1) + 12 * 3_600_000) })
+    await add("HRB", "Today", { dueAt: new Date(dayStart(zone, now, 0) + 12 * 3_600_000) })
+    const titles = async (text: string) =>
+      (
+        await store.tasks.board(
+          listQuery(
+            `project:HRB ${text}`,
+            { entity: "task", backend: "sql", fields: PROJECT_TASK_FIELDS },
+            "tasks list",
+          ),
+          {
+            zone,
+            limit: 50,
+          },
+        )
+      ).items
+        .map(({ title }) => title)
+        .sort()
+    expect(await titles("due:tomorrow")).toEqual(["Tomorrow noon"])
+    expect(await titles("due:[today TO tomorrow]")).toEqual(["Today", "Tomorrow noon"])
   })
 
   it("reads a score with a decimal point as 0–1, and a bare 0–4 as the old scale", () => {

@@ -42,7 +42,9 @@ export const PROJECT_TASK_FIELDS: readonly FieldSpec[] = [
       "low, medium, high, critical or none; a range of labels or of the 0–1 number: priority:[high TO critical]",
   }),
   field("agent", "kw", "agent:hermes", { relation: "the agent working on it, by name; none or any" }),
-  field("due", "time", "due:[today TO 2026-12-31]", { relation: "the due date; NOT due:* has none" }),
+  field("due", "time", "due:[today TO 2026-12-31]", {
+    relation: "the due date; today, tomorrow and yesterday are your calendar days; NOT due:* has none",
+  }),
   field("overdue", "bool", "overdue:true", { relation: "open work due before today" }),
   field("when", "enum", "when:today", {
     values: ["overdue", "today", "upcoming", "later", "none"],
