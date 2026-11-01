@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Mail a server search stores first gets the owner's rule tags.** `searchMailServer` saved new mail without the
+  `tag:` labels and `mailRuleId` its rules give, and sync never reads mail whose place it already knows, so that mail
+  stayed untagged until `rules apply`. It now tags it as `syncMail` does, and writes reused or refused labels back into
+  the rules the same way.
+
 ## 0.537.0 — 01.11.2026
 
 ### Added
