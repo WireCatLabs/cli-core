@@ -21,10 +21,11 @@ import type { Chat } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { pickChat } from "../../resolve.js"
 import { type BaseEnvironment, baseContext, provide } from "../context.js"
+import type { Messenger } from "../messenger/context.js"
+import { scheduleCommand } from "../messenger/schedule-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
-import type { Messenger } from "./context.js"
-import { scheduleCommand, scheduleCommandFor } from "./schedule-command.js"
+import { scheduleCommandFor } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const messenger: Messenger = {
@@ -235,6 +236,26 @@ describe.runIf(posix)("schedule under the read-only lock", () => {
     const listed = await call(["list", "--json"], locked, system)
     expect(listed.code).toBe(0)
     expect(JSON.parse(listed.out).items).toMatchObject([{ name: "keep" }])
+  })
+
+  it("refuses a name another profile already uses, and still replaces its own", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const add = (profile: string) =>
+      call(["command", "sync", "--every", "15m", "--", "doctor"], { ...env, CHAT_PROFILE: profile }, system)
+    expect((await add("work")).code).toBe(0)
+
+    const other = await add("home")
+    expect(other.code).not.toBe(0)
+    expect(other.err).toContain("already runs for profile work")
+    expect(other.err).toContain("sync-home")
+    expect(
+      (JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "sync"), "utf8")) as Schedule).environment,
+    ).toMatchObject({
+      CHAT_PROFILE: "work",
+    })
+
+    expect((await add("work")).code).toBe(0)
   })
 
   it("passes the lock on to a schedule saved past the command line's refusal", async () => {

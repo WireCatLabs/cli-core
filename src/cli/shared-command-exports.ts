@@ -57,10 +57,7 @@ import {
 } from "./messenger/records-command.js"
 import { repliesCommand as repliesCommandDefinition } from "./messenger/replies-command.js"
 import { reviewCommand as reviewCommandDefinition } from "./messenger/review.js"
-import {
-  scheduleCommand as scheduleCommandDefinition,
-  scheduleCommandFor as scheduleCommandForDefinition,
-} from "./messenger/schedule-command.js"
+import { scheduleCommand as scheduleCommandDefinition } from "./messenger/schedule-command.js"
 import { searchCommand as searchCommandDefinition } from "./messenger/search-command.js"
 import { searchesCommand as searchesCommandDefinition } from "./messenger/searches-command.js"
 import { serveCommand as serveCommandDefinition } from "./messenger/serve-command.js"
@@ -74,6 +71,7 @@ import {
 import { topicsCommand as topicsCommandDefinition } from "./messenger/topics-command.js"
 import { watchCommand as watchCommandDefinition } from "./messenger/watch-command.js"
 import { runsCommand as runsCommandDefinition } from "./runs/command.js"
+import { scheduleCommandFor as scheduleCommandForDefinition } from "./schedule/schedule-command.js"
 import { sharedCommand as protectedCommand } from "./shared-contracts.js"
 
 import { skillCommand as skillCommandDefinition } from "./skill-command.js"
