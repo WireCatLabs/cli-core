@@ -5,6 +5,13 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`AppIdentity.sends`**: a CLI that is not a messenger yet sends to people (mail) keeps `sends_per_hour`, so the
+  owner can set its hourly limit with `config set sends_per_hour`; the other messenger settings stay hidden.
+
 ## 0.524.0 — 01.11.2026
 
 ### Added
@@ -12,11 +19,6 @@ shape of this file.
 - **`appDoctorCommand` takes a `local` check.** A CLI that is not a messenger can now put what it reads of its own
   state from disk into `doctor` — a run that stopped half way, an undo window about to close — without `--online`.
   Its fields join the answer and its notes go to stderr; a throw is reported as `local.error`, never a failed doctor.
-
-### Added
-
-- **`AppIdentity.sends`**: a CLI that is not a messenger yet sends to people (mail) keeps `sends_per_hour`, so the
-  owner can set its hourly limit with `config set sends_per_hour`; the other messenger settings stay hidden.
 
 ## 0.523.0 — 01.11.2026
 
