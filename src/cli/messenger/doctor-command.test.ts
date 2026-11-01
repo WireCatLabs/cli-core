@@ -5,6 +5,7 @@ import { CliError, captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Chat } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { providerLogPathFor, writeProviderWarning } from "../../runs/provider-log.js"
 import { FloodMemory } from "../../sends/flood.js"
 import type { SendEntry } from "../../sends/journal.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
@@ -181,6 +182,17 @@ describe("doctor", () => {
     chmodSync(root, 0o755)
     const { answer } = await call(["doctor", "--json"], env, refused)
     expect(answer.files.problems ?? []).not.toContainEqual(expect.objectContaining({ path: root }))
+  })
+
+  it("**counts the messenger library's warnings of the last day, by kind**", async () => {
+    const { env } = setup()
+    const path = providerLogPathFor(app, "default", env)
+    writeProviderWarning(path, "decrypt", "database is locked")
+    writeProviderWarning(path, "decrypt", "database is locked")
+    writeProviderWarning(path, "socket", "close failed")
+
+    const { answer } = await call(["doctor", "--json"], env, refused)
+    expect(answer.provider_log).toEqual({ path, last_day: { total: 3, kinds: { decrypt: 2, socket: 1 } } })
   })
 
   it("reads the store and the remembered account once something was read", async () => {
