@@ -71,6 +71,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261030114008_version-39-email-locations", version: 39, minCompatible: 34 },
   { name: "20261030225520_version-40-note-trigrams", version: 40, minCompatible: 34 },
   { name: "20261031230945_version-41-task-fields", version: 41, minCompatible: 34 },
+  { name: "20261101002523_version-42-task-revision", version: 42, minCompatible: 34 },
 ]
 
 export const generatedMigrations = (

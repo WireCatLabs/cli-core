@@ -449,23 +449,29 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       throw new CliError("validation_error", "give --before or --after, not both")
     if (!database.prepare(`SELECT 1 FROM tasks t WHERE t.id = ? AND ${BOARD_SCOPE}`).get(task))
       throw new CliError("validation_error", "only a project task moves on the board")
-    const status = move.status ?? (row.status as TaskState)
-    const column = columnOf(task, status)
     const neighbour = move.before ?? move.after
     if (neighbour === undefined) {
-      if (column.length > 0 || move.status === undefined)
+      const status = move.status ?? (row.status as TaskState)
+      if (columnOf(task, status).length > 0 || move.status === undefined)
         throw new CliError("validation_error", "say where it goes: --before <key> or --after <key>")
       const from = priorityLabel(row.priority_score == null ? null : Number(row.priority_score))
       edit(task, { status: move.status }, actor)
       return { label: { from, to: from, changed: false }, renumbered: [] }
     }
     const target = required(neighbour)
-    const at = column.findIndex(({ id }) => id === target)
-    if (at === -1)
+    const anchor = database.prepare(`SELECT t.key, t.status FROM tasks t WHERE t.id = ? AND ${BOARD_SCOPE}`).get(target)
+    if (target === task) throw new CliError("validation_error", "a task moves beside another task, not itself")
+    if (!anchor) throw new CliError("validation_error", `${neighbour} is not on a project's board`)
+    // A card dropped beside one in another column joins that column; a status that names a different one is a mistake.
+    const status = anchor.status as TaskState
+    if (move.status !== undefined && move.status !== status)
       throw new CliError(
         "validation_error",
-        `${move.before ?? move.after} is not a ${status} task of a project; a task moves beside one in its column`,
+        `${String(anchor.key)} is in ${status}, not ${move.status}: pick a task in the ${move.status} column`,
+        { reason: "task.column", anchor: String(anchor.key), anchorStatus: status, requestedStatus: move.status },
       )
+    const column = columnOf(task, status)
+    const at = column.findIndex(({ id }) => id === target)
     const index = move.before === undefined ? at + 1 : at
     const above = column[index - 1]
     const below = column[index]
@@ -498,7 +504,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         renumbered.push(one.key)
       })
     }
-    edit(task, { priority: given, ...(move.status === undefined ? {} : { status: move.status }) }, actor)
+    edit(task, { priority: given, status }, actor)
     const to = priorityLabel(given) as PriorityLabel
     return { label: { from, to, changed: from !== to }, renumbered }
   }

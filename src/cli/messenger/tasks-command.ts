@@ -21,7 +21,7 @@ import {
   taskTypeOf,
 } from "../../services/tasks.js"
 import type { CloseSuggestion, TaskPair } from "../../store/index.js"
-import { PRIORITY_LABELS, priorityOf } from "../../tasks/index.js"
+import { PRIORITY_LABELS, priorityOption } from "../../tasks/index.js"
 import { actorOf, holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption } from "../effects.js"
@@ -184,7 +184,7 @@ const HOLDER_HELP =
   "who you are for claims: a session id or a chat id; default WIRECAT_HOLDER, else Claude Code's session, else the agent's name"
 
 const planFrom = (options: {
-  priority?: number | null
+  priority?: number | "none"
   parent?: string
   title?: string
   description?: string
@@ -194,7 +194,7 @@ const planFrom = (options: {
   assignee?: string[]
 }) => {
   const plan: TaskPlan = {}
-  if (options.priority !== undefined) plan.priority = options.priority
+  if (options.priority !== undefined) plan.priority = options.priority === "none" ? null : options.priority
   if (options.parent !== undefined) plan.parent = options.parent === "none" ? null : options.parent
   if (options.category !== undefined) plan.category = options.category
   if (options.title !== undefined) plan.title = options.title
@@ -335,7 +335,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       .option(
         "--priority <n>",
         `${PRIORITY_LABELS.join(", ")} or none; 0 (urgent) … 4 (low) still read as before`,
-        priorityOf,
+        priorityOption,
       )
       .option("--parent <id>", "parent task in the same project; none clears it"),
     "send Alex the API token",

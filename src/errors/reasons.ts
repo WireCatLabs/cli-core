@@ -129,6 +129,7 @@ const OTHERS: Entry[] = [
   validation("task.claimed", "someone else holds the task"),
   validation("task.closed", "the task is already closed"),
   ["task.stale", "configuration_error", "the task changed since it was read; read it again"],
+  validation("task.column", "the task beside which it moves is in another column than the status asked for"),
   validation("task.dependency-cycle", "the task would depend on itself"),
   validation("task.duplicate-candidates", "open tasks may be the same job: attach to one, or add it as new"),
   validation("task.certainty-required", "an agent closes a task with its certainty, 0 to 1"),

@@ -21,7 +21,7 @@ const board = async () => {
   const add = (project: string, title: string, more: { priority?: number; dueAt?: Date; description?: string } = {}) =>
     store.tasks.create({ project, title, type: "chore", ...more }, "owner")
   const keys = (page: { items: { key: string }[] }) => page.items.map(({ key }) => key)
-  return { store, add, keys }
+  return { store, add, keys, path }
 }
 
 describe("a task's work states", () => {
@@ -152,21 +152,41 @@ describe("the task board", () => {
     const { store, add } = await board()
     const task = await add("HRB", "A")
     await store.tasks.claim(task.id, "hermes", new Date(Date.now() + 60_000))
-    await expect(store.tasks.edit(task.id, { title: "B" }, "owner", { revision: task.revision })).rejects.toMatchObject(
-      {
-        code: "configuration_error",
-        details: { reason: "task.stale", revision: task.revision + 1 },
-      },
-    )
+    const titled = await store.tasks.edit(task.id, { title: "B" }, "owner", { revision: task.revision })
+    expect(titled.revision).toBe(task.revision + 1)
     await expect(
       store.tasks.assign(task.id, { to: "person:21", role: "assignee" }, "owner", { revision: task.revision }),
-    ).rejects.toMatchObject({ details: { reason: "task.stale" } })
-    const fresh = await store.tasks.details(task.id)
-    const assigned = await store.tasks.assign(task.id, { to: "person:21", role: "assignee" }, "owner", fresh)
-    expect(assigned.revision).toBe(fresh.revision + 1)
+    ).rejects.toMatchObject({
+      code: "configuration_error",
+      details: { reason: "task.stale", revision: titled.revision },
+    })
+    const assigned = await store.tasks.assign(task.id, { to: "person:21", role: "assignee" }, "owner", titled)
+    expect(assigned.revision).toBe(titled.revision + 1)
+    const unassigned = await store.tasks.unassign(task.id, { to: "person:21", role: "assignee" }, "owner", assigned)
+    expect(unassigned.revision).toBe(assigned.revision + 1)
     await store.tasks.release(task.id, "hermes")
     const kinds = (await store.tasks.events(task.id)).map(({ kind }) => kind)
-    expect(kinds).toEqual(["created", "claimed", "assigned", "released"])
+    expect(kinds).toEqual(["created", "claimed", "title", "assigned", "unassigned", "released"])
+  })
+
+  it("keeps the revision while an agent works: a claim, its renewal and release, a follow-up time", async () => {
+    const { store, add, path } = await board()
+    const task = await add("HRB", "A")
+    const soon = (minutes: number) => new Date(Date.now() + minutes * 60_000)
+    await store.tasks.claim(task.id, "hermes", soon(1))
+    await store.tasks.claim(task.id, "hermes", soon(5))
+    await store.tasks.edit(task.id, { nextCheckAt: soon(60) }, { bot: "hermes" })
+    await store.tasks.recordCloseCertainty(task.id, 0.4)
+    await store.tasks.release(task.id, "hermes")
+    expect((await store.tasks.details(task.id)).revision).toBe(task.revision)
+
+    const database = await openCache(path)
+    database.exec(`UPDATE tasks SET claimed_by = 'old-build', claimed_until = 1, updated_at = 2 WHERE key = 'HRB-1'`)
+    database.exec(`UPDATE tasks SET status = status, title = title WHERE key = 'HRB-1'`)
+    expect(database.prepare("SELECT revision FROM tasks WHERE key = 'HRB-1'").get()?.revision).toBe(task.revision)
+    database.exec(`UPDATE tasks SET title = 'Renamed by an older build' WHERE key = 'HRB-1'`)
+    expect(database.prepare("SELECT revision FROM tasks WHERE key = 'HRB-1'").get()?.revision).toBe(task.revision + 1)
+    database.close()
   })
 
   it("keeps an agent apart from the assignees, and finds tasks by it", async () => {
@@ -202,7 +222,27 @@ describe("the task board", () => {
     await store.tasks.move("OPS-1", { status: "in_progress" }, "owner")
     const doing = await store.tasks.move("HRB-3", { status: "in_progress", after: "OPS-1" }, "owner")
     expect(doing).toMatchObject({ renumbered: [], task: { status: "in_progress" } })
-    await expect(store.tasks.move("HRB-1", { after: "HRB-3" }, "owner")).rejects.toThrow("is not a open task")
+  })
+
+  it("moves a card beside one in another column into that column, and refuses a status that names another", async () => {
+    const { store, add } = await board()
+    await add("HRB", "A")
+    await add("HRB", "B")
+    await store.tasks.move("HRB-2", { status: "in_progress" }, "owner")
+
+    const joined = await store.tasks.move("HRB-1", { after: "HRB-2" }, "owner")
+    expect(joined).toMatchObject({ label: { from: null, to: "low", changed: true }, task: { status: "in_progress" } })
+    expect(joined.task.revision).toBe(2)
+
+    await store.tasks.move("HRB-1", { status: "done" }, "owner")
+    await expect(store.tasks.move("HRB-1", { status: "todo", before: "HRB-2" }, "owner")).rejects.toMatchObject({
+      code: "validation_error",
+      message: "HRB-2 is in in_progress, not todo: pick a task in the todo column",
+      details: { reason: "task.column", anchor: "HRB-2", anchorStatus: "in_progress", requestedStatus: "todo" },
+    })
+    await expect(store.tasks.move("HRB-1", { before: "HRB-1" }, "owner")).rejects.toThrow(
+      "a task moves beside another task, not itself",
+    )
   })
 
   it("spreads a band out again when two neighbours leave no room", async () => {
@@ -230,6 +270,6 @@ describe("the task board", () => {
       ["tags", { tags: [["venue"], []] }],
       ["close-certainty", { close_certainty: [null, 0.8] }],
     ])
-    expect((await store.tasks.details(task.id)).revision).toBe(task.revision + 3)
+    expect((await store.tasks.details(task.id)).revision).toBe(task.revision + 2)
   })
 })
