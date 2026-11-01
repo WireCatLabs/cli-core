@@ -57,7 +57,10 @@ import {
 } from "./messenger/records-command.js"
 import { repliesCommand as repliesCommandDefinition } from "./messenger/replies-command.js"
 import { reviewCommand as reviewCommandDefinition } from "./messenger/review.js"
-import { scheduleCommand as scheduleCommandDefinition } from "./messenger/schedule-command.js"
+import {
+  scheduleCommand as scheduleCommandDefinition,
+  scheduleCommandFor as scheduleCommandForDefinition,
+} from "./messenger/schedule-command.js"
 import { searchCommand as searchCommandDefinition } from "./messenger/search-command.js"
 import { searchesCommand as searchesCommandDefinition } from "./messenger/searches-command.js"
 import { serveCommand as serveCommandDefinition } from "./messenger/serve-command.js"
@@ -126,6 +129,7 @@ export const stickersCommand = sharedCommand(stickersCommandDefinition)
 export const repliesCommand = sharedCommand(repliesCommandDefinition)
 export const reviewCommand = sharedCommand(reviewCommandDefinition)
 export const scheduleCommand = sharedCommand(scheduleCommandDefinition)
+export const scheduleCommandFor = sharedCommand(scheduleCommandForDefinition)
 export const searchCommand = sharedCommand(searchCommandDefinition)
 export const searchesCommand = sharedCommand(searchesCommandDefinition)
 export const serveCommand = sharedCommand(serveCommandDefinition)

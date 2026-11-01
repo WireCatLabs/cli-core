@@ -19,6 +19,14 @@ shape of this file.
 - **`list:`** in the query language: a mailing list by its List-Id, or by a domain for every list under it
   (`list:github.com`); mail only.
 
+## 0.519.0 — 01.11.2026
+
+### Added
+
+- **`scheduleCommandFor(host)`** mounts the `schedule` command on a CLI that is not a messenger (mail-cli): the host
+  gives its identity and a context with the environment, the profile and the output. `scheduleCommand(messenger)`
+  is the same command, unchanged.
+
 ## 0.518.0 — 01.11.2026
 
 ### Added

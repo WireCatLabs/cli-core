@@ -399,6 +399,7 @@ export {
   type ReportContext as DoctorReportContext,
   reportFileName as doctorReportFileName,
 } from "./messenger/report.js"
+export type { ScheduleHost } from "./messenger/schedule-command.js"
 export {
   allAnswer,
   allHitItem,
@@ -518,6 +519,7 @@ export {
   reviewCommand,
   runsCommand,
   scheduleCommand,
+  scheduleCommandFor,
   searchCommand,
   searchesCommand,
   sendCommand,
