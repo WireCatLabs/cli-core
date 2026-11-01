@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **`parseMail` also returns `messageId`, `references`, `replyTo` and `date`**, and takes a third argument, the most
+  attachments to keep (`MAX_ATTACHMENTS`, 50, by default), so a command that lists one message's files can ask for all
+  of them.
+
 - **A `search all` meeting transcript hit names its cue and its speaker**: `cue_ref`
   (`meeting:<account>/<meeting>/<transcript>/<cue>`) and `sender_name` (marked untrusted). `meetings passage <cue_ref>
   --before-n 3 --after-n 3` opens the lines around it; `ref` stays the meeting. Chat and summary hits are unchanged.

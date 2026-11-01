@@ -10,6 +10,7 @@ export {
   type Address,
   htmlToText,
   looksLikeHtml,
+  MAX_ATTACHMENTS,
   MAX_BODY_CHARS,
   type ParsedMail,
   parseMail,

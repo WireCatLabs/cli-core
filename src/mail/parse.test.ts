@@ -73,3 +73,36 @@ it.each([
   await parseMail(htmlMail(hostile))
   expect(performance.now() - started).toBeLessThan(2_000)
 })
+
+it("reads the thread headers, and the attachments past the 50th when asked for them", async () => {
+  const parts = Array.from({ length: 52 }, (_, at) => [
+    "--b",
+    `Content-Type: text/plain; name="f${at}.txt"`,
+    "Content-Disposition: attachment",
+    "",
+    `file ${at}`,
+  ]).flat()
+  const mail = raw(
+    "Message-ID: <id-1@example.test>",
+    "References: <root@example.test> <id-0@example.test>",
+    "Reply-To: Ann <ann@example.test>",
+    "Date: Mon, 26 Oct 2026 09:00:00 +0000",
+    'Content-Type: multipart/mixed; boundary="b"',
+    "",
+    "--b",
+    "Content-Type: text/plain",
+    "",
+    "Body",
+    ...parts,
+    "--b--",
+  )
+  const parsed = await parseMail(mail)
+  expect(parsed).toMatchObject({
+    messageId: "<id-1@example.test>",
+    references: ["<root@example.test>", "<id-0@example.test>"],
+    replyTo: [{ email: "ann@example.test", name: "Ann" }],
+    date: expect.stringContaining("2026-10-26"),
+  })
+  expect(parsed.attachments).toHaveLength(50)
+  expect((await parseMail(mail, undefined, Number.POSITIVE_INFINITY)).attachments).toHaveLength(52)
+})
