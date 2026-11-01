@@ -3,6 +3,7 @@ export { factsOf } from "./facts.js"
 export { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 export { dropMissing, type Gone, tooManyGone } from "./gone.js"
 export { type AuthVerdicts, HEADER_FIELDS, headersOf, type MailHeaders, mailHeadersOf } from "./headers.js"
+export { decodeMailboxName, labelName, systemLabel } from "./labels.js"
 export {
   type Address,
   htmlToText,
@@ -13,6 +14,7 @@ export {
 } from "./parse.js"
 export { PRESET_NAMES, PRESETS, type PresetName, presetMatches } from "./presets.js"
 export { domainsToAge, groupKey, type Probe, type ProbeGroup, probeMail, SUGGEST_RULE } from "./probe.js"
+export { type MailFolderProgress, mailProgress } from "./progress.js"
 export {
   type FileStamp,
   FULL_PASS_MS,
@@ -28,6 +30,7 @@ export {
   within,
 } from "./resume.js"
 export { ruleInput, STORE_ACTION } from "./rule-input.js"
+export { storedMailRule, storedMailRules } from "./rule-stored.js"
 export { mapProposedTags, ruleTagger, settleRuleTags, type TagOutcome } from "./rule-tags.js"
 export {
   conditionKeys,
