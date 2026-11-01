@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The request pace from `@wirecat/cli-core/sends`.** `Pacer`, `DEFAULT_PACE`, `PaceRate` and `pacePathFor` were only
+  inside the messenger context; a CLI that is not a messenger (mail's SMTP sends) now spaces its writes with the same
+  file-shared pace.
+
 ## 0.522.0 — 01.11.2026
 
 ### Added
