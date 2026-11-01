@@ -6,6 +6,7 @@ import { Command } from "commander"
 import { engineStates } from "../../attachments/extract.js"
 import type { AccountStanding, MessengerAdapter } from "../../ports/messenger.js"
 import { providerErrorKey } from "../../runs/events.js"
+import { type ProviderWarnings, providerLogPathFor, providerWarnings } from "../../runs/provider-log.js"
 import { listRuns, runsDirFor, runtime } from "../../runs/run.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
@@ -21,6 +22,7 @@ import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { type PrivateFiles, privateFiles, withSqliteSidecars } from "./private-files.js"
 import { buildReport, reportFileName } from "./report.js"
+import { DAY_MS } from "./serve-members.js"
 import { storeSummary } from "./store-maintenance-command.js"
 
 /**
@@ -149,6 +151,8 @@ const rememberedOf = (report: Record<string, unknown>) =>
  * What `doctor` answers, as data. A configuration that will not load is a field, not an exception:
  * then there is no renderer from the settings, and the caller renders with the defaults.
  */
+const providerLogState = ({ path, total, kinds }: ProviderWarnings) => ({ path, last_day: { total, kinds } })
+
 const diagnose = async (
   command: Command,
   messenger: Messenger,
@@ -222,8 +226,9 @@ const diagnose = async (
   const store = storePath(env)
   const sends = sendsPathFor(app, profile, env)
   const flood = floodPathFor(app, profile, env)
+  const providerLog = providerLogPathFor(app, profile, env)
   const files = privateFiles({
-    files: [...own.files, ...withSqliteSidecars(store), sends, flood],
+    files: [...own.files, ...withSqliteSidecars(store), sends, flood, providerLog],
     // A folder the owner chose with MESSAGING_STORE may rightly be shared, like the home folder itself.
     dirs: [
       ...own.dirs,
@@ -231,6 +236,7 @@ const diagnose = async (
       dirname(sends),
       dirname(flood),
       runsDirFor(app, env),
+      dirname(providerLog),
     ],
   })
 
@@ -249,6 +255,7 @@ const diagnose = async (
       readers: engineStates(),
       sends: sendsState(new SendJournal(sendsPathFor(app, profile, env))),
       flood: floodState(new FloodMemory(flood)),
+      provider_log: providerLogState(providerWarnings(providerLog, new Date(Date.now() - DAY_MS))),
       runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
       // The messenger's own block keeps the keys it gives: some of them are file paths.
       files: filesReport(files),

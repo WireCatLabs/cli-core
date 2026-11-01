@@ -91,6 +91,14 @@ export {
 } from "../runs/events.js"
 export { CORE_LOG_EVENTS } from "../runs/log-events.js"
 export {
+  openProviderLog,
+  PROVIDER_LOG_BYTES,
+  type ProviderWarnings,
+  providerLogPathFor,
+  providerWarnings,
+  writeProviderWarning,
+} from "../runs/provider-log.js"
+export {
   crashOf,
   type Recording,
   type RecordingOptions,

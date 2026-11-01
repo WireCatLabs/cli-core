@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Every profile keeps its messenger library's warnings, and `doctor` counts the last day's.** A message the
+  library could not decrypt used to leave no trace unless the CLI's own log variable was set. `providerLogPathFor(app,
+  profile, env)` names `<state>/provider-log/<profile>.jsonl`; `openProviderLog(path)` makes it private (mode 600)
+  and keeps it under 1 MB with one older file, so an engine in another process can append to the path it is given;
+  `writeProviderWarning(path, kind, message)` appends from Node. A line is `{"time","level","kind"?,"message"}`, the
+  shape zerolog writes; `kind` is the adapter's tag. The adapter masks phone numbers, ids of people and text before
+  writing. `doctor` answers `provider_log: { path, last_day: { total, kinds } }` and checks the file is private.
+
 ## 0.527.0 — 01.11.2026
 
 ### Added
