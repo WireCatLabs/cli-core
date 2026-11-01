@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`parseMail` also returns `messageId`, `references`, `replyTo` and `date`**, and takes a third argument, the most
+  attachments to keep (`MAX_ATTACHMENTS`, 50, by default), so a command that lists one message's files can ask for all
+  of them.
+
 ## 0.533.0 — 01.11.2026
 
 ### Added
