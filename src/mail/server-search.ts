@@ -19,7 +19,8 @@ import { factsOf } from "./facts.js"
 import { mailHeadersOf } from "./headers.js"
 import { parseMail } from "./parse.js"
 import { storedMailRules } from "./rule-stored.js"
-import { decide } from "./rules.js"
+import { ruleTagger, settleRuleTags } from "./rule-tags.js"
+import { decide, type MailRule, tagsOf } from "./rules.js"
 import { type MailCriteria, mailCriteriaOf } from "./server-query.js"
 import type { Listed, MailSource } from "./source.js"
 
@@ -114,6 +115,8 @@ export const searchMailServer = async (
   }
   const accountId = await store.accounts.saveAccount(mailbox, { name: mailbox.account })
   const fresh: Listed[] = []
+  let rules: MailRule[] = []
+  const ruled = new Map<Listed, { ruleId: number | null; tags: string[] }>()
   let raws: (Uint8Array | Error)[] | undefined
   let opening: ReturnType<MailServerAccess["open"]> | undefined
   let openFailure: unknown
@@ -158,7 +161,7 @@ export const searchMailServer = async (
     )
     if (!open) return
     const unique = [...new Map(listed.map((item) => [item.messageId, item])).values()]
-    const rules = await storedMailRules(store, { address: mailbox.account })
+    rules = await storedMailRules(store, { address: mailbox.account })
     const facts = factsOf(unique, rules)
     for (const item of unique) {
       const held = (await store.mail.email(accountId, item.messageId)) !== null
@@ -166,7 +169,9 @@ export const searchMailServer = async (
       if (!held && (rule?.action === "skip" || rule?.action === "envelope")) continue
       report.returned += 1
       sources.set(sourceKey(item.threadId, item.messageId), held ? "both" : "server")
-      if (!held) fresh.push(item)
+      if (held) continue
+      fresh.push(item)
+      ruled.set(item, { ruleId: rule?.id ?? null, tags: tagsOf(rules, facts(item)) })
     }
     if (fresh.length) raws = await source.fetchRaw(fresh)
   }
@@ -204,6 +209,7 @@ export const searchMailServer = async (
 
   const now = Date.now()
   const inputs: ThreadSave[] = []
+  const saved: Listed[] = []
   for (const [index, item] of fresh.entries()) {
     const raw = raws?.[index]
     try {
@@ -234,16 +240,25 @@ export const searchMailServer = async (
               : { locations: [{ folder, uidvalidity: validity, uid: Number(item.uid) }] }),
             ...(item.seen === undefined ? {} : { read: item.seen }),
             ...(item.flagged === undefined ? {} : { flagged: item.flagged }),
+            mailRuleId: ruled.get(item)?.ruleId ?? null,
             attachments: files,
           },
         ],
       })
+      saved.push(item)
     } catch {
       sources.delete(sourceKey(item.threadId, item.messageId))
       report.complete = false
     }
   }
   if (inputs.length) await store.mail.saveThreads(inputs)
+  // Sync never reads mail whose place it knows again, so a rule's tags go on here or never.
+  const tagger = ruleTagger(store, mailbox)
+  for (const item of saved) {
+    const tags = ruled.get(item)?.tags ?? []
+    if (tags.length) await tagger.tag({ type: "message", chatId: item.threadId, messageId: item.messageId }, tags)
+  }
+  await settleRuleTags(store, accountId, rules, tagger.outcome())
   report.new = inputs.length
   report.returned = sources.size
   return { report, sources }

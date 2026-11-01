@@ -43,7 +43,13 @@ const setup = async (
     access = {},
     source,
     skipFrom,
-  }: { access?: Partial<MailServerAccess>; source?: (mailbox: FakeMailbox) => MailSource; skipFrom?: string } = {},
+    tagFrom,
+  }: {
+    access?: Partial<MailServerAccess>
+    source?: (mailbox: FakeMailbox) => MailSource
+    skipFrom?: string
+    tagFrom?: { from: string; tags: string[] }
+  } = {},
 ) => {
   const root = mkdtempSync(join(tmpdir(), "mail-server-"))
   const env = { MAIL_CONFIG_DIR: join(root, "config"), MAIL_STATE_DIR: join(root, "state") }
@@ -73,6 +79,17 @@ const setup = async (
     await store.mail.rules.upsert(
       mine,
       ruleInput({ match: { from: skipFrom }, action: "skip", decided_at: "2026-10-01T00:00:00Z" }),
+      1,
+    )
+  if (tagFrom)
+    await store.mail.rules.upsert(
+      mine,
+      ruleInput({
+        match: { from: tagFrom.from },
+        action: "keep",
+        tags: tagFrom.tags,
+        decided_at: "2026-10-01T00:00:00Z",
+      }),
       1,
     )
   await store.close()
@@ -118,7 +135,15 @@ const setup = async (
       await opened.close()
     }
   }
-  return { mail, json, mailbox, stored }
+  const tagged = async () => {
+    const opened = await openStore({ path })
+    try {
+      return (await opened.tags.tags(MINE)).map(({ messageId, tag }) => [messageId, tag])
+    } finally {
+      await opened.close()
+    }
+  }
+  return { mail, json, mailbox, stored, tagged }
 }
 
 const byRef = (items: { ref: string; found_in?: string }[]) =>
@@ -192,6 +217,14 @@ describe("mail server search", () => {
     expect(byRef(found.items)).toEqual({ m1: "archive" })
     expect(found.meta.issues).toEqual([expect.objectContaining({ code: "timeout", reason: "search.server-timeout" })])
     expect(await stored()).toEqual(["m1"])
+  })
+
+  it("tags mail it stores with the owner's rules, since sync never reads it again", async () => {
+    const { json, tagged } = await setup([fake("3", 11, {})], {
+      tagFrom: { from: "ann@example.com", tags: ["billing"] },
+    })
+    expect(byRef((await json("search", "messages", "invoice")).items)).toEqual({ m1: "archive", m3: "server" })
+    expect(await tagged()).toEqual([["m3", "billing"]])
   })
 
   it("keeps mail an owner's skip rule leaves out of the store out of it", async () => {
