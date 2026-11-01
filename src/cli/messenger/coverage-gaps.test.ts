@@ -45,3 +45,17 @@ it("gives the full sync alone without a window, says never fetched, and says not
     missing: [],
   })
 })
+
+it("says a chat that reaches its first message is behind or has gaps, not held from a date only", () => {
+  const reaching = (gaps: boolean): ChatCoverage => ({
+    ...row("4", "partial", "2026-04-30T00:00:00Z"),
+    completeness: { chatId: "4", state: "partial", upToDate: false, gaps, reachesStart: true, fetchedAt: null },
+    held: { messages: 262, oldestAt: "2026-04-30T00:00:00Z", newestAt: "2026-10-20T00:00:00Z" },
+  })
+  expect(coverageGaps([reaching(false)]).missing[0]?.why).toContain(
+    "the first is held from its first message, behind since 2026-10-20",
+  )
+  expect(coverageGaps([reaching(true)]).missing[0]?.why).toContain(
+    "the first is held from its first message, with gaps",
+  )
+})

@@ -82,6 +82,18 @@ it("reads only the store and names the fetch for a linked chat it does not hold"
   )
 })
 
+it("names in --json the command that syncs a linked chat it does not hold, and exits 0 on that partial answer", async () => {
+  const { call } = await setUp()
+  const { code, stdout } = await call("projects", "evidence", "Harbour", ...WINDOW, "--json")
+  expect(code).toBe(0)
+  const body = JSON.parse(stdout)
+  expect(body.meta.complete).toBe(false)
+  expect(body.item.linked_chats[0]).toMatchObject({
+    chat: "7",
+    sync_command: "chat default projects evidence Harbour --since-time 2025-11-30 --sync-first",
+  })
+})
+
 it("with --sync-first syncs the linked chat back to the window first, then reads it as held", async () => {
   const { call, asked } = await setUp()
   const { code, stdout, stderr } = await call("projects", "evidence", "Harbour", ...WINDOW, "--sync-first", "--json")
@@ -91,7 +103,11 @@ it("with --sync-first syncs the linked chat back to the window first, then reads
   expect(body.item.fetch).toEqual([
     { chat: "chat:chat/500/7", state: "complete", reason: null, elapsed_ms: expect.any(Number) },
   ])
-  expect(body.item.linked_chats[0]).toMatchObject({ chat: "7", completeness: { state: "complete" } })
+  expect(body.item.linked_chats[0]).toMatchObject({
+    chat: "7",
+    completeness: { state: "complete" },
+    sync_command: null,
+  })
   expect(body.item.items.length).toBe(10)
   expect(body.missing).toBeUndefined()
   expect(stderr).toMatch(/chat 1 of 1 · chat:chat\/500\/7 · \d+ messages so far/)
