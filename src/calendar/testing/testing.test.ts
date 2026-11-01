@@ -16,7 +16,8 @@ const NOW = Date.UTC(2026, 9, 27, 9)
 const window = { from: NOW - 365 * 24 * HOUR, to: NOW + 90 * 24 * HOUR }
 
 describe("memory event store", () => {
-  for (const c of eventStoreContract(() => ({ store: memoryEventStore(), accountId: 1 }))) it(c.name, c.run)
+  for (const c of eventStoreContract(() => ({ store: memoryEventStore(), accountId: 1, otherAccountId: 2 })))
+    it(c.name, c.run)
 })
 
 describe("sync engine over the memory store", () => {

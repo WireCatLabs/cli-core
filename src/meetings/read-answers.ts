@@ -232,7 +232,12 @@ export const event = v.strictObject({
   changed_at: v.optional(v.nullable(isoTime)),
   /** The times a moved event had at that date. */
   was: v.optional(v.strictObject({ starts_at: v.nullable(isoTime), ends_at: v.nullable(isoTime) })),
-  /** On a calendar CLI's `events list overlapping`: the events it clashes with, as `event:<id>`. */
+  /**
+   * Whether its time overlaps another event's, in the accounts read: a timed event, not cancelled, not declined, not
+   * free and no working-location block. On a calendar CLI's `events list` when the query names it.
+   */
+  overlapping: v.optional(v.boolean()),
+  /** With `overlapping:true`: the events it overlaps, as `event:<id>`. */
   overlaps: v.optional(v.array(text)),
 })
 

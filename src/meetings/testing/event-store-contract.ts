@@ -2,10 +2,11 @@ import assert from "node:assert/strict"
 import { type EntryInput, type EventFilter, type EventStore, eventChange } from "../event-store.js"
 import type { ContractCase } from "../store.js"
 
-/** A fresh, empty store and one calendar account in it. */
+/** A fresh, empty store and two calendar accounts in it. */
 export interface EventStoreFixture {
   store: EventStore
   accountId: number
+  otherAccountId: number
 }
 
 const HOUR = 3_600_000
@@ -510,6 +511,52 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       const ids = new Set(found.map(({ id }) => id))
       for (const externalId of ["first", "second"])
         assert.ok(ids.has((await store.entry(calendar, externalId))?.eventId as number), externalId)
+      const all = await store.events({ from: at - HOUR, to: at + 8 * HOUR })
+      const rest = await store.events({ overlapping: false, from: at - HOUR, to: at + 8 * HOUR })
+      assert.deepEqual(
+        rest.map(({ id }) => id),
+        all.filter(({ id }) => !ids.has(id)).map(({ id }) => id),
+      )
+    }),
+    test("a working-location block overlaps nothing; a meeting in another account overlaps when both are read", async ({
+      store,
+      calendar,
+      ...fixture
+    }) => {
+      const at = later
+      const [other] = await store.saveCalendars(
+        fixture.otherAccountId,
+        [
+          {
+            externalId: "other-primary",
+            title: "Home",
+            timezone: "UTC",
+            accessRole: "owner",
+            primary: true,
+            syncByDefault: true,
+          },
+        ],
+        1,
+      )
+      await store.saveEntries(
+        calendar,
+        [single("office", at, { eventType: "working-location", endsAt: at + 8 * HOUR }), single("work", at + HOUR)],
+        2,
+      )
+      await store.saveEntries((other as { id: number }).id, [single("dentist", at + HOUR + HOUR / 2)], 2)
+      const window = { from: at - HOUR, to: at + 8 * HOUR }
+      assert.equal((await store.events({ ...window, overlapping: true, accountId: fixture.accountId })).length, 0)
+      const both = await store.events({
+        ...window,
+        overlapping: true,
+        accountIds: [fixture.accountId, fixture.otherAccountId],
+      })
+      assert.equal(both.length, 2)
+      assert.equal(
+        (await store.events({ ...window, accountIds: [fixture.accountId, fixture.otherAccountId] })).length,
+        3,
+      )
+      assert.equal((await store.events({ ...window, accountIds: [fixture.otherAccountId] })).length, 1)
     }),
     test("participants are kept by address; a room is listed and is no contact", async ({ store, calendar }) => {
       const [entry] = await store.saveEntries(

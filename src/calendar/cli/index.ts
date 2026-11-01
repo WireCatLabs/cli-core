@@ -14,6 +14,7 @@ import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { BUSY_QUERY, BUSY_QUERY_NOTE, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
 import {
+  accountsMeta,
   CALENDAR_UNTRUSTED_FIELDS,
   calendarIn,
   calendarItem,
@@ -26,8 +27,10 @@ import {
   eventsFilter,
   type PersonOfEmail,
   peopleAnswer,
+  type ReadAccount,
   resolveAnswer,
   reviewsAnswer,
+  sourceAccounts,
   weekFilter,
 } from "../reads.js"
 import { REPEAT_HELP } from "../recurrence.js"
@@ -80,6 +83,8 @@ export interface CalendarCommandDeps {
   timezone?: string
   /** The provider's writer and the profile's guard: `events create|update|delete|respond` exist only with it. */
   writes?: CalendarWrites
+  /** A profile lock pins the process (WC-ACCT-5): `events list --source` may then read only the profile's account. */
+  locked?: boolean
 }
 
 const LOCAL_READ: Effects = { remote: "none", local: "read" }
@@ -330,28 +335,50 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   const events = annotate(program.command("events").description("the account's stored events"), { effects: GROUP })
   example(
     withQuery(
-      annotate(events.command("list"), { effects: LOCAL_READ }).description("list stored events, earliest first"),
+      annotate(events.command("list"), { effects: LOCAL_READ, partial: true }).description(
+        "list stored events, earliest first; --source reads several accounts as one list",
+      ),
       EVENTS_QUERY,
     ).addHelpText("after", EVENTS_QUERY_NOTE),
     "events list starts_at>=2026-11-02 starts_at<2026-11-07 --json",
     "events list ends_at>=today person:ana@example.com",
-    "events list starts_at>=2026-11-02 --limit 50 --page 2",
+    "events list overlapping:true --source all",
   )
     .option("--limit <n>", "events per page, 1–1000", integer, 100)
     .option("--page <n>", "which page, starting at 1", integer, 1)
-    .action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+    .option(
+      "--source <accounts>",
+      "calendar accounts held in the store to read as one list: all, a provider, or a list such as " +
+        `${program.name()}:work,${program.name()}:personal or group:<name>; the profile's account when absent`,
+    )
+    .action(async (words: string[], opts: { limit: number; page: number; source?: string }, command: Command) => {
+      const own: ReadAccount = { id: deps.accountId, key: deps.account }
+      const { accounts, skipped } =
+        opts.source === undefined
+          ? { accounts: [own], skipped: [] }
+          : await sourceAccounts(messages("--source"), deps.account, opts.source, program.name())
+      if (deps.locked && accounts.some(({ id }) => id !== own.id))
+        throw new CliError(
+          "permission_error",
+          "this process is locked to one profile; --source may name only its own account",
+          { reason: "profile.locked" },
+        )
       const filter = await eventsFilter(words, {
         store: deps.store,
         accountId: deps.accountId,
+        accountIds: accounts.map(({ id }) => id),
         zone: zone(),
         now: now(),
         personOf: personId,
       })
       print(
-        eachMarked(
-          await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }, opts.page),
-          EVENT_ITEM_UNTRUSTED,
-        ),
+        {
+          ...eachMarked(
+            await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }, opts.page),
+            EVENT_ITEM_UNTRUSTED,
+          ),
+          meta: await accountsMeta(deps.store, accounts, skipped, now()),
+        },
         command,
       )
     })

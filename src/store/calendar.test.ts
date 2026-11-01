@@ -59,7 +59,11 @@ const zoomMeeting = async (store: MessageStore, accountId: number, externalId: s
 describe("SQLite event store", () => {
   for (const { name, run } of eventStoreContract(async () => {
     const { store, accountId } = await setup()
-    return { store: store.calendar, accountId }
+    const otherAccountId = await store.accounts.saveAccount(
+      { provider: "google-calendar", account: "owner-2" },
+      { name: null },
+    )
+    return { store: store.calendar, accountId, otherAccountId }
   }))
     it(`contract: ${name}`, run)
 

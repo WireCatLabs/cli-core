@@ -7,6 +7,27 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`events list --source <accounts>`: events of several calendar accounts as one list.** The shared calendar
+  `events list` takes `--source` as `search messages` does (`all`, a provider or its alias, `provider:account`,
+  `group:<name>`; WC-ACCT-8) and reads the accounts in one store query (`EventFilter.accountIds`), so a meeting two
+  accounts hold is one item and pages stay exact. Every answer names the accounts it read in `meta.accounts`
+  (WC-ACCT-9); `meta.complete` is false, with an issue per account, when one has no synced calendar
+  (`calendar.unsynced`) or a sync that never finished or is mid-round (`calendar.sync-incomplete`); the command
+  declares `partial`, so such an answer exits 0. `CalendarCommandDeps.locked` keeps a process under a profile lock to
+  its own account (`profile.locked`).
+- **`overlapping:true` in `events list`: meetings that overlap.** A field of the event entity (`overlapping`, with
+  `overlaps` listing the others), filtered in the store with a self-join. Timed events only, not cancelled, not
+  declined, not free and not a working-location block; back-to-back events do not overlap. `overlapping:false` keeps
+  the rest. Across `--source` it finds a work meeting that clashes with a personal one.
+
+### Changed — may break callers
+
+- `EventStoreFixture` (the event store contract) takes `otherAccountId`, a second calendar account.
+- `EventFilter.overlapping: false` now keeps the events that do not overlap; before, it filtered nothing.
+- `EventFilter.overlapping` also leaves out working-location blocks.
+
 ## 0.526.0 — 01.11.2026
 
 ### Added

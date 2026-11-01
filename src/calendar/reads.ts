@@ -7,6 +7,7 @@ import {
   queryError,
   queryFieldsOf,
 } from "@wirecat/cli-base/query"
+import type { Issue, Meta } from "@wirecat/cli-base/standards"
 import { LIST_QUERY_GUIDE, listQuery, nativeTerms, type QueryWords, typedQuery } from "../cli/list-query.js"
 import {
   type Event,
@@ -22,6 +23,10 @@ import {
   type StoredEntry,
   type StoredParticipant,
 } from "../meetings/index.js"
+import { entriesOfList, fitting } from "../search/account-list.js"
+import { listContextOf } from "../services/search-kind.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
+import { calendarStatus } from "./sync.js"
 
 const iso = (at: number | null) => (at === null ? null : new Date(at).toISOString())
 
@@ -53,6 +58,27 @@ export const calendarItem = (one: StoredCalendar) => ({
   synced: one.synced,
   seen_at: iso(one.seenAt),
 })
+
+/** A stored calendar by its id or the provider's id, among the accounts' calendars; one the id names twice is refused. */
+const calendarAmong = async (
+  store: EventStore,
+  accountIds: readonly number[],
+  reference: string,
+): Promise<StoredCalendar> => {
+  if (accountIds.length === 1) return calendarIn(store, accountIds[0] as number, reference)
+  const calendars = (await Promise.all(accountIds.map((id) => store.calendars(id)))).flat()
+  const byId = calendars.find((one) => String(one.id) === reference)
+  if (byId) return byId
+  const byExternal = calendars.filter((one) => one.externalId === reference)
+  if (byExternal.length > 1)
+    throw new CliError(
+      "validation_error",
+      `calendar ${reference} is in more than one of these accounts; name it by its id: ` +
+        byExternal.map(({ id }) => id).join(", "),
+    )
+  if (!byExternal[0]) throw new CliError("not_found", `no calendar ${reference} in these accounts`)
+  return byExternal[0]
+}
 
 /** A stored calendar by its id or the provider's id, among the account's calendars. */
 export const calendarIn = async (store: EventStore, accountId: number, reference: string): Promise<StoredCalendar> => {
@@ -93,7 +119,7 @@ export const EVENTS_QUERY: QueryRegistry = {
   entity: "event",
   backend: "native",
   fields: queryFieldsOf(event, {
-    native: ["starts_at", "ends_at", "changed_at", "calendar", "person"],
+    native: ["starts_at", "ends_at", "changed_at", "overlapping", "calendar", "person"],
     relations: {
       calendar: { type: "kw", example: "calendar:3", relation: "one calendar, by its id or the provider's id" },
       person: {
@@ -106,6 +132,7 @@ export const EVENTS_QUERY: QueryRegistry = {
       starts_at: "starts_at:[2026-11-02 TO 2026-11-07}",
       ends_at: "ends_at>=2026-11-02",
       changed_at: "changed_at>=2026-10-01",
+      overlapping: "overlapping:true",
     },
     validate: {
       ends_at: oneSided("ends_at", "ends_at>=2026-11-02; for the latest, write starts_at<2026-11-07"),
@@ -113,14 +140,24 @@ export const EVENTS_QUERY: QueryRegistry = {
     },
   }).map((field) =>
     field.native
-      ? { ...field, operators: field.type === "time" ? (["term", "range"] as const) : (["term", "phrase"] as const) }
+      ? {
+          ...field,
+          operators:
+            field.type === "time"
+              ? (["term", "range"] as const)
+              : field.type === "bool"
+                ? (["term"] as const)
+                : (["term", "phrase"] as const),
+        }
       : field,
   ),
 }
 
 export const EVENTS_QUERY_NOTE =
   "\nends_at keeps events that end after its moment, so one that ends exactly then is left out. Without starts_at " +
-  "or ends_at: events that end after the start of today, in your time zone."
+  "or ends_at: events that end after the start of today, in your time zone.\noverlapping:true keeps timed events " +
+  "that overlap another in the accounts read, each with overlaps: the others. Left out: all-day, cancelled, " +
+  "declined and free events and working-location blocks; back-to-back events do not overlap."
 
 /** A time term as epoch ms: from `lower` on, and before `upper`. */
 export const timeWindow = (node: Predicate, zone: string, now: number): { lower?: number; upper?: number } => {
@@ -143,20 +180,23 @@ export const timeWindow = (node: Predicate, zone: string, now: number): { lower?
 }
 
 /**
- * `events list`'s query into a store filter, for one account. A person named by address is found through the
- * shared store; one nobody knows matches no event.
+ * `events list`'s query into a store filter, for one account or, with `accountIds`, several. A person named by
+ * address is found through the shared store; one nobody knows matches no event.
  */
 export const eventsFilter = async (
   query: QueryWords,
   context: {
     store: EventStore
     accountId: number
+    /** These accounts in place of `accountId`. */
+    accountIds?: readonly number[]
     zone: string
     now: number
     personOf?: (reference: string) => Promise<number | null>
   },
 ): Promise<EventFilter | null> => {
-  const filter: EventFilter = { accountId: context.accountId }
+  const accounts = context.accountIds ?? [context.accountId]
+  const filter: EventFilter = accounts.length === 1 ? { accountId: accounts[0] as number } : { accountIds: accounts }
   const { zone, now } = context
   const span = (text: string) => ({ start: 0, end: text.length })
   const day = (date: string) => dayBoundary(date, zone, false, span(date))
@@ -173,8 +213,8 @@ export const eventsFilter = async (
     } else if (field === "changed_at") {
       const { lower } = timeWindow(node, zone, now)
       if (lower !== undefined) filter.changedSince = lower
-    } else if (field === "calendar")
-      filter.calendarId = (await calendarIn(context.store, context.accountId, node.value)).id
+    } else if (field === "overlapping") filter.overlapping = node.value.toLowerCase() === "true"
+    else if (field === "calendar") filter.calendarId = (await calendarAmong(context.store, accounts, node.value)).id
     else if (field === "person") {
       if (!context.personOf) throw new CliError("configuration_error", "this tool cannot look people up")
       const person = await context.personOf(node.value)
@@ -224,6 +264,16 @@ const ownCopies = (details: EventDetails, calendars: ReadonlySet<number>): Event
 
 const calendarIds = async (store: EventStore, accountId: number) =>
   new Set((await store.calendars(accountId)).map(({ id }) => id))
+
+const accountsOf = (filter: EventFilter): readonly number[] =>
+  filter.accountIds ?? (filter.accountId === undefined ? [] : [filter.accountId])
+
+const scopeOf = (filter: EventFilter) =>
+  filter.accountIds !== undefined
+    ? { accountIds: filter.accountIds }
+    : filter.accountId === undefined
+      ? {}
+      : { accountId: filter.accountId }
 
 /** An event the account holds, with only its copies, or `not_found`: another account's event is not shown. */
 export const eventOf = async (store: EventStore, accountId: number, id: number): Promise<EventDetails> => {
@@ -390,7 +440,7 @@ export const resolveAnswer = async (
 
 /** What changed about each listed event since the filter's instant, from its own copies. */
 const changesOf = async (store: EventStore, rows: Event[], filter: EventFilter, since: number) => {
-  const mine = filter.accountId === undefined ? [] : [...(await calendarIds(store, filter.accountId))]
+  const mine = (await Promise.all(accountsOf(filter).map(async (id) => [...(await calendarIds(store, id))]))).flat()
   const { entries, revisions } = await store.historyOf(
     rows.map(({ id }) => id),
     mine,
@@ -414,7 +464,7 @@ const overlapsOf = async (store: EventStore, rows: Event[], filter: EventFilter)
   const timed = rows.filter((one) => one.startsAt !== null && one.endsAt !== null)
   if (!timed.length) return new Map<number, Event[]>()
   const others = await store.events({
-    ...(filter.accountId === undefined ? {} : { accountId: filter.accountId }),
+    ...scopeOf(filter),
     from: Math.min(...timed.map(({ startsAt }) => startsAt as number)),
     to: Math.max(...timed.map(({ endsAt }) => endsAt as number)),
     overlapping: true,
@@ -438,7 +488,7 @@ export const eventsAnswer = async (store: EventStore, filter: EventFilter | null
   if (filter === null) return listed([])
   const { rows, limit, hasMore } = await page(store, { ...filter, offset: (number - 1) * (filter.limit ?? 100) })
   const changes = filter.changedSince === undefined ? null : await changesOf(store, rows, filter, filter.changedSince)
-  const overlaps = filter.overlapping ? await overlapsOf(store, rows, filter) : null
+  const overlaps = filter.overlapping === true ? await overlapsOf(store, rows, filter) : null
   return listed(
     rows.map((event) => {
       const change = changes?.get(event.id)
@@ -451,9 +501,74 @@ export const eventsAnswer = async (store: EventStore, filter: EventFilter | null
               ...(change.was ? { was: { starts_at: iso(change.was.startsAt), ends_at: iso(change.was.endsAt) } } : {}),
             }
           : {}),
+        ...(filter.overlapping === undefined ? {} : { overlapping: filter.overlapping }),
         ...(overlaps ? { overlaps: (overlaps.get(event.id) ?? []).map(({ id }) => `event:${id}`) } : {}),
       }
     }),
     { limit, hasMore, page: number },
   )
+}
+
+/** A calendar account a list reads: the store's id, and its name as `meta.accounts` gives it. */
+export interface ReadAccount {
+  id: number
+  key: AccountKey
+}
+
+const nameOf = ({ provider, account }: AccountKey) => `${provider}:${account}`
+
+/**
+ * The calendar accounts `--source` names, as `search messages --source` reads them (WC-ACCT-8): `all`, a provider,
+ * `provider:account` with an account or a profile, or `group:<name>`. An entry that names no calendar account is in
+ * `skipped`; nothing at all is an error.
+ */
+export const sourceAccounts = async (
+  messages: MessageStore,
+  running: AccountKey,
+  source: string,
+  command: string,
+): Promise<{ accounts: ReadAccount[]; skipped: Issue[] }> => {
+  const context = await listContextOf(messages, running, undefined)
+  const { accounts, skipped } = fitting(
+    entriesOfList(source, { ...context, running: { provider: running.provider, command } }),
+    ["events"],
+    `${command} events list`,
+  )
+  const stored = await messages.accounts.storedAccounts()
+  const read: ReadAccount[] = []
+  const issues: Issue[] = skipped.map(({ code, source }) => ({ code, source }))
+  for (const key of accounts) {
+    const held = stored.find((one) => one.provider === key.provider && one.account === key.account)
+    if (held) read.push({ id: held.id, key })
+    else issues.push({ code: "not_found", reason: "calendar.unsynced", source: nameOf(key) })
+  }
+  if (read.length === 0)
+    throw new CliError("not_found", `--source ${source} names no calendar account this store holds`, {
+      reason: "calendar.unsynced",
+    })
+  return { accounts: read, skipped: issues }
+}
+
+/**
+ * `meta` of a list over calendar accounts (WC-ACCT-9): which it read, and `complete: false` when one has no synced
+ * calendar, or a calendar whose sync never finished or is in the middle of a round, so its events may be missing.
+ */
+export const accountsMeta = async (
+  store: EventStore,
+  accounts: readonly ReadAccount[],
+  skipped: readonly Issue[],
+  now: number,
+): Promise<Pick<Meta, "accounts" | "complete" | "issues">> => {
+  const issues = [...skipped]
+  for (const { id, key } of accounts) {
+    const { items } = await calendarStatus(store, id, { profile: nameOf(key), now })
+    if (items.length === 0) issues.push({ code: "not_found", reason: "calendar.unsynced", source: nameOf(key) })
+    else if (items.some(({ state }) => state !== "complete"))
+      issues.push({ code: "not_found", reason: "calendar.sync-incomplete", source: nameOf(key) })
+  }
+  return {
+    accounts: accounts.map(({ key }) => nameOf(key)),
+    complete: issues.length === 0,
+    ...(issues.length ? { issues } : {}),
+  }
 }
