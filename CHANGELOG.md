@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.539.0 — 01.11.2026
+
 ### Added
 
 - **`events create --text <line>`**: an event the provider reads from one line, such as 'Lunch with Ana tomorrow
