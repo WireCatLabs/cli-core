@@ -93,6 +93,39 @@ describe("the archive service", () => {
   })
 })
 
+describe("the archive service's progress", () => {
+  it("says how far back a fetch got by date, never by a message key", async () => {
+    const store = await emptyStore()
+    const history = [1, 2, 3, 4, 5].map(messageAt)
+    const adapter = {
+      self: () => "500",
+      history: async (_chat: string, { limit, before }: { limit: number; before?: string }) => {
+        const older = history.filter((one) => before === undefined || Number(one.id) < Number(before))
+        const items = older.slice(-limit)
+        await store.messages.saveMessages(account, "7", items, { via: "history" })
+        return { items, hasMore: older.length > items.length }
+      },
+    } as unknown as MessengerAdapter
+    const notes: string[] = []
+    await archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      connection: async () => adapter,
+    }).fetch("7", {
+      limit: 1000,
+      pageSize: 2,
+      pauseMs: 0,
+      note: (message) => notes.push(message),
+      stop: new AbortController().signal,
+      onPage: () => {},
+    })
+    expect(notes.filter((note) => note.includes("so far"))).toEqual([
+      "2 messages so far, back to 2026-09-27",
+      "4 messages so far, back to 2026-09-27",
+    ])
+  })
+})
+
 describe("fetching every chat", () => {
   it("walks the chats most recently active first, counts a failing chat and goes on", async () => {
     const store = await emptyStore()

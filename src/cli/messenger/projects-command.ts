@@ -10,7 +10,13 @@ import type { AccountKey, MessageStore } from "../../store/store.js"
 import { FETCH } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
-import { projectAnswerParts, projectCutoffTime, projectEvidenceText, projectWindowOf } from "../project-evidence.js"
+import {
+  projectAnswerParts,
+  projectCutoffTime,
+  projectEvidenceText,
+  projectWindowOf,
+  withSyncCommands,
+} from "../project-evidence.js"
 import { lineOf } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -162,14 +168,15 @@ export const projectsCommand = (messenger: Messenger): Command => {
           : undefined
         const found = await context.withStore((store, account) => gather(store, account, fetcher))
         const parts = projectAnswerParts(options.sinceTime, found)
-        renderAnswer(this, context, itemOf(snakeKeys(found), parts), () =>
-          projectEvidenceText(found, {
-            sync: (one, since) =>
-              one.provider === messenger.provider
-                ? lineOf(this, `projects evidence ${quote(project)} --since-time ${since} --sync-first`)
-                : null,
-            showDocument: "the notes app that imported it",
-          }),
+        const hints = {
+          sync: (one: { provider: string }, since: string) =>
+            one.provider === messenger.provider
+              ? lineOf(this, `projects evidence ${quote(project)} --since-time ${since} --sync-first`)
+              : null,
+          showDocument: "the notes app that imported it",
+        }
+        renderAnswer(this, context, itemOf(snakeKeys(withSyncCommands(found, hints.sync)), parts), () =>
+          projectEvidenceText(found, hints),
         )
       }),
   )

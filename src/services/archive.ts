@@ -475,7 +475,7 @@ export const fetchInto = async ({
     before = byTime
       ? new Date(boundary + (fresh > 0 && !(window && fetching.beforeInclusive) ? 1 : 0)).toISOString()
       : String(boundary)
-    note(`${fetched} messages so far, back to ${held.from}`)
+    note(`${fetched} messages so far, back to ${fromAt.slice(0, 10)}`)
     const wait = fetching.jitter ? pauseMs * (1 + Math.random()) : pauseMs
     await sleep(wait, undefined, { signal: stop }).catch(() => {})
   }

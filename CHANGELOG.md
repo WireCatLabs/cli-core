@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`withSyncCommands(found, sync)`** gives each linked chat of a stored project gathering its `syncCommand`: the
+  line the text names to sync a chat held in part, or null. tg's and max's `projects evidence --json` carry it as
+  `linked_chats[].sync_command`, so an agent reading JSON gets the command the text shows.
+
+### Fixed
+
+- **A chat that reaches its first message is no longer "held from <date> only"** in `missing`, `next` and the
+  `projects evidence` text: it is "held from its first message, behind since <date>", or "with gaps".
+- **`messages sync` progress says how far back it got as a date** ("back to 2026-09-27"), not as a message key, which
+  for MAX was a number of milliseconds.
+
 ## 0.516.0 — 01.11.2026
 
 ### Fixed

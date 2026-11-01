@@ -448,6 +448,7 @@ export {
   projectCutoffTime,
   projectEvidenceText,
   projectWindowOf,
+  withSyncCommands,
 } from "./project-evidence.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {

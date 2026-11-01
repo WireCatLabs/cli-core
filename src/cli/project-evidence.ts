@@ -3,7 +3,7 @@ import * as v from "valibot"
 import type { ChatCoverage } from "../services/chat-coverage.js"
 import { dateWindow, momentOf } from "../services/moment.js"
 import type { StoredProjectGathering } from "../services/stored-project-gathering.js"
-import { coverageGaps } from "./messenger/search-answers.js"
+import { coverageGaps, heldPhrase } from "./messenger/search-answers.js"
 
 /** Days back (`90d`) or a start date (`2026-09-01`); either way the run freezes its end, so a resume keeps it. */
 export const projectWindowOf = (value: string): { days: number } | { after: number } => {
@@ -61,6 +61,19 @@ export const projectAnswerParts = (sinceTime: string, found: StoredProjectGather
     },
   }
 }
+
+/**
+ * The gathering with each linked chat's `syncCommand`: the line that syncs a chat held in part back to the window
+ * start, or null when it needs none or no command here can. JSON readers get what the text says per chat.
+ */
+export const withSyncCommands = (found: StoredProjectGathering, sync: ProjectTextHints["sync"]) => ({
+  ...found,
+  linkedChats: found.linkedChats.map((one) => ({
+    ...one,
+    syncCommand:
+      one.completeness === null || one.completeness.state === "complete" ? null : sync(one, day(found.window.after)),
+  })),
+})
 
 export interface ProjectTextHints {
   /** The command that syncs one linked chat back to `since` (`YYYY-MM-DD`), or null when no command here can. */
@@ -165,15 +178,12 @@ export const projectEvidenceText = (found: StoredProjectGathering, hints: Projec
       `${one.chat}: ${FETCH_STATES[one.state] ?? one.state} before reading` +
         `${one.reason && one.state !== "skipped" ? ` (${one.reason})` : ""}`,
     )
-  const held = (one: StoredProjectGathering["linkedChats"][number]) =>
-    one.completeness?.state === "unknown" || !one.held?.oldestAt
-      ? "never fetched"
-      : `held from ${one.held.oldestAt.slice(0, 10)} only`
   for (const one of found.linkedChats)
     if (one.completeness !== null && one.completeness.state !== "complete") {
       const sync = hints.sync(one, day(found.window.after))
+      const held = one.held === null ? "never fetched" : heldPhrase({ completeness: one.completeness, held: one.held })
       lines.push(
-        `${one.title ?? one.ref}: ${held(one)}${one.state === "pending" ? ", not read this run" : ""}` +
+        `${one.title ?? one.ref}: ${held}${one.state === "pending" ? ", not read this run" : ""}` +
           (sync ? ` — sync it: ${sync}` : ""),
       )
     }

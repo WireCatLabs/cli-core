@@ -128,6 +128,17 @@ const metaOf = (
 const day = (at: string | null) => at?.slice(0, 10) ?? "no date"
 
 /**
+ * What the store holds of a chat that is not complete, in words. A chat that reaches its first message is only
+ * behind or has gaps: saying "held from <date> only" would claim older history is missing.
+ */
+export const heldPhrase = ({ completeness, held }: Pick<ChatCoverage, "completeness" | "held">): string => {
+  if (completeness.state === "unknown" || !held.oldestAt) return "never fetched"
+  if (!completeness.reachesStart) return `held from ${day(held.oldestAt)} only`
+  if (completeness.gaps) return "held from its first message, with gaps"
+  return `held from its first message, behind since ${day(held.newestAt)}`
+}
+
+/**
  * The steps for chats the store holds only in part. Bounded first, when the answer's window is known, then the whole
  * chat; both name the first chat only, because a download is the owner's call. Counts and dates only, never text.
  */
@@ -135,7 +146,7 @@ const chatGaps = (rows: ChatCoverage[], since?: string): { next: NextStep[]; mis
   const open = rows.filter(({ completeness }) => completeness.state !== "complete")
   const [first] = open
   if (!first) return { next: [], missing: [] }
-  const held = first.completeness.state === "unknown" ? "never fetched" : `held from ${day(first.held.oldestAt)} only`
+  const held = heldPhrase(first)
   const steps = (args: Record<string, string>, why: string): NextStep => ({
     ...nextStep("messages.sync", { args: { chat: first.chatId, ...args } }),
     why,
