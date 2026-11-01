@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.531.0 — 01.11.2026
+
 ### Added
 
 - **`topics create --emoji` and `topics edit --emoji`: a forum topic's icon.** The value is an emoji from the
