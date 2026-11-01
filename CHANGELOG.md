@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.523.0 — 01.11.2026
+
 ### Added
 
 - **The request pace from `@wirecat/cli-core/sends`.** `Pacer`, `DEFAULT_PACE`, `PaceRate` and `pacePathFor` were only
