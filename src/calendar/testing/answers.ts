@@ -15,13 +15,14 @@ const commandAt = (root: Command, argv: readonly string[]): Command => {
 
 /**
  * Parses what a shared calendar command handed its host against the command's entity, as a host prints it: keys in
- * snake_case, a list's items one by one, a search's hits each with the search's `untrusted`, and no `next`.
+ * snake_case, a list's items one by one, a search's hits each with the search's `untrusted`, and no `next`. A `meta`
+ * goes into the host's envelope, never into the item.
  */
 export const checkCalendarAnswer = (root: Command, argv: readonly string[], value: unknown): void => {
   const command = commandAt(root, argv)
   const schema = answerEntitySchema(command)
   if (!schema) throw new Error(`${argv.join(" ")} declares no answer entity`)
-  const { next: _next, ...body } = snakeKeys(value) as Record<string, unknown>
+  const { next: _next, meta: _meta, ...body } = snakeKeys(value) as Record<string, unknown>
   const marker = (body.untrusted as string[] | undefined)
     ?.filter((field) => field.startsWith("hits."))
     .map((field) => field.slice("hits.".length))
