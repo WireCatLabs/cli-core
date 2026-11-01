@@ -54,6 +54,26 @@ describe("config", () => {
     expect(stillTaken).toBe(0)
   })
 
+  it("**a CLI that is not a messenger but sends** offers sends_per_hour and reads it", async () => {
+    const tool = { ...app, messenger: false, sends: true as const }
+    const own = settingsFor(tool)
+    const offered = (
+      configCommand(tool, own).commands.find((one) => one.name() === "set")?.registeredArguments[0]?.description ?? ""
+    ).split(", ")
+    expect(offered).toContain("sends_per_hour")
+    expect(offered).not.toContain("sender_colors")
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const streams = captureStreams()
+    const code = await run(
+      ["work", "config", "set", "sends_per_hour", "5", "--json"],
+      { app: tool, commands: () => [configCommand(tool, own)] },
+      { streams, tty: false, env },
+    )
+    expect(code, streams.stderr.join("\n")).toBe(0)
+    expect(own.resolveSettings({ profile: "work" }, { env }).sendsPerHour).toBe(5)
+  })
+
   it("**a CLI that is not a messenger offers no messenger setting**, and refuses one", async () => {
     const tool = { ...app, messenger: false }
     const own = settingsFor(tool)
