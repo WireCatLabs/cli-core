@@ -9,9 +9,9 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **Needs `@wirecat/cli-base` 0.70.x** (peer range `>=0.70.0 <0.71.0`, was 0.68.x). 0.70.0 lets `--to` take an e-mail
+- **Needs `@wirecat/cli-base` 0.71.x** (peer range `>=0.71.0 <0.72.0`, was 0.68.x). 0.71.0 lets `--to` take an e-mail
   address and `--subject` a subject line in the shared command vocabulary, which mail-cli uses. A CLI on cli-base
-  0.68 or 0.69 moves to 0.70 together with this version.
+  0.68 or 0.69 moves to 0.71 together with this version.
 
 ### Fixed
 

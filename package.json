@@ -251,7 +251,7 @@
     "@types/node": "^22.20.5",
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^5.0.5",
-    "@wirecat/cli-base": "0.70.0",
+    "@wirecat/cli-base": "0.71.0",
     "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.414.0",
     "commander": "15.0.0",
     "cspell": "10.4.0",
@@ -271,7 +271,7 @@
   },
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
-    "@wirecat/cli-base": ">=0.70.0 <0.71.0",
+    "@wirecat/cli-base": ">=0.71.0 <0.72.0",
     "commander": ">=15"
   },
   "bin": {
