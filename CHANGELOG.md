@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.518.0 — 01.11.2026
+
 ### Added
 
 - **A memory names its project (store version 43)**: `memories.add({ project })`, `memories.list({ project })` and
