@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.528.0 — 01.11.2026
+
 ### Added
 
 - **Every profile keeps its messenger library's warnings, and `doctor` counts the last day's.** A message the
