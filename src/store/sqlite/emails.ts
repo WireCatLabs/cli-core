@@ -34,6 +34,7 @@ import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "
 import type { Orm, StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
 import { type SyncStateSave, writeState } from "./sync.js"
+import { type ThreadFilter, threadRows } from "./thread-columns.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
@@ -284,8 +285,8 @@ export interface MailStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
   /** Several threads and sync state in one transaction: a slice of mail commits with its resume point, or not at all. */
   saveThreads(inputs: ThreadSave[], states?: SyncStateSave[]): Promise<ThreadDetails[]>
-  /** Newest activity first. */
-  threads(filter?: MailFilter): Promise<EmailThread[]>
+  /** Newest activity first; `where` is a list query compiled over `THREAD_COLUMNS`. */
+  threads(filter?: ThreadFilter): Promise<EmailThread[]>
   thread(id: number): Promise<ThreadDetails | null>
   email(accountId: number, externalId: string): Promise<Email | null>
   /** Newest first. */
@@ -813,14 +814,7 @@ export const mailStoreOver = (
     return ids.map((id) => threadDetails(database, id) as ThreadDetails)
   },
   async threads(filter = {}) {
-    const [limit, offset] = page(filter)
-    return database
-      .prepare(
-        `SELECT * FROM email_threads WHERE (? IS NULL OR account_id = ?) AND (? OR deleted_at IS NULL)
-          ORDER BY coalesce(last_email_at, 0) DESC, id DESC LIMIT ? OFFSET ?`,
-      )
-      .all(filter.accountId ?? null, filter.accountId ?? null, filter.includeDeleted ? 1 : 0, limit, offset)
-      .map(threadOf)
+    return threadRows(database, filter).map(threadOf)
   },
   async thread(id) {
     return threadDetails(database, id)

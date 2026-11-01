@@ -404,6 +404,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `subject` | txt | every word, folded as text is; mail only | `subject:"quarterly planning"` | term, phrase |
 | `mailbox` | kw | a folder or label by its id (ASCII case folded) or name (case folded in any script); mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase |
 | `label` | kw | the same as mailbox:; mail only | `label:Projects` | term, phrase |
+| `list` | kw | the List-Id of a mailing list, lower case; a domain matches every list under it; mail only | `list:github.com` | term, phrase |
 | `is` | enum | unread, read, starred | `is:unread` | term, phrase |
 | `chat` | kw | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
 | `date` | time | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |

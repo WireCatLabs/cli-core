@@ -78,6 +78,20 @@ account `{ provider: "email", account: <address, lower case> }`.
   memo passes its embedding here.
 - **`ages`.** Domain registration dates known so far, for a rule that asks for a sender score.
 
+## Reading the stored mail
+
+`searchMail(store, runAs, { text, mailAccount | accounts, … })` is `search messages` over mail: the shared query
+language, with `list:` for a mailing list, and mail from a demoted sender after the rest unless `plainOrder` or
+`newest`. `showMail(store, locator, { before, after, full })` is one email and its thread neighbours with the text of
+each attachment, cut at `ATTACHMENT_CHARS` unless `full`. memo's `search mail` and `messages show` and mail-cli's
+commands call these two, so the answers match.
+
+`@wirecat/cli-core/mail/cli` mounts the commands on a mail CLI: `mailReadCommands({ app, read })` gives `search
+messages`, `messages show` and `conversations list|show`. `read(command, work)` opens the shared store for one run and
+names the profile's mailbox; every command reads that mailbox alone and refuses another one's reference. A thread is a
+conversation, `chat:email/<address>/<thread>`; `conversations list` filters on `subject`, `emails_count` and
+`last_email_at` in SQL (`THREAD_COLUMNS`). The store keeps text, not the RFC 5322 source, so there is no `--raw`.
+
 ## Sync state
 
 All under the account, in `store.sync` (`syncState`, `setSyncState`):

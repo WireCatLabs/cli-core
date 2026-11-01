@@ -147,6 +147,17 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     support: "A1",
   },
   {
+    name: "list",
+    example: "list:github.com",
+    index: "emails.headers list-id",
+    aliases: [],
+    type: "kw",
+    operators: terms,
+    normalization: "the List-Id of a mailing list, lower case; a domain matches every list under it; mail only",
+    support: "A1",
+    validate: filled,
+  },
+  {
     name: "is",
     example: "is:unread",
     index: "emails.read / emails.flagged / messages.starred",

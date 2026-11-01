@@ -554,6 +554,21 @@ const mailbox: FieldCompiler = ({ value }, { mail }) =>
       : bound("0"),
   )
 
+// Mail stored in full keeps List-Id in its headers; mail only recorded, in its metadata.
+const list: FieldCompiler = ({ value }, { mail }) => {
+  const wanted = value.trim().toLowerCase()
+  return always(
+    mail
+      ? bound(
+          `m.id IN (SELECT id FROM (SELECT id, coalesce(json_extract(headers, '$."list-id"'),
+             json_extract(metadata, '$.listId')) AS list_id FROM emails) WHERE list_id = ? OR list_id LIKE '%.' || ? ESCAPE '\\')`,
+          wanted,
+          wanted.replace(/[\\%_]/g, "\\$&"),
+        )
+      : bound("0"),
+  )
+}
+
 const is: FieldCompiler = ({ value }, { mail }) => {
   const state = value.toLowerCase()
   return always(
@@ -617,6 +632,7 @@ export const FIELD_COMPILERS: Readonly<Record<string, FieldCompiler>> = {
   source: notesOnly,
   mailbox,
   label: mailbox,
+  list,
   is,
   subject,
 }
