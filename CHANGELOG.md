@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A `search all` meeting transcript hit names its cue and its speaker**: `cue_ref`
+  (`meeting:<account>/<meeting>/<transcript>/<cue>`) and `sender_name` (marked untrusted). `meetings passage <cue_ref>
+  --before-n 3 --after-n 3` opens the lines around it; `ref` stays the meeting. Chat and summary hits are unchanged.
+  `SearchHit` from the meetings store carries the same cue as `ref` and `speakerName`; `MeetingSearchItem` carries
+  `cueRef` and `speakerName`.
+
 ## 0.532.0 — 01.11.2026
 
 ### Added

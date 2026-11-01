@@ -326,7 +326,7 @@ const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   document: DOCUMENT_HIT_UNTRUSTED,
   note: undefined,
   event: ["title", "excerpt"],
-  meeting: ["title", "excerpt"],
+  meeting: ["title", "excerpt", "sender_name"],
 }
 
 export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
@@ -342,6 +342,7 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         offset_ms: item.startMs,
         scope: item.scope,
         id: String(item.id),
+        ...(item.cueRef === undefined ? {} : { cue_ref: item.cueRef, sender_name: item.speakerName ?? null }),
         untrusted: ALL_HIT_UNTRUSTED.meeting,
       }
     : defined({

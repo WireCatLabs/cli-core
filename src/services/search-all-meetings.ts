@@ -38,6 +38,9 @@ export interface MeetingSearchItem {
   scope: SearchHit["scope"]
   id: number
   startMs: number | null
+  /** A transcript hit's cue, `meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens. */
+  cueRef?: string
+  speakerName?: string | null
 }
 export interface MeetingSearchCursor {
   accountId: number
@@ -176,6 +179,9 @@ const collectMeetings = async (
           scope: hit.scope,
           id: hit.id,
           startMs: hit.startMs,
+          ...(hit.scope === "transcript" && hit.ref !== undefined
+            ? { cueRef: hit.ref, speakerName: hit.speakerName ?? null }
+            : {}),
         },
       })
       if (collected.items.length > request.limit) {

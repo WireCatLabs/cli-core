@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { MeetingSave } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
+import { readMeetingPassage } from "./meeting-passage-format.js"
 import type { SearchFound } from "./messages.js"
 import { RESOURCES_SEARCHED, searchAll } from "./search-all.js"
 import { type SearchAllIncludingMeetingsRequest, searchAllIncludingMeetings } from "./search-all-meetings.js"
@@ -125,6 +126,23 @@ describe("opt-in meeting-inclusive search", () => {
     expect(found.items[0]).toHaveProperty("ref", `meeting:${accountId}/${saved.meeting.id}`)
     expect(found.meetings).toMatchObject({ accountId, complete: true, meetingsScanned: 1 })
     expect(found.hasMore).toBe(false)
+  })
+
+  it("names a transcript hit's cue and speaker, and meetings passage opens that cue with the lines around it", async () => {
+    const { store, accountId, save } = await fixture()
+    const saved = await save("cues", ["first line", "second line", "the needle line", "fourth line", "fifth line"])
+    const transcript = saved.transcripts[0]?.transcript.id
+    const [hit] = (await searchAllIncludingMeetings(store, account, request())).items
+    expect(hit).toMatchObject({
+      ref: `meeting:${accountId}/${saved.meeting.id}`,
+      cueRef: `meeting:${accountId}/${saved.meeting.id}/${transcript}/2`,
+      speakerName: "Alice Example",
+    })
+    const { packet } = await readMeetingPassage(store.meetings, accountId, (hit as { cueRef: string }).cueRef, {
+      before: 1,
+      after: 1,
+    })
+    expect(packet.items.map(({ text }) => text)).toEqual(["second line", "the needle line", "fourth line"])
   })
 
   it("reports unknown matching coverage on sparse pages and resumes into older matches", async () => {

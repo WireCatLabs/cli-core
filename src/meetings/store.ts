@@ -100,6 +100,8 @@ export interface SearchHit {
   id: number
   text: string
   startMs: number | null
+  /** Who spoke a transcript hit's cue, as the transcript names them; absent for chat and summary hits. */
+  speakerName?: string | null
   /** `corrected` when a query word matched only as a stored word recognition may have garbled. */
   match?: "words" | "corrected"
   /** For a `corrected` hit, the stored words each such query word matched in this passage. */

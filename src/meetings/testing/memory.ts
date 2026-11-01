@@ -4,6 +4,7 @@ import { MEETING_QUERY, meetingItem } from "../item.js"
 import type { Event, EventSeries, MeetingSeries } from "../model.js"
 import { eventItem } from "../read-answers.js"
 import { MeetingError, positiveInteger } from "../reads.js"
+import { formatMeetingReference } from "../reference.js"
 import type { MeetingDetails, MeetingFilter, MeetingSave, MeetingStore, SearchHit } from "../store.js"
 import type { MeetingTranscriptStore, TranscriptAppend } from "../transcript-store.js"
 
@@ -133,11 +134,19 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
           .filter((t) => t.transcript.supersededAt === null && t.transcript.deletedAt === null)
           .flatMap((t) =>
             t.rows.map((r) => ({
+              ref: formatMeetingReference({
+                type: "meeting",
+                accountId: d.meeting.accountId,
+                meetingId: d.meeting.id,
+                transcriptId: t.transcript.id,
+                cuePosition: r.position,
+              }),
               meetingId: d.meeting.id,
               scope: "transcript" as const,
               id: r.id,
               text: r.text,
               startMs: r.startMs,
+              speakerName: r.speakerName,
             })),
           )
         rows.push(
