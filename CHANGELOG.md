@@ -28,9 +28,6 @@ shape of this file.
 - **`appDoctorCommand` takes a `local` check.** A CLI that is not a messenger can now put what it reads of its own
   state from disk into `doctor` — a run that stopped half way, an undo window about to close — without `--online`.
   Its fields join the answer and its notes go to stderr; a throw is reported as `local.error`, never a failed doctor.
-
-### Added
-
 - **`AppIdentity.sends`**: a CLI that is not a messenger yet sends to people (mail) keeps `sends_per_hour`, so the
   owner can set its hourly limit with `config set sends_per_hour`; the other messenger settings stay hidden.
 
