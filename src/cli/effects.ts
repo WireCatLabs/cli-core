@@ -1,4 +1,11 @@
-import { annotate, annotateOption, type CommandInfo, metaOf, stepTargets } from "@wirecat/cli-base/commands"
+import {
+  annotate,
+  annotateOption,
+  type CommandInfo,
+  metaOf,
+  optionMetaOf,
+  stepTargets,
+} from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
 import { type Command, Option } from "commander"
 import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
@@ -115,6 +122,42 @@ export const fetchesOnlyAt =
     return at !== undefined && fetchesOnly(at)
   }
 
+const FILE_OPTION = new WeakMap<Command, string>()
+
+/**
+ * Marks a command whose only local write is the file one owner-only option names (`events export --output`): its
+ * effects stay a write, as WC-CMD-17 asks, but a run without the option only reads. An MCP tool never offers the
+ * option, so it runs through `read`; `<PREFIX>_READ_ONLY` refuses only a run that gives it. `option` is the option's
+ * attribute name, `output`.
+ */
+export const writesFileOnlyWith = <T extends Command>(command: T, option: string): T => {
+  const flag = command.options.find((one) => one.attributeName() === option)
+  if (!flag || optionMetaOf(flag).mcp !== false)
+    throw new Error(`${command.name()}: writesFileOnlyWith needs --${option} added first, as an owner-only option`)
+  FILE_OPTION.set(command, option)
+  return command
+}
+
+const writesFileNow = (command: Command): boolean => {
+  const option = FILE_OPTION.get(command)
+  return option === undefined || command.opts()[option] !== undefined
+}
+
+/**
+ * What an MCP server runs through `read`: a command that only fetches into the store (`fetchesOnly`), and one whose
+ * only write is a file the tool cannot name (`writesFileOnlyWith`).
+ */
+export const readsOverMcp = (command: Command): boolean => fetchesOnly(command) || FILE_OPTION.has(command)
+
+/** `readsOverMcp` by command path under `root`, as an MCP catalogue asks it; an unknown path is not one. */
+export const readsOverMcpAt =
+  (root: Command) =>
+  (path: readonly string[]): boolean => {
+    let at: Command | undefined = root
+    for (const word of path) at = at?.commands.find((one) => one.name() === word)
+    return at !== undefined && readsOverMcp(at)
+  }
+
 /**
  * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
  * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
@@ -126,7 +169,8 @@ export const isStoreChange = (command: Command): boolean => {
     (effects?.remote === "none" || STORE_WRITES.has(command)) &&
     effects?.local === "write" &&
     !KEPT_UNDER_LOCK.has(command) &&
-    !changesAuthority(command)
+    !changesAuthority(command) &&
+    writesFileNow(command)
   )
 }
 

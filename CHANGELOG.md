@@ -28,6 +28,29 @@ shape of this file.
   command's deadline so it answers in part instead of timing out, and stops writing once the command is stopped. A
   find larger than 5 MB is left on the server unread, and the answer says so (`search.server-too-large`).
 
+## 0.540.0 — 02.11.2026
+
+### Added
+
+- **`events export` without `--output` is a read over MCP and under the read-only lock.** It only prints the `.ics`
+  text, and MCP tools never offer `--output`. `writesFileOnlyWith(command, option)` marks a command whose only local
+  write is the file an owner-only option names: its effects stay a write (WC-CMD-17), `readsOverMcp` / `readsOverMcpAt`
+  count it as a read, and `<PREFIX>_READ_ONLY` refuses only a run that gives the option. Every MCP server now judges
+  `read` with `readsOverMcpAt`, which is `fetchesOnly` plus these; a CLI test that snapshots the catalogue with
+  `fetchesOnlyAt` should switch to it.
+- **An MCP list's `query` input names its fields.** It said "the fields are below", and no Fields section is sent
+  over MCP. It now reads cli-base's `queryDescription`: the fields, enum values, and which fields `-field:value`
+  leaves out. `events list`'s query declares `event_type` as `negatable` (cli-base), and `negatableOf(registry)`
+  gives `nativeTermLists` the same list, so the description and the filter cannot drift. `queryArgument` uses the
+  same sentence.
+- **`events list` and `events prepare` give `meta.now`, `meta.now_local` and `meta.timezone` (WC-TIME-7)**, from the
+  host's clock and zone, so an agent plans "tomorrow" from the real date.
+
+### Changed — may break callers
+
+- **cli-base 0.72.0.** `metaSchema` accepts `now` and `now_local`; a host that checks meta against an older cli-base's
+  strict schema drops the whole meta.
+
 ## 0.539.0 — 01.11.2026
 
 ### Added

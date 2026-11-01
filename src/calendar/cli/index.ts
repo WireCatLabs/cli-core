@@ -1,11 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
-import type { Effects } from "@wirecat/cli-base/standards"
+import { clockMeta, type Effects } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { ownerOnlyOption } from "../../cli/effects.js"
+import { ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
@@ -398,7 +398,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
             await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }, opts.page),
             EVENT_ITEM_UNTRUSTED,
           ),
-          meta: await accountsMeta(deps.store, accounts, skipped, now()),
+          meta: { ...(await accountsMeta(deps.store, accounts, skipped, now())), ...clockMeta(now(), zone()) },
         },
         command,
       )
@@ -420,7 +420,10 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   )
   // Not over MCP: an agent would choose where on the owner's disk to write. It gets the text in the answer.
   if (deps.writeFile)
-    exporter.addOption(ownerOnlyOption("--output <file>", "the file to write; printed in the answer when absent"))
+    writesFileOnlyWith(
+      exporter.addOption(ownerOnlyOption("--output <file>", "the file to write; printed in the answer when absent")),
+      "output",
+    )
   exporter.action(async (words: string[], opts: { output?: string }, command: Command) => {
     const filter = await eventsFilter(words, {
       store: deps.store,
@@ -481,7 +484,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         ...(opts.limit === undefined ? {} : { limit: opts.limit }),
         ...(window.since === undefined ? {} : { since: window.since }),
       })
-      print({ ...prepared, meta: { ...meta, ...window.meta } }, command)
+      print({ ...prepared, meta: { ...meta, ...window.meta, ...clockMeta(now(), zone()) } }, command)
     })
 
   const searches = annotate(program.command("search").description("find stored things by text: events"), {

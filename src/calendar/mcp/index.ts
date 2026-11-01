@@ -58,7 +58,8 @@ export const calendarTools = [
     description:
       "stored events, earliest first; `query` takes field terms joined by AND: starts_at (>=, <, or " +
       "[a TO b}), ends_at>=, changed_at>= (events new, moved or cancelled since, each with change and was), " +
-      "overlapping:true (timed events that clash, each with overlaps), calendar:<id>; a date in the zone given, " +
+      "overlapping:true (timed events that clash, each with overlaps), calendar:<id>, event_type:<kind>, and " +
+      "-event_type:<kind> to leave one kind out; a date in the zone given, " +
       "UTC when absent; without starts_at or ends_at, from today on",
     properties: {
       account_id: integer,

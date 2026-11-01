@@ -273,8 +273,11 @@ export {
   REMOTE_READ,
   REMOTE_WRITE,
   reachesOtherService,
+  readsOverMcp,
+  readsOverMcpAt,
   refuseUnderReadOnly,
   storeChangeRefusal,
+  writesFileOnlyWith,
 } from "./effects.js"
 export { type CliEntry, type EntryContext, type EntryIo, startCli } from "./entry.js"
 export {
@@ -353,6 +356,7 @@ export {
   nativeField,
   nativeTermLists,
   nativeTerms,
+  negatableOf,
   pagedList,
   pageOf,
   type QueryWords,

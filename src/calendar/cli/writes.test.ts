@@ -2,10 +2,11 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, errorObjectOf } from "@wirecat/cli-base"
-import { describeProgram } from "@wirecat/cli-base/commands"
+import { describeProgram, metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { isStoreChange, readsOverMcpAt } from "../../cli/effects.js"
 import { commandPermissions, knownPermissionKeys } from "../../cli/permission-keys.js"
 import { type AgentProgram, runCommandForAgent, toolsFromCommands } from "../../mcp/agent.js"
 import type { EntryInput } from "../../meetings/index.js"
@@ -248,6 +249,31 @@ describe("calendar write commands", () => {
     const tool = toolsFromCommands(describeProgram(program())).find(({ command }) => command === "events export")
     expect(JSON.stringify(tool)).not.toContain("--output")
     expect(Object.keys(tool?.input.entries ?? {})).not.toContain("output")
+  })
+
+  it("an MCP list's query names its fields, and that event_type alone can be left out with -", async () => {
+    const { program } = await setup()
+    const tool = toolsFromCommands(describeProgram(program())).find(({ command }) => command === "events list")
+    const query = JSON.stringify(tool?.input.entries.query)
+    expect(query).toContain("-field:value or NOT field:value leaves out what matches, for event_type only")
+    expect(query).toContain("event_type (default|out-of-office|focus|working-location|birthday|from-mail)")
+    expect(query).not.toContain("the fields are below")
+  })
+
+  it("events export is a read over MCP and under the read-only lock until --output names a file", async () => {
+    const { program } = await setup()
+    const root = program()
+    const tools = toolsFromCommands(describeProgram(root), { fetchOnly: readsOverMcpAt(root) })
+    expect(tools.find(({ command }) => command === "events export")?.writes).toBe(false)
+    expect(tools.find(({ command }) => command === "events import")?.writes).toBe(true)
+    const exporter = root.commands
+      .find((one) => one.name() === "events")
+      ?.commands.find((one) => one.name() === "export")
+    if (!exporter) throw new Error("no events export")
+    expect(metaOf(exporter).effects).toEqual({ remote: "none", local: "write" })
+    expect(isStoreChange(exporter)).toBe(false)
+    exporter.setOptionValue("output", "week.ics")
+    expect(isStoreChange(exporter)).toBe(true)
   })
 
   it("events import asks first, adds each event under its UID, and a second import keeps one copy", async () => {
