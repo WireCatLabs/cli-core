@@ -11,7 +11,8 @@ shape of this file.
 
 - **A memory names its project (store version 43)**: `memories.add({ project })`, `memories.list({ project })` and
   `memories.update(ref, { project })`, which moves a memory to another project or to none with `null`. A memory and a
-  fact carry `project` and `projectName`, so a reader needs no second lookup for the name.
+  fact carry `project` and `projectName` (`project` and `project_name` in the `memory` and `fact` entities), so a reader
+  needs no second lookup for the name.
 - **`evidenceFindings.sources(id)`** reads each reference a findings batch cites back once, in the shape of
   `memories.sources`: `kind`, `title`, `sender`, `at`, an excerpt of at most 280 characters, `tool` and `missing`.
 
