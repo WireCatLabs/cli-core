@@ -41,6 +41,7 @@ export {
   type PriorityLabel,
   priorityLabel,
   priorityOf,
+  priorityOption,
   TASK_STATES,
   type TaskState,
 } from "../tasks/index.js"

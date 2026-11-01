@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.515.0 — 01.11.2026
+
 ### Added
 
 - **`storedMailRules(store, account, query?)`** reads one account's mail rules from the store in the shape
@@ -16,6 +18,25 @@ shape of this file.
   (`\Inbox` and `Inbox` are one label, modified UTF-7 is decoded), moved from memo.
 - **`mailProgress(store, key)`** gives each synced folder's window, done and total from the saved resume points,
   without asking the mailbox. It treats only `not_found` as "no account yet" and passes other store errors on.
+- **Store version 42: a task's revision goes up only for a change a person could overwrite** (`minCompatible` stays
+  34): its title, description, status, priority, agent, due date, project or parent, an assignee added or removed, or
+  a tag added or removed. A claim taken, renewed or released, a follow-up time, a close suggestion or certainty no
+  longer bump it, so a board no longer reports a conflict while an agent simply works. Triggers do it, so writes by
+  older builds follow the same rule.
+
+### Fixed
+
+- **`tasks update --priority none` clears the priority** instead of failing with "a priority score is 0 to 1":
+  Commander stores an option parser's `null` as an empty string. `priorityOption` reads `none` as the word `"none"`
+  for a command's own option; a consumer that maps it to `null` (as `--due none`) clears the priority.
+
+### Changed — may break callers
+
+- **`tasks.move` beside a task in another column moves the task into that column**: without `status` it takes the
+  neighbour's status. A `status` that differs from the neighbour's is refused with `validation_error`, reason
+  `task.column` (`HRB-2 is in in_progress, not todo: pick a task in the todo column`), with `anchor`, `anchorStatus`
+  and `requestedStatus` in the details. A neighbour off every project board, or the task itself, is refused with a
+  message that says so.
 
 ## 0.514.0 — 01.11.2026
 
