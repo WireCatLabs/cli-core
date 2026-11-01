@@ -13,6 +13,15 @@ shape of this file.
   access token whose `expiresAt` still called it fresh (a revoked session), refresh under the shared lock anyway. A
   different fresh token another process saved meanwhile is answered instead of a second refresh.
 
+## 0.536.0 — 01.11.2026
+
+### Fixed
+
+- **A server mail search that ran out of time says so.** When the server's own deadline cut a search or the read of
+  its finds short, `searchMailServer` reported `search.server-failed` (`provider_unavailable`), as if the server had
+  refused. It now reports `search.server-timeout` (`timeout`), as when `--server-time` ends it, so a caller knows to
+  give it more time.
+
 ## 0.535.0 — 01.11.2026
 
 ### Added
