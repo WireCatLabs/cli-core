@@ -14,8 +14,6 @@ export interface StoredTokens {
   tokens: TokenSet
   /** The app the entry was signed in with, when the entry records it; refresh must use that one. */
   client?: OAuthClient
-  /** Fields a CLI added at sign-in (`EncodeInput.extra`), as the standard codec keeps them; never a token or secret. */
-  extra?: Record<string, unknown>
 }
 
 export interface EncodeInput {
@@ -82,18 +80,6 @@ export const oauthAccount = (providerId: string, profile: string): string => {
   return `oauth:${providerId}:${profile}`
 }
 
-const STANDARD_FIELDS = new Set([
-  "version",
-  "provider",
-  "clientId",
-  "clientSecret",
-  "accessToken",
-  "refreshToken",
-  "expiresAt",
-  "scopes",
-  "tokenType",
-])
-
 /** The entry every new sign-in writes: account `oauth:<provider>:<profile>` under the CLI's own service. */
 export const standardCodec = (providerId: string): TokenCodec => ({
   decode: (raw) => {
@@ -102,10 +88,8 @@ export const standardCodec = (providerId: string): TokenCodec => ({
     const clientId = text(value.clientId)
     if (value.version !== 1 || value.provider !== providerId || !refreshToken || !clientId) throw invalid()
     if (!Array.isArray(value.scopes) || !value.scopes.every((scope) => typeof scope === "string")) throw invalid()
-    const extra = Object.fromEntries(Object.entries(value).filter(([field]) => !STANDARD_FIELDS.has(field)))
     return {
       client: { clientId },
-      ...(Object.keys(extra).length ? { extra } : {}),
       tokens: defined({
         accessToken: text(value.accessToken),
         refreshToken,

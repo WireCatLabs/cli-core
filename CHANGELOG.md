@@ -12,8 +12,6 @@ shape of this file.
 - **`tokenKeeper.tokens({ refresh: true })`** (and `accessToken({ refresh: true })`): after a server refuses an
   access token whose `expiresAt` still called it fresh (a revoked session), refresh under the shared lock anyway. A
   different fresh token another process saved meanwhile is answered instead of a second refresh.
-- **`StoredTokens.extra`**: the standard codec now reads back the fields a CLI added at sign-in (`signIn`'s `accept`,
-  `save(tokens, extra)`), such as when the sign-in happened. Token and client fields are never part of it.
 
 ## 0.535.0 — 01.11.2026
 
