@@ -140,6 +140,8 @@ shape of this file.
 
 ### Fixed
 
+- **`messages delete` with no message id refuses with `validation_error`** before it connects. An empty id (`""`
+  or a lone comma) used to reach the messenger as a deletion of nothing and answer success.
 - **An MCP read or write whose answer named a step only the person can take (`user_action`) failed as a bug.** The
   router dropped next steps this server does not offer by their command, and such a step has none. It is kept now;
   a command step this server does not offer is still dropped.
