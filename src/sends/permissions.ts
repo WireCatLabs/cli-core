@@ -206,6 +206,12 @@ const ACCOUNT_KEYS: Record<AccountAction, PermissionKey> = {
   "chat-mark-unread": "chats.mark-unread",
   "message-star": "messages.star",
   "message-unstar": "messages.unstar",
+  // A mail CLI names its own key on every write; these only answer `keyForWrite` when one is left out.
+  "message-flag": "messages.update",
+  "message-move": "messages.move",
+  "message-copy": "messages.copy",
+  "message-delete": "messages.trash",
+  "message-restore": "messages.restore",
   privacy: "account.privacy.set",
 }
 
