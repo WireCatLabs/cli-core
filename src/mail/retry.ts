@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { LoadEngine } from "../readers/types.js"
-import type { AccountKey, MessageStore } from "../store/index.js"
+import type { MessageStore } from "../store/index.js"
+import { mailAccountKey } from "./account-key.js"
 import { type AttachmentLog, addressOf, FETCH_CHUNK, readAttachments } from "./attachments.js"
 import { mailFolders } from "./folders.js"
 import { mailHeadersOf } from "./headers.js"
@@ -40,7 +41,7 @@ export const retryUnread = async ({
   index: MailSyncOptions["index"]
 }): Promise<MailSyncResult> => {
   const startedAt = now()
-  const key: AccountKey = { provider: "email", account: account.address.toLowerCase() }
+  const key = mailAccountKey(account.address)
   const find = source.find
   if (find === undefined)
     throw new CliError(

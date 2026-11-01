@@ -103,9 +103,9 @@ const searchCommand = (mail: MailReads): Command => {
     partial: true,
     output: { entity: "message", view: "hit" },
     examples: [
-      `${mail.app.command} ya search messages invoice`,
-      `${mail.app.command} ya search messages 'from:ann@example.com has:attachment date>30d'`,
-      `${mail.app.command} ya search messages 'list:github.com is:unread' --newest`,
+      `${mail.app.command} personal search messages invoice`,
+      `${mail.app.command} personal search messages 'from:ann@example.com has:attachment date>30d'`,
+      `${mail.app.command} personal search messages 'list:github.com is:unread' --newest`,
     ],
   })
     .summary(mail.server ? "find emails by words and fields" : "find stored emails by words and fields")
@@ -126,7 +126,7 @@ const searchCommand = (mail: MailReads): Command => {
       "after",
       `
 Fields: from: to: cc: bcc: subject: body: mailbox: (or label:) list: (a List-Id or its domain) is:unread|read|starred
-has:attachment, filename:, content: (the text of attachments), size>, date: — \`${mail.app.command} ya search messages 'content:invoice'\`.
+has:attachment, filename:, content: (the text of attachments), size>, date: — \`${mail.app.command} personal search messages 'content:invoice'\`.
 chat: names a thread by its subject. Mail sent to many is in the mailbox bulk; NOT mailbox:bulk leaves it out.
 Mail from senders with signs of fraud comes after the rest of the page; --plain-order keeps it in place.
 --json: the list is items; each hit's reference is ref (msg:email/…), which messages show reads.${
@@ -235,8 +235,8 @@ const messagesCommand = (mail: MailReads): Command => {
   annotate(messages.command("show"), {
     effects: LOCAL_READ,
     examples: [
-      `${mail.app.command} ya messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
-      `${mail.app.command} ya messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E' --before-n 2`,
+      `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
+      `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E' --before-n 2`,
     ],
   })
     .summary("one stored email whole, with the text of its attachments")
@@ -295,8 +295,8 @@ const conversationsCommand = (mail: MailReads): Command => {
     annotate(conversations.command("list"), {
       effects: LOCAL_READ,
       examples: [
-        `${mail.app.command} ya conversations list`,
-        `${mail.app.command} ya conversations list subject:invoice emails_count>1`,
+        `${mail.app.command} personal conversations list`,
+        `${mail.app.command} personal conversations list subject:invoice emails_count>1`,
       ],
     })
       .summary("stored email threads, newest first")
@@ -354,8 +354,8 @@ const conversationsCommand = (mail: MailReads): Command => {
   annotate(conversations.command("show"), {
     effects: LOCAL_READ,
     examples: [
-      `${mail.app.command} ya conversations show 'chat:email/me%40example.com/thread-1'`,
-      `${mail.app.command} ya conversations show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
+      `${mail.app.command} personal conversations show 'chat:email/me%40example.com/thread-1'`,
+      `${mail.app.command} personal conversations show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
     ],
   })
     .summary("one email thread, every email oldest first")

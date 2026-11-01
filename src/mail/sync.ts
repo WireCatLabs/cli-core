@@ -5,6 +5,7 @@ import type { BudgetStop, RunBudget } from "../background/budget.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { AccountKey, EmailLocationInput, FolderEmail, MessageStore, ThreadSave } from "../store/index.js"
 import { isBusy } from "../store/sqlite/transaction.js"
+import { mailAccountKey } from "./account-key.js"
 import { FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { BULK, bulkBox } from "./bulk.js"
 import { parsedEmail } from "./email-input.js"
@@ -229,7 +230,7 @@ export const syncMail = async (
     })),
   ]
   const complete = last.complete && plan.stopped === null && unreadable.length === 0 && remaining === 0
-  const account: AccountKey = { provider: "email", account: options.account.address.toLowerCase() }
+  const account = mailAccountKey(options.account.address)
   const indexed = plan.stopped === null ? await index?.(store, account) : undefined
   const deletionsSkipped = rounds.map((round) => round.deletionsSkipped).findLast((text) => text !== undefined)
   const { unreadable: _unreadable, ...rest } = last
@@ -296,7 +297,7 @@ const syncRound = async (
       index,
     })
   const startedAt = now()
-  const key: AccountKey = { provider: "email", account: account.address.toLowerCase() }
+  const key = mailAccountKey(account.address)
   const accountId = await store.accounts.saveAccount(key, { name: account.address })
 
   const folders = await mailFolders(account, source)

@@ -14,6 +14,16 @@ shape of this file.
   the key that lets an agent mail other people. A permission key there covers the keys under it.
 - **`safeName` from `./files`**: the file-name cleaner downloads use (no path, no leading dot, no control or direction
   character; Windows' reserved names refused), for a CLI that saves a file someone else named.
+- **`mailAccountKey(address)`** from `./mail`: the store key of a mail account, `{ provider: "email", account }` with
+  the address in lower case. **`positiveCount(flag)`** from `./cli`: the parser of a whole-number flag from 1 up.
+- **The shared `schedule` command lives in `src/cli/schedule/`**, not under the messenger commands. `scheduleCommandFor`
+  and `ScheduleHost` come from `./cli` as before; the old module path re-exports them. Each `schedule` command now
+  has examples and described arguments, and the example profile of the shared mail read commands is `personal`.
+
+### Fixed
+
+- **`schedule command` and `schedule agent` refuse a name that another profile already uses**, rather than replacing
+  its schedule and timer. Schedules of the same profile are still replaced. Existing timers keep their names.
 
 ## 0.529.0 — 01.11.2026
 

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import type { AccountKey, MessageStore, SenderScore } from "../store/index.js"
+import type { MessageStore, SenderScore } from "../store/index.js"
+import { mailAccountKey } from "./account-key.js"
 import { domainsToAge, groupKey, probeMail } from "./probe.js"
 import { decide, type MailRule } from "./rules.js"
 import { type DomainAge, FRAUD_SIGNALS, FREE_MAIL, registrableOf, WEIGHTS } from "./score.js"
@@ -38,7 +39,7 @@ export const scoreSenders = async (
   now = Date.now(),
   rules: readonly MailRule[] = [],
 ): Promise<{ scored: number; looked: number; failed: number; demoted: number } | undefined> => {
-  const key: AccountKey = { provider: "email", account: address.toLowerCase() }
+  const key = mailAccountKey(address)
   const last = (await store.sync.syncState(key, SCORED))?.value
   const done = last === undefined ? undefined : (JSON.parse(last) as { version: number; at: number })
   if (done !== undefined && done.version === SCORE_VERSION && now - done.at < DAY) return undefined
