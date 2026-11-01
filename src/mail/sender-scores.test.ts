@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it } from "vitest"
 import { type MessageStore, openStore } from "../store/index.js"
 import type { MailRule } from "./rules.js"
@@ -115,4 +116,15 @@ it("ranks a forged sender lower, unless the owner wrote to its domain or a prote
 
   await save([mail(3, ME, "Owner", { outgoing: true, to: [{ address: "billing@pay-secure.example", name: null }] })])
   expect(await scoreSenders(store, ME, ages(none), 2 * DAY, [keep])).toMatchObject({ demoted: 0 })
+})
+
+it("scores nothing for an account the store does not hold, and does not hide any other failure", async () => {
+  const stub = (error: unknown) =>
+    ({
+      sync: { syncState: async () => undefined },
+      accounts: { storedAccount: async () => Promise.reject(error) },
+    }) as unknown as MessageStore
+  const none = ages(async () => ({ looked: 0, failed: 0 }))
+  expect(await scoreSenders(stub(new CliError("not_found", "no account")), ME, none)).toBeUndefined()
+  await expect(scoreSenders(stub(new Error("database is locked")), ME, none)).rejects.toThrow("database is locked")
 })

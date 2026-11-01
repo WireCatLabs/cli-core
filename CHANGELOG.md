@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Changed
+
+- **Needs `@wirecat/cli-base` 0.70.x** (peer range `>=0.70.0 <0.71.0`, was 0.68.x). 0.70.0 lets `--to` take an e-mail
+  address and `--subject` a subject line in the shared command vocabulary, which mail-cli uses. A CLI on cli-base
+  0.68 or 0.69 moves to 0.70 together with this version.
+
+### Fixed
+
+- **Scoring mail senders no longer hides a broken store.** `scoreSenders` treated any failure of the account lookup
+  as "no such account" and returned quietly; now only `not_found` does, and a locked or damaged store fails the
+  sync as it does elsewhere.
+
 ## 0.528.0 — 01.11.2026
 
 ### Added

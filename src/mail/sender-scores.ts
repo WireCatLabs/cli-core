@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import type { AccountKey, MessageStore, SenderScore } from "../store/index.js"
 import { domainsToAge, groupKey, probeMail } from "./probe.js"
 import { decide, type MailRule } from "./rules.js"
@@ -41,7 +42,10 @@ export const scoreSenders = async (
   const last = (await store.sync.syncState(key, SCORED))?.value
   const done = last === undefined ? undefined : (JSON.parse(last) as { version: number; at: number })
   if (done !== undefined && done.version === SCORE_VERSION && now - done.at < DAY) return undefined
-  const stored = await store.accounts.storedAccount(key).catch(() => null)
+  const stored = await store.accounts.storedAccount(key).catch((error: unknown) => {
+    if (error instanceof CliError && error.code === "not_found") return null
+    throw error
+  })
   if (stored === null) return undefined
   const items = (await store.mail.emailFacts({ accountId: stored.id })).map((email) => {
     const item = listedOf(email)
