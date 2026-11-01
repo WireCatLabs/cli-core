@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.524.0 — 01.11.2026
+
 ### Added
 
 - **`appDoctorCommand` takes a `local` check.** A CLI that is not a messenger can now put what it reads of its own
