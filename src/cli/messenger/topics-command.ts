@@ -1,12 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { topicIcon } from "../../entities/index.js"
 import { capability } from "../../ports/messenger.js"
 import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { typedQuery, withQuery } from "../list-query.js"
+import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { window, withPaging } from "../paging.js"
-import { lines, pageOf, topicAnswer } from "./chat-answers.js"
+import { lines, pageOf, topicAnswer, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { TOPICS_QUERY, topicTitle } from "./list-result-queries.js"
 
@@ -75,6 +76,31 @@ export const topicsCommand = (messenger: Messenger): Command => {
         renderAnswer(this, context, itemOf(topicAnswer(shown)))
       })
 
+  const icons = new Command("icons").description("the emojis a forum topic can take as its icon")
+  topics.addCommand(icons)
+  icons.addCommand(
+    withQuery(
+      annotate(new Command("list"), {
+        effects: REMOTE_READ,
+        examples: [`${messenger.app.command} personal topics icons list`],
+      }).description("the emojis `--emoji` takes in topics create and topics edit"),
+      TOPIC_ICONS_QUERY,
+    ).action(async function (this: Command, words: string[]) {
+      const context = messengerContext(this, messenger)
+      listQuery(typedQuery(words), TOPIC_ICONS_QUERY, "topics icons list")
+      const icons = await context.withServices((services) => services.topics.icons())
+      renderAnswer(
+        this,
+        context,
+        wholeList(
+          "topics icons list",
+          icons.map((emoji) => ({ emoji })),
+        ),
+        lines(({ emoji }) => emoji),
+      )
+    }),
+  )
+
   annotate(topics.command("enable"), { effects: REMOTE_WRITE })
     .description("enable forum topics; only the owner, with an explicit upgrade for a basic group")
     .argument("<chat>", messenger.chatArgument)
@@ -91,28 +117,32 @@ export const topicsCommand = (messenger: Messenger): Command => {
     .argument("<chat>", messenger.chatArgument)
     .argument("<title>", "the topic title, at most 128 UTF-8 bytes")
     .option("--operation-id <id>", "identify this creation attempt; an already sent or unknown id is refused")
+    .option("--emoji <emoji>", "the topic's icon, one of `topics icons list`")
     .action(async function (this: Command, chat: string, title: string) {
       const context = messengerContext(this, messenger)
+      const { operationId, emoji } = this.opts<{ operationId?: string; emoji?: string }>()
       const created = await context.withServices((services) =>
-        services.topics.create(chat, title, { sendId: this.opts<{ operationId?: string }>().operationId }),
+        services.topics.create(chat, title, { sendId: operationId, ...(emoji === undefined ? {} : { icon: emoji }) }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(created)))
     })
   annotate(topics.command("edit"), { effects: REMOTE_WRITE })
-    .description("rename, close or reopen a forum topic")
+    .description("rename, close, reopen or give an icon to a forum topic")
     .argument("<chat>", messenger.chatArgument)
     .argument("<topic>", "the topic id, from `topics list`")
     .option("--title <title>", "the new title, at most 128 UTF-8 bytes")
     .option("--closed <on|off>", "on closes the topic to new messages, off reopens it")
     .option("--pinned <on|off>", "on pins the topic at the top of the list, off unpins it")
     .option("--hidden <on|off>", "on hides the General topic from the topic list, off shows it")
+    .option("--emoji <emoji>", "the topic's icon, one of `topics icons list`; none removes it")
     .action(async function (this: Command, chat: string, topic: string) {
       const context = messengerContext(this, messenger)
-      const { title, closed, pinned, hidden } = this.opts<{
+      const { title, closed, pinned, hidden, emoji } = this.opts<{
         title?: string
         closed?: string
         pinned?: string
         hidden?: string
+        emoji?: string
       }>()
       const closes = onOff("--closed", closed)
       const pins = onOff("--pinned", pinned)
@@ -123,6 +153,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
           ...(closes === undefined ? {} : { closed: closes }),
           ...(pins === undefined ? {} : { pinned: pins }),
           ...(hides === undefined ? {} : { hidden: hides }),
+          ...(emoji === undefined ? {} : { icon: emoji === "none" ? null : emoji }),
         }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(done)))
@@ -156,6 +187,8 @@ export const topicsCommand = (messenger: Messenger): Command => {
     })
   return topics
 }
+
+const TOPIC_ICONS_QUERY = unfilteredQuery("topic_icon", topicIcon)
 
 const onOff = (flag: string, value: string | undefined): boolean | undefined => {
   if (value === undefined) return undefined

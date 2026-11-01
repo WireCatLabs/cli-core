@@ -116,6 +116,7 @@ read  tasks duplicates list
 read  tasks list
 read  tasks related
 read  tasks show
+read  topics icons list
 read  topics list
 write account privacy set
 write account sessions end

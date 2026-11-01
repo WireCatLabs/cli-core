@@ -854,6 +854,7 @@ describe("the MCP server", () => {
       "tasks list",
       "tasks related",
       "tasks show",
+      "topics icons list",
       "topics list",
     ])
     expect(tools.filter((one) => one.availability?.available !== false).every((one) => !one.writes)).toBe(true)

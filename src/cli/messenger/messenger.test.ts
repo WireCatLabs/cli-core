@@ -333,6 +333,13 @@ describe("forum setup commands", () => {
     )
     expect(made.code).toBe(0)
     expect(createTopic).toHaveBeenCalledWith("8", "synthetic", { sendId: "42" })
+    const withIcon = await call(
+      ["topics", "create", "8", "synthetic", "--operation-id", "43", "--emoji", "🤖", "--json"],
+      async () => connection,
+      env,
+    )
+    expect(withIcon.code).toBe(0)
+    expect(createTopic).toHaveBeenLastCalledWith("8", "synthetic", { sendId: "43", icon: "🤖" })
     expect(JSON.parse(made.stdout[0] ?? "").item).toMatchObject({ operation_id: "42", topic: { id: "12" } })
   })
 })
@@ -5989,11 +5996,39 @@ describe("topics edit", () => {
     expect(pinned.code).toBe(0)
     expect(editTopic).toHaveBeenLastCalledWith("7", "12", { pinned: true })
 
+    const icon = await call(["topics", "edit", "7", "12", "--emoji", "🤖", "--json"], connect, env)
+    expect(icon.code).toBe(0)
+    expect(editTopic).toHaveBeenLastCalledWith("7", "12", { icon: "🤖" })
+
+    const removed = await call(["topics", "edit", "7", "12", "--emoji", "none", "--json"], connect, env)
+    expect(removed.code).toBe(0)
+    expect(editTopic).toHaveBeenLastCalledWith("7", "12", { icon: null })
+
     for (const flag of ["--closed", "--pinned"]) {
       const wrong = await call(["topics", "edit", "7", "12", flag, "yes", "--json"], connect, env)
       expect(wrong.code).not.toBe(0)
     }
-    expect(editTopic).toHaveBeenCalledTimes(3)
+    expect(editTopic).toHaveBeenCalledTimes(5)
+  })
+})
+
+describe("topics icons list", () => {
+  it("lists the emojis, one per line for a person and as items in JSON", async () => {
+    const root = mkdtempSync(join(tmpdir(), "topic-icons-cli-"))
+    const env = {
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CONFIG_DIR: join(root, "config"),
+      MESSAGING_STORE: join(root, "m.db"),
+    }
+    const connect = vi.fn(async () => ({ ...fake, topicIcons: async () => ["🤖", "📰"] }))
+
+    const json = await call(["topics", "icons", "list", "--json"], connect, env)
+    expect(json.code).toBe(0)
+    expect(JSON.parse(json.stdout.join("")).items).toEqual([{ emoji: "🤖" }, { emoji: "📰" }])
+
+    const text = await call(["topics", "icons", "list"], connect, env, { tty: true })
+    expect(text.stdout.join("")).toContain("🤖\n📰\n")
   })
 })
 

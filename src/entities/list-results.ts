@@ -30,6 +30,7 @@ export const botAdmin = v.strictObject({
 })
 
 export const botMenuEntry = v.strictObject({ name: text, description: v.nullable(text) })
+export const topicIcon = v.strictObject({ emoji: text })
 export const botWebhook = v.strictObject({ url: text, types: v.optional(v.array(text)) })
 
 export const scheduledJob = v.strictObject({

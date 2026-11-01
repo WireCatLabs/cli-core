@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`topics create --emoji` and `topics edit --emoji`: a forum topic's icon.** The value is an emoji from the
+  messenger's topic icon set, which `topics icons list` shows; `topics edit --emoji none` removes the icon. An emoji
+  change is journaled as `topic-edit`. Adapters take it as `createTopic(…, { icon })` and `TopicChange.icon`
+  (`null` removes it), and list the set with the optional `TopicEditing.topicIcons()`; the `topic_icon` entity is the
+  list's item.
+
 ## 0.530.0 — 01.11.2026
 
 ### Added

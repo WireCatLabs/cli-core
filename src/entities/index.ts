@@ -76,6 +76,7 @@ import {
   callRecord,
   scheduledJob,
   stickerInventory,
+  topicIcon,
 } from "./list-results.js"
 import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
@@ -364,6 +365,7 @@ export {
   taskStats,
   taskUnmerge,
   topic,
+  topicIcon,
   trackedChat,
   trackedChatHistory,
   watchedMessage,
@@ -458,6 +460,7 @@ export const ENTITIES = {
   bot_seen_chat: botSeenChat,
   bot_admin: botAdmin,
   bot_menu_entry: botMenuEntry,
+  topic_icon: topicIcon,
   bot_webhook: botWebhook,
   scheduled_job: scheduledJob,
   call_record: callRecord,

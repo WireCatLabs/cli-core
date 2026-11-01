@@ -311,7 +311,7 @@ export interface ForumControl {
   forumState(chatId: Id): Promise<ForumState>
   upgradeForum(chatId: Id): Promise<ForumState>
   enableForum(chatId: Id): Promise<ForumState>
-  createTopic(chatId: Id, title: string, options: { sendId: string }): Promise<Topic>
+  createTopic(chatId: Id, title: string, options: { sendId: string; icon?: string }): Promise<Topic>
 }
 
 export interface TopicEditing {
@@ -321,6 +321,8 @@ export interface TopicEditing {
   orderPinnedTopics(chatId: Id, topicIds: Id[]): Promise<void>
   /** Deletes the topic and every message in it, for everyone; it cannot be undone. A topic that is gone is `not_found`. */
   deleteTopic?(chatId: Id, topicId: Id): Promise<void>
+  /** The emojis any account may give a topic as its icon. */
+  topicIcons?(): Promise<string[]>
 }
 
 export interface ThreadAddressing {
