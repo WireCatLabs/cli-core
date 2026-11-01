@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`schedule exec` runs without a profile.** A timer starts `<cli> schedule exec <file>` with no profile named, and a
+  CLI with several profiles refused it ("name a profile") before reading the schedule, so no timed run ever ran. The
+  schedule's own environment carries the profile.
+
 ## 0.520.0 — 01.11.2026
 
 ### Added

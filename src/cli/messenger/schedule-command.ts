@@ -87,7 +87,10 @@ const withWhen = (command: Command) =>
 /** What the schedule command needs of a CLI: who it is and, per command, where it prints and which profile runs. */
 export interface ScheduleHost {
   app: AppIdentity
-  context(command: Command): AnswerOutput & { env: NodeJS.ProcessEnv; profile: string }
+  context(
+    command: Command,
+    resolving?: { needsProfile?: boolean },
+  ): AnswerOutput & { env: NodeJS.ProcessEnv; profile: string }
 }
 
 /**
@@ -100,8 +103,8 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
   )
 
-  const prepare = (self: Command) => {
-    const context = contextOf(self)
+  const prepare = (self: Command, resolving: { needsProfile?: boolean } = {}) => {
+    const context = contextOf(self, resolving)
     const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(self).system ?? thisMachine()
     const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: context.env }).state
     const say = (value: object, lines: string[]) => renderAnswer(self, context, itemOf(value), () => lines.join("\n"))
@@ -277,7 +280,8 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
     .description("what a timer runs, given the schedule's file; to run one by hand, use run")
     .argument("<file>")
     .action(async function (this: Command, file: string) {
-      const { context, system, timer } = prepare(this)
+      // A timer starts it with no profile named; the schedule's own environment carries the profile.
+      const { context, system, timer } = prepare(this, { needsProfile: false })
       const last = await runSchedule(app, system, context.env, file, { timer: timer() })
       if (last.exitCode !== 0) setExitCode(this, 1)
     })
@@ -286,4 +290,7 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
 }
 
 export const scheduleCommand = (messenger: Messenger): Command =>
-  scheduleCommandFor({ app: messenger.app, context: (command) => messengerContext(command, messenger) })
+  scheduleCommandFor({
+    app: messenger.app,
+    context: (command, resolving) => messengerContext(command, messenger, resolving),
+  })
