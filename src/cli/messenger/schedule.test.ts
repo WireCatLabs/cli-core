@@ -316,6 +316,17 @@ describe("schedule on Windows", () => {
   })
 })
 
+const lastRunOutput = (file: string) => {
+  const runs = join(file, "..", "runs")
+  return join(
+    runs,
+    readdirSync(runs)
+      .filter((name) => name.endsWith(".log"))
+      .sort()
+      .at(-1) ?? "",
+  )
+}
+
 describe("a run", () => {
   const scheduled = (state: string, schedule: Omit<Schedule, "createdAt" | "environment">) => {
     const file = scheduleFile(state, schedule.name)
@@ -365,6 +376,25 @@ describe("a run", () => {
     expect(text).not.toContain("secret words")
     expect(text).not.toContain(NOT_ALLOWED)
     expect(readFileSync(last.output, "utf8")).toContain(`-${last.traceId}-`)
+  })
+
+  it("runs from a timer's own argv, which names no profile", async () => {
+    const { env } = setup()
+    const { system } = machine("linux", [process.execPath, "-e", "console.log(process.env.CHAT_PROFILE)"])
+    const file = scheduled(env.CHAT_STATE_DIR, {
+      name: "sync",
+      kind: "command",
+      argv: [],
+      when: { every: 5 },
+    })
+    const streams = captureStreams()
+    const code = await run(
+      ["schedule", "exec", file],
+      { app, commands: () => [scheduleCommand(messenger)] },
+      { streams, env, system },
+    )
+    expect(code, streams.stderr.join("")).toBe(0)
+    expect(readFileSync(lastRunOutput(file), "utf8")).toContain("work")
   })
 
   it("keeps the newest thirty runs, however many files each has", async () => {
