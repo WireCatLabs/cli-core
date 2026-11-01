@@ -407,7 +407,6 @@ export {
   type ReportContext as DoctorReportContext,
   reportFileName as doctorReportFileName,
 } from "./messenger/report.js"
-export type { ScheduleHost } from "./messenger/schedule-command.js"
 export {
   allAnswer,
   allHitItem,
@@ -428,7 +427,7 @@ export { storeSummary } from "./messenger/store-maintenance-command.js"
 export { type Saving, stored } from "./messenger/stored.js"
 export { dateOrNone } from "./messenger/tasks-command.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
-export { window, withPaging } from "./paging.js"
+export { positiveCount, window, withPaging } from "./paging.js"
 export {
   type CommandPermissions,
   commandPathKey,
@@ -461,6 +460,7 @@ export {
   withSyncCommands,
 } from "./project-evidence.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
+export type { ScheduleHost } from "./schedule/schedule-command.js"
 export {
   type Config,
   type Configuration,

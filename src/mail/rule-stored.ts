@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import type { MessageStore, MailRule as StoredRule } from "../store/index.js"
+import { mailAccountKey } from "./account-key.js"
 import { PRESET_NAMES, type PresetName } from "./presets.js"
 import type { MailAction, MailRule, MailRuleMatch } from "./rules.js"
 
@@ -78,7 +79,7 @@ export const storedMailRuleSet = async (
 ): Promise<MailRuleSet> => {
   let stored: StoredRule[]
   try {
-    const { id } = await store.accounts.storedAccount({ provider: "email", account: account.address.toLowerCase() })
+    const { id } = await store.accounts.storedAccount(mailAccountKey(account.address))
     stored = await store.mail.rules.list(id, query)
   } catch (error) {
     if (error instanceof CliError && error.code === "not_found") return { rules: [], unreadable: [] }

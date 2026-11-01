@@ -5,6 +5,21 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`mailAccountKey(address)`** from `./mail`: the store key of a mail account, `{ provider: "email", account }` with
+  the address in lower case. **`positiveCount(flag)`** from `./cli`: the parser of a whole-number flag from 1 up.
+- **The shared `schedule` command lives in `src/cli/schedule/`**, not under the messenger commands. `scheduleCommandFor`
+  and `ScheduleHost` come from `./cli` as before; the old module path re-exports them. Each `schedule` command now
+  has examples and described arguments, and the example profile of the shared mail read commands is `personal`.
+
+### Fixed
+
+- **`schedule command` and `schedule agent` refuse a name that another profile already uses**, rather than replacing
+  its schedule and timer. Schedules of the same profile are still replaced. Existing timers keep their names.
+
 ## 0.529.0 — 01.11.2026
 
 ### Added
