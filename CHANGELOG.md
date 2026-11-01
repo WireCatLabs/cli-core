@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.541.0 — 02.11.2026
+
 ### Added
 
 - **`MailServerAccess.timeMs`**: a mailbox's own default for the server search's time bound, for a server whose
