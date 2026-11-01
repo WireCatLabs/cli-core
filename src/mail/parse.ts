@@ -12,12 +12,23 @@ export interface ParsedMail {
   to: Address[]
   cc: Address[]
   bcc: Address[]
+  replyTo: Address[]
+  date: string | null
+  /** Message-ID as the first `<id>` the header holds, brackets kept; the header as written when it holds none. */
+  messageId: string | null
+  /** Every `<id>` of References, in the header's order, brackets kept. */
+  references: string[]
   attachments: { id: number; name: string; mime: string | null; bytes: Uint8Array | null }[]
   text: string
 }
 
 // The store cuts a body into pieces itself; this only guards against a pathological one, like a pasted log.
 export const MAX_BODY_CHARS = 1_000_000
+
+/** What sync stores; a command that shows the files of one message passes its own limit. */
+export const MAX_ATTACHMENTS = 50
+
+const BRACKETED_ID = /<[^<>\s]+>/g
 
 const addresses = (list: PostalAddress[]): Address[] =>
   list
@@ -80,7 +91,11 @@ const bytesOf = (content: ArrayBuffer | Uint8Array | string): Uint8Array =>
       : new Uint8Array(content)
 
 /** A raw RFC 5322 message, as IMAP's `BODY[]` holds it. */
-export const parseMail = async (raw: Uint8Array, maxBodyChars = MAX_BODY_CHARS): Promise<ParsedMail> => {
+export const parseMail = async (
+  raw: Uint8Array,
+  maxBodyChars = MAX_BODY_CHARS,
+  maxAttachments = MAX_ATTACHMENTS,
+): Promise<ParsedMail> => {
   let email: Awaited<ReturnType<typeof PostalMime.parse>>
   try {
     email = await PostalMime.parse(raw)
@@ -95,7 +110,11 @@ export const parseMail = async (raw: Uint8Array, maxBodyChars = MAX_BODY_CHARS):
     to: addresses(email.to ?? []),
     cc: addresses(email.cc ?? []),
     bcc: addresses(email.bcc ?? []),
-    attachments: email.attachments.slice(0, 50).map((part, id) => ({
+    replyTo: addresses(email.replyTo ?? []),
+    date: email.date ?? null,
+    messageId: email.messageId?.match(BRACKETED_ID)?.[0] ?? email.messageId ?? null,
+    references: email.references?.match(BRACKETED_ID) ?? [],
+    attachments: email.attachments.slice(0, maxAttachments).map((part, id) => ({
       id,
       name: (part.filename ?? `attachment-${id}`).slice(0, 200),
       mime: part.mimeType || null,
