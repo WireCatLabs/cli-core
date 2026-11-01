@@ -16,6 +16,10 @@ shape of this file.
   `meta.complete: false` names a chat the store does not hold whole (`chat.not-read`) or meetings not yet indexed
   (`meetings.index-pending`); `untrusted` marks all third-party text. It summarises nothing. `recordContext` is
   `personContext` for a person already found, read in the accounts the caller names.
+- **A task error names the tasks it is about**: `task.has-subtasks` gives `details.subtasks` (their keys) and
+  `task.is-subtask` gives `details.parent`, in the JSON a CLI prints. The keys were raised but not kept.
+- **`parent:` in the project task query**: `parent:<key>` lists a task's subtasks, also by a key it had before it
+  moved to another project; `parent:none` and `parent:any`.
 
 ### Fixed
 
@@ -28,13 +32,6 @@ shape of this file.
   decision created moved the project's row, and every other waiting batch of that project was refused as
   `evidence-findings.stale`. A renamed project no longer refuses a batch either; the project must still exist.
   Meeting findings are unchanged.
-
-### Added
-
-- **A task error names the tasks it is about**: `task.has-subtasks` gives `details.subtasks` (their keys) and
-  `task.is-subtask` gives `details.parent`, in the JSON a CLI prints. The keys were raised but not kept.
-- **`parent:` in the project task query**: `parent:<key>` lists a task's subtasks, also by a key it had before it
-  moved to another project; `parent:none` and `parent:any`.
 
 ### Changed — may break callers
 
