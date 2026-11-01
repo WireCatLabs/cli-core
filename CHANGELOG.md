@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`syncMail` counts what `max` left unread in `remaining`**, not 0, so a CLI can say how much is left after a run
+  cut short by `--limit`.
+
 ## 0.515.0 — 01.11.2026
 
 ### Added

@@ -66,7 +66,7 @@ export interface MailSyncResult {
   state?: "partial" | "complete"
   /** Why a budgeted run stopped early: its request budget, its deadline, or a cancel. */
   stopped?: BudgetStop
-  /** Messages of the window this run did not get to read; a budgeted run only. */
+  /** Messages of the window this run did not get to read: left by a budget, or by `max`. */
   remaining?: number
   /** Requests a budgeted run spent. */
   requests?: number
@@ -242,7 +242,7 @@ export const syncMail = async (
     deleted: sum((round) => round.deleted),
     complete,
     state: complete ? "complete" : "partial",
-    remaining,
+    remaining: remaining + (last.remaining ?? 0),
     requests: budget.used,
     ...(plan.stopped === null ? {} : { stopped: plan.stopped }),
     ...(indexed === undefined ? {} : { indexed }),
@@ -323,6 +323,7 @@ const syncRound = async (
     if (point?.complete && point.size === mboxStamp.size && point.mtimeMs === mboxStamp.mtimeMs) mboxPoint = point
   }
   let capped = false
+  let overMax = 0
   const unreadable: NonNullable<MailSyncResult["unreadable"]> = []
   /** Raw mail read to learn its id, kept for the save so it is not read twice. */
   const rawOf = new Map<Listed, Uint8Array>()
@@ -408,6 +409,7 @@ const syncRound = async (
         for (const [id, flags] of flagsToRefresh(byUid, round.listing))
           refreshed.set(id, { ...refreshed.get(id), ...flags })
         if (round.capped) capped = true
+        overMax += round.left
         for (const { item, raw } of round.read) {
           collected.push(item)
           rawOf.set(item, raw)
@@ -642,7 +644,10 @@ const syncRound = async (
       if (pending.length < max) {
         upgraded.set(item.messageId, boxes)
         pending.push(item)
-      } else full = true
+      } else {
+        full = true
+        overMax++
+      }
       continue
     }
     if (known.has(item.messageId)) {
@@ -665,7 +670,10 @@ const syncRound = async (
       continue
     }
     if (pending.length < max) pending.push(item)
-    else full = true
+    else {
+      full = true
+      overMax++
+    }
   }
   const inMailboxes = (item: Listed) => [
     ...[...(foundFolders.get(item.messageId) ?? [])].map(mailbox),
@@ -968,6 +976,7 @@ const syncRound = async (
     envelopes,
     deleted,
     complete,
+    remaining: overMax,
     ...(indexed === undefined ? {} : { indexed }),
     coverage,
     ...(attachments.length ? { attachments } : {}),
