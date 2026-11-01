@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.517.0 — 01.11.2026
+
 ### Added
 
 - **`withSyncCommands(found, sync)`** gives each linked chat of a stored project gathering its `syncCommand`: the
