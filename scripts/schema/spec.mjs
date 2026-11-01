@@ -865,6 +865,7 @@ const NEW = {
         c("scope", "text", { notnull: true, note: "personal or work, from its evidence" }),
         ...ts(),
         c("deleted_at", "integer", { note: "when it stopped being a memory: a `fact` memory moved to `facts`" }),
+        fk("project_id", "projects", { note: "the project it belongs to, as a fact's" }),
       ],
     },
     fts("memory_words", "Word index over memories.", "normalized_text, scope"),

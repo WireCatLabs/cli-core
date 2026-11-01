@@ -1135,8 +1135,9 @@ What an agent concluded: a summary, a daily digest, a preference. Derived and fa
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | when it stopped being a memory: a `fact` memory moved to `facts` |
+| `project_id` | integer |  | → `projects.id` | the project it belongs to, as a fact's |
 
-*Keys and indexes:* `INDEX (subject_type, subject_id)`, `INDEX (author_type, author_id)`, `INDEX (supersedes_id)`
+*Keys and indexes:* `INDEX (subject_type, subject_id)`, `INDEX (author_type, author_id)`, `INDEX (supersedes_id)`, `INDEX (project_id)`
 
 ### `memory_words`
 

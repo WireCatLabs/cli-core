@@ -870,5 +870,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER tasks_revision_tagging_ai AFTER INSERT ON taggings WHEN new.taggable_type = 'task' BEGIN\n  UPDATE tasks SET revision = revision + 1 WHERE id = new.taggable_id;\nEND;",
       "CREATE TRIGGER tasks_revision_tagging_ad AFTER DELETE ON taggings WHEN old.taggable_type = 'task' BEGIN\n  UPDATE tasks SET revision = revision + 1 WHERE id = old.taggable_id;\nEND;"
     ]
+  },
+  {
+    "name": "20261101011859_version-43-memory-project",
+    "statements": [
+      "ALTER TABLE `memories` ADD `project_id` integer REFERENCES projects(id);",
+      "CREATE INDEX `memories_by_project_id` ON `memories` (`project_id`);"
+    ]
   }
 ]

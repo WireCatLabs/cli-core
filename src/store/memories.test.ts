@@ -117,6 +117,41 @@ describe("memories", () => {
   })
 })
 
+describe("a memory's project", () => {
+  it("is named on the memory and on a fact, filters the list, and moves or clears", async () => {
+    const store = await open()
+    const harbour = await store.knowledge.addProject({ name: "Project Harbour", type: "work" })
+    const lighthouse = await store.knowledge.addProject({ name: "Lighthouse", type: "work" })
+    const note = await store.notes.addNote({ text: "Synthetic evidence" })
+    const add = (project?: string) =>
+      store.memories.add({
+        kind: "summary",
+        body: "x",
+        scope: "work",
+        evidence: [note.ref],
+        author: agent,
+        ...(project === undefined ? {} : { project }),
+      })
+
+    const inHarbour = await add(harbour.ref)
+    const loose = await add()
+    expect(inHarbour).toMatchObject({ project: harbour.ref, projectName: "Project Harbour" })
+    expect(loose).toMatchObject({ project: null, projectName: null })
+    expect((await store.memories.list({ project: harbour.ref })).map((one) => one.ref)).toEqual([inHarbour.ref])
+    await expect(add(note.ref)).rejects.toThrow("is not a project")
+
+    expect(await store.memories.update(loose.ref, { project: lighthouse.ref })).toMatchObject({
+      project: lighthouse.ref,
+      projectName: "Lighthouse",
+    })
+    expect(await store.memories.update(inHarbour.ref, { project: null })).toMatchObject({ project: null })
+    expect(await store.facts.add({ type: "fact", statement: "y", by: "owner", project: harbour.ref })).toMatchObject({
+      project: harbour.ref,
+      projectName: "Project Harbour",
+    })
+  })
+})
+
 describe("forgetting a memory", () => {
   it("erases its row, words, pieces, vector and links, and the text from the file; the rest stays", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")

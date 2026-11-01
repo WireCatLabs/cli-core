@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator, parseLocator } from "../domain/locator.js"
 import { type FindingOutcome, type FindingsInput, type FindingsReceipt, validateFindings } from "../meetings/index.js"
+import type { EvidenceSource } from "./sqlite/evidence-sources.js"
 
 export const EVIDENCE_FINDINGS_KIND = "evidence_findings"
 
@@ -50,4 +51,6 @@ export interface EvidenceFindingsStore {
     id: string,
     input: { fingerprint: string; accept: string[]; by?: EvidenceFindingsDecider },
   ): Promise<EvidenceFindingsBatch>
+  /** Each reference the batch cites, read back once; one gone from the store since is `missing`. */
+  sources(id: string): Promise<EvidenceSource[]>
 }

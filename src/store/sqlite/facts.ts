@@ -14,6 +14,7 @@ import {
   keepHighestId,
   linkEvidence,
   nextId,
+  projectOf,
   subjectOf,
 } from "./memories.js"
 import { requiredThing } from "./notes.js"
@@ -29,6 +30,7 @@ export interface Fact {
   /** Proposed, then accepted or rejected; a correction supersedes it; only a decision is reversed. */
   status: (typeof FACT_STATUSES)[number]
   project: string | null
+  projectName: string | null
   subject: string | null
   subjectName: string | null
   subjectIsOwner: boolean
@@ -110,7 +112,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     type: row.type as Fact["type"],
     statement: String(row.statement),
     status: row.status as Fact["status"],
-    project: row.project_id == null ? null : `project:${row.project_id}`,
+    ...projectOf(database, row),
     ...subjectOf(database, row),
     occurredAt: row.occurred_at == null ? null : iso(row.occurred_at),
     supersedes: row.supersedes_id == null ? null : `fact:${row.supersedes_id}`,

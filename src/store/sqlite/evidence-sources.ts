@@ -1,6 +1,6 @@
 import type { CacheDatabase } from "../driver.js"
 import { linkKind } from "./link-kinds.js"
-import { referenceOfThing, stateOfThing, storedThing, type Thing } from "./things.js"
+import { canonicalThingReference, referenceOfThing, stateOfThing, storedThing, type Thing, thingOf } from "./things.js"
 
 /** One reference a memory or fact rests on, read back whole enough to judge it without opening it. */
 export interface EvidenceSource {
@@ -58,6 +58,23 @@ const KIND: Partial<Record<Thing["type"], string>> = {
   meeting_transcript_row: "meeting",
 }
 
+const sourceOf = (database: CacheDatabase, thing: Thing): EvidenceSource => {
+  const state = stateOfThing(database, thing)
+  const read = READS[thing.type]
+  const row = read === undefined || state === "unavailable" ? undefined : database.prepare(read).get(thing.id)
+  const gone = state !== "available"
+  return {
+    ref: referenceOfThing(database, thing) ?? null,
+    kind: KIND[thing.type] ?? thing.type,
+    title: textOf(row?.title),
+    sender: textOf(row?.sender),
+    at: iso(row?.at),
+    excerpt: gone ? null : excerptOf(row?.body),
+    tool: textOf(row?.tool),
+    missing: gone,
+  }
+}
+
 /**
  * Every `evidence` link from a memory or fact, in the order they were written, including one whose target was
  * deleted since: `evidenceOf` drops those, so a reader would never learn the record lost a source.
@@ -69,20 +86,29 @@ export const evidenceSourcesOf = (database: CacheDatabase, from: { type: string;
         "AND to_id IS NOT NULL ORDER BY id",
     )
     .all(from.type, from.id)
-    .map((link) => {
-      const thing = storedThing(link.to_type, link.to_id)
-      const state = stateOfThing(database, thing)
-      const read = READS[thing.type]
-      const row = read === undefined || state === "unavailable" ? undefined : database.prepare(read).get(thing.id)
-      const gone = state !== "available"
-      return {
-        ref: referenceOfThing(database, thing) ?? null,
-        kind: KIND[thing.type] ?? thing.type,
-        title: textOf(row?.title),
-        sender: textOf(row?.sender),
-        at: iso(row?.at),
-        excerpt: gone ? null : excerptOf(row?.body),
-        tool: textOf(row?.tool),
-        missing: gone,
-      }
-    })
+    .map((link) => sourceOf(database, storedThing(link.to_type, link.to_id)))
+
+const thingNamed = (database: CacheDatabase, reference: string): Thing | undefined => {
+  try {
+    return thingOf(database, canonicalThingReference(reference))
+  } catch {
+    return undefined
+  }
+}
+
+/** Each distinct reference read back, in order; one the store no longer resolves keeps its reference, `missing`. */
+export const sourcesOfReferences = (database: CacheDatabase, references: readonly string[]): EvidenceSource[] =>
+  [...new Set(references)].map((reference) => {
+    const thing = thingNamed(database, reference)
+    if (thing) return { ...sourceOf(database, thing), ref: reference }
+    return {
+      ref: reference,
+      kind: reference.startsWith("msg:") ? "message" : reference.split(":")[0] || "unknown",
+      title: null,
+      sender: null,
+      at: null,
+      excerpt: null,
+      tool: null,
+      missing: true,
+    }
+  })

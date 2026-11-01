@@ -9,6 +9,8 @@ export const fact = v.strictObject({
   text,
   status: v.picklist(FACT_STATUSES),
   project: v.nullable(text),
+  /** What the project is called. */
+  project_name: v.optional(v.nullable(text)),
   subject: v.nullable(reference),
   /** What the subject is called; `null` for the owner and for a row with no name. */
   subject_name: v.optional(v.nullable(text)),

@@ -64,10 +64,18 @@ export interface ProposedActionsStore {
 
 type Row = Record<string, unknown>
 const iso = (value: unknown) => (value == null ? null : new Date(Number(value)).toISOString())
-const NAMED =
-  "SELECT p.*, b.name AS proposer_name FROM proposed_actions p " +
-  "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
 const json = (value: unknown) => (value == null ? null : JSON.parse(String(value)))
+
+/**
+ * A findings batch closed with nothing accepted is stored `approved`, as older builds read it; it reads as
+ * `rejected`, the decision the owner made.
+ */
+const STATUS =
+  `CASE WHEN p.status = 'approved' AND p.kind IN ('${MEETING_FINDINGS_KIND}', '${EVIDENCE_FINDINGS_KIND}') ` +
+  "AND json_array_length(p.result, '$.accepted') = 0 THEN 'rejected' ELSE p.status END"
+const NAMED =
+  `SELECT p.*, ${STATUS} AS shown_status, b.name AS proposer_name FROM proposed_actions p ` +
+  "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
 
 type ProposalOperations = Omit<
   {
@@ -98,7 +106,7 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
           : (referenceOfThing(database, storedThing(row.target_type, row.target_id)) ?? null),
       payload: json(row.payload),
       reason: row.reason == null ? null : String(row.reason),
-      status: row.status as ProposedAction["status"],
+      status: row.shown_status as ProposedAction["status"],
       proposedBy: {
         type: row.proposed_by_type as Actor["type"],
         id: String(row.proposed_by_id),
@@ -203,7 +211,7 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
       if (status !== undefined && !PROPOSAL_STATUSES.includes(status))
         throw new CliError("validation_error", `a status is one of ${PROPOSAL_STATUSES.join(", ")}`)
       return database
-        .prepare(`${NAMED} WHERE (? IS NULL OR p.status = ?) ORDER BY p.created_at DESC, p.id DESC LIMIT ?`)
+        .prepare(`${NAMED} WHERE (? IS NULL OR ${STATUS} = ?) ORDER BY p.created_at DESC, p.id DESC LIMIT ?`)
         .all(status ?? null, status ?? null, Math.min(Math.max(limit, 1), 500))
         .map(actionOf)
     },
