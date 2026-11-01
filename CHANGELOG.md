@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`storedMailRules(store, account, query?)`** reads one account's mail rules from the store in the shape
+  `syncMail` takes as `account.rules`, and `storedMailRule(stored)` reads one; a rule with a condition this build does
+  not know is left out. An account the store has not seen has no rules.
+- **`labelName(raw)`, `systemLabel(name)` and `decodeMailboxName(name)`** name Gmail labels as people read them
+  (`\Inbox` and `Inbox` are one label, modified UTF-7 is decoded), moved from memo.
+- **`mailProgress(store, key)`** gives each synced folder's window, done and total from the saved resume points,
+  without asking the mailbox. It treats only `not_found` as "no account yet" and passes other store errors on.
+
 ## 0.513.0 — 01.11.2026
 
 ### Added
