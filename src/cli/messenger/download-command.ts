@@ -5,6 +5,8 @@ import { CliError, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import { NOT_FILES } from "../../domain/attachments.js"
+import { isLocator } from "../../domain/locator.js"
+import { messageLinkTarget } from "../../domain/message-link.js"
 import type { Id } from "../../domain/models.js"
 import { FETCHING, keyOf } from "../../services/archive.js"
 import type { ExtractRun } from "../../services/attachments.js"
@@ -22,6 +24,7 @@ import { patiently } from "../../services/patience.js"
 import { FETCH } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
+import { count } from "./attachments-command.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
 import { stopOnSignal } from "./patience.js"
 
@@ -29,14 +32,21 @@ import { stopOnSignal } from "./patience.js"
 export const downloadSubcommand = (messages: Command, messenger: Messenger): Command =>
   annotate(messages.command("download"), {
     output: { entity: "message_download" },
-    examples: [`${messenger.app.command} personal messages download "Book club" 101 --output-dir ./downloads`],
+    examples: [
+      `${messenger.app.command} personal messages download "Book club" 101 --output-dir ./downloads`,
+      `${messenger.app.command} personal messages download msg:${messenger.provider}/me/500/101 --attachment 1 --offline`,
+    ],
     effects: FETCH,
   })
     .summary("download files attached to stored messages")
-    .description("save a message's photos, files, videos and voice notes to a folder — or a whole chat's with --all")
-    .argument("<chat>", messenger.chatArgument)
-    .argument("[message]", "the message id; left out with --all")
+    .description(
+      "save a message's photos, files, videos and voice notes to a folder — or a whole chat's with --all; " +
+        "with --offline, copy the ones this computer already holds, one by --attachment",
+    )
+    .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
+    .argument("[message]", "the message id; left out with --all or a locator")
     .option("--output-dir <dir>", "where to save them; created if missing", ".")
+    .option("--attachment <n>", "which file of the message, from 1; needed when it has more than one", count)
     .option("--all", "every file of the chat, newest first; run it again to continue where it stopped")
     .option(
       "--pause <duration>",
@@ -51,7 +61,32 @@ export const downloadSubcommand = (messages: Command, messenger: Messenger): Com
         all,
         pause,
         extract,
-      } = this.opts<{ outputDir: string; all?: boolean; pause: string; extract?: boolean }>()
+        attachment,
+      } = this.opts<{ outputDir: string; all?: boolean; pause: string; extract?: boolean; attachment?: number }>()
+      if (context.settings.offline) {
+        if (all || extract)
+          throw new CliError(
+            "validation_error",
+            "--offline copies one message's saved files; leave out --all and --extract",
+          )
+        const saved = await context.withServices((services) =>
+          services.attachments.saveHeld({
+            chat,
+            ...(messageId === undefined ? {} : { message: messageId.trim() }),
+            ...(attachment === undefined ? {} : { attachment }),
+            output,
+          }),
+        )
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys({ files: saved })),
+          () => `${saved.map((one) => one.path).join("\n")}\n`,
+        )
+        return
+      }
+      if (attachment !== undefined)
+        throw new CliError("validation_error", "--attachment picks a file this computer already holds; add --offline")
       if (extract) refuseLocalWrite(context, messenger.app.command, "attachments.extract")
       if (all && messageId !== undefined) {
         throw new CliError("validation_error", "--all saves the whole chat; leave out the message id")
@@ -60,15 +95,17 @@ export const downloadSubcommand = (messages: Command, messenger: Messenger): Com
         await downloadChat(this, context, messenger, chat, output, parseDuration(pause, "--pause"), extract)
         return
       }
-      if (messageId === undefined) throw new CliError("validation_error", "name a message id, or use --all")
-      const id = messageId.trim()
+      if (messageId === undefined && !isLocator(chat))
+        throw new CliError("validation_error", "name a message id, or use --all")
+      const target = messageLinkTarget(chat, messageId?.trim(), messenger.provider)
+      const id = target.message
       const result = await context.withServices(async (services) => {
-        const { files, skipped } = await services.messages.download(chat, id)
+        const { files, skipped } = await services.messages.download(chat, messageId?.trim())
         if (skipped.length > 0) context.renderer.note(`not a file, not downloaded: ${skipped.join(", ")}`)
         if (files.length === 0) throw new CliError("not_found", `message ${id} has no file to download`)
         mkdirSync(output, { recursive: true })
         const progress = batchProgress(context.env)
-        const downloaded = await saveFiles(services.messages, chat, id, files, output, {
+        const downloaded = await saveFiles(services.messages, target.chat, id, files, output, {
           warn: context.renderer.warn,
           batch: progress,
         })
@@ -76,7 +113,11 @@ export const downloadSubcommand = (messages: Command, messenger: Messenger): Com
         let extraction: ExtractRun | undefined
         if (extract) {
           try {
-            extraction = await services.attachments.extract({ chat, message: id, paths: done.map((file) => file.path) })
+            extraction = await services.attachments.extract({
+              chat: target.chat,
+              message: id,
+              paths: done.map((file) => file.path),
+            })
           } catch (error) {
             const issue = progress.fail(id, "extract", error)
             context.renderer.warn(`message ${id}: ${issue.code} — ${issue.message}`)

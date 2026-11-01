@@ -19,7 +19,7 @@ import { addMediaArchiveCommands } from "./media-archive-command.js"
 import { stopOnSignal } from "./patience.js"
 import { readAll } from "./stdin.js"
 
-const count = (value: string): number => {
+export const count = (value: string): number => {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 1) throw new CliError("validation_error", `"${value}" is not a count`)
   return parsed

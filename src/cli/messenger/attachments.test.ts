@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Readable } from "node:stream"
@@ -703,5 +703,89 @@ describe("an agent's text for a file", () => {
       config: { profiles: { default: { permissions: { "attachments.update": "readonly" } } } },
     })
     expect((await locked.piped("x")("attachments", "update", "7", "4")).code).toBe(5)
+  })
+})
+
+describe("a search hit's files", () => {
+  it("names the files on a hit, by the position the other commands take", async () => {
+    const { call, env } = await setup()
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.messages.saveMessages(
+      OWNER,
+      "7",
+      [
+        message("9", [
+          { kind: "webpage", url: "https://example.org" },
+          { kind: "file", name: "terms.pdf", size: 2048 },
+        ]),
+      ],
+      { via: "history" },
+    )
+    await store.close()
+    const found = json(await call("search", "messages", "message", "--json")).items
+    const byId = (list: { ref: string; untrusted?: string[] }[], id: string) =>
+      list.find(({ ref }) => ref.endsWith(`/${id}`))
+    expect(byId(found, "9")).toMatchObject({
+      attachments: [{ position: 2, kind: "file", name: "terms.pdf", size: 2048 }],
+    })
+    expect(byId(found, "1")).toMatchObject({ attachments: [{ position: 1, kind: "file", name: "notes.txt" }] })
+    expect(byId(found, "9")?.untrusted).toContain("attachments.name")
+    for (const hit of found) v.parse(ENTITIES["message.hit"], hit)
+    const all = json(await call("search", "all", "message", "--json")).items
+    expect(byId(all, "9")).toMatchObject({ attachments: [{ position: 2, name: "terms.pdf" }] })
+    for (const hit of all) v.parse(ENTITIES.hit, hit)
+  })
+
+  it("--offline copies a held file by its locator and leaves the store pointing at its own copy", async () => {
+    const { call, root, files } = await setup()
+    const into = join(root, "out")
+    const done = await call("messages", "download", "msg:chat/500/7/1", "--offline", "--output-dir", into, "--json")
+    expect(done.code).toBe(0)
+    const answer = json(done)
+    v.parse(ENTITIES.message_download, answer)
+    expect(answer.files).toEqual([{ kind: "file", path: join(into, "notes.txt"), bytes: SECRET.length + 10 }])
+    expect(readFileSync(join(into, "notes.txt"), "utf8")).toBe(`${SECRET} for March`)
+    const listed = json(await call("attachments", "list", "--json")).items
+    expect(listed.find(({ message }: { message: string }) => message.endsWith("/1"))?.local_path).toBe(
+      join(files, "notes.txt"),
+    )
+    const again = await call("messages", "download", "7", "1", "--attachment", "1", "--offline", "--output-dir", into)
+    expect(again.stderr).toContain("already exists")
+  })
+
+  it("--offline refuses a file not saved here, a wrong position, another account, --all and --attachment online", async () => {
+    const { call, root } = await setup()
+    const into = join(root, "out")
+    const missing = await call("messages", "download", "msg:chat/500/7/7", "--offline", "--output-dir", into)
+    expect(missing.code).toBe(6)
+    expect(missing.stderr).toContain("not saved on this computer")
+    expect(existsSync(into)).toBe(false)
+    expect((await call("messages", "download", "7", "1", "--attachment", "2", "--offline")).stderr).toContain(
+      "no file at position 2",
+    )
+    expect((await call("messages", "download", "msg:chat/501/7/1", "--offline")).stderr).toContain("another account")
+    expect((await call("messages", "download", "7", "--all", "--offline")).stderr).toContain("leave out --all")
+    expect((await call("messages", "download", "7", "1", "--attachment", "1")).stderr).toContain("add --offline")
+  })
+
+  it("downloads by locator over the network as by chat and id", async () => {
+    const { call, root } = await setup()
+    const into = join(root, "net")
+    const done = await call("messages", "download", "msg:chat/500/7/7", "--output-dir", into, "--json")
+    expect(done.code).toBe(0)
+    expect(json(done).files).toEqual([expect.objectContaining({ path: join(into, "fetched.txt") })])
+    expect((await call("messages", "download", "msg:other/500/7/7")).stderr).toContain("another messenger")
+  })
+
+  it("messages link lists the message's files, each with no link of its own", async () => {
+    const { call } = await setup()
+    const linked = json(await call("messages", "link", "msg:chat/500/7/1", "--offline", "--json"))
+    v.parse(ENTITIES.message_link, linked)
+    expect(linked).toMatchObject({
+      ref: "msg:chat/500/7/1",
+      url: null,
+      reason: "offline",
+      files: [{ position: 1, kind: "file", name: "notes.txt", url: null, reason: "unsupported_provider" }],
+    })
   })
 })

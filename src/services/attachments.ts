@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
-import { constants } from "node:fs"
-import { open, readFile, stat } from "node:fs/promises"
+import { constants, mkdirSync } from "node:fs"
+import { lstat, open, readFile, stat } from "node:fs/promises"
 import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
 import type * as v from "valibot"
@@ -37,6 +37,7 @@ import {
 } from "../store/store.js"
 import { batchProgress } from "./batch.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
+import { type Saved, save } from "./file-download.js"
 import { chatIdIn } from "./message-resolution.js"
 
 export type ExtractStatus = "extracted" | "needs-agent" | "unreadable" | "engine-missing" | "too-large" | "missing"
@@ -152,6 +153,11 @@ export interface AttachmentsService {
     offset?: number
     query?: QueryAst
   }): Promise<{ items: AttachmentItem[]; has_more: boolean }>
+  /**
+   * Copies files the store already holds to `output`, never over a file there, and never asks the messenger: one
+   * not held locally is an error before anything is written. The store keeps pointing at its own copy.
+   */
+  saveHeld(target: { chat: string; message?: string; attachment?: number; output: string }): Promise<Saved[]>
   /** Keeps text an agent read from a file — a scan, a photo — replacing whatever was there. Sends nothing. */
   setText(target: { chat: string; message?: string; attachment?: number; text: string }): Promise<AttachmentTextSet>
 }
@@ -591,6 +597,64 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
       ...bytes,
       ...preview,
     }
+  },
+
+  saveHeld: async ({ chat, message, attachment, output }) => {
+    if (attachment !== undefined && (!Number.isSafeInteger(attachment) || attachment < 1))
+      throw new CliError("validation_error", "attachment must be a position from 1")
+    const store = await accountStore(deps)
+    const { account } = store
+    const { chatId, messageId } = await messageOf(deps, store, chat, message)
+    const ref = formatLocator({ ...account, chat: chatId, message: messageId })
+    const files = (await store.attachments.attachments({ chatId, messageId, limit: 1000 })).filter(
+      ({ kind }) => !NOT_FILES.has(kind),
+    )
+    if (files.length === 0) throw new CliError("not_found", `the local store holds no file of ${ref}`)
+    const chosen = attachment === undefined ? files : files.filter(({ position }) => position === attachment - 1)
+    if (chosen.length === 0)
+      throw new CliError(
+        "not_found",
+        `${ref} has no file at position ${attachment}; its files are at ${files.map(({ position }) => position + 1).join(", ")}`,
+      )
+    const env = deps.env ?? process.env
+    const held = await Promise.all(
+      chosen.map(async (file) => {
+        const missing = new CliError(
+          "not_found",
+          `file ${file.position + 1} of ${ref} is not saved on this computer; run messages download without --offline`,
+        )
+        if (file.localPath === null) throw missing
+        if (refusedPlace(file.localPath, deps.messenger.app, env))
+          throw new CliError(
+            "validation_error",
+            "cannot copy known credential files, the WireCat apps' own files or the message store",
+          )
+        const found = await lstat(file.localPath).catch(() => undefined)
+        if (!found) throw missing
+        if (!found.isFile()) throw new CliError("validation_error", "the saved attachment must be a regular file")
+        return { file, path: file.localPath }
+      }),
+    )
+    mkdirSync(output, { recursive: true })
+    const saved: Saved[] = []
+    for (const { file, path } of held)
+      saved.push(
+        await save(
+          {
+            kind: file.kind,
+            ...(file.name === null ? {} : { name: file.name }),
+            ...(file.mime === null ? {} : { mime: file.mime }),
+            position: file.position,
+            bytes: async function* () {
+              const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+              yield* handle.createReadStream()
+            },
+          },
+          output,
+          `${messageId}-${file.position + 1}`,
+        ),
+      )
+    return saved
   },
 
   setText: async ({ chat, message, attachment, text }) => {

@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { DownloadedFile, StickerFile, Upload } from "../domain/attachments.js"
 import { type FormattedText, validateFormattedText, visibleFormattedText } from "../domain/formatting.js"
 import { formatLocator } from "../domain/locator.js"
-import { type MessageLink, messageLinkTarget, validatePermalink } from "../domain/message-link.js"
+import { fileLinks, type MessageLink, messageLinkTarget, validatePermalink } from "../domain/message-link.js"
 import type { Deletion, Discussion, Id, Message, Page, Provider, WindowedMessage } from "../domain/models.js"
 import { pinDurationsText } from "../domain/pin-duration.js"
 import { threadIdOf } from "../domain/thread.js"
@@ -231,6 +231,12 @@ export interface Reacted {
 export const DELETE_AT_ONCE = 10
 
 /** Every write goes through the guard: asked before it goes, told after, on every outcome. */
+/** Only a message with files says what can be linked of them. */
+const filesOf = ({ attachments }: Pick<Message, "attachments">): { files?: ReturnType<typeof fileLinks> } => {
+  const files = fileLinks(attachments)
+  return files.length > 0 ? { files } : {}
+}
+
 export interface MessagesService {
   /** The account these messages are read as, which names each one's locator. */
   reader(): Promise<AccountKey>
@@ -244,8 +250,8 @@ export interface MessagesService {
     post: string,
     window: { limit: number; before?: string },
   ): Promise<Page<Message> & { discussion: Discussion }>
-  /** The files of one message. Always from the messenger, whatever its history is read from. */
-  download(chat: string, message: Id): Promise<Download>
+  /** The files of one message, `chat` and its id or a `msg:` locator alone. Always from the messenger. */
+  download(chat: string, message?: Id): Promise<Download>
   /**
    * Records in the local store where the files went, so their text can be read later. Only a
    * message the store holds; answers how many attachments it recorded.
@@ -508,13 +514,14 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         const store = await deps.store()
         const chat = await readChatId(deps, target.chat, store, account)
         const found = await store.messages.around(account, chat, target.message, { before: 0, after: 0 })
-        if (!found.some((item) => item.id === target.message && item.chatId === chat))
-          throw new CliError("not_found", "no such message in this account's stored chat")
+        const held = found.find((item) => item.id === target.message && item.chatId === chat)
+        if (!held) throw new CliError("not_found", "no such message in this account's stored chat")
         return {
           locator: formatLocator({ ...account, chat, message: target.message }),
           url: null,
           access: "unavailable",
           reason: deps.offline ? "offline" : "unsupported_provider",
+          ...filesOf(held),
         }
       }
       const connection = await deps.connection()
@@ -525,21 +532,31 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         )
       const { id: chat } = await connection.resolve(target.chat)
       const locator = formatLocator({ ...account, chat, message: target.message })
-      if (connection.permalink)
-        return { locator, ...validatePermalink(await connection.permalink(chat, target.message)) }
+      if (connection.permalink) {
+        const permalink = validatePermalink(await connection.permalink(chat, target.message))
+        const held = await deps
+          .store()
+          .then((store) => store.messages.around(account, chat, target.message, { before: 0, after: 0 }))
+          .then((found) => found.find((item) => item.id === target.message && item.chatId === chat))
+          .catch(() => undefined)
+        return { locator, ...permalink, ...(held ? filesOf(held) : {}) }
+      }
       const found = await capability(connection, "around", "read a message")(chat, target.message, {
         before: 0,
         after: 0,
       })
-      if (!found.some((item) => item.id === target.message && item.chatId === chat))
-        throw new CliError("not_found", "no such message in this chat")
-      return { locator, url: null, access: "unavailable", reason: "unsupported_provider" }
+      const held = found.find((item) => item.id === target.message && item.chatId === chat)
+      if (!held) throw new CliError("not_found", "no such message in this chat")
+      return { locator, url: null, access: "unavailable", reason: "unsupported_provider", ...filesOf(held) }
     },
 
-    download: async (chat, message) => {
+    download: async (reference, message) => {
+      const target = messageLinkTarget(reference, message, deps.messenger.provider)
+      if (target.account !== undefined && target.account !== (await deps.account()).account)
+        throw new CliError("validation_error", "that locator belongs to another account; select its profile first")
       const connection = await deps.connection()
       const download = capability(connection, "download", "download attachments")
-      return download((await connection.resolve(chat)).id, message)
+      return download((await connection.resolve(target.chat)).id, target.message)
     },
 
     keepDownloaded: (chat, message, files) =>

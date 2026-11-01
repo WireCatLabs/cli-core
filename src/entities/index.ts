@@ -8,7 +8,7 @@ import { accountSession } from "./account-session.js"
 import { adminReport } from "./admin-report.js"
 import { agenda } from "./agenda.js"
 import { analysisConsent, analysisConsentRevocation } from "./analysis-consent.js"
-import { attachment } from "./attachment.js"
+import { attachment, hitFile } from "./attachment.js"
 import { attachmentBytes, attachmentExtraction, attachmentTextChange } from "./attachment-results.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
@@ -397,6 +397,8 @@ export const ENTITIES = {
       "follow_ups",
       "email",
     ]).entries,
+    /** The files the message carries; absent when it has none. */
+    attachments: v.optional(v.array(hitFile)),
     untrusted,
   }),
   "message.summary": v.pick(message, [

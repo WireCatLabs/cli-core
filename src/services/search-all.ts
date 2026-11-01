@@ -1,5 +1,6 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
+import { type HitFile, hitFiles } from "../domain/attachments.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
 import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
@@ -40,6 +41,8 @@ export interface SearchAllItem {
   senderIsMe?: boolean
   /** A mail's people, labels and thread, as `search mail` gives them. */
   email?: MailFields
+  /** A message's or a mail's files, as `search messages` names them. */
+  attachments?: HitFile[]
   /** Which search found it: words, meaning or both. */
   foundBy: ("title" | "words" | "meaning")[]
 }
@@ -204,6 +207,7 @@ export const searchAll = async (
           : { name: hit.senderName, ref: null },
         senderIsMe: senderIsMe(hit, at.account),
         ...(hit.email ? { email: hit.email } : {}),
+        attachments: hitFiles(hit.attachments),
         foundBy,
       }
     }

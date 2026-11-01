@@ -1,4 +1,4 @@
-import type { ProviderMetadata } from "./models.js"
+import type { Attachment, ProviderMetadata } from "./models.js"
 
 /** Attachments that are never a file, so their messages cost no download request. */
 export const NOT_FILES: ReadonlySet<string> = new Set([
@@ -11,6 +11,30 @@ export const NOT_FILES: ReadonlySet<string> = new Set([
   "call",
   "inline_keyboard",
 ])
+
+/** A file a message carries, as a search hit names it; `position` counts every attachment, from 1. */
+export interface HitFile {
+  position: number
+  kind: string
+  name?: string
+  size?: number
+}
+
+// The position is taken before the filter: the store numbers every attachment, and `--attachment` takes that number.
+// A server search hit built by an adapter may come without attachments at all.
+export const hitFiles = (attachments: readonly Attachment[] | undefined): HitFile[] =>
+  (attachments ?? []).flatMap(({ kind, name, size }, index) =>
+    NOT_FILES.has(kind)
+      ? []
+      : [
+          {
+            position: index + 1,
+            kind,
+            ...(name === undefined ? {} : { name }),
+            ...(size === undefined ? {} : { size }),
+          },
+        ],
+  )
 
 /** The stored kinds `has:<kind>` matches: MAX stores a file as `file`, Telegram as `document`. */
 export const storedKinds = (kind: string): string[] => (kind === "file" ? ["file", "document"] : [kind])
