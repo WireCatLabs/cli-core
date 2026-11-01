@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.536.0 — 01.11.2026
+
 ### Fixed
 
 - **A server mail search that ran out of time says so.** When the server's own deadline cut a search or the read of
