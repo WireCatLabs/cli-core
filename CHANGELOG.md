@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.520.0 — 01.11.2026
+
 ### Added
 
 - **`@wirecat/cli-core/mail/cli`**: `mailReadCommands({ app, read })` mounts `search messages`, `messages show` and
