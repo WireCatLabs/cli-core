@@ -20,6 +20,16 @@ shape of this file.
 - **`messages sync` progress says how far back it got as a date** ("back to 2026-09-27"), not as a message key, which
   for MAX was a number of milliseconds.
 
+## 0.514.0 — 01.11.2026
+
+### Fixed
+
+- **A failed run's record masks a WhatsApp id as `[id]`**: `<number>[:device]@s.whatsapp.net`, a
+  group's `<number>-<number>@g.us`, `@c.us`, `@broadcast`, `@newsletter` and an `@lid` of any length. Before, such an
+  id was masked only when it looked like an email, and a 16-digit `@lid` or a `@newsletter` id stayed in the record.
+- **The parity check requires `projects` and `projects evidence` in max and tg**, which ship them in max-cli 0.94.0
+  and tg-cli 0.110.0 (tg-cli#798, max-cli#886); wa stays planned.
+
 ## 0.513.0 — 01.11.2026
 
 ### Added
