@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import {
+  dayBoundary,
   type FieldSpec,
   type FieldType,
   OPERATORS_BY_TYPE,
@@ -42,7 +43,13 @@ export const PROJECT_TASK_FIELDS: readonly FieldSpec[] = [
   }),
   field("agent", "kw", "agent:hermes", { relation: "the agent working on it, by name; none or any" }),
   field("due", "time", "due:[today TO 2026-12-31]", { relation: "the due date; NOT due:* has none" }),
-  field("overdue", "bool", "overdue:true", { relation: "open work whose due date has passed" }),
+  field("overdue", "bool", "overdue:true", { relation: "open work due before today" }),
+  field("when", "enum", "when:today", {
+    values: ["overdue", "today", "upcoming", "later", "none"],
+    relation:
+      "the due date as a board groups it: overdue (open work due before today), today, upcoming (the next 7 days " +
+      "after today), later, or none",
+  }),
   field("closed", "time", "closed:>=14d", { relation: "when it was done or dismissed" }),
   field("ready", "bool", "ready:true", { relation: "open work whose blocked-by tasks are all done" }),
   field("text", "txt", "text:invoice", { relation: "words of the title and description; a bare word means this" }),
@@ -155,8 +162,34 @@ const truth = (node: Predicate, sql: string): Where => ({
   params: [],
 })
 
-/** `now` is when overdue is measured; one value per answer, so the list and its counts agree. */
-export const projectTaskColumns = (now: number): ColumnMap => ({
+const SPAN = { start: 0, end: 0 }
+const UPCOMING_DAYS = 7
+
+const dayIn = (at: number, zone: string, ahead: number) => {
+  const date = new Date(
+    `${new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at)}T00:00:00Z`,
+  )
+  date.setUTCDate(date.getUTCDate() + ahead)
+  return dayBoundary(date.toISOString().slice(0, 10), zone, false, SPAN)
+}
+
+/** Each due group as SQL over `t`, from day starts in the owner's zone; the filter and the counts share them. */
+export const dueGroups = (now: number, zone: string) => {
+  const today = dayIn(now, zone, 0)
+  const tomorrow = dayIn(now, zone, 1)
+  const after = dayIn(now, zone, UPCOMING_DAYS + 1)
+  return {
+    overdue: `${OPEN} AND t.due_at IS NOT NULL AND t.due_at < ${today}`,
+    today: `t.due_at >= ${today} AND t.due_at < ${tomorrow}`,
+    upcoming: `t.due_at >= ${tomorrow} AND t.due_at < ${after}`,
+    later: `t.due_at >= ${after}`,
+    none: "t.due_at IS NULL",
+  } as const
+}
+export type DueGroup = keyof ReturnType<typeof dueGroups>
+
+/** `now` and `zone` place today; one value per answer, so the list and its counts agree. */
+export const projectTaskColumns = (now: number, zone: string): ColumnMap => ({
   state: { type: "enum", sql: "t.status" },
   kind: { type: "enum", sql: "t.type" },
   project: { where: projectWhere },
@@ -165,7 +198,14 @@ export const projectTaskColumns = (now: number): ColumnMap => ({
   agent: { where: agentWhere },
   due: { type: "time", sql: "t.due_at" },
   closed: { type: "time", sql: "t.closed_at" },
-  overdue: { where: (node) => truth(node, `${OPEN} AND t.due_at IS NOT NULL AND t.due_at < ${Number(now)}`) },
+  overdue: { where: (node) => truth(node, dueGroups(now, zone).overdue) },
+  when: {
+    where: (node) => {
+      const group = dueGroups(now, zone)[node.value.toLowerCase() as DueGroup]
+      if (group === undefined) throw new CliError("validation_error", "when is overdue, today, upcoming, later or none")
+      return { sql: group, params: [] }
+    },
+  },
   ready: { where: (node) => truth(node, `${OPEN} AND NOT EXISTS (${UNFINISHED_BLOCKER})`) },
   text: {
     where: (node) => {

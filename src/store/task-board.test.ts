@@ -1,12 +1,19 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseLucene } from "@wirecat/cli-base/query"
+import { dayBoundary, parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
+import { priorityOf } from "../tasks/index.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
 const query = (text: string) => parseLucene(text, { defaultField: "text" })
+
+const dayStart = (zone: string, at: number, ahead: number) => {
+  const date = new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(at)}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + ahead)
+  return dayBoundary(date.toISOString().slice(0, 10), zone, false, { start: 0, end: 0 })
+}
 
 const board = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "task-board-")), "messages.db")
@@ -116,7 +123,7 @@ describe("the task board", () => {
 
     const counts = await store.tasks.boardCounts(query("project:HRB state:open"))
     expect(counts.total).toBe(2)
-    expect(counts.project).toEqual([{ value: "HRB", name: "Harbour launch", count: 2 }])
+    expect(counts.project).toEqual([{ value: "HRB", ref: "project:1", name: "Harbour launch", count: 2 }])
     expect(counts.state).toEqual([
       { value: "open", count: 2 },
       { value: "todo", count: 0 },
@@ -137,14 +144,96 @@ describe("the task board", () => {
     ])
   })
 
-  it("offers the owner and everyone who holds a role on a task", async () => {
+  it("offers everyone the store knows: the owner first, then by their tasks, a person added by name too", async () => {
     const { store, add } = await board()
     const task = await add("HRB", "A")
     await store.tasks.assign(task.id, { to: "person:22", role: "reviewer" }, "owner")
+    const lena = await store.people.add({ name: "  Lena Example " })
+    expect(lena).toMatchObject({ name: "Lena Example", identities: [] })
+    await expect(store.people.add({ name: " " })).rejects.toThrow("1–200 characters")
+
     const people = await store.tasks.taskPeople()
-    expect(people.find(({ owner }) => owner)).toMatchObject({ tasks: 0 })
-    expect(people.filter(({ owner }) => !owner)).toEqual([
+    expect(people[0]).toMatchObject({ owner: true, tasks: 0 })
+    expect(people.slice(1)).toEqual([
       { person: "person:22", name: "Kai Sample", owner: false, tasks: 1 },
+      { person: "person:21", name: "Ana Ruiz", owner: false, tasks: 0 },
+      { person: `person:${lena.uid}`, name: "Lena Example", owner: false, tasks: 0 },
+    ])
+    expect(await store.tasks.taskPeople({ limit: 2 })).toHaveLength(2)
+  })
+
+  it("adds a task with its state, due date and agent in one write, and clears its description", async () => {
+    const { store } = await board()
+    const due = new Date("2026-12-01T10:00:00Z")
+    const task = await store.tasks.create(
+      {
+        project: "HRB",
+        title: "Book the venue",
+        type: "chore",
+        status: "in_progress",
+        dueAt: due,
+        agent: "hermes",
+        description: "Two rooms",
+      },
+      "owner",
+    )
+    expect(task).toMatchObject({
+      status: "in_progress",
+      dueAt: due.toISOString(),
+      agent: "hermes",
+      projectKey: "HRB",
+      projectName: "Harbour launch",
+    })
+    expect(await store.tasks.edit(task.id, { description: null }, "owner")).toMatchObject({ description: null })
+    const history = await store.tasks.events(task.id)
+    expect(history.find(({ kind }) => kind === "due")?.changes).toEqual({ due_at: [null, due.toISOString()] })
+  })
+
+  it("reads a score with a decimal point as 0–1, and a bare 0–4 as the old scale", () => {
+    expect(priorityOf("0.0")).toBe(0)
+    expect(priorityOf("1.0")).toBe(1)
+    expect(priorityOf(".3")).toBe(0.3)
+    expect(priorityOf("0")).toBe(0.875)
+    expect(priorityOf("1")).toBe(0.625)
+    expect(() => priorityOf("1.5")).toThrow("0.0 to 1.0")
+  })
+
+  it("groups due dates by the owner's day: overdue before today, today, the next 7 days, later and none", async () => {
+    const { store, add } = await board()
+    const zone = "Europe/Madrid"
+    const now = Date.now()
+    const madrid = (offsetDays: number, hour: number) => new Date(dayStart(zone, now, offsetDays) + hour * 3_600_000)
+    await add("HRB", "Yesterday", { dueAt: madrid(-1, 12) })
+    await add("HRB", "Earlier today", { dueAt: madrid(0, 0) })
+    await add("HRB", "Tonight", { dueAt: madrid(0, 23) })
+    await add("HRB", "In three days", { dueAt: madrid(3, 9) })
+    await add("HRB", "In a month", { dueAt: madrid(30, 9) })
+    const none = await add("HRB", "No date")
+    await store.tasks.edit(none.id, { agent: "hermes" }, "owner")
+
+    const titles = async (text: string) =>
+      (await store.tasks.board(query(`project:HRB ${text}`), { zone, limit: 50 })).items
+        .map(({ title }) => title)
+        .sort()
+    expect(await titles("overdue:true")).toEqual(["Yesterday"])
+    expect(await titles("when:today")).toEqual(["Earlier today", "Tonight"])
+    expect(await titles("when:upcoming")).toEqual(["In three days"])
+    expect(await titles("when:later")).toEqual(["In a month"])
+    expect(await titles("when:none")).toEqual(["No date"])
+
+    const counts = await store.tasks.boardCounts(query("project:HRB when:today"), { zone })
+    expect(counts.total).toBe(2)
+    expect(counts.due).toEqual([
+      { value: "overdue", count: 1 },
+      { value: "today", count: 2 },
+      { value: "upcoming", count: 1 },
+      { value: "later", count: 1 },
+      { value: "none", count: 1 },
+    ])
+    const all = await store.tasks.boardCounts(query("project:HRB"), { zone })
+    expect(all.agent).toEqual([
+      { value: "none", count: 5 },
+      { value: "hermes", count: 1 },
     ])
   })
 

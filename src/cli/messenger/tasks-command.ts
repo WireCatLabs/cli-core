@@ -137,7 +137,7 @@ const pairLine = (pair: TaskPair) =>
   ].join("  ")
 
 /** `none` clears a date; anything else is a time ahead. Not `null`: commander stores a parser's `null` as "". */
-const dateOrNone = (flag: string) => (typed: string) =>
+export const dateOrNone = (flag: string) => (typed: string) =>
   typed.trim().toLowerCase() === "none" ? ("none" as const) : new Date(aheadOf(typed, flag))
 
 const durationOf = (flag: string) => (typed: string) => {

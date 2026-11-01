@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import { TASK_TYPES, WORK_TASK_TYPES } from "../../domain/knowledge.js"
 import {
   checkedScore,
@@ -22,7 +23,15 @@ import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { queryFilter, type Where } from "./query-filter.js"
 import { stemmerCache } from "./stems.js"
-import { BOARD_SCOPE, boardOrder, projectTaskColumns, type TaskSort, withoutField } from "./task-board.js"
+import {
+  BOARD_SCOPE,
+  boardOrder,
+  type DueGroup,
+  dueGroups,
+  projectTaskColumns,
+  type TaskSort,
+  withoutField,
+} from "./task-board.js"
 import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
 import { INBOX_KEY_LENGTH, inboxKey } from "./task-keys.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
@@ -76,7 +85,7 @@ export interface TaskFields {
   category?: string
 }
 
-export interface NewWorkTask extends Omit<TaskFields, "status" | "reason"> {
+export interface NewWorkTask extends Omit<TaskFields, "reason"> {
   /** `project:<id>` or the project's key. */
   project: string
   title: string
@@ -95,6 +104,9 @@ export interface TaskDetails {
   ref: string
   key: string
   project: string
+  /** The project's key and name, as `boardCounts` names it. */
+  projectKey: string
+  projectName: string
   title: string
   description: string | null
   type: TaskType
@@ -157,12 +169,17 @@ export interface BoardOptions {
 /** How many tasks match, and how many hold each value: the board's pickers show these beside their choices. */
 export interface BoardCounts {
   total: number
-  project: { value: string; name: string; count: number }[]
+  /** `value` is the key; `ref` the `project:<id>` a task's `project` names. */
+  project: { value: string; ref: string; name: string; count: number }[]
   /** `person:<id>`, or `none` for the tasks nobody is assigned. */
   assignee: { value: string; name: string | null; count: number }[]
   /** By label; `none` for the tasks with no priority. */
   priority: { value: PriorityLabel | "none"; count: number }[]
   state: { value: TaskState; count: number }[]
+  /** The groups `when:` takes, in board order; they do not overlap. */
+  due: { value: DueGroup; count: number }[]
+  /** The agent's name, or `none`. */
+  agent: { value: string; count: number }[]
 }
 
 export interface TaskEvent {
@@ -207,7 +224,10 @@ export interface WorkTasks extends TaskRelationsStore {
   /** The owner's project tasks, every project at once, narrowed by a query over `PROJECT_TASK_FIELDS`. */
   board(query: QueryAst | undefined, options: BoardOptions): Promise<{ items: TaskDetails[]; total: number }>
   /** The owner and everyone who holds a role on a live task, by name: who the board offers to assign. */
-  taskPeople(): Promise<{ person: string; name: string | null; owner: boolean; tasks: number }[]>
+  /** Everyone the store knows, the owner first, then by how many live tasks name them. */
+  taskPeople(options?: {
+    limit?: number
+  }): Promise<{ person: string; name: string | null; owner: boolean; tasks: number }[]>
   /** Each count leaves out the query's own terms on that field, so a chosen project does not hide the others. */
   boardCounts(query: QueryAst | undefined, options?: Pick<BoardOptions, "zone">): Promise<BoardCounts>
   /**
@@ -249,6 +269,20 @@ const claimOf = (row: Row, at: number): Pick<TaskDetails, "claimedBy" | "claimed
   row.claimed_by != null && Number(row.claimed_until) >= at
     ? { claimedBy: String(row.claimed_by), claimedUntil: iso(row.claimed_until) }
     : { claimedBy: null, claimedUntil: null }
+
+/** A change to a time column is kept as epoch ms; it reads as ISO, as the task itself does. */
+const timesAsIso = (changes: Record<string, [unknown, unknown]>): Record<string, [unknown, unknown]> =>
+  Object.fromEntries(
+    Object.entries(changes).map(([key, pair]) => [
+      key,
+      key.endsWith("_at") && Array.isArray(pair)
+        ? (pair.map((value) => (typeof value === "number" ? new Date(value).toISOString() : value)) as [
+            unknown,
+            unknown,
+          ])
+        : pair,
+    ]),
+  )
 
 /** What a write made on a stale copy is refused with: the revision the caller read is not the task's now. */
 export const checkRevision = (row: Row, expected: number | undefined): void => {
@@ -302,6 +336,10 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     }
     return parent
   }
+  const projectNamed = (id: number) => {
+    const project = database.prepare("SELECT key, name FROM projects WHERE id = ?").get(id) as Row
+    return { projectKey: String(project.key), projectName: String(project.name) }
+  }
   const detailsOf = (row: Row): TaskDetails => {
     const id = Number(row.id)
     const reference = (taskRow: number) => `task:${taskIdOf(database, taskRow)}`
@@ -310,6 +348,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       ref: reference(id),
       key: String(row.key),
       project: `project:${row.project_id}`,
+      ...projectNamed(Number(row.project_id)),
       title: String(row.title),
       description: row.description == null ? null : String(row.description),
       type: row.type as TaskType,
@@ -344,7 +383,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     database.prepare("UPDATE tasks SET updated_at = ? WHERE id = ?").run(at, task)
   const boardWhere = (query: QueryAst | undefined, zone: string | undefined, at: number): Where => {
     if (query === undefined) return { sql: BOARD_SCOPE, params: [] }
-    const where = queryFilter(query, projectTaskColumns(at), {
+    const where = queryFilter(query, projectTaskColumns(at, timezoneOf(zone)), {
       command: "tasks list",
       now: at,
       ...(zone ? { zone } : {}),
@@ -744,8 +783,13 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           .prepare(`SELECT ${select}, count(*) AS n FROM tasks t ${from} WHERE ${where.sql} GROUP BY ${group}`)
           .all(...where.params)
       }
-      const project = grouped("project", "p.key, p.name", "JOIN projects p ON p.id = t.project_id", "p.id")
-        .map((row) => ({ value: String(row.key), name: String(row.name), count: Number(row.n) }))
+      const project = grouped("project", "p.id, p.key, p.name", "JOIN projects p ON p.id = t.project_id", "p.id")
+        .map((row) => ({
+          value: String(row.key),
+          ref: `project:${row.id}`,
+          name: String(row.name),
+          count: Number(row.n),
+        }))
         .sort((a, b) => a.value.localeCompare(b.value))
       const assigned = grouped(
         "assignee",
@@ -767,6 +811,19 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         priorities.set(label, (priorities.get(label) ?? 0) + Number(row.n))
       }
       const states = new Map(grouped("state", "t.status", "", "t.status").map((row) => [row.status, Number(row.n)]))
+      const groups = dueGroups(at, timezoneOf(zone))
+      const dueWhere = boardWhere(withoutField(withoutField(query, "when"), "overdue"), zone, at)
+      const due = (Object.keys(groups) as DueGroup[]).map((value) => ({
+        value,
+        count: Number(
+          database
+            .prepare(`SELECT count(*) AS n FROM tasks t WHERE ${dueWhere.sql} AND ${groups[value]}`)
+            .get(...dueWhere.params)?.n ?? 0,
+        ),
+      }))
+      const agent = grouped("agent", "t.agent", "", "t.agent")
+        .map((row) => ({ value: row.agent == null ? "none" : String(row.agent), count: Number(row.n) }))
+        .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
       return {
         total: countOf(boardWhere(query, zone, at)),
         project,
@@ -776,17 +833,19 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           count: priorities.get(value) ?? 0,
         })),
         state: TASK_STATES.map((value) => ({ value, count: states.get(value) ?? 0 })),
+        due,
+        agent,
       }
     },
-    taskPeople: async () =>
+    taskPeople: async ({ limit = 500 } = {}) =>
       database
         .prepare(
           "SELECT p.id, p.name, p.owner, count(DISTINCT t.id) AS n FROM persons p " +
             "LEFT JOIN task_assignments a ON a.assignee_type = 'person' AND a.assignee_id = p.id " +
             "LEFT JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL " +
-            "WHERE p.owner = 1 OR t.id IS NOT NULL GROUP BY p.id ORDER BY p.owner DESC, p.name COLLATE NOCASE, p.id",
+            "GROUP BY p.id ORDER BY p.owner DESC, n DESC, p.name IS NULL, p.name COLLATE NOCASE, p.id LIMIT ?",
         )
-        .all()
+        .all(Math.min(Math.max(limit, 1), 5000))
         .map((row) => ({
           person: `person:${row.id}`,
           name: row.name == null ? null : String(row.name),
@@ -812,7 +871,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
                   id: Number(row.actor_id),
                   name: row.actor_name == null ? null : String(row.actor_name),
                 },
-          changes: row.changes == null ? null : JSON.parse(String(row.changes)),
+          changes: row.changes == null ? null : timesAsIso(JSON.parse(String(row.changes))),
           at: iso(row.created_at) as string,
         })),
   }

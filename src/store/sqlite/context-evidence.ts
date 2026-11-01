@@ -290,6 +290,20 @@ export const contextRecordOf = (
         }
       : null
   }
+  const note = /^note:([1-9]\d*)$/.exec(ref)
+  if (note) {
+    const row = database
+      .prepare("SELECT title, body, revision FROM notes WHERE id=? AND deleted_at IS NULL")
+      .get(Number(note[1]))
+    return row
+      ? {
+          ref,
+          title: row.title == null ? null : String(row.title),
+          text: String(row.body),
+          revision: Number(row.revision),
+        }
+      : null
+  }
   let at: ReturnType<typeof parseLocator>
   try {
     at = parseLocator(ref)

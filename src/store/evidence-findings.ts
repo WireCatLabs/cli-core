@@ -6,15 +6,21 @@ import type { EvidenceSource } from "./sqlite/evidence-sources.js"
 export const EVIDENCE_FINDINGS_KIND = "evidence_findings"
 
 const reference = (raw: string) => {
-  if (/^document:[1-9]\d*$/.test(raw)) return raw
+  if (/^(document|note):[1-9]\d*$/.test(raw)) return raw
   try {
     return formatLocator(parseLocator(raw))
   } catch {
-    throw new CliError("validation_error", "finding evidence is a msg: or document: reference")
+    throw new CliError("validation_error", "finding evidence is a msg:, document: or note: reference")
   }
 }
 export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
-  validateFindings(input, { plural: "evidence findings", singular: "evidence finding", cited: "reference", reference })
+  validateFindings(input, {
+    plural: "evidence findings",
+    singular: "evidence finding",
+    cited: "reference",
+    reference,
+    anySubject: true,
+  })
 
 /** Who decided: the owner, or an agent the host let decide for the owner, with its reason. */
 export type EvidenceFindingsDecider = "owner" | { bot: string; model?: string; reason: string }
@@ -24,7 +30,10 @@ export interface EvidenceFindingsReceipt extends FindingsReceipt {
 }
 export interface EvidenceFindingsBatch {
   id: string
-  project: string
+  /** `null` when its findings name no one project. */
+  project: string | null
+  /** Who or what every finding is about, when they agree: a project, person, organization or task; else `null`. */
+  subject: string | null
   input: FindingsInput
   fingerprint: string
   status: "proposed" | "reviewed"
