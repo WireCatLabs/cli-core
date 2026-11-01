@@ -54,7 +54,7 @@ const email = (externalId: string, day: number, fields: Partial<EmailInput>): Em
   ...fields,
 })
 
-const seeded = async () => {
+const seeded = async (storeFails?: Error) => {
   const root = mkdtempSync(join(tmpdir(), "mail-cli-"))
   const env = { MAIL_CONFIG_DIR: join(root, "config"), MAIL_STATE_DIR: join(root, "state") }
   mkdirSync(env.MAIL_CONFIG_DIR, { recursive: true })
@@ -110,8 +110,17 @@ const seeded = async () => {
         app,
         read: async (_command, work) => {
           const opened = await openStore({ path })
+          const failing = storeFails && {
+            ...opened.accounts,
+            storedAccount: () => Promise.reject(storeFails),
+          }
           try {
-            return await work(opened, MINE)
+            return await work(
+              failing
+                ? new Proxy(opened, { get: (store, key) => (key === "accounts" ? failing : Reflect.get(store, key)) })
+                : opened,
+              MINE,
+            )
           } finally {
             await opened.close()
           }
@@ -194,5 +203,17 @@ describe("mail read commands", () => {
     ])
     const byEmail = await json("conversations", "show", BILL)
     expect(byEmail.items).toHaveLength(2)
+  })
+
+  it("fails conversations when the store fails, rather than answering that nothing is stored", async () => {
+    const { mail } = await seeded(new Error("database is locked"))
+    for (const argv of [
+      ["conversations", "list"],
+      ["conversations", "show", BILL],
+    ]) {
+      const answer = await mail(...argv, "--json")
+      expect(answer.code).not.toBe(0)
+      expect(answer.err).not.toContain("no stored thread")
+    }
   })
 })
