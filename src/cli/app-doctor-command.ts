@@ -29,6 +29,21 @@ export interface AppDoctorOptions {
    * (or a throw, reported as `error_code` and `error`) makes the whole check fail without failing the command.
    */
   online?: (env: NodeJS.ProcessEnv) => Promise<{ ok: boolean } & Record<string, unknown>>
+  /**
+   * What the CLI reads of its own state from disk, with no call out: a run left half done, a deadline near. `fields`
+   * join the answer; each of `notes` goes to stderr, as a fix does. A throw is reported as `local.error`.
+   */
+  local?: (env: NodeJS.ProcessEnv) => { fields: Record<string, unknown>; notes?: string[] }
+}
+
+const localCheck = (env: NodeJS.ProcessEnv, options: AppDoctorOptions) => {
+  if (!options.local) return { fields: {}, notes: [] }
+  try {
+    const { fields, notes = [] } = options.local(env)
+    return { fields, notes }
+  } catch (error) {
+    return { fields: { local: { error: error instanceof Error ? error.message : String(error) } }, notes: [] }
+  }
 }
 
 const onlineCheck = async (app: AppIdentity, env: NodeJS.ProcessEnv, fetcher: FetchLike, options: AppDoctorOptions) => {
@@ -159,10 +174,12 @@ export const appDoctorCommand = (app: AppIdentity, configuration: Configuration,
       const environment = environmentOf<BaseEnvironment & { fetch?: FetchLike }>(this)
       const env = environment.env ?? process.env
       const { report, fixes } = appDoctorReport(app, configuration, env, this, options)
+      const local = localCheck(env, options)
       const online = this.opts<{ online?: boolean }>().online
         ? await onlineCheck(app, env, environment.fetch ?? fetch, options)
         : undefined
       const output = outputFor(this)
-      renderAnswer(this, output, itemOf(online ? { ...report, online } : report))
+      renderAnswer(this, output, itemOf({ ...report, ...local.fields, ...(online ? { online } : {}) }))
       for (const fix of fixes) output.renderer.note(`to make it private: ${fix}`)
+      for (const note of local.notes) output.renderer.note(note)
     })

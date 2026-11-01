@@ -207,6 +207,32 @@ describe("appDoctorCommand", () => {
     expect(JSON.stringify(JSON.parse(streams.stdout[0] ?? "{}").item.config.issues)).toContain("evnts.delete")
   })
 
+  describe("local", () => {
+    const answer = async (local: NonNullable<Parameters<typeof appDoctorCommand>[2]>["local"]) => {
+      const streams = captureStreams()
+      const program = { ...definition(), commands: () => [appDoctorCommand(app, configuration, { local })] }
+      const code = await run(["doctor", "--json"], program, { streams, tty: false, env: home() })
+      return { code, item: JSON.parse(streams.stdout[0] ?? "{}").item, stderr: streams.stderr.join("") }
+    }
+
+    it("joins the CLI's own fields and prints its notes, without --online", async () => {
+      const { item, stderr } = await answer(() => ({
+        fields: { cleanup: { runs: 1 } },
+        notes: ["run r1 stopped before the end"],
+      }))
+      expect(item.cleanup).toEqual({ runs: 1 })
+      expect(stderr).toContain("run r1 stopped before the end")
+    })
+
+    it("reports a throw as a field, and the doctor still answers", async () => {
+      const { code, item } = await answer(() => {
+        throw new Error("unreadable run file")
+      })
+      expect(code).toBe(0)
+      expect(item.local).toEqual({ error: "unreadable run file" })
+    })
+  })
+
   describe("--online", () => {
     const answer = async (
       options: Parameters<typeof appDoctorCommand>[2],
