@@ -52,6 +52,16 @@ const refusal: Record<Extract<ServerSkip, "unsupported" | "offline" | "not_allow
 
 const BOUND = Symbol("bound")
 
+type Failure = ServerSearched["failed"][number]["reason"]
+
+/** A call the server's own deadline cut short is the time bound's, as one cut by --server-time is. */
+const failureOf = (error: unknown): Failure =>
+  error instanceof CliError && error.code === "rate_limited"
+    ? "rate_limited"
+    : error instanceof CliError && error.code === "timeout"
+      ? "time_or_abort_bound"
+      : "search_failed"
+
 /** The newest first: a server's UIDs grow as mail arrives in the folder. */
 const newest = (uids: readonly string[], count: number) =>
   [...uids].sort((one, other) => Number(other) - Number(one)).slice(0, count)
@@ -98,7 +108,7 @@ export const searchMailServer = async (
   const listed: Listed[] = []
   const validities = new Map<Listed, string>()
   let open = true
-  const fail = (call: { folder: string } | null, reason: ServerSearched["failed"][number]["reason"]) => {
+  const fail = (call: { folder: string } | null, reason: Failure) => {
     report.complete = false
     report.failed.push({ chat: call?.folder ?? null, reason })
   }
@@ -142,7 +152,7 @@ export const searchMailServer = async (
         } catch (error) {
           if (!open) return
           pending.delete(call)
-          fail(call, error instanceof CliError && error.code === "rate_limited" ? "rate_limited" : "search_failed")
+          fail(call, failureOf(error))
         }
       }),
     )
@@ -168,15 +178,9 @@ export const searchMailServer = async (
     if (stop.aborted) resolve(BOUND)
     stop.addEventListener("abort", () => resolve(BOUND), { once: true })
   })
-  let outcome: "done" | "failed" | typeof BOUND
+  let outcome: "done" | Failure | typeof BOUND
   try {
-    outcome = await Promise.race([
-      run().then(
-        () => "done" as const,
-        () => "failed" as const,
-      ),
-      bound,
-    ])
+    outcome = await Promise.race([run().then(() => "done" as const, failureOf), bound])
   } finally {
     open = false
     clearTimeout(timer)
@@ -188,10 +192,11 @@ export const searchMailServer = async (
   }
   if (openFailure !== undefined && backend === "server") throw openFailure
   if (unsupported) return skip("unsupported")
-  for (const call of pending) fail(call, outcome === "failed" ? "search_failed" : "time_or_abort_bound")
+  const ended = outcome === BOUND || outcome === "done" ? "time_or_abort_bound" : outcome
+  for (const call of pending) fail(call, ended)
   if (outcome !== "done" || (fresh.length > 0 && raws === undefined)) {
     // What was found but not read in time is the archive's to answer: none of it is claimed as the server's.
-    if (pending.size === 0) fail(null, outcome === "failed" ? "search_failed" : "time_or_abort_bound")
+    if (pending.size === 0) fail(null, ended)
     for (const item of fresh) sources.delete(sourceKey(item.threadId, item.messageId))
     report.returned = sources.size
     return { report, sources }

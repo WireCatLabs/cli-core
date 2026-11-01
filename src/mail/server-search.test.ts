@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-base"
+import { CliError, captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { type ProgramDefinition, run } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
@@ -177,6 +177,18 @@ describe("mail server search", () => {
     })
     const { json, stored } = await setup([fake("2", 10, {})], { source: slow })
     const found = await json("search", "messages", "invoice", "--server-time", "50ms")
+    expect(byRef(found.items)).toEqual({ m1: "archive" })
+    expect(found.meta.issues).toEqual([expect.objectContaining({ code: "timeout", reason: "search.server-timeout" })])
+    expect(await stored()).toEqual(["m1"])
+  })
+
+  it("calls a read of the finds that timed out a timeout, not a failed search", async () => {
+    const late = (mailbox: FakeMailbox): MailSource => ({
+      ...fakeMailSource(mailbox),
+      fetchRaw: () => Promise.reject(new CliError("timeout", "the mail server did not answer in time")),
+    })
+    const { json, stored } = await setup([fake("2", 10, {})], { source: late })
+    const found = await json("search", "messages", "invoice")
     expect(byRef(found.items)).toEqual({ m1: "archive" })
     expect(found.meta.issues).toEqual([expect.objectContaining({ code: "timeout", reason: "search.server-timeout" })])
     expect(await stored()).toEqual(["m1"])
