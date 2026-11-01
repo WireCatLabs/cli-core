@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.538.0 — 01.11.2026
+
 ### Added
 
 - **`events prepare [event]`, in the shared calendar commands: what the store holds for one meeting.** The event as
