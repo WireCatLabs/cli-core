@@ -10,16 +10,16 @@ const backendOf = (value: string): Backend => {
   return value
 }
 
+/** `--backend` and `--server-time`, for any search whose source has a server that searches: `where` names it. */
+export const serverSearchOptions = (command: Command, where: string): Command =>
+  command
+    .option("--backend <archive|server|both>", `where to search: the local archive, ${where}, or both`, backendOf)
+    .option("--server-time <duration>", "stop waiting for the server after this long (default: 5s)")
+
 /** Mounted only where the messenger's server can search messages. */
 export const backendOptions = (command: Command, messenger: Messenger): Command =>
   messenger.serverSearch
-    ? command
-        .option(
-          "--backend <archive|server|both>",
-          "where to search: the local archive, the messenger's server, or both (default: both; message discovery uses archive only)",
-          backendOf,
-        )
-        .option("--server-time <duration>", "stop waiting for the server after this long (default: 5s)")
+    ? serverSearchOptions(command, "the messenger's server (default: both; message discovery uses archive only)")
     : command
 
 export const backendRequest = (command: Command): { backend?: Backend; server?: ServerOptions } => {
@@ -30,7 +30,7 @@ export const backendRequest = (command: Command): { backend?: Backend; server?: 
   }
 }
 
-export const noteServer = (context: MessengerContext, server: ServerSearched | undefined): void => {
+export const noteServer = (context: Pick<MessengerContext, "renderer">, server: ServerSearched | undefined): void => {
   if (!server) return
   if (server.skipped) context.renderer.note(`server search skipped: ${server.skipped} — the answer is the archive's`)
   else if (!server.complete)

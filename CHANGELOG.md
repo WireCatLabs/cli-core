@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Mail server search.** `mailReadCommands({ app, read, server })` gives `search messages` the shared
+  `--backend archive|server|both` and `--server-time`, as tg has them: the mail server is asked for candidates, the
+  new ones are stored, and the same strict query runs on the store, so each hit says `found_in`. `searchMailServer`
+  does it; `mailCriteriaOf` turns the query into `MailCriteria` (words, `from:` `to:` `cc:` `subject:` `body:`
+  `is:` and `date:`, one per top-level OR) for a `MailSource.query`, which a mail CLI translates into its server's
+  syntax. An owner's skip and envelope rules keep a find out of the store, as in a sync; nothing moves the sync's saved
+  position. The fake mail source answers `query` and records it in `queried`. When the server answers in part,
+  `meta.complete` is false with an issue per reason (`search.offline`, `search.server-timeout`, …; new `search.server-*` reasons).
+- `searchMail` takes `only`, and the store's word search reads `only` over mail as over messages.
+- `serverSearchOptions(command, where)` mounts `--backend` and `--server-time` on any search; `backendOptions` uses it.
+
 ## 0.522.0 — 01.11.2026
 
 ### Added

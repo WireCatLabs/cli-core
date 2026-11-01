@@ -106,8 +106,8 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   const { database } = context
   const corpus = execution.corpus === "mail" ? MAIL : MESSAGES
   const mail = corpus === MAIL
-  if (mail && (execution.only || execution.conversationIds || execution.conversationSince !== undefined))
-    throw new CliError("validation_error", "mail has no server search or conversations")
+  if (mail && (execution.conversationIds || execution.conversationSince !== undefined))
+    throw new CliError("validation_error", "mail has no conversations to search within")
   const started = context.now()
   const budget: MatchBudget = { work: 0 }
   let states = 0,
@@ -270,11 +270,11 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       [
         where,
         {
-          sql: `m.id IN (SELECT picked.id FROM json_each(?) j CROSS JOIN accounts allowed CROSS JOIN chats scoped CROSS JOIN messages picked
+          sql: `m.id IN (SELECT picked.id FROM json_each(?) j CROSS JOIN accounts allowed CROSS JOIN ${mail ? "email_threads" : "chats"} scoped CROSS JOIN ${mail ? "emails" : "messages"} picked
             WHERE (${execution.accounts.map(() => "(allowed.provider=? AND allowed.external_id=?)").join(" OR ") || "0"})
               AND allowed.provider=json_extract(j.value,'$.provider') AND allowed.external_id=json_extract(j.value,'$.account')
               AND scoped.account_id=allowed.id AND scoped.external_id=json_extract(j.value,'$.chatId')
-              AND picked.chat_id=scoped.id AND picked.external_id=json_extract(j.value,'$.id'))`,
+              AND picked.${mail ? "email_thread_id" : "chat_id"}=scoped.id AND picked.external_id=json_extract(j.value,'$.id'))`,
           params: [JSON.stringify(execution.only), ...execution.accounts.flatMap((key) => [key.provider, key.account])],
           exact: true,
         },
