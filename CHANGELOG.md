@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.514.0 — 01.11.2026
+
 ### Fixed
 
 - **A failed run's record masks a WhatsApp id as `[id]`**: `<number>[:device]@s.whatsapp.net`, a
