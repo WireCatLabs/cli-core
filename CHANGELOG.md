@@ -7,17 +7,8 @@ shape of this file.
 
 ## Unreleased
 
-## 0.515.0 — 01.11.2026
-
 ### Added
 
-- **`storedMailRules(store, account, query?)`** reads one account's mail rules from the store in the shape
-  `syncMail` takes as `account.rules`, and `storedMailRule(stored)` reads one; a rule with a condition this build does
-  not know is left out. An account the store has not seen has no rules.
-- **`labelName(raw)`, `systemLabel(name)` and `decodeMailboxName(name)`** name Gmail labels as people read them
-  (`\Inbox` and `Inbox` are one label, modified UTF-7 is decoded), moved from memo.
-- **`mailProgress(store, key)`** gives each synced folder's window, done and total from the saved resume points,
-  without asking the mailbox. It treats only `not_found` as "no account yet" and passes other store errors on.
 - **Store version 42: a task's revision goes up only for a change a person could overwrite** (`minCompatible` stays
   34): its title, description, status, priority, agent, due date, project or parent, an assignee added or removed, or
   a tag added or removed. A claim taken, renewed or released, a follow-up time, a close suggestion or certainty no
@@ -37,6 +28,18 @@ shape of this file.
   `task.column` (`HRB-2 is in in_progress, not todo: pick a task in the todo column`), with `anchor`, `anchorStatus`
   and `requestedStatus` in the details. A neighbour off every project board, or the task itself, is refused with a
   message that says so.
+
+## 0.515.0 — 01.11.2026
+
+### Added
+
+- **`storedMailRules(store, account, query?)`** reads one account's mail rules from the store in the shape
+  `syncMail` takes as `account.rules`, and `storedMailRule(stored)` reads one; a rule with a condition this build does
+  not know is left out. An account the store has not seen has no rules.
+- **`labelName(raw)`, `systemLabel(name)` and `decodeMailboxName(name)`** name Gmail labels as people read them
+  (`\Inbox` and `Inbox` are one label, modified UTF-7 is decoded), moved from memo.
+- **`mailProgress(store, key)`** gives each synced folder's window, done and total from the saved resume points,
+  without asking the mailbox. It treats only `not_found` as "no account yet" and passes other store errors on.
 
 ## 0.514.0 — 01.11.2026
 
