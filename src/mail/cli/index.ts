@@ -18,6 +18,12 @@ import { atDetail } from "../../output-detail.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { type AccountKey, type MessageStore, queryFilter, THREAD_COLUMNS } from "../../store/store.js"
 
+/** A locked or broken store must fail the command, not read as "nothing stored yet". */
+const absentAccount = (error: unknown): undefined => {
+  if (error instanceof CliError && error.code === "not_found") return undefined
+  throw error
+}
+
 /** What a mail CLI hands the shared commands: how to open the store for one run, and whose mail it reads. */
 export interface MailReads {
   app: AppIdentity
@@ -226,7 +232,7 @@ const conversationsCommand = (mail: MailReads): Command => {
       const typed = typedQuery(words)
       const query = listQuery(typed, THREAD_QUERY, "conversations list")
       const { threads, mailbox } = await mail.read(this, async (store, mailbox) => {
-        const account = await store.accounts.storedAccount(mailbox).catch(() => undefined)
+        const account = await store.accounts.storedAccount(mailbox).catch(absentAccount)
         if (!account) return { threads: [], mailbox }
         const where = query ? queryFilter(query, THREAD_COLUMNS, { command: "conversations list" }) : undefined
         const threads = await store.mail.threads({
@@ -279,7 +285,7 @@ const conversationsCommand = (mail: MailReads): Command => {
       const full = detailOf(this) === "full"
       const emails = await mail.read(this, async (store, mailbox) => {
         const thread = threadOf(mailbox, given)
-        const account = await store.accounts.storedAccount(mailbox).catch(() => undefined)
+        const account = await store.accounts.storedAccount(mailbox).catch(absentAccount)
         const hits = account ? await store.mail.threadHits(account.id, thread) : []
         if (!account || hits.length === 0) throw new CliError("not_found", `no stored thread ${given}`)
         return Promise.all(

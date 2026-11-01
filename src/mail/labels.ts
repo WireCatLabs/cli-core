@@ -22,8 +22,14 @@ export const decodeMailboxName = (name: string): string =>
 
 export const systemLabel = (name: string): string => SYSTEM_LABELS[name.toLowerCase()] ?? name
 
-/** A label as people read it: `\\Important` and `Important` are one label, and names are decoded. */
-export const labelName = (raw: string): string => {
-  const system = raw.startsWith("\\") ? raw.slice(1) : raw
-  return SYSTEM_LABELS[system.toLowerCase()] ?? decodeMailboxName(system)
+/**
+ * A label as people read it, from a name already decoded (imapflow decodes X-GM-LABELS): `\\Important` and
+ * `Important` are one label. Decoding twice would turn `R&D-team` into `Rteam`.
+ */
+export const decodedLabelName = (name: string): string => {
+  const system = name.startsWith("\\") ? name.slice(1) : name
+  return SYSTEM_LABELS[system.toLowerCase()] ?? system
 }
+
+/** The same from X-GM-LABELS as the server sends it, in modified UTF-7. */
+export const labelName = (raw: string): string => decodedLabelName(decodeMailboxName(raw))

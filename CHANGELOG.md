@@ -12,6 +12,20 @@ shape of this file.
 - **The request pace from `@wirecat/cli-core/sends`.** `Pacer`, `DEFAULT_PACE`, `PaceRate` and `pacePathFor` were only
   inside the messenger context; a CLI that is not a messenger (mail's SMTP sends) now spaces its writes with the same
   file-shared pace.
+- **`mailIds` from `@wirecat/cli-core/mail`: one email id for mail and memo.** On every server but Gmail the id is
+  the hash of the Message-ID (the UID with its folder and UIDVALIDITY when there is none) and the thread is the first
+  id of References, else In-Reply-To. OBJECTID's EMAILID is not used, so a server that turns OBJECTID on keeps its
+  ids. Gmail keeps X-GM-MSGID and X-GM-THRID.
+- **`decodedLabelName` for a Gmail label already decoded.** imapflow decodes X-GM-LABELS; `labelName` decodes the
+  modified UTF-7 again and turned `R&D-team` into `Rteam`. `labelName` stays for the wire form.
+- **`storedMailRuleSet`: the stored rules this build cannot read, with why.** A sync reports them instead of dropping
+  them silently; `storedMailRules` still returns only the rules.
+
+### Fixed
+
+- **`conversations list` and `conversations show` no longer read a failing store as "nothing stored".** Only a
+  missing account answers empty or not found; a locked or broken store fails the command.
+- **The messenger `search messages` help sends mail searches to `mail <profile> search messages`**, not to memo.
 
 ## 0.522.0 — 01.11.2026
 

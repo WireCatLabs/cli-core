@@ -23,17 +23,25 @@ const KINDS: Record<keyof MailRuleMatch, "string" | "number" | "boolean"> = {
   preset: "string",
 }
 
+/** Why this build cannot read a stored rule, or undefined when it can. */
+const unreadable = (stored: StoredRule): string | undefined => {
+  if (ACTION_OF[String(stored.actions.store)] === undefined) return `action ${String(stored.actions.store)}`
+  const entries = Object.entries(stored.conditions as Record<string, unknown>)
+  if (entries.length === 0) return "no condition"
+  const unknown = entries.find(
+    ([key, value]) =>
+      !(key in KINDS) ||
+      typeof value !== KINDS[key as keyof MailRuleMatch] ||
+      (key === "preset" && !PRESET_NAMES.includes(value as PresetName)),
+  )
+  return unknown && `condition ${unknown[0]}`
+}
+
 /** A stored rule as the sync reads it; `undefined` for one this build cannot read, so it is left to the build that can. */
 export const storedMailRule = (stored: StoredRule): MailRule | undefined => {
-  const action = ACTION_OF[String(stored.actions.store)]
+  if (unreadable(stored) !== undefined) return undefined
+  const action = ACTION_OF[String(stored.actions.store)] as MailAction
   const entries = Object.entries(stored.conditions as Record<string, unknown>)
-  const known = entries.every(
-    ([key, value]) =>
-      key in KINDS &&
-      typeof value === KINDS[key as keyof MailRuleMatch] &&
-      !(key === "preset" && !PRESET_NAMES.includes(value as PresetName)),
-  )
-  if (action === undefined || !known || entries.length === 0) return undefined
   const tags = Array.isArray(stored.actions.tags) ? stored.actions.tags.filter((tag) => typeof tag === "string") : []
   const skipped = stored.actions.tags_skipped
   const tagsSkipped =
@@ -53,17 +61,40 @@ export const storedMailRule = (stored: StoredRule): MailRule | undefined => {
   }
 }
 
+export interface MailRuleSet {
+  rules: MailRule[]
+  /**
+   * Stored rules this build cannot read, each with what it does not know. The sync leaves them out, and a build that
+   * reads them decides mail differently, so a sync reports them rather than drop them silently.
+   */
+  unreadable: { id: number; why: string }[]
+}
+
 /** One account's rules from the store, for `account.rules` of the sync; none when the store has not seen the account. */
+export const storedMailRuleSet = async (
+  store: MessageStore,
+  account: { address: string },
+  query?: QueryAst,
+): Promise<MailRuleSet> => {
+  let stored: StoredRule[]
+  try {
+    const { id } = await store.accounts.storedAccount({ provider: "email", account: account.address.toLowerCase() })
+    stored = await store.mail.rules.list(id, query)
+  } catch (error) {
+    if (error instanceof CliError && error.code === "not_found") return { rules: [], unreadable: [] }
+    throw error
+  }
+  const set: MailRuleSet = { rules: [], unreadable: [] }
+  for (const one of stored) {
+    const why = unreadable(one)
+    if (why === undefined) set.rules.push(storedMailRule(one) as MailRule)
+    else set.unreadable.push({ id: one.id, why })
+  }
+  return set
+}
+
 export const storedMailRules = async (
   store: MessageStore,
   account: { address: string },
   query?: QueryAst,
-): Promise<MailRule[]> => {
-  try {
-    const { id } = await store.accounts.storedAccount({ provider: "email", account: account.address.toLowerCase() })
-    return (await store.mail.rules.list(id, query)).flatMap((stored) => storedMailRule(stored) ?? [])
-  } catch (error) {
-    if (error instanceof CliError && error.code === "not_found") return []
-    throw error
-  }
-}
+): Promise<MailRule[]> => (await storedMailRuleSet(store, account, query)).rules

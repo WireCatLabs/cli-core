@@ -70,7 +70,7 @@ offer \`${messenger.app.command} messages sync <chat>\` and run it only once the
 Keep serve running so new messages are searchable.`
       } Notes are
 \`${messenger.app.command} search notes\`, messages and notes at once \`${messenger.app.command} search all\`; for mail,
-the separate memo CLI: \`memo search mail\`.
+the mail CLI: \`mail <profile> search messages\`.
 A bare word looks in message text, voice transcripts, file names and file text. text:, transcript:,
 content: (the text of files) and filename: (their names) narrow it to one —
 \`${messenger.app.command} search messages 'content:invoice'\`. chat: narrows it to one chat; has:voice, has:file and
