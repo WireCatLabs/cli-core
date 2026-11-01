@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A memory names its project (store version 43)**: `memories.add({ project })`, `memories.list({ project })` and
+  `memories.update(ref, { project })`, which moves a memory to another project or to none with `null`. A memory and a
+  fact carry `project` and `projectName`, so a reader needs no second lookup for the name.
+- **`evidenceFindings.sources(id)`** reads each reference a findings batch cites back once, in the shape of
+  `memories.sources`: `kind`, `title`, `sender`, `at`, an excerpt of at most 280 characters, `tool` and `missing`.
+
+### Fixed
+
+- **A findings batch closed with nothing accepted reads as `rejected`** in `proposedActions.get` and `list`, and
+  `list({ status: "rejected" })` finds it. The store still writes it `approved`, so older builds read it as before.
+
 ## 0.517.0 — 01.11.2026
 
 ### Added

@@ -61,7 +61,7 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
   }
   const view = (proposal: ProposedAction): MeetingFindingsBatch => {
     const input = proposal.payload as StoredInput
-    if (!input || !proposal.account || !["proposed", "approved"].includes(proposal.status))
+    if (!input || !proposal.account || !["proposed", "approved", "rejected"].includes(proposal.status))
       return invalid("invalid stored findings batch")
     return {
       id: proposal.id,

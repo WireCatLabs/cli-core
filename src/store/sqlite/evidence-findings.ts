@@ -9,6 +9,7 @@ import {
   validateEvidenceFindings,
 } from "../evidence-findings.js"
 import { contextRecordOf } from "./context-evidence.js"
+import { sourcesOfReferences } from "./evidence-sources.js"
 import { findingsAgent, findingsCoreOver } from "./findings-core.js"
 import { authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
@@ -50,7 +51,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
   }
   const view = (proposal: ProposedAction): EvidenceFindingsBatch => {
     const input = proposal.payload as StoredInput
-    if (!input || !proposal.target || !["proposed", "approved"].includes(proposal.status))
+    if (!input || !proposal.target || !["proposed", "approved", "rejected"].includes(proposal.status))
       return invalid("invalid stored findings batch")
     return {
       id: proposal.id,
@@ -136,6 +137,11 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       })
     },
     get: async (id) => view(load(id)),
+    sources: async (id) =>
+      sourcesOfReferences(
+        database,
+        view(load(id)).input.findings.flatMap((finding) => finding.evidence.map((one) => one.reference)),
+      ),
     list: async ({ project, limit = 20, offset = 0, status } = {}) => {
       if (status !== undefined && status !== "proposed" && status !== "reviewed")
         return invalid("finding status is proposed or reviewed")

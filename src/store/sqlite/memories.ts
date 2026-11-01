@@ -26,6 +26,9 @@ export interface Memory {
   subjectName: string | null
   /** The subject is the owner. */
   subjectIsOwner: boolean
+  /** The project it belongs to, as `project:<id>`. */
+  project: string | null
+  projectName: string | null
   /** `name` is a bot's handle; `null` for a person. */
   author: { type: Actor["type"]; id: string; name: string | null }
   model: string | null
@@ -49,6 +52,7 @@ export interface MemoryInput {
   evidence: string[]
   author: Author
   subject?: string
+  project?: string
   confidence?: number
   status?: "proposed" | "confirmed"
   /** The memory this one replaces; it becomes `superseded`. */
@@ -60,11 +64,14 @@ export interface MemoriesStore {
   get(reference: string): Promise<Memory>
   list(options?: {
     subject?: string
+    project?: string
     kind?: Memory["kind"]
     status?: Memory["status"]
     scope?: Memory["scope"]
     limit?: number
   }): Promise<Memory[]>
+  /** Moves it to another project, or to none with `null`. */
+  update(reference: string, change: { project: string | null }): Promise<Memory>
   /** The owner stands behind it; its evidence was checked now. */
   confirm(reference: string): Promise<Memory>
   /** Its evidence no longer holds. */
@@ -158,6 +165,20 @@ export const subjectOf = (
   }
 }
 
+/** A memory's or fact's project, with its name, so a reader does not look the project up. */
+export const projectOf = (database: StoreContext["database"], row: Row) => {
+  if (row.project_id == null) return { project: null, projectName: null }
+  const named = database.prepare(SUBJECT_NAMES.project as string).get(Number(row.project_id))
+  return { project: `project:${row.project_id}`, projectName: named?.name == null ? null : String(named.name) }
+}
+
+/** A `project:<id>` the store holds, as its row id. */
+export const projectId = (database: StoreContext["database"], reference: string): number => {
+  const project = requiredThing(database, reference, "the project")
+  if (project.type !== "project") throw new CliError("validation_error", `${reference} is not a project`)
+  return project.id
+}
+
 type Numbered = "memories" | "facts"
 const highestKey = (table: Numbered) => `ids.${table}.highest`
 
@@ -219,6 +240,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     kind: row.kind as Memory["kind"],
     body: String(row.body),
     ...subjectOf(database, row),
+    ...projectOf(database, row),
     author: authorOf(row),
     model: row.model == null ? null : String(row.model),
     confidence: row.confidence == null ? null : Number(row.confidence),
@@ -267,13 +289,15 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       const id = write(database, () => {
         const { actor, model } = authorActor(context, input.author)
         const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
+        const project = input.project === undefined ? null : projectId(database, input.project)
         const replaced = input.supersedes === undefined ? undefined : Number(rowOf(input.supersedes).id)
         const at = now()
         const made = Number(
           database
             .prepare(
               "INSERT INTO memories (id, kind, body, subject_type, subject_id, author_type, author_id, model, confidence, status, " +
-                "last_verified_at, supersedes_id, scope, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "last_verified_at, supersedes_id, scope, project_id, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
               nextId(database, "memories"),
@@ -289,6 +313,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
               status === "confirmed" ? at : null,
               replaced ?? null,
               scope,
+              project,
               at,
               at,
             )?.id,
@@ -308,16 +333,19 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     get: async (reference) => memoryOf(rowOf(reference)),
     list: async (options = {}) => {
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
+      const project = options.project === undefined ? null : projectId(database, options.project)
       return database
         .prepare(
           `${NAMED} WHERE m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id = ?)) ` +
-            "AND (? IS NULL OR m.kind = ?) AND (? IS NULL OR m.status = ?) AND (? IS NULL OR m.scope = ?) " +
+            "AND (? IS NULL OR m.project_id = ?) AND (? IS NULL OR m.kind = ?) AND (? IS NULL OR m.status = ?) AND (? IS NULL OR m.scope = ?) " +
             "ORDER BY m.created_at DESC, m.id DESC LIMIT ?",
         )
         .all(
           subject?.type ?? null,
           subject?.type ?? null,
           subject?.id ?? null,
+          project,
+          project,
           options.kind ?? null,
           options.kind ?? null,
           options.status ?? null,
@@ -328,6 +356,13 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
         )
         .map(memoryOf)
     },
+    update: async (reference, change) =>
+      write(database, () => {
+        const id = Number(rowOf(reference).id)
+        const project = change.project === null ? null : projectId(database, change.project)
+        database.prepare("UPDATE memories SET project_id = ?, updated_at = ? WHERE id = ?").run(project, now(), id)
+        return memoryOf(rowOf(`memory:${id}`))
+      }),
     confirm: async (reference) => setStatus(reference, "confirmed", true),
     markStale: async (reference) => setStatus(reference, "stale", false),
     remove: async (reference) => {

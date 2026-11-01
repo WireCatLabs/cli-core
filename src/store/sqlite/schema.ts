@@ -1132,11 +1132,13 @@ export const memories = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    projectId: integer("project_id").references(() => projects.id),
   },
   (table) => [
     index("memories_by_subject_type_subject_id").on(table.subjectType, table.subjectId),
     index("memories_by_author_type_author_id").on(table.authorType, table.authorId),
     index("memories_by_supersedes_id").on(table.supersedesId),
+    index("memories_by_project_id").on(table.projectId),
   ],
 )
 

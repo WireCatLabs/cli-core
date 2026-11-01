@@ -176,6 +176,42 @@ it("is reviewed only through its own store, never as a generic proposal", async 
   await expect(f.store.proposedActions.propose({ kind: "evidence_findings", by: agent })).rejects.toThrow("dedicated")
 })
 
+it("reads a batch closed with nothing accepted as rejected, and one with a finding accepted as approved", async () => {
+  const f = await fixture()
+  const none = await f.store.evidenceFindings.stage(await f.input(), agent)
+  await f.store.evidenceFindings.review(none.id, { fingerprint: none.fingerprint, accept: [] })
+  const other = await f.input("run-2")
+  for (const finding of other.findings)
+    if (finding.kind === "fact") finding.statement = "The harbour launch is the fourth one"
+    else finding.title = "Print the launch checklist"
+  const some = await f.store.evidenceFindings.stage(other, agent)
+  await f.store.evidenceFindings.review(some.id, { fingerprint: some.fingerprint, accept: ["launch"] })
+
+  expect(await f.store.proposedActions.get(none.id)).toMatchObject({ status: "rejected", result: { accepted: [] } })
+  expect(await f.store.proposedActions.get(some.id)).toMatchObject({ status: "approved" })
+  expect((await f.store.proposedActions.list({ status: "rejected" })).map((one) => one.id)).toEqual([none.id])
+  expect((await f.store.proposedActions.list({ status: "approved" })).map((one) => one.id)).toEqual([some.id])
+  expect(await f.store.evidenceFindings.get(none.id)).toMatchObject({ status: "reviewed" })
+})
+
+it("reads every reference a batch cites back once, with a short excerpt", async () => {
+  const f = await fixture()
+  const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
+  const sources = await f.store.evidenceFindings.sources(batch.id)
+  expect(sources.map((one) => one.ref)).toEqual([f.message, f.doc.ref])
+  expect(sources[0]).toMatchObject({ kind: "message", missing: false, excerpt: expect.any(String) })
+  expect(sources[1]).toMatchObject({ kind: "document", missing: false })
+  for (const one of sources) expect(one.excerpt?.length ?? 0).toBeLessThanOrEqual(280)
+
+  f.db.prepare("DELETE FROM messages WHERE account_id=? AND external_id='3'").run(f.accountId)
+  expect((await f.store.evidenceFindings.sources(batch.id))[0]).toMatchObject({
+    ref: f.message,
+    kind: "message",
+    excerpt: null,
+    missing: true,
+  })
+})
+
 it("reads a staged batch from snake_case JSON with msg: and document: evidence", () => {
   const fingerprint = "a".repeat(64)
   const input = parseEvidenceFindingsJson(
