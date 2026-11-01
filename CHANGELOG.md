@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.533.0 — 01.11.2026
+
 ### Added
 
 - **A `search all` meeting transcript hit names its cue and its speaker**: `cue_ref`
