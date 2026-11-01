@@ -25,6 +25,8 @@ export const hit = v.strictObject({
   offset_ms: v.optional(v.nullable(count)),
   /** A meeting passage's place: its transcript, chat or summary. */
   scope: v.optional(v.picklist(["transcript", "chat", "summary"])),
+  /** A meeting transcript hit's cue, which `meetings passage` opens with the lines around it. */
+  cue_ref: v.optional(reference),
   /** A meeting passage's stored line, so two passages of one meeting stay apart; `search meetings` gives the same. */
   id: v.optional(v.pipe(v.string(), v.minLength(1))),
   /** A message's files; absent when it has none. */

@@ -64,7 +64,16 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       assert.equal((await s.participants("example.com", 1)).length, 1)
       assert.equal((await s.participants("alice", 2)).length, 0)
       assert.deepEqual((await s.search("EXAMPLE")).map((h) => h.scope).sort(), ["chat", "summary", "transcript"])
-      assert.equal((await s.search("Ship"))[0]?.startMs, 0)
+      const [ship] = await s.search("Ship")
+      assert.equal(ship?.startMs, 0)
+      const cue = t.rows.find((row) => row.id === ship?.id)
+      assert.ok(cue)
+      assert.equal(
+        ship?.ref,
+        `meeting:${d.meeting.accountId}/${d.meeting.id}/${t.transcript.id}/${cue.position}`,
+        "a transcript hit names its cue",
+      )
+      assert.equal(ship?.speakerName, cue.speakerName)
     }),
     test("idempotence, updates and omitted parts retain history", async (s) => {
       const input = sampleMeeting()

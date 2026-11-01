@@ -27,7 +27,7 @@ import type {
   TranscriptAppend,
   TranscriptAppendReceipt,
 } from "../../meetings/index.js"
-import { joinKeyOf, MeetingError } from "../../meetings/index.js"
+import { formatMeetingReference, joinKeyOf, MeetingError } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import * as eventQueries from "./events.js"
@@ -694,17 +694,18 @@ const search = (database: CacheDatabase, query: string, filter?: MeetingFilter):
       .prepare(
         `WITH hit AS (SELECT rowid AS r FROM meeting_words WHERE meeting_words MATCH ?),
        picked AS (SELECT id, row_number() OVER (ORDER BY coalesce(started_at, 0) DESC, id) AS n FROM (${picked.sql}))
-       SELECT p.n, 0 AS kind, t.id AS a, r.position AS b, r.id, t.meeting_id, r.start_ms, coalesce(length(CAST(r.text AS BLOB)),0) AS bytes
+       SELECT p.n, 0 AS kind, t.id AS a, r.position AS b, r.id, t.meeting_id, r.start_ms, coalesce(length(CAST(r.text AS BLOB)),0) AS bytes,
+              r.speaker_name AS speaker, m.account_id
          FROM hit h JOIN meeting_transcript_rows r ON h.r % 4 = 1 AND r.id = h.r / 4
          JOIN meeting_transcripts t ON t.id = r.meeting_transcript_id
            AND t.superseded_at IS NULL AND t.deleted_at IS NULL
-         JOIN picked p ON p.id = t.meeting_id
+         JOIN picked p ON p.id = t.meeting_id JOIN meetings m ON m.id = t.meeting_id
        UNION ALL
-       SELECT p.n, 1, c.id, 0, c.id, c.meeting_id, NULL, coalesce(length(CAST(c.text AS BLOB)),0)
+       SELECT p.n, 1, c.id, 0, c.id, c.meeting_id, NULL, coalesce(length(CAST(c.text AS BLOB)),0), NULL, NULL
          FROM hit h JOIN meeting_chat_messages c ON h.r % 4 = 2 AND c.id = h.r / 4
          JOIN picked p ON p.id = c.meeting_id
        UNION ALL
-       SELECT p.n, 2, s.id, 0, s.id, s.meeting_id, NULL, coalesce(length(CAST(s.title AS BLOB)),0)+coalesce(length(CAST(s.overview AS BLOB)),0)+coalesce(length(CAST(s.sections AS BLOB)),0)+coalesce(length(CAST(s.next_steps AS BLOB)),0)+coalesce(length(CAST(s.content AS BLOB)),0)
+       SELECT p.n, 2, s.id, 0, s.id, s.meeting_id, NULL, coalesce(length(CAST(s.title AS BLOB)),0)+coalesce(length(CAST(s.overview AS BLOB)),0)+coalesce(length(CAST(s.sections AS BLOB)),0)+coalesce(length(CAST(s.next_steps AS BLOB)),0)+coalesce(length(CAST(s.content AS BLOB)),0), NULL, NULL
          FROM hit h JOIN meeting_summaries s ON h.r % 4 = 3 AND s.id = h.r / 4
          JOIN picked p ON p.id = s.meeting_id
        ORDER BY 1, 2, 3, 4 LIMIT 10001`,
@@ -720,7 +721,21 @@ const search = (database: CacheDatabase, query: string, filter?: MeetingFilter):
     const scopes = ["transcript", "chat", "summary"] as const
     return rows.map((row) => {
       const scope = scopes[Number(row.kind)] as SearchHit["scope"]
+      const cue =
+        scope === "transcript"
+          ? {
+              ref: formatMeetingReference({
+                type: "meeting",
+                accountId: Number(row.account_id),
+                meetingId: Number(row.meeting_id),
+                transcriptId: Number(row.a),
+                cuePosition: Number(row.b),
+              }),
+              speakerName: row.speaker === null ? null : String(row.speaker),
+            }
+          : {}
       return {
+        ...cue,
         meetingId: Number(row.meeting_id),
         scope,
         id: Number(row.id),
