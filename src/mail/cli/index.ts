@@ -1,21 +1,24 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { queryFieldsOf } from "@wirecat/cli-base/query"
 import { Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { outputFor } from "../../cli/context.js"
-import { LOCAL_READ } from "../../cli/effects.js"
+import { LOCAL_READ, REMOTE_READ } from "../../cli/effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, typedQuery, withQuery } from "../../cli/list-query.js"
 import { messagesAnswer, offsetOf, shownOf } from "../../cli/messenger/search-answers.js"
+import { backendRequest, noteServer, serverSearchOptions } from "../../cli/messenger/search-backend-options.js"
 import { positiveCount } from "../../cli/paging.js"
 import { formatReference, parseReference } from "../../domain/references.js"
 import { count, reference, text, time, untrusted } from "../../entities/fields.js"
 import type { ShownMail } from "../../mail/read.js"
 import { attachmentsText, hitText, searchMail, showMail, withAttachmentText } from "../../mail/read.js"
+import { type MailServerAccess, searchMailServer } from "../../mail/server-search.js"
 import { atDetail } from "../../output-detail.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { type ServerSearched, type ServerSkip, sourceKey } from "../../services/server-search.js"
 import { type AccountKey, type MessageStore, queryFilter, THREAD_COLUMNS } from "../../store/store.js"
 
 /** What a mail CLI hands the shared commands: how to open the store for one run, and whose mail it reads. */
@@ -26,6 +29,8 @@ export interface MailReads {
    * reads that mailbox alone; the store must take writes, since a search tops up its word index first.
    */
   read: <T>(command: Command, work: (store: MessageStore, mailbox: AccountKey) => Promise<T>) => Promise<T>
+  /** The mailbox's server, for `search messages --backend`; without it the search reads the store only. */
+  server?: (command: Command) => MailServerAccess
 }
 
 const DEFAULT_LIMIT = 20
@@ -57,9 +62,38 @@ const threadOf = (mailbox: AccountKey, given: string): string => {
   return place.chat
 }
 
+type Issue = { code: ErrorCode; reason: string }
+const SKIPPED: Record<ServerSkip, Issue> = {
+  unsupported: { code: "provider_error", reason: "search.server-unsupported" },
+  pushed_history: { code: "provider_error", reason: "search.server-unsupported" },
+  offline: { code: "permission_error", reason: "search.offline" },
+  not_allowed: { code: "permission_error", reason: "search.server-not-allowed" },
+  other_accounts: { code: "validation_error", reason: "search.server-no-criteria" },
+  no_words: { code: "validation_error", reason: "search.server-no-criteria" },
+  needs_chat: { code: "validation_error", reason: "search.server-no-criteria" },
+}
+const FAILED: Record<ServerSearched["failed"][number]["reason"], Issue> = {
+  rate_limited: { code: "rate_limited", reason: "search.server-rate-limited" },
+  search_failed: { code: "provider_unavailable", reason: "search.server-failed" },
+  time_or_abort_bound: { code: "timeout", reason: "search.server-timeout" },
+}
+
+/** What the server search left out, so `meta.complete` is false whenever any of it is (WC-OUT-7). */
+const serverIssues = (server: ServerSearched | undefined) => {
+  if (!server || server.complete) return []
+  if (server.skipped) return [{ ...SKIPPED[server.skipped], source: "server" }]
+  const failed = [...new Set(server.failed.map(({ reason }) => reason))].map((reason) => ({
+    ...FAILED[reason],
+    source: "server",
+  }))
+  return failed.length
+    ? failed
+    : [{ code: "outcome_unknown" as const, reason: "search.server-capped", source: "server" }]
+}
+
 const searchCommand = (mail: MailReads): Command => {
   const leaf = annotate(new Command("messages"), {
-    effects: LOCAL_READ,
+    effects: mail.server ? REMOTE_READ : LOCAL_READ,
     partial: true,
     output: { entity: "message", view: "hit" },
     examples: [
@@ -68,9 +102,12 @@ const searchCommand = (mail: MailReads): Command => {
       `${mail.app.command} ya search messages 'list:github.com is:unread' --newest`,
     ],
   })
-    .summary("find stored emails by words and fields")
+    .summary(mail.server ? "find emails by words and fields" : "find stored emails by words and fields")
     .description(
-      "search this profile's mail in the local store — what sync read — by words, people, folders, lists and dates; best match first",
+      mail.server
+        ? "search this profile's mail in the local store and, by default, on the mail server for mail sync has not read " +
+            "yet (--backend); the server's finds are stored, then one strict query decides; best match first"
+        : "search this profile's mail in the local store — what sync read — by words, people, folders, lists and dates; best match first",
     )
     .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, field:value and date ranges')
     .option("--limit <n>", `how many, at most ${MAX_LIMIT}`, limitOf)
@@ -86,58 +123,101 @@ Fields: from: to: cc: bcc: subject: body: mailbox: (or label:) list: (a List-Id 
 has:attachment, filename:, content: (the text of attachments), size>, date: — \`${mail.app.command} ya search messages 'content:invoice'\`.
 chat: names a thread by its subject. Mail sent to many is in the mailbox bulk; NOT mailbox:bulk leaves it out.
 Mail from senders with signs of fraud comes after the rest of the page; --plain-order keeps it in place.
---json: the list is items; each hit's reference is ref (msg:email/…), which messages show reads.
+--json: the list is items; each hit's reference is ref (msg:email/…), which messages show reads.${
+        mail.server
+          ? `
+--backend: the server is asked for words, from: to: cc: subject: body: is: and date:, in INBOX, Sent and Archive or
+all of Gmail; the rest stays with the strict query on the store. Permission key: messages.server-search.
+found_in says archive, server (new from the server) or both; meta.complete is false when the server answered in part.`
+          : ""
+      }
 Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md`,
     )
-    .action(async function (this: Command, words: string[]) {
-      const options = this.opts<{
-        limit?: number
-        page?: number
-        newest?: boolean
-        exact?: boolean
-        plainOrder?: boolean
-        timezone?: string
-      }>()
-      const limit = options.limit ?? DEFAULT_LIMIT
-      const page = options.page ?? 1
-      const query = words.join(" ")
-      const found = await mail.read(this, (store, mailbox) =>
-        searchMail(
-          store,
-          mailbox,
-          {
+  if (mail.server) serverSearchOptions(leaf, "the mail server (default: both)")
+  leaf.action(async function (this: Command, words: string[]) {
+    const options = this.opts<{
+      limit?: number
+      page?: number
+      newest?: boolean
+      exact?: boolean
+      plainOrder?: boolean
+      timezone?: string
+    }>()
+    const limit = options.limit ?? DEFAULT_LIMIT
+    const page = options.page ?? 1
+    const query = words.join(" ")
+    const { backend, server: bounds } = mail.server ? backendRequest(this) : {}
+    const found = await mail.read(this, async (store, mailbox) => {
+      const step = mail.server
+        ? await searchMailServer(store, mailbox, mail.server(this), {
             text: query,
-            limit,
-            mailAccount: mailbox.account,
-            ...(offsetOf(page, limit) === undefined ? {} : { offset: offsetOf(page, limit) }),
-            ...(options.newest ? { newest: true } : {}),
+            ...(backend === undefined ? {} : { backend }),
+            ...(bounds?.timeMs === undefined ? {} : { timeMs: bounds.timeMs }),
             ...(options.exact ? { exact: true } : {}),
-            ...(options.plainOrder ? { plainOrder: true } : {}),
             ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
-          },
-          { app: mail.app },
-        ),
+          })
+        : undefined
+      const only =
+        backend === "server" && step
+          ? [...step.sources.keys()].map((key) => {
+              const [chatId, id] = JSON.parse(key) as [string, string]
+              return { ...mailbox, chatId, id }
+            })
+          : undefined
+      const found = await searchMail(
+        store,
+        mailbox,
+        {
+          text: query,
+          limit,
+          mailAccount: mailbox.account,
+          ...(offsetOf(page, limit) === undefined ? {} : { offset: offsetOf(page, limit) }),
+          ...(options.newest ? { newest: true } : {}),
+          ...(options.exact ? { exact: true } : {}),
+          ...(options.plainOrder ? { plainOrder: true } : {}),
+          ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
+          ...(only ? { only } : {}),
+        },
+        { app: mail.app },
       )
-      const output = outputFor(this)
-      const again = {
-        query,
-        ...(options.newest ? { newest: true } : {}),
-        ...(options.exact ? { exact: true } : {}),
-        ...(options.plainOrder ? { plain_order: true } : {}),
-        ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
+      if (!step) return found
+      return {
+        ...found,
+        server: step.report,
+        items: found.items.map((hit) => ({
+          ...hit,
+          source: step.sources.get(sourceKey(hit.chatId, hit.id)) ?? ("archive" as const),
+        })),
       }
-      const level = detailOf(this)
-      renderAnswer(this, output, messagesAnswer("search messages", found, { limit, page, again }, query), () => {
-        if (!found.wordsReady)
-          output.renderer.note(
-            `the word index is still being built — \`${mail.app.command} store migrate\` finishes it`,
-          )
-        if (found.items.length === 0) output.renderer.note("nothing found — only mail sync stored is searched")
-        const shown = shownOf(found.items.length, (page - 1) * limit, found.total)
-        if (shown) output.renderer.note(shown)
-        return found.items.map((item) => `${hitText(item, level)}\n`).join("")
-      })
     })
+    const output = outputFor(this)
+    const again = {
+      query,
+      ...(options.newest ? { newest: true } : {}),
+      ...(options.exact ? { exact: true } : {}),
+      ...(options.plainOrder ? { plain_order: true } : {}),
+      ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
+    }
+    const level = detailOf(this)
+    const answer = messagesAnswer("search messages", found, { limit, page, again }, query)
+    const issues = serverIssues(found.server)
+    if (issues.length)
+      answer.meta = { ...answer.meta, complete: false, issues: [...(answer.meta?.issues ?? []), ...issues] }
+    renderAnswer(this, output, answer, () => {
+      if (!found.wordsReady)
+        output.renderer.note(`the word index is still being built — \`${mail.app.command} store migrate\` finishes it`)
+      noteServer(output, found.server)
+      if (found.items.length === 0)
+        output.renderer.note(
+          found.server && !found.server.skipped
+            ? "nothing found in the local store or on the mail server"
+            : "nothing found — only mail sync stored is searched",
+        )
+      const shown = shownOf(found.items.length, (page - 1) * limit, found.total)
+      if (shown) output.renderer.note(shown)
+      return found.items.map((item) => `${hitText(item, level)}\n`).join("")
+    })
+  })
   return new Command("search").summary("search the stored mail").description("find stored emails").addCommand(leaf)
 }
 

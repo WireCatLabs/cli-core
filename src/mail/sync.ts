@@ -5,8 +5,9 @@ import type { BudgetStop, RunBudget } from "../background/budget.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { AccountKey, EmailLocationInput, FolderEmail, MessageStore, ThreadSave } from "../store/index.js"
 import { isBusy } from "../store/sqlite/transaction.js"
-import { addressOf, FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
+import { FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { BULK, bulkBox } from "./bulk.js"
+import { parsedEmail } from "./email-input.js"
 import { factsOf } from "./facts.js"
 import { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 import { dropMissing, tooManyGone } from "./gone.js"
@@ -886,18 +887,7 @@ const syncRound = async (
         now: startedAt,
         emails: [
           {
-            externalId: item.messageId,
-            subject: mail.subject,
-            from: mail.from === null ? null : addressOf(mail.from),
-            to: mail.to.map(addressOf),
-            cc: mail.cc.map(addressOf),
-            bcc: mail.bcc.map(addressOf),
-            sentAt: null,
-            receivedAt: Date.parse(item.receivedAt),
-            bodyText: mail.text || null,
-            size: item.size ?? null,
-            ...(Object.keys(header).length ? { headers: header } : {}),
-            outgoing: mail.from === null ? null : mail.from.email === key.account,
+            ...parsedEmail(mail, item, header, key.account),
             mailboxes: inMailboxes(item),
             ...locationOf(item),
             ...flagsOf(item),

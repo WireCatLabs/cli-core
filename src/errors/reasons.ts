@@ -77,6 +77,13 @@ const OTHERS: Entry[] = [
   validation("search.no-calendars", "no calendar of this profile syncs yet, so the provider has nothing to search"),
   validation("search.server-options", "search --backend server takes neither --exact, --cursor nor --newest"),
   validation("search.one-backend", "search answers from one backend at a time: archive or server"),
+  ["search.server-not-allowed", "permission_error", "the profile does not allow messages.server-search"],
+  validation("search.server-no-criteria", "the query has nothing the server can search, so only the store is read"),
+  ["search.server-unsupported", "provider_error", "this source's server cannot search"],
+  ["search.server-rate-limited", "rate_limited", "the server refused a search as too many requests"],
+  ["search.server-failed", "provider_unavailable", "the server did not answer a search"],
+  ["search.server-timeout", "timeout", "the server did not answer within --server-time"],
+  ["search.server-capped", "outcome_unknown", "the server found more than one search reads, or a branch was not sent"],
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [
