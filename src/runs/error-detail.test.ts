@@ -31,6 +31,19 @@ describe("redactText", () => {
       "401 for [redacted]: client_secret:[redacted]",
     )
   })
+
+  it("masks WhatsApp ids as ids, the long @lid and the group form too", () => {
+    expect(redactText("send to 34612345678:12@s.whatsapp.net failed: not-authorized")).toBe(
+      "send to [id] failed: not-authorized",
+    )
+    expect(redactText("no session for 1234567890123456@lid after 3 retries")).toBe(
+      "no session for [id] after 3 retries",
+    )
+    expect(redactText("group 34612345678-1612345678@g.us not found (404)")).toBe("group [id] not found (404)")
+    expect(redactText("newsletter 120363012345678901@newsletter, legacy 34612345678@c.us")).toBe(
+      "newsletter [id], legacy [id]",
+    )
+  })
 })
 
 describe("errorDetailOf", () => {

@@ -144,6 +144,9 @@ export const endpointTemplate = (raw: string): string => {
 export const INTERNATIONAL_PHONE = /\+\d[\d\s()-]{6,}\d/.source
 export const BARE_PHONE = /(^|[^\w-])\d{11,15}\b/.source
 
+/** A WhatsApp jid: `<number>[:device]@s.whatsapp.net`, a group's `<number>-<time>@g.us`, an `@lid` of any length. */
+const MESSENGER_ID = /\b\d+(?:-\d+)?(?::\d+)?@(?:s\.whatsapp\.net|g\.us|c\.us|lid|broadcast|newsletter)\b/g
+
 /**
  * An error's sentence with what could be somebody's words or a secret taken out: anything in quotes, an email, a
  * phone number, a secret `withoutSecrets` finds, a bot token, a bearer or a long opaque string, a URL's query, the
@@ -155,6 +158,7 @@ export const redactText = (text: string): string => {
   let out = home && home !== "/" ? text.split(home).join("~") : text
   out = withoutSecrets(out.replace(/"[^"\n]*"|“[^”\n]*”|«[^»\n]*»/g, '"[redacted]"'))
     .replace(/\b(bearer|basic|token|key|password|secret)(\s*[:=]\s*|\s+)[^\s'"]+/gi, "$1$2[redacted]")
+    .replace(MESSENGER_ID, "[id]")
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[email]")
     .replace(new RegExp(INTERNATIONAL_PHONE, "g"), "[number]")
     .replace(new RegExp(BARE_PHONE, "g"), "$1[number]")
