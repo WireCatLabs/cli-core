@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.535.0 — 01.11.2026
+
 ### Added
 
 - **`syncMail` takes `saveCoverage: false`** for a spot read, such as a CLI storing the copy of a message it just
