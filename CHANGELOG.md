@@ -17,6 +17,11 @@ shape of this file.
 - **`mailProgress(store, key)`** gives each synced folder's window, done and total from the saved resume points,
   without asking the mailbox. It treats only `not_found` as "no account yet" and passes other store errors on.
 
+### Fixed
+
+- **The parity check requires `projects` and `projects evidence` in max and tg**, which ship them in max-cli 0.94.0
+  and tg-cli 0.110.0 (tg-cli#798, max-cli#886); wa stays planned.
+
 ## 0.513.0 — 01.11.2026
 
 ### Added
