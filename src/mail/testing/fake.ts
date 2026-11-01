@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { GMAIL_ALL_MAIL } from "../folders.js"
 import { headersOf } from "../headers.js"
 import type { FileStamp } from "../resume.js"
+import type { MailCriteria } from "../server-query.js"
 import type { Listed, MailSource, Quick, Searched } from "../source.js"
 
 export type FakePerson = [name: string | null, address: string]
@@ -58,6 +59,28 @@ export interface FakeMailbox {
   fetchBatch?: number
   /** What the source was asked: the UIDs of each listing, and `msgid:<id>` for each `find`. */
   asked?: string[]
+  /** Each server search `query` was given, with its folder, so a test sees what was sent. */
+  queried?: { criteria: MailCriteria; folder: string }[]
+}
+
+/** As IMAP SEARCH matches: a case-blind substring of the field, every part required. */
+const matches = (m: FakeMail, criteria: MailCriteria): boolean => {
+  const has = (field: string, value: string) => field.toLowerCase().includes(value.toLowerCase())
+  const people = (list: FakePerson[]) => list.map(person).join(", ")
+  const text = `${m.subject}\n${m.text ?? m.html ?? ""}`
+  const at = Date.parse(m.receivedAt)
+  return (
+    criteria.words.every((word) => has(`${people([m.from])}\n${people(m.to)}\n${text}`, word)) &&
+    criteria.from.every((value) => has(person(m.from), value)) &&
+    criteria.to.every((value) => has(people(m.to), value)) &&
+    criteria.cc.every((value) => has(people(m.cc ?? []), value)) &&
+    criteria.subject.every((value) => has(m.subject, value)) &&
+    criteria.body.every((value) => has(m.text ?? m.html ?? "", value)) &&
+    (criteria.since === undefined || at >= criteria.since) &&
+    (criteria.before === undefined || at < criteria.before) &&
+    (criteria.seen === undefined || (m.seen ?? false) === criteria.seen) &&
+    (criteria.flagged === undefined || (m.flagged ?? false) === criteria.flagged)
+  )
 }
 
 const TRASH = "[Gmail]/Bin"
@@ -186,6 +209,18 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
           },
         }
       : {}),
+
+    query: async (criteria, folder) => {
+      count("search")
+      if (mailbox.searchFails) throw failure(mailbox.searchFails)
+      mailbox.queried?.push({ criteria, folder })
+      return {
+        validity: String(mailbox.validity ?? 12),
+        uids: inFolder(folder)
+          .filter((m) => matches(m, criteria))
+          .map((m) => m.uid),
+      }
+    },
 
     find: async (messageIds, folder, options) => {
       for (const id of messageIds) mailbox.asked?.push(`msgid:${id}`)

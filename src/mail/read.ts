@@ -27,6 +27,8 @@ export interface MailSearch {
   newest?: boolean
   /** Leave mail from suspicious senders where the words put it, instead of after the rest. */
   plainOrder?: boolean
+  /** Only these emails, by thread and email id: `--backend server` reads what the server returned. */
+  only?: (AccountKey & { chatId: string; id: string })[]
 }
 
 /**
@@ -36,7 +38,7 @@ export interface MailSearch {
 export const searchMail = async (
   store: MessageStore,
   runAs: AccountKey,
-  { text, limit, offset = 0, accounts, mailAccount, exact, timezone, newest, plainOrder }: MailSearch,
+  { text, limit, offset = 0, accounts, mailAccount, exact, timezone, newest, plainOrder, only }: MailSearch,
   saved: Saved = {},
 ): Promise<SearchFound> => {
   const lower = !plainOrder && !newest
@@ -48,6 +50,7 @@ export const searchMail = async (
     ...(exact ? { exact: true } : {}),
     ...(timezone === undefined ? {} : { timezone }),
     ...(newest ? { newest: true } : {}),
+    ...(only === undefined ? {} : { only }),
   }
   if (!lower) return searchStore(store, runAs, { ...request, limit, offset }, saved)
   // Lowered from the first hit on, so a later page never repeats or skips what an earlier one moved.

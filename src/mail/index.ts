@@ -78,6 +78,8 @@ export {
   SCORE_VERSION,
   scoreSenders,
 } from "./sender-scores.js"
+export { type MailCriteria, mailCriteriaOf, narrows } from "./server-query.js"
+export { type MailServerAccess, type MailServerRequest, searchMailServer } from "./server-search.js"
 export type { Listed, MailSource, Quick, Searched } from "./source.js"
 export { listedOf, type StoredMail } from "./stored.js"
 export {

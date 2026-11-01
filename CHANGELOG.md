@@ -9,6 +9,19 @@ shape of this file.
 
 ### Added
 
+- **Mail server search.** `mailReadCommands({ app, read, server })` gives `search messages` the shared
+  `--backend archive|server|both` and `--server-time`, as tg has them: the mail server is asked for candidates, the
+  new ones are stored, and the same strict query runs on the store, so each hit says `found_in`. `searchMailServer`
+  does it; `mailCriteriaOf` turns the query into `MailCriteria` (words, `from:` `to:` `cc:` `subject:` `body:`
+  `is:` and `date:`, one per top-level OR) for a `MailSource.query`, which a mail CLI translates into its server's
+  syntax. An owner's skip and envelope rules keep a find out of the store, as in a sync; nothing moves the sync's saved
+  position. The fake mail source answers `query` and records it in `queried`. When the server answers in part,
+  `meta.complete` is false with an issue per reason (`search.offline`, `search.server-timeout`, …; new
+  `search.server-*` reasons).
+- `searchMail` takes `only`, and the store's word search reads `only` over mail as over messages.
+- `serverSearchOptions(command, where)` mounts `--backend` and `--server-time` on any search; `backendOptions` uses it.
+- **`AppIdentity.sends`**: a CLI that is not a messenger yet sends to people (mail) keeps `sends_per_hour`, so the
+  owner can set its hourly limit with `config set sends_per_hour`; the other messenger settings stay hidden.
 - **`mailIds` from `@wirecat/cli-core/mail`: one email id for mail and memo.** On every server but Gmail the id is
   the hash of the Message-ID (the UID with its folder and UIDVALIDITY when there is none) and the thread is the first
   id of References, else In-Reply-To. OBJECTID's EMAILID is not used, so a server that turns OBJECTID on keeps its
@@ -31,11 +44,6 @@ shape of this file.
 - **`appDoctorCommand` takes a `local` check.** A CLI that is not a messenger can now put what it reads of its own
   state from disk into `doctor` — a run that stopped half way, an undo window about to close — without `--online`.
   Its fields join the answer and its notes go to stderr; a throw is reported as `local.error`, never a failed doctor.
-
-### Added
-
-- **`AppIdentity.sends`**: a CLI that is not a messenger yet sends to people (mail) keeps `sends_per_hour`, so the
-  owner can set its hourly limit with `config set sends_per_hour`; the other messenger settings stay hidden.
 
 ## 0.523.0 — 01.11.2026
 

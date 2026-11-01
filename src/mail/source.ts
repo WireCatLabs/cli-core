@@ -1,5 +1,6 @@
 import type { MailHeaders } from "./headers.js"
 import type { FileStamp } from "./resume.js"
+import type { MailCriteria } from "./server-query.js"
 
 export interface Listed {
   uid: string
@@ -58,6 +59,11 @@ export interface MailSource {
   quick?(since: Date, folder: string, options: { searched: Searched }): Promise<Quick[]>
   /** The ids of a message read by `fetchRaw`, worked out as `list` works them out; needed wherever `quick` is. */
   identify?(raw: Uint8Array, item: Quick): { messageId: string; threadId: string }
+  /**
+   * The UIDs of `folder` the server's own search finds for `criteria`, and its UIDVALIDITY; `list` given them reads
+   * them. Absent where nothing can be asked: a file. A server reads only the parts its syntax has.
+   */
+  query?(criteria: MailCriteria, folder: string): Promise<Searched>
   /** A file's size and modification time, so an unchanged file read to the end is not read again. */
   stamp?(): Promise<FileStamp>
   /**
