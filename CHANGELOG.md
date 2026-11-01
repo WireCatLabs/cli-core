@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.537.0 — 01.11.2026
+
 ### Added
 
 - **`tokenKeeper.tokens({ refresh: true })`** (and `accessToken({ refresh: true })`): after a server refuses an
