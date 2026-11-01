@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.527.0 — 01.11.2026
+
 ### Added
 
 - **`events list --source <accounts>`: events of several calendar accounts as one list.** The shared calendar
