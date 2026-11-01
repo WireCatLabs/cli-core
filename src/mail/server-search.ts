@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { importEngine } from "../attachments/extract.js"
+import { type Deadline, deadlineMargin } from "../background/budget.js"
 import { type Level, levelFor, type PermissionKey } from "../sends/permissions.js"
 import {
   type Backend,
@@ -33,6 +34,8 @@ export interface MailServerAccess {
   readOnly?: boolean
   /** The mailbox and the folders a search reads, closed after the search. */
   open: () => Promise<{ source: MailSource; folders: string[]; close?: () => Promise<void> }>
+  /** This mailbox's own default for the time bound, for a server whose search is slow; `--server-time` wins. */
+  timeMs?: number
 }
 
 export interface MailServerRequest {
@@ -42,6 +45,8 @@ export interface MailServerRequest {
   backend?: Backend
   timeMs?: number
   signal?: AbortSignal
+  /** The command's deadline: the time bound ends before it, so the search answers in part instead of timing out. */
+  deadline?: Deadline
 }
 
 const refusal: Record<Extract<ServerSkip, "unsupported" | "offline" | "not_allowed" | "no_words">, string> = {
@@ -82,9 +87,13 @@ export const searchMailServer = async (
   const backend = request.backend ?? DEFAULT_BACKEND
   if (backend === "archive") return undefined
   const quiet = request.backend === undefined
-  const timeMs = request.timeMs ?? SERVER_BOUNDS.timeMs
-  if (!Number.isSafeInteger(timeMs) || timeMs < 1 || timeMs > 60_000)
+  const asked = request.timeMs ?? access.timeMs ?? SERVER_BOUNDS.timeMs
+  if (!Number.isSafeInteger(asked) || asked < 1 || asked > 60_000)
     throw new CliError("validation_error", "the server time takes a whole number of milliseconds from 1 to 60000")
+  const { deadline } = request
+  const timeMs = deadline
+    ? Math.max(1, Math.min(asked, deadline.endsAt - Date.now() - deadlineMargin(deadline)))
+    : asked
   const report: ServerSearched = { backend, skipped: null, calls: 0, returned: 0, new: 0, failed: [], complete: true }
   const sources = new Map<string, "server" | "both">()
   const skip = (reason: keyof typeof refusal): ServerStep | undefined => {
@@ -117,11 +126,14 @@ export const searchMailServer = async (
   const fresh: Listed[] = []
   let rules: MailRule[] = []
   const ruled = new Map<Listed, { ruleId: number | null; tags: string[] }>()
-  let raws: (Uint8Array | Error)[] | undefined
+  const inputs: ThreadSave[] = []
+  const saved: Listed[] = []
   let opening: ReturnType<MailServerAccess["open"]> | undefined
   let openFailure: unknown
   let unsupported = false
 
+  const controller = new AbortController()
+  const stop = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal
   // Opening lists the folders, a call to the server, so it runs inside the time bound too.
   const run = async () => {
     opening = access.open()
@@ -170,15 +182,65 @@ export const searchMailServer = async (
       report.returned += 1
       sources.set(sourceKey(item.threadId, item.messageId), held ? "both" : "server")
       if (held) continue
+      // A big message would hold the connection and the parser past the bound; sync reads it whole later.
+      if ((item.size ?? 0) > SERVER_BOUNDS.maxMessageBytes) {
+        report.tooLarge = (report.tooLarge ?? 0) + 1
+        report.complete = false
+        sources.delete(sourceKey(item.threadId, item.messageId))
+        continue
+      }
       fresh.push(item)
       ruled.set(item, { ruleId: rule?.id ?? null, tags: tagsOf(rules, facts(item)) })
     }
-    if (fresh.length) raws = await source.fetchRaw(fresh)
+    const raws = fresh.length && open ? await source.fetchRaw(fresh) : []
+    // Parsing and reading attachments stay inside the bound: after it, nothing more is read or kept.
+    const now = Date.now()
+    for (const [index, item] of fresh.entries()) {
+      if (!open) return
+      const raw = raws[index]
+      try {
+        if (raw === undefined || raw instanceof Error) throw raw ?? new Error("not read")
+        const mail = await parseMail(raw)
+        const files = await readAttachments(
+          mail,
+          item.messageId,
+          { loadEngine: importEngine, maxAttachmentChars: MAX_ATTACHMENT_CHARS, at: now, signal: stop },
+          [],
+        )
+        if (!open) return
+        const folder = item.folder as string
+        const validity = validities.get(item)
+        inputs.push({
+          accountId,
+          externalId: item.threadId,
+          now,
+          emails: [
+            {
+              ...parsedEmail(mail, item, mailHeadersOf(raw), mailbox.account),
+              mailboxes: [
+                { externalId: folder, name: folder, kind: null },
+                ...(item.labels ?? []).map((name) => ({ externalId: `label:${name}`, name, kind: "label" })),
+                ...(item.headers?.bulk ? [bulkBox] : []),
+              ],
+              ...(validity === undefined
+                ? {}
+                : { locations: [{ folder, uidvalidity: validity, uid: Number(item.uid) }] }),
+              ...(item.seen === undefined ? {} : { read: item.seen }),
+              ...(item.flagged === undefined ? {} : { flagged: item.flagged }),
+              mailRuleId: ruled.get(item)?.ruleId ?? null,
+              attachments: files,
+            },
+          ],
+        })
+        saved.push(item)
+      } catch {
+        sources.delete(sourceKey(item.threadId, item.messageId))
+        report.complete = false
+      }
+    }
   }
 
-  const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeMs)
-  const stop = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal
   const bound = new Promise<typeof BOUND>((resolve) => {
     if (stop.aborted) resolve(BOUND)
     stop.addEventListener("abort", () => resolve(BOUND), { once: true })
@@ -199,58 +261,14 @@ export const searchMailServer = async (
   if (unsupported) return skip("unsupported")
   const ended = outcome === BOUND || outcome === "done" ? "time_or_abort_bound" : outcome
   for (const call of pending) fail(call, ended)
-  if (outcome !== "done" || (fresh.length > 0 && raws === undefined)) {
+  if (outcome !== "done") {
     // What was found but not read in time is the archive's to answer: none of it is claimed as the server's.
     if (pending.size === 0) fail(null, ended)
-    for (const item of fresh) sources.delete(sourceKey(item.threadId, item.messageId))
-    report.returned = sources.size
-    return { report, sources }
+    const kept = new Set(saved)
+    for (const item of fresh) if (!kept.has(item)) sources.delete(sourceKey(item.threadId, item.messageId))
   }
-
-  const now = Date.now()
-  const inputs: ThreadSave[] = []
-  const saved: Listed[] = []
-  for (const [index, item] of fresh.entries()) {
-    const raw = raws?.[index]
-    try {
-      if (raw === undefined || raw instanceof Error) throw raw ?? new Error("not read")
-      const mail = await parseMail(raw)
-      const files = await readAttachments(
-        mail,
-        item.messageId,
-        { loadEngine: importEngine, maxAttachmentChars: MAX_ATTACHMENT_CHARS, at: now },
-        [],
-      )
-      const folder = item.folder as string
-      const validity = validities.get(item)
-      inputs.push({
-        accountId,
-        externalId: item.threadId,
-        now,
-        emails: [
-          {
-            ...parsedEmail(mail, item, mailHeadersOf(raw), mailbox.account),
-            mailboxes: [
-              { externalId: folder, name: folder, kind: null },
-              ...(item.labels ?? []).map((name) => ({ externalId: `label:${name}`, name, kind: "label" })),
-              ...(item.headers?.bulk ? [bulkBox] : []),
-            ],
-            ...(validity === undefined
-              ? {}
-              : { locations: [{ folder, uidvalidity: validity, uid: Number(item.uid) }] }),
-            ...(item.seen === undefined ? {} : { read: item.seen }),
-            ...(item.flagged === undefined ? {} : { flagged: item.flagged }),
-            mailRuleId: ruled.get(item)?.ruleId ?? null,
-            attachments: files,
-          },
-        ],
-      })
-      saved.push(item)
-    } catch {
-      sources.delete(sourceKey(item.threadId, item.messageId))
-      report.complete = false
-    }
-  }
+  // The command's own deadline or a cancel ended it: its runner has answered, so nothing more is written.
+  if (request.signal?.aborted) throw request.signal.reason
   if (inputs.length) await store.mail.saveThreads(inputs)
   // Sync never reads mail whose place it knows again, so a rule's tags go on here or never.
   const tagger = ruleTagger(store, mailbox)

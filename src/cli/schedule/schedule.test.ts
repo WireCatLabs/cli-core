@@ -14,7 +14,7 @@ import { captureStreams, errorObjectOf, NOT_ALLOWED, renderError } from "@wireca
 import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import * as v from "valibot"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
 import type { Chat } from "../../domain/models.js"
@@ -416,6 +416,34 @@ describe("a run", () => {
     )
     expect(code, streams.stderr.join("")).toBe(0)
     expect(readFileSync(lastRunOutput(file), "utf8")).toContain("work")
+  })
+
+  it("stops its child when its own --timeout ends the wait, so the child does not outlive the run", async () => {
+    const { env } = setup()
+    const { system } = machine("linux", [process.execPath, "-e", "setInterval(() => {}, 1000)"])
+    const file = scheduled(env.CHAT_STATE_DIR, { name: "sync", kind: "command", argv: [], when: { every: 5 } })
+    const began = Date.now()
+    const code = await run(
+      ["schedule", "exec", file, "--timeout", "500ms"],
+      { app, commands: () => [scheduleCommand(messenger)] },
+      { streams: captureStreams(), env, system },
+    )
+    expect(Date.now() - began).toBeLessThan(8_000)
+    expect(code).toBe(1)
+    expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).exitCode).toBe(143)
+  })
+
+  it("kills a child that ignores SIGTERM once its grace is over", async () => {
+    const { env, root } = setup()
+    const ready = join(root, "ready")
+    const child = `process.on("SIGTERM", () => {}); require("fs").writeFileSync(${JSON.stringify(ready)}, ""); setInterval(() => {}, 1000)`
+    const { system } = machine("linux", [process.execPath, "-e", child])
+    const file = scheduled(env.CHAT_STATE_DIR, { name: "sync", kind: "command", argv: [], when: { every: 5 } })
+    const stop = new AbortController()
+    const running = runSchedule(app, system, env, file, { signal: stop.signal, killAfterMs: 200 })
+    await vi.waitFor(() => expect(existsSync(ready)).toBe(true), { timeout: 20_000 })
+    stop.abort()
+    expect((await running).exitCode).toBe(137)
   })
 
   it("keeps the newest thirty runs, however many files each has", async () => {

@@ -779,6 +779,70 @@ describe("syncMail with a request budget", () => {
     expect(await emails(env)).toHaveLength(5)
   })
 
+  it("asks the store only about the mail each round listed, not the whole account, every round", async () => {
+    const { env } = setup(twelve, { listBatch: 5, fetchBatch: 5 })
+    await budgeted(env, undefined)
+    const real = await store(env)
+    const asked: Parameters<MessageStore["mail"]["emailRefs"]>[0][] = []
+    const watched = {
+      ...real,
+      mail: {
+        ...real.mail,
+        emailRefs: (filter: Parameters<MessageStore["mail"]["emailRefs"]>[0]) => {
+          asked.push(filter)
+          return real.mail.emailRefs(filter)
+        },
+      },
+    } as MessageStore
+
+    const again = await syncMail(sourceOf(env), watched, {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({}),
+      rescan: true,
+    })
+
+    expect(again).toMatchObject({ alreadyStored: 12, saved: 0 })
+    expect(asked.length).toBeGreaterThan(1)
+    for (const filter of asked) {
+      expect(filter?.externalIds !== undefined || filter?.since !== undefined).toBe(true)
+      expect(filter?.externalIds?.length ?? 0).toBeLessThanOrEqual(5)
+    }
+  })
+
+  it("writes nothing for a listing that comes back after the run was stopped", async () => {
+    const { env } = setup(twelve, { listBatch: 5, fetchBatch: 5 })
+    const inner = sourceOf(env)
+    const stop = new AbortController()
+    let release: () => void = () => {}
+    const late = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const source: MailSource = {
+      ...inner,
+      list: async (...args) => {
+        const found = await inner.list(...args)
+        stop.abort(new CliError("cancelled", "stopped"))
+        await late
+        return found
+      },
+    }
+    const opened = await store(env)
+    const running = syncMail(source, opened, {
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({ signal: stop.signal }),
+      signal: stop.signal,
+    })
+    release()
+
+    await expect(running).rejects.toMatchObject({ code: "cancelled" })
+    expect(await emails(env)).toHaveLength(0)
+    expect(await opened.sync.syncState(KEY, resumeKey("[Gmail]/All Mail"))).toBeUndefined()
+  })
+
   it("does not let a failed message hide behind the resume point", async () => {
     const { env, box } = setup(twelve, { unreadable: ["105"], listBatch: 20, fetchBatch: 20 })
     await budgeted(env, undefined)

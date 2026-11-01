@@ -425,6 +425,8 @@ export const findProgram = (name: string, env: NodeJS.ProcessEnv, platform: Node
 }
 
 const KEEP_RUNS = 30
+/** How long a stopped child has to save and answer after SIGTERM before it is killed. */
+const KILL_AFTER_MS = 10_000
 
 /**
  * One run: the command or the agent with the schedule's variables, its output kept beside the schedule,
@@ -436,7 +438,12 @@ export const runSchedule = async (
   system: ServerSystem,
   env: NodeJS.ProcessEnv,
   file: string,
-  { now = () => new Date(), timer }: { now?: () => Date; timer?: Timer } = {},
+  {
+    now = () => new Date(),
+    timer,
+    signal,
+    killAfterMs = KILL_AFTER_MS,
+  }: { now?: () => Date; timer?: Timer; signal?: AbortSignal; killAfterMs?: number } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
   const folder = join(file, "..")
@@ -475,10 +482,20 @@ export const runSchedule = async (
       err.push(Buffer.from(String(error)))
       resolve(127)
     })
-    child.on("close", (code) => {
+    // The child keeps its own deadline; a stop of this run stops the child too, so nothing it does outlives the run.
+    let kill: NodeJS.Timeout | undefined
+    const stop = () => {
+      child.kill("SIGTERM")
+      kill = setTimeout(() => child.kill("SIGKILL"), killAfterMs)
+    }
+    if (signal?.aborted) stop()
+    else signal?.addEventListener("abort", stop, { once: true })
+    child.on("close", (code, killedBy) => {
+      signal?.removeEventListener("abort", stop)
+      if (kill) clearTimeout(kill)
       writeFileSync(output, Buffer.concat(agent ? out : [...out, ...err]), { mode: 0o600 })
       if (agent) writeFileSync(errors, Buffer.concat(err), { mode: 0o600 })
-      resolve(code ?? 1)
+      resolve(code ?? (killedBy === "SIGKILL" ? 137 : killedBy === "SIGTERM" ? 143 : 1))
     })
   })
   const ended = now()
