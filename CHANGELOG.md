@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.532.0 — 01.11.2026
+
 ### Added
 
 - **A message hit names its files**: `search messages` and `search all` hits carry
