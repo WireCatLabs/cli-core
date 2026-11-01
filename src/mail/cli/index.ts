@@ -4,7 +4,7 @@ import { queryFieldsOf } from "@wirecat/cli-base/query"
 import { Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
-import { outputFor } from "../../cli/context.js"
+import { environmentOf, outputFor } from "../../cli/context.js"
 import { LOCAL_READ, REMOTE_READ } from "../../cli/effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, typedQuery, withQuery } from "../../cli/list-query.js"
@@ -37,6 +37,8 @@ export interface MailReads {
   read: <T>(command: Command, work: (store: MessageStore, mailbox: AccountKey) => Promise<T>) => Promise<T>
   /** The mailbox's server, for `search messages --backend`; without it the search reads the store only. */
   server?: (command: Command) => MailServerAccess
+  /** How `--server-time` help states its default when a provider's own differs (`MailServerAccess.timeMs`). */
+  serverTimeDefault?: string
 }
 
 const DEFAULT_LIMIT = 20
@@ -92,8 +94,11 @@ const serverIssues = (server: ServerSearched | undefined) => {
     ...FAILED[reason],
     source: "server",
   }))
-  return failed.length
-    ? failed
+  const tooLarge = server.tooLarge
+    ? [{ code: "outcome_unknown" as const, reason: "search.server-too-large", source: "server" }]
+    : []
+  return failed.length || tooLarge.length
+    ? [...failed, ...tooLarge]
     : [{ code: "outcome_unknown" as const, reason: "search.server-capped", source: "server" }]
 }
 
@@ -139,7 +144,7 @@ found_in says archive, server (new from the server) or both; meta.complete is fa
       }
 Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md`,
     )
-  if (mail.server) serverSearchOptions(leaf, "the mail server (default: both)")
+  if (mail.server) serverSearchOptions(leaf, "the mail server (default: both)", mail.serverTimeDefault)
   leaf.action(async function (this: Command, words: string[]) {
     const options = this.opts<{
       limit?: number
@@ -153,12 +158,16 @@ Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/quer
     const page = options.page ?? 1
     const query = words.join(" ")
     const { backend, server: bounds } = mail.server ? backendRequest(this) : {}
+    const { signal, deadline: deadlineOf } = environmentOf(this)
+    const deadline = deadlineOf?.()
     const found = await mail.read(this, async (store, mailbox) => {
       const step = mail.server
         ? await searchMailServer(store, mailbox, mail.server(this), {
             text: query,
             ...(backend === undefined ? {} : { backend }),
             ...(bounds?.timeMs === undefined ? {} : { timeMs: bounds.timeMs }),
+            ...(signal ? { signal } : {}),
+            ...(deadline ? { deadline } : {}),
             ...(options.exact ? { exact: true } : {}),
             ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
           })

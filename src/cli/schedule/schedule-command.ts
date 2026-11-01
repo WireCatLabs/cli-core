@@ -71,6 +71,19 @@ const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
 }
 
 /** A schedule as answered: snake_case, but its environment keeps the variables' own names. */
+/**
+ * A run waits for its child, which keeps its own deadline (a sync's is 15 minutes): the wait has none of its own, or the
+ * run answered `timeout` at 30 s while the child went on. A signal or an explicit --timeout stops the child.
+ */
+const untilChildEnds = async <T>(command: Command, wait: (signal: AbortSignal | undefined) => Promise<T>) => {
+  const environment = environmentOf(command)
+  try {
+    return await wait(environment.untilStopped?.())
+  } finally {
+    environment.endUntilStopped?.()
+  }
+}
+
 const scheduleAnswer = ({ environment, createdAt, ...schedule }: Schedule, extra: object) => ({
   ...(snakeKeys(schedule) as object),
   environment,
@@ -290,9 +303,12 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
     .argument("<name>", "the schedule's name, as `schedule list` shows it")
     .action(async function (this: Command, name: string) {
       const { context, system, state, say, timer } = prepare(this)
-      const last = await runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
-        timer: timer(),
-      })
+      const last = await untilChildEnds(this, (signal) =>
+        runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
+          timer: timer(),
+          ...(signal ? { signal } : {}),
+        }),
+      )
       say(snakeKeys({ name, ...last }) as object, [`${name}: exit ${last.exitCode} — ${last.output}`])
       if (last.exitCode !== 0) setExitCode(this, 1)
     })
@@ -324,7 +340,9 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
     .action(async function (this: Command, file: string) {
       // A timer starts it with no profile named; the schedule's own environment carries the profile.
       const { context, system, timer } = prepare(this, { needsProfile: false })
-      const last = await runSchedule(app, system, context.env, file, { timer: timer() })
+      const last = await untilChildEnds(this, (signal) =>
+        runSchedule(app, system, context.env, file, { timer: timer(), ...(signal ? { signal } : {}) }),
+      )
       if (last.exitCode !== 0) setExitCode(this, 1)
     })
 

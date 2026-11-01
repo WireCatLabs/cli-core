@@ -8,7 +8,8 @@ import type { SearchQuery } from "./messages.js"
 import { prepareLucene } from "./messages-search.js"
 
 export const SERVER_SEARCH_KEY = "messages.server-search"
-export const SERVER_BOUNDS = { timeMs: 5_000, perCall: 100, maxCalls: 3 }
+/** `maxMessageBytes`: a candidate larger than this is not downloaded; a sync reads it, and the answer says so. */
+export const SERVER_BOUNDS = { timeMs: 5_000, perCall: 100, maxCalls: 3, maxMessageBytes: 5_000_000 }
 export const DEFAULT_BACKEND = "both"
 export type Backend = "archive" | "server" | "both"
 export interface ServerOptions {
@@ -30,6 +31,8 @@ export interface ServerSearched {
   /** Messages the store did not hold before this search. */
   new: number
   failed: { chat: string | null; reason: "rate_limited" | "search_failed" | "time_or_abort_bound" }[]
+  /** Candidates larger than `SERVER_BOUNDS.maxMessageBytes`, left on the server unread. */
+  tooLarge?: number
   complete: boolean
 }
 export type HitSource = "archive" | "server" | "both"
