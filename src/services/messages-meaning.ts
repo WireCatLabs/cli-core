@@ -12,7 +12,7 @@ import { plainWords } from "./pictures.js"
  */
 export const meaningLane =
   (deps: ModelDeps & Pick<ServiceDeps, "store">): MeaningLane =>
-  async (question, accounts, shared) => {
+  async (question, accounts, shared, within) => {
     const target = embeddingTarget(deps, DEFAULT_TEXT_MODEL)
     const skipped = (reason: string, step?: "models.download" | "conversations.rebuild") => ({
       skipped: { reason, model: target.id, ...(step ? { step } : {}) },
@@ -27,14 +27,17 @@ export const meaningLane =
     try {
       const ranked: MeaningRanked = []
       if (words) {
+        const pks = await within?.()
         const lookUp = async (embedder: Embedder) => {
           const [query] = await embedder.embed([words], "query")
           for (const one of ready) {
-            const near = await store.vectors.nearestMessages(one, {
-              model: target.key,
-              limit: MEANING_DEPTH,
-              query: query as Float32Array,
-            })
+            const near = pks
+              ? await store.vectors.scoreMessages(one, { model: target.key, query: query as Float32Array, pks })
+              : await store.vectors.nearestMessages(one, {
+                  model: target.key,
+                  limit: MEANING_DEPTH,
+                  query: query as Float32Array,
+                })
             for (const { chatId, messageId, score } of near) ranked.push({ ...one, chatId, id: messageId, score })
           }
         }

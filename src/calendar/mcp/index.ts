@@ -1,4 +1,5 @@
 import { CliError, errorObjectOf, type FailureContext, mcpErrorResult } from "@wirecat/cli-base"
+import { listOf } from "../../cli/envelope.js"
 import { isCliFailure } from "../../errors/failures.js"
 import { type EventStore, listed } from "../../meetings/index.js"
 import { agentResult, UNTRUSTED_NEUTRAL } from "../../meetings/mcp/index.js"
@@ -58,7 +59,13 @@ export const calendarTools = [
       "stored events, earliest first; `query` takes field terms joined by AND: starts_at (>=, <, or " +
       "[a TO b}), ends_at>=, changed_at>= (events new, moved or cancelled since, each with change and was), " +
       "calendar:<id>; a date in the zone given, UTC when absent; without starts_at or ends_at, from today on",
-    properties: { account_id: integer, query: text, timezone: text, limit: { ...integer, maximum: 1000 } },
+    properties: {
+      account_id: integer,
+      query: text,
+      timezone: text,
+      limit: { ...integer, maximum: 1000, description: "events per page" },
+      page: { ...integer, description: "which page, starting at 1; page.next_page gives the next" },
+    },
     required: [],
   },
   {
@@ -92,7 +99,7 @@ const following = {
   type: "boolean",
   description: "this occurrence and every later one: the series ends before it, and a new one starts with the change",
 }
-const newId = { ...text, description: "the id an outcome_unknown named: a retry finds that event instead of a new one" }
+const operationId = (description: string) => ({ ...text, description })
 const notify = {
   type: "boolean",
   description: "whether the provider mails the other attendees; required when there are any",
@@ -128,7 +135,9 @@ export const calendarWriteTools = [
       calendar: text,
       ...fields,
       notify,
-      id: newId,
+      operation_id: operationId(
+        "the operation_id a create that ended in outcome_unknown named: a retry finds that event",
+      ),
     },
     required: ["calendar", "title"],
     destructive: false,
@@ -138,7 +147,16 @@ export const calendarWriteTools = [
     description:
       "change an event, with series every occurrence of its repeating event and its repeat rule, or with following " +
       "this occurrence and every later one",
-    properties: { ...target, ...fields, series: flag, following, notify, id: newId },
+    properties: {
+      ...target,
+      ...fields,
+      series: flag,
+      following,
+      notify,
+      operation_id: operationId(
+        "with following, the operation_id an outcome_unknown named: a retry finds that new series",
+      ),
+    },
     required: ["event"],
     destructive: true,
   },
@@ -193,7 +211,7 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
     if (!Object.hasOwn(args, key)) throw new CliError("validation_error", `missing argument: ${key}`)
   for (const [key, value] of Object.entries(args))
     if (
-      ["account_id", "limit"].includes(key) &&
+      ["account_id", "limit", "page"].includes(key) &&
       (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
     )
       throw new CliError("validation_error", `${key} must be a positive integer`)
@@ -208,7 +226,7 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
         "end_time",
         "start_date",
         "end_date",
-        "id",
+        "operation_id",
         "repeat",
         "to_calendar",
       ].includes(key) &&
@@ -294,30 +312,9 @@ export const callCalendarTool = async (
           ).flat(),
         )
         break
-      case "events_list": {
-        const limit = (args.limit as number | undefined) ?? 100
-        const lists = await Promise.all(
-          accounts.map(async (accountId) =>
-            eventsAnswer(
-              store,
-              await eventsFilter(args.query as string | undefined, {
-                store,
-                accountId,
-                zone: (args.timezone as string | undefined) ?? "UTC",
-                now,
-              }).then((filter) => filter && { ...filter, limit }),
-            ),
-          ),
-        )
-        const items = lists
-          .flatMap((one) => one.items)
-          .sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""))
-        answer = listed(items.slice(0, limit), {
-          limit,
-          hasMore: items.length > limit || lists.some((one) => one.hasMore),
-        })
+      case "events_list":
+        answer = await eventsList(store, args, accounts, now)
         break
-      }
       case "event_show":
         answer = await eventAnswer((await eventIn()).details)
         break
@@ -345,6 +342,55 @@ export const callCalendarTool = async (
     )
     return { content, structuredContent, isError: true as const }
   }
+}
+
+const EVENTS_READ = 1000
+
+/**
+ * One page of events across the accounts. Page n of several accounts is not each account's page n, so each one is
+ * read from its first event up to the page's end and the merge is cut there.
+ */
+const eventsList = async (
+  store: EventStore,
+  args: Record<string, unknown>,
+  accounts: readonly number[],
+  now: number,
+) => {
+  const limit = (args.limit as number | undefined) ?? 100
+  const page = (args.page as number | undefined) ?? 1
+  const end = page * limit
+  const merging = accounts.length > 1
+  if (!Number.isSafeInteger(end)) throw new CliError("validation_error", "page is too far", { param: "page" })
+  if (merging && end > EVENTS_READ)
+    throw new CliError(
+      "validation_error",
+      `page ${page} of ${limit} reads past event ${EVENTS_READ} of each account; name one with account_id`,
+      { param: "account_id" },
+    )
+  const lists = await Promise.all(
+    accounts.map(async (accountId) => {
+      const filter = await eventsFilter(args.query as string | undefined, {
+        store,
+        accountId,
+        zone: (args.timezone as string | undefined) ?? "UTC",
+        now,
+      })
+      return merging
+        ? eventsAnswer(store, filter && { ...filter, limit: end })
+        : eventsAnswer(store, filter && { ...filter, limit }, page)
+    }),
+  )
+  const merged = lists.flatMap((one) => one.items).sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""))
+  const items = merging ? merged.slice(end - limit, end) : merged
+  return listOf("events_list", {
+    items,
+    limit,
+    page,
+    has_more: (merging && merged.length > end) || lists.some((one) => one.hasMore),
+    args: Object.fromEntries(
+      ["account_id", "query", "timezone"].filter((key) => args[key] !== undefined).map((key) => [key, args[key]]),
+    ),
+  })
 }
 
 const fieldsOf = (args: Record<string, unknown>): EventFields => ({
@@ -422,7 +468,7 @@ const writeTool = async (
     zone: (args.timezone as string | undefined) ?? "UTC",
     names: {
       notify: "notify: true or false",
-      id: "id",
+      id: "operation_id",
       calendar: "calendar",
       series: "series",
       following: "following",
@@ -439,13 +485,13 @@ const writeTool = async (
     name === "event_create"
       ? await createEvent(context, args.calendar as string, fieldsOf(args), {
           ...choice,
-          ...(args.id === undefined ? {} : { id: args.id as string }),
+          ...(args.operation_id === undefined ? {} : { id: args.operation_id as string }),
         })
       : name === "event_update"
         ? await updateEvent(context, args.event as string, fieldsOf(args), {
             ...on,
             ...choice,
-            ...(args.id === undefined ? {} : { id: args.id as string }),
+            ...(args.operation_id === undefined ? {} : { id: args.operation_id as string }),
           })
         : name === "event_delete"
           ? await deleteEvent(context, args.event as string, { ...on, ...choice })

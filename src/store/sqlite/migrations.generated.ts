@@ -847,5 +847,17 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER document_trigrams_bd BEFORE DELETE ON documents BEGIN\n  DELETE FROM document_trigrams WHERE rowid = old.id;\nEND;",
       "-- The trigrams hold JS-normalized text, which SQL cannot produce: fillTrigrams fills the rows stored before this\n-- version, up to `watermark`, and a search reads the rest of them by their text meanwhile.\nINSERT INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version)\n  SELECT 'note_trigrams', coalesce(max(id), 0), 0, 0, 1 FROM notes\n  UNION ALL SELECT 'document_trigrams', coalesce(max(id), 0), 0, 0, 1 FROM documents;"
     ]
+  },
+  {
+    "name": "20261031230945_version-41-task-fields",
+    "statements": [
+      "ALTER TABLE `tasks` ADD `priority_score` real;",
+      "ALTER TABLE `tasks` ADD `agent` text;",
+      "ALTER TABLE `tasks` ADD `revision` integer DEFAULT 1 NOT NULL;",
+      "-- 0 urgent … 4 low land inside the critical, high, medium and low quarters, with room on either side for moves.\nUPDATE tasks SET priority_score = CASE priority WHEN 0 THEN 0.875 WHEN 1 THEN 0.625 WHEN 2 THEN 0.375 WHEN 3 THEN 0.1875 WHEN 4 THEN 0.0625 END WHERE priority IS NOT NULL;",
+      "-- A build before version 41 writes only `priority`; these keep the score in step with what it wrote.\nCREATE TRIGGER tasks_priority_score_ai AFTER INSERT ON tasks WHEN new.priority IS NOT NULL AND new.priority_score IS NULL BEGIN\n  UPDATE tasks SET priority_score = CASE new.priority WHEN 0 THEN 0.875 WHEN 1 THEN 0.625 WHEN 2 THEN 0.375 WHEN 3 THEN 0.1875 WHEN 4 THEN 0.0625 END WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER tasks_priority_score_au AFTER UPDATE OF priority ON tasks WHEN new.priority IS NOT old.priority AND new.priority_score IS old.priority_score BEGIN\n  UPDATE tasks SET priority_score = CASE new.priority WHEN 0 THEN 0.875 WHEN 1 THEN 0.625 WHEN 2 THEN 0.375 WHEN 3 THEN 0.1875 WHEN 4 THEN 0.0625 END WHERE id = new.id;\nEND;",
+      "-- Every build's write bumps it, older ones too, so a stale copy is caught whoever wrote last.\nCREATE TRIGGER tasks_revision_au AFTER UPDATE ON tasks WHEN new.revision IS old.revision BEGIN\n  UPDATE tasks SET revision = old.revision + 1 WHERE id = new.id;\nEND;"
+    ]
   }
 ]

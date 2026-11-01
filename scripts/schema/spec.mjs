@@ -1391,6 +1391,14 @@ const NEW = {
         c("close_suggested_certainty", "real", { note: "0–1, as the suggesting agent rated it" }),
         c("close_suggested_reason", "text", { note: "why the agent would close it, in a few words" }),
         c("close_suggested_at", "integer", { note: "when the agent suggested closing it" }),
+        c("priority_score", "real", {
+          note: "0 to 1, higher first: low, medium, high, critical by quarters; orders a board column. `priority` is kept from it for builds before version 41",
+        }),
+        c("agent", "text", { note: "the agent working on it, by name; unlike a claim it does not lapse" }),
+        c("revision", "integer", {
+          notnull: true,
+          note: "bumped by a trigger on every update; a write made on an older revision is refused",
+        }),
       ],
       keys: [
         "UNIQUE (project_id, number)",

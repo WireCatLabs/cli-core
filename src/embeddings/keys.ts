@@ -41,7 +41,8 @@ export const embeddingKeys = (app: AppIdentity, env: NodeJS.ProcessEnv = process
         : undefined
       return shared ? { key: shared, source: "env" } : undefined
     },
-    write: (provider: string, key: string): CredentialSource => credentials(provider).write(account(provider), key),
+    write: (provider: string, key: string): CredentialSource =>
+      credentials(provider).write(account(provider), key, { signIn: true }),
     remove: (provider: string): CredentialSource[] => credentials(provider).remove(account(provider)),
   }
 }

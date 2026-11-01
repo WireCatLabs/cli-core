@@ -21,7 +21,7 @@ const seeded = async () => {
   )
   account.run(1, "owner@example.com", "Owner Example")
   account.run(2, "other@example.com", "Other Example")
-  return { database, mail: mailStoreOver({ database, orm }) }
+  return { database, mail: mailStoreOver({ database, orm, now: () => 1 }) }
 }
 
 const envelope = (id: string, size: number, mailRuleId: number | null, overrides: Partial<EmailInput> = {}) => ({

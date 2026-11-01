@@ -6,6 +6,7 @@ const HAND_WRITTEN = new Set(["search_terms", "search_term_trigrams", "schema_mi
 const camel = (s) => s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase())
 
 const DEFAULTS = {
+  "tasks.revision": 1,
   "persons.owner": 0,
   "aliases.display": 0,
   "chats.searchable": 1,

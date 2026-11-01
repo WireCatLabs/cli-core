@@ -128,6 +128,18 @@ describe.each(stores)("events list on the %s store", (_name, open) => {
     expect(cut.items.map(({ title }) => title)).toEqual(["a", "b"])
     expect(await eventsAnswer(store, filter && { ...filter, limit: 3 })).toMatchObject({ hasMore: false })
   })
+
+  it("the next page starts after the last event of the one before", async () => {
+    const { store, accountId } = await seeded(open, [
+      timed("2026-11-02T08:00:00Z", "a"),
+      timed("2026-11-02T09:00:00Z", "b"),
+      timed("2026-11-02T10:00:00Z", "c"),
+    ])
+    const filter = await eventsFilter("ends_at>=2026-11-01", { store, accountId, zone: "UTC", now: 0 })
+    const second = await eventsAnswer(store, filter && { ...filter, limit: 2 }, 2)
+    expect(second).toMatchObject({ page: 2, limit: 2, hasMore: false })
+    expect(second.items.map(({ title }) => title)).toEqual(["c"])
+  })
 })
 
 describe("people list", () => {

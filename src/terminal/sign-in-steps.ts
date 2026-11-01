@@ -2,6 +2,7 @@ import { StringDecoder } from "node:string_decoder"
 import { CliError } from "@wirecat/cli-base"
 import { Option } from "commander"
 import { MAX_SECRET_INPUT } from "../cli/input-policy.js"
+import { stepLines } from "./step-lines.js"
 
 /**
  * Opt-in, because a read nobody answers hangs: an agent running `session start` in a shell must get the refusal it
@@ -49,9 +50,7 @@ export interface SignInSteps {
 
 export const signInSteps = ({ diagnostic, json, answers, input = process.stdin }: SignInStepsOptions): SignInSteps => {
   if (answers && !json) throw new CliError("validation_error", "--answer-stdin needs --json")
-  const emit = (event: Record<string, unknown>) => {
-    if (json) diagnostic(JSON.stringify(event))
-  }
+  const emit = stepLines(diagnostic, json)
   const next = answers ? lineReader(input) : undefined
   return {
     json,

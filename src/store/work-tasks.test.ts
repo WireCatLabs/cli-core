@@ -22,7 +22,7 @@ describe("tasks made in the store", () => {
   it("creates a bug in a project with its fields, and records each change as an event", async () => {
     const { store, project } = await withProject()
     const bug = await store.tasks.create(
-      { project: "lht", title: "Export drops the last row", type: "bug", priority: 1, description: "Seen on CSV" },
+      { project: "lht", title: "Export drops the last row", type: "bug", priority: 0.625, description: "Seen on CSV" },
       "owner",
     )
     expect(bug).toMatchObject({
@@ -31,7 +31,8 @@ describe("tasks made in the store", () => {
       project: project.ref,
       type: "bug",
       status: "open",
-      priority: 1,
+      priority: 0.625,
+      priorityLabel: "high",
       description: "Seen on CSV",
       source: null,
     })
@@ -45,7 +46,7 @@ describe("tasks made in the store", () => {
     expect(sub.parent).toBe("task:LHT-1")
     await store.tasks.assign(bug.id, { to: "person:21", role: "assignee" }, "owner")
     await store.tasks.assign(bug.id, { to: "person:21", role: "assignee" }, "owner")
-    await store.tasks.edit(bug.id, { priority: 0, dueAt: new Date("2026-10-20T00:00:00Z") }, "owner")
+    await store.tasks.edit(bug.id, { priority: 0.875, dueAt: new Date("2026-10-20T00:00:00Z") }, "owner")
     const done = await store.tasks.edit(bug.id, { status: "done", reason: "fixed" }, "owner")
 
     expect(done).toMatchObject({
@@ -56,9 +57,9 @@ describe("tasks made in the store", () => {
     expect(done.closedAt).not.toBeNull()
     expect((await store.tasks.events(bug.id)).map((event) => [event.kind, event.changes])).toEqual([
       ["created", null],
-      ["priority", { priority: [null, 1] }],
+      ["priority", { priority: [null, 0.625] }],
       ["assigned", { assignee: [null, "person:21"] }],
-      ["priority", { priority: [1, 0] }],
+      ["priority", { priority: [0.625, 0.875] }],
       ["due", { due_at: [null, Date.parse("2026-10-20T00:00:00Z")] }],
       ["status", { status: ["open", "done"] }],
     ])
@@ -106,10 +107,10 @@ describe("tasks made in the store", () => {
     expect(await store.tasks.get(bug.id)).toBeUndefined()
     expect((await store.tasks.list({})).map((listed) => listed.id)).toEqual(["t1"])
     await service.close(task.id, { as: "done", by: "owner" })
-    expect(await store.tasks.edit(task.id, { priority: 2, title: "Answer Bob Sample" }, "owner")).toMatchObject({
+    expect(await store.tasks.edit(task.id, { priority: 0.375, title: "Answer Bob Sample" }, "owner")).toMatchObject({
       id: "t1",
       type: "question",
-      priority: 2,
+      priority: 0.375,
       title: "Answer Bob Sample",
       source: "msg:telegram:100:-1001:42",
     })
@@ -119,6 +120,9 @@ describe("tasks made in the store", () => {
       "title",
       "priority",
     ])
+    await expect(store.tasks.edit(task.id, { status: "in_progress" }, "owner")).rejects.toThrow(
+      "todo and in_progress are for a project task",
+    )
     await store.close()
   })
 })

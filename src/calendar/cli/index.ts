@@ -31,7 +31,7 @@ import {
   weekFilter,
 } from "../reads.js"
 import { REPEAT_HELP } from "../recurrence.js"
-import { serverSearchAnswer } from "../server-search.js"
+import { bothSearchAnswer, serverSearchAnswer } from "../server-search.js"
 import type { CalendarExpander, CalendarSource } from "../source.js"
 import { calendarStatus, syncCalendars } from "../sync.js"
 import type { EventResponse } from "../writer.js"
@@ -335,9 +335,11 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     ).addHelpText("after", EVENTS_QUERY_NOTE),
     "events list starts_at>=2026-11-02 starts_at<2026-11-07 --json",
     "events list ends_at>=today person:ana@example.com",
+    "events list starts_at>=2026-11-02 --limit 50 --page 2",
   )
-    .option("--limit <n>", "events at most, 1–1000", integer, 100)
-    .action(async (words: string[], opts: { limit: number }, command: Command) => {
+    .option("--limit <n>", "events per page, 1–1000", integer, 100)
+    .option("--page <n>", "which page, starting at 1", integer, 1)
+    .action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
       const filter = await eventsFilter(words, {
         store: deps.store,
         accountId: deps.accountId,
@@ -346,7 +348,10 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         personOf: personId,
       })
       print(
-        eachMarked(await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }), EVENT_ITEM_UNTRUSTED),
+        eachMarked(
+          await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }, opts.page),
+          EVENT_ITEM_UNTRUSTED,
+        ),
         command,
       )
     })
@@ -368,15 +373,22 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       .description(
         deps.serverSearch
           ? "find stored events by words, and by meaning when its model is downloaded; with --backend server, ask " +
-              "the provider instead"
+              "the provider instead, or with --backend both, ask both"
           : "find stored events by words, and by meaning when its model is downloaded",
       )
       .argument("<query...>", "what to find in titles, descriptions, places and attendees"),
     "search events roadmap planning --json",
-    ...(deps.serverSearch ? ["search events --backend server quarterly review"] : []),
+    ...(deps.serverSearch
+      ? ["search events --backend server quarterly review", "search events --backend both quarterly review"]
+      : []),
   )
     .option("--limit <n>", "events per page", integer, 20)
-    .option("--cursor <cursor>", "continue from a page's next_offset", (text) => (text === "0" ? 0 : integer(text)), 0)
+    .option(
+      "--cursor <cursor>",
+      "go on from where the last page stopped; page.next gives it",
+      (text) => (text === "0" ? 0 : integer(text)),
+      0,
+    )
     .option("--exact", "every word as written, no word stems")
     .option("--newest", "latest start first instead of best first")
   if (deps.serverSearch)
@@ -384,7 +396,8 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       new Option(
         "--backend <archive|server|both>",
         "where to search: archive, the local store, or server, the provider's own search over the synced calendars, " +
-          "earliest first",
+          "earliest first; both gives the store's hits, each the provider also found marked server, then the " +
+          "provider's other hits, one page with no cursor",
       )
         .choices(["archive", "server", "both"])
         .default("archive"),
@@ -395,48 +408,50 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean; backend?: string },
       command: Command,
     ) => {
-      if (opts.backend === "both")
-        throw new CliError(
-          "validation_error",
-          "search events --backend both is not offered: the store's search and the provider's rank and page events " +
-            "differently, so one merged list would have no single order or next page; run --backend archive and " +
-            "--backend server",
-          { reason: "search.one-backend" },
-        )
-      if (opts.backend === "server") {
+      const archived = () =>
+        searchEvents(messages("search"), words.join(" "), {
+          accounts: [deps.account],
+          limit: opts.limit,
+          offset: opts.cursor,
+          timezone: zone(),
+          command: program.name(),
+          ...(opts.exact ? { exact: true } : {}),
+          ...(opts.newest ? { newest: true } : {}),
+        })
+      if (opts.backend === "server" || opts.backend === "both") {
+        const flag = `search events --backend ${opts.backend}`
         if (command.optsWithGlobals<{ offline?: boolean }>().offline)
-          throw new CliError(
-            "permission_error",
-            "search events --backend server asks the provider; leave out --offline",
-            {
-              reason: "search.offline",
-            },
-          )
-        if (opts.exact || opts.cursor || opts.newest)
+          throw new CliError("permission_error", `${flag} asks the provider; leave out --offline`, {
+            reason: "search.offline",
+          })
+        if (opts.backend === "server" && opts.exact)
+          throw new CliError("validation_error", `${flag} takes no --exact: the provider matches words its own way`, {
+            reason: "search.server-options",
+          })
+        if (opts.cursor || opts.newest)
           throw new CliError(
             "validation_error",
-            "search events --backend server takes neither --exact, --cursor nor --newest: the provider ranks and pages it",
+            `${flag} takes neither --cursor nor --newest: the provider ranks and pages its own hits`,
             { reason: "search.server-options" },
           )
-        const found = await serverSearchAnswer(source(), deps.store, {
+        const served = await serverSearchAnswer(source(), deps.store, {
           accountId: deps.accountId,
           account: deps.account,
           query: words.join(" "),
           limit: opts.limit,
         })
-        print({ ...found, untrusted: SERVER_SEARCH_UNTRUSTED }, command)
+        if (opts.backend === "server") print({ ...served, untrusted: SERVER_SEARCH_UNTRUSTED }, command)
+        else
+          print(
+            {
+              ...(await bothSearchAnswer(deps.store, deps.accountId, await archived(), served, opts.limit)),
+              untrusted: SEARCH_UNTRUSTED,
+            },
+            command,
+          )
         return
       }
-      const found = await searchEvents(messages("search"), words.join(" "), {
-        accounts: [deps.account],
-        limit: opts.limit,
-        offset: opts.cursor,
-        timezone: zone(),
-        command: program.name(),
-        ...(opts.exact ? { exact: true } : {}),
-        ...(opts.newest ? { newest: true } : {}),
-      })
-      print({ ...found, untrusted: SEARCH_UNTRUSTED }, command)
+      print({ ...(await archived()), untrusted: SEARCH_UNTRUSTED }, command)
     },
   )
 
@@ -529,7 +544,7 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
     zone: zone(),
     names: {
       notify: "--notify or --no-notify",
-      id: "--id",
+      id: "--operation-id",
       calendar: "--calendar",
       series: "--series",
       following: "--following",
@@ -587,14 +602,17 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
       fields(write("create"), false)
         .description("add an event to a calendar; with --repeat, one that repeats")
         .argument("<calendar>", "the calendar's id, or the provider's id"),
-    ).option("--id <id>", "the id a create that ended in outcome_unknown named: a retry finds that event"),
+    ).option(
+      "--operation-id <id>",
+      "the operation_id a create that ended in outcome_unknown named: a retry finds that event",
+    ),
     "events create 3 --title 'Example planning' --start-time 2026-11-02T10:00 --end-time 2026-11-02T11:00",
     "events create 3 --title 'Example review' --start-date 2026-11-03 --end-date 2026-11-03 " +
       "--attendee ana@example.com --no-notify",
     "events create 3 --title 'Example standup' --start-time 2026-11-02T09:30 --end-time 2026-11-02T09:45 " +
       "--repeat 'FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12'",
-  ).action(async (calendar: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
-    const { notify: choice, id, ...rest } = opts
+  ).action(async (calendar: string, opts: FieldOptions & Choices & { operationId?: string }, command: Command) => {
+    const { notify: choice, operationId: id, ...rest } = opts
     printWritten(
       await createEvent(context(command), calendar, fieldsOf(rest), {
         ...(choice === undefined ? {} : { notify: choice }),
@@ -616,13 +634,23 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
           "change this occurrence and every later one: the repeating event ends before it and a new one starts " +
             "with the change",
         )
-        .option("--id <id>", "with --following, the id an outcome_unknown named: a retry finds that new series"),
+        .option(
+          "--operation-id <id>",
+          "with --following, the operation_id an outcome_unknown named: a retry finds that new series",
+        ),
     ),
     "events update event:42 --start-time 2026-11-02T14:00 --end-time 2026-11-02T15:00 --notify",
     "events update event:42 --series --repeat 'FREQ=WEEKLY;BYDAY=TU;UNTIL=20261231T230000Z' --no-notify",
     "events update event:42 --following --start-time 2026-11-09T10:00 --end-time 2026-11-09T10:30 --no-notify",
-  ).action(async (reference: string, opts: FieldOptions & Choices & { id?: string }, command: Command) => {
-    const { calendar: _calendar, series: _series, following: _following, notify: _notify, id, ...rest } = opts
+  ).action(async (reference: string, opts: FieldOptions & Choices & { operationId?: string }, command: Command) => {
+    const {
+      calendar: _calendar,
+      series: _series,
+      following: _following,
+      notify: _notify,
+      operationId: id,
+      ...rest
+    } = opts
     printWritten(
       await updateEvent(context(command), reference, fieldsOf(rest), {
         ...choicesOf(opts),

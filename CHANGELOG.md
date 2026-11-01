@@ -9,13 +9,212 @@ shape of this file.
 
 ### Fixed
 
+- **The parity check requires `projects` and `projects evidence` in max and tg**, which ship them in max-cli 0.94.0
+  and tg-cli 0.110.0 (tg-cli#798, max-cli#886); wa stays planned.
+
+## 0.513.0 — 01.11.2026
+
+### Added
+
+- **`tasks.board(query, { limit, offset, sort, descending, zone })` and `tasks.boardCounts(query)`** list the owner's
+  project tasks across every project (an account's inbox is left out) with a Lucene query over `PROJECT_TASK_FIELDS`:
+  `state`, `kind`, `project` (`project:*` for all), `assignee` (`any`, `none`, `"person:12"`), `priority`,
+  `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
+  (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
+  hold each project, assignee, priority and state, each without the query's own terms on that field.
+- **Store version 41: a decimal priority, an agent and a revision on every task** (`minCompatible` stays 34).
+  `tasks.priority_score` holds 0 to 1, higher first; `priorityLabel` reads it as low, medium, high or critical by
+  quarters. The old 0 (urgent) … 4 (low) became 0.875, 0.625, 0.375, 0.1875 and 0.0625, and the integer `priority`
+  column is still written from the score, so an older build reads a familiar number; when an older build writes the
+  integer, a trigger moves the score with it. `tasks.agent` names the agent working on a task, apart from its
+  assignees and its claim. `tasks.revision` is bumped by a trigger on every update, by any build.
+- **`tasks.move(id, { status, before | after }, by)`** puts a project task beside another in its board column by giving
+  it a priority between its neighbours; the answer says when the label changed, and which tasks were spread out again
+  when the neighbours left no room. Into an empty column it needs no neighbour.
+- **A stale write is refused**: `edit`, `assign`, `unassign` and `move` take `{ revision }` and refuse another with
+  `configuration_error`, reason `task.stale`, and the task's current revision. `assign` and `unassign` now bump the
+  task's revision too.
+- **Every task write is in `task_events`**, in the same transaction: new kinds `agent`, `claimed`, `released`,
+  `next-check` (a follow-up time used to leave no event), `resolution`, `verdict`, `close-certainty` and `tags` (a
+  tag added to or removed from a task). The event id only grows, so it orders changes.
+- **`priority:` and `agent:` query fields** on the board: `priority:high`, `priority:none`, `priority:[medium TO
+  critical]`, `priority:[0.6 TO 1]`; `agent:hermes`, `agent:none`.
+- **The `task` entity** may carry `priority_label`, `agent`, `revision`, `assignments`, `ready` and `blocked_by`, as a
+  project task list gives them.
+
+### Changed — may break callers
+
+- **A task's `priority` is a number from 0 to 1, higher first**, in `TaskDetails`, `TaskFields` and the task card
+  (`priority_label` beside it); it was 0 (urgent) … 4 (low). Lists order by it highest first. `tasks update
+  --priority` takes low, medium, high, critical or none, and still reads 0–4 as before.
+
+## 0.512.0 — 01.11.2026
+
+### Added
+
+- **A project task has two more open states: `todo` and `in_progress`.** `TASK_STATES` is `open`, `todo`,
+  `in_progress`, `done`, `dismissed`; `CLOSED_STATES` and `isClosedState` name the closed ones. `tasks.edit` moves a
+  project task between any two of them, records each move as a `status` event, sets `started_at` the first time it
+  enters `in_progress`, and reopens a closed task: `closed_at`, who closed it and its reason are cleared. Readiness,
+  `readyTasks`, claims, a person's open tasks, reminders, duplicate checks and category counts treat both new states as
+  open work. A task from a message stays open or closed.
+- **`tasks.board(query, { limit, offset, sort, descending, zone })` and `tasks.boardCounts(query)`** list the owner's
+  project tasks across every project (an account's inbox is left out) with a Lucene query over `PROJECT_TASK_FIELDS`:
+  `state`, `kind`, `project` (`project:*` for all), `assignee` (`any`, `none`, `"person:12"`), `priority` with
+  ranges, `due` and `closed` with ranges, `overdue`, `ready`, and `text`, the words of the title and description
+  (prefixes; a task key too). The board sorts by `TASK_SORTS` and returns the total; the counts give how many tasks
+  hold each project, assignee, priority and state, each without the query's own terms on that field.
+- **`tasks.taskPeople()`** lists the owner and everyone who holds a role on a live task, with how many tasks.
+- **`tasks.events(id)`** names who acted: `actor.name` is the person's or the bot's name, or null.
+- **`listQuery(text, registry, command, { defaultField })`** reads a bare word as that field instead of refusing it.
+- **`events_list` takes `page`**, as `events list --page` does. Without `account_id` each page is cut from every
+  account's events merged in time order, so it reads at most each account's first 1000 events; a page past that is
+  refused with `validation_error` and asks for `account_id`.
+
+### Changed — may break callers
+
+- **`ClosedState` is `done | dismissed`**, no longer every state but `open`; a check of `state === "open"` for "not
+  closed" misses `todo` and `in_progress` — use `isClosedState`.
+- **The calendar MCP tools `event_create` and `event_update` take `operation_id`, not `id`**, as `events create` and
+  `events update --following` take `--operation-id` since 0.510.0. The value is the same: the `operation_id` a lost
+  write's `outcome_unknown` names, and that error now says "repeat with operation_id". `id` is refused as an unknown
+  argument; change agent prompts that pass it.
+- **`events_list` answers the shared list shape**: `page: { mode: "page", limit, has_more, next_page }` and a
+  `page.next` step, where it answered `page: 1` and `hasMore`. Read `page.has_more` instead of `hasMore`.
+
+## 0.511.0 — 31.10.2026
+
+## 0.510.0 — 31.10.2026
+
+### Fixed
+
+- **`search events --backend both` marks a repeating event the provider also found.** The stored search shows a series
+  as one hit, while a provider such as Google answers the series and each moved occurrence apart, so 0.508.0 left the
+  stored hit without `server` and listed the provider's copies again below it. A provider hit is now matched through
+  its stored copy's series, and the stored hit takes `server` once.
+- **`search events --help`** says what `--backend both` does in words ("ask both").
+
+## 0.509.0 — 31.10.2026
+
+### Changed — may break callers
+
+- **The MCP agent log names the agent that made the call, not the server.** A row in `agent_actions` was always the
+  bot `<command>-mcp` (`tg-mcp`); it is now the client as it named itself (`clientInfo.name` from `initialize`, or the
+  per-request `io.modelcontextprotocol/clientInfo`), else the coding agent whose environment started a stdio server
+  (`claude-code`), else `<command>-mcp`. A filter on `tg-mcp` no longer finds new rows. The name is the client's own
+  claim: a label, never a permission. `callingAgent(fallback, caller?)` from `@wirecat/cli-core/mcp` gives the same
+  name to a CLI that runs its own server, and `Registration.log` receives the call's caller.
+- **Any proposed or accepted fact can be corrected.** `facts.add({ supersedes })` took only a decision; it now takes a
+  fact of any type, and refuses one already superseded, reversed or rejected. When the new fact is accepted (at once,
+  for the owner's), the old one becomes `superseded` whether it was proposed or accepted; a proposed one used to stay
+  proposed.
+
+## 0.508.0 — 31.10.2026
+
+### Added
+
+- **`events list --page <n>`: the next page of stored events.** `events list` said `hasMore` and had no way to read on;
+  it now takes `--page` from 1 with `--limit` events a page (100), and the answer's `page` is the number shown, so a
+  host's `listOf` can offer `page.next` (WC-OUT-5). `eventsAnswer` takes the page as a third argument.
+- **`search events --backend both`** asks the store and the provider's own search together, where `--backend` is
+  offered (`deps.serverSearch`). The stored hits come first in the stored search's order, `found_by` gaining
+  `server` on each the provider also found; then the hits only the provider found, earliest first. One page, with no
+  `next_offset`; `has_more` when either side has more. It refuses `--offline`, `--cursor` and `--newest` as
+  `--backend server` does, and takes `--exact` for the stored side. `calendar_search_hit` allows `server` in a stored
+  hit's `found_by`. An occurrence the store keeps under another id than the provider's search names shows twice.
+
+### Changed — may break callers
+
+- **`events create --id` and `events update --following --id` are now `--operation-id`** (WC-CMD-10, WC-OUT-10): the
+  value is the `operation_id` the answer and an `outcome_unknown` already name. `--id` is refused as an unknown
+  option; errors name `--operation-id`. The calendar MCP tools keep their `id` argument.
+- **`search events` no longer refuses `--backend both`** with `search.one-backend`; see Added.
+
+### Fixed
+
+- **`search events --cursor` help** said "a page's next_offset", a key the answer a host prints does not have; it now
+  says to go on from where the last page stopped, as `page.next` gives it.
+
+- **A budgeted `syncMail` waits out a locked store.** When another process (memo's scheduled sync) holds the store's
+  write lock past its 5 s busy timeout, the sync used to fail with `database is locked`; it now waits 2 s, 4 s, ... (at
+  most 5 times, each a request of the budget) and reads the round again. When the budget has no room the run ends as
+  `partial`. `options.wait` lets a test skip the pause.
+- **A bot token, a bot's named secret or an AI provider's key the owner sets again goes back to the keyring.** After
+  one keyring failure such a secret stayed in the private file for good, as cli-base 0.68.0 keeps a plain write where
+  the secret is. `BotTokenStore.write`, `writeSecret` and `embeddingKeys().write` now write with `{ signIn: true }`:
+  the keyring is tried and, once it takes the secret, the file copy is removed (WC-SECR-4). `writeKeyring` was
+  keyring-only already; the CAS key is only read here.
+
+## 0.507.0 — 31.10.2026
+
+### Added
+
+- **`messages sync --json` prints its progress on stderr**, for a window to draw a bar instead of an endless one
+  (WireCat Desktop). One JSON line each, counts only — never a chat's id or title:
+  `{"event":"progress","step":"sync","chats":3,"chats_done":1,"fetched":250}`. With `--all`, one once the chat list
+  is read (`chats_done` 0), then one after each chat, those passed as already current included; for one chat, one per
+  page with `chats` and `chats_done` `null`. At most about two a second; the first and last of `--all` always come.
+  Only in machine output (`--json`, `--jsonl`, or stdout not a terminal) and not in a `--background` job's log;
+  stdout still carries the one answer. Archive services take an optional `onChat` for the same counts.
+
+### Changed — may break callers
+
+- **Needs `@wirecat/cli-base` 0.68.0** (peer range `>=0.68.0 <0.69.0`). cli-base's `Credentials` in `auto` now reads
+  a sign-in the private file holds before the keyring and keeps its refreshes there (WC-SECR-4).
+
+### Fixed
+
+- **A new OAuth sign-in moves a file sign-in back to the keyring.** `TokenStorage.write` takes `{ signIn: true }`, and
+  the keeper's `signIn` and `save` pass it: the keyring is tried again and, once it takes the sign-in, the file copy
+  is removed. A refresh stays where the sign-in is, so a locked keyring is not tried for it on every refresh.
+
+## 0.506.0 — 31.10.2026
+
+### Added
+
+- **`QueriesStore.matchingPks`, `AccountVectors.scoreMessages` and `MeaningLane`'s fourth argument `within`**, which
+  lists a filter's messages once meaning can run: together they rank a filter's own messages. `fieldsOfQuery` and
+  `meaningWords` live in `src/search/lucene/meaning-parts.ts`, shared by notes and messages.
+
+- **`MailStore.saveThreads(inputs, states?)`.** Saves several threads and sync state (`{ accountId, name, value }`,
+  as `setSyncState` saves it) in one write transaction: all of it commits or none of it does. Like
+  `EventStore.saveSlots`, it lets a sync commit a slice of work with its resume point.
+
+### Changed — may break callers
+
+- **`search messages --discover` searches by meaning when the query uses `-`, `NOT`, `OR`, groups, phrases or
+  `exact:`.** Such a query used to run strict search alone, with no meaning hits. Now its words are still matched by
+  the whole query, as strict search does (`discovery.method: "lexical-strict"`), and the messages nearest in meaning
+  to its wanted words join them; every hit found by meaning, and every reply and follow-up discovery adds, matches
+  every field of the query and every excluded word, as notes do since 0.496.0. A field joined to the words by `OR`
+  narrows nothing. A query with no word to embed (`date:today`, `Helix*`) stays strict. On the owner's store, 6
+  such queries went from 0 meaning hits to 10–17 of 20, with no hit breaking the query.
+### Fixed
+
 - **The parity manifest lists `projects` and `projects evidence`**, with their options and the new `--alias` and
   `--context-query`. Without the rows, `cli-core-parity` failed max and tg once they mounted `projectsCommand` from
-  0.504.0. max and tg have it (tg-cli#798, max-cli#886); wa is planned.
+  0.504.0. All three are marked planned, so the check passes with or without the command; a follow-up marks max and
+  tg as having it once tg-cli#798 and max-cli#886 are merged.
+- **Search by meaning inside a filter ranks the filter's own messages.** With fields that hold at most 100,000
+  messages (`RANK_WITHIN_MESSAGES`), `--discover` scores every one of them that has a vector, instead of taking the
+  100 nearest messages overall and dropping those outside the filter. On the owner's store, `chat:<id>` with a chat of
+  1,000 messages went from 3 meaning candidates to 100 and from 9 hits to 20. A larger filter, or one the store
+  cannot list in one query (a preset, a pattern), keeps the old way.
+- **`--discover` works on a read-only store.** Its follow-up step created a temporary table to count rare words,
+  which a read-only connection refuses; it now counts them with a bounded query.
+- **`mail sync` no longer holds the store's one writer lock for each email in turn.** It saves fetched mail in slices of
+  50 emails, each with the resume point in the same transaction, and pauses 100 ms between slices, so `memo sync` or
+  another process next to it can take the lock instead of failing with "database is locked". A run that fails resumes
+  after the last committed slice.
 - **A long fill or rebuild in one process no longer makes another process's write fail with "database is locked".**
   `writeBatch` pauses 2 ms after each batch it commits. Without the pause, the next batch took the lock again within
   microseconds, and a write waiting in another process (a command run during `store rebuild` or a migration's fill)
   could miss every gap until its 5 s wait ran out.
+- **A forgotten memory's or fact's number is never given to a new one.** SQLite gave the next row the highest id + 1,
+  so after `memories.remove` or `facts.remove` of the newest record, the next one took its number and a stale
+  `memory:N` or `fact:N` named it. A remove now keeps the highest id handed out in `store_settings`
+  (`ids.memories.highest`, `ids.facts.highest`), and new memories and facts, restored project facts included, take
+  the next id above it. No schema change.
 
 ## 0.505.0 — 31.10.2026
 
@@ -29,14 +228,6 @@ shape of this file.
   read); a throw there is `ok: false` with `error_code` and `error`, never a failed command. `version` comes from npm
   (the `latestVersion` that `upgrade` uses) when the CLI passes the new `AppDoctorOptions.packageName`; without it that
   check is left out. The command's effects are now `REMOTE_READ`, as the messenger's.
-
-### Fixed
-
-- **A forgotten memory's or fact's number is never given to a new one.** SQLite gave the next row the highest id + 1,
-  so after `memories.remove` or `facts.remove` of the newest record, the next one took its number and a stale
-  `memory:N` or `fact:N` named it. A remove now keeps the highest id handed out in `store_settings`
-  (`ids.memories.highest`, `ids.facts.highest`), and new memories and facts, restored project facts included, take
-  the next id above it. No schema change.
 
 ## 0.504.0 — 31.10.2026
 

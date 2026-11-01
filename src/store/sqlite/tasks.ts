@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { TaskCategory, UnlistedCategory } from "../../domain/task-categories.js"
 import {
+  isClosedState,
   matches,
   TASK_KINDS,
   TASK_ORIGINS,
@@ -257,8 +258,9 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
           .prepare(
             "UPDATE tasks SET status = ?, close_reason = ?, close_reason_folded = ?, due_at = ?, closed_at = ?, " +
               "closed_by_type = ?, closed_by_id = ?, updated_at = ?, " +
-              "claimed_by = CASE WHEN ? = 'open' THEN claimed_by END, claimed_until = CASE WHEN ? = 'open' THEN claimed_until END, " +
-              "close_certainty = CASE WHEN ? = 'open' THEN NULL ELSE close_certainty END " +
+              "claimed_by = CASE WHEN ? NOT IN ('done', 'dismissed') THEN claimed_by END, " +
+              "claimed_until = CASE WHEN ? NOT IN ('done', 'dismissed') THEN claimed_until END, " +
+              "close_certainty = CASE WHEN ? NOT IN ('done', 'dismissed') THEN NULL ELSE close_certainty END " +
               "WHERE id = ?",
           )
           .run(
@@ -275,7 +277,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             task.state,
             row,
           )
-        if (task.state !== "open") database.prepare(`UPDATE tasks SET ${CLEAR_SUGGESTION} WHERE id = ?`).run(row)
+        if (isClosedState(task.state)) database.prepare(`UPDATE tasks SET ${CLEAR_SUGGESTION} WHERE id = ?`).run(row)
         if (before.status !== task.state)
           recordTaskEvent(database, row, closedBy ?? null, "status", { status: [before.status, task.state] }, at)
         if ((before.due_at ?? null) !== time(task.dueAt))
@@ -289,7 +291,9 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
       const row = required(id)
       const at = now()
       write(database, () => {
+        const before = database.prepare("SELECT resolution FROM tasks WHERE id = ?").get(row)?.resolution ?? null
         database.prepare("UPDATE tasks SET resolution = ?, updated_at = ? WHERE id = ?").run(text, at, row)
+        if (before !== text) recordTaskEvent(database, row, null, "resolution", { resolution: [before, text] }, at)
         if (!by) return
         database
           .prepare(`DELETE FROM links WHERE from_type = 'task' AND from_id = ? AND kind = ${linkKind("answered-by")}`)
@@ -307,7 +311,13 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     judge: async (id, verdict) => {
       if (verdict !== null && !TASK_VERDICTS.includes(verdict))
         throw new CliError("validation_error", `a verdict is one of ${TASK_VERDICTS.join(", ")}`)
-      database.prepare("UPDATE tasks SET verdict = ?, updated_at = ? WHERE id = ?").run(verdict, now(), required(id))
+      const row = required(id)
+      write(database, () => {
+        const at = now()
+        const before = database.prepare("SELECT verdict FROM tasks WHERE id = ?").get(row)?.verdict ?? null
+        database.prepare("UPDATE tasks SET verdict = ?, updated_at = ? WHERE id = ?").run(verdict, at, row)
+        if (before !== verdict) recordTaskEvent(database, row, null, "verdict", { verdict: [before, verdict] }, at)
+      })
     },
   }
 }

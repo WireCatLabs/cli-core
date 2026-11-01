@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Similarity } from "../../search/task-similarity.js"
+import { isClosedState } from "../../tasks/index.js"
 import { folded } from "./folded.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor } from "./memories.js"
@@ -236,7 +237,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
   const followUp = async (row: Row, candidates: readonly SimilarTask[], by: Author) =>
     write(database, () => {
       for (const one of candidates) {
-        if (one.status === "open" || one.band === "different") continue
+        if (!isClosedState(one.status) || one.band === "different") continue
         const closed = required(one.key)
         if (mergedInto(closed)) continue
         validateTaskRelation(database, Number(row.id), Number(closed.id), "follow-up-of")
@@ -275,7 +276,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
         (one) => one.band !== "different",
       )
       if (!linked) await followUp(row, alike, { bot: "rule" })
-      const found = linked ? alike : alike.filter((one) => one.status === "open")
+      const found = linked ? alike : alike.filter((one) => !isClosedState(one.status))
       if (found.length === 0) return 0
       return write(database, () => {
         let added = 0
@@ -342,7 +343,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
       const a = required(dup)
       const b = required(into)
       sameInbox(a, b)
-      if (a.status !== "open")
+      if (isClosedState(String(a.status)))
         throw new CliError(
           "validation_error",
           `task ${String(a.key)} is already ${String(a.status)}; a merge closes an open task — reopen it with tasks unmerge if a merge closed it`,

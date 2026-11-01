@@ -12,6 +12,7 @@ import { JOBS_QUERY, jobItems } from "../../services/job-query.js"
 import { dateWindow } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { applyTaskRulesSinceLastPass, type RuleResult } from "../../services/task-rules.js"
+import { stepLines } from "../../terminal/step-lines.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { destroysNothing, FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -60,7 +61,8 @@ export const syncCommand = (messenger: Messenger): Command => {
   })
     .summary("fetch and save a chat's message history")
     .description(
-      "bring a chat's history in the local store up to date, newest first; run it again to continue; --all syncs every chat",
+      "bring a chat's history in the local store up to date, newest first; run it again to continue; --all syncs every chat; " +
+        'with --json, stderr carries progress lines: {"event":"progress","step":"sync","chats","chats_done","fetched"}, counts only',
     )
     .argument("[chat]", messenger.chatArgument)
     .option(
@@ -212,6 +214,8 @@ export const syncCommand = (messenger: Messenger): Command => {
       const jobs = jobsDir(messenger.app, context.env)
       const jobId = context.env[envName(messenger.app, "BACKFILL_JOB")]
       const stop = stopOnSignal(this)
+      // A background job keeps its log as it was; its progress is the job file.
+      const progress = syncProgress(stepLines(context.streams.diagnostic, !jobId && context.format !== "pretty"))
       try {
         const options = {
           limit,
@@ -222,9 +226,12 @@ export const syncCommand = (messenger: Messenger): Command => {
           ...(last === undefined ? {} : { last }),
           note: context.renderer.note,
           stop: stop.signal,
-          onPage: (progress: { fetched: number; chatId: string; oldest: number }) => {
-            if (jobId) updateJob(jobs, jobId, { progress: { ...progress, at: new Date().toISOString() } })
+          onPage: (page: { fetched: number; chatId: string; oldest: number }) => {
+            if (jobId) updateJob(jobs, jobId, { progress: { ...page, at: new Date().toISOString() } })
+            if (chat !== undefined) progress({ chats: null, chats_done: null, fetched: page.fetched })
           },
+          onChat: ({ chats, done, fetched }: { chats: number; done: number; fetched: number }) =>
+            progress({ chats, chats_done: done, fetched }, done === 0 || done === chats),
         }
         const result = await context.withServices(
           (services): Promise<Fetched | FetchedAll> =>
@@ -279,6 +286,23 @@ export const syncCommand = (messenger: Messenger): Command => {
         stop.release()
       }
     })
+}
+
+/** At most this often a progress line, so a run of fast pages or of chats already current does not flood the window. */
+const PROGRESS_EVERY_MS = 500
+
+/**
+ * `messages sync`'s progress for a window to draw a bar by: counts only, because the lines reach a desktop app and
+ * its logs — never a chat's id or title. `always` keeps the first and the last line of `--all` through the throttle.
+ */
+const syncProgress = (emit: ReturnType<typeof stepLines>) => {
+  let last = Number.NEGATIVE_INFINITY
+  return (counts: { chats: number | null; chats_done: number | null; fetched: number }, always = false) => {
+    const now = Date.now()
+    if (!always && now - last < PROGRESS_EVERY_MS) return
+    last = now
+    emit({ event: "progress", step: "sync", ...counts })
+  }
 }
 
 /**

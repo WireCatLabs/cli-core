@@ -18,6 +18,8 @@ export interface QueriesStore {
   countQuery(execution: QueryExecution, by: QueryGrouping): Promise<QueryGroup[]>
   /** How many messages match, counted no further than `cap + 1`; `undefined` when only a full search could tell. */
   countMatches(execution: QueryExecution, cap: number): Promise<number | undefined>
+  /** The keys of the messages that match, no more than `cap + 1`; `undefined` when only a full search could tell. */
+  matchingPks(execution: QueryExecution, cap: number): Promise<number[] | undefined>
   conversationEligibility(execution: QueryExecution): Promise<ConversationEligibility>
   rankQuery(execution: QueryExecution, request: RankingRequest): Promise<RankedStoreFound>
   rankingEvidence(execution: QueryExecution, request: RankingEvidenceRequest): Promise<RankedEvidence>
@@ -33,6 +35,7 @@ export const queriesStoreOver = (context: StoreContext, stemmerFor: (stemmers: S
     matchQuery: async (execution) => lucene.matchQuery(context, mailIndexed(execution)),
     countQuery: async (execution, by) => lucene.countQuery(context, mailIndexed(execution), by),
     countMatches: async (execution, cap) => lucene.countMatches(context, mailIndexed(execution), cap),
+    matchingPks: async (execution, cap) => lucene.matchingPks(context, mailIndexed(execution), cap),
     conversationEligibility: async (execution) => conversationEligibility(context, execution),
     rankQuery: async (execution, request) => rankQuery(context, execution, request),
     rankingEvidence: async (execution, request) => rankingEvidence(context, execution, request),

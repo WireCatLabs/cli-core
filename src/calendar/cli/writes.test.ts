@@ -184,8 +184,8 @@ describe("calendar write commands", () => {
     const lost = await cli(...create, ...at).catch((error) => error)
     expect(lost).toMatchObject({ code: "outcome_unknown" })
     const id = lost.details.operation_id as string
-    expect(lost.message).toContain(`--id ${id}`)
-    await cli(...create, ...at, "--id", id)
+    expect(lost.message).toContain(`--operation-id ${id}`)
+    await cli(...create, ...at, "--operation-id", id)
     expect(writer.held("primary").filter(({ externalId }) => externalId === id)).toHaveLength(1)
     expect(await store.entry(1, id)).toMatchObject({ title: "Example planning" })
   })
@@ -200,8 +200,8 @@ describe("calendar write commands", () => {
     const failed = await cli(...create, ...at).catch((error) => error)
     const id = failed.details.operation_id as string
     expect(failed).toMatchObject({ code: "provider_unavailable", details: { reason: "store.locked", id } })
-    expect(failed.message).toContain(`--id ${id}`)
-    await cli(...create, ...at, "--id", id)
+    expect(failed.message).toContain(`--operation-id ${id}`)
+    await cli(...create, ...at, "--operation-id", id)
     expect(writer.held("primary").filter(({ externalId }) => externalId === id)).toHaveLength(1)
     expect(await store.entry(1, id)).toMatchObject({ title: "Example planning" })
   })
@@ -625,13 +625,13 @@ describe("events update and delete --following", () => {
     )
     expect(failed).toMatchObject({ details: { reason: "event.conflict" } })
     const id = failed.details.operation_id as string
-    expect(failed.message).toContain(`--id ${id}`)
+    expect(failed.message).toContain(`--operation-id ${id}`)
     await store.saveEntries(
       1,
       writer.held("primary").filter(({ externalId }) => externalId === "w1"),
       NOW,
     )
-    await cli("events", "update", slot, "--following", "--title", "New", "--no-notify", "--id", id)
+    await cli("events", "update", slot, "--following", "--title", "New", "--no-notify", "--operation-id", id)
     expect(writer.held("primary").filter(({ title }) => title === "New")).toHaveLength(1)
     expect((await store.entry(1, "w1"))?.recurrence?.[0]).toContain("UNTIL=20261110T095959Z")
     await expect(cli("events", "update", slot, "--following", "--title", "New", "--no-notify")).rejects.toMatchObject({
@@ -652,7 +652,7 @@ describe("events update and delete --following", () => {
     )
     expect(lost).toMatchObject({ code: "outcome_unknown" })
     expect(lost.message).toContain("sync: if the series now ends before this occurrence, the split is done")
-    expect(lost.message).toContain(`--id ${lost.details.operation_id}`)
+    expect(lost.message).toContain(`--operation-id ${lost.details.operation_id}`)
     expect(writer.held("primary").find(({ externalId }) => externalId === "w1")?.recurrence?.[0]).toContain("UNTIL=")
   })
 

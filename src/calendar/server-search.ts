@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { EventStore } from "../meetings/index.js"
+import type { EventsFound, FoundEvent } from "../services/events-search.js"
 import type { AccountKey } from "../store/store.js"
 import type { CalendarSource } from "./source.js"
 
@@ -45,4 +46,51 @@ export const serverSearchAnswer = async (
   }
   hits.sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""))
   return { query, by: "server" as const, hits: hits.slice(0, limit), has_more: more || hits.length > limit }
+}
+
+type FoundBy = FoundEvent["found_by"][number] | "server"
+type ServerFound = Awaited<ReturnType<typeof serverSearchAnswer>>
+
+/** As the stored search groups hits: the occurrences of one series are one hit. */
+const groupOf = (eventId: number | null, eventSeriesId: number | null) =>
+  eventSeriesId !== null ? `s${eventSeriesId}` : eventId !== null ? `e${eventId}` : undefined
+
+/**
+ * `--backend both`: the stored search's hits in its own order, each one the provider also found marked `server`, then
+ * what only the provider found, earliest first. One page and no cursor: the two sides rank and page differently.
+ * A provider hit is matched through its stored copy: a series, or any of its occurrences, to the stored hit of that
+ * series. A provider hit the store does not hold is listed on its own.
+ */
+export const bothSearchAnswer = async (
+  store: EventStore,
+  accountId: number,
+  archived: EventsFound,
+  served: ServerFound,
+  limit: number,
+) => {
+  const calendars = new Map((await store.calendars(accountId)).map((calendar) => [calendar.externalId, calendar]))
+  const hits: (Omit<FoundEvent, "found_by"> & { found_by: FoundBy[] })[] = archived.hits.map((hit) => ({ ...hit }))
+  const byGroup = new Map<string, (typeof hits)[number]>()
+  for (const hit of hits) {
+    const details = await store.event(Number(hit.ref.slice("event:".length)))
+    const group = details && groupOf(details.event.id, details.event.eventSeriesId)
+    if (group) byGroup.set(group, hit)
+  }
+  const onlyServer: ServerFound["hits"] = []
+  for (const hit of served.hits) {
+    const calendar = calendars.get(hit.calendar)
+    const entry = calendar ? await store.entry(calendar.id, hit.external_id) : null
+    const group = entry ? groupOf(entry.eventId, entry.eventSeriesId) : undefined
+    const held = group === undefined ? undefined : byGroup.get(group)
+    if (!held) onlyServer.push(hit)
+    else if (!held.found_by.includes("server")) held.found_by = [...held.found_by, "server"]
+  }
+  const merged = [...hits, ...onlyServer]
+  return {
+    query: archived.query,
+    by: "both" as const,
+    ...(archived.meaning_skipped === undefined ? {} : { meaning_skipped: archived.meaning_skipped }),
+    hits: merged.slice(0, limit),
+    has_more: archived.has_more || served.has_more || merged.length > limit,
+  }
 }

@@ -5,6 +5,7 @@ import { formatReference, parseReference, type Reference } from "../../domain/re
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
+import { isClosedState } from "../../tasks/index.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { ulid } from "../ulid.js"
@@ -444,7 +445,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     const open =
       row !== undefined &&
       taskAccountOf(database, row) === taskAccount(key) &&
-      database.prepare("SELECT status FROM tasks WHERE id = ?").get(row)?.status === "open"
+      !isClosedState(String(database.prepare("SELECT status FROM tasks WHERE id = ?").get(row)?.status ?? "done"))
     if (!open) throw new CliError("validation_error", "a reminder requires an open task in this account")
     return row as number
   }
@@ -875,7 +876,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         at = now()
       const rows = database
         .prepare(
-          "SELECT r.id FROM reminders r JOIN tasks t ON t.id = r.task_id WHERE r.account_id=? AND r.due_at<=? AND t.status = 'open' " +
+          "SELECT r.id FROM reminders r JOIN tasks t ON t.id = r.task_id WHERE r.account_id=? AND r.due_at<=? AND t.status NOT IN ('done','dismissed') " +
             "AND (r.state='pending' OR (r.state='leased' AND r.lease_until<=?)) ORDER BY r.due_at, r.id LIMIT ?",
         )
         .all(accountId, at, at, limit)

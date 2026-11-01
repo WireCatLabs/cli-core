@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { isClosedState } from "../../tasks/index.js"
 import { type Author, authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import {
@@ -55,7 +56,7 @@ export const taskCloseOver = (context: StoreContext): TaskCloseStore => {
     suggestClose: async (id, suggestion, by) =>
       write(database, () => {
         const row = liveRow(id)
-        if (row.status !== "open")
+        if (isClosedState(String(row.status)))
           throw new CliError("validation_error", `task ${String(row.key)} is already ${String(row.status)}`, {
             reason: "task.closed",
           })
@@ -88,9 +89,17 @@ export const taskCloseOver = (context: StoreContext): TaskCloseStore => {
     recordCloseCertainty: async (id, certainty) =>
       write(database, () => {
         const row = liveRow(id)
-        database
-          .prepare("UPDATE tasks SET close_certainty = ? WHERE id = ?")
-          .run(certaintyOf(certainty), Number(row.id))
+        const value = certaintyOf(certainty)
+        database.prepare("UPDATE tasks SET close_certainty = ? WHERE id = ?").run(value, Number(row.id))
+        if ((row.close_certainty ?? null) !== value)
+          recordTaskEvent(
+            database,
+            Number(row.id),
+            null,
+            "close-certainty",
+            { close_certainty: [row.close_certainty ?? null, value] },
+            now(),
+          )
       }),
   }
 }

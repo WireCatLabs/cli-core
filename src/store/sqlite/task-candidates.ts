@@ -259,7 +259,8 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
       drainCorpus(database, CORPORA.task, stemmerFor)
       const stemmer = stemmerFor(storeStemmers(database) ?? DEFAULT_STEMMERS)
       const since = now() - RECENTLY_CLOSED_MS
-      const live = "t.project_id = ? AND t.deleted_at IS NULL AND t.id <> ? AND (t.status = 'open' OR t.closed_at >= ?)"
+      const live =
+        "t.project_id = ? AND t.deleted_at IS NULL AND t.id <> ? AND (t.status NOT IN ('done', 'dismissed') OR t.closed_at >= ?)"
       const scope = [side.project, side.row ?? -1, since]
 
       const found = new Map<number, Set<CandidateLookup>>()

@@ -1,7 +1,7 @@
 import * as v from "valibot"
 import { TASK_TYPES } from "../domain/knowledge.js"
 import { LINK_KINDS, LINK_SOURCES } from "../store/sqlite/link-kinds.js"
-import { TASK_KINDS, TASK_ORIGINS, TASK_STATES, TASK_VERDICTS } from "../tasks/index.js"
+import { PRIORITY_LABELS, TASK_KINDS, TASK_ORIGINS, TASK_STATES, TASK_VERDICTS } from "../tasks/index.js"
 import { count, id, reference, text, time } from "./fields.js"
 import { closeSuggestion } from "./task.js"
 import { taskPair } from "./task-pair.js"
@@ -31,6 +31,9 @@ export const taskCard = v.strictObject({
   type: v.picklist(TASK_TYPES),
   status: v.picklist(TASK_STATES),
   priority: v.nullable(v.number()),
+  priority_label: v.nullable(v.picklist(PRIORITY_LABELS)),
+  agent: v.nullable(text),
+  revision: v.number(),
   parent: v.nullable(reference),
   source: v.nullable(text),
   due_at: nullableTime,

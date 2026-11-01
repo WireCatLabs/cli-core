@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { isClosedState } from "../../tasks/index.js"
 import type { CacheDatabase } from "../driver.js"
 import type { Actor } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
@@ -193,7 +194,7 @@ export const taskRelationsStoreOver = (
                 ? ("dismissed" as const)
                 : ("open" as const),
         }))
-        return { ready: liveTask(database, rowId).status === "open" && blockers.length === 0, blockers }
+        return { ready: !isClosedState(String(liveTask(database, rowId).status)) && blockers.length === 0, blockers }
       }),
     readyTasks: async (project, options = {}) =>
       read(database, () => {
@@ -210,7 +211,7 @@ export const taskRelationsStoreOver = (
         if (!row) throw new CliError("not_found", "the owner project is unavailable")
         const rows = database
           .prepare(
-            "SELECT coalesce(t.package_id,t.key) AS id,t.key,substr(t.title,1,300) AS title FROM tasks t WHERE t.project_id=? AND t.status='open' AND t.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM links l LEFT JOIN tasks b ON b.id=l.to_id LEFT JOIN projects p ON p.id=b.project_id WHERE l.from_type='task' AND l.to_type='task' AND l.kind='blocked-by' AND l.from_id=t.id AND l.confirmed=1 AND l.anchor IS NULL AND (b.id IS NULL OR b.deleted_at IS NOT NULL OR p.deleted_at IS NOT NULL OR b.status!='done')) ORDER BY coalesce(t.priority,5),t.number,t.id LIMIT ?",
+            "SELECT coalesce(t.package_id,t.key) AS id,t.key,substr(t.title,1,300) AS title FROM tasks t WHERE t.project_id=? AND t.status NOT IN ('done','dismissed') AND t.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM links l LEFT JOIN tasks b ON b.id=l.to_id LEFT JOIN projects p ON p.id=b.project_id WHERE l.from_type='task' AND l.to_type='task' AND l.kind='blocked-by' AND l.from_id=t.id AND l.confirmed=1 AND l.anchor IS NULL AND (b.id IS NULL OR b.deleted_at IS NOT NULL OR p.deleted_at IS NOT NULL OR b.status!='done')) ORDER BY t.priority_score IS NULL,t.priority_score DESC,t.number,t.id LIMIT ?",
           )
           .all(Number(row.id), limit + 1)
         return {

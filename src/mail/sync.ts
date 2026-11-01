@@ -1,8 +1,10 @@
+import { setTimeout } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import { importEngine } from "../attachments/extract.js"
 import type { BudgetStop, RunBudget } from "../background/budget.js"
 import type { LoadEngine } from "../readers/types.js"
-import type { AccountKey, EmailLocationInput, FolderEmail, MessageStore } from "../store/index.js"
+import type { AccountKey, EmailLocationInput, FolderEmail, MessageStore, ThreadSave } from "../store/index.js"
+import { isBusy } from "../store/sqlite/transaction.js"
 import { addressOf, FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { BULK, bulkBox } from "./bulk.js"
 import { factsOf } from "./facts.js"
@@ -90,6 +92,8 @@ const DAY = 86_400_000
 const EDGE = 2 * DAY
 /** How often a long run saves where it is, so a kill costs at most this much listing again. */
 const SAVE_EVERY_MS = 30_000
+const SLICE_SIZE = 50
+const SLICE_PAUSE_MS = 100
 /** About a minute of listing; the 30-day window of the timer stays below it. */
 const RESUME_FROM = 5_000
 
@@ -121,6 +125,8 @@ export interface MailSyncOptions {
    * is tried once more at the end of the run and, if it still fails, left for the next one. `max` defaults to no limit.
    */
   budget?: RunBudget
+  /** Pauses before a round is read again after the store was locked; tests pass one that does not wait. */
+  wait?: (ms: number) => Promise<void>
 }
 
 /** What a budgeted run carries from one round to the next. */
@@ -134,6 +140,8 @@ interface Plan extends QuickPlan {
 }
 
 const LIST_SLICE = 200
+const STORE_BUSY_TRIES = 5
+const STORE_BUSY_WAIT_MS = 2_000
 
 export const syncMail = async (
   source: MailSource,
@@ -158,10 +166,12 @@ export const syncMail = async (
     asked: 0,
   }
   const rounds: MailSyncResult[] = []
+  let busyWaits = 0
   const goOn = async () => {
     for (;;) {
       plan.asked = 0
       plan.remaining = 0
+      const triedBefore = plan.tried.size
       try {
         rounds.push(
           await syncRound(
@@ -172,6 +182,20 @@ export const syncMail = async (
           ),
         )
       } catch (error) {
+        // Another process (memo's scheduled sync) held the store's write lock past its busy timeout. The slices this
+        // run committed stay; the round's messages are asked for again after a pause, while the budget has room.
+        if (isBusy(error) && busyWaits < STORE_BUSY_TRIES && !options.signal?.aborted) {
+          busyWaits++
+          for (const key of [...plan.tried].slice(triedBefore)) plan.tried.delete(key)
+          const stop = budget.take()
+          if (stop === null) {
+            await (options.wait ?? setTimeout)(STORE_BUSY_WAIT_MS * busyWaits)
+            continue
+          }
+          plan.stopped = stop
+          plan.remaining = Math.max(plan.remaining, 1)
+          return
+        }
         // A request cut at the deadline, or failed after the budget was spent, is the run's end, not its failure: what
         // earlier rounds saved is kept and the next run goes on. While the budget has room the error is real.
         const transient = error instanceof CliError && (error.code === "timeout" || error.code === "network_error")
@@ -659,7 +683,8 @@ const syncRound = async (
     inFolder.set(item.messageId, [...(inFolder.get(item.messageId) ?? []), Number(item.uid)])
     uidsOf.set(folder, inFolder)
   }
-  const saveProgress = async () => {
+  const progressStates = () => {
+    const states: { accountId: number; name: string; value: string }[] = []
     for (const [folder, searched] of searches) {
       if (searched.validity === undefined) continue
       const done: number[] = []
@@ -705,8 +730,12 @@ const syncRound = async (
         last: { ...thisRun, done: searched.uids.filter((uid) => within(merged, Number(uid))).length },
         updatedAt: new Date(now()).toISOString(),
       }
-      await store.sync.setSyncState(key, resumeKey(folder), JSON.stringify(point))
+      states.push({ accountId, name: resumeKey(folder), value: JSON.stringify(point) })
     }
+    return states
+  }
+  const saveProgress = async () => {
+    for (const { name, value } of progressStates()) await store.sync.setSyncState(key, name, value)
   }
   // Mail already stored is located before its UID is marked done, so a done UID always has its place.
   for (const folder of locatable) {
@@ -714,8 +743,34 @@ const syncRound = async (
     await store.mail.setLocations(accountId, folder, searched.validity as string, uidsOf.get(folder) ?? new Map())
   }
   let savedAt = now()
+  // Fetched mail is saved in slices: one transaction holds the lock for a slice and carries the resume point, and the
+  // pause between slices lets another process take the lock (`await` over synchronous SQLite never yields).
+  const slice: { input: ThreadSave; done: () => Promise<void> }[] = []
+  const flush = async (pause = false) => {
+    savedAt = now()
+    const batch = slice.splice(0)
+    if (batch.length === 0) return saveProgress()
+    const ids = batch.flatMap(({ input }) => input.emails.map(({ externalId }) => externalId))
+    for (const id of ids) settled.add(id)
+    try {
+      await store.mail.saveThreads(
+        batch.map(({ input }) => input),
+        progressStates(),
+      )
+    } catch (error) {
+      for (const id of ids) settled.delete(id)
+      throw error
+    }
+    for (const { done } of batch) await done()
+    if (pause) await setTimeout(SLICE_PAUSE_MS)
+  }
+  const enqueue = async (input: ThreadSave, done: () => Promise<void>) => {
+    slice.push({ input, done })
+    if (slice.length >= SLICE_SIZE) await flush(true)
+  }
   const saveNow = async (force = false) => {
-    if (!force && now() - savedAt < SAVE_EVERY_MS) return
+    if (force) return flush()
+    if (now() - savedAt < SAVE_EVERY_MS) return
     savedAt = now()
     await saveProgress()
   }
@@ -730,7 +785,7 @@ const syncRound = async (
   for (const { item, rule } of toRecord) {
     await stopIfAborted()
     const headers = item.headers
-    await store.mail.saveThread({
+    const input: ThreadSave = {
       accountId,
       externalId: item.threadId,
       now: startedAt,
@@ -758,10 +813,11 @@ const syncRound = async (
           },
         },
       ],
+    }
+    await enqueue(input, async () => {
+      envelopes++
+      await tagStored(item)
     })
-    envelopes++
-    settled.add(item.messageId)
-    await tagStored(item)
     await saveNow()
   }
   const fetchChunk = plan === undefined ? FETCH_CHUNK : (source.fetchBatch ?? FETCH_SLICE)
@@ -816,7 +872,7 @@ const syncRound = async (
         { loadEngine, maxAttachmentChars, at: startedAt },
         attachments,
       )
-      await store.mail.saveThread({
+      const input: ThreadSave = {
         accountId,
         externalId: item.threadId,
         now: startedAt,
@@ -842,13 +898,14 @@ const syncRound = async (
             attachments: files,
           },
         ],
+      }
+      await enqueue(input, async () => {
+        saved++
+        await tagStored(item)
+        const boxes = upgraded.get(item.messageId)
+        if (boxes !== undefined)
+          await store.mail.setMailboxes(accountId, boxes.map(envelopeBoxOf), new Map([[item.messageId, []]]), startedAt)
       })
-      saved++
-      settled.add(item.messageId)
-      await tagStored(item)
-      const boxes = upgraded.get(item.messageId)
-      if (boxes !== undefined)
-        await store.mail.setMailboxes(accountId, boxes.map(envelopeBoxOf), new Map([[item.messageId, []]]), startedAt)
     }
     await saveNow()
   }

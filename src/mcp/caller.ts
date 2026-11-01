@@ -1,7 +1,26 @@
 import { CLIENT_INFO_META_KEY } from "@modelcontextprotocol/server"
-import { agentOf, clientHash, type RunAgent, type RunCaller, type RunClient } from "../runs/run-context.js"
+import {
+  agentOf,
+  clientHash,
+  currentCaller,
+  type RunAgent,
+  type RunCaller,
+  type RunClient,
+} from "../runs/run-context.js"
 
 export { currentCaller, withCaller } from "../runs/run-context.js"
+
+/**
+ * The name the audit log keeps for the agent behind one call: the client as it named itself, else the coding agent
+ * whose environment started a stdio server, else `fallback`. A client's name is its own claim, a label and never a
+ * permission (MCP's `clientInfo` is self-reported).
+ */
+export const callingAgent = (fallback: string, caller: RunCaller | undefined = currentCaller()): string => {
+  const client = caller?.agent?.client?.name
+  if (client && client !== "unknown") return client
+  const kind = caller?.agent?.kind
+  return kind && kind !== "mcp-client" ? kind : fallback
+}
 
 /** The `_meta` key the every-profile server names the real caller under, for the profile server it passes a call to. */
 export const CALLER_META_KEY = "wirecat.dev/caller"

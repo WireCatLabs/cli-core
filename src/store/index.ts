@@ -34,6 +34,16 @@ export type {
   MeetingFindingsReceipt,
   MeetingTaskFinding,
 } from "../meetings/index.js"
+export {
+  CLOSED_STATES,
+  isClosedState,
+  PRIORITY_LABELS,
+  type PriorityLabel,
+  priorityLabel,
+  priorityOf,
+  TASK_STATES,
+  type TaskState,
+} from "../tasks/index.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
 export type {
   DocumentTransferOptions,
@@ -192,8 +202,11 @@ export {
   type SearchIndexState,
   searchIndexState,
 } from "./sqlite/search-index.js"
+export type { SyncStateSave } from "./sqlite/sync.js"
 export type { TagCreationOptions, TagCreationReview } from "./sqlite/tag-creation.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
+export type { TaskSort } from "./sqlite/task-board.js"
+export { PROJECT_TASK_FIELDS, TASK_SORTS } from "./sqlite/task-board.js"
 export type { SimilarSubject, SimilarTask, TaskDraft } from "./sqlite/task-candidates.js"
 export { type AgentCloseSettings, type CloseSuggestion, certaintyOf } from "./sqlite/task-close.js"
 export type { TaskPair, TaskPairDecision, TaskPairSide } from "./sqlite/task-pairs.js"
@@ -216,11 +229,16 @@ export type {
   VocabularyTarget,
 } from "./sqlite/vocabulary.js"
 export type {
+  BoardCounts,
+  BoardOptions,
   NewWorkTask,
+  RevisionCheck,
   TaskAssignment,
   TaskDetails,
   TaskEvent,
   TaskFields,
+  TaskMove,
+  TaskMoved,
   TaskRole,
   TaskType,
   WorkTaskType,
