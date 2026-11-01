@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.529.0 — 01.11.2026
+
 ### Added
 
 - **`people.add({ name })`** adds a person known by name only, to assign a task to before any message names them.
