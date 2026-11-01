@@ -30,11 +30,17 @@ shape of this file.
 
 - **`overdue:true` no longer matches a task due later today**: it is open work due before today, in the owner's zone.
 - **A task's history gives due dates and other times as ISO**, as the task does, not epoch milliseconds.
+- **Scoring mail senders no longer hides a broken store.** `scoreSenders` treated any failure of the account lookup
+  as "no such account" and returned quietly; now only `not_found` does, and a locked or damaged store fails the
+  sync as it does elsewhere.
 
 ### Changed — may break callers
 
 - **`EvidenceFindingsBatch.project` is `null`** when the findings name no project, and the batch carries `subject`.
   A finding's `project` is optional in `FindingsInput`; meeting findings still require it.
+- **Needs `@wirecat/cli-base` 0.71.x** (peer range `>=0.71.0 <0.72.0`, was 0.68.x). 0.71.0 lets `--to` take an e-mail
+  address and `--subject` a subject line in the shared command vocabulary, which mail-cli uses. A CLI on cli-base
+  0.68 or 0.69 moves to 0.71 together with this version.
 
 ## 0.528.0 — 01.11.2026
 
