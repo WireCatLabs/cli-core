@@ -27,6 +27,7 @@ export {
   type SendOutcome,
   sendsPathFor,
 } from "./journal.js"
+export { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "./pace.js"
 export {
   assertOverridesTighten,
   CEILING_KEY,
