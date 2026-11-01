@@ -26,6 +26,8 @@ export interface AppIdentity {
    * tg, max and wa print what they always did.
    */
   messenger?: boolean
+  /** A CLI that is not a messenger yet sends to people, as mail does: it keeps the hourly limit, `sends_per_hour`. */
+  sends?: true
   /**
    * How long one request to the provider usually takes, in ms: a sync's budget is the deadline, less its margin,
    * divided by it (`requestsFor`). 2 s when unset.
