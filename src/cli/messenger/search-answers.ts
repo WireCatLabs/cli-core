@@ -1,6 +1,7 @@
 import type { ErrorCode } from "@wirecat/cli-base"
 import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { InferOutput } from "valibot"
+import { hitFiles } from "../../domain/attachments.js"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import { senderIsMe } from "../../domain/models.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
@@ -26,6 +27,8 @@ export type MessageHitItem = InferOutput<(typeof ENTITIES)["message.hit"]>
 export type NoteHitItem = InferOutput<(typeof ENTITIES)["note.hit"]>
 export type HitItem = InferOutput<(typeof ENTITIES)["hit"]>
 
+const nonEmpty = <T>(list: T[]): T[] | undefined => (list.length > 0 ? list : undefined)
+
 const defined = <T extends object>(value: T): T =>
   Object.fromEntries(Object.entries(value).filter(([, one]) => one !== undefined)) as T
 
@@ -43,6 +46,7 @@ const MESSAGE_HIT_UNTRUSTED = [
   "follow_ups.chat_title",
   "follow_ups.sender_name",
   "follow_ups.excerpt",
+  "attachments.name",
 ]
 const MAIL_HIT_UNTRUSTED = [
   "email.subject",
@@ -106,6 +110,7 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
       sender_name: one.senderName,
       excerpt: excerpt(one.text, query),
     })),
+    attachments: nonEmpty(hitFiles(hit.attachments)),
     untrusted: hit.email ? [...MESSAGE_HIT_UNTRUSTED, ...MAIL_HIT_UNTRUSTED] : MESSAGE_HIT_UNTRUSTED,
   })
 }
@@ -316,8 +321,8 @@ export const noteHitItem = (hit: FoundNote): NoteHitItem =>
 
 /** The text of each kind of `search all` hit that someone other than the owner may have written. */
 const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
-  message: ["title", "excerpt", "sender_name"],
-  mail: ["title", "excerpt", "sender_name"],
+  message: ["title", "excerpt", "sender_name", "attachments.name"],
+  mail: ["title", "excerpt", "sender_name", "attachments.name"],
   document: DOCUMENT_HIT_UNTRUSTED,
   note: undefined,
   event: ["title", "excerpt"],
@@ -352,6 +357,7 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         sender_is_me: item.senderIsMe,
         sender_ref: item.from?.ref,
         found_by: item.foundBy,
+        attachments: item.attachments === undefined ? undefined : nonEmpty(item.attachments),
         untrusted: ALL_HIT_UNTRUSTED[item.kind],
       })
 

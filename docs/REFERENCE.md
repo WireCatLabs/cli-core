@@ -256,6 +256,15 @@ Adapters can implement optional `permalink` to return HTTPS links; its result co
 content. Link audience is `public`, `restricted` or `unknown`; a URL grants no membership.
 Without support, a validated target returns `url: null`, `access: unavailable`, and a reason.
 Offline validates this account's stored message and returns reason `offline`, without connecting.
+A message with files also gets `files: [{ position, kind, name, url, reason }]`. No messenger gives a file a link
+of its own yet, so each `url` is null with reason `unsupported_provider`: open the message's link instead.
+
+## Files saved on this computer
+
+`messages download <chat> <message>` and `messages download <msg: locator>` fetch the files from the messenger.
+With `--offline`, the same command copies files the store already holds to `--output-dir` and never connects;
+`--attachment <n>` picks one by the position a search hit's `attachments` gives. A file not saved here is a
+`not_found` error before anything is written. The copy is not recorded: the store keeps pointing at its own file.
 A locator for another messenger or account is refused. Singular `link` differs from graph `links`.
 
 ## The entry point of a CLI with its own program

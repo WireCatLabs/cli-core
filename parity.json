@@ -3329,6 +3329,9 @@
         "--all": {
           "in": "all"
         },
+        "--attachment": {
+          "in": "all"
+        },
         "--extract": "all",
         "--output-dir": {
           "in": "all"

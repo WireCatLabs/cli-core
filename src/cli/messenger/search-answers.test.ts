@@ -200,8 +200,8 @@ describe("untrusted text in search answers", () => {
 
     for (const item of items) v.parse(ENTITIES.hit, item)
     expect(Object.fromEntries(items.map(({ kind, untrusted }) => [kind, untrusted]))).toEqual({
-      message: ["title", "excerpt", "sender_name"],
-      mail: ["title", "excerpt", "sender_name"],
+      message: ["title", "excerpt", "sender_name", "attachments.name"],
+      mail: ["title", "excerpt", "sender_name", "attachments.name"],
       document: ["title", "excerpt"],
       event: ["title", "excerpt"],
       meeting: ["title", "excerpt"],
@@ -243,6 +243,7 @@ describe("untrusted text in search answers", () => {
       "follow_ups.chat_title",
       "follow_ups.sender_name",
       "follow_ups.excerpt",
+      "attachments.name",
       "email.subject",
       "email.from.name",
       "email.to.name",

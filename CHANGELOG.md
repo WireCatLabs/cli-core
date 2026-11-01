@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A message hit names its files**: `search messages` and `search all` hits carry
+  `attachments: [{ position, kind, name, size }]` (files only, absent when there are none; `name` and `size` when the
+  store has them). `position` counts every attachment from 1, as `attachments show --attachment` takes it.
+  `attachments.name` is listed in the hit's `untrusted` fields.
+- **`messages download --offline`** copies files the local store already holds, by chat and id or by a `msg:`
+  locator, and never connects; `--attachment <n>` picks one. A file not saved here fails with `not_found` before
+  anything is written, and the store keeps pointing at its own copy.
+- **`messages download` takes a `msg:` locator** in place of chat and id; the chat and id form still works.
+- **`messages link` lists a message's files**: `files: [{ position, kind, name, url, reason }]`. No messenger gives
+  a file its own link yet, so `url` is null with reason `unsupported_provider`.
+
 ## 0.531.0 — 01.11.2026
 
 ### Added
