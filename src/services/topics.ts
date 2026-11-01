@@ -8,20 +8,26 @@ import type { ServiceDeps } from "./deps.js"
 
 export interface TopicsService {
   show(chat: string, topic: string): Promise<Topic>
+  /** The emojis `create` and `edit` take as an icon. */
+  icons(): Promise<string[]>
   enable(
     chat: string,
     options: { upgrade: boolean },
   ): Promise<Operated<{ previousChatId: string; chat: Chat; upgraded: boolean; forum: true }>>
-  create(chat: string, title: string, options: { sendId?: string }): Promise<Operated<{ chatId: string; topic: Topic }>>
+  create(
+    chat: string,
+    title: string,
+    options: { sendId?: string; icon?: string },
+  ): Promise<Operated<{ chatId: string; topic: Topic }>>
   edit(chat: string, topic: string, change: TopicChange): Promise<Operated<{ chatId: string; topic: Topic }>>
   order(chat: string, topics: string[]): Promise<Operated<{ chatId: string; order: string[] }>>
   /** Every message in it goes too, for everyone; asks first by default (`topics.delete` is `ask`). */
   delete(chat: string, topic: string): Promise<Operated<{ chatId: string; topicId: string }>>
 }
 
-const actionOf = ({ title, closed, pinned, hidden }: TopicChange): ChatAction => {
+const actionOf = ({ title, closed, pinned, hidden, icon }: TopicChange): ChatAction => {
   const set = [closed, pinned, hidden].filter((one) => one !== undefined).length
-  if (title !== undefined || set !== 1) return "topic-edit"
+  if (title !== undefined || icon !== undefined || set !== 1) return "topic-edit"
   if (closed !== undefined) return closed ? "topic-close" : "topic-reopen"
   if (pinned !== undefined) return pinned ? "topic-pin" : "topic-unpin"
   return hidden ? "topic-hide" : "topic-unhide"
@@ -30,6 +36,12 @@ const actionOf = ({ title, closed, pinned, hidden }: TopicChange): ChatAction =>
 const validTitle = (title: string): void => {
   if (title.trim() === "" || new TextEncoder().encode(title).byteLength > 128)
     throw new CliError("validation_error", "a topic title needs 1–128 UTF-8 bytes")
+}
+
+const validIcon = (icon: string): string => {
+  const emoji = icon.trim()
+  if (emoji === "") throw new CliError("validation_error", "which icon? give an emoji from `topics icons list`")
+  return emoji
 }
 
 export const topicsService = (deps: ServiceDeps): TopicsService => {
@@ -44,6 +56,11 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
       const id = topic.trim()
       if (id === "") throw new CliError("validation_error", "which topic? give its id, from `topics list`")
       return capability(await deps.connection(), "topic", "show a forum topic")(chat, id)
+    },
+    icons: async () => {
+      if (deps.offline)
+        throw new CliError("validation_error", "`topics icons list` asks the messenger; not with --offline")
+      return capability(await deps.connection(), "topicIcons", "list topic icons")()
     },
     enable: async (chat, { upgrade }) => {
       const connection = await online()
@@ -138,8 +155,9 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
         forum: true,
       }
     },
-    create: async (chat, title, { sendId }) => {
+    create: async (chat, title, { sendId, icon: typedIcon }) => {
       validTitle(title)
+      const icon = typedIcon === undefined ? undefined : validIcon(typedIcon)
       const connection = await online()
       const create = capability(connection, "createTopic", "create forum topics")
       const probe = capability(connection, "forumState", "read forum settings")
@@ -157,7 +175,7 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
           key: "topics.create",
           length: title.length,
         },
-        () => create(target, title, { sendId: id }),
+        () => create(target, title, { sendId: id, ...(icon === undefined ? {} : { icon }) }),
         (done) => ({ threadId: done.id, resultChatId: target }),
         async () => {
           const state = await probe(chatId)
@@ -177,8 +195,12 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
     },
     edit: async (chat, typedTopic, change) => {
       const { title, closed, pinned, hidden } = change
-      if (title === undefined && closed === undefined && pinned === undefined && hidden === undefined)
-        throw new CliError("validation_error", "nothing to change — rename, close, reopen, pin, unpin or hide it")
+      const icon = change.icon == null ? change.icon : validIcon(change.icon)
+      if ([title, closed, pinned, hidden, icon].every((one) => one === undefined))
+        throw new CliError(
+          "validation_error",
+          "nothing to change — rename, close, reopen, pin, unpin, hide or give an icon",
+        )
       if (title !== undefined) validTitle(title)
       const topicId = typedTopic.trim()
       if (topicId === "") throw new CliError("validation_error", "which topic? give its id from `topics list`")
@@ -196,6 +218,7 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
             ...(closed === undefined ? {} : { closed }),
             ...(pinned === undefined ? {} : { pinned }),
             ...(hidden === undefined ? {} : { hidden }),
+            ...(icon === undefined ? {} : { icon }),
           }),
       )
       return { operationId, chatId, topic }

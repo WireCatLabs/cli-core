@@ -663,6 +663,8 @@ export interface TopicChange {
   pinned?: boolean
   /** Only a forum's General topic can be hidden from the topic list. */
   hidden?: boolean
+  /** An emoji from the messenger's topic icon set; `null` removes the icon. */
+  icon?: string | null
 }
 
 /** Someone who asked to join a group or channel that needs an admin's approval. */

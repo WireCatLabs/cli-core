@@ -45,6 +45,8 @@ describe("editing a forum topic", () => {
     [{ closed: true, pinned: true }, "topic-edit"],
     [{ hidden: true }, "topic-hide"],
     [{ hidden: false }, "topic-unhide"],
+    [{ icon: "🤖" }, "topic-edit"],
+    [{ icon: null }, "topic-edit"],
   ] as const)("passes %j and journals %s with the topic id, never the title", async (change, action) => {
     const f = fixture()
     expect(await f.service.edit("synthetic group", " 12 ", change)).toMatchObject({ chatId: "7", topic })
@@ -58,6 +60,7 @@ describe("editing a forum topic", () => {
     [{}, "nothing to change"],
     [{ title: " " }, "1–128 UTF-8 bytes"],
     [{ title: "x".repeat(129) }, "1–128 UTF-8 bytes"],
+    [{ icon: " " }, "which icon"],
   ])("refuses %j before connecting", async (change, message) => {
     const f = fixture()
     const connection = vi.fn(f.deps.connection)
@@ -72,6 +75,35 @@ describe("editing a forum topic", () => {
       "not with --offline",
     )
     await expect(fixture(false).service.edit("7", "12", { closed: true })).rejects.toThrow("cannot edit forum topics")
+  })
+})
+
+describe("topic icons", () => {
+  it("lists the messenger's icon set, and refuses offline and a messenger without one", async () => {
+    const topicIcons = vi.fn(async () => ["🤖", "📰"])
+    const deps = (capable: boolean) =>
+      onlineDeps(
+        { provider: "test" } as Messenger,
+        (capable ? { topicIcons } : {}) as unknown as MessengerAdapter,
+        {} as SendGuard,
+      )
+    expect(await topicsService(deps(true)).icons()).toEqual(["🤖", "📰"])
+    await expect(topicsService({ ...deps(true), offline: true }).icons()).rejects.toThrow("not with --offline")
+    await expect(topicsService(deps(false)).icons()).rejects.toThrow("cannot list topic icons")
+  })
+
+  it("passes a trimmed icon to a new topic", async () => {
+    const createTopic = vi.fn(async () => topic)
+    const guard = { check: () => {}, record: () => {} } as unknown as SendGuard
+    const adapter = {
+      resolve: async () => chat,
+      createTopic,
+      forumState: async () => ({ chat, forum: true, canCreate: true }),
+    } as unknown as MessengerAdapter
+    const service = topicsService(onlineDeps({ provider: "test" } as Messenger, adapter, guard))
+    await service.create("7", "synthetic", { sendId: "42", icon: " 🤖 " })
+    expect(createTopic).toHaveBeenCalledWith("7", "synthetic", { sendId: "42", icon: "🤖" })
+    await expect(service.create("7", "synthetic", { sendId: "43", icon: "" })).rejects.toThrow("which icon")
   })
 })
 
