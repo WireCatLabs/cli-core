@@ -132,3 +132,14 @@ describe("error reasons", () => {
     expect(() => failureContext({ details: ["migratedChatId"] })).toThrow(/snake_case: migratedChatId/)
   })
 })
+
+it("keeps the keys a task error names in the JSON a CLI prints", () => {
+  const context = { reasons: CORE_REASONS, details: CORE_DETAILS }
+  const subtasks = new CliError("validation_error", "HRB-1 has subtasks", {
+    reason: "task.has-subtasks",
+    subtasks: ["HRB-2"],
+  })
+  expect(errorObjectOf(subtasks, context).error.details).toEqual({ subtasks: ["HRB-2"] })
+  const subtask = new CliError("validation_error", "HRB-2 is a subtask", { reason: "task.is-subtask", parent: "HRB-1" })
+  expect(errorObjectOf(subtask, context).error.details).toEqual({ parent: "HRB-1" })
+})

@@ -14,6 +14,23 @@ shape of this file.
 - **`tokenKeeper.tokens({ refresh: true })`** (and `accessToken({ refresh: true })`): after a server refuses an
   access token whose `expiresAt` still called it fresh (a revoked session), refresh under the shared lock anyway. A
   different fresh token another process saved meanwhile is answered instead of a second refresh.
+- **A task error names the tasks it is about**: `task.has-subtasks` gives `details.subtasks` (their keys) and
+  `task.is-subtask` gives `details.parent`, in the JSON a CLI prints. The keys were raised but not kept.
+- **`parent:` in the project task query**: `parent:<key>` lists a task's subtasks, also by a key it had before it
+  moved to another project; `parent:none` and `parent:any`.
+
+### Fixed
+
+- **A findings batch stays approvable after a sibling batch of the same project is decided.** Accepting checks only
+  the evidence and assignee the accepted findings cite. Before, every task a
+  decision created moved the project's row, and every other waiting batch of that project was refused as
+  `evidence-findings.stale`. A renamed project no longer refuses a batch either; the project must still exist.
+  Meeting findings are unchanged.
+
+### Changed — may break callers
+
+- **Moving a subtask to another project is refused** with `task.is-subtask` (details `parent`, its parent's key),
+  unless the same edit detaches it with `parent: null`. Before, the move dropped its parent without saying so.
 
 ## 0.536.0 — 01.11.2026
 

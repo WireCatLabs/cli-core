@@ -86,7 +86,10 @@ export interface TaskFields {
   reason?: string | null
   /** A name the caller checked against its category list; every change is a `category` event. */
   category?: string
-  /** Another owner project, by key or `project:<id>`: the task takes the next key there; its old key still finds it. */
+  /**
+   * Another owner project, by key or `project:<id>`: the task takes the next key there; its old key still finds it.
+   * A subtask moves only with `parent: null` in the same edit.
+   */
   project?: string
   /** A project task's kind, bug, feature or chore. */
   type?: WorkTaskType
@@ -413,12 +416,20 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     Boolean(database.prepare(`SELECT 1 FROM tasks t WHERE t.id = ? AND ${BOARD_SCOPE}`).get(task))
 
   /** The task takes the target's next number and key; the source's counter never goes back, so its old key stays unique. */
-  const moveToProject = (task: number, before: Row, target: number, actor: Actor, at: number) => {
+  const moveToProject = (task: number, before: Row, target: number, actor: Actor, at: number, detach: boolean) => {
     if (target === Number(before.project_id)) return
     if (!onBoard(task)) throw new CliError("validation_error", "only a project task moves to another project")
     const targetRow = database.prepare("SELECT key FROM projects WHERE id = ?").get(target) as Row
     if (String(targetRow.key).length === INBOX_KEY_LENGTH)
       throw new CliError("validation_error", "a task moves only into one of your projects")
+    if (before.parent_id != null && !detach) {
+      const parent = taskIdOf(database, Number(before.parent_id))
+      throw new CliError(
+        "validation_error",
+        `${String(before.key)} is a subtask of ${parent}; detach it in the same write (parent none) to move it alone`,
+        { reason: "task.is-subtask", parent },
+      )
+    }
     const children = database
       .prepare("SELECT key FROM tasks WHERE parent_id = ? AND deleted_at IS NULL ORDER BY id")
       .all(task)
@@ -535,7 +546,8 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       change("type", fields.type, "type")
       bump = true
     }
-    if (fields.project !== undefined) moveToProject(task, before, projectOf(fields.project), actor, at)
+    if (fields.project !== undefined)
+      moveToProject(task, before, projectOf(fields.project), actor, at, fields.parent === null)
     if (set.length === 0) {
       if (bump) database.prepare("UPDATE tasks SET revision = revision + 1 WHERE id = ?").run(task)
       return
