@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { EntryInput, ParticipantResponse, StoredCalendar } from "../meetings/index.js"
 import type { Level, PermissionKey } from "../sends/permissions.js"
+import type { IcsEvent } from "./ics.js"
 
 /**
  * A new event in neutral words: a timed one has `startsAt` and `endsAt` (epoch ms, end exclusive) in `timezone`; an
@@ -68,6 +69,17 @@ export interface CalendarWriter {
     options: { etag: string; notify: boolean },
   ): Promise<EntryInput>
   /**
+   * Optional: the provider makes an event from one line of text, reading its date, time and place its own way. The
+   * provider picks the id, so a retry after `outcome_unknown` may make a second event.
+   */
+  quickAdd?(calendar: StoredCalendar, text: string, options: { notify: boolean }): Promise<EntryInput>
+  /**
+   * Optional: adds a private copy of an event read from an iCalendar file, under its own UID, as Google's
+   * `events.import`. The provider mails nobody. Sending the same UID again goes to the provider again; what it does
+   * with an event it holds already is its own.
+   */
+  importEvent?(calendar: StoredCalendar, event: IcsEvent): Promise<EntryInput>
+  /**
    * Optional: moves the event, keeping its id, to `target`, another calendar of the same account. `etag` is checked
    * before the move; a provider whose move takes no precondition reads the event first. A retry after
    * `outcome_unknown` that finds the event already on `target` returns it.
@@ -81,7 +93,7 @@ export interface CalendarWriter {
 }
 
 /** Which write a command makes, for `CalendarWrites.extraKeys`. */
-export type CalendarWrite = "create" | "update" | "delete" | "respond" | "move"
+export type CalendarWrite = "create" | "quick-add" | "import" | "update" | "delete" | "respond" | "move"
 
 /** Mailing the other attendees: an agent may write to the calendar and still not to people (WC-PERM-14's spirit). */
 export const EVENTS_NOTIFY_KEY: PermissionKey = "events.notify"
@@ -96,6 +108,8 @@ export const CALENDAR_WRITE_KEYS: readonly PermissionKey[] = [EVENTS_NOTIFY_KEY,
  */
 export const CALENDAR_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = {
   "events.create": "allow",
+  // One import writes a whole file of events, and may change events the calendar already holds under their UIDs.
+  "events.import": "ask",
   "events.update": "allow",
   "events.respond": "allow",
   "events.move": "allow",

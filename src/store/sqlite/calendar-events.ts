@@ -52,6 +52,10 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
     clauses.push("e.starts_at >= ?")
     params.push(filter.startsFrom - DAY)
   }
+  if (filter.id !== undefined) {
+    clauses.push("e.id = ?")
+    params.push(filter.id)
+  }
   if (filter.calendarId !== undefined) {
     clauses.push(entries("ce.calendar_id = ?"))
     params.push(filter.calendarId)
@@ -63,6 +67,14 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
     return `${column} IN (${accounts.map(() => "?").join(", ")})`
   }
   if (accounts !== undefined) clauses.push(entries(inAccounts("c.account_id")))
+  // A copy's kind counts only in the accounts read: another account's copy of the same meeting is its own.
+  const ofKind = (kinds: readonly string[]) => {
+    for (const kind of kinds) params.push(kind)
+    const scope = accounts === undefined ? "" : ` AND ${inAccounts("c.account_id")}`
+    return entries(`coalesce(ce.event_type, 'default') IN (${kinds.map(() => "?").join(", ")})${scope}`)
+  }
+  if (filter.eventType !== undefined) clauses.push(ofKind([filter.eventType]))
+  if (filter.notEventTypes?.length) clauses.push(`NOT ${ofKind(filter.notEventTypes)}`)
   if (filter.personId !== undefined) {
     clauses.push(
       entries(

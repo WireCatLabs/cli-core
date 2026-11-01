@@ -102,6 +102,7 @@ const setup = async (
     ...(options.lock ? { readOnlyLock: options.lock } : {}),
   })
   const written: Record<string, unknown>[] = []
+  const files = new Map<string, string>()
   const program = () => {
     const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
     root.option("--yes").option("--dry-run").option("--json").option("--jsonl")
@@ -113,6 +114,14 @@ const setup = async (
       now: () => NOW,
       timezone: "UTC",
       writes: { writer, app, settings, env, ...(options.extraKeys ? { extraKeys: options.extraKeys } : {}) },
+      readFile: async (path) => {
+        const text = files.get(path)
+        if (text === undefined) throw new CliError("not_found", `no file ${path}`)
+        return text
+      },
+      writeFile: async (path, content) => {
+        files.set(path, content)
+      },
     })
     return root
   }
@@ -127,7 +136,7 @@ const setup = async (
   const journal = () => new SendJournal(sendsPathFor(app, "work", env)).entries()
   const eventOf = async (externalId: string) =>
     (await store.entry(calendar?.id as number, externalId))?.eventId as number
-  return { store, writer, cli, parse, program, journal, eventOf, calendarId: calendar?.id as number }
+  return { store, writer, cli, parse, program, journal, eventOf, files, calendarId: calendar?.id as number }
 }
 
 // A broader `events: allow` would not lift the built-in asks (WC-PERM-7): each key is named.
@@ -145,7 +154,7 @@ describe("calendar write commands", () => {
     const root = new Command("gcal")
     addCalendarCommands(root, { store: memoryEventStore(), accountId: 1, account: {} as never, write: () => undefined })
     const events = root.commands.find((one) => one.name() === "events")
-    expect(events?.commands.map((one) => one.name())).toEqual(["list", "show", "prepare"])
+    expect(events?.commands.map((one) => one.name())).toEqual(["list", "export", "show", "prepare"])
   })
 
   it("create asks when the owner set it to, then journals its id before the provider sees it", async () => {
@@ -169,6 +178,168 @@ describe("calendar write commands", () => {
     expect(made.event).toMatch(/^event:\d+$/u)
     const stored = await store.entry(1, id)
     expect(stored).toMatchObject({ title: "Example planning", startsAt: Date.UTC(2026, 10, 2, 10), etag: '"v4"' })
+  })
+
+  it("create --text lets the provider read the line, stores the event and mails nobody unless told", async () => {
+    const { cli, writer, store, journal } = await setup()
+    const made = await cli("events", "create", "work", "--text", "Example lunch with Ana tomorrow 1pm")
+    const [call] = writer.calls
+    expect(call).toMatchObject({ write: "quick-add", calendar: "primary", notify: false })
+    expect(made.event).toMatch(/^event:\d+$/u)
+    expect(await store.entry(1, call?.externalId as string)).toMatchObject({
+      title: "Example lunch with Ana tomorrow 1pm",
+    })
+    expect(journal()).toEqual([
+      expect.objectContaining({ outcome: "sent", key: "events.create", sendId: made.operation_id, notify: false }),
+    ])
+    await expect(cli("events", "create", "primary", "--text", "Lunch", "--notify")).rejects.toMatchObject({
+      code: "permission_error",
+    })
+  })
+
+  it("create --text refuses other fields and an operation id, and says a lost answer is not safe to retry", async () => {
+    const { cli, writer } = await setup()
+    await expect(cli(...create, "--text", "Lunch tomorrow")).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: "event.text-with-fields" },
+    })
+    await expect(
+      cli("events", "create", "primary", "--text", "Lunch", "--operation-id", newEventId()),
+    ).rejects.toMatchObject({ code: "validation_error" })
+    await expect(cli("events", "create", "primary", "--text", "  ")).rejects.toMatchObject({
+      code: "validation_error",
+    })
+    expect(writer.calls).toEqual([])
+    writer.loseNextAnswer()
+    const lost = cli("events", "create", "primary", "--text", "Lunch tomorrow")
+    await expect(lost).rejects.toMatchObject({ code: "outcome_unknown", details: { retryable: false } })
+    await expect(lost).rejects.toThrow(/cannot be retried safely/u)
+  })
+
+  it("create --text is checked by events.create and the provider's own key", async () => {
+    const denied = await setup({ permissions: { "events.create": "deny" } })
+    await expect(denied.cli("events", "create", "primary", "--text", "Lunch")).rejects.toMatchObject({
+      code: "permission_error",
+    })
+    const keyed = await setup({
+      permissions: { "api.calendar.events.quickAdd": "deny" },
+      extraKeys: (write) => (write === "quick-add" ? ["api.calendar.events.quickAdd"] : []),
+    })
+    await expect(keyed.cli("events", "create", "primary", "--text", "Lunch")).rejects.toMatchObject({
+      code: "permission_error",
+    })
+    expect(await keyed.cli(...create, ...at)).toMatchObject({ event: expect.stringMatching(/^event:/u) })
+    expect(denied.writer.calls).toEqual([])
+  })
+
+  it("events export writes the query's events as iCalendar, one by id:, or to --output", async () => {
+    const { cli, files, eventOf, program } = await setup()
+    const one = await cli("events", "export", `id:${await eventOf("e1")}`)
+    expect(one).toMatchObject({ format: "ics", events: 1, untrusted: ["content"] })
+    const content = String(one.content)
+    expect(content).toContain("UID:e1@example.com\r\n")
+    expect(content).toContain("SUMMARY:Example review\r\n")
+    expect(content).toContain("ATTENDEE;PARTSTAT=ACCEPTED:mailto:ana@example.com\r\n")
+    const week = await cli("events", "export", "starts_at>=2026-10-27", "--output", "week.ics")
+    expect(week).toEqual({ format: "ics", events: 2, output: "week.ics" })
+    const uids = (files.get("week.ics") ?? "").match(/^UID:.*$/gmu)
+    expect(uids).toEqual(["UID:e1@example.com", "UID:s1_20261028T100000Z"])
+    expect((await cli("events", "export", "event_type:birthday")).events).toBe(0)
+    const tool = toolsFromCommands(describeProgram(program())).find(({ command }) => command === "events export")
+    expect(JSON.stringify(tool)).not.toContain("--output")
+    expect(Object.keys(tool?.input.entries ?? {})).not.toContain("output")
+  })
+
+  it("events import asks first, adds each event under its UID, and a second import keeps one copy", async () => {
+    const { cli, writer, store, files, journal, calendarId } = await setup()
+    files.set(
+      "in.ics",
+      [
+        "BEGIN:VCALENDAR",
+        "BEGIN:VEVENT",
+        "UID:offsite@example.com",
+        "DTSTART;VALUE=DATE:20261110",
+        "DTEND;VALUE=DATE:20261112",
+        "SUMMARY:Example offsite",
+        "END:VEVENT",
+        "BEGIN:VEVENT",
+        "UID:dinner@example.com",
+        "DTSTART;TZID=Europe/Madrid:20261103T200000",
+        "DTEND;TZID=Europe/Madrid:20261103T220000",
+        "SUMMARY:Example dinner",
+        "ATTENDEE;CN=Ana:mailto:ana@example.com",
+        "END:VEVENT",
+        "BEGIN:VEVENT",
+        "UID:dinner@example.com",
+        "RECURRENCE-ID:20261103T190000Z",
+        "DTSTART:20261103T200000Z",
+        "END:VEVENT",
+        "END:VCALENDAR",
+      ].join("\r\n"),
+    )
+    await expect(cli("events", "import", "Family", "in.ics")).rejects.toMatchObject({ code: "confirmation_required" })
+    expect(writer.calls).toEqual([])
+    const done = await cli("events", "import", "Family", "in.ics", "--yes")
+    expect(done).toMatchObject({
+      calendar: expect.any(String),
+      imported: [
+        { uid: "offsite@example.com", event: expect.stringMatching(/^event:/u) },
+        { uid: "dinner@example.com", entry: { starts_at: "2026-11-03T19:00:00.000Z" } },
+      ],
+      skipped: [{ uid: "dinner@example.com", reason: expect.stringContaining("RECURRENCE-ID") }],
+    })
+    expect(writer.calls.map(({ write, notify }) => [write, notify])).toEqual([
+      ["import", false],
+      ["import", false],
+    ])
+    expect(journal().filter(({ outcome }) => outcome === "sent")).toEqual([
+      expect.objectContaining({ key: "events.import", sendId: done.operation_id }),
+    ])
+    await cli("events", "import", "Family", "in.ics", "--yes")
+    const family = (await store.calendars(1)).find(({ title }) => title === "Family")
+    expect(writer.held("family")).toHaveLength(2)
+    expect(family && family.id !== calendarId).toBe(true)
+  })
+
+  it("an event exported and imported into another calendar keeps its UID, title, times and attendees", async () => {
+    const { cli, writer, eventOf } = await setup({ permissions: { "events.import": "allow" } })
+    await cli("events", "export", `id:${await eventOf("e1")}`, "--output", "e1.ics")
+    const done = await cli("events", "import", "family", "e1.ics")
+    expect(done.imported).toEqual([
+      expect.objectContaining({
+        uid: "e1@example.com",
+        entry: expect.objectContaining({
+          title: "Example review",
+          starts_at: new Date(NOW + 2 * HOUR).toISOString(),
+          ends_at: new Date(NOW + 3 * HOUR).toISOString(),
+        }),
+      }),
+    ])
+    expect(writer.held("family")[0]?.participants?.map(({ email }) => email)).toEqual(["ana@example.com"])
+  })
+
+  it("events import refuses a file with nothing to import, and names what it imported before a failure", async () => {
+    const { cli, writer, files } = await setup({ permissions: { "events.import": "allow" } })
+    files.set("empty.ics", "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n")
+    await expect(cli("events", "import", "primary", "empty.ics")).rejects.toMatchObject({
+      details: { reason: "ics.no-events" },
+    })
+    await expect(cli("events", "import", "primary", "missing.ics")).rejects.toMatchObject({ code: "not_found" })
+    const event = (uid: string) => ["BEGIN:VEVENT", `UID:${uid}`, "DTSTART:20261103T200000Z", "END:VEVENT"]
+    files.set(
+      "two.ics",
+      ["BEGIN:VCALENDAR", ...event("a@example.com"), ...event("b@example.com"), "END:VCALENDAR"].join("\n"),
+    )
+    const imported = writer.importEvent?.bind(writer)
+    let count = 0
+    writer.importEvent = async (...args) => {
+      if (++count === 2) throw new CliError("provider_error", "Google said no")
+      return (imported as NonNullable<typeof imported>)(...args)
+    }
+    await expect(cli("events", "import", "primary", "two.ics")).rejects.toMatchObject({
+      code: "provider_error",
+      details: { imported: ["a@example.com"], failed: "b@example.com" },
+    })
   })
 
   it("--dry-run previews a write and calls nothing", async () => {

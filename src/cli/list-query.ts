@@ -171,12 +171,14 @@ export const nativeTerms = (ast: QueryAst | undefined, command: string): Map<str
 
 /**
  * As `nativeTerms`, but each `repeatable` field may be named again, every term kept in order: `person:a person:b`
- * asks for both, as AND reads.
+ * asks for both, as AND reads. A `negatable` field may also be excluded, `-field:value` or `NOT field:value`, as
+ * often as wanted; those terms are kept under `-field`.
  */
 export const nativeTermLists = (
   ast: QueryAst | undefined,
   command: string,
   repeatable: readonly string[] = [],
+  negatable: readonly string[] = [],
 ): Map<string, Predicate[]> => {
   const terms = new Map<string, Predicate[]>()
   if (!ast) return terms
@@ -185,11 +187,20 @@ export const nativeTermLists = (
   const add = (node: QueryNode) => {
     if (node.kind === "boolean") {
       for (const clause of node.clauses) {
+        const excluded =
+          clause.occur === "must_not" && clause.node.kind === "predicate" && negatable.includes(clause.node.field)
+        if (excluded && clause.node.kind === "predicate") {
+          const key = `-${clause.node.field}`
+          terms.set(key, [...(terms.get(key) ?? []), clause.node])
+          continue
+        }
         if (clause.occur !== "must")
           queryError(
             "query.unsupported-placement",
             clause.node.span,
-            "this list takes only field:value terms joined by AND",
+            negatable.length
+              ? `this list takes only field:value terms joined by AND, and -field:value for ${negatable.join(", ")}`
+              : "this list takes only field:value terms joined by AND",
             context,
           )
         add(clause.node)

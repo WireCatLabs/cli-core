@@ -549,8 +549,16 @@ export const memoryEventStore = (): EventStore => {
               (event.allDay && filter.startsFromDate !== undefined
                 ? has(event, (one) => one.startDate !== null && one.startDate >= (filter.startsFromDate ?? ""))
                 : event.startsAt !== null && event.startsAt >= filter.startsFrom)) &&
+            (filter.id === undefined || event.id === filter.id) &&
             (filter.calendarId === undefined || has(event, (one) => one.calendarId === filter.calendarId)) &&
             (accounts === undefined || has(event, inAccounts)) &&
+            (filter.eventType === undefined ||
+              has(event, (one) => inAccounts(one) && (one.eventType ?? "default") === filter.eventType)) &&
+            (!filter.notEventTypes?.length ||
+              !has(
+                event,
+                (one) => inAccounts(one) && (filter.notEventTypes ?? []).includes(one.eventType ?? "default"),
+              )) &&
             (filter.personId === undefined ||
               has(event, (one) =>
                 participants.some((p) => p.entryId === one.id && p.identityId === filter.personId),

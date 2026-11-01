@@ -8,8 +8,9 @@ import {
   queryFieldsOf,
 } from "@wirecat/cli-base/query"
 import type { Issue, Meta } from "@wirecat/cli-base/standards"
-import { LIST_QUERY_GUIDE, listQuery, nativeTerms, type QueryWords, typedQuery } from "../cli/list-query.js"
+import { LIST_QUERY_GUIDE, listQuery, nativeTermLists, type QueryWords, typedQuery } from "../cli/list-query.js"
 import {
+  type EntryEventType,
   type Event,
   type EventDetails,
   type EventFilter,
@@ -26,6 +27,7 @@ import {
 import { entriesOfList, fitting } from "../search/account-list.js"
 import { listContextOf } from "../services/search-kind.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { type IcsEvent, writeIcs } from "./ics.js"
 import { calendarStatus } from "./sync.js"
 
 const iso = (at: number | null) => (at === null ? null : new Date(at).toISOString())
@@ -59,7 +61,30 @@ export const calendarItem = (one: StoredCalendar) => ({
   seen_at: iso(one.seenAt),
 })
 
-/** A stored calendar by its id or the provider's id, among the accounts' calendars; one the id names twice is refused. */
+const sameTitle = (one: StoredCalendar, reference: string) =>
+  one.title !== null && one.title.trim().toLocaleLowerCase() === reference.trim().toLocaleLowerCase()
+
+/**
+ * A calendar by its id, then the provider's id, then its title, case aside. Two calendars may share a title, a shared
+ * one beside the owner's own: such a title is refused with their ids, never one of them picked.
+ */
+const calendarOfList = (calendars: readonly StoredCalendar[], reference: string, where: string): StoredCalendar => {
+  const byId = calendars.find((one) => String(one.id) === reference)
+  if (byId) return byId
+  const byExternal = calendars.filter((one) => one.externalId === reference)
+  const found = byExternal.length ? byExternal : calendars.filter((one) => sameTitle(one, reference))
+  if (found.length > 1)
+    throw new CliError(
+      "validation_error",
+      `calendar ${reference} names ${found.length} calendars ${where}; name one by its id: ` +
+        found.map(({ id, title }) => (title === null ? String(id) : `${id} (${title})`)).join(", "),
+      { reason: "calendar.ambiguous", candidates: found.map(({ id }) => String(id)) },
+    )
+  if (!found[0]) throw new CliError("not_found", `no calendar ${reference} ${where}; calendars list shows them`)
+  return found[0]
+}
+
+/** A stored calendar among the accounts' calendars, as `calendarIn` finds one. */
 const calendarAmong = async (
   store: EventStore,
   accountIds: readonly number[],
@@ -67,27 +92,12 @@ const calendarAmong = async (
 ): Promise<StoredCalendar> => {
   if (accountIds.length === 1) return calendarIn(store, accountIds[0] as number, reference)
   const calendars = (await Promise.all(accountIds.map((id) => store.calendars(id)))).flat()
-  const byId = calendars.find((one) => String(one.id) === reference)
-  if (byId) return byId
-  const byExternal = calendars.filter((one) => one.externalId === reference)
-  if (byExternal.length > 1)
-    throw new CliError(
-      "validation_error",
-      `calendar ${reference} is in more than one of these accounts; name it by its id: ` +
-        byExternal.map(({ id }) => id).join(", "),
-    )
-  if (!byExternal[0]) throw new CliError("not_found", `no calendar ${reference} in these accounts`)
-  return byExternal[0]
+  return calendarOfList(calendars, reference, "in these accounts")
 }
 
-/** A stored calendar by its id or the provider's id, among the account's calendars. */
-export const calendarIn = async (store: EventStore, accountId: number, reference: string): Promise<StoredCalendar> => {
-  const calendars = await store.calendars(accountId)
-  const found =
-    calendars.find((one) => String(one.id) === reference) ?? calendars.find((one) => one.externalId === reference)
-  if (!found) throw new CliError("not_found", `no calendar ${reference} in this account; calendars list shows them`)
-  return found
-}
+/** A stored calendar of the account by its id, the provider's id, or its title when only one has it. */
+export const calendarIn = async (store: EventStore, accountId: number, reference: string): Promise<StoredCalendar> =>
+  calendarOfList(await store.calendars(accountId), reference, "in this account")
 
 export const eventIdOf = (reference: string | number): number => {
   const text = String(reference).replace(/^event:/u, "")
@@ -106,6 +116,16 @@ export const plusDays = (date: string, days: number) => {
 
 const LIST = "events list"
 
+/** The kinds a calendar entry is stored as (`EntryEventType`); a copy with none is `default`. */
+export const EVENT_TYPES: readonly EntryEventType[] = [
+  "default",
+  "out-of-office",
+  "focus",
+  "working-location",
+  "birthday",
+  "from-mail",
+]
+
 const oneSided = (field: string, example: string) => (node: Predicate) => {
   if (node.operator !== "range" || node.upper !== "*")
     queryError("query.unsupported-operator", node.span, `${field} takes only an earliest moment, such as ${example}`, {
@@ -119,9 +139,19 @@ export const EVENTS_QUERY: QueryRegistry = {
   entity: "event",
   backend: "native",
   fields: queryFieldsOf(event, {
-    native: ["starts_at", "ends_at", "changed_at", "overlapping", "calendar", "person"],
+    native: ["id", "starts_at", "ends_at", "changed_at", "overlapping", "calendar", "person", "event_type"],
     relations: {
-      calendar: { type: "kw", example: "calendar:3", relation: "one calendar, by its id or the provider's id" },
+      event_type: {
+        type: "enum",
+        values: EVENT_TYPES,
+        example: "event_type:default",
+        relation: "events with a copy of this kind; -event_type:<kind> leaves out events with one",
+      },
+      calendar: {
+        type: "kw",
+        example: "calendar:3",
+        relation: "one calendar, by its id, the provider's id or its title",
+      },
       person: {
         type: "kw",
         example: "person:ana@example.com",
@@ -129,6 +159,7 @@ export const EVENTS_QUERY: QueryRegistry = {
       },
     },
     examples: {
+      id: "id:42",
       starts_at: "starts_at:[2026-11-02 TO 2026-11-07}",
       ends_at: "ends_at>=2026-11-02",
       changed_at: "changed_at>=2026-10-01",
@@ -154,9 +185,9 @@ export const EVENTS_QUERY: QueryRegistry = {
 }
 
 export const EVENTS_QUERY_NOTE =
-  "\nends_at keeps events that end after its moment, so one that ends exactly then is left out. Without starts_at " +
-  "or ends_at: events that end after the start of today, in your time zone.\noverlapping:true keeps timed events " +
-  "that overlap another in the accounts read, each with overlaps: the others. Left out: all-day, cancelled, " +
+  "\nends_at keeps events that end after its moment, so one that ends exactly then is left out. Without id, " +
+  "starts_at or ends_at: events that end after the start of today, in your time zone.\noverlapping:true keeps timed " +
+  "events that overlap another in the accounts read, each with overlaps: the others. Left out: all-day, cancelled, " +
   "declined and free events and working-location blocks; back-to-back events do not overlap."
 
 /** A time term as epoch ms: from `lower` on, and before `upper`. */
@@ -200,8 +231,16 @@ export const eventsFilter = async (
   const { zone, now } = context
   const span = (text: string) => ({ start: 0, end: text.length })
   const day = (date: string) => dayBoundary(date, zone, false, span(date))
-  for (const [field, node] of nativeTerms(listQuery(typedQuery(query), EVENTS_QUERY, LIST), LIST)) {
-    if (field === "starts_at") {
+  const terms = nativeTermLists(listQuery(typedQuery(query), EVENTS_QUERY, LIST), LIST, [], ["event_type"])
+  const kinds = (nodes: Predicate[] = []) => nodes.map(({ value }) => value.toLowerCase() as EntryEventType)
+  const excluded = kinds(terms.get("-event_type"))
+  if (excluded.length) filter.notEventTypes = [...new Set(excluded)]
+  for (const [field, nodes] of terms) {
+    const node = nodes[0] as Predicate
+    if (field === "-event_type") continue
+    if (field === "event_type") filter.eventType = kinds(nodes)[0] as EntryEventType
+    else if (field === "id") filter.id = eventIdOf(node.value)
+    else if (field === "starts_at") {
       const { lower, upper } = timeWindow(node, zone, now)
       if (lower !== undefined) filter.startsFrom = lower
       if (upper !== undefined) filter.to = upper
@@ -222,7 +261,13 @@ export const eventsFilter = async (
       filter.personId = person
     }
   }
-  if (filter.from === undefined && filter.startsFrom === undefined && filter.to === undefined)
+  // One event named by its id is found whenever it is.
+  if (
+    filter.id === undefined &&
+    filter.from === undefined &&
+    filter.startsFrom === undefined &&
+    filter.to === undefined
+  )
     filter.from = day(localDate(now, zone))
   return datedFilter(filter, zone)
 }
@@ -571,4 +616,68 @@ export const accountsMeta = async (
     complete: issues.length === 0,
     ...(issues.length ? { issues } : {}),
   }
+}
+
+/** The most events one `events export` writes: what the store reads in one go. */
+export const EXPORT_MAX = 1000
+
+const stampOf = (at: number) =>
+  new Date(at)
+    .toISOString()
+    .replace(/[-:]/gu, "")
+    .replace(/\.\d{3}/u, "")
+
+/**
+ * One event as iCalendar, from its first live copy in the account. An occurrence of a repeating event is written as
+ * an event of its own, its UID the series' with its slot after it, so a file never holds two events with one UID.
+ */
+const icsEventOf = (details: EventDetails): IcsEvent => {
+  const entry = details.entries.find((one) => one.deletedAt === null) ?? (details.entries[0] as StoredEntry)
+  const { event } = details
+  const participants = details.participants.filter(({ entryId }) => entryId === entry.id)
+  const organizer = participants.find((one) => one.organizer)
+  const slot = entry.originalStartsAt ?? entry.startsAt
+  const uid =
+    entry.kind === "occurrence" && slot !== null
+      ? `${entry.icalUid ?? entry.seriesExternalId ?? entry.externalId}_${stampOf(slot)}`
+      : (entry.icalUid ?? entry.externalId)
+  const times =
+    event.allDay && entry.startDate !== null && entry.endDate !== null
+      ? { startDate: entry.startDate, endDate: entry.endDate }
+      : event.startsAt === null
+        ? {}
+        : { startsAt: event.startsAt, endsAt: event.endsAt ?? event.startsAt }
+  return {
+    uid,
+    title: event.title,
+    description: event.description,
+    location: event.location,
+    ...times,
+    status: entry.status,
+    transparency: entry.transparency,
+    organizer: organizer ? { email: organizer.email, name: organizer.name } : null,
+    attendees: participants
+      .filter((one) => !one.organizer)
+      .map(({ email, name, response, optional }) => ({ email, name, response, optional })),
+  }
+}
+
+/** The events of a filter as one iCalendar text; a filter that finds more than `EXPORT_MAX` is refused. */
+export const eventsIcs = async (
+  store: EventStore,
+  accountId: number,
+  filter: EventFilter | null,
+  options: { now: number; product: string },
+) => {
+  const { rows, hasMore } =
+    filter === null ? { rows: [], hasMore: false } : await page(store, { ...filter, limit: EXPORT_MAX, offset: 0 })
+  if (hasMore)
+    throw new CliError(
+      "validation_error",
+      `the query finds more than ${EXPORT_MAX} events; narrow it, such as with starts_at:[2026-11-01 TO 2026-12-01}`,
+      { reason: "export.too-many" },
+    )
+  const events: IcsEvent[] = []
+  for (const row of rows) events.push(icsEventOf(await eventOf(store, accountId, row.id)))
+  return { format: "ics" as const, events: events.length, content: writeIcs(events, options) }
 }

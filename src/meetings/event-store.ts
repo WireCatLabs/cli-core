@@ -219,7 +219,13 @@ export interface EventFilter {
   accountId?: number
   /** Several accounts' events at once, in place of `accountId`. */
   accountIds?: readonly number[]
+  /** Only this event. */
+  id?: number
   calendarId?: number
+  /** Events with a copy, in the accounts read, of this kind; a copy stored with no kind is `default`. */
+  eventType?: EntryEventType
+  /** Events with no copy, in the accounts read, of any of these kinds. */
+  notEventTypes?: readonly EntryEventType[]
   /** Events whose entries list one of this person's contacts. */
   personId?: number
   /** Latest start first; earliest first when absent. */

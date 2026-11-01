@@ -5,6 +5,7 @@ import type { Effects } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
+import { ownerOnlyOption } from "../../cli/effects.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
@@ -22,11 +23,13 @@ import {
   calendarItem,
   EVENTS_QUERY,
   EVENTS_QUERY_NOTE,
+  EXPORT_MAX,
   eventAnswer,
   eventIdOf,
   eventOf,
   eventsAnswer,
   eventsFilter,
+  eventsIcs,
   type PersonOfEmail,
   peopleAnswer,
   type ReadAccount,
@@ -43,9 +46,12 @@ import type { EventResponse } from "../writer.js"
 import {
   type CalendarWrites,
   createEvent,
+  createEventFromText,
   deleteEvent,
   EVENT_RESPONSES,
   type EventFields,
+  IMPORT_MAX,
+  importEvents,
   moveEvent,
   respondToEvent,
   updateEvent,
@@ -85,6 +91,10 @@ export interface CalendarCommandDeps {
   timezone?: string
   /** The provider's writer and the profile's guard: `events create|update|delete|respond` exist only with it. */
   writes?: CalendarWrites
+  /** Writes `events export --output`'s file; without it the export is printed only. */
+  writeFile?: (path: string, content: string) => Promise<void>
+  /** Reads `events import`'s file; without it, and the writer's `import`, there is no `events import`. */
+  readFile?: (path: string) => Promise<string>
   /** A profile lock pins the process (WC-ACCT-5): `events list --source` may then read only the profile's account. */
   locked?: boolean
 }
@@ -105,6 +115,9 @@ const ATTENDEE_UNTRUSTED = ["name"]
 const REVIEW_UNTRUSTED = ["candidates.title"]
 const SEARCH_UNTRUSTED = ["hits.title", "hits.location", "hits.excerpt"]
 const SERVER_SEARCH_UNTRUSTED = ["hits.title", "hits.location"]
+const IMPORT_UNTRUSTED = ["imported.uid", "imported.entry.title", "skipped.uid", "skipped.reason"]
+/** The largest .ics file `events import` reads. */
+const ICS_MAX_BYTES = 10 * 1024 * 1024
 
 const eachMarked = <T extends { items: object[] }>(answer: T, untrusted: string[]) => ({
   ...answer,
@@ -185,7 +198,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     example(
       annotate(calendars.command(name), { effects: LOCAL_WRITE })
         .description(synced ? "sync this calendar from now on" : "stop syncing this calendar; what is stored stays")
-        .argument("<calendar>", "the calendar's id, or the provider's id"),
+        .argument("<calendar>", "the calendar's id, the provider's id, or its title"),
       `calendars ${name} 3`,
     ).action(async (reference: string, _opts: unknown, command: Command) => {
       const calendar = await calendarIn(deps.store, deps.accountId, reference)
@@ -390,6 +403,41 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         command,
       )
     })
+  const exporter = example(
+    withQuery(
+      annotate(events.command("export"), { effects: deps.writeFile ? LOCAL_WRITE : LOCAL_READ }).description(
+        `write stored events as iCalendar (.ics), at most ${EXPORT_MAX}: one with id:<id>, or those the query ` +
+          "finds; each occurrence of a repeating event as an event of its own",
+      ),
+      EVENTS_QUERY,
+    ).addHelpText("after", EVENTS_QUERY_NOTE),
+    ...(deps.writeFile
+      ? [
+          "events export id:42 --output planning.ics",
+          "events export starts_at:[2026-11-02 TO 2026-11-09} NOT event_type:birthday --output week.ics",
+        ]
+      : ["events export id:42", "events export starts_at:[2026-11-02 TO 2026-11-09} NOT event_type:birthday"]),
+  )
+  // Not over MCP: an agent would choose where on the owner's disk to write. It gets the text in the answer.
+  if (deps.writeFile)
+    exporter.addOption(ownerOnlyOption("--output <file>", "the file to write; printed in the answer when absent"))
+  exporter.action(async (words: string[], opts: { output?: string }, command: Command) => {
+    const filter = await eventsFilter(words, {
+      store: deps.store,
+      accountId: deps.accountId,
+      zone: zone(),
+      now: now(),
+      personOf: personId,
+    })
+    const exported = await eventsIcs(deps.store, deps.accountId, filter, { now: now(), product: program.name() })
+    if (opts.output === undefined) {
+      print({ ...exported, untrusted: ["content"] }, command)
+      return
+    }
+    if (!opts.output.trim()) throw new CliError("validation_error", "--output names no file")
+    await deps.writeFile?.(opts.output, exported.content)
+    print({ format: exported.format, events: exported.events, output: opts.output }, command)
+  })
   example(
     annotate(events.command("show"), { effects: LOCAL_READ })
       .description("one event: its calendar copies, attendees with their person, Drive files and history")
@@ -651,6 +699,8 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
       )
       .option("--repeat <rule>", `how it repeats${replacing ? ", with --series" : ""}: ${REPEAT_HELP}`)
   type FieldOptions = Omit<EventFields, "attendees"> & { attendee?: string[] }
+  const flagOf = (field: string) =>
+    field === "attendees" ? "--attendee" : `--${field.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`)}`
   const fieldsOf = ({ attendee, ...given }: FieldOptions): EventFields => ({
     ...Object.fromEntries(Object.entries(given).filter(([, value]) => value !== undefined)),
     ...(attendee === undefined || attendee.length === 0 ? {} : { attendees: attendee }),
@@ -666,32 +716,67 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
   const target = (command: Command) =>
     command
       .argument("<event>", "the event's id, or event:<id>")
-      .option("--calendar <id>", "the calendar, when the event is on more than one of the account's")
+      .option("--calendar <id>", "the calendar, by id or title, when the event is on more than one of the account's")
 
-  example(
+  const quick = writes.writer.quickAdd !== undefined
+  const create = example(
     notify(
       fields(write("create"), false)
-        .description("add an event to a calendar; with --repeat, one that repeats")
-        .argument("<calendar>", "the calendar's id, or the provider's id"),
+        .description(
+          quick
+            ? "add an event to a calendar; with --repeat, one that repeats; with --text, one the provider reads " +
+                "from a line such as 'Lunch with Ana tomorrow 1pm'"
+            : "add an event to a calendar; with --repeat, one that repeats",
+        )
+        .argument("<calendar>", "the calendar's id, the provider's id, or its title"),
     ).option(
       "--operation-id <id>",
       "the operation_id a create that ended in outcome_unknown named: a retry finds that event",
     ),
-    "events create 3 --title 'Example planning' --start-time 2026-11-02T10:00 --end-time 2026-11-02T11:00",
+    quick
+      ? "events create Work --text 'Example lunch with Ana tomorrow 1pm at Example Cafe'"
+      : "events create 3 --title 'Example planning' --start-time 2026-11-02T10:00 --end-time 2026-11-02T11:00",
     "events create 3 --title 'Example review' --start-date 2026-11-03 --end-date 2026-11-03 " +
       "--attendee ana@example.com --no-notify",
     "events create 3 --title 'Example standup' --start-time 2026-11-02T09:30 --end-time 2026-11-02T09:45 " +
       "--repeat 'FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12'",
-  ).action(async (calendar: string, opts: FieldOptions & Choices & { operationId?: string }, command: Command) => {
-    const { notify: choice, operationId: id, ...rest } = opts
-    printWritten(
-      await createEvent(context(command), calendar, fieldsOf(rest), {
-        ...(choice === undefined ? {} : { notify: choice }),
-        ...(id === undefined ? {} : { id }),
-      }),
-      command,
+  )
+  if (quick)
+    create.option(
+      "--text <text>",
+      "one line the provider reads the title, date, time and place from, in place of the other fields; nobody is " +
+        "mailed without --notify, and a retry after outcome_unknown may add the event twice",
     )
-  })
+  create.action(
+    async (
+      calendar: string,
+      opts: FieldOptions & Choices & { operationId?: string; text?: string },
+      command: Command,
+    ) => {
+      const { notify: choice, operationId: id, text, ...rest } = opts
+      if (text !== undefined) {
+        const given = Object.keys(fieldsOf(rest))
+        if (given.length || id !== undefined)
+          throw new CliError(
+            "validation_error",
+            `--text takes the whole event from its line; leave out ${[...given.map(flagOf), ...(id === undefined ? [] : ["--operation-id"])].join(", ")}`,
+            { reason: "event.text-with-fields", param: "--text" },
+          )
+        printWritten(
+          await createEventFromText(context(command), calendar, text, choice === undefined ? {} : { notify: choice }),
+          command,
+        )
+        return
+      }
+      printWritten(
+        await createEvent(context(command), calendar, fieldsOf(rest), {
+          ...(choice === undefined ? {} : { notify: choice }),
+          ...(id === undefined ? {} : { id }),
+        }),
+        command,
+      )
+    },
+  )
   example(
     notify(
       target(fields(write("update"), true))
@@ -745,12 +830,31 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
   ).action(async (reference: string, opts: Choices, command: Command) => {
     printWritten(await deleteEvent(context(command), reference, choicesOf(opts)), command)
   })
+  const readFile = deps.readFile
+  if (writes.writer.importEvent && readFile)
+    example(
+      write("import")
+        .description(
+          `add the events of an iCalendar (.ics) file to a calendar, at most ${IMPORT_MAX}, each under its own UID; ` +
+            "nobody is mailed; a changed occurrence of a repeating event (RECURRENCE-ID) is skipped",
+        )
+        .argument("<calendar>", "the calendar's id, the provider's id, or its title")
+        .argument("<file>", "the .ics file to read"),
+      "events import Work planning.ics",
+    ).action(async (calendar: string, file: string, _opts: unknown, command: Command) => {
+      const text = await readFile(file)
+      if (Buffer.byteLength(text, "utf8") > ICS_MAX_BYTES)
+        throw new CliError("validation_error", `${file} is larger than ${ICS_MAX_BYTES / 1024 / 1024} MB`, {
+          reason: "ics.too-large",
+        })
+      print({ ...(await importEvents(context(command), calendar, text)), untrusted: IMPORT_UNTRUSTED }, command)
+    })
   if (writes.writer.move)
     example(
       notify(
         target(write("move"))
           .description("move an event, with its id, to another calendar of the account; a repeating one moves whole")
-          .requiredOption("--to-calendar <id>", "the calendar to move it to: its id, or the provider's id")
+          .requiredOption("--to-calendar <id>", "the calendar to move it to: its id, the provider's id, or its title")
           .option("--series", "move the whole repeating event an occurrence belongs to"),
       ),
       "events move event:42 --to-calendar 4 --no-notify",

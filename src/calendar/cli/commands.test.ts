@@ -307,6 +307,76 @@ describe("calendar commands", () => {
     await expect(cli("calendars", "sync", "nope")).rejects.toMatchObject({ code: "not_found" })
   })
 
+  it("names a calendar by its title, and refuses a title two calendars share with their ids", async () => {
+    const { cli, store, accountId } = await setup()
+    await cli("calendars", "list")
+    expect(await cli("calendars", "sync", "team")).toMatchObject({ external_id: "team", synced: true })
+    expect(await cli("calendars", "unsync", "TEAM")).toMatchObject({ external_id: "team", synced: false })
+    await cli("sync")
+    const work = await cli("events", "list", "calendar:work")
+    expect(work.items.map(({ title }) => title)).toEqual(["Example roadmap planning", "Later review"])
+    expect((await cli("events", "list", 'calendar:"Work"')).items).toHaveLength(2)
+    await store.calendar.saveCalendars(
+      accountId,
+      [
+        {
+          externalId: "primary",
+          title: "Work",
+          timezone: "UTC",
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: true,
+        },
+        {
+          externalId: "team",
+          title: "Team",
+          timezone: null,
+          accessRole: "reader",
+          primary: false,
+          syncByDefault: false,
+        },
+        {
+          externalId: "shared",
+          title: "work",
+          timezone: null,
+          accessRole: "reader",
+          primary: false,
+          syncByDefault: false,
+        },
+      ],
+      NOW,
+    )
+    const ids = (await store.calendar.calendars(accountId))
+      .filter(({ title }) => title?.toLowerCase() === "work")
+      .map(({ id }) => String(id))
+    await expect(cli("events", "list", "calendar:work")).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: "calendar.ambiguous", candidates: ids },
+    })
+    expect((await cli("events", "list", "calendar:primary")).items).toHaveLength(2)
+  })
+
+  it("events list keeps or leaves out events by the kind of their copies", async () => {
+    const { cli, source } = await setup()
+    source.put(
+      "primary",
+      planning({ externalId: "cake", title: "Ana's birthday", eventType: "birthday", participants: [] }),
+      planning({ externalId: "deep", title: "Deep work", eventType: "focus", participants: [] }),
+    )
+    await cli("sync")
+    const titles = async (...query: string[]) =>
+      (await cli("events", "list", "starts_at:today", ...query)).items.map(({ title }) => title).sort()
+    expect(await titles("event_type:birthday")).toEqual(["Ana's birthday"])
+    expect(await titles("event_type:default")).toEqual(["Example roadmap planning"])
+    expect(await titles("-event_type:birthday", "-event_type:focus")).toEqual(["Example roadmap planning"])
+    expect(await titles("NOT", "event_type:focus")).toEqual(["Ana's birthday", "Example roadmap planning"])
+    await expect(cli("events", "list", "event_type:party")).rejects.toMatchObject({ code: "validation_error" })
+    await expect(cli("events", "list", "event_type:focus", "OR", "event_type:birthday")).rejects.toMatchObject({
+      code: "validation_error",
+    })
+    await expect(cli("events", "list", "-calendar:work")).rejects.toMatchObject({ code: "validation_error" })
+  })
+
   it("search calls the events search over this account", async () => {
     const { cli } = await setup()
     await cli("sync")

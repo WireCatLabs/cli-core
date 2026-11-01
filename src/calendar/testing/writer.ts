@@ -3,7 +3,7 @@ import type { EntryInput, StoredCalendar } from "../../meetings/index.js"
 import { type CalendarWriter, calendarConflict, type EventDraft, type EventPatch } from "../writer.js"
 
 export interface FakeCalendarWriterCall {
-  write: "create" | "update" | "remove" | "respond" | "move"
+  write: "create" | "quick-add" | "import" | "update" | "remove" | "respond" | "move"
   calendar: string
   externalId: string
   notify: boolean
@@ -91,6 +91,46 @@ export const fakeCalendarWriter = (options: { provider?: string } = {}): FakeCal
         status: "confirmed",
         participants: [],
         ...fields(draft),
+      })
+      of(calendar.externalId).set(id, entry)
+      return answer(entry)
+    },
+    /** Reads no date: the event is the whole line as its title, an hour from noon UTC of 2 November 2026. */
+    async quickAdd(calendar, text, { notify }) {
+      const id = `quick${++version}`
+      calls.push({ write: "quick-add", calendar: calendar.externalId, externalId: id, notify })
+      const noon = Date.UTC(2026, 10, 2, 12)
+      const entry = stamp({
+        externalId: id,
+        icalUid: `${id}@example.com`,
+        kind: "single",
+        status: "confirmed",
+        title: text,
+        startsAt: noon,
+        endsAt: noon + 3_600_000,
+        participants: [],
+      })
+      of(calendar.externalId).set(id, entry)
+      return answer(entry)
+    },
+    /** Keeps one event per UID on a calendar: a UID sent again replaces the event under the same id. */
+    async importEvent(calendar, event) {
+      const held = [...of(calendar.externalId).values()].find((one) => one.icalUid === event.uid)
+      const id = held?.externalId ?? `imported${++version}`
+      calls.push({ write: "import", calendar: calendar.externalId, externalId: id, notify: false })
+      const entry = stamp({
+        externalId: id,
+        icalUid: event.uid,
+        kind: event.recurrence ? "series" : "single",
+        status: event.status ?? "confirmed",
+        title: event.title,
+        description: event.description ?? null,
+        location: event.location ?? null,
+        ...(event.startDate === undefined
+          ? { startsAt: event.startsAt ?? null, endsAt: event.endsAt ?? null, timezone: event.timezone ?? null }
+          : { allDay: true, startDate: event.startDate, endDate: event.endDate ?? null }),
+        ...(event.recurrence ? { recurrence: event.recurrence } : {}),
+        participants: (event.attendees ?? []).map(({ email, name }) => ({ email, name: name ?? null })),
       })
       of(calendar.externalId).set(id, entry)
       return answer(entry)
