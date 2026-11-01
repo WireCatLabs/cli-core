@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.530.0 — 01.11.2026
+
 ### Added
 
 - **`configCommand(app, config, { ownerOnly })`**: settings and permission keys an agent with `mcp.authority` still
