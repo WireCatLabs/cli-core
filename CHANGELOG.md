@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`syncMail` takes `saveCoverage: false`** for a spot read, such as a CLI storing the copy of a message it just
+  sent: the mail is saved, and the coverage that memo reports for the archive stays what the last full run set.
+
 ## 0.533.0 — 01.11.2026
 
 ### Added
