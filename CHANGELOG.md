@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.526.0 — 01.11.2026
+
 ### Added
 
 - **`mailIds` from `@wirecat/cli-core/mail`: one email id for mail and memo.** On every server but Gmail the id is
