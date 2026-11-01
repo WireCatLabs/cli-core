@@ -50,6 +50,12 @@ const planning = (extra: Partial<EntryInput> = {}): EntryInput => ({
 const setup = async (deps: Partial<CalendarCommandDeps> = {}) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "calendar-cli-")), "store.db") })
   opened.push(store)
+  await store.accounts.registerProvider({
+    name: "google-calendar",
+    kind: "events",
+    aliases: ["gcal", "calendar"],
+    command: "gcal",
+  })
   const accountId = await store.accounts.saveAccount(account, { name: null })
   const source = fakeCalendarSource({
     calendars: [
@@ -349,6 +355,53 @@ describe("calendar commands", () => {
     await expect(cli("events", "list", "overlapping")).rejects.toMatchObject({ code: "validation_error" })
   })
 
+  it("events list --source reads every calendar account as one list, and overlapping:true finds clashes across them", async () => {
+    const { cli, store } = await setup()
+    await cli("sync")
+    const other = await store.accounts.saveAccount({ provider: "google-calendar", account: "owner-2" }, { name: null })
+    const [calendar] = await store.calendar.saveCalendars(
+      other,
+      [{ externalId: "home", title: "Home", timezone: null, accessRole: "owner", primary: true, syncByDefault: true }],
+      NOW,
+    )
+    const dentist = planning({ externalId: "d1", title: "Dentist", participants: [], startsAt: NOW + 2.5 * HOUR })
+    await store.calendar.saveEntries(calendar?.id as number, [dentist], NOW)
+
+    const own = await cli("events", "list", "starts_at:today")
+    expect(own.items.map(({ title }) => title)).toEqual(["Example roadmap planning"])
+    expect(own.meta).toEqual({ accounts: ["google-calendar:owner-1"], complete: true })
+    expect((await cli("events", "list", "starts_at:today", "overlapping:true")).items).toEqual([])
+
+    const both = await cli("events", "list", "starts_at:today", "--source", "all")
+    expect(both.items.map(({ title }) => title)).toEqual(["Example roadmap planning", "Dentist"])
+    expect(both.meta).toEqual({
+      accounts: ["google-calendar:owner-1", "google-calendar:owner-2"],
+      complete: false,
+      issues: [{ code: "not_found", reason: "calendar.sync-incomplete", source: "google-calendar:owner-2" }],
+    })
+    const clashes = await cli("events", "list", "overlapping:true", "--source", "google-calendar")
+    expect(clashes.items).toEqual([
+      expect.objectContaining({ title: "Example roadmap planning", overlapping: true, overlaps: [expect.any(String)] }),
+      expect.objectContaining({ title: "Dentist", overlapping: true }),
+    ])
+    const rest = await cli("events", "list", "overlapping:false", "--source", "google-calendar:owner-1")
+    expect(rest.items.map(({ title, overlapping }) => [title, overlapping])).toEqual([
+      ["Example roadmap planning", false],
+      ["Later review", false],
+    ])
+
+    await expect(cli("events", "list", "--source", "telegram:1")).rejects.toMatchObject({ code: "validation_error" })
+    await expect(cli("events", "list", "overlapping:yes")).rejects.toMatchObject({ code: "validation_error" })
+  })
+
+  it("events list --source under a profile lock reads only the profile's own account", async () => {
+    const { cli, store } = await setup({ locked: true })
+    await cli("sync")
+    await store.accounts.saveAccount({ provider: "google-calendar", account: "owner-2" }, { name: null })
+    expect((await cli("events", "list", "--source", "google-calendar:owner-1")).items).toHaveLength(2)
+    await expect(cli("events", "list", "--source", "all")).rejects.toMatchObject({ code: "permission_error" })
+  })
+
   it("links review and resolve: a copy that fits two events waits for the owner", async () => {
     const { cli, store, accountId } = await setup()
     const calendars = await store.calendar.saveCalendars(
@@ -570,6 +623,8 @@ describe("calendar commands", () => {
     })
     const tools = toolsFromCommands(describeProgram(root))
     expect(tools.length).toBeGreaterThan(10)
+    const list = tools.find(({ command }) => command === "events list")
+    expect(Object.keys(list?.input.entries ?? {})).toEqual(expect.arrayContaining(["query", "source"]))
     expect(
       tools.filter(({ input }) => "json" in input.entries || "jsonl" in input.entries).map(({ command }) => command),
     ).toEqual([])

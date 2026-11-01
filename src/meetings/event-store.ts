@@ -209,13 +209,16 @@ export interface EventFilter {
   /** Events `eventChange` finds new, moved or cancelled at or after this instant. */
   changedSince?: number
   /**
-   * Events whose time overlaps another's. Only timed events that take the owner's time count: not cancelled, and with
-   * a live copy the owner did not decline or mark free.
+   * `true`: events whose time overlaps another's; `false`: every other event. Only timed events that take the owner's
+   * time count: not cancelled, and with a live copy, in the accounts read, that the owner did not decline or mark
+   * free and that is no working-location marker. Back-to-back events do not overlap.
    */
   overlapping?: boolean
   /** All-day events starting before this local day (exclusive); `to` without it. */
   toDate?: string
   accountId?: number
+  /** Several accounts' events at once, in place of `accountId`. */
+  accountIds?: readonly number[]
   calendarId?: number
   /** Events whose entries list one of this person's contacts. */
   personId?: number

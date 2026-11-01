@@ -5,6 +5,13 @@ import { eventOf } from "./events.js"
 
 const DAY = 86_400_000
 
+const accountsOf = (filter: EventFilter): readonly number[] | undefined => {
+  if (filter.accountIds !== undefined && filter.accountId !== undefined)
+    throw new CliError("validation_error", "an event filter takes accountId or accountIds, not both")
+  if (filter.accountIds?.length === 0) throw new CliError("validation_error", "accountIds names no account")
+  return filter.accountIds ?? (filter.accountId === undefined ? undefined : [filter.accountId])
+}
+
 /** The events of a filter, earliest first (`EventStore.events`). */
 export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[] => {
   const clauses = ["e.deleted_at IS NULL"]
@@ -49,10 +56,13 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
     clauses.push(entries("ce.calendar_id = ?"))
     params.push(filter.calendarId)
   }
-  if (filter.accountId !== undefined) {
-    clauses.push(entries("c.account_id = ?"))
-    params.push(filter.accountId)
+  const accounts = accountsOf(filter)
+  const inAccounts = (column: string) => {
+    if (accounts === undefined) return ""
+    for (const id of accounts) params.push(id)
+    return `${column} IN (${accounts.map(() => "?").join(", ")})`
   }
+  if (accounts !== undefined) clauses.push(entries(inAccounts("c.account_id")))
   if (filter.personId !== undefined) {
     clauses.push(
       entries(
@@ -62,11 +72,7 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
     )
     params.push(filter.personId)
   }
-  const account = (alias: string) => {
-    if (filter.accountId === undefined) return ""
-    params.push(filter.accountId)
-    return ` AND ${alias}.account_id = ?`
-  }
+  const account = (alias: string) => (accounts === undefined ? "" : ` AND ${inAccounts(`${alias}.account_id`)}`)
   if (filter.changedSince !== undefined) {
     // The SQL form of eventChange: first stored since, cancelled since, or a live copy's time changed since.
     const since = filter.changedSince
@@ -86,19 +92,19 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
              ORDER BY r.created_at, r.id LIMIT 1) = 1)))`,
     )
   }
-  if (filter.overlapping) {
+  if (filter.overlapping !== undefined) {
     const busy = (event: string) =>
       `${event}.deleted_at IS NULL AND ${event}.status <> 'cancelled' AND ${event}.all_day = 0
          AND ${event}.starts_at IS NOT NULL AND ${event}.ends_at IS NOT NULL AND EXISTS (SELECT 1 FROM calendar_entries
            bce JOIN calendars bc ON bc.id = bce.calendar_id WHERE bce.event_id = ${event}.id${account("bc")}
            AND bce.deleted_at IS NULL AND bce.status <> 'cancelled' AND coalesce(bce.own_response, '') <> 'declined'
-           AND coalesce(bce.transparency, '') <> 'transparent')`
+           AND coalesce(bce.transparency, '') <> 'transparent'
+           AND coalesce(bce.event_type, '') <> 'working-location')`
     const own = busy("e")
     params.push(longest())
-    clauses.push(
-      `${own} AND EXISTS (SELECT 1 FROM events e2 WHERE e2.id <> e.id AND e2.starts_at < e.ends_at
-         AND e2.ends_at > e.starts_at AND e2.starts_at >= e.starts_at - ? AND ${busy("e2")})`,
-    )
+    const clash = `${own} AND EXISTS (SELECT 1 FROM events e2 WHERE e2.id <> e.id AND e2.starts_at < e.ends_at
+         AND e2.ends_at > e.starts_at AND e2.starts_at >= e.starts_at - ? AND ${busy("e2")})`
+    clauses.push(filter.overlapping ? clash : `NOT (${clash})`)
   }
   const limit = filter.limit ?? 100
   const offset = filter.offset ?? 0

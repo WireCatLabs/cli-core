@@ -503,12 +503,13 @@ export const memoryEventStore = (): EventStore => {
         throw new CliError("validation_error", "limit takes 1–1000 and offset 0 or more")
       const has = (event: Event, check: (entry: Entry) => boolean) =>
         entries.some((one) => one.eventId === event.id && check(one))
-      const copiesOf = (event: Event) =>
-        entries.filter(
-          (one) =>
-            one.eventId === event.id &&
-            (filter.accountId === undefined || calendarOf(one.calendarId).accountId === filter.accountId),
-        )
+      if (filter.accountIds !== undefined && filter.accountId !== undefined)
+        throw new CliError("validation_error", "an event filter takes accountId or accountIds, not both")
+      if (filter.accountIds?.length === 0) throw new CliError("validation_error", "accountIds names no account")
+      const accounts = filter.accountIds ?? (filter.accountId === undefined ? undefined : [filter.accountId])
+      const inAccounts = (one: Entry) =>
+        accounts === undefined || accounts.includes(calendarOf(one.calendarId).accountId)
+      const copiesOf = (event: Event) => entries.filter((one) => one.eventId === event.id && inAccounts(one))
       const busy = (event: Event) =>
         event.deletedAt === null &&
         event.status !== "cancelled" &&
@@ -520,7 +521,17 @@ export const memoryEventStore = (): EventStore => {
             one.deletedAt === null &&
             one.status !== "cancelled" &&
             one.ownResponse !== "declined" &&
-            one.transparency !== "transparent",
+            one.transparency !== "transparent" &&
+            one.eventType !== "working-location",
+        )
+      const clashes = (event: Event) =>
+        busy(event) &&
+        [...events.values()].some(
+          (other) =>
+            other.id !== event.id &&
+            busy(other) &&
+            (other.startsAt as number) < (event.endsAt as number) &&
+            (other.endsAt as number) > (event.startsAt as number),
         )
       return [...events.values()]
         .filter(
@@ -539,23 +550,14 @@ export const memoryEventStore = (): EventStore => {
                 ? has(event, (one) => one.startDate !== null && one.startDate >= (filter.startsFromDate ?? ""))
                 : event.startsAt !== null && event.startsAt >= filter.startsFrom)) &&
             (filter.calendarId === undefined || has(event, (one) => one.calendarId === filter.calendarId)) &&
-            (filter.accountId === undefined ||
-              has(event, (one) => calendarOf(one.calendarId).accountId === filter.accountId)) &&
+            (accounts === undefined || has(event, inAccounts)) &&
             (filter.personId === undefined ||
               has(event, (one) =>
                 participants.some((p) => p.entryId === one.id && p.identityId === filter.personId),
               )) &&
             (filter.changedSince === undefined ||
               eventChange(event, copiesOf(event), revisions, filter.changedSince) !== null) &&
-            (!filter.overlapping ||
-              (busy(event) &&
-                [...events.values()].some(
-                  (other) =>
-                    other.id !== event.id &&
-                    busy(other) &&
-                    (other.startsAt as number) < (event.endsAt as number) &&
-                    (other.endsAt as number) > (event.startsAt as number),
-                ))),
+            (filter.overlapping === undefined || clashes(event) === filter.overlapping),
         )
         .sort((a, b) => ((a.startsAt ?? -1) - (b.startsAt ?? -1) || a.id - b.id) * (filter.newest ? -1 : 1))
         .slice(offset, offset + limit)
