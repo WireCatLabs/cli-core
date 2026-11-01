@@ -65,6 +65,25 @@ export const commandPath = (command: Command): string => {
  * The query as typed, validated against the list's fields, with each default whose field it does not name;
  * `undefined` when nothing narrows the list. A bare word is refused unless the list names a `defaultField` for it. CLI and MCP read a list's query through this one function.
  */
+/**
+ * `tomorrow` in a time field as the owner's next calendar date: the query language knows `today` and `yesterday`
+ * only, and a due date is more often ahead than behind.
+ */
+const withTomorrow = (query: QueryAst, registry: QueryRegistry, zone = timezoneOf(), now = Date.now()): QueryAst => {
+  const times = new Set(registry.fields.filter(({ type }) => type === "time").map(({ name }) => name))
+  const date = new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(now)}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + 1)
+  const tomorrow = date.toISOString().slice(0, 10)
+  const day = (value: string) => (value.toLowerCase() === "tomorrow" ? tomorrow : value)
+  const map = (node: QueryNode): QueryNode =>
+    node.kind === "predicate"
+      ? times.has(node.field)
+        ? { ...node, value: day(node.value), ...(node.upper === undefined ? {} : { upper: day(node.upper) }) }
+        : node
+      : { ...node, clauses: node.clauses.map((clause) => ({ ...clause, node: map(clause.node) })) }
+  return { ...query, root: map(query.root) }
+}
+
 export const listQuery = (
   text: string,
   registry: QueryRegistry,
@@ -72,7 +91,8 @@ export const listQuery = (
   { defaultField = "none" }: { defaultField?: string } = {},
 ): QueryAst | undefined => {
   const context = { command, guide: LIST_QUERY_GUIDE }
-  const typed = text.trim() === "" ? undefined : parseLucene(text, { defaultField, ...context })
+  const parsed = text.trim() === "" ? undefined : parseLucene(text, { defaultField, ...context })
+  const typed = parsed && withTomorrow(parsed, registry)
   if (typed) validateQuery(typed, registry, context)
   const named = typed ? fieldsNamed(typed) : new Set<string>()
   const defaults = (registry.defaults ?? [])

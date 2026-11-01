@@ -270,7 +270,15 @@ export const stateOfThing = (database: CacheDatabase, thing: Thing | undefined):
 /** The `tasks.id` behind what callers name a task by: the package's id, or the task's key. */
 export const taskRowOf = (database: CacheDatabase, id: string): number | undefined => {
   const row = database.prepare("SELECT id FROM tasks WHERE package_id = ? OR key = ? ORDER BY id LIMIT 1").get(id, id)
-  return row ? Number(row.id) : undefined
+  if (row) return Number(row.id)
+  // A task moved to another project took a new key there; its old key still names it.
+  const moved = database
+    .prepare(
+      "SELECT task_id FROM task_events WHERE kind = 'project' AND json_extract(changes, '$.key[0]') = ? " +
+        "ORDER BY id DESC LIMIT 1",
+    )
+    .get(id)
+  return moved ? Number(moved.task_id) : undefined
 }
 
 /** The package's id for a task row: the reverse of `taskRowOf`. */

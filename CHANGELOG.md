@@ -14,6 +14,19 @@ shape of this file.
   change is journaled as `topic-edit`. Adapters take it as `createTopic(…, { icon })` and `TopicChange.icon`
   (`null` removes it), and list the set with the optional `TopicEditing.topicIcons()`; the `topic_icon` entity is the
   list's item.
+- **`tasks.edit(id, { project })` moves a project task to another of the owner's projects.** It takes the next key
+  there; `id`, `ref` and `key` change, and the old key still finds the task through a `project` event in its
+  history. The source project's numbers are never reused. A subtask leaves its parent; a
+  task with subtasks is refused (`task.has-subtasks`, with their keys). The revision goes up.
+- **`tasks.edit(id, { type })` changes a project task's kind** among bug, feature and chore, as a `type` event, and
+  bumps the revision.
+- **A task names who added it**: `TaskDetails.createdBy` (`created_by` in the `task` and `task_card` entities),
+  `{ type, id, name, owner }`. `tasksService.add` takes an `author`, so a task found in a message by a named agent is
+  that agent's, not `agent`'s.
+- **Task comments**: `tasks.comment(id, text, by)` keeps a note about the task in its author's name; `tasks.comments`
+  lists them oldest first with `author`, `text` and `at`. A comment leaves the revision as it is.
+- **`tomorrow` in any time field of a list query** (`due:tomorrow`, `due:[today TO tomorrow]`), as the owner's next
+  calendar day: `listQuery` reads it before validating. `today` and `yesterday` already worked.
 
 ## 0.530.0 — 01.11.2026
 
