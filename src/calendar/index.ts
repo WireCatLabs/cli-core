@@ -21,6 +21,7 @@ export type {
   StoredEntry,
   StoredParticipant,
 } from "../meetings/index.js"
+export { type IcsEvent, type IcsSkip, readIcs, writeIcs } from "./ics.js"
 export { repeatRule } from "./recurrence.js"
 export type {
   BusyTimes,

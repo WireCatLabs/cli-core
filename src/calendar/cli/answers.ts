@@ -193,6 +193,23 @@ export const calendarEventWrite = v.strictObject({
   untrusted,
 })
 
+export const calendarExport = v.strictObject({
+  format: v.literal("ics"),
+  events: count,
+  /** The iCalendar text, when no `--output` took it. */
+  content: v.optional(text),
+  output: v.optional(text),
+  untrusted: v.optional(v.array(text)),
+})
+
+export const calendarImport = v.strictObject({
+  operation_id: text,
+  calendar: id,
+  imported: v.array(v.strictObject({ uid: text, event: nullableText, entry: v.nullable(entry) })),
+  skipped: v.array(v.strictObject({ uid: nullableText, reason: text })),
+  untrusted,
+})
+
 export const calendarAttendee = v.strictObject({
   ...attendee,
   /** How many of the listed events the person attends; only on the week's list. */
@@ -251,6 +268,8 @@ const ANSWERS: Record<string, { name: string; schema?: v.GenericSchema }> = {
   "events list": { name: "event" },
   "events show": { name: "calendar_event", schema: calendarEvent },
   "events prepare": { name: "calendar_event_preparation", schema: calendarEventPreparation },
+  "events export": { name: "calendar_export", schema: calendarExport },
+  "events import": { name: "calendar_import", schema: calendarImport },
   "events create": { name: "calendar_event_write", schema: calendarEventWrite },
   "events update": { name: "calendar_event_write", schema: calendarEventWrite },
   "events delete": { name: "calendar_event_write", schema: calendarEventWrite },

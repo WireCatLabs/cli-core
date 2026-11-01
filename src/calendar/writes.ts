@@ -8,6 +8,7 @@ import { type Asker, type GuardRequest, type GuardSettings, guardFor, type SendG
 import { guardedWrite } from "../sends/guarded.js"
 import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
+import { readIcs } from "./ics.js"
 import { calendarIn, entryItem, eventIdOf, eventOf, plusDays } from "./reads.js"
 import { kindBoundLines, repeatRule, ruleCount, ruleEnd, ruleEndingBefore, ruleLine, splitDates } from "./recurrence.js"
 import {
@@ -69,6 +70,8 @@ export interface WriteContext {
 /** Each write is checked by its command's path, the key a declared CLI's `commandPermissions` already knows. */
 const COMMAND_KEY: Record<CalendarWrite, PermissionKey> = {
   create: "events.create",
+  "quick-add": "events.create",
+  import: "events.import",
   update: "events.update",
   delete: "events.delete",
   respond: "events.respond",
@@ -284,6 +287,130 @@ export const createEvent = async (
     context.store.saveEntries(calendar.id, [entry], context.now),
   )
   return answerOf(id, saved, draft.recurrence !== undefined)
+}
+
+/** The longest line `createEventFromText` sends; a quick add is one sentence, not a description. */
+const TEXT_MAX = 1000
+
+/**
+ * An event the provider makes from one line of text, as Google's quickAdd. Nobody is mailed unless `notify` says so:
+ * the attendees are known only once the provider has read the text.
+ */
+export const createEventFromText = async (
+  context: WriteContext,
+  calendarReference: string,
+  text: string,
+  options: { notify?: boolean } = {},
+) => {
+  const quickAdd = context.writes.writer.quickAdd
+  if (!quickAdd) throw new CliError("configuration_error", "this provider cannot make an event from text")
+  const line = text.trim()
+  if (!line) throw new CliError("validation_error", "the text is empty: say what, when and where")
+  if (line.length > TEXT_MAX || /[\r\n]/u.test(line))
+    throw new CliError("validation_error", `the text is one line of at most ${TEXT_MAX} characters`)
+  const calendar = await calendarIn(context.store, context.accountId, calendarReference)
+  const notify = options.notify ?? false
+  const guard = writeGuard(context, keysFor(context, "quick-add", notify))
+  const id = newEventId()
+  let entry: EntryInput
+  try {
+    entry = await guardedWrite(
+      guard,
+      { chatId: null, kind: "edit", key: COMMAND_KEY["quick-add"], operationId: id, sendId: id, notify },
+      () => quickAdd.call(context.writes.writer, calendar, line, { notify }),
+    )
+  } catch (error) {
+    if (isCliError(error) && error.code === "outcome_unknown")
+      throw new CliError(
+        "outcome_unknown",
+        `${error.message} — the provider may have made the event, and a create from text cannot be retried safely: ` +
+          "sync, then look with events list changed_at>=today before adding it again",
+        { ...error.details, operation_id: id, retryable: false },
+      )
+    throw error
+  }
+  let saved: StoredEntry | undefined
+  try {
+    ;[saved] = await context.store.saveEntries(calendar.id, [entry], context.now)
+  } catch (error) {
+    throw new CliError(
+      isCliError(error) ? error.code : "invalid_response",
+      `the provider made event ${entry.externalId}, but the local store did not save it ` +
+        `(${error instanceof Error ? error.message : String(error)}); sync to store it — do not create it again`,
+      { ...(isCliError(error) ? error.details : {}), operation_id: id, id: entry.externalId, retryable: false },
+    )
+  }
+  return answerOf(id, saved, (entry.recurrence?.length ?? 0) > 0)
+}
+
+/** The most events one import sends: a file of more is refused before anything goes. */
+export const IMPORT_MAX = 500
+
+/**
+ * The events of an iCalendar text into a calendar, one provider call each, in the file's order. The whole import is
+ * one write for the guard: one question, one journal line. A failure part way names the UIDs already imported.
+ */
+export const importEvents = async (context: WriteContext, calendarReference: string, text: string) => {
+  const writer = context.writes.writer
+  if (!writer.importEvent) throw new CliError("configuration_error", "this provider cannot import events")
+  const { events, skipped } = readIcs(text, context.zone)
+  if (events.length === 0)
+    throw new CliError(
+      "validation_error",
+      skipped.length
+        ? `no event in the file can be imported: ${skipped.map(({ reason }) => reason).join("; ")}`
+        : "the file holds no event (VEVENT)",
+      { reason: "ics.no-events", skipped: skipped.map(({ uid, reason }) => ({ uid, reason })) },
+    )
+  if (events.length > IMPORT_MAX)
+    throw new CliError(
+      "validation_error",
+      `the file holds ${events.length} events; one import takes at most ${IMPORT_MAX}`,
+      { reason: "ics.too-many" },
+    )
+  const calendar = await calendarIn(context.store, context.accountId, calendarReference)
+  const guard = writeGuard(context, keysFor(context, "import", false))
+  const id = newEventId()
+  const imported: { uid: string; event: string | null; entry: ReturnType<typeof entryItem> | null }[] = []
+  await guardedWrite(
+    guard,
+    { chatId: null, kind: "edit", key: COMMAND_KEY.import, operationId: id, sendId: id, notify: false },
+    async () => {
+      for (const event of events) {
+        try {
+          const entry = await writer.importEvent?.call(writer, calendar, event)
+          if (!entry) throw new CliError("invalid_response", "the provider returned no event")
+          const [saved] = await context.store.saveEntries(calendar.id, [entry], context.now)
+          imported.push({
+            uid: event.uid,
+            event: saved?.eventId == null ? null : `event:${saved.eventId}`,
+            entry: saved ? entryItem(saved) : null,
+          })
+        } catch (error) {
+          const done = imported.map(({ uid }) => uid)
+          throw new CliError(
+            isCliError(error) ? error.code : "provider_error",
+            `${error instanceof Error ? error.message : String(error)} — at the event with UID ${event.uid}; ` +
+              `${done.length} of ${events.length} were imported before it (details.imported). Running the import ` +
+              "again sends every event again under its UID",
+            {
+              ...(isCliError(error) ? error.details : {}),
+              operation_id: id,
+              imported: done,
+              failed: event.uid,
+              retryable: false,
+            },
+          )
+        }
+      }
+    },
+  )
+  return {
+    operation_id: id,
+    calendar: String(calendar.id),
+    imported,
+    skipped: skipped.map(({ uid, reason }) => ({ uid, reason })),
+  }
 }
 
 interface Target {

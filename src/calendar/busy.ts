@@ -56,7 +56,7 @@ export const BUSY_QUERY: QueryRegistry = {
       calendar: {
         type: "kw",
         example: "calendar:3",
-        relation: "one of the account's calendars, by its id or the provider's id; repeat for more",
+        relation: "one of the account's calendars, by its id, the provider's id or its title; repeat for more",
       },
       person: { type: "kw", example: "person:ana@example.com", relation: "someone else, by address; repeat for more" },
     },

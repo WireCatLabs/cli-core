@@ -7,6 +7,30 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`events create --text <line>`**: an event the provider reads from one line, such as 'Lunch with Ana tomorrow
+  1pm', when the writer has the new optional `CalendarWriter.quickAdd`. Checked as `events.create` and
+  `extraKeys("quick-add")`; takes no `--operation-id`, since the provider picks the id, and mails nobody without
+  `--notify`.
+- **`events export [query…] [--output <file>]`**: the events `events list`'s query finds, as iCalendar (RFC 5545).
+  `--output` exists when the host passes `deps.writeFile`, and is left out of MCP tools: an agent gets the text.
+  `writeIcs` and `readIcs` are in `./calendar`.
+- **`events import <calendar> <file>`**: an iCalendar file's events into a calendar, each under its UID, when the
+  writer has the new optional `CalendarWriter.importEvent` and the host passes `deps.readFile`. Its key `events.import`
+  asks by default (`CALENDAR_WRITE_DEFAULTS`).
+- **`events list` takes `id:<id>` and `event_type:<kind>`**, and `-event_type:<kind>` or `NOT event_type:<kind>` to
+  leave a kind out, such as birthdays and working-location blocks; filtered in the store
+  (`EventFilter.id`, `eventType`, `notEventTypes`). `nativeTermLists` takes the fields a list lets the query exclude.
+- **A calendar by its title**: `calendar:`, `<calendar>`, `--calendar` and `--to-calendar` take a calendar's title,
+  case aside, after its id and the provider's id. A title two calendars share is refused (`calendar.ambiguous`) with
+  their ids.
+
+### Changed — may break callers
+
+- `CalendarWrite` has `quick-add` and `import`: a `Record<CalendarWrite, …>`, such as a CLI's map of write to its API
+  keys, needs both.
+
 ## 0.538.0 — 01.11.2026
 
 ### Added

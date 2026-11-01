@@ -558,6 +558,26 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       )
       assert.equal((await store.events({ ...window, accountIds: [fixture.otherAccountId] })).length, 1)
     }),
+    test("events filter by the kind of their copies; a copy with no kind is default", async ({ store, calendar }) => {
+      const at = later
+      await store.saveEntries(
+        calendar,
+        [
+          single("meeting", at, { title: "meeting" }),
+          single("plain", at + HOUR, { title: "plain", eventType: "default" }),
+          single("cake", at + 2 * HOUR, { title: "cake", eventType: "birthday" }),
+          single("deep", at + 3 * HOUR, { title: "deep", eventType: "focus" }),
+        ],
+        2,
+      )
+      const window = { from: at - HOUR, to: at + 8 * HOUR }
+      const titles = async (filter: EventFilter) =>
+        (await store.events({ ...window, ...filter })).map(({ title }) => title)
+      assert.deepEqual(await titles({ eventType: "default" }), ["meeting", "plain"])
+      assert.deepEqual(await titles({ eventType: "birthday" }), ["cake"])
+      assert.deepEqual(await titles({ notEventTypes: ["birthday", "focus"] }), ["meeting", "plain"])
+      assert.deepEqual(await titles({ eventType: "default", notEventTypes: ["default"] }), [])
+    }),
     test("participants are kept by address; a room is listed and is no contact", async ({ store, calendar }) => {
       const [entry] = await store.saveEntries(
         calendar,
