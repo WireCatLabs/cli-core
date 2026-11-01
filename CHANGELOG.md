@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.515.0 — 01.11.2026
+
 ### Added
 
 - **`storedMailRules(store, account, query?)`** reads one account's mail rules from the store in the shape
