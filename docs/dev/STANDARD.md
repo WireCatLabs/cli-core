@@ -252,6 +252,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `chats` | collection | conversations in a messenger |  |
 | `contacts` | collection | identities in a messenger's contact list |  |
 | `messages` | collection | posts in a messenger chat, or emails |  |
+| `drafts` | collection | e-mails saved in a mailbox's Drafts folder, written and not sent |  |
 | `polls` | collection | polls in a chat |  |
 | `reactions` | collection | reactions to a message |  |
 | `recipients` | collection | who a message goes to |  |
@@ -623,7 +624,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--secret` | `<name>` | choice | which secret beside a bot's token to keep, typed at a hidden prompt; never the secret itself |  |
 | `--store-token` | `<profile>` | string | keep a token an operation returns only in this bot profile's keyring; never print it |  |
 | `--task` | `<id>` | id | a task, by id |  |
-| `--to` | `<chat>` | id | the chat it goes to |  |
+| `--to` | `<chat\|address>` | string | who it goes to: a chat in a messenger, an e-mail address in mail; repeat it for more addresses |  |
 | `--topic-name` | `<name>` | string | a stored meeting topic label, by name or alias |  |
 | `--topic` | `<id>` | id | the forum topic, in a chat that has topics |  |
 | `--transcript-id` | `<id>` | id | one transcript version, by id |  |
@@ -717,7 +718,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--start` | `<param>` | string | the start parameter the bot or app reads |  |
 | `--start-time` | `<time>` | time | when it starts |  |
 | `--sticker` | `<id>` | id | send this sticker, alone |  |
-| `--subject` | `<ref>` | string | what it is about, as a reference |  |
+| `--subject` | `<ref\|text>` | string | what it is about: a reference in a note or task, the subject line in mail |  |
 | `--supersedes` | `<ref>` | string | the earlier one this replaces, as a reference |  |
 | `--text` | `<text>` | string | the text |  |
 | `--text-file` | `<path>` | path | read the text from this file; - reads stdin |  |
@@ -747,6 +748,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--series` |  | switch | act on the whole repeating event, not only this occurrence |  |
 | `--following` |  | switch | act on this occurrence and every later one of the repeating event |  |
 | `--to-calendar` | `<id>` | id | the calendar it moves to, of the same account |  |
+| `--cc` | `<address>` | string | an e-mail address that gets a copy; repeat it for more |  |
+| `--bcc` | `<address>` | string | an e-mail address that gets a blind copy; repeat it for more |  |
+| `--reply-all` |  | switch | with --reply-to, an e-mail reply also goes to everyone the message went to |  |
 
 <!-- flags: end -->
 
