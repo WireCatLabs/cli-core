@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.521.0 — 01.11.2026
+
 ### Fixed
 
 - **`schedule exec` runs without a profile.** A timer starts `<cli> schedule exec <file>` with no profile named, and a
