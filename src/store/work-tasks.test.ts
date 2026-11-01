@@ -60,7 +60,7 @@ describe("tasks made in the store", () => {
       ["priority", { priority: [null, 0.625] }],
       ["assigned", { assignee: [null, "person:21"] }],
       ["priority", { priority: [0.625, 0.875] }],
-      ["due", { due_at: [null, Date.parse("2026-10-20T00:00:00Z")] }],
+      ["due", { due_at: [null, "2026-10-20T00:00:00.000Z"] }],
       ["status", { status: ["open", "done"] }],
     ])
     expect((await store.tasks.find({ project: "LHT", type: "bug" })).map((task) => task.id)).toEqual(["LHT-1"])

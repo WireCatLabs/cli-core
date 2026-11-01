@@ -10,7 +10,10 @@ export interface FindingEvidence {
 }
 interface FindingBase {
   id: string
-  project: string
+  /** Every task finding has one; a fact finding may have none when its rules allow it. */
+  project?: string
+  /** Who or what a fact is about: `person:`, `organization:`, `task:` or `project:`. */
+  subject?: string
   evidence: FindingEvidence[]
 }
 export interface FactFinding extends FindingBase {
@@ -69,7 +72,11 @@ export interface FindingsRules {
   /** "cue" */
   cited: string
   reference: (raw: string) => string
+  /** A fact finding may name no project, and any finding may name a subject. */
+  anySubject?: boolean
 }
+
+const SUBJECT = /^(person|organization|project):[1-9]\d*$|^task:[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 
 export const validateFindings = (input: FindingsInput, rules: FindingsRules): FindingsInput => {
   if (!input || typeof input !== "object" || Buffer.byteLength(JSON.stringify(input), "utf8") > 65536)
@@ -92,8 +99,13 @@ export const validateFindings = (input: FindingsInput, rules: FindingsRules): Fi
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/.test(id) || ids.has(id))
       return invalid("finding IDs must be unique simple keys")
     ids.add(id)
-    const project = text(finding.project, 64)
-    if (!/^project:[1-9]\d*$/.test(project)) return invalid("a finding names a project reference")
+    const project = finding.project === undefined && rules.anySubject ? undefined : text(finding.project, 64)
+    if (project !== undefined && !/^project:[1-9]\d*$/.test(project))
+      return invalid("a finding names a project reference")
+    if (finding.subject !== undefined && (!rules.anySubject || !SUBJECT.test(text(finding.subject, 80))))
+      return invalid("a finding's subject is a person:, organization:, task: or project: reference")
+    if (finding.kind === "task" && project === undefined)
+      return invalid("a task finding names the project the task goes in")
     if (!Array.isArray(finding.evidence) || finding.evidence.length < 1 || finding.evidence.length > 8)
       return invalid(`a finding requires 1–8 cited ${rules.cited}s`)
     const evidence = finding.evidence
@@ -110,9 +122,14 @@ export const validateFindings = (input: FindingsInput, rules: FindingsRules): Fi
       .sort((a, b) => a.reference.localeCompare(b.reference))
     if (new Set(evidence.map((item) => item.reference)).size !== evidence.length)
       return invalid(`duplicate evidence ${rules.cited}`)
-    const base = { id, project, evidence }
+    const base = {
+      id,
+      ...(project === undefined ? {} : { project }),
+      ...(finding.subject === undefined ? {} : { subject: finding.subject }),
+      evidence,
+    }
     if (finding.kind === "fact") {
-      fields(finding, ["id", "project", "evidence", "kind", "type", "statement"], rules.singular)
+      fields(finding, ["id", "project", "subject", "evidence", "kind", "type", "statement"], rules.singular)
       if (!FACT_TYPES.includes(finding.type)) return invalid("unknown fact finding type")
       return { ...base, kind: "fact", type: finding.type, statement: text(finding.statement, 2000) }
     }
