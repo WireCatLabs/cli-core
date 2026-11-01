@@ -11,7 +11,8 @@ import type { ExtractRun } from "../../services/attachments.js"
 import { type BatchResult, batchProgress, mergeBatches } from "../../services/batch.js"
 import { type Saved, saveFiles } from "../../services/file-download.js"
 
-export { downloadMessage, type Saved, safeName, save } from "../../services/file-download.js"
+export { safeName } from "../../files/safe-name.js"
+export { downloadMessage, type Saved, save } from "../../services/file-download.js"
 
 import { parseDuration } from "../../domain/duration.js"
 import type { Fetching } from "../../ports/traits.js"

@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`configCommand(app, config, { ownerOnly })`**: settings and permission keys an agent with `mcp.authority` still
+  cannot change over MCP, beside `mcp.*` and `bot.api` — for a mail CLI, the server hosts its password goes to, and
+  the key that lets an agent mail other people. A permission key there covers the keys under it.
+- **`safeName` from `./files`**: the file-name cleaner downloads use (no path, no leading dot, no control or direction
+  character; Windows' reserved names refused), for a CLI that saves a file someone else named.
+
 ## 0.529.0 — 01.11.2026
 
 ### Added
