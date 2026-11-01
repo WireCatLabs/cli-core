@@ -22,6 +22,7 @@ export {
   priorityBand,
   priorityLabel,
   priorityOf,
+  priorityOption,
 } from "./priority.js"
 export {
   type CloseOptions,

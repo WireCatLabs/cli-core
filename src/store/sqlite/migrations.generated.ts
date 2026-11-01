@@ -859,5 +859,16 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER tasks_priority_score_au AFTER UPDATE OF priority ON tasks WHEN new.priority IS NOT old.priority AND new.priority_score IS old.priority_score BEGIN\n  UPDATE tasks SET priority_score = CASE new.priority WHEN 0 THEN 0.875 WHEN 1 THEN 0.625 WHEN 2 THEN 0.375 WHEN 3 THEN 0.1875 WHEN 4 THEN 0.0625 END WHERE id = new.id;\nEND;",
       "-- Every build's write bumps it, older ones too, so a stale copy is caught whoever wrote last.\nCREATE TRIGGER tasks_revision_au AFTER UPDATE ON tasks WHEN new.revision IS old.revision BEGIN\n  UPDATE tasks SET revision = old.revision + 1 WHERE id = new.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261101002523_version-42-task-revision",
+    "statements": [
+      "-- A claim renewed, a follow-up time or a close suggestion is an agent at work, not a change a person could overwrite;\n-- bumping on those made the board report a conflict while an agent simply worked.\nDROP TRIGGER tasks_revision_au;",
+      "CREATE TRIGGER tasks_revision_au AFTER UPDATE OF title, description, status, priority, priority_score, agent, due_at, project_id, parent_id ON tasks\n  WHEN new.revision IS old.revision AND (new.title IS NOT old.title OR new.description IS NOT old.description\n    OR new.status IS NOT old.status OR new.priority IS NOT old.priority OR new.priority_score IS NOT old.priority_score\n    OR new.agent IS NOT old.agent OR new.due_at IS NOT old.due_at OR new.project_id IS NOT old.project_id\n    OR new.parent_id IS NOT old.parent_id) BEGIN\n  UPDATE tasks SET revision = old.revision + 1 WHERE id = new.id;\nEND;",
+      "CREATE TRIGGER tasks_revision_assignment_ai AFTER INSERT ON task_assignments BEGIN\n  UPDATE tasks SET revision = revision + 1 WHERE id = new.task_id;\nEND;",
+      "CREATE TRIGGER tasks_revision_assignment_ad AFTER DELETE ON task_assignments BEGIN\n  UPDATE tasks SET revision = revision + 1 WHERE id = old.task_id;\nEND;",
+      "CREATE TRIGGER tasks_revision_tagging_ai AFTER INSERT ON taggings WHEN new.taggable_type = 'task' BEGIN\n  UPDATE tasks SET revision = revision + 1 WHERE id = new.taggable_id;\nEND;",
+      "CREATE TRIGGER tasks_revision_tagging_ad AFTER DELETE ON taggings WHEN old.taggable_type = 'task' BEGIN\n  UPDATE tasks SET revision = revision + 1 WHERE id = old.taggable_id;\nEND;"
+    ]
   }
 ]

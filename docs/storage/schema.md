@@ -1660,7 +1660,7 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `close_suggested_at` | integer |  |  | when the agent suggested closing it |
 | `priority_score` | real |  |  | 0 to 1, higher first: low, medium, high, critical by quarters; orders a board column. `priority` is kept from it for builds before version 41 |
 | `agent` | text |  |  | the agent working on it, by name; unlike a claim it does not lapse |
-| `revision` | integer | not null |  | bumped by a trigger on every update; a write made on an older revision is refused |
+| `revision` | integer | not null |  | bumped by triggers when a person could conflict: title, description, status, priority, agent, due date, project, parent, assignees or tags; never by a claim, a follow-up time or a close suggestion. A write made on an older revision is refused |
 
 *Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`, `INDEX (close_suggested_by_type, close_suggested_by_id)`
 

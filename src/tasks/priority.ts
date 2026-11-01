@@ -46,3 +46,6 @@ export const priorityOf = (value: string): number | null => {
     `a priority is ${PRIORITY_LABELS.join(", ")} or none; 0 (urgent) … 4 (low) still work as critical, high, medium, low, low`,
   )
 }
+
+/** `priorityOf` for a command-line option: Commander stores a parser's `null` as an empty string, so `none` stays a word. */
+export const priorityOption = (value: string): number | "none" => priorityOf(value) ?? "none"
