@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.538.0 — 01.11.2026
+
 ### Fixed
 
 - **Mail a server search stores first gets the owner's rule tags.** `searchMailServer` saved new mail without the
