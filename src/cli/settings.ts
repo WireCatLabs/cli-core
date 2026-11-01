@@ -434,7 +434,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const defaultsOnlyKeys = Object.keys(defaultsOnly)
   const botOnlyKeys = Object.keys(BOT_ONLY_ENTRIES)
   const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys].filter(
-    (setting) => app.messenger !== false || !MESSENGER_ONLY_SETTINGS.includes(setting),
+    (setting) =>
+      app.messenger !== false ||
+      !MESSENGER_ONLY_SETTINGS.includes(setting) ||
+      (app.sends === true && setting === "sends_per_hour"),
   )
 
   const PROFILE = envName(app, "PROFILE")
