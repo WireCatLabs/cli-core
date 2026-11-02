@@ -1,13 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, annotateOption } from "@wirecat/cli-base/commands"
+import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command, Option } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import { FETCHING } from "../../services/archive.js"
 import type { Services } from "../../services/index.js"
 import type { ProjectChatFetcher } from "../../services/project-gathering.js"
+import { projectStatus, STATUS_SIGNALS } from "../../services/project-status/index.js"
 import { gatherStoredProject } from "../../services/stored-project-gathering.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
-import { FETCH } from "../effects.js"
+import { answerEntity } from "../answer-entity.js"
+import { FETCH, LOCAL_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import {
@@ -17,7 +20,8 @@ import {
   projectWindowOf,
   withSyncCommands,
 } from "../project-evidence.js"
-import { lineOf } from "../steps.js"
+import { projectStatusAnswer, projectStatusRow, projectStatusSchema, projectStatusText } from "../project-status.js"
+import { lineOf, nextStep, rootOf, stepLine } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 const collect = (value: string, previous: string[]) => [...previous, value]
@@ -180,7 +184,68 @@ export const projectsCommand = (messenger: Messenger): Command => {
         )
       }),
   )
+  projects.addCommand(statusCommand(messenger))
   return projects
+}
+
+/** Where a project stands from this profile's stored messages: no model call, nothing leaves the machine. */
+const statusCommand = (messenger: Messenger): Command =>
+  answerEntity(
+    annotate(new Command("status"), {
+      examples: [`${messenger.app.command} personal projects status HRB --context-query 1C`],
+      effects: LOCAL_READ,
+      partial: true,
+    })
+      .summary("where a project stands in this account's linked chats: whose move, open asks, money")
+      .description(
+        "per chat confirmed as the project's (and its child projects'), from what the store holds: the last message, " +
+          "who replies next, open questions both ways, promises, amounts with their direction, payments recorded, " +
+          "how long each --context-query has been quiet on their side, and how much of the chat is held. Amounts, " +
+          "directions and promises found by words are marked pattern: read the cited message before trusting one. " +
+          "Only this profile's account is read; the other linked chats are named, and memo projects status reads them",
+      )
+      .argument("<project>", "an existing project's id, key, exact name or alias")
+      .option("--since-time <time>", "how far back: days (60d, at most 730d) or a start date (2026-09-01)", "60d")
+      .option("--before-time <time>", "fixed exclusive end: ISO 8601 timestamp with UTC offset")
+      .option(
+        "--context-query <words>",
+        "words that all appear in one text; reports their last mention per side. Repeat for another",
+        collect,
+        [],
+      )
+      .action(async function (this: Command, project: string) {
+        const options = this.opts<{ sinceTime: string; beforeTime?: string; contextQuery: string[] }>()
+        const context = messengerContext(this, messenger)
+        const found = await context.withStore((store, account) =>
+          projectStatus(store, {
+            project,
+            accounts: [account],
+            ...projectWindowOf(options.sinceTime),
+            ...(options.beforeTime === undefined ? {} : { asOf: projectCutoffTime(options.beforeTime) }),
+            contextQueries: options.contextQuery,
+          }),
+        )
+        const root = rootOf(this)
+        const hints = {
+          sync: (chat: { chatId: string }, since: string) =>
+            nextStep("messages.sync", { args: { chat: chat.chatId, since_time: since } }),
+          read: (chat: { chatId: string }, since: string) =>
+            nextStep("messages.list", { args: { chat: chat.chatId, query: `date>=${since}` } }),
+          line: (step: NextStep) => (step.kind === "command" ? lineOf(this, wordsOf(root, step)) : step.why),
+        }
+        const { item, ...parts } = projectStatusAnswer(found, hints)
+        renderAnswer(this, context, itemOf(item, parts), () => projectStatusText(found, hints))
+      }),
+    "project_status",
+    projectStatusSchema,
+    { row: projectStatusRow(STATUS_SIGNALS) },
+  )
+
+/** A step's words after the tool and the profile, so `lineOf` names the profile the run used. */
+const wordsOf = (root: Command, step: Extract<NextStep, { kind: "command" }>) => {
+  const profile: unknown = root.getOptionValue("profile")
+  const typed = typeof profile === "string" && profile !== "" ? 2 : 1
+  return stepLine(root, step).split(" ").slice(typed).join(" ")
 }
 
 const quote = (text: string) => (/^[\w:.-]+$/.test(text) ? text : `"${text.replace(/(["\\$`])/g, "\\$1")}"`)

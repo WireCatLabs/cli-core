@@ -84,6 +84,22 @@ export type {
   ProjectSender,
   ProjectUnitState,
 } from "./project-gathering-request.js"
+export {
+  DEFAULT_PURPOSES,
+  type MoneyTotal,
+  type ProjectStatus,
+  type ProjectStatusInput,
+  projectStatus,
+  STATUS_CHATS,
+  STATUS_SIGNALS,
+  STATUS_WINDOW,
+  type StatusAttention,
+  type StatusChat,
+  type StatusChatSummary,
+  type StatusContext,
+  type StatusItem,
+  type StatusSignal,
+} from "./project-status/index.js"
 export { questions } from "./questions.js"
 export {
   canonicalProjectRef,
