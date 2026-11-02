@@ -380,6 +380,38 @@ export const memoryEventStore = (): EventStore => {
     async setCalendarSynced(calendarId, synced) {
       calendarOf(calendarId).synced = synced
     },
+    async forgetCalendar(calendarId, now) {
+      const calendar = calendarOf(calendarId)
+      const mine = entries.filter((one) => one.calendarId === calendarId)
+      const ids = new Set(mine.map(({ id }) => id))
+      const eventIds = new Set(mine.flatMap(({ eventId }) => (eventId === null ? [] : [eventId])))
+      const seriesIds = new Set(mine.flatMap(({ eventSeriesId }) => (eventSeriesId === null ? [] : [eventSeriesId])))
+      for (let at = entries.length - 1; at >= 0; at--) if (ids.has((entries[at] as Entry).id)) entries.splice(at, 1)
+      for (let at = revisions.length - 1; at >= 0; at--)
+        if (ids.has((revisions[at] as EntryRevision).entryId)) revisions.splice(at, 1)
+      for (let at = reviews.length - 1; at >= 0; at--)
+        if (
+          (reviews[at] as LinkReview).linkableType === "calendar_entry" &&
+          ids.has((reviews[at] as LinkReview).linkableId)
+        )
+          reviews.splice(at, 1)
+      participants = participants.filter((one) => !ids.has(one.entryId))
+      attachments = attachments.filter((one) => !ids.has(one.entryId))
+      for (const id of ids) unlinked.delete(id)
+      let gone = 0
+      for (const id of eventIds)
+        if (entries.some((one) => one.eventId === id)) refreshEvent(id, now)
+        else if (events.delete(id)) gone++
+      for (const id of seriesIds)
+        if (entries.some((one) => one.eventSeriesId === id)) refreshSeries(id)
+        else {
+          series.delete(id)
+          for (const event of events.values()) if (event.eventSeriesId === id) event.eventSeriesId = null
+        }
+      cursors.delete(calendarId)
+      calendars.splice(calendars.indexOf(calendar), 1)
+      return { entries: ids.size, events: gone }
+    },
     async saveEntries(calendarId, list, now) {
       calendarOf(calendarId)
       for (const input of list)
