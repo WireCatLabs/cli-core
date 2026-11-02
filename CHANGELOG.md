@@ -26,6 +26,11 @@ shape of this file.
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
 
+### Changed — may break callers
+
+- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
+  cli-base bumps it to 0.74.0 together with cli-core.
+
 ### Fixed
 
 - **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
