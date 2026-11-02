@@ -9,6 +9,18 @@ shape of this file.
 
 ### Added
 
+- **Payments are facts of type `payment`.** The amount (text, two decimals), ISO 4217 currency, direction (`to_us` or
+  `from_us`), counterparty ref or name, due date, state (`expected`, `paid`, `cancelled`) and item ride in
+  `metadata.payment`, read back as `Fact.payment`; no migration. A payment fact cites 1 to 8 references. Paid is a new
+  fact that supersedes the expected one, so the history stays. Only the owner accepts or rejects a payment:
+  `mayDecide` takes `ownerOnly`. `facts.list({ payment: { open, direction, state } })` filters them; `open` is
+  expected and still holding. `paymentTitle(fact)` reads "1 200 EUR to us from Ana, due 31.10 (expected)".
+  - **Agents stage payments as findings of kind `payment`** in `projects actions add`; confirming one writes and
+    accepts the fact, and a batch holding one is the owner's to decide. The inbox summarises each finding through
+    `FACT_SUMMARIES`, one row per kind. `projects status` lists payment facts with their title and adds the expected
+    ones to `money.open`, counting an ask the fact cites once.
+  - **For an app's `facts list`: `PAYMENT_QUERY_FIELDS` (`open:true`, `direction:to_us`, `state:paid`) and
+    `paymentFilterOf(terms)`.**
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -100,6 +112,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`FACT_TYPES` gains `payment`, and a `Finding` may be a `PaymentFinding`.** A caller that lists facts with a fixed
+  type list, or reads `finding.title` on every finding that is not a fact, narrows by `kind` first. A memo older than
+  this release refuses a payment fact in `facts list`; ship memo's bump the same day. `MEETING_FACT_TYPES` is gone:
+  `FACT_TYPES` is the one list.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
   it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
   global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A

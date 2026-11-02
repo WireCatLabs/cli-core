@@ -276,8 +276,8 @@ export const projectStatusText = (found: ProjectStatus, hints: ProjectStatusHint
     lines.push("Money")
     for (const one of money) lines.push(moneyLine(one, titles))
     for (const one of payments) {
-      const data = one.data as { statement: string; status: string }
-      lines.push(`  payment ${data.statement} · ${one.evidence[0]?.ref ?? ""} [${data.status}]`)
+      const data = one.data as { title: string; status: string }
+      lines.push(`  payment ${data.title} · ${one.evidence[0]?.ref ?? ""} [${data.status}]`)
     }
   }
   if (found.chats.length) lines.push("Chats")

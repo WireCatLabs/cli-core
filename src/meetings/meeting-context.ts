@@ -1,9 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { dispatchMeetingMutation, type MeetingMutationOptions } from "./meeting-management.js"
+import { FACT_TYPES } from "./payment.js"
 import { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
-
-/** Mirrors the store's fact types; the store checks the type again when it writes. */
-export const MEETING_FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
 
 export type MeetingContextChange =
   | { action: "note.add"; text: string; title?: string }
@@ -19,7 +17,7 @@ export type MeetingContextChange =
   | {
       action: "fact.add"
       statement: string
-      type: (typeof MEETING_FACT_TYPES)[number]
+      type: (typeof FACT_TYPES)[number]
       scope: "personal" | "work"
       evidence: readonly string[]
       subject?: string
@@ -121,10 +119,10 @@ export const validateMeetingContextChange = (change: MeetingContextChange): Read
       })
     }
     case "fact.add": {
-      if (!MEETING_FACT_TYPES.includes(change.type) || !["personal", "work"].includes(change.scope))
+      if (!FACT_TYPES.includes(change.type) || !["personal", "work"].includes(change.scope))
         throw new CliError(
           "validation_error",
-          `fact type (${MEETING_FACT_TYPES.join(", ")}) and explicit personal/work scope are required`,
+          `fact type (${FACT_TYPES.join(", ")}) and explicit personal/work scope are required`,
         )
       return Object.freeze({
         action: change.action,

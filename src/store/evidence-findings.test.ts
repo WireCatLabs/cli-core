@@ -205,7 +205,7 @@ it("reads a batch closed with nothing accepted as rejected, and one with a findi
   const other = await f.input("run-2")
   for (const finding of other.findings)
     if (finding.kind === "fact") finding.statement = "The harbour launch is the fourth one"
-    else finding.title = "Print the launch checklist"
+    else if (finding.kind === "task") finding.title = "Print the launch checklist"
   const some = await f.store.evidenceFindings.stage(other, agent)
   await f.store.evidenceFindings.review(some.id, { fingerprint: some.fingerprint, accept: ["launch"], by: "owner" })
 
@@ -301,7 +301,7 @@ it("keeps a batch approvable after a sibling batch of the same project is decide
   const other = await f.input("run-2")
   for (const finding of other.findings)
     if (finding.kind === "fact") finding.statement = "The harbour launch is the fourth one"
-    else finding.title = "Print the launch checklist"
+    else if (finding.kind === "task") finding.title = "Print the launch checklist"
   const second = await f.store.evidenceFindings.stage(other, agent)
   await f.store.evidenceFindings.review(first.id, {
     fingerprint: first.fingerprint,
@@ -314,7 +314,7 @@ it("keeps a batch approvable after a sibling batch of the same project is decide
   const third = await f.input("run-3")
   for (const finding of third.findings)
     if (finding.kind === "fact") finding.statement = "The harbour launch is the fifth one"
-    else finding.title = "Sign the launch checklist"
+    else if (finding.kind === "task") finding.title = "Sign the launch checklist"
   const stale = await f.store.evidenceFindings.stage(third, agent)
 
   expect(

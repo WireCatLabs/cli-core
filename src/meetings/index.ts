@@ -78,6 +78,7 @@ export {
   type FindingsReceipt,
   type FindingsRules,
   findingFingerprint,
+  type PaymentFinding,
   validateFindings,
 } from "./findings-rules.js"
 export { liftMeetingFields, MEETING_HIT_QUERY, meetingWordsQuery, parseMeetingQuery } from "./hit-query.js"
@@ -102,7 +103,6 @@ export {
 } from "./links.js"
 export {
   createMeetingContext,
-  MEETING_FACT_TYPES,
   type MeetingContextAction,
   type MeetingContextChange,
   type MeetingContextOperation,
@@ -164,6 +164,14 @@ export {
   meetingHitContextLimits,
   validateMeetingPassage,
 } from "./passage.js"
+export {
+  FACT_TYPES,
+  PAYMENT_DIRECTIONS,
+  PAYMENT_STATES,
+  type Payment,
+  paymentTitle,
+  validatePayment,
+} from "./payment.js"
 export {
   type MeetingPreparationContext,
   type MeetingPreparationContextRequest,

@@ -1488,10 +1488,10 @@ const NEW = {
     },
     {
       name: "facts",
-      doc: "What happened, as its evidence shows: a fact, a statement, a question, a decision or a promise. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. Replaces `decisions`, which stays empty.",
+      doc: "What happened, as its evidence shows: a fact, a statement, a question, a decision, a promise or a payment. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.",
       cols: [
         id(),
-        c("type", "text", { notnull: true, note: "fact, statement, question, decision, promise" }),
+        c("type", "text", { notnull: true, note: "fact, statement, question, decision, promise, payment" }),
         c("statement", "text", { notnull: true, note: "what happened, in one sentence" }),
         c("status", "text", {
           notnull: true,

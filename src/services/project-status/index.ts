@@ -61,7 +61,7 @@ export interface ProjectStatus {
   chats: StatusChatSummary[]
   /** Every signal's items, in signal order, then chat order. */
   items: StatusItem[]
-  /** Open amounts summed per direction and currency. */
+  /** Open amounts and expected payment facts, summed per direction and currency. */
   money: { open: MoneyTotal[] }
   outOfScope: { chat: string; reason: "other-account" | "linked-chat-limit" | "purpose"; purpose?: string }[]
   failed: { signal: string; why: string }[]
@@ -119,11 +119,23 @@ const inAccounts = (accounts: AccountKey[] | undefined, provider: string, accoun
 
 const failure = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
+/** An open ask, or an expected payment fact; an ask that a payment fact cites is counted once, as the fact. */
+const counted = (items: StatusItem[]) => {
+  const recorded = new Set(
+    items.filter((item) => item.signal === "payments").flatMap((item) => item.evidence.slice(1).map((one) => one.ref)),
+  )
+  return (item: StatusItem, state: string | undefined) =>
+    item.signal === "payments"
+      ? state === "expected"
+      : item.signal === "amounts" && state === "open" && !item.evidence.some((one) => recorded.has(one.ref))
+}
+
 const totalsOf = (items: StatusItem[]): MoneyTotal[] => {
   const totals = new Map<string, MoneyTotal & { cents: number }>()
+  const open = counted(items)
   for (const item of items) {
     const data = item.data as { amount?: string; currency?: string | null; direction?: string; state?: string }
-    if (item.signal !== "amounts" || data.state !== "open" || data.amount === undefined) continue
+    if (!open(item, data.state) || data.amount === undefined) continue
     const key = `${data.direction}|${data.currency ?? ""}`
     const total = totals.get(key) ?? {
       direction: data.direction ?? "unknown",
