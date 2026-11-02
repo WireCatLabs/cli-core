@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A CLI can write each of its settings into its config file with the default, so the owner sees every setting
+  there.** A CLI declares its scalar settings as `DeclaredSetting` (`key`, `default`, `description`).
+  `withSettingDefaults(raw, declared)` returns the file with each missing setting added at its default. It keeps the
+  owner's values, their order and unknown keys. It does not create a section that is not there.
+  `settingRows(raw, declared)` gives `config show` each setting with its value, default, description and `from`
+  (`config file` or `default`). memo is the first user (cli-base WC-CMD-30).
+- **`KEEP_SUCCESSFUL_RUNS_FOR_DAYS` and `RUNS_SIZE_LIMIT_MB` are exported** beside `KEEP_RUNS_FOR_DAYS`. A host can
+  then name the run-record defaults it writes into its config file.
+
 ## 0.560.0 — 02.11.2026
 
 ### Changed — may break callers
