@@ -15,6 +15,7 @@ export {
   type ParsedMail,
   parseMail,
 } from "./parse.js"
+export { PARTIAL, type PartialOutcome } from "./partial.js"
 export { PRESET_NAMES, PRESETS, type PresetName, presetMatches } from "./presets.js"
 export { domainsToAge, groupKey, type Probe, type ProbeGroup, probeMail, SUGGEST_RULE } from "./probe.js"
 export { type MailFolderProgress, mailProgress } from "./progress.js"
@@ -83,6 +84,7 @@ export {
 export { type MailCriteria, mailCriteriaOf, narrows } from "./server-query.js"
 export { type MailServerAccess, type MailServerRequest, searchMailServer } from "./server-search.js"
 export type { Listed, MailSource, Quick, Searched } from "./source.js"
+export { SEARCH_REFUSED, searchRefused } from "./source.js"
 export { listedOf, type StoredMail } from "./stored.js"
 export {
   MAX_ATTACHMENT_CHARS,

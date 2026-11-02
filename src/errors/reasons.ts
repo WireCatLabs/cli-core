@@ -118,7 +118,11 @@ const OTHERS: Entry[] = [
   ["search.server-failed", "provider_unavailable", "the server did not answer a search"],
   ["search.server-timeout", "timeout", "the server did not answer within --server-time"],
   ["search.server-capped", "outcome_unknown", "the server found more than one search reads, or a branch was not sent"],
-  ["search.server-too-large", "outcome_unknown", "a message the server found is too large to download during a search"],
+  [
+    "search.server-partial",
+    "outcome_unknown",
+    "a message the server found was stored without its attachments; the next sync reads it whole",
+  ],
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [

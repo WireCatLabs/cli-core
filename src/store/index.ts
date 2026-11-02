@@ -140,6 +140,7 @@ export type {
   MailboxInput,
   MailFilter,
   MailStore,
+  PartialEmail,
   SenderScore,
   ThreadDetails,
   ThreadSave,

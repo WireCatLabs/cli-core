@@ -1,6 +1,16 @@
+import { CliError } from "@wirecat/cli-base"
 import type { MailHeaders } from "./headers.js"
 import type { FileStamp } from "./resume.js"
 import type { MailCriteria } from "./server-query.js"
+
+/**
+ * The reason of the CliError `search`, `query` and `present` throw when the server answers SEARCH with NO or BAD:
+ * read as "nothing found", it would look like an empty folder and prove its stored mail deleted.
+ */
+export const SEARCH_REFUSED = "mail.search-refused"
+
+export const searchRefused = (error: unknown): boolean =>
+  error instanceof CliError && error.details.reason === SEARCH_REFUSED
 
 export interface Listed {
   uid: string
@@ -87,6 +97,9 @@ export interface MailSource {
   present?(uids: readonly string[], folder: string): Promise<string[]>
   /** Puts labels back on messages in `folder`, by Gmail id. */
   label?(messageIds: readonly string[], folder: string, labels: readonly string[]): Promise<void>
-  /** Each item's raw RFC 5322 bytes, in order; one that could not be read is an Error, not a failed call. */
-  fetchRaw(items: Quick[]): Promise<(Uint8Array | Error)[]>
+  /**
+   * Each item's raw RFC 5322 bytes, in order; one that could not be read is an Error, not a failed call. With
+   * `bytes`, at most the first `bytes` of each: a message cut short comes back shorter than its `size`.
+   */
+  fetchRaw(items: Quick[], options?: { bytes?: number }): Promise<(Uint8Array | Error)[]>
 }

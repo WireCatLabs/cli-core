@@ -5,6 +5,7 @@ import { CliError, captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { type ProgramDefinition, run } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
+import { SERVER_BOUNDS } from "../services/server-search.js"
 import { type AccountKey, openStore } from "../store/store.js"
 import { mailReadCommands } from "./cli/index.js"
 import { GMAIL_ALL_MAIL } from "./folders.js"
@@ -12,6 +13,7 @@ import { ruleInput } from "./rule-input.js"
 import { mailCriteriaOf } from "./server-query.js"
 import type { MailServerAccess } from "./server-search.js"
 import type { MailSource } from "./source.js"
+import { syncMail } from "./sync.js"
 import { type FakeMail, type FakeMailbox, fakeMailSource } from "./testing/index.js"
 
 const app = {
@@ -143,7 +145,7 @@ const setup = async (
       await opened.close()
     }
   }
-  return { mail, json, mailbox, stored, tagged }
+  return { mail, json, mailbox, stored, tagged, path }
 }
 
 const byRef = (items: { ref: string; found_in?: string }[]) =>
@@ -232,26 +234,41 @@ describe("mail server search", () => {
     expect(JSON.parse(answer.out).meta.issues).toEqual([expect.objectContaining({ reason: "search.server-timeout" })])
   })
 
-  it("leaves a find too large to download on the server, and says so", async () => {
-    const read: string[] = []
-    const big = (mailbox: FakeMailbox): MailSource => {
-      const inner = fakeMailSource(mailbox)
-      return {
-        ...inner,
-        list: async (...args) =>
-          (await inner.list(...args)).map((item) => (item.uid === "2" ? { ...item, size: 6_000_000 } : item)),
-        fetchRaw: async (items) => {
-          read.push(...items.map(({ uid }) => uid))
-          return inner.fetchRaw(items)
+  it("stores a big find from its first bytes, and the next sync reads it whole", async () => {
+    const attachment = { name: "figures.txt", mime: "text/plain", content: `Quarterly figures ${"x".repeat(400_000)}` }
+    const { json, mailbox, path } = await setup([fake("2", 10, { attachment }), fake("3", 11, {})])
+    const asked: (number | undefined)[] = []
+    const found = await json("search", "messages", "invoice")
+    expect(byRef(found.items)).toEqual({ m1: "archive", m2: "server", m3: "server" })
+    expect(found.meta.issues).toEqual([expect.objectContaining({ reason: "search.server-partial" })])
+    const opened = await openStore({ path })
+    try {
+      const account = (await opened.accounts.storedAccount(MINE))?.id as number
+      const cut = await opened.mail.email(account, "m2")
+      expect(cut?.bodyText).toContain("Please pay the invoice")
+      expect(cut?.attachments).toEqual([])
+      expect((await opened.mail.partialEmails(account, 10)).total).toBe(1)
+      const source = fakeMailSource(mailbox)
+      const counted: MailSource = {
+        ...source,
+        fetchRaw: async (items, options) => {
+          asked.push(options?.bytes)
+          return source.fetchRaw(items, options)
         },
       }
+      const synced = await syncMail(counted, opened, {
+        account: { address: MINE.account },
+        since: new Date(Date.UTC(2026, 9, 1)),
+      })
+      expect(synced.partial).toEqual({ completed: 1, left: 0 })
+      const whole = await opened.mail.email(account, "m2")
+      expect(whole?.attachments).toEqual([expect.objectContaining({ name: "figures.txt" })])
+      expect(whole?.metadata).toEqual({})
+      expect((await opened.mail.partialEmails(account, 10)).total).toBe(0)
+      expect(asked).not.toContain(SERVER_BOUNDS.textBytes)
+    } finally {
+      await opened.close()
     }
-    const { json, stored } = await setup([fake("2", 10, {}), fake("3", 11, {})], { source: big })
-    const found = await json("search", "messages", "invoice")
-    expect(read).toEqual(["3"])
-    expect(byRef(found.items)).toEqual({ m1: "archive", m3: "server" })
-    expect(found.meta.issues).toEqual([expect.objectContaining({ reason: "search.server-too-large" })])
-    expect((await stored()).sort()).toEqual(["m1", "m3"])
   })
 
   it("calls a read of the finds that timed out a timeout, not a failed search", async () => {
