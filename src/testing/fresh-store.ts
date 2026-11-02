@@ -26,8 +26,9 @@ vi.mock(import("../store/sqlite/open-store.js"), async (importOriginal) => {
     ...original,
     openStoreContext: async (options = {}) => {
       if (!options.readOnly) {
-        const { storePath } = await import("../store/path.js")
+        const { refuseOwnerStoreInTests, storePath } = await import("../store/path.js")
         const file = options.path ?? storePath(options.env)
+        refuseOwnerStoreInTests(file)
         if (!statSync(file, { throwIfNoEntry: false })?.size && !existsSync(`${file}-wal`)) {
           try {
             mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
