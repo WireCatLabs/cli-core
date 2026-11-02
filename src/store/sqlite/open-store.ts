@@ -1,6 +1,7 @@
 import { mkdirSync, statSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "../decisions.js"
 import { migrate } from "../migrations.js"
 import { storeCapable } from "../open.js"
 import { storePath } from "../path.js"
@@ -29,6 +30,8 @@ export interface StoreOptions {
   version?: string
   /** Where the notice of an upgrade that locks other CLIs out goes; stderr, since stdout may carry JSON or MCP. */
   warn?: (line: string) => void
+  /** The host's decision policy (its `agent_decisions`); the default lets an agent decide with a reason. */
+  decisions?: DecisionPolicy
 }
 export const BACKFILL_ON_OPEN = 5_000
 
@@ -58,6 +61,7 @@ export const openStoreContext = async ({
   version,
   warn = (line) => process.stderr.write(`${line}\n`),
   readOnly = false,
+  decisions = DEFAULT_DECISION_POLICY,
 }: StoreOptions = {}): Promise<StoreContext> => {
   if (typeof readOnly !== "boolean") throw new CliError("validation_error", "readOnly must be a boolean")
   await storeCapable()
@@ -92,7 +96,12 @@ export const openStoreContext = async ({
       })
     }
     loadProviders(database)
-    return { ...opened, now, sharedConfig: sharedConfigPath(file, env ?? process.env) }
+    return {
+      ...opened,
+      now,
+      sharedConfig: sharedConfigPath(file, env ?? process.env),
+      decisions,
+    }
   } catch (error) {
     database.close()
     throw error

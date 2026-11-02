@@ -1,4 +1,5 @@
 import type { FindingOutcome, MeetingFindingsInput, MeetingFindingsReceipt } from "../meetings/index.js"
+import type { Decider } from "./decisions.js"
 import type { AccountKey } from "./types.js"
 
 export interface MeetingFindingsBatch {
@@ -27,6 +28,6 @@ export interface MeetingFindingsStore {
   review(
     account: AccountKey,
     id: string,
-    input: { fingerprint: string; accept: string[] },
+    input: { fingerprint: string; accept: string[]; by: Decider },
   ): Promise<MeetingFindingsBatch>
 }

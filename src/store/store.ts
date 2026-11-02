@@ -12,6 +12,7 @@ import {
 import { type ChatsStore, chatsStoreOver } from "./chats.js"
 import { type ConversationsStore, conversationsStoreOver } from "./conversations.js"
 import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
+import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "./decisions.js"
 import type { EvidenceFindingsStore } from "./evidence-findings.js"
 import type { MeetingFindingsStore } from "./meeting-findings.js"
 import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
@@ -116,6 +117,8 @@ export interface MessageStore {
   readonly memories: MemoriesStore
   /** What an agent wants done outside the store, waiting for the owner's approval. */
   readonly proposedActions: ProposedActionsStore
+  /** Who may decide proposals, fixed when the store was opened; the store's decide methods and the registry read it. */
+  readonly decisionPolicy: DecisionPolicy
   /** One row per tool an agent called, never its arguments. */
   readonly agentActions: AgentActionsStore
   /** Meetings and calendar events: the port `src/meetings/` defines. */
@@ -326,6 +329,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     get memories() {
       return memories()
     },
+    decisionPolicy: context.decisions ?? DEFAULT_DECISION_POLICY,
     get proposedActions() {
       return proposedActions()
     },
