@@ -65,6 +65,10 @@ const SCHEME = /(?<![A-Za-z])(Bearer|Basic)(\s+)(?![A-Z]?[a-z]+(?![A-Za-z0-9]))[
 const NAMED_PAIR =
   /(?<![\p{L}\p{N}])([\p{L}\p{N}_.-]*(?:token|pass|pwd|pin|otp|2fa|secret|credential|cookie|authorization|key|contrase|clave|пароль|пин|код)[\p{L}\p{N}_.-]*)(["']?\s*(?:=>|[:=])\s*["']?|\s+(?![\p{L}]+(?![\p{L}\p{N}])))((?:Bearer\s+|Basic\s+)?)([^\s"'&,;]+)/giu
 
+/** A credential in a shape vendors publish so scanners find it: a known token prefix, a private key, a `Bearer` value. */
+export const holdsCredential = (text: string): boolean =>
+  text.search(PRIVATE_KEY) >= 0 || text.search(KNOWN_TOKENS) >= 0 || text.search(SCHEME) >= 0
+
 /**
  * Whether a run of token characters is a random string rather than words: long, mixed case, high Shannon entropy,
  * cut into short pieces (`Kz9vQ2mX`) where a name is cut into words (`InlineQueryResultMpeg4Gif`).

@@ -227,6 +227,13 @@ export {
   type ProposedActionsStore,
   proposerOfAction,
 } from "./sqlite/proposed-actions.js"
+export type {
+  RecordKey,
+  RecordOutcome,
+  RecordStore,
+  RecordsWritten,
+  SourceRecord,
+} from "./sqlite/records.js"
 export type { LinkDecision, RelationUpdate } from "./sqlite/relation-proposals.js"
 export {
   fillSearchIndex,

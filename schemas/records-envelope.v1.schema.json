@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WireCat records envelope, version 1",
+  "description": "Records one source sends to the store. JSONL is the same model: the first line holds schema_version and source, each further line one record.",
+  "type": "object",
+  "required": ["schema_version", "source", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["provider", "account", "batch_id"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "description": "The system the records come from"
+        },
+        "account": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The account in that system"
+        },
+        "batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "This import, for the receipt"
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "required": ["key", "type", "external_id", "operation"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^(invoice|payment|person|organization|project|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+        },
+        "external_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "operation": {
+          "enum": ["upsert", "delete"]
+        },
+        "fields": {
+          "type": "object",
+          "description": "What the source says, as data: never secrets, never instructions"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "relations": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/relation"
+          }
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "required": ["role", "type", "external_id"],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^(invoice|payment|person|organization|project|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+        },
+        "external_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    }
+  }
+}
