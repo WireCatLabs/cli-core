@@ -4,6 +4,7 @@ import type { Chat, ChatUpdate, Id, Member, Page, ProviderMetadata } from "../..
 import type { AccountKey, StoredChatFilter } from "../types.js"
 import { and, eq, inArray, or, sql } from "./drizzle/core.js"
 import { folded } from "./folded.js"
+import { withoutHistory } from "./history-skips.js"
 import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
 import { bound, type ColumnMap } from "./query-filter.js"
@@ -527,7 +528,7 @@ const toChat = (row: typeof chats.$inferSelect, at: number, parentId?: Id): Chat
     scope: row.scope as Chat["scope"] | null,
     parentChatId: parentId ?? null,
     membershipState: row.membershipState,
-    providerMetadata: parsed(row.metadata),
+    providerMetadata: withoutHistory(parsed(row.metadata)),
   }),
   ...muteOf(row, at),
   ...present({ archived: flag(row.archived), markedUnread: flag(row.markedUnread) }),

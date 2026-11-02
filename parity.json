@@ -438,6 +438,9 @@
     "--full": {
       "meaning": "found messages with their whole text and every provider field"
     },
+    "--full-history": {
+      "meaning": "keep this chat's pushed history in full from now on, past the history limits"
+    },
     "--hidden": {
       "value": "<on|off>",
       "meaning": "on hides a forum's General topic from the topic list, off shows it"
@@ -3509,6 +3512,7 @@
         "--catch-up-messages": "all",
         "--catch-up-time": "all",
         "--dry-run": "all",
+        "--full-history": "all",
         "--last": "all",
         "--limit": "all",
         "--no-catch-up": "all",
