@@ -7,35 +7,21 @@ shape of this file.
 
 ## Unreleased
 
-### Changed — may break callers
-
-- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
-  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
-  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
-  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
-  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
-  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
-  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
-  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
-- **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
-  keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
-  (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
-
 ### Added
 
-- **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
-  it, when, provider, account, the CLI that opens it and whether it is `available`, `deleted` or `unavailable`. One
-  statement per kind present, offline. A malformed ref comes back `unknown`, never thrown, so one bad row cannot fail
-  a page. Titles hold no message text; `{ excerpt: true }` adds at most 280 characters. Read once per page.
-- **`refLabel(summary)` and `openOf(summary, { profilesFor, local? })`** (`./cli`): the one label
-  (`Chat «Title» (MAX)`) and the command that opens a ref. `openOf` never picks a profile: with none or several,
-  `argv` keeps `<profile>` and `profiles` lists the choices. Kinds no CLI owns open with the caller's `local` words.
-- **`ProviderEntry.opens`**: the read command that opens each kind of ref (`{ document: "documents show" }`). A CLI
-  writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
-  this build does not know is dropped, so an older build still reads a newer entry.
-
-### Added
-
+- **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
+  `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
+  (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
+  contents in an error. gcal, drive and mail each kept a copy of this reader.
+- **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
+  `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
+- **iCalendar feeds as read-only calendars.** With `deps.feeds` (`icsFeeds`), `calendars add <url> [--title]` follows a
+  public holiday calendar, a sports schedule or a published `.ics` address, and `calendars remove <calendar>` stops.
+  `sync` reads each feed after the provider (`syncWithFeeds`), so its events show in `events list`,
+  `search events`, `overlapping:` and `events remind`. Repeating events are expanded here (`expandSeries`: RRULE in
+  the event's own zone, RDATE, EXDATE and overrides). The address is a secret input, kept by the CLI and never
+  printed; a fetch follows redirects only to https and stops at 10 MB and 30 s. `readIcs` takes
+  `{ overrides: true }` and returns the calendar's `name`. See `docs/dev/CALENDARS.md`, "Feeds".
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
@@ -49,6 +35,58 @@ shape of this file.
   owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
   `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
   `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
+- **A command's own history handler learns whether each batch reached the store**: `HistoryBatchHandler` takes
+  `saved`, a promise of the same `true` or `false` the messenger gets, so a link can count only what was kept.
+- **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
+  `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
+  commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
+  account is refused, naming the account it belongs to and the profiles of this CLI the store saw on it; it never
+  switches account. One of another messenger is refused with the command that opens it (`open it with tg <profile>
+  messages list chat:telegram/…`), and another kind (`document:413` given as a chat) with what the argument takes.
+- **`event:<id>` and `meeting:<account>/<meeting>[/<transcript>[/<cue>]]` parse with `parseReference`** and
+  `canonicalReference`, as every other kind: `event:N` was printed by the calendar and person answers and could not be
+  read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
+  `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
+  `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
+- **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
+  it, when, provider, account, the CLI that opens it and whether it is `available`, `deleted` or `unavailable`. One
+  statement per kind present, offline. A malformed ref comes back `unknown`, never thrown, so one bad row cannot fail
+  a page. Titles hold no message text; `{ excerpt: true }` adds at most 280 characters. Read once per page.
+- **`refLabel(summary)` and `openOf(summary, { profilesFor, local? })`** (`./cli`): the one label
+  (`Chat «Title» (MAX)`) and the command that opens a ref. `openOf` never picks a profile: with none or several,
+  `argv` keeps `<profile>` and `profiles` lists the choices. Kinds no CLI owns open with the caller's `local` words.
+- **`ProviderEntry.opens`**: the read command that opens each kind of ref (`{ document: "documents show" }`). A CLI
+  writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
+  this build does not know is dropped, so an older build still reads a newer entry.
+
+
+
+### Changed — may break callers
+
+- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
+  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
+  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
+  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
+  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
+  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
+  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
+  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+- **A write to a calendar the account may only read refuses before anything is asked or journaled**
+  (`calendar.read-only`): create, quick add, import, update, delete, respond and move, for a feed and for a provider's
+  `reader` or `free-busy` calendar alike. Before, only the target of a move was checked; the provider refused the rest.
+  `calendars busy` and `search --backend server` leave feed calendars out.
+- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
+  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
+  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
+  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
+  the reason instead.
+- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
+  no longer found by that title; give its id or a part of the title.
+- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
+  provider clash message now shows (`telegram (messages, from tg)`).
+- **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
+  keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
+  (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
 
 ### Fixed
 
@@ -62,8 +100,6 @@ shape of this file.
 
 ### Added
 
-- **A command's own history handler learns whether each batch reached the store**: `HistoryBatchHandler` takes
-  `saved`, a promise of the same `true` or `false` the messenger gets, so a link can count only what was kept.
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
@@ -71,29 +107,6 @@ shape of this file.
   never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
   (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
   `setHistoryIncluded`; `Saving` takes `historyLimits`.
-- **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
-  `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
-  commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
-  account is refused, naming the account it belongs to and the profiles of this CLI the store saw on it; it never
-  switches account. One of another messenger is refused with the command that opens it (`open it with tg <profile>
-  messages list chat:telegram/…`), and another kind (`document:413` given as a chat) with what the argument takes.
-- **`event:<id>` and `meeting:<account>/<meeting>[/<transcript>[/<cue>]]` parse with `parseReference`** and
-  `canonicalReference`, as every other kind: `event:N` was printed by the calendar and person answers and could not be
-  read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
-  `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
-  `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
-
-### Changed — may break callers
-
-- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
-  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
-  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
-  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
-  the reason instead.
-- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
-  no longer found by that title; give its id or a part of the title.
-- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
-  provider clash message now shows (`telegram (messages, from tg)`).
 
 ## 0.544.0 — 02.11.2026
 
