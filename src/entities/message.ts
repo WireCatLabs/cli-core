@@ -121,6 +121,12 @@ export const message = v.strictObject({
       sender_score: v.optional(
         v.strictObject({ score: v.number(), signals: v.array(text), demoted: v.optional(v.literal(true)) }),
       ),
+      /** Mail `review`: filed in the mailbox of mail sent to many. */
+      bulk: v.optional(v.boolean()),
+      /** Mail `review`: its List-Id, `null` when it has none. */
+      list_id: v.optional(v.nullable(text)),
+      /** Mail `review`: the mail rule that decided how it is stored, by its id in `rules list`; `null` when none. */
+      rule_id: v.optional(v.nullable(v.number())),
     }),
   ),
   provider_metadata: providerMetadata,

@@ -48,7 +48,8 @@ export const catchUpQuery = (
 
 type Read = Message & { chatTitle?: string | null }
 
-const summaryOf = (message: Read, reader: AccountKey) => {
+/** One message of a catch-up answer: the fields `inbox` and `review` show, for every messenger and for mail. */
+export const summaryOf = (message: Read, reader: AccountKey) => {
   const { ref, chat_id, chat_title, timestamp, sender_name, sender_is_me, outgoing, text, transcript, attachments } =
     messageItem(message, reader)
   return {

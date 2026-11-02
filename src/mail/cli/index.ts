@@ -20,6 +20,9 @@ import { atDetail } from "../../output-detail.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { type ServerSearched, type ServerSkip, sourceKey } from "../../services/server-search.js"
 import { type AccountKey, type MessageStore, queryFilter, THREAD_COLUMNS } from "../../store/store.js"
+import { mailReviewCommand } from "./review.js"
+
+export { MAIL_REVIEW_QUERY, MAIL_REVIEW_STEPS } from "./review.js"
 
 /** A locked or broken store must fail the command, not read as "nothing stored yet". */
 const absentAccount = (error: unknown): undefined => {
@@ -397,11 +400,12 @@ const conversationsCommand = (mail: MailReads): Command => {
 }
 
 /**
- * `search messages`, `messages show` and `conversations list|show` over the mail a mail CLI stored: the same
+ * `search messages`, `review`, `messages show` and `conversations list|show` over the mail a mail CLI stored: the same
  * query language, ranking and answers as memo's mail search, read only, scoped to the profile's mailbox.
  */
 export const mailReadCommands = sharedCommand((mail: MailReads): Command[] => [
   searchCommand(mail),
+  mailReviewCommand(mail),
   messagesCommand(mail),
   conversationsCommand(mail),
 ])

@@ -19,6 +19,7 @@ import {
   type TaskDetails,
   type Where,
 } from "../store/store.js"
+import { mailActivity } from "./agenda-mail.js"
 import { type ChatCoverage, chatCoverage } from "./chat-coverage.js"
 import { CHAT_KINDS } from "./chats.js"
 import type { ServiceDeps } from "./deps.js"
@@ -142,6 +143,10 @@ export interface AgendaService {
   show(options?: AgendaOptions): Promise<Agenda>
 }
 
+/**
+ * An email account's chats are its threads, and whose turn one is follows `mailTurn` (`../mail/owed.ts`), not merely
+ * who wrote last: mail sent to many is never owed.
+ */
 export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): AgendaService => ({
   show: async ({
     dueWithin = DAY,
@@ -206,9 +211,18 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         assignees,
       }))
 
-    const where = parts.chats ? queryFilter(parts.chats, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined
-    const activity = await store.chats.chatActivity(account, at - within, where)
+    const mail = account.provider === "email" ? await mailActivity(store, account, at - within, parts.chats) : undefined
+    const activity =
+      mail ??
+      (await store.chats.chatActivity(
+        account,
+        at - within,
+        parts.chats ? queryFilter(parts.chats, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined,
+      ))
+    const turnOf = (chat: ChatActivity) =>
+      "turn" in chat ? chat.turn : chat.lastFromOwner === null ? null : chat.lastFromOwner ? "waiting" : "owed"
     const chats = activity.chats.map(({ lastMessageId, ...chat }) => ({
+      turn: turnOf({ lastMessageId, ...chat }),
       ...chat,
       lastMessage:
         lastMessageId === null
@@ -223,21 +237,17 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
     }))
     const silentFor = (chat: Omit<AgendaChat, "coverage">) => at - Date.parse(chat.lastMessageAt)
     const shown = {
-      owed: chats.filter((chat) => chat.lastFromOwner === false && silentFor(chat) >= unanswered),
-      waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= waiting),
-      unsynced: chats.filter((chat) => chat.lastMessage === null),
+      owed: chats.filter((chat) => chat.turn === "owed" && silentFor(chat) >= unanswered),
+      waiting: chats.filter((chat) => chat.turn === "waiting" && silentFor(chat) >= waiting),
+      // A thread with no stored email but drafts is not behind: mail sync stores every email it lists.
+      unsynced: mail ? [] : chats.filter((chat) => chat.lastMessage === null),
     }
+    const ids = Object.values(shown).flatMap((list) => list.map(({ chatId }) => chatId))
     const covered = new Map(
-      (
-        await chatCoverage(
-          store,
-          account,
-          Object.values(shown).flatMap((list) => list.map(({ chatId }) => chatId)),
-        )
-      ).map((one) => [one.chatId, one]),
+      (mail ? mail.coverage(ids) : await chatCoverage(store, account, ids)).map((one) => [one.chatId, one]),
     )
     const withCoverage = (list: typeof chats): AgendaChat[] =>
-      list.map((chat) => ({ ...chat, coverage: covered.get(chat.chatId) as ChatCoverage }))
+      list.map(({ turn: _, ...chat }) => ({ ...chat, coverage: covered.get(chat.chatId) as ChatCoverage }))
     const inList = new Set((await store.tasks.categories()).map(({ name }) => name))
     const unlisted = new Map<string, number>()
     for (const { category } of open)
