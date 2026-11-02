@@ -18,6 +18,7 @@ import { formatReference } from "../../domain/references.js"
 import { AGENDA_DEFAULTS } from "../../services/agenda.js"
 import { REVIEW_DAYS, reviewStart } from "../../services/inbox.js"
 import type { AccountKey, EmailMarks } from "../../store/store.js"
+import { readPastMark } from "../marks.js"
 import { hitText } from "../read.js"
 import { type MailReview, OWED_DAYS, REVIEW_THREADS, reviewMail } from "../review.js"
 import type { MailReads } from "./index.js"
@@ -36,6 +37,15 @@ export const MAIL_REVIEW_QUERY = defineQuery({
 
 /** The mail review's steps; a host lists them beside its own so its step checks know them. */
 export const MAIL_REVIEW_STEPS = defineSteps([
+  {
+    id: "mail-messages.acknowledge",
+    command: "messages acknowledge",
+    args: [
+      { name: "holder", required: true },
+      { name: "cursor", required: true },
+    ],
+    why: "once these are processed, this moves the holder's mark past them",
+  },
   {
     id: "mail-review.next",
     command: "review",
@@ -126,6 +136,71 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean) =>
   })
 }
 
+const holderReview = async (command: Command, mail: MailReads, holder: string, query: string[]) => {
+  const { unanswered, waiting } = command.opts<{ unanswered?: unknown; waiting?: unknown }>()
+  if (typedQuery(query).trim() || unanswered !== undefined || waiting !== undefined)
+    throw new CliError(
+      "validation_error",
+      "--holder reads past its own mark — not with a query, --unanswered or --waiting",
+    )
+  const { read, mailbox, marks } = await mail.read(command, async (store, mailbox) => {
+    const read = await readPastMark(store, mailbox, holder)
+    const account = read.emails.length ? await store.accounts.storedAccount(mailbox) : undefined
+    const marks = account
+      ? await store.mail.emailMarks(
+          account.id,
+          read.emails.map((one) => one.id),
+        )
+      : new Map()
+    return { read, mailbox, marks }
+  })
+  const chats = new Map<string, MailReview["chats"][number]>()
+  for (const email of read.emails) {
+    const chat = chats.get(email.chatId) ?? {
+      id: email.chatId,
+      title: email.chatTitle,
+      kind: "dialog",
+      messages: [],
+      more: false,
+    }
+    const mark = marks.get(email.id)
+    chat.messages.push(mark ? { ...email, marks: mark } : email)
+    chats.set(email.chatId, chat)
+  }
+  const now = new Date().toISOString()
+  const found: MailReview = {
+    since: read.mark?.throughAt ? new Date(read.mark.throughAt).toISOString() : now,
+    until: now,
+    complete: !read.more,
+    chats: [...chats.values()],
+    skipped: [],
+    partial: false,
+    quiet: 0,
+  }
+  const answer = reviewAnswer(found, mailbox, true)
+  const skipped = Object.entries(read.skipped).filter(([, count]) => count > 0)
+  answer.next = [
+    stepOf(step("mail-messages.acknowledge"), { args: { holder, cursor: read.cursor } }),
+    ...(answer.next ?? []),
+  ]
+  answer.missing = [
+    ...(answer.missing ?? []),
+    ...(read.held > 0 ? [{ field: "items", why: `${read.held} partial emails held until they are whole` }] : []),
+    ...(skipped.length
+      ? [{ field: "items", why: `left out: ${skipped.map(([reason, count]) => `${count} ${reason}`).join(", ")}` }]
+      : []),
+  ]
+  const output = outputFor(command)
+  renderAnswer(command, output, answer, () => {
+    output.renderer.note(
+      read.mark
+        ? `${holder}: past ${read.mark.throughId}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
+        : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
+    )
+    return read.emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id))}\n`).join("")
+  })
+}
+
 /**
  * `review` over the stored mail of the profile's mailbox, with tg's words: what is new, what the owner owes, what
  * waits for an answer. It reads the store only and opens no task.
@@ -159,6 +234,11 @@ export const mailReviewCommand = (mail: MailReads): Command =>
       "only threads where you wrote last and nobody answered for this long — 3d; 7d if not given",
     )
     .option(
+      "--holder <name>",
+      "read for this holder — an agent or a pipeline — what is stored past its processing mark, by store order; " +
+        "bulk, envelopes, drafts and partial mail left out; `messages acknowledge` moves the mark",
+    )
+    .option(
       "--new",
       "what changed since the last `review --new` of this mailbox, a point per thread — for scheduled runs",
     )
@@ -172,7 +252,13 @@ Mail newer than the last finished sync waits for the next review. Each reader ke
 an agent over MCP, and each scheduled run.`,
     )
     .action(async function (this: Command, query: string[]) {
-      const options = this.opts<{ new?: boolean; unanswered?: string | true; waiting?: string | true }>()
+      const options = this.opts<{
+        new?: boolean
+        unanswered?: string | true
+        waiting?: string | true
+        holder?: string
+      }>()
+      if (options.holder !== undefined) return holderReview(this, mail, options.holder, query)
       const { since: from, meta } = catchUpQuery(query, MAIL_REVIEW_QUERY, "review")
       const bulk = nativeTerms(listQuery(typedQuery(query), MAIL_REVIEW_QUERY, "review"), "review").get("bulk")?.value
       if (bulk !== undefined && bulk !== "false")
