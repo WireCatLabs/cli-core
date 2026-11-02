@@ -422,6 +422,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--encrypt` |  | switch | compress and encrypt with a password that is never kept |  |
 | `--exact` |  | switch | bare words and quotes match their exact form only |  |
 | `--fingerprint` | `<hash>` | string | refuse if what it names has changed since it was read |  |
+| `--full-history` |  | switch | keep a chat's whole history, past its limits |  |
 | `--for-everyone` |  | switch | delete for everyone in the chat, not only for the owner |  |
 | `--http` |  | switch | serve over HTTP on 127.0.0.1 |  |
 | `--language` | `<lucene\|legacy>` | choice | the query language |  |

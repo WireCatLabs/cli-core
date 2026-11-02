@@ -187,6 +187,7 @@ export const serveAppOverHttp = async (
   const listening = await serveOverHttp(build, {
     ...http,
     appName: app.command,
+    reaches: `your ${options.name}`,
     onCode: (code, expires) =>
       context.renderer.note(
         context.env[mcpHttpMarker(app.envPrefix)] === undefined

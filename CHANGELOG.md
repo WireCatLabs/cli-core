@@ -136,8 +136,8 @@ shape of this file.
   no longer found by that title; give its id or a part of the title.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
-- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
-  cli-base bumps it to 0.74.0 together with cli-core.
+- **cli-core now needs `@wirecat/cli-base` 0.75.0**, which holds the `--full-history` switch's name and the help
+  without `OR` for a list its provider filters. A CLI that pins cli-base bumps it to 0.75.0 together with cli-core.
 - **`FACT_TYPES` gains `payment`, and a `Finding` may be a `PaymentFinding`.** A caller that lists facts with a fixed
   type list, or reads `finding.title` on every finding that is not a fact, narrows by `kind` first. A memo older than
   this release refuses a payment fact in `facts list`; ship memo's bump the same day. `MEETING_FACT_TYPES` is gone:
@@ -164,6 +164,22 @@ shape of this file.
   tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
   `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
   `--brief` and `--full` too, and refuse them together as the others do.
+- **An Outlook or Exchange feed's events are read, no longer skipped.** Those feeds name time zones the Windows way,
+  `TZID:W. Europe Standard Time`, and the iCalendar reader took only IANA names (`Europe/Berlin`), so `calendars add`
+  and `sync` skipped every timed event of such a feed and counted it under `skipped`. A Windows name is now read as
+  the IANA zone Unicode CLDR gives it worldwide (territory `001`), in DTSTART, DTEND, RECURRENCE-ID, and in the TZID of
+  RDATE and EXDATE, which are stored with the IANA name. The 142 names are a table generated from CLDR release-49
+  (`scripts/windows-zones.ts` regenerates it); no new dependency. A TZID that is neither, such as Outlook's
+  `(UTC+01:00) Amsterdam, Berlin, Bern`, is still skipped.
+- **A list whose provider filters it no longer says in `--help` that its query takes `OR`.** With
+  `@wirecat/cli-base` 0.74.0 → 0.75.0, its `Syntax:` line names only what it takes: `field:value` terms joined by AND,
+  and the phrase, `word*` and range forms where a field takes them. Every CLI picks this up at its next cli-core bump.
+- **The browser login page of `mcp serve --http` names what the app asks to reach and the right command.** It always
+  said "reach your messages through `<app> mcp --http`"; a CLI that is not a messenger now says what it serves (gcal:
+  "your Google Calendar"), and every CLI names `<app> mcp serve --http`. `HttpOptions` takes `reaches` for the
+  wording; unset, the page says "your `<app>` data".
+- **`store jobs list` says in its help and its MCP description that its query takes `OR`.** The list reads every job
+  file and takes the whole query language, but its registry said the source filters it (`native`).
 
 ## 0.550.0 — 02.11.2026
 

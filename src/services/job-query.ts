@@ -2,10 +2,13 @@ import { evaluate, type QueryAst, type QueryRegistry, queryFieldsOf } from "@wir
 import { job } from "../entities/job.js"
 import { jobItem, listJobs } from "./backfill-jobs.js"
 
-/** The job folder is the list's own source: every file is read whole, so it answers each field. */
+/**
+ * The job folder is the list's own source: every file is read whole, so it answers each field. `sql`, not `native`:
+ * `evaluate` takes the whole language, OR included, and the help and the MCP description say so.
+ */
 export const JOBS_QUERY = {
   entity: "job",
-  backend: "native",
+  backend: "sql",
   fields: queryFieldsOf(job, {
     native: Object.keys(job.entries),
     examples: { state: "state:failed", started_at: "started_at>=7d", chat: "chat:7", fetched: "fetched>0" },

@@ -113,6 +113,8 @@ export interface HttpOptions {
   /** Where the hashes of issued tokens and registered clients are kept. */
   tokenFile: string
   appName: string
+  /** What the browser login page says an app asks to reach: `your messages`, `your Google Calendar`. */
+  reaches?: string
   onCode: (code: string, expires: Date) => void
   onError?: (error: Error) => void
   now?: () => number
@@ -130,7 +132,7 @@ export interface HttpOptions {
  * the owner's browser cannot reach the port through a rebound DNS name.
  */
 export const serveOverHttp = async (build: () => McpServer, options: HttpOptions): Promise<Listening> => {
-  const { publicUrl, port, tokenFile, appName, onCode, onError, now, lockFile, version } = options
+  const { publicUrl, port, tokenFile, appName, reaches, onCode, onError, now, lockFile, version } = options
   const lock = lockFile
     ? httpLock(lockFile, {
         pid: process.pid,
@@ -157,6 +159,7 @@ export const serveOverHttp = async (build: () => McpServer, options: HttpOptions
     resource,
     file: tokenFile,
     appName,
+    ...(reaches ? { reaches } : {}),
     onCode: (code, expires) => {
       lock?.update({ loginCode: code, loginCodeExpiresAt: expires.toISOString() })
       onCode(code, expires)

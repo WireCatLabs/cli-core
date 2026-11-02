@@ -545,6 +545,7 @@ const serveProfiles = async (self: Command, context: BaseContext, host: McpHost,
       tokenFile,
       lockFile: httpLockFile(tokenFile),
       version: app.version,
+      reaches: app.messenger === false ? `your ${host.name}` : "your messages",
       onCode: (code, expires) =>
         context.renderer.note(
           env[mcpHttpMarker(app.envPrefix)] === undefined
