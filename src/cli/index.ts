@@ -285,6 +285,7 @@ export {
   grantsAuthority,
   isLogin,
   isOtherServiceCall,
+  isProposal,
   isStoreChange,
   judgedEffects,
   judgedTargets,
@@ -293,7 +294,9 @@ export {
   logsInOrOut,
   NO_EFFECTS,
   ownerOnlyOption,
+  PROPOSE_COMMANDS,
   previewFlag,
+  proposesOnly,
   REMOTE_READ,
   REMOTE_WRITE,
   reachesOtherService,
@@ -402,7 +405,11 @@ export {
 } from "./mcp-server-command.js"
 export { formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
 export { meetingEvidenceItem, meetingPersonContextItem } from "./meeting-evidence-answer.js"
-export { parseEvidenceFindingsJson, parseMeetingFindingsJson } from "./meeting-findings-input.js"
+export {
+  parseEvidenceFindingsJson,
+  parseMailFindingsJson,
+  parseMeetingFindingsJson,
+} from "./meeting-findings-input.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export {
   type MeetingPreparationReader,

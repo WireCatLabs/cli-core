@@ -647,6 +647,31 @@ const samples: Record<EntityName, unknown> = {
     previous: [],
     receipt: null,
   },
+  mail_findings: {
+    id: "1",
+    account: { provider: "email", account: "me@example.com" },
+    input: {
+      schema_version: 1,
+      key: "mail-triage:42",
+      extractor: "synthetic",
+      findings: [
+        {
+          id: "c1",
+          kind: "new_contact",
+          address: "ann@example.com",
+          name: "Ann",
+          evidence: [{ reference: "msg:email/me%40example.com/t1/m1", fingerprint: "a".repeat(64) }],
+        },
+      ],
+    },
+    fingerprint: "b".repeat(64),
+    status: "proposed",
+    author: { type: "bot", id: "2", name: "synthetic" },
+    decided_by: null,
+    decided_at: null,
+    previous: [],
+    receipt: null,
+  },
   memory: {
     ref: "memory:1",
     id: "1",

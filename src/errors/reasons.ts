@@ -52,6 +52,8 @@ const OTHERS: Entry[] = [
   validation("meeting-findings.stale", "meeting findings changed since they were read; stage a new batch"),
   validation("meeting-findings.dedicated-review", "review meeting findings through the dedicated findings command"),
   validation("evidence-findings.stale", "evidence findings changed since they were read; stage a new batch"),
+  validation("mail-findings.stale", "mail findings cite mail that changed since it was read; stage a new batch"),
+  validation("mail-findings.partial", "a cited email is not stored whole yet; cite it once it is"),
   validation("evidence-findings.dedicated-review", "review evidence findings through the dedicated findings command"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],

@@ -692,3 +692,90 @@ describe("a failing schedule", () => {
     expect((await command(["chats", "list"], env)).err).toBe("")
   })
 })
+
+describe.runIf(process.platform !== "win32")("an agent gated on new mail", () => {
+  const gated = (hasMail: () => boolean) => {
+    const { env: bare } = setup()
+    // This host resolves settings in full, so the timer's run names the profile its schedule file holds.
+    const env = { ...bare, CHAT_PROFILE: "default" }
+    const { system } = machine("linux")
+    const resolveSettings = settingsFor(app).resolveSettings
+    const asked: string[] = []
+    const host = {
+      app,
+      context: (command: Command) => {
+        const base = baseContext(command, resolveSettings)
+        return { ...base, profile: base.settings.profile }
+      },
+      newMail: async (_command: Command, holder: string) => {
+        asked.push(holder)
+        return hasMail()
+      },
+    }
+    const call = async (argv: string[]) => {
+      const streams = captureStreams()
+      const code = await run(
+        [...argv, "--json"],
+        { app, commands: () => [scheduleCommandFor(host)] },
+        {
+          streams,
+          env,
+          system,
+        },
+      )
+      return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
+    }
+    return { env, asked, call }
+  }
+
+  it("may check every 5 minutes, and starts the agent only when mail is stored past the holder's mark", async () => {
+    let mail = false
+    const { env, asked, call } = gated(() => mail)
+    const added = await call([
+      "default",
+      "schedule",
+      "agent",
+      "triage",
+      "claude",
+      "p",
+      "--every",
+      "5m",
+      "--on-new-mail",
+      "mail-triage",
+    ])
+    expect(added.code, added.err).toBe(0)
+    const file = scheduleFile(env.CHAT_STATE_DIR, "triage")
+    expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({ when: { every: 5 }, onNewMail: "mail-triage" })
+
+    const skipped = await call(["schedule", "exec", file])
+    expect(skipped.code, skipped.err).toBe(0)
+    expect(existsSync(join(file, "..", "last.json"))).toBe(false)
+    const byHand = await call(["schedule", "run", "triage"])
+    expect(JSON.parse(byHand.out).item).toMatchObject({ skipped: true, holder: "mail-triage" })
+
+    mail = true
+    expect((await call(["schedule", "exec", file])).code).toBe(0)
+    expect(existsSync(join(file, "..", "last.json"))).toBe(true)
+    expect(asked).toEqual(["mail-triage", "mail-triage", "mail-triage"])
+  })
+
+  it("keeps the hourly floor for an agent that is not gated, and refuses a holder name that is not one", async () => {
+    const { call } = gated(() => true)
+    expect((await call(["schedule", "agent", "x", "claude", "p", "--every", "5m"])).err).toContain(
+      "at least 60 minutes",
+    )
+    const bad = await call([
+      "default",
+      "schedule",
+      "agent",
+      "x",
+      "claude",
+      "p",
+      "--every",
+      "1h",
+      "--on-new-mail",
+      "Bad",
+    ])
+    expect(bad.code).toBe(2)
+  })
+})

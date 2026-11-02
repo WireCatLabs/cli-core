@@ -18,6 +18,8 @@ import {
   judgedTargets,
   LOCAL_WRITE,
   logsInOrOut,
+  PROPOSE_COMMANDS,
+  proposesOnly,
   refuseUnderReadOnly,
 } from "./effects.js"
 import { chatsCommand } from "./messenger/chats-command.js"
@@ -209,6 +211,33 @@ describe("command effects", () => {
     expect(isStoreChange(fresh)).toBe(true)
     expect(isStoreChange(destroysNothing(annotate(new Command("kept"), { effects: LOCAL_WRITE })))).toBe(false)
     expect(isStoreChange(annotate(new Command("fetch"), { effects: FETCH }))).toBe(false)
+  })
+
+  describe("the propose tier", () => {
+    const at = (words: string[], mark: boolean) => {
+      const root = new Command("cli")
+      let parent = root
+      for (const word of words.slice(0, -1)) parent = parent.command(word)
+      const leaf = annotate(new Command(words.at(-1) as string), { effects: LOCAL_WRITE })
+      parent.addCommand(mark ? proposesOnly(leaf) : leaf)
+      return leaf
+    }
+
+    it("is a closed list of two paths", () => {
+      expect([...PROPOSE_COMMANDS]).toEqual(["messages acknowledge", "mail findings add"])
+    })
+
+    it("lets a marked command on a listed path through the lock, under a profile too", () => {
+      expect(isStoreChange(at(["mail", "findings", "add"], true))).toBe(false)
+      expect(isStoreChange(at(["personal", "messages", "acknowledge"], true))).toBe(false)
+    })
+
+    it("refuses a marked command on any other path, and a listed path nobody marked", () => {
+      expect(isStoreChange(at(["mail", "findings", "confirm"], true))).toBe(true)
+      expect(isStoreChange(at(["tasks", "add"], true))).toBe(true)
+      expect(isStoreChange(at(["remail", "findings", "add"], true))).toBe(true)
+      expect(isStoreChange(at(["mail", "findings", "add"], false))).toBe(true)
+    })
   })
 
   it("keep off serve's relay the commands whose remote side is another service", () => {

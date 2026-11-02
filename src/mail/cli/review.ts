@@ -126,6 +126,13 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean) =>
         bulk: message.marks?.bulk ?? false,
         list_id: message.marks?.listId ?? null,
         rule_id: message.marks?.ruleId ?? null,
+        ...(message.marks
+          ? {
+              fingerprint: message.marks.fingerprint,
+              new_sender: message.marks.newSender,
+              sender_identities: message.marks.senderIdentities,
+            }
+          : {}),
       },
     })),
     limit: Math.max(1, read.length),
@@ -235,7 +242,7 @@ export const mailReviewCommand = (mail: MailReads): Command =>
     .option(
       "--holder <name>",
       "read for this holder — an agent or a pipeline — what is stored past its processing mark, by store order; " +
-        "bulk, envelopes, drafts and partial mail left out; `messages acknowledge` moves the mark",
+        "bulk, envelopes, drafts, suspicious senders and partial mail left out; `messages acknowledge` moves the mark",
     )
     .option(
       "--new",
@@ -245,7 +252,8 @@ export const mailReviewCommand = (mail: MailReads): Command =>
       "after",
       `
 Without a date, --unanswered and --waiting look at threads active in the last ${OWED_DAYS} days.
-Every email is shown, mail sent to many too; each item's email says bulk, list_id and rule_id, and its sender_score.
+Every email is shown, mail sent to many too; each item's email says bulk, list_id and rule_id, and its sender_score,
+the fingerprint a finding cites it by, new_sender (no earlier email from the address) and sender_identities.
 bulk:false leaves out threads whose newest email is mail sent to many, a list's or recorded by an envelope rule.
 Mail newer than the last finished sync waits for the next review. Each reader keeps its own --new point: you,
 an agent over MCP, and each scheduled run.`,

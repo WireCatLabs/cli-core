@@ -14,6 +14,7 @@ import { type ConversationsStore, conversationsStoreOver } from "./conversations
 import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
 import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "./decisions.js"
 import type { EvidenceFindingsStore } from "./evidence-findings.js"
+import type { MailFindingsStore } from "./mail-findings.js"
 import type { MeetingFindingsStore } from "./meeting-findings.js"
 import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
 import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
@@ -39,6 +40,7 @@ import { type FinanceStore, financeStoreOver } from "./sqlite/finance.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
+import { mailFindingsStoreOver } from "./sqlite/mail-findings.js"
 import { meetingFindingsStoreOver } from "./sqlite/meeting-findings.js"
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
 import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
@@ -112,6 +114,8 @@ export interface MessageStore {
   readonly meetingFindings: MeetingFindingsStore
   /** Cited facts and follow-ups about one project from stored messages, mail and documents, for review. */
   readonly evidenceFindings: EvidenceFindingsStore
+  /** What an agent read in new mail, cited and staged per mailbox; only the owner decides it. */
+  readonly mailFindings: MailFindingsStore
   /** What any ref names, a page of them at a time: read once per page, never once per row. */
   readonly refs: RefsStore
   readonly facts: FactsStore
@@ -227,6 +231,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const calendar = once(() => ({ ...eventStoreOver(context), ...eventSearchOver(context) }))
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
+  const mailFindings = once(() => mailFindingsStoreOver(context))
   const refs: RefsStore = {
     summaries: async (texts, options) => refSummariesOf(context.database, texts, options),
   }
@@ -330,6 +335,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     refs,
     get evidenceFindings() {
       return evidenceFindings()
+    },
+    get mailFindings() {
+      return mailFindings()
     },
     get facts() {
       return facts()

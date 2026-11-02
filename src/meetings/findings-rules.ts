@@ -88,11 +88,161 @@ export interface FindingsRules {
   anySubject?: boolean
   /** Payment findings are staged on a project's evidence, not from a meeting. */
   payments?: boolean
+  /** A task finding may name no project: it goes in its account's inbox. */
+  inboxTasks?: boolean
 }
 
 const SUBJECT = /^(person|organization|project):[1-9]\d*$|^task:[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 
-export const validateFindings = (input: FindingsInput, rules: FindingsRules): FindingsInput => {
+/** A finding's cited evidence: 1–8 distinct references in `rules`' form, each with a 64-hex fingerprint. */
+export const validEvidence = (raw: unknown, rules: FindingsRules): FindingEvidence[] => {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 8)
+    return invalid(`a finding requires 1–8 cited ${rules.cited}s`)
+  const evidence = raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return invalid("finding evidence is a reference and fingerprint")
+      fields(item, ["reference", "fingerprint"], rules.singular)
+      if (typeof item.reference !== "string" || typeof item.fingerprint !== "string")
+        return invalid("evidence requires a reference and fingerprint")
+      const reference = rules.reference(item.reference)
+      if (!/^[a-f0-9]{64}$/.test(item.fingerprint))
+        return invalid(`finding evidence requires exact ${rules.cited} references and fingerprints`)
+      return { reference, fingerprint: item.fingerprint as string }
+    })
+    .sort((a, b) => a.reference.localeCompare(b.reference))
+  if (new Set(evidence.map((item) => item.reference)).size !== evidence.length)
+    return invalid(`duplicate evidence ${rules.cited}`)
+  return evidence
+}
+
+/** A finding's simple key: unique among `ids`, which it joins. */
+export const findingId = (raw: unknown, ids: Set<string>): string => {
+  const id = findingText(raw, 64)
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/.test(id) || ids.has(id)) return invalid("finding IDs must be unique simple keys")
+  ids.add(id)
+  return id
+}
+
+/** One fact, payment or task finding, its ID added to `ids`. */
+export const validateFinding = (finding: Finding, rules: FindingsRules, ids: Set<string>): Finding => {
+  if (!finding || typeof finding !== "object") return invalid("a finding is an object")
+  const id = findingId(finding.id, ids)
+  const project = finding.project === undefined && rules.anySubject ? undefined : text(finding.project, 64)
+  if (project !== undefined && !/^project:[1-9]\d*$/.test(project))
+    return invalid("a finding names a project reference")
+  if (finding.subject !== undefined && (!rules.anySubject || !SUBJECT.test(text(finding.subject, 80))))
+    return invalid("a finding's subject is a person:, organization:, task: or project: reference")
+  if (finding.kind === "task" && project === undefined && !rules.inboxTasks)
+    return invalid("a task finding names the project the task goes in")
+  const evidence = validEvidence(finding.evidence, rules)
+  const base = {
+    id,
+    ...(project === undefined ? {} : { project }),
+    ...(finding.subject === undefined ? {} : { subject: finding.subject }),
+    evidence,
+  }
+  if (finding.kind === "fact") {
+    fields(finding, ["id", "project", "subject", "evidence", "kind", "type", "statement"], rules.singular)
+    if ((finding.type as string) === "payment")
+      return invalid("a payment is a finding of kind payment; money is a payments row, not a fact")
+    if (!FACT_TYPES.includes(finding.type)) return invalid("unknown fact finding type")
+    return { ...base, kind: "fact", type: finding.type, statement: text(finding.statement, 2000) }
+  }
+  if (finding.kind === "payment" && rules.payments) {
+    fields(
+      finding,
+      ["id", "project", "subject", "evidence", "kind", "statement", "payment", "supersedes"],
+      rules.singular,
+    )
+    if (finding.supersedes !== undefined && !/^invoice:[1-9]\d*$/.test(String(finding.supersedes)))
+      return invalid("a payment finding supersedes an invoice: reference, the expected payment it settles or voids")
+    const payment = validatePayment(finding.payment)
+    if (payment.state === "expected" && finding.supersedes !== undefined)
+      return invalid("an expected payment supersedes nothing; a paid or cancelled one supersedes its invoice")
+    if (payment.state === "cancelled" && finding.supersedes === undefined)
+      return invalid("a cancelled payment names the invoice: it cancels in supersedes")
+    if (payment.state === "expected" && !/^(person|organization):/.test(payment.counterparty ?? ""))
+      return invalid(
+        "an expected payment becomes an invoice, which names its counterparty as a person: or organization:",
+      )
+    return {
+      ...base,
+      kind: "payment",
+      ...(finding.statement === undefined ? {} : { statement: text(finding.statement, 2000) }),
+      payment,
+      ...(finding.supersedes === undefined ? {} : { supersedes: finding.supersedes }),
+    }
+  }
+  if (finding.kind !== "task") return invalid(`a finding is a fact${rules.payments ? ", payment" : ""} or task`)
+  fields(
+    finding,
+    [
+      "id",
+      "project",
+      "evidence",
+      "kind",
+      "type",
+      "title",
+      "reason",
+      "commitment",
+      "dueAt",
+      "dueEvidence",
+      "assignee",
+      "assigneeEvidence",
+    ],
+    rules.singular,
+  )
+  if (!TASK_TYPES.includes(finding.type)) return invalid("a task finding type is bug, chore or feature")
+  if (!["explicit", "inferred"].includes(finding.commitment))
+    return invalid("task commitment must be explicit or inferred")
+  if (
+    (finding.dueAt === undefined) !== (finding.dueEvidence === undefined) ||
+    (finding.assignee === undefined) !== (finding.assigneeEvidence === undefined)
+  )
+    return invalid("optional dates and assignees require their supporting evidence")
+  if (
+    finding.assignee !== undefined &&
+    (typeof finding.assignee !== "string" || !/^person:[1-9]\d*$/.test(finding.assignee))
+  )
+    return invalid("an assignee must be a person reference")
+  return {
+    ...base,
+    kind: "task",
+    type: finding.type,
+    title: text(finding.title, 300),
+    reason: text(finding.reason, 2000),
+    commitment: finding.commitment,
+    ...(finding.dueAt === undefined
+      ? {}
+      : {
+          dueAt: meetingTimestamp(finding.dueAt, "finding due date"),
+          dueEvidence: support(finding.dueEvidence, evidence),
+        }),
+    ...(finding.assignee === undefined
+      ? {}
+      : { assignee: finding.assignee, assigneeEvidence: support(finding.assigneeEvidence, evidence) }),
+  }
+}
+
+/** A date's or assignee's support: references the finding's own evidence cites. */
+export const support = (value: unknown, evidence: readonly FindingEvidence[]): string[] => {
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > 8 ||
+    value.some((ref) => typeof ref !== "string" || !evidence.some((item) => item.reference === ref))
+  )
+    return invalid("date and assignee support must cite the finding's evidence")
+  return [...new Set(value as string[])].sort()
+}
+
+/** A batch's envelope — schema version, key, extractor — around 1–`most` findings each `one` checks. */
+export const validateBatch = <F>(
+  input: { schemaVersion: 1; key: string; extractor: string; findings: unknown[] },
+  rules: Pick<FindingsRules, "plural" | "singular">,
+  most: number,
+  one: (finding: never, ids: Set<string>) => F,
+): { schemaVersion: 1; key: string; extractor: string; findings: F[] } => {
   if (!input || typeof input !== "object" || Buffer.byteLength(JSON.stringify(input), "utf8") > 65536)
     return invalid(`${rules.plural} take at most 65536 UTF-8 bytes`)
   fields(input, ["schemaVersion", "key", "extractor", "findings"], rules.singular)
@@ -100,137 +250,20 @@ export const validateFindings = (input: FindingsInput, rules: FindingsRules): Fi
     input.schemaVersion !== 1 ||
     !Array.isArray(input.findings) ||
     input.findings.length < 1 ||
-    input.findings.length > 16
+    input.findings.length > most
   )
-    return invalid(`schemaVersion 1 takes 1–16 ${rules.plural}`)
+    return invalid(`schemaVersion 1 takes 1–${most} ${rules.plural}`)
   const key = text(input.key, 64)
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/.test(key))
     return invalid("a findings key uses letters, digits, dot, colon, underscore or hyphen")
   const ids = new Set<string>()
-  const findings = input.findings.map((finding): Finding => {
-    if (!finding || typeof finding !== "object") return invalid("a finding is an object")
-    const id = text(finding.id, 64)
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/.test(id) || ids.has(id))
-      return invalid("finding IDs must be unique simple keys")
-    ids.add(id)
-    const project = finding.project === undefined && rules.anySubject ? undefined : text(finding.project, 64)
-    if (project !== undefined && !/^project:[1-9]\d*$/.test(project))
-      return invalid("a finding names a project reference")
-    if (finding.subject !== undefined && (!rules.anySubject || !SUBJECT.test(text(finding.subject, 80))))
-      return invalid("a finding's subject is a person:, organization:, task: or project: reference")
-    if (finding.kind === "task" && project === undefined)
-      return invalid("a task finding names the project the task goes in")
-    if (!Array.isArray(finding.evidence) || finding.evidence.length < 1 || finding.evidence.length > 8)
-      return invalid(`a finding requires 1–8 cited ${rules.cited}s`)
-    const evidence = finding.evidence
-      .map((item) => {
-        if (!item || typeof item !== "object") return invalid("finding evidence is a reference and fingerprint")
-        fields(item, ["reference", "fingerprint"], rules.singular)
-        if (typeof item.reference !== "string" || typeof item.fingerprint !== "string")
-          return invalid("evidence requires a reference and fingerprint")
-        const reference = rules.reference(item.reference)
-        if (!/^[a-f0-9]{64}$/.test(item.fingerprint))
-          return invalid(`finding evidence requires exact ${rules.cited} references and fingerprints`)
-        return { reference, fingerprint: item.fingerprint }
-      })
-      .sort((a, b) => a.reference.localeCompare(b.reference))
-    if (new Set(evidence.map((item) => item.reference)).size !== evidence.length)
-      return invalid(`duplicate evidence ${rules.cited}`)
-    const base = {
-      id,
-      ...(project === undefined ? {} : { project }),
-      ...(finding.subject === undefined ? {} : { subject: finding.subject }),
-      evidence,
-    }
-    if (finding.kind === "fact") {
-      fields(finding, ["id", "project", "subject", "evidence", "kind", "type", "statement"], rules.singular)
-      if ((finding.type as string) === "payment")
-        return invalid("a payment is a finding of kind payment; money is a payments row, not a fact")
-      if (!FACT_TYPES.includes(finding.type)) return invalid("unknown fact finding type")
-      return { ...base, kind: "fact", type: finding.type, statement: text(finding.statement, 2000) }
-    }
-    if (finding.kind === "payment" && rules.payments) {
-      fields(
-        finding,
-        ["id", "project", "subject", "evidence", "kind", "statement", "payment", "supersedes"],
-        rules.singular,
-      )
-      if (finding.supersedes !== undefined && !/^invoice:[1-9]\d*$/.test(String(finding.supersedes)))
-        return invalid("a payment finding supersedes an invoice: reference, the expected payment it settles or voids")
-      const payment = validatePayment(finding.payment)
-      if (payment.state === "expected" && finding.supersedes !== undefined)
-        return invalid("an expected payment supersedes nothing; a paid or cancelled one supersedes its invoice")
-      if (payment.state === "cancelled" && finding.supersedes === undefined)
-        return invalid("a cancelled payment names the invoice: it cancels in supersedes")
-      if (payment.state === "expected" && !/^(person|organization):/.test(payment.counterparty ?? ""))
-        return invalid(
-          "an expected payment becomes an invoice, which names its counterparty as a person: or organization:",
-        )
-      return {
-        ...base,
-        kind: "payment",
-        ...(finding.statement === undefined ? {} : { statement: text(finding.statement, 2000) }),
-        payment,
-        ...(finding.supersedes === undefined ? {} : { supersedes: finding.supersedes }),
-      }
-    }
-    if (finding.kind !== "task") return invalid(`a finding is a fact${rules.payments ? ", payment" : ""} or task`)
-    fields(
-      finding,
-      [
-        "id",
-        "project",
-        "evidence",
-        "kind",
-        "type",
-        "title",
-        "reason",
-        "commitment",
-        "dueAt",
-        "dueEvidence",
-        "assignee",
-        "assigneeEvidence",
-      ],
-      rules.singular,
-    )
-    if (!TASK_TYPES.includes(finding.type)) return invalid("a task finding type is bug, chore or feature")
-    if (!["explicit", "inferred"].includes(finding.commitment))
-      return invalid("task commitment must be explicit or inferred")
-    const support = (value: unknown): string[] => {
-      if (
-        !Array.isArray(value) ||
-        value.length < 1 ||
-        value.length > 8 ||
-        value.some((ref) => typeof ref !== "string" || !evidence.some((item) => item.reference === ref))
-      )
-        return invalid("date and assignee support must cite the finding's evidence")
-      return [...new Set(value as string[])].sort()
-    }
-    if (
-      (finding.dueAt === undefined) !== (finding.dueEvidence === undefined) ||
-      (finding.assignee === undefined) !== (finding.assigneeEvidence === undefined)
-    )
-      return invalid("optional dates and assignees require their supporting evidence")
-    if (
-      finding.assignee !== undefined &&
-      (typeof finding.assignee !== "string" || !/^person:[1-9]\d*$/.test(finding.assignee))
-    )
-      return invalid("an assignee must be a person reference")
-    return {
-      ...base,
-      kind: "task",
-      type: finding.type,
-      title: text(finding.title, 300),
-      reason: text(finding.reason, 2000),
-      commitment: finding.commitment,
-      ...(finding.dueAt === undefined
-        ? {}
-        : { dueAt: meetingTimestamp(finding.dueAt, "finding due date"), dueEvidence: support(finding.dueEvidence) }),
-      ...(finding.assignee === undefined
-        ? {}
-        : { assignee: finding.assignee, assigneeEvidence: support(finding.assigneeEvidence) }),
-    }
-  })
+  const findings = input.findings.map((finding) => one(finding as never, ids))
   return { schemaVersion: 1, key, extractor: text(input.extractor, 200), findings }
 }
+
+export const validateFindings = (input: FindingsInput, rules: FindingsRules): FindingsInput =>
+  validateBatch(input, rules, 16, (finding: Finding, ids) => validateFinding(finding, rules, ids))
+
+export const findingText = (value: unknown, limit: number): string => text(value, limit)
+export const findingFields = (value: object, allowed: string[], noun: string): void => fields(value, allowed, noun)
 export const findingFingerprint = ({ id: _id, ...finding }: Finding): string => findingHash(finding)

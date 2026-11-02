@@ -2,12 +2,15 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { LOCAL_WRITE, proposesOnly } from "../../cli/effects.js"
 import { type ProgramDefinition, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
 import type { EmailInput, MailboxInput } from "../../store/index.js"
 import { type AccountKey, openStore } from "../../store/store.js"
-import { marksOf } from "../marks.js"
+import { holderHasMail, marksOf } from "../marks.js"
 import { mailReadCommands } from "./index.js"
 
 const app = {
@@ -70,7 +73,12 @@ const mailbox = async () => {
   const definition: ProgramDefinition = {
     app,
     configuration: settingsFor(app),
-    commands: () => mailReadCommands({ app, read: (_command, work) => withStore((store) => work(store, MINE)) }),
+    commands: () => [
+      ...mailReadCommands({ app, read: (_command, work) => withStore((store) => work(store, MINE)) }),
+      // Two local writes outside the propose tier: one unmarked, one marked on a path the tier does not list.
+      annotate(new Command("scribble"), { effects: LOCAL_WRITE }).action(() => {}),
+      proposesOnly(annotate(new Command("sneak"), { effects: LOCAL_WRITE })).action(() => {}),
+    ],
   }
   const json = async (argv: string[], extra: Record<string, string> = {}) => {
     const streams = captureStreams()
@@ -345,5 +353,93 @@ describe("a holder's processing mark", () => {
     expect((await box.cli(["messages", "acknowledge", "--holder", "Bad Name", "--cursor", "1.1"])).code).toBe(2)
     expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", "soon"])).code).toBe(2)
     expect(await box.refused(["--holder", "triage", "--unanswered"])).toBe(2)
+  })
+})
+
+describe("what the mail pipeline reads and may write under the read-only lock", () => {
+  const read = async (box: Awaited<ReturnType<typeof mailbox>>, extra: Record<string, string> = {}) => {
+    const answer = await box.json(["--holder", "triage"], extra)
+    const next = (answer.next ?? []) as { step?: string; args?: { cursor?: string } }[]
+    return { answer, cursor: next.find((one) => one.step === "mail-messages.acknowledge")?.args?.cursor as string }
+  }
+
+  it("leaves out suspicious senders and gives each email its fingerprint and whether its sender is new", async () => {
+    const box = await mailbox()
+    await box.thread("t-first", email("first", 3))
+    await box.synced()
+    const start = await read(box)
+    expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", start.cursor])).code).toBe(0)
+    await box.thread("t-again", email("again", 1))
+    await box.thread("t-new", email("hello", 1, { from: { address: "bob@example.org", name: "Bob" } }))
+    await box.thread("t-scam", email("scam", 1, { from: { address: "scam@example.net", name: null } }))
+    await box.withStore((store) =>
+      store.mail.setSenderScores(
+        box.accountId,
+        [{ address: "scam@example.net", score: 9, signals: ["brand_spoof"], demoted: true }],
+        Date.now(),
+      ),
+    )
+    await box.synced()
+
+    const { answer } = await read(box)
+
+    expect(threads(answer).sort()).toEqual(["t-again", "t-new"])
+    expect(answer.missing).toContainEqual(expect.objectContaining({ why: expect.stringContaining("1 suspicious") }))
+    const byThread = Object.fromEntries(answer.items.map((one) => [one.chat_id, one]))
+    expect(byThread["t-again"]?.email).toMatchObject({ new_sender: false, sender_identities: 1 })
+    expect(byThread["t-new"]?.email).toMatchObject({ new_sender: true, sender_identities: 1 })
+    const cited = byThread["t-new"] as (typeof answer.items)[number]
+    const staged = await box.withStore(async (store) => {
+      await store.knowledge.addProject({ name: "Example" })
+      return store.mailFindings.stage(
+        MINE,
+        {
+          schemaVersion: 1,
+          key: "triage:9",
+          extractor: "test",
+          findings: [
+            {
+              id: "c1",
+              kind: "new_contact",
+              address: "bob@example.org",
+              name: "Bob Example",
+              evidence: [{ reference: cited.ref, fingerprint: cited.email.fingerprint as string }],
+            },
+          ],
+        },
+        { bot: "triage" },
+      )
+    })
+    expect(staged.status).toBe("proposed")
+  })
+
+  it("lets a read-only run move its mark, and refuses every other local write", async () => {
+    const box = await mailbox()
+    await box.synced()
+    const lock = { MAIL_READ_ONLY: "1" }
+    const { cursor } = await read(box, lock)
+
+    expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", cursor], lock)).code).toBe(0)
+    expect((await box.cli(["scribble"], lock)).code).toBe(5)
+    expect((await box.cli(["sneak"], lock)).code).toBe(5)
+    expect((await box.cli(["scribble"])).code).toBe(0)
+  })
+
+  it("wakes a holder only for mail it reads, and moves its mark over mail that is only skipped", async () => {
+    const box = await mailbox()
+    await box.synced()
+    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(true)
+    const { cursor } = await read(box)
+    await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", cursor])
+    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(false)
+
+    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK] }))
+    await box.synced()
+    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(false)
+    expect((await box.withStore((store) => marksOf(store, MINE)))[0]?.skipped.bulk).toBe(1)
+
+    await box.thread("t-ann", email("ann", 1))
+    await box.synced()
+    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(true)
   })
 })

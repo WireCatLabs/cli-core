@@ -58,6 +58,8 @@ export interface ProposalKind {
   readonly stored?: readonly string[]
   /** Whether its proposals have parts decided on their own, as a findings batch has findings. */
   readonly parts?: boolean
+  /** Only the owner decides it, whatever the host's `agent_decisions` says. */
+  readonly ownerOnly?: boolean
   /** Bounded: at most `offset + limit` rows, newest first. */
   list(filter: ProposalFilter): Promise<ProposalRow[]>
   get(id: string): Promise<ProposalRow>

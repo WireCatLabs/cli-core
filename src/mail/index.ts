@@ -1,6 +1,15 @@
 export { mailAccountKey } from "./account-key.js"
 export { BULK, bulkBox } from "./bulk.js"
 export { factsOf } from "./facts.js"
+export {
+  MAIL_FINDINGS_KIND,
+  MAIL_FINDINGS_PER_RUN,
+  MAIL_FINDINGS_PER_SENDER,
+  type MailFinding,
+  type MailFindingsInput,
+  mailFindingFingerprint,
+  validateMailFindings,
+} from "./findings.js"
 export { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 export { dropMissing, type Gone, tooManyGone } from "./gone.js"
 export { type AuthVerdicts, HEADER_FIELDS, headersOf, type MailHeaders, mailHeadersOf } from "./headers.js"
@@ -11,6 +20,7 @@ export {
   cursorOf,
   HOLD_PARTIAL_MS,
   HOLDER,
+  holderHasMail,
   MARK_BATCH,
   type MailMark,
   type MarkRead,

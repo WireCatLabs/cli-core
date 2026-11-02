@@ -313,6 +313,7 @@ export const checkRevision = (row: Row, expected: number | undefined): void => {
 type WorkTaskOperations = Omit<WorkTasks, "create" | "assign"> & {
   create(input: NewWorkTask, by: Author): TaskDetails
   assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): TaskDetails
+  editNow(id: string, fields: TaskFields, by: Author): TaskDetails
 }
 
 export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperations => {
@@ -683,6 +684,12 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         checkRevision(rowById(task), check.revision)
         edit(task, fields, authorActor(context, by).actor)
       })
+      return details(task)
+    },
+    /** `edit` inside the caller's write, so a decision that edits a task rolls back with it. */
+    editNow: (id, fields, by) => {
+      const task = required(id)
+      write(database, () => edit(task, fields, authorActor(context, by).actor))
       return details(task)
     },
     move: async (id, move, by, check = {}) => {

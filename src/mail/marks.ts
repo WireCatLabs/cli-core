@@ -11,7 +11,7 @@ export const HOLD_PARTIAL_MS = 7 * 86_400_000
 const MOST_HELD = 500
 const PREFIX = "consumer:"
 
-export type SkipReason = "bulk" | "envelope" | "partial" | "draft"
+export type SkipReason = "bulk" | "envelope" | "partial" | "draft" | "suspicious"
 
 /**
  * How far one holder — an agent, a pipeline — has processed an account's mail, in the shared store (`sync_cursors`,
@@ -30,7 +30,7 @@ export interface MailMark {
   updatedAt: number
 }
 
-const noneSkipped = (): Record<SkipReason, number> => ({ bulk: 0, envelope: 0, partial: 0, draft: 0 })
+const noneSkipped = (): Record<SkipReason, number> => ({ bulk: 0, envelope: 0, partial: 0, draft: 0, suspicious: 0 })
 
 const keyOf = (holder: string) => {
   if (!HOLDER.test(holder))
@@ -81,6 +81,7 @@ const verdict = (email: MarkedEmail, now: number): SkipReason | "held" | "read" 
   if (email.draft) return "draft"
   if (email.envelope) return "envelope"
   if (email.bulk) return "bulk"
+  if (email.demoted) return "suspicious"
   if (email.partial) return now - email.storedAt < HOLD_PARTIAL_MS ? "held" : "partial"
   return "read"
 }
@@ -96,7 +97,7 @@ const parseCursor = (cursor: string) => {
 }
 
 export interface MarkRead {
-  /** The emails for the holder, oldest first; bulk, envelopes, drafts and partial mail left out. */
+  /** The emails for the holder, oldest first; bulk, envelopes, drafts, suspicious senders and partial mail left out. */
   emails: StoredHit[]
   /** What `acknowledge --cursor` takes once the holder is done with these. */
   cursor: string
@@ -117,11 +118,22 @@ export const readPastMark = async (
   store: MessageStore,
   mailbox: AccountKey,
   holder: string,
-  { now = Date.now(), limit = MARK_BATCH }: { now?: number; limit?: number } = {},
+  options: { now?: number; limit?: number } = {},
 ): Promise<MarkRead> => {
+  const { wanted, ...read } = await examine(store, mailbox, holder, options)
+  return { emails: await store.mail.emailHits(wanted), ...read }
+}
+
+/** `readPastMark` without the emails' text: the store ids it would read, by their verdicts. */
+const examine = async (
+  store: MessageStore,
+  mailbox: AccountKey,
+  holder: string,
+  { now = Date.now(), limit = MARK_BATCH }: { now?: number; limit?: number },
+): Promise<Omit<MarkRead, "emails"> & { wanted: number[] }> => {
   const mark = await markOf(store, mailbox, holder)
   const account = await accountOf(store, mailbox)
-  const empty = { emails: [], more: false, held: 0, skipped: noneSkipped(), mark }
+  const empty = { wanted: [], more: false, held: 0, skipped: noneSkipped(), mark }
   if (!account) return { ...empty, cursor: cursorOf(0, now) }
   if (!mark) return { ...empty, cursor: cursorOf(await store.mail.newestEmailId(account.id), now) }
   const found = await store.mail.emailsAfter(account.id, mark.throughId, limit + 1, mark.held)
@@ -142,15 +154,34 @@ export const readPastMark = async (
     else if (said === "held") held += 1
     else if (email.id > mark.throughId) skipped[said] += 1
   }
-  const emails = await store.mail.emailHits(wanted.sort((a, b) => a - b))
   return {
-    emails,
+    wanted: wanted.sort((a, b) => a - b),
     cursor: cursorOf(batch.at(-1)?.id ?? mark.throughId, now),
     more: after.length > batch.length,
     held,
     skipped,
     mark,
   }
+}
+
+/**
+ * Whether the holder has mail to read in any stored mailbox — what a schedule asks before it starts the holder's
+ * agent, so a run with nothing new costs no model call. Mail that is only skipped (bulk, envelopes, drafts,
+ * suspicious senders) moves the holder's mark here, as the agent would have acknowledged it, or it would wait
+ * forever behind the mark. A holder with no mark yet has mail to read: its first run sets the mark.
+ */
+export const holderHasMail = async (store: MessageStore, holder: string, now = Date.now()): Promise<boolean> => {
+  for (const mailbox of await store.accounts.accounts()) {
+    if (mailbox.provider !== "email") continue
+    for (;;) {
+      const read = await examine(store, mailbox, holder, { now })
+      if (!read.mark || read.wanted.length > 0) return true
+      if (read.cursor === cursorOf(read.mark.throughId, now)) break
+      await acknowledgeMark(store, mailbox, holder, read.cursor, now)
+      if (!read.more) break
+    }
+  }
+  return false
 }
 
 /**

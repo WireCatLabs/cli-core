@@ -1,5 +1,5 @@
-import type { DecisionPolicy } from "../decisions.js"
 // biome-ignore-all lint/plugin/no-sqlite-driver: cli-core owns the store, so it opens the driver itself
+import type { DecisionPolicy } from "../decisions.js"
 import { type CacheDatabase, PRAGMAS } from "../driver.js"
 import { refuseOwnerStoreInTests } from "../path.js"
 import { quietSqliteWarning } from "../sqlite-warning.js"

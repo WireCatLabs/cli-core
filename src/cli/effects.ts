@@ -80,6 +80,28 @@ export const destroysNothing = <T extends Command>(command: T): T => {
   return command
 }
 
+/**
+ * The `propose` tier, a closed list: the only commands `<PREFIX>_READ_ONLY` lets stage something for the owner. Each
+ * appends a proposal the owner decides or moves its caller's own processing mark, and nothing else. A command must
+ * be marked `proposesOnly` **and** end with one of these paths; adding a path widens what a read-only agent can
+ * write, so it needs its own review.
+ */
+export const PROPOSE_COMMANDS = ["messages acknowledge", "mail findings add"] as const
+
+const PROPOSES = new WeakSet<Command>()
+
+/** Marks a command of the `propose` tier; the lock lets it through only when its path is in `PROPOSE_COMMANDS`. */
+export const proposesOnly = <T extends Command>(command: T): T => {
+  PROPOSES.add(command)
+  return command
+}
+
+export const isProposal = (command: Command): boolean => {
+  if (!PROPOSES.has(command)) return false
+  const path = pathOf(command).join(" ")
+  return PROPOSE_COMMANDS.some((listed) => path === listed || path.endsWith(` ${listed}`))
+}
+
 const STORE_WRITES = new WeakSet<Command>()
 
 /** A local edit remains an edit even when it first fetches metadata from the messenger. */
@@ -160,8 +182,9 @@ export const readsOverMcpAt =
 
 /**
  * Whether `<PREFIX>_READ_ONLY` refuses the command as a change to the store. Every write that stays on this machine
- * is refused unless `destroysNothing` marks it, so a new one fails closed (WC-PERM-12). A fetch (`remote: "read"`)
- * keeps receiving, a remote write is `changesMessenger`'s, and an authority change has its own refusal.
+ * is refused unless `destroysNothing` marks it or it is of the `propose` tier, so a new one fails closed
+ * (WC-PERM-12). A fetch (`remote: "read"`) keeps receiving, a remote write is `changesMessenger`'s, and an authority
+ * change has its own refusal.
  */
 export const isStoreChange = (command: Command): boolean => {
   const effects = metaOf(command).effects
@@ -169,6 +192,7 @@ export const isStoreChange = (command: Command): boolean => {
     (effects?.remote === "none" || STORE_WRITES.has(command)) &&
     effects?.local === "write" &&
     !KEPT_UNDER_LOCK.has(command) &&
+    !isProposal(command) &&
     !changesAuthority(command) &&
     writesFileNow(command)
   )

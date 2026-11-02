@@ -127,6 +127,12 @@ export const message = v.strictObject({
       list_id: v.optional(v.nullable(text)),
       /** Mail `review`: the mail rule that decided how it is stored, by its id in `rules list`; `null` when none. */
       rule_id: v.optional(v.nullable(v.number())),
+      /** Mail `review`: the evidence fingerprint a finding cites this email by. */
+      fingerprint: v.optional(v.pipe(text, v.regex(/^[a-f0-9]{64}$/))),
+      /** Mail `review`: no earlier stored email, in any account, came from this address. */
+      new_sender: v.optional(v.boolean()),
+      /** Mail `review`: how many identities the sender's person has; 1 is this address alone. */
+      sender_identities: v.optional(v.number()),
     }),
   ),
   provider_metadata: providerMetadata,
