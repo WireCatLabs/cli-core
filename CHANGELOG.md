@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.549.0 — 02.11.2026
+
 ### Added
 
 - **A calendar CLI can mount `search all`.** Given `app` (its identity) beside `messages`, `addCalendarCommands` adds
