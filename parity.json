@@ -1131,6 +1131,7 @@
   },
   "globalOptions": {
     "--brief": "all",
+    "--compact": "all",
     "--debug": "all",
     "--dry-run": "all",
     "--full": "all",
