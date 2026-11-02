@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.546.0 — 02.11.2026
-
 ### Added
 
 - **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
@@ -21,6 +19,16 @@ shape of this file.
   attachments, marked `metadata.partial`, and `meta.issues` says `search.server-partial`. `syncMail` then reads up to
   100 partial emails whole and clears the mark (`partial: { completed, left }`; `completePartial: false` skips it).
   `MailStore.partialEmails` lists them. No store migration: the mark is a JSON key older builds ignore.
+
+### Changed — may break callers
+
+- **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
+  candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
+
+## 0.546.0 — 02.11.2026
+
+### Added
+
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -82,8 +90,6 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
-  candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
   it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
   global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
