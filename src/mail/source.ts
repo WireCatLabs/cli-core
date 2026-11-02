@@ -30,7 +30,13 @@ export interface Listed {
 }
 
 /** A message as `quick` lists it: everything but the ids, which a source without a cheap one reads from the raw bytes. */
-export type Quick = Omit<Listed, "messageId" | "threadId">
+export type Quick = Omit<Listed, "messageId" | "threadId"> & {
+  /**
+   * The folder's UIDVALIDITY the UID was stored under. `fetchRaw` reads nothing for it when the folder's differs, and
+   * `identify` works the ids out under it.
+   */
+  validity?: string
+}
 
 export interface Searched {
   /** Absent when the server does not say; then no UID is trusted across runs. */

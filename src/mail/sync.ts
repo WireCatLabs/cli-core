@@ -89,7 +89,7 @@ export const syncMail = async (
     ...(options.budget ? { take: () => options.budget?.take() ?? null } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
   })
-  return partial.completed || partial.left ? { ...result, partial } : result
+  return partial.completed || partial.left || partial.stuck ? { ...result, partial } : result
 }
 
 const syncRounds = async (

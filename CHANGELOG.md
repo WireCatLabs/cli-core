@@ -98,6 +98,11 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **cli-core registers `mail.search-refused`.** A CLI that listed it in its own reasons gets "listed twice" from
+  `defineReasons` and must drop its entry; mail did.
+- **`MailStore` has `markPartial(accountId, externalId, mark)`, and `partialEmails` answers `stuck` and leaves out an
+  email marked `partial.stuck`.** A store of its own must add both. `PartialOutcome` (`syncMail`'s `partial`) gains
+  `stuck`, and `partial` is answered whenever any of `completed`, `left` or `stuck` is not 0.
 - **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
   candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
@@ -143,6 +148,15 @@ shape of this file.
 
 ### Fixed
 
+- **A partial email the server no longer gives at its stored place is given up on instead of read whole on every
+  sync.** `completePartial` reads it at its newest stored location under that location's UIDVALIDITY (the new optional
+  `Quick.validity`, which a source checks before reading), counts each failed read in `metadata.partial.tries`, and
+  after 3, or at once when the place holds another message, marks it `partial.stuck`: it stays readable as it is, is
+  counted in `partial.stuck`, and no longer takes one of the 100 places a run reads, so it never holds back newer ones.
+  An email with no stored location is given up on at once.
+- **A server search never stores a partial copy over an email already stored whole.** A sync in another process could
+  save the email between the search's check and its write; the write then dropped every attachment. The store now
+  keeps a live whole email as it is when a copy marked `partial` is saved over it.
 - **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
   only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
   `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two

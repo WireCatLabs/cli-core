@@ -1,4 +1,5 @@
 import type { BudgetStop } from "../background/budget.js"
+import type { JsonValue } from "../meetings/index.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { MessageStore, PartialEmail } from "../store/index.js"
 import { type AttachmentLog, FETCH_CHUNK, readAttachments } from "./attachments.js"
@@ -13,17 +14,24 @@ export const PARTIAL = "partial"
 /** How many partial emails one sync reads whole at most; the rest wait for the next run. */
 export const PARTIAL_PER_RUN = 100
 
+/** Failed reads after which a partial email is given up on (`partial.stuck`) and stays as it is. */
+export const PARTIAL_TRIES = 3
+
 export interface PartialOutcome {
   /** Read whole this run, the mark cleared. */
   completed: number
-  /** Still partial after this run. */
+  /** Still partial after this run, tried again by the next. */
   left: number
+  /** Given up on: the server no longer gives this email at its stored place. They stay readable as they are. */
+  stuck: number
 }
 
 /**
  * Reads whole the emails a server search stored from their first bytes, so the archive holds their attachments too.
- * Sync never reads stored mail again, so without this step a partial email would stay partial. Gmail's are found by
- * their id; elsewhere at a stored location, trusted only when the bytes read there carry the stored id.
+ * Sync never reads stored mail again, so without this step a partial email would stay partial. A source with `find`
+ * finds them by id; elsewhere they are read at their newest stored location under its UIDVALIDITY, trusted only when
+ * `identify` gives the stored id for the bytes read there. Each failed read is counted, and after `PARTIAL_TRIES`, or
+ * at once when the place holds another message, the email is left partial for good.
  */
 export const completePartial = async ({
   store,
@@ -52,27 +60,39 @@ export const completePartial = async ({
   take?: () => BudgetStop | null
   signal?: AbortSignal
 }): Promise<PartialOutcome> => {
-  const { emails, total } = await store.mail.partialEmails(accountId, PARTIAL_PER_RUN)
-  if (emails.length === 0) return { completed: 0, left: 0 }
+  const { emails, total, stuck } = await store.mail.partialEmails(accountId, PARTIAL_PER_RUN)
+  if (emails.length === 0) return { completed: 0, left: 0, stuck }
+  let given = 0
+  // A failed read is counted, so an email the server no longer gives is not read whole on every sync forever.
+  const failed = async (email: PartialEmail, forGood = false) => {
+    const mark = (email.metadata?.[PARTIAL] ?? {}) as Record<string, JsonValue>
+    const tries = Number(mark.tries ?? 0) + 1
+    const gaveUp = forGood || tries >= PARTIAL_TRIES
+    await store.mail.markPartial(accountId, email.externalId, { ...mark, tries, ...(gaveUp ? { stuck: true } : {}) })
+    if (gaveUp) given++
+  }
   const byId = new Map(emails.map((email) => [email.externalId, email]))
   const items = new Map<PartialEmail, Quick | Listed>()
   if (source.find) {
     for (const folder of await folders()) {
       const left = emails.filter((email) => !items.has(email)).map(({ externalId }) => externalId)
       if (left.length === 0) break
-      if (take?.()) return { completed: 0, left: total }
+      if (take?.()) return { completed: 0, left: total, stuck }
       for (const found of await source.find(left, folder)) {
         const email = byId.get(found.messageId)
         if (email && !items.has(email)) items.set(email, found)
       }
     }
+    for (const email of emails) if (!items.has(email)) await failed(email)
   } else if (source.identify)
     for (const email of emails) {
       const place = email.locations[0]
-      if (place)
+      if (!place) await failed(email, true)
+      else
         items.set(email, {
           uid: String(place.uid),
           folder: place.folder,
+          validity: place.uidvalidity,
           receivedAt: new Date(email.receivedAt ?? 0).toISOString(),
         })
     }
@@ -91,9 +111,15 @@ export const completePartial = async ({
     const attachments: AttachmentLog = []
     for (const [index, [email, item]] of chunk.entries()) {
       const raw = raws[index]
-      if (!(raw instanceof Uint8Array)) continue
-      // A UID means another message after a UIDVALIDITY change; only the stored id proves it is this one.
-      if (!source.find && source.identify?.(raw, item).messageId !== email.externalId) continue
+      if (!(raw instanceof Uint8Array)) {
+        await failed(email)
+        continue
+      }
+      // Only the stored id proves the bytes at a stored UID are this email; another one there will not change back.
+      if (!source.find && source.identify?.(raw, item).messageId !== email.externalId) {
+        await failed(email, true)
+        continue
+      }
       try {
         const mail = await parseMail(raw, maxBodyChars)
         const files = await readAttachments(
@@ -121,8 +147,9 @@ export const completePartial = async ({
         completed++
       } catch {
         if (signal?.aborted) break
+        await failed(email)
       }
     }
   }
-  return { completed, left: total - completed }
+  return { completed, left: total - completed - given, stuck: stuck + given }
 }
