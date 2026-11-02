@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.555.0 — 02.11.2026
-
 ### Added
 
 - **Each chat keeps its own point of reading for tasks.** `review --new`, `inbox --new`, the messenger's read state
@@ -22,14 +20,7 @@ shape of this file.
   read and write them. The follow-ups skill uses them. New permission key `tasks.acknowledge`.
   A read again only updates and closes tasks: `tasks add` refuses a message the chat's point already passed
   (`task.already-read`) unless given `--open-new`; a message that already has a task is returned as before.
-- **`review` for mail CLIs** (`mailReadCommands`): every stored email, both sides, in threads that changed since a
-  point, in messenger `review`'s item shape plus `email` (people, labels, sender score and the marks `bulk`,
-  `list_id`, `rule_id`); `--new` keeps a point per mailbox, `--unanswered [duration]` keeps threads whose newest email
-  came to the owner in To or Cc with no answer, `--waiting [duration]` threads where the owner wrote last;
-  `bulk:false` leaves out mail sent to many. It reads the store only, cuts at the last finished sync and opens no
-  task. `reviewMail`, `mailTurn`, `isBulk`, `MAIL_REVIEW_STEPS`, `store.mail.threadActivity` and
-  `store.mail.emailMarks` are exported; `store.mail.threadHits` takes a received-time window; the `message` entity's
-  `email` gains optional `bulk`, `list_id` and `rule_id`, and its `summary` view may carry `email`.
+
 - **A processing mark per holder and mail account** (`src/mail/marks.ts`): `review --holder <name>` reads what is
   stored past the holder's mark, by store order (`emails.id`), so mail stored late is not skipped; bulk mail, envelopes
   and drafts are skipped and counted, partial mail held until whole. `messages acknowledge --holder <name> --cursor
@@ -37,8 +28,7 @@ shape of this file.
   `consumer:<holder>`, no schema change. `readPastMark`, `acknowledgeMark`, `marksOf`, `markItem` and the
   `mail_mark` entity are exported for `status`; `store.mail` gains `emailsAfter`, `newestEmailId`, `statesLike` and
   `emailHits`.
-- **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
-  of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
+
 - **`config repair` mends a settings file whose JSON is broken only in its syntax**, without AI or network (the file
   may hold keys). It fixes a byte-order mark, `//` and `/* */` comments, trailing commas, a missing comma between
   entries on separate lines, unquoted keys, single-quoted text, and closing brackets missing at the end. Every value,
@@ -52,8 +42,24 @@ shape of this file.
   with `details.file`, `details.line` and `details.column`.
   It changes what a later run may do, so the read-only lock refuses it and an MCP server runs it only with
   `mcp.authority`; an agent's shell may not repair a file cut off before its end. `repairConfigText` exports it.
+
 - **`doctor` offers `<tool> config repair` as the `fix` of an `invalid_json` issue** when the repair would succeed, so
   the desktop can show a Repair button; a command refused on such a file names it too.
+
+## 0.555.0 — 02.11.2026
+
+### Added
+
+- **`review` for mail CLIs** (`mailReadCommands`): every stored email, both sides, in threads that changed since a
+  point, in messenger `review`'s item shape plus `email` (people, labels, sender score and the marks `bulk`,
+  `list_id`, `rule_id`); `--new` keeps a point per mailbox, `--unanswered [duration]` keeps threads whose newest email
+  came to the owner in To or Cc with no answer, `--waiting [duration]` threads where the owner wrote last;
+  `bulk:false` leaves out mail sent to many. It reads the store only, cuts at the last finished sync and opens no
+  task. `reviewMail`, `mailTurn`, `isBulk`, `MAIL_REVIEW_STEPS`, `store.mail.threadActivity` and
+  `store.mail.emailMarks` are exported; `store.mail.threadHits` takes a received-time window; the `message` entity's
+  `email` gains optional `bulk`, `list_id` and `rule_id`, and its `summary` view may carry `email`.
+- **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
+  of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
 
 ### Fixed
 
