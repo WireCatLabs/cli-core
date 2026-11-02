@@ -121,6 +121,8 @@ shows the event's own fields (title, time) and only this account's copies, atten
 |---|---|---|
 | `calendars list [synced:… primary:… access_role:…]` | provider read, local write | the provider's calendars, saved, with which of them sync; the query narrows the whole list the provider answered (`CALENDARS_QUERY`) |
 | `calendars sync <calendar>` / `unsync <calendar>` | local write | turn one calendar's sync on or off, by its id, the provider's or its title |
+| `calendars add <url> [--title <title>]` | provider read, local write; off MCP | only with `deps.feeds`: follow an iCalendar feed (`https://`, `http://`, `webcal://`) as a read-only calendar of the account. The feed is read once to check it; the address is a secret input (`secretInput`), kept by the CLI's `FeedRegistry` and never printed. The answer is the calendar, with `events` |
+| `calendars remove <calendar>` | local write; off MCP | only with `deps.feeds`, only a feed (`feed.not-a-feed`): forgets its address, stops its sync and marks its stored entries deleted (`removed`) |
 | `sync [--rescan] [--max-pages <n>] [--embed]` | provider read, local write | `syncCalendars` with `runBudgetOf(command, --max-pages)`; `cooperative` and `partial`: a run the budget stops answers `state: "partial"` with a `next` step and exits 0, a calendar that failed makes the run a failure: nothing on stdout (WC-OUT-14), and `provider_error` (`sync.partial`) whose message names each failed calendar and its error and whose `details.calendars` holds every synced calendar's result (`error` on the failed ones); it is safe to retry, as a sync sends the provider no write. `--embed` then calls `deps.embed(600)`, which a CLI binds to `embedEvents`, as drive's `sync --embed` does with `embedNotes`, unless the run stopped early |
 | `store status` | local read | each synced calendar's sync in the WC-LIFE-14 shape (`progressOf`): `done`, `total: null`, `remaining: null`, `state`, `updated_at`, `cursor_age_ms`, plus `round` in progress and `line` (`progressLine`); `profile` is `deps.profile` |
 | `events list [query…] [--source <accounts>] [--limit <n>] [--page <n>]` | local read, partial | stored events, earliest first, `--limit` per page (100) and `--page` from 1, so the host's `page.next` step can run, narrowed by the standard field query (`EVENTS_QUERY`): `starts_at` either way (`starts_at>=2026-11-02`, `starts_at<2026-11-07`, `starts_at:[2026-11-02 TO 2026-11-07}`, `starts_at:today`), `ends_at` from below only and strictly after its moment (`ends_at>=2026-11-02` leaves out an event that ends exactly then), `changed_at` from below only, `calendar:`, `person:`, `id:` (one event, whenever it is) and `event_type:` (`default`, `out-of-office`, `focus`, `working-location`, `birthday`, `from-mail`; a copy with no kind is `default`), which alone of the fields may also be excluded, `-event_type:birthday` or `NOT event_type:birthday`, as often as wanted (the registry's `negatable`, read by `negatableOf`; an MCP tool's `query` says so). A kind counts only on the copies in the accounts read. Without `id`, `starts_at` or `ends_at`, events that end after the start of today. An all-day event is compared by its local dates (WC-TIME-5). `changed_at>=<date>` keeps the events `eventChange` finds new, moved or cancelled since then, each with `change`, `changed_at` and, when moved, `was`; it reads the copies' `created_at`, `deleted_at` and revisions, so it sees what the syncs saw. `overlapping:true` keeps the events whose time overlaps another's in the accounts read, each with `overlapping` and `overlaps` (the others, as `event:<id>`); `overlapping:false` keeps every other event. Only timed events that take the owner's time count: not cancelled or deleted, with a live copy in the accounts read that the owner did not decline, did not mark free (`transparent`) and that is not a working-location block. All-day events never overlap, and ends are exclusive, so back-to-back events do not. The store filters it with a self-join (`EventFilter.overlapping`). `--source` reads several calendar accounts as one list, resolved as `search messages --source` resolves it (`entriesOfList`, `fitting` to the `events` kind): `all`, a provider or its alias (`gcal`), `provider:account` by account or recorded profile, `group:<name>`. The store reads them in one query (`EventFilter.accountIds`), so a meeting two accounts hold is one item and paging stays exact. `calendar:` then names a calendar of any of them, and a provider id two of them hold is refused. Every answer has `meta.accounts`, and `meta.now`, `meta.now_local` and `meta.timezone` (WC-TIME-7, as `events prepare`); `meta.complete` is false with an issue per account that has no synced calendar (`calendar.unsynced`) or a calendar whose sync never finished or is mid-round (`calendar.sync-incomplete`), and per `--source` entry that names no calendar account. With `deps.locked` (a profile lock), `--source` may name only the profile's own account (`profile.locked`) |
@@ -218,6 +220,36 @@ A CLI on cli-core's three-tool MCP server reaches the commands instead; that ser
 serialises it with the same escaping (`answered` in `src/mcp/tool.ts`), and its tool descriptions carry the same line.
 An event hit of `search all` names its invitation text in its own `untrusted`: `title` and `excerpt`.
 The shared commands mark the same text in their answers, so a CLI serving them over MCP passes the marker on: `events show`, `events prepare`, `search events` and the write commands name the fields in a top-level `untrusted` (`search events`: `hits.title`, `hits.location`, `hits.excerpt`); `events list`, `people list` and `links review` put it on each item, because a host's list envelope is strict and `--jsonl` prints only the items.
+
+## Feeds
+
+`icsFeeds({ registry, zone, fetch?, signal?, limits? })` (`./calendar/feeds`) is the `CalendarFeeds` a CLI hands
+`deps.feeds`: the profile's iCalendar feeds as read-only calendars of its own account, so `events list`,
+`search events`, `overlapping:` and `events remind` read them as any calendar. Google's API cannot subscribe a
+calendar to a URL ([calendarList.insert](https://developers.google.com/workspace/calendar/api/v3/reference/calendarList/insert)
+takes only an existing calendar's `id`), so the CLI reads the feed itself.
+
+- **A calendar per feed:** `externalId` `ics:<random id>`, never made from the address; `accessRole: "reader"`, so
+  every write refuses before a question is asked or anything is journaled (`calendar.read-only`), as a reader
+  calendar of the provider does. `calendars busy` leaves feeds out (`busy.feed` when one is named) and
+  `search --backend server` does not ask the provider about them: the stored search covers them.
+- **Its own source:** `provider: "ics"`, `expands: "local"`, `fullListOnly: true`. `syncWithFeeds` runs the provider's
+  `syncCalendars`, then the feeds', under one budget, into one report with `feeds` (each feed's `events` and the
+  `skipped` it could not take). `sync` and `events remind` call it. A full list marks what the feed dropped.
+- **Reading:** `readFeed` takes the events inside the window, `X-WR-TIMEZONE` for floating times, and overrides
+  (`RECURRENCE-ID`, `readIcs(…, { overrides: true })`), which take the place of the slot they name. Text goes through
+  `calendarText`, as an invitation's: feed text is somebody else's.
+- **Repeating events:** `expandSeries` expands RRULE in the series' own zone (a weekly 10:00 stays 10:00 across a
+  clock change): `FREQ` `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, with `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY` (with
+  ordinals), `BYMONTHDAY`, `BYMONTH`, `BYSETPOS` and `WKST`, plus `RDATE`, and `EXDATE` slots come back `cancelled`.
+  A series with any other part (`BYHOUR`, `FREQ=HOURLY`, `EXRULE`, two RRULEs) is skipped and counted, never guessed.
+- **Fetching:** `fetchFeed` follows each redirect by hand and only to `https:`, at most 5; reads at most 10 MB of
+  decoded body and waits at most 30 s. Errors name the feed (`feed 7`) and the HTTP status, never the address.
+- **What the CLI keeps:** a `FeedRegistry` (`read`, `write`) of `{ id, url, title }`, in the keyring or a 0600 file
+  as its other secrets.
+
+Not done: VTIMEZONE (a `TZID` must be an IANA name; an Outlook feed's Windows zone names are skipped), conditional
+requests (`ETag`, `304`), and refreshing a feed on its own schedule apart from `sync`.
 
 ## Testing an adapter
 

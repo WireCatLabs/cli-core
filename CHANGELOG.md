@@ -15,6 +15,13 @@ shape of this file.
   contents in an error. gcal, drive and mail each kept a copy of this reader.
 - **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
   `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
+- **iCalendar feeds as read-only calendars.** With `deps.feeds` (`icsFeeds`), `calendars add <url> [--title]` follows a
+  public holiday calendar, a sports schedule or a published `.ics` address, and `calendars remove <calendar>` stops.
+  `sync` and `events remind` read each feed after the provider (`syncWithFeeds`), so its events show in `events list`,
+  `search events`, `overlapping:` and `events remind`. Repeating events are expanded here (`expandSeries`: RRULE in
+  the event's own zone, RDATE, EXDATE and overrides). The address is a secret input, kept by the CLI and never
+  printed; a fetch follows redirects only to https and stops at 10 MB and 30 s. `readIcs` takes
+  `{ overrides: true }` and returns the calendar's `name`. See `docs/dev/CALENDARS.md`, "Feeds".
 
 ### Changed — may break callers
 
@@ -26,6 +33,10 @@ shape of this file.
   `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
   notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
   lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+- **A write to a calendar the account may only read refuses before anything is asked or journaled**
+  (`calendar.read-only`): create, quick add, import, update, delete, respond and move, for a feed and for a provider's
+  `reader` or `free-busy` calendar alike. Before, only the target of a move was checked; the provider refused the rest.
+  `calendars busy` and `search --backend server` leave feed calendars out.
 
 ### Added
 

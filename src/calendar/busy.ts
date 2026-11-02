@@ -10,6 +10,7 @@ import {
 import { LIST_QUERY_GUIDE, listQuery, nativeTermLists, type QueryWords, typedQuery } from "../cli/list-query.js"
 import type { EventStore, StoredCalendar } from "../meetings/index.js"
 import { calendarBusy } from "./cli/answers.js"
+import { isFeedCalendar } from "./feeds.js"
 import { calendarIn, plusDays, timeWindow } from "./reads.js"
 import type { BusyTimes, CalendarSource, SyncWindow } from "./source.js"
 
@@ -93,6 +94,12 @@ export const busyQuery = async (
       else if (field === "end") to = timeWindow(node, zone, now).upper
       else if (field === "calendar") {
         const calendar = await calendarIn(context.store, context.accountId, node.value)
+        if (isFeedCalendar(calendar))
+          throw new CliError(
+            "validation_error",
+            `calendar ${calendar.id} is a feed, which the provider has no busy times for; read it with events list`,
+            { reason: "busy.feed" },
+          )
         if (!calendars.some(({ id }) => id === calendar.id)) calendars.push(calendar)
       } else if (field === "person") {
         const email = node.value.trim().toLowerCase()
@@ -105,7 +112,9 @@ export const busyQuery = async (
   if (to <= from) throw new CliError("validation_error", "the window ends before it starts")
   const asked = calendars.length
     ? calendars
-    : (await context.store.calendars(context.accountId)).filter(({ synced, deletedAt }) => synced && !deletedAt)
+    : (await context.store.calendars(context.accountId)).filter(
+        (calendar) => calendar.synced && !calendar.deletedAt && !isFeedCalendar(calendar),
+      )
   if (asked.length === 0 && people.size === 0)
     throw new CliError("validation_error", "no calendar syncs yet; name one with calendar:<id>, or a person:<email>", {
       reason: "busy.no-calendars",
