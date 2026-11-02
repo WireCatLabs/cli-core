@@ -7,22 +7,8 @@ shape of this file.
 
 ## Unreleased
 
-## 0.557.0 — 02.11.2026
-
 ### Added
 
-- **Invoices and payments in the store (store version 45).** `store.finance` adds, lists and shows invoices with
-  their lines and payments, allocates a payment to invoices and sums what open invoices still owe per currency
-  (`openTotals`). Money is an integer in the currency's minor units (`CURRENCY_SCALES`, ISO 4217), passed and read as
-  decimal strings; an unknown currency is refused and nothing is converted. A total must equal its lines, and an
-  allocation never exceeds the payment or the invoice or crosses currencies; triggers back the code. The status
-  follows confirmed allocations; only the owner issues a draft or voids an invoice.
-- **An agent's or an import's invoice or payment is a proposal.** The owner's entry is confirmed at once; a bot's
-  waits as `invoice` or `payment` in `proposalRegistry`, and only the owner decides it. A pending payment's
-  allocations never count against an invoice, so they never block the owner's own. Confirming one counts them in the
-  same write, or is refused while other confirmed payments already cover the invoice; rejecting drops them.
-- **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
-  `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
 - **A `propose` tier under `<PREFIX>_READ_ONLY`.** `proposesOnly(command)` marks a command that only stages
   something for the owner or moves its caller's own mark; the lock lets it run only when its path also ends with one
   of `PROPOSE_COMMANDS` — `messages acknowledge` and `mail findings add` — a closed list. `isStoreChange` applies it,
@@ -40,6 +26,23 @@ shape of this file.
 - **`schedule agent --on-new-mail <holder>`,** where the host passes `newMail` (`holderHasMail`): the agent starts
   only when mail is stored past the holder's mark, and may check every 5 minutes; a run with nothing new costs no
   model call and records nothing. Mail that is only skipped moves the holder's mark without the agent.
+
+## 0.557.0 — 02.11.2026
+
+### Added
+
+- **Invoices and payments in the store (store version 45).** `store.finance` adds, lists and shows invoices with
+  their lines and payments, allocates a payment to invoices and sums what open invoices still owe per currency
+  (`openTotals`). Money is an integer in the currency's minor units (`CURRENCY_SCALES`, ISO 4217), passed and read as
+  decimal strings; an unknown currency is refused and nothing is converted. A total must equal its lines, and an
+  allocation never exceeds the payment or the invoice or crosses currencies; triggers back the code. The status
+  follows confirmed allocations; only the owner issues a draft or voids an invoice.
+- **An agent's or an import's invoice or payment is a proposal.** The owner's entry is confirmed at once; a bot's
+  waits as `invoice` or `payment` in `proposalRegistry`, and only the owner decides it. A pending payment's
+  allocations never count against an invoice, so they never block the owner's own. Confirming one counts them in the
+  same write, or is refused while other confirmed payments already cover the invoice; rejecting drops them.
+- **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
+  `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
 
 ### Fixed
 
