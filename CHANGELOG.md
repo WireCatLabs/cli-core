@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.561.0 — 03.11.2026
+
 ### Changed — may break callers
 
 - **`links review` under a profile lock lists only the profile's own link choices.** With `deps.locked`, or without
