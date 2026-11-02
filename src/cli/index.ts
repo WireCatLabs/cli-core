@@ -281,7 +281,7 @@ export {
   storeChangeRefusal,
   writesFileOnlyWith,
 } from "./effects.js"
-export { type CliEntry, type EntryContext, type EntryIo, startCli } from "./entry.js"
+export { type CliEntry, type EntryContext, type EntryIo, openBrowser, startCli } from "./entry.js"
 export {
   type AnswerOutput,
   answerSchema,
