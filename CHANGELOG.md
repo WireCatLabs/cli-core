@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.558.0 — 02.11.2026
+
 ### Changed — may break callers
 
 - **A payment is no longer a fact (store version 46).** Money lives only in `store.finance`. `facts.add` refuses type
