@@ -9,6 +9,18 @@ shape of this file.
 
 ### Added
 
+- **`projects evidence` and `projects status` read the linked chats of the purposes asked.** `--purpose sales,work`
+  or `--purpose all` picks them; without it, the configured defaults (built in: `work`). A chat left out is one
+  `missing` row with its purpose, message count, dates and the command that reads it; an unknown purpose is refused
+  with the configured list. `gatherStoredProject` and `projectStatus` take `purposes`, `purposeConfig` and a `count`
+  port (`storedChatCount`); `purposesOf`, `BUILT_IN_PURPOSE_CONFIG` and `Messenger.purposes` let a host pass its list.
+  When one linked chat with no purpose gives most of a run's items, the answer suggests a purpose once.
+- **`projects evidence --include-proposed` reads chats and members proposed for the project**, after the confirmed
+  ones. Each linked chat and member row carries `proposed` and `score`, and each item only they brought `proposed`.
+  `gatherStoredProject` takes `includeProposed`; `linkedChatsOf` takes `{ includeProposed }`.
+- **`--compact` rows for `projects evidence`**: items, linked chats, chats left out by purpose and members. A row
+  column may take a `prefix`, a shape may print fields `whole` (the cursor), and `time`/`day` columns read epoch ms.
+- `countMessages` takes `until`.
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -89,6 +101,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`LinkedChat` gains `purpose` and `relationship`, `ProjectStatus` gains `purposes`, and a status chat left out by
+  purpose carries its account, chat id and counts.** `StoredProjectGathering` gains `leftOut`, `members`, `purposes`
+  and `purposeHint`. A caller that builds these by hand adds the fields. `DEFAULT_PURPOSES` moved to
+  `project-purposes`, still exported from `@wirecat/cli-core/services`.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
   it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
   global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A

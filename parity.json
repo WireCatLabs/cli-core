@@ -478,6 +478,9 @@
       "meaning": "every chat of these kinds, comma-separated",
       "note": "a folder (`chats folders`) or an export folder (`store export`) takes these chats"
     },
+    "--include-proposed": {
+      "meaning": "also read chats and members proposed for the project and not yet confirmed, each item marked"
+    },
     "--into": {
       "value": "<id>",
       "meaning": "the task that stays: a duplicate is merged into it, or a message is linked to it instead of opening a task"
@@ -831,6 +834,10 @@
     "--public-url": {
       "value": "<url>",
       "meaning": "the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch"
+    },
+    "--purpose": {
+      "value": "<purposes>",
+      "meaning": "the linked chats' purposes to read, comma-separated, or all; a chat left out is counted"
     },
     "--question": {
       "meaning": "match only questions"
@@ -3707,9 +3714,11 @@
         "--contact": "all",
         "--context-query": "all",
         "--cursor": "all",
+        "--include-proposed": "all",
         "--limit": "all",
         "--max-pages": "all",
         "--no-catch-up": "all",
+        "--purpose": "all",
         "--since-time": "all",
         "--sync-first": "all",
         "--sync-time": "all"
@@ -3723,6 +3732,7 @@
       "options": {
         "--before-time": "all",
         "--context-query": "all",
+        "--purpose": "all",
         "--since-time": "all"
       }
     },

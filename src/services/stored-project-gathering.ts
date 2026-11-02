@@ -1,11 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ContextSource } from "../context/evidence.js"
 import { formatReference, parseReference } from "../domain/references.js"
-import type { MessageStore } from "../store/store.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
 import { chatCoverage } from "./chat-coverage.js"
 import { gatherProjectEvidence, type ProjectChatFetcher, type ProjectGatheringPorts } from "./project-gathering.js"
 import { storedNeighbours } from "./project-gathering-around.js"
 import { type EvidenceMentions, findEvidenceMentions } from "./project-gathering-mentions.js"
+import { LINK_PURPOSE, type PurposeConfig, purposeRead, purposesOf } from "./project-purposes.js"
 
 export interface StoredProjectInput {
   project: string
@@ -32,7 +33,44 @@ export interface StoredProjectInput {
   maxFetchMs?: number
   onFetchProgress?: ProjectGatheringPorts["onFetchProgress"]
   signal?: AbortSignal
+  /** The linked chats' purposes to read; `["all"]` reads every one. Left out, the config's defaults. */
+  purposes?: readonly string[]
+  /** The host's purposes; core's built-in ones when left out. */
+  purposeConfig?: PurposeConfig
+  /** Proposed `member-of` links count as linked chats and members too, after the confirmed ones, every item marked. */
+  includeProposed?: boolean
+  /** How many messages a left-out chat holds in the window; the store's own count when left out. */
+  count?: ChatCounter
 }
+
+export interface ChatCount {
+  messages: number
+  firstAt: string | null
+  lastAt: string | null
+}
+
+export type ChatCounter = (
+  account: AccountKey,
+  chatId: string,
+  window: { since: number; until: number },
+) => Promise<ChatCount>
+
+/** The store's count of one chat's messages in a window, `until` exclusive, and the first and last of them. */
+export const storedChatCount =
+  (store: MessageStore): ChatCounter =>
+  async (account, chatId, { since, until }) => {
+    const window = { since: new Date(since).toISOString(), until: new Date(until - 1).toISOString() }
+    const [messages, newest, oldest] = await Promise.all([
+      store.messages.countMessages(account, chatId, window),
+      store.messages.messages(account, chatId, { limit: 1, since: window.since, until: until - 1 }),
+      store.messages.messages(account, chatId, { limit: 1, after: { time: since - 1 }, until: until - 1 }),
+    ])
+    return {
+      messages,
+      firstAt: oldest.items[0]?.timestamp ?? null,
+      lastAt: newest.items.at(-1)?.timestamp ?? null,
+    }
+  }
 
 const PROJECT_ID = /^project:[1-9]\d*$/
 
@@ -134,10 +172,56 @@ const contactOf = async (store: MessageStore, contact: string): Promise<Contact[
 const LINKED_CHATS = 16
 const CORE_LIMIT = 16
 
-/** Confirmed `person` members, in a stable order, so a cut at the lane limit always drops the same ones. */
-const memberRefsOf = async (store: MessageStore, project: string | null) => {
+interface Proposed {
+  from: string
+  /** The inbox id: a stored proposal's number, or `link:<id>` for a suggestion written before proposals were. */
+  id: string
+  role: string | null
+  purpose: string | null
+  score?: number
+}
+
+/** Pending `member-of` proposals to the project, oldest first, so a cut at a limit always drops the same ones. */
+const proposedLinksOf = async (store: MessageStore, project: string): Promise<Proposed[]> => {
+  const stored = await store.proposedActions.list({ kinds: ["relationship"], status: "proposed", project, limit: 500 })
+  const proposals = stored
+    .flatMap((action): Proposed[] => {
+      const payload = action.payload as { from?: unknown; to?: unknown; kind?: unknown; role?: unknown }
+      const { purpose, score } = action.payload as { purpose?: unknown; score?: unknown }
+      if (payload?.kind !== "member-of" || payload.to !== project || typeof payload.from !== "string") return []
+      return [
+        {
+          from: payload.from,
+          id: action.id,
+          role: typeof payload.role === "string" ? payload.role : null,
+          purpose: typeof purpose === "string" ? purpose : null,
+          ...(typeof score === "number" ? { score } : {}),
+        },
+      ]
+    })
+    .sort((a, b) => Number(a.id) - Number(b.id))
+  const legacy = (await store.knowledge.relations(null, project))
+    .filter((one) => !one.confirmed && one.kind === "member-of" && one.to === project)
+    .map((one) => ({ from: one.from, id: `link:${one.id}`, role: one.role, purpose: one.purpose }))
+  return [...proposals, ...legacy]
+}
+
+export interface ProjectMember {
+  person: string
+  state: "read" | "member-limit" | "no-identity"
+  /** The proposal that names this person a member; read only with `includeProposed`. */
+  proposed?: string
+  score?: number
+}
+
+/** Confirmed `person` members in a stable order, then proposed ones when asked, so a cut drops the same ones. */
+const memberRefsOf = async (
+  store: MessageStore,
+  project: string | null,
+  includeProposed: boolean,
+): Promise<{ ref: string; proposed?: string; score?: number }[]> => {
   if (!project) return []
-  const refs = []
+  const confirmed = new Set<string>()
   for (const relation of await store.knowledge.relations(null, project))
     if (
       relation.confirmed &&
@@ -145,25 +229,39 @@ const memberRefsOf = async (store: MessageStore, project: string | null) => {
       relation.to === project &&
       /^person:.+/.test(relation.from)
     )
-      refs.push(relation.from)
-  return [...new Set(refs)].sort()
+      confirmed.add(relation.from)
+  const members: { ref: string; proposed?: string; score?: number }[] = [...confirmed].sort().map((ref) => ({ ref }))
+  if (!includeProposed) return members
+  for (const one of await proposedLinksOf(store, project))
+    if (/^person:.+/.test(one.from) && !members.some((member) => member.ref === one.from))
+      members.push({ ref: one.from, proposed: one.id, ...(one.score === undefined ? {} : { score: one.score }) })
+  return members
 }
 
 /**
  * Members are read by what their identities wrote, like `--contact person:<id>` but without the owner's aliases:
  * a short alias would add a text lane that matches mentions, and membership is about who wrote, not who was named.
  */
-const memberLanesOf = async (store: MessageStore, project: string | null, given: Set<string>, room: number) => {
+const memberLanesOf = async (
+  store: MessageStore,
+  project: string | null,
+  given: Set<string>,
+  room: number,
+  includeProposed: boolean,
+) => {
   const lanes: Contact[] = []
   const left: { source: string; kind: string; reason: "member-limit" | "no-identity" }[] = []
-  for (const reference of (await memberRefsOf(store, project)).filter((one) => !given.has(one))) {
+  const rows: ProjectMember[] = []
+  for (const member of (await memberRefsOf(store, project, includeProposed)).filter((one) => !given.has(one.ref))) {
+    const { ref: reference, ...marks } = member
     const person = await store.people.personByUid(reference.slice("person:".length))
     const senders = person ? sendersOf(person) : []
-    if (!senders.length) left.push({ source: reference, kind: "member", reason: "no-identity" })
-    else if (lanes.length >= room) left.push({ source: reference, kind: "member", reason: "member-limit" })
-    else lanes.push({ reference, senders })
+    const state = !senders.length ? "no-identity" : lanes.length >= room ? "member-limit" : "read"
+    if (state === "read") lanes.push({ reference, senders })
+    else left.push({ source: reference, kind: "member", reason: state })
+    rows.push({ person: reference, state, ...marks })
   }
-  return { lanes, left }
+  return { lanes, left, rows }
 }
 
 export interface LinkedChat {
@@ -172,28 +270,94 @@ export interface LinkedChat {
   chat: string
   /** The link's free role (`source report`, `what worked`), if the owner set one. */
   role: string | null
+  /** What the chat is for in the project; `null` means `work`. */
+  purpose: string | null
+  /** The confirmed link's id; null for a proposed one. */
+  relationship: string | null
+  /** The proposal that links the chat; only with `includeProposed`. */
+  proposed?: string
+  score?: number
 }
 
-/** Only links the owner confirmed: a suggested one would put a whole chat into the evidence on a guess. */
-export const linkedChatsOf = async (store: MessageStore, project: string | null): Promise<LinkedChat[]> => {
+const chatOf = (from: string) => {
+  if (!from.startsWith("chat:")) return undefined
+  const reference = parseReference(from)
+  return reference.type === "chat" ? reference : undefined
+}
+
+/**
+ * Links the owner confirmed, then, when asked, the proposed ones: a suggestion would put a whole chat into the
+ * evidence on a guess, so it is read only on request and marked.
+ */
+export const linkedChatsOf = async (
+  store: MessageStore,
+  project: string | null,
+  options: { includeProposed?: boolean } = {},
+): Promise<LinkedChat[]> => {
   if (!project) return []
   const chats: LinkedChat[] = []
   for (const relation of await store.knowledge.relations(null, project)) {
     if (!relation.confirmed || relation.kind !== "member-of" || relation.to !== project) continue
-    if (!relation.from.startsWith("chat:")) continue
-    const reference = parseReference(relation.from)
-    if (reference.type === "chat")
+    const reference = chatOf(relation.from)
+    if (reference)
       chats.push({
         provider: reference.provider,
         account: reference.account,
         chat: reference.chat,
         role: relation.role,
+        purpose: relation.purpose,
+        relationship: relation.id,
       })
+  }
+  if (!options.includeProposed) return chats
+  for (const one of await proposedLinksOf(store, project)) {
+    const reference = chatOf(one.from)
+    if (!reference) continue
+    if (
+      chats.some(
+        (chat) =>
+          chat.provider === reference.provider && chat.account === reference.account && chat.chat === reference.chat,
+      )
+    )
+      continue
+    chats.push({
+      provider: reference.provider,
+      account: reference.account,
+      chat: reference.chat,
+      role: one.role,
+      purpose: one.purpose,
+      relationship: null,
+      proposed: one.id,
+      ...(one.score === undefined ? {} : { score: one.score }),
+    })
   }
   return chats
 }
 
-export type StoredProjectGathering = Awaited<ReturnType<typeof gatherProjectEvidence>> & {
+/** A linked chat whose purpose this run did not read: counted, never listed. */
+export interface LeftOutChat {
+  ref: string
+  provider: string
+  account: string
+  chat: string
+  title: string | null
+  purpose: string
+  relationship: string | null
+  proposed?: string
+  messages: number
+  firstAt: string | null
+  lastAt: string | null
+}
+
+/** Over half the items and at least this many, from one chat's membership alone: worth asking what the chat is for. */
+const HINT_ITEMS = 20
+
+type Gathered = Awaited<ReturnType<typeof gatherProjectEvidence>>
+
+export type StoredProjectGathering = Omit<Gathered, "items" | "linkedChats"> & {
+  /** `proposed`: the proposal whose link alone brought the item in; only with `includeProposed`. */
+  items: (Gathered["items"][number] & { proposed?: string })[]
+  linkedChats: (Gathered["linkedChats"][number] & { purpose: string; proposed?: string; score?: number })[]
   projectRef: string | null
   unreadSources: {
     source: string
@@ -201,6 +365,12 @@ export type StoredProjectGathering = Awaited<ReturnType<typeof gatherProjectEvid
     reason?: "out-of-scope" | "linked-chat-limit" | "member-limit" | "no-identity" | "unknown-provider"
   }[]
   mentions: EvidenceMentions
+  /** The purposes read: `all`, or the list. */
+  purposes: "all" | string[]
+  leftOut: LeftOutChat[]
+  members: ProjectMember[]
+  /** One linked chat with no purpose set gave most of this run's items; a first run only, so it is said once. */
+  purposeHint: { chat: string; relationship: string; items: number; of: number } | null
 }
 
 /**
@@ -234,9 +404,18 @@ export const gatherStoredProject = async (
     CORE_LIMIT - contacts.length,
     CORE_LIMIT - searchLanes - contacts.filter((one) => one.senders).length,
   )
-  const members = await memberLanesOf(store, project.ref, new Set(contacts.flatMap((one) => one.reference ?? [])), room)
+  const includeProposed = input.includeProposed === true
+  const purposes = purposesOf(input.purposes, input.purposeConfig, project)
+  const members = await memberLanesOf(
+    store,
+    project.ref,
+    new Set(contacts.flatMap((one) => one.reference ?? [])),
+    room,
+    includeProposed,
+  )
   const people = [...contacts, ...members.lanes]
-  const linked = await linkedChatsOf(store, project.ref)
+  const all = await linkedChatsOf(store, project.ref, { includeProposed })
+  const linked = all.filter((one) => purposeRead(purposes, one.purpose))
   const linkedChats = linked.slice(0, LINKED_CHATS).map(({ provider, account, chat }) => ({ provider, account, chat }))
   const budgets = {
     ...(input.maxReads === undefined ? {} : { maxReads: input.maxReads }),
@@ -285,5 +464,75 @@ export const gatherStoredProject = async (
       reason: "linked-chat-limit" as const,
     })),
   ]
-  return { projectRef: project.ref, unreadSources: [...unread, ...unreadChats, ...members.left], ...gathered, mentions }
+  const refOf = (one: LinkedChat) => formatReference({ type: "chat", ...one })
+  const byRef = new Map(linked.map((one) => [refOf(one), one]))
+  const proposedLanes = new Map<string, string>()
+  for (const row of gathered.linkedChats) {
+    const proposed = byRef.get(row.ref)?.proposed
+    if (proposed && row.lane !== null) proposedLanes.set(row.lane, proposed)
+  }
+  for (const lane of gathered.lanes) {
+    const proposed = members.rows.find((one) => one.proposed && lane.people.includes(one.person))?.proposed
+    if (proposed && lane.kinds.includes("sender")) proposedLanes.set(lane.id, proposed)
+  }
+  // Marked only when nothing but proposed links found it: an item a word or a confirmed link found is evidence anyway.
+  const items = gathered.items.map((item) => {
+    const proposed = item.lanes.every((lane) => proposedLanes.has(lane))
+      ? proposedLanes.get(item.lanes[0] ?? "")
+      : undefined
+    return proposed ? { ...item, proposed } : item
+  })
+  const linkedRows = gathered.linkedChats.map((row) => {
+    const link = byRef.get(row.ref)
+    return {
+      ...row,
+      purpose: link?.purpose ?? LINK_PURPOSE,
+      ...(link?.proposed ? { proposed: link.proposed } : {}),
+      ...(link?.score === undefined ? {} : { score: link.score }),
+    }
+  })
+  const count = input.count ?? storedChatCount(store)
+  const leftOut: LeftOutChat[] = []
+  for (const one of all.filter((chat) => !purposeRead(purposes, chat.purpose))) {
+    const account = { provider: one.provider, account: one.account }
+    const [counted, [held]] = await Promise.all([
+      count(account, one.chat, { since: gathered.window.after, until: gathered.window.before }),
+      chatCoverage(store, account, [one.chat]),
+    ])
+    leftOut.push({
+      ref: refOf(one),
+      provider: one.provider,
+      account: one.account,
+      chat: one.chat,
+      title: held?.title ?? null,
+      purpose: one.purpose ?? LINK_PURPOSE,
+      relationship: one.relationship,
+      ...(one.proposed ? { proposed: one.proposed } : {}),
+      ...counted,
+    })
+  }
+  return {
+    projectRef: project.ref,
+    unreadSources: [...unread, ...unreadChats, ...members.left],
+    ...gathered,
+    items,
+    linkedChats: linkedRows,
+    mentions,
+    purposes: purposes === "all" ? "all" : [...purposes],
+    leftOut,
+    members: members.rows,
+    purposeHint: gathered.resumed ? null : purposeHintOf(linked, linkedRows, items.length),
+  }
+}
+
+const purposeHintOf = (
+  linked: LinkedChat[],
+  rows: { ref: string; items?: number }[],
+  of: number,
+): StoredProjectGathering["purposeHint"] => {
+  const [top] = [...rows].sort((a, b) => (b.items ?? 0) - (a.items ?? 0))
+  const items = top?.items ?? 0
+  const link = linked.find((one) => formatReference({ type: "chat", ...one }) === top?.ref)
+  if (!top || !link?.relationship || link.purpose !== null || items < HINT_ITEMS || items * 2 <= of) return null
+  return { chat: top.ref, relationship: link.relationship, items, of }
 }

@@ -1,6 +1,8 @@
 import type { Missing, NextStep } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import type { ProjectStatus, StatusChatSummary, StatusItem } from "../services/project-status/index.js"
+import type { Id } from "../domain/models.js"
+import type { OutOfScope, ProjectStatus, StatusChatSummary, StatusItem } from "../services/project-status/index.js"
+import type { AccountKey } from "../store/store.js"
 import type { RowShape } from "./compact.js"
 import { snakeKeys } from "./envelope.js"
 import { heldPhrase } from "./messenger/search-answers.js"
@@ -13,6 +15,8 @@ export interface ProjectStatusHints {
   read: (chat: StatusChatSummary, since: string) => NextStep | null
   /** The command line a step runs, for the text form. */
   line: (step: NextStep) => string
+  /** The step that reads a chat left out by its purpose from `since`; null when no command here can. */
+  readChat?: (chat: { ref: string; account: AccountKey; chatId: Id }, since: string) => NextStep | null
 }
 
 const day = (at: string | number) => new Date(at).toISOString().slice(0, 10)
@@ -70,8 +74,19 @@ export const projectStatusSchema = v.looseObject({
       why: v.nullable(v.string()),
     }),
   ),
+  purposes: v.union([v.literal("all"), v.array(v.string())]),
   out_of_scope: v.optional(
-    v.array(v.strictObject({ chat: v.string(), reason: v.string(), purpose: v.optional(v.string()) })),
+    v.array(
+      v.strictObject({
+        chat: v.string(),
+        reason: v.string(),
+        purpose: v.optional(v.string()),
+        messages: v.optional(v.number()),
+        first_at: v.optional(v.nullable(v.string())),
+        last_at: v.optional(v.nullable(v.string())),
+        read_command: v.optional(v.nullable(v.string())),
+      }),
+    ),
   ),
   failed: v.optional(v.array(v.strictObject({ signal: v.string(), why: v.string() }))),
   ...Object.fromEntries(
@@ -119,9 +134,30 @@ const nextOf = (found: ProjectStatus, hints: ProjectStatusHints): NextStep[] => 
   return [...syncs, ...reads].slice(0, 2)
 }
 
-const missingOf = (found: ProjectStatus): Missing[] => {
+type LeftOut = Extract<OutOfScope, { reason: "purpose" }>
+
+const leftOutOf = (found: ProjectStatus): LeftOut[] =>
+  found.outOfScope.filter((one): one is LeftOut => one.reason === "purpose")
+
+const readLine = (found: ProjectStatus, one: LeftOut, hints: ProjectStatusHints): string | null => {
+  const step = hints.readChat?.({ ref: one.chat, account: one.account, chatId: one.chatId }, day(found.window.since))
+  return step ? hints.line(step) : null
+}
+
+/** `12 messages 2026-10-03…2026-11-01`, or that the window holds none. */
+export const heldInWindow = (one: { messages: number; firstAt: string | null; lastAt: string | null }) =>
+  one.messages && one.firstAt && one.lastAt
+    ? `${one.messages} message${one.messages === 1 ? "" : "s"} ${day(one.firstAt)}…${day(one.lastAt)}`
+    : "no messages in the window"
+
+const leftOutWhy = (one: LeftOut, read: string | null) =>
+  `${one.chat}, purpose ${one.purpose}, not read: ${heldInWindow(one)}` +
+  (read ? `; read it: ${read}` : "; add its purpose to --purpose to read it")
+
+const missingOf = (found: ProjectStatus, hints: ProjectStatusHints): Missing[] => {
   const held = found.chats.filter((chat) => partial(found, chat))
   const [first] = held
+  const others = found.outOfScope.filter((one) => one.reason !== "purpose")
   return [
     ...(first
       ? [
@@ -134,16 +170,20 @@ const missingOf = (found: ProjectStatus): Missing[] => {
           },
         ]
       : []),
-    ...(found.outOfScope.length
+    ...(others.length
       ? [
           {
             field: "chats",
-            why: `${found.outOfScope.length} linked chats were not read here (${[
-              ...new Set(found.outOfScope.map((one) => one.reason)),
+            why: `${others.length} linked chats were not read here (${[
+              ...new Set(others.map((one) => one.reason)),
             ].join(", ")}); memo projects status reads every account`,
           },
         ]
       : []),
+    ...leftOutOf(found).map((one) => {
+      const read = readLine(found, one, hints)
+      return { field: "chats", why: leftOutWhy(one, read), ...(read ? { step: "messages.list" } : {}) }
+    }),
     ...found.failed.map((one) => ({ field: `signal:${one.signal}`, why: one.why })),
   ]
 }
@@ -191,11 +231,28 @@ export const projectStatusAnswer = (found: ProjectStatus, hints: ProjectStatusHi
       attention: weights.get(chat.ref)?.weight ?? 0,
       why: weights.get(chat.ref)?.why ?? null,
     })),
-    ...(found.outOfScope.length ? { outOfScope: found.outOfScope } : {}),
+    purposes: found.purposes,
+    ...(found.outOfScope.length
+      ? {
+          outOfScope: found.outOfScope.map((one) =>
+            one.reason === "purpose"
+              ? {
+                  chat: one.chat,
+                  reason: one.reason,
+                  purpose: one.purpose,
+                  messages: one.messages,
+                  firstAt: one.firstAt,
+                  lastAt: one.lastAt,
+                  readCommand: readLine(found, one, hints),
+                }
+              : one,
+          ),
+        }
+      : {}),
     ...(found.failed.length ? { failed: found.failed } : {}),
     ...lists,
   }) as ProjectStatusItem
-  const missing = missingOf(found)
+  const missing = missingOf(found, hints)
   const complete = found.failed.length === 0 && !found.chats.some((chat) => partial(found, chat))
   return {
     item,
@@ -290,8 +347,9 @@ export const projectStatusText = (found: ProjectStatus, hints: ProjectStatusHint
       `  ${cut ? `${data.child} not read (${cut})` : `${data.key ?? data.child} · ${data.name} · ${data.chats} chats`}`,
     )
   }
-  if (found.outOfScope.length)
-    lines.push(`Not read here: ${found.outOfScope.map((one) => `${one.chat} (${one.reason})`).join(", ")}`)
+  const others = found.outOfScope.filter((one) => one.reason !== "purpose")
+  if (others.length) lines.push(`Not read here: ${others.map((one) => `${one.chat} (${one.reason})`).join(", ")}`)
+  for (const one of leftOutOf(found)) lines.push(`Left out: ${leftOutWhy(one, readLine(found, one, hints))}`)
   for (const one of found.failed) lines.push(`Signal ${one.signal} failed: ${one.why}`)
   if (next.length) lines.push("Next")
   next.forEach((step, index) => {

@@ -60,8 +60,8 @@ export interface AccountMessages {
    * ends the window; `reads.MessagePageWindow` says how.
    */
   messages(key: AccountKey, chatId: Id, window: reads.MessagePageWindow): Promise<Page<Message>>
-  /** How many stored messages the chat has, sent at `since` or later when it is given. */
-  countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
+  /** How many stored messages the chat has, sent at `since` or later and at `until` or earlier when given. */
+  countMessages(key: AccountKey, chatId: Id, options?: { since?: string; until?: string }): Promise<number>
   /** Saved or edited after `at` (ISO, this machine's clock), oldest first, and the ids deleted after it. */
   changes(key: AccountKey, chatId: Id, at: string): Promise<{ messages: Message[]; deleted: Id[] }>
   /**
@@ -184,9 +184,9 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
       return chatKey === undefined ? { items: [], hasMore: false } : reads.messagePage(context, chatKey, window)
     },
 
-    countMessages: async (key, chatId, { since } = {}) => {
+    countMessages: async (key, chatId, { since, until } = {}) => {
       const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? 0 : reads.countMessages(context, chatKey, since)
+      return chatKey === undefined ? 0 : reads.countMessages(context, chatKey, since, until)
     },
 
     changes: async (key, chatId, at) => {

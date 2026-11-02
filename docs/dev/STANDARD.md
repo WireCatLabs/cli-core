@@ -996,6 +996,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp serve` |
 | `--idle` | `<duration>` | stop after this long with nobody using it — 15m, 1h |  | `serve` (max-only), `server restart` (max-only), `server start` (max-only) |
 | `--include` | `<kinds>` | every chat of these kinds, comma-separated. **a folder (`chats folders`) or an export folder (`store export`) takes these chats** |  | `chats folders create` (planned), `chats folders update` (planned), `store export` |
+| `--include-proposed` |  | also read chats and members proposed for the project and not yet confirmed, each item marked |  | `projects evidence` |
 | `--into` | `<id>` | the task that stays: a duplicate is merged into it, or a message is linked to it instead of opening a task |  | `tasks add`, `tasks merge` |
 | `--join-approval` | `<on\|off>` | people ask to join, and an admin lets them in |  | `chats update` (tg, wa only) |
 | `--json` |  | machine-readable output: one JSON value on stdout, nothing else |  | every command |
@@ -1087,6 +1088,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--profile-photo` | `<who>` | who sees the profile photo: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--profiles` | `<names\|all>` | the profiles one MCP server serves, comma-separated, or all of them |  | `mcp config`, `mcp revoke`, `mcp serve`, `mcp server start`, `mcp server status`, `mcp server stop` |
 | `--public-url` | `<url>` | the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch |  | `bot watch`, `mcp serve`, `mcp server start` |
+| `--purpose` | `<purposes>` | the linked chats' purposes to read, comma-separated, or all; a chat left out is counted |  | `projects evidence`, `projects status` |
 | `--question` |  | match only questions |  | `replies edit` |
 | `--quiet` |  | diagnostics off. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--quiz` |  | a quiz: one answer is right, and a vote is final |  | `polls create` (tg-only) |

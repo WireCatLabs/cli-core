@@ -1,9 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
+import { MAX_NEXT_STEPS, type Missing, type NextStep } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { ChatCoverage } from "../services/chat-coverage.js"
 import { dateWindow, momentOf } from "../services/moment.js"
-import type { StoredProjectGathering } from "../services/stored-project-gathering.js"
+import type { LeftOutChat, StoredProjectGathering } from "../services/stored-project-gathering.js"
 import { coverageGaps, heldPhrase } from "./messenger/search-answers.js"
+import { heldInWindow } from "./project-status.js"
 
 /** Days back (`90d`) or a start date (`2026-09-01`); either way the run freezes its end, so a resume keeps it. */
 export const projectWindowOf = (value: string): { days: number } | { after: number } => {
@@ -47,10 +49,28 @@ const coverageRows = ({ linkedChats }: StoredProjectGathering): ChatCoverage[] =
  * The zone a typed start date was read in, and the window the run used, in UTC. `complete` is "the answer is whole":
  * reads finished and every linked chat held in full; the answer's own `complete` stays "reads finished".
  */
-export const projectAnswerParts = (sinceTime: string, found: StoredProjectGathering) => {
+export const projectAnswerParts = (
+  sinceTime: string,
+  found: StoredProjectGathering,
+  hints?: Pick<ProjectTextHints, "read">,
+) => {
   const { window } = found
   const { timezone } = dateWindow({ sinceTime }).meta
-  const { next, missing } = coverageGaps(coverageRows(found), 0, new Date(window.after).toISOString())
+  const gaps = coverageGaps(coverageRows(found), 0, new Date(window.after).toISOString())
+  const next: NextStep[] = [...gaps.next]
+  const missing: Missing[] = [
+    ...gaps.missing,
+    ...found.leftOut.map((one) => {
+      const read = hints?.read?.(one, day(window.after)) ?? null
+      return { field: "linked_chats", why: leftOutLine(one, read), ...(read ? { step: "messages.list" } : {}) }
+    }),
+  ]
+  if (found.purposeHint) {
+    const why = purposeHintLine(found.purposeHint)
+    missing.push({ field: "purpose", why })
+    if (next.length < MAX_NEXT_STEPS)
+      next.push({ kind: "user_action", step: "relationships.purpose", why, safe_to_auto_execute: false })
+  }
   return {
     ...(next.length ? { next } : {}),
     ...(missing.length ? { missing } : {}),
@@ -66,13 +86,18 @@ export const projectAnswerParts = (sinceTime: string, found: StoredProjectGather
  * The gathering with each linked chat's `syncCommand`: the line that syncs a chat held in part back to the window
  * start, or null when it needs none or no command here can. JSON readers get what the text says per chat.
  */
-export const withSyncCommands = (found: StoredProjectGathering, sync: ProjectTextHints["sync"]) => ({
+export const withSyncCommands = (
+  found: StoredProjectGathering,
+  sync: ProjectTextHints["sync"],
+  read?: ProjectTextHints["read"],
+) => ({
   ...found,
   linkedChats: found.linkedChats.map((one) => ({
     ...one,
     syncCommand:
       one.completeness === null || one.completeness.state === "complete" ? null : sync(one, day(found.window.after)),
   })),
+  leftOut: found.leftOut.map((one) => ({ ...one, readCommand: read?.(one, day(found.window.after)) ?? null })),
 })
 
 export interface ProjectTextHints {
@@ -80,7 +105,19 @@ export interface ProjectTextHints {
   sync: (chat: StoredProjectGathering["linkedChats"][number], since: string) => string | null
   /** How to open a document too large to read here. */
   showDocument: string
+  /** The command that reads a chat left out by its purpose from `since`, or null when no command here can. */
+  read?: (chat: LeftOutChat, since: string) => string | null
 }
+
+/** One line for a chat left out by its purpose: what it holds in the window and how to read it. */
+const leftOutLine = (one: LeftOutChat, read: string | null) =>
+  `${one.title ? `«${one.title}» (${one.ref})` : one.ref}, purpose ${one.purpose}` +
+  `${one.proposed ? `, proposed ${one.proposed}` : ""}, not read: ${heldInWindow(one)}` +
+  (read ? `; read it: ${read}` : `; add --purpose ${one.purpose} to read it here`)
+
+const purposeHintLine = (hint: NonNullable<StoredProjectGathering["purposeHint"]>) =>
+  `${hint.chat} gave ${hint.items} of ${hint.of} items by membership alone; if it is not a work chat, ask the owner ` +
+  `to set its purpose: memo relationships update ${hint.relationship} --purpose <purpose>`
 
 const LABELS: Record<string, string> = {
   "person-only": "  [person only]",
@@ -89,6 +126,7 @@ const LABELS: Record<string, string> = {
 }
 
 const day = (at: number) => new Date(at).toISOString().slice(0, 10)
+const PROPOSED = "  [proposed, not confirmed]"
 
 const FETCH_STATES: Record<string, string> = {
   complete: "synced",
@@ -117,7 +155,7 @@ export const projectEvidenceText = (found: StoredProjectGathering, hints: Projec
     `searched: ${[...lanes.values()].join("; ")}`,
     ...found.items.map(
       (item) =>
-        `${day(item.at)}  ${item.ref}${LABELS[item.context] ?? ""}\n    ${item.text}` +
+        `${day(item.at)}  ${item.ref}${LABELS[item.context] ?? ""}${item.proposed ? PROPOSED : ""}\n    ${item.text}` +
         (item.around ?? [])
           .map((one) => `\n      ${one.found ? "(hit) " : ""}${one.sender ? `${one.sender}: ` : ""}${one.text}`)
           .join(""),
@@ -187,6 +225,14 @@ export const projectEvidenceText = (found: StoredProjectGathering, hints: Projec
           (sync ? ` — sync it: ${sync}` : ""),
       )
     }
+  const proposed = [
+    ...found.linkedChats.flatMap((one) => (one.proposed ? [`${one.title ?? one.ref} (${one.proposed})`] : [])),
+    ...found.members.flatMap((one) => (one.proposed ? [`${one.person} (${one.proposed})`] : [])),
+  ]
+  if (proposed.length) lines.push(`read as proposed, not confirmed: ${proposed.join(", ")}`)
+  for (const one of found.leftOut)
+    lines.push(`left out: ${leftOutLine(one, hints.read?.(one, day(found.window.after)) ?? null)}`)
+  if (found.purposeHint) lines.push(purposeHintLine(found.purposeHint))
   const capped = found.linkedChats.filter((one) => one.capped)
   if (capped.length)
     lines.push(

@@ -101,6 +101,16 @@ export const STATUS_ROWS: Readonly<Record<string, RowShape>> = {
     ],
   },
   "status.signal": { columns: [{ field: "id" }, { field: "version" }] },
-  "status.out-of-scope": { columns: [{ field: "chat" }, { field: "reason" }, { field: "purpose" }] },
+  "status.out-of-scope": {
+    columns: [
+      { field: "chat" },
+      { field: "reason" },
+      { field: "purpose" },
+      { field: "messages", as: "count", tag: "messages" },
+      { field: "first_at", as: "day" },
+      { field: "last_at", as: "day" },
+      { field: "read_command" },
+    ],
+  },
   "status.failed": { columns: [{ field: "signal" }], text: ["why"] },
 }

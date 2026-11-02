@@ -6,6 +6,7 @@ import { parseDuration } from "../../domain/duration.js"
 import { FETCHING } from "../../services/archive.js"
 import type { Services } from "../../services/index.js"
 import type { ProjectChatFetcher } from "../../services/project-gathering.js"
+import { BUILT_IN_PURPOSES, purposeList } from "../../services/project-purposes.js"
 import { projectStatus, STATUS_SIGNALS } from "../../services/project-status/index.js"
 import { gatherStoredProject } from "../../services/stored-project-gathering.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
@@ -82,6 +83,8 @@ const archiveFetcher = (
 }
 
 interface Options {
+  purpose: string[]
+  includeProposed?: boolean
   alias: string[]
   contextQuery: string[]
   contact: string[]
@@ -96,6 +99,10 @@ interface Options {
   syncFirst?: boolean
   syncTime: string
 }
+
+const purposeHelp = (messenger: Messenger) =>
+  `the linked chats' purposes to read, comma separated (${(messenger.purposes?.purposes ?? BUILT_IN_PURPOSES).join(", ")}), ` +
+  "or all; the configured defaults if not given, and a chat left out is counted, never dropped silently"
 
 /** Off MCP: a tool call ends at about a minute, too soon for a sync, which would fail the whole answer. */
 const cliOnly = (flags: string, description: string, value?: string) => {
@@ -127,6 +134,11 @@ export const projectsCommand = (messenger: Messenger): Command => {
       .option("--alias <name>", "another name of the project, searched on its own; repeat for more", collect, [])
       .option("--context-query <words>", "more words that all appear in one text; repeat for another", collect, [])
       .option("--contact <person>", "a name to search, or person:<id> to read what that person wrote", collect, [])
+      .option("--purpose <purposes>", purposeHelp(messenger), purposeList, [])
+      .option(
+        "--include-proposed",
+        "also read chats and members proposed for the project and not yet confirmed; each item they bring is marked",
+      )
       .option("--since-time <time>", "how far back: days (90d, at most 730d) or a start date (2026-09-01)", "60d")
       .option("--before-time <time>", "fixed exclusive end: ISO 8601 timestamp with UTC offset")
       .option("--limit <n>", "new references at most, up to 500; 100 if not given", positiveCount("--limit"))
@@ -164,22 +176,34 @@ export const projectsCommand = (messenger: Messenger): Command => {
               ...(options.contact.length ? { people: options.contact } : {}),
               ...(options.maxPages === undefined ? {} : { maxReads: options.maxPages }),
               ...(options.cursor === undefined ? {} : { checkpoint: options.cursor }),
+              ...(options.purpose.length ? { purposes: options.purpose } : {}),
+              ...(messenger.purposes ? { purposeConfig: messenger.purposes } : {}),
+              ...(options.includeProposed ? { includeProposed: true } : {}),
               ...(fetcher ? { fetcher, maxFetchMs, onFetchProgress: progressNote(context.renderer.note) } : {}),
             }),
           )
         const fetcher = options.syncFirst
           ? archiveFetcher((work) => context.withServices(work, { name: "projects evidence fetch" }), messenger)
           : undefined
-        const found = await context.withStore((store, account) => gather(store, account, fetcher))
-        const parts = projectAnswerParts(options.sinceTime, found)
+        let profile: AccountKey | undefined
+        const found = await context.withStore((store, account) => {
+          profile = account
+          return gather(store, account, fetcher)
+        })
+        const root = rootOf(this)
         const hints = {
           sync: (one: { provider: string }, since: string) =>
             one.provider === messenger.provider
               ? lineOf(this, `projects evidence ${quote(project)} --since-time ${since} --sync-first`)
               : null,
+          read: (one: { provider: string; account: string; chat: string }, since: string) =>
+            one.provider === profile?.provider && one.account === profile.account
+              ? lineOf(this, wordsOf(root, readStep(one.chat, since) as Extract<NextStep, { kind: "command" }>))
+              : null,
           showDocument: "the notes app that imported it",
         }
-        renderAnswer(this, context, itemOf(snakeKeys(withSyncCommands(found, hints.sync)), parts), () =>
+        const parts = projectAnswerParts(options.sinceTime, found, hints)
+        renderAnswer(this, context, itemOf(snakeKeys(withSyncCommands(found, hints.sync, hints.read)), parts), () =>
           projectEvidenceText(found, hints),
         )
       }),
@@ -207,6 +231,7 @@ const statusCommand = (messenger: Messenger): Command =>
       .argument("<project>", "an existing project's id, key, exact name or alias")
       .option("--since-time <time>", "how far back: days (60d, at most 730d) or a start date (2026-09-01)", "60d")
       .option("--before-time <time>", "fixed exclusive end: ISO 8601 timestamp with UTC offset")
+      .option("--purpose <purposes>", purposeHelp(messenger), purposeList, [])
       .option(
         "--context-query <words>",
         "words that all appear in one text; reports their last mention per side. Repeat for another",
@@ -214,23 +239,35 @@ const statusCommand = (messenger: Messenger): Command =>
         [],
       )
       .action(async function (this: Command, project: string) {
-        const options = this.opts<{ sinceTime: string; beforeTime?: string; contextQuery: string[] }>()
+        const options = this.opts<{
+          sinceTime: string
+          beforeTime?: string
+          contextQuery: string[]
+          purpose: string[]
+        }>()
         const context = messengerContext(this, messenger)
-        const found = await context.withStore((store, account) =>
-          projectStatus(store, {
+        let profile: AccountKey | undefined
+        const found = await context.withStore((store, account) => {
+          profile = account
+          return projectStatus(store, {
             project,
             accounts: [account],
             ...projectWindowOf(options.sinceTime),
             ...(options.beforeTime === undefined ? {} : { asOf: projectCutoffTime(options.beforeTime) }),
             contextQueries: options.contextQuery,
-          }),
-        )
+            ...(options.purpose.length ? { purposes: options.purpose } : {}),
+            ...(messenger.purposes ? { purposeConfig: messenger.purposes } : {}),
+          })
+        })
         const root = rootOf(this)
         const hints = {
           sync: (chat: { chatId: string }, since: string) =>
             nextStep("messages.sync", { args: { chat: chat.chatId, since_time: since } }),
-          read: (chat: { chatId: string }, since: string) =>
-            nextStep("messages.list", { args: { chat: chat.chatId, query: `date>=${since}` } }),
+          read: (chat: { chatId: string }, since: string) => readStep(chat.chatId, since),
+          readChat: (chat: { account: AccountKey; chatId: string }, since: string) =>
+            chat.account.provider === profile?.provider && chat.account.account === profile.account
+              ? readStep(chat.chatId, since)
+              : null,
           line: (step: NextStep) => (step.kind === "command" ? lineOf(this, wordsOf(root, step)) : step.why),
         }
         const { item, ...parts } = projectStatusAnswer(found, hints)
@@ -240,6 +277,8 @@ const statusCommand = (messenger: Messenger): Command =>
     projectStatusSchema,
     { row: projectStatusRow(STATUS_SIGNALS) },
   )
+
+const readStep = (chat: string, since: string) => nextStep("messages.list", { args: { chat, query: `date>=${since}` } })
 
 /** A step's words after the tool and the profile, so `lineOf` names the profile the run used. */
 const wordsOf = (root: Command, step: Extract<NextStep, { kind: "command" }>) => {
