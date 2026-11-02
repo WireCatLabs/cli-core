@@ -158,6 +158,20 @@ export {
 export type { EvidenceSource } from "./sqlite/evidence-sources.js"
 export type { Fact, FactInput, FactsStore, PaymentFilter } from "./sqlite/facts.js"
 export type { FileListQuery, FilesStore, StoredFile } from "./sqlite/files.js"
+export type {
+  Allocation,
+  FinanceStore,
+  Invoice,
+  InvoiceDetail,
+  InvoiceInput,
+  InvoiceLine,
+  InvoiceLineInput,
+  OpenTotal,
+  Party,
+  Payment as FinancePayment,
+  PaymentDetail as FinancePaymentDetail,
+  PaymentInput as FinancePaymentInput,
+} from "./sqlite/finance.js"
 export { IMPORTED_DOCUMENT_QUERY, type ImportedDocuments } from "./sqlite/imported-documents.js"
 export type { Involvement, InvolvementStore } from "./sqlite/involvements.js"
 export type {

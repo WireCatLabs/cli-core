@@ -2,6 +2,16 @@ export { bareCheck, type CheckWords, checkWords } from "./domain/checks.js"
 export type { CounterField, CounterObservation, CounterObservations, CounterState } from "./domain/counters.js"
 export { COUNTER_FIELDS, counterValue, observedCounters } from "./domain/counters.js"
 export {
+  FINANCE_REVIEWS,
+  type FinanceReview,
+  INVOICE_DIRECTIONS,
+  INVOICE_STATUSES,
+  type InvoiceDirection,
+  type InvoiceStatus,
+  MONEY_DIRECTIONS,
+  type MoneyDirection,
+} from "./domain/finance.js"
+export {
   type FormattedText,
   type HtmlFormatting,
   type MarkdownFormatting,
@@ -13,6 +23,14 @@ export { type Markup, parseMarkdown } from "./domain/markdown.js"
 export { parseMarkdownSpans } from "./domain/markdown-spans.js"
 export type { MessageLink, MessagePermalink } from "./domain/message-link.js"
 export type * from "./domain/models.js"
+export {
+  CURRENCY_SCALES,
+  currencyOf,
+  type Money,
+  minorUnits,
+  moneyLabel,
+  moneyOf,
+} from "./domain/money.js"
 export { countedPoll } from "./domain/polls.js"
 export {
   FOLDER_PROVIDERS,

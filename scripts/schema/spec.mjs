@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
+import { financeTables } from "./finance.mjs"
 import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
@@ -1678,6 +1679,13 @@ const GROUPS = [
     "A task and ticket system for people and agents: projects with keys, typed and prioritised tasks, assignees that are people or bots, and the facts recorded along the way (`facts`). A promise is a task of type `promise`; a question is a task of type `question` whose answer is linked.",
     ["reminders:knowledge_reminders"],
     NEW.tasks,
+  ],
+  [
+    "finance",
+    "Money",
+    "Invoices, payments and what settles what, in exact minor units per currency. Totals are per currency: the store converts nothing.",
+    [],
+    financeTables,
   ],
   [
     "actions",

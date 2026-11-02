@@ -1,3 +1,4 @@
+import { invoiceLine, paymentLine } from "../../domain/finance.js"
 import { filesAccountSql, providerLabel, providerNamed } from "../../domain/providers.js"
 import { oneLine, type RefState, type RefSummary, type RefSummaryKind } from "../../domain/ref-summaries.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
@@ -238,6 +239,25 @@ const READERS = {
     body: bodyOr(body, "x.statement"),
   })),
   bot: byId("bot", "bots", () => ({ title: "x.name" })),
+  // Money is formatted with its currency's scale in JS, so SQL hands `titleOf` the fields as JSON.
+  invoice: byId("invoice", "invoices", () => ({
+    title:
+      "json_object('id', x.id, 'number', x.number, 'direction', x.direction, 'total', x.total, " +
+      `'currency', x.currency, 'counterpartyName', ${subjectName("x.counterparty_type", "x.counterparty_id")}, ` +
+      "'dueDate', x.due_date, 'status', x.status, 'review', x.review)",
+    holder: "(SELECT name FROM projects WHERE id = x.project_id)",
+    at: "x.created_at",
+    deleted: "x.deleted_at",
+  })),
+  payment: byId("payment", "payments", () => ({
+    title:
+      "json_object('direction', x.direction, 'amount', x.amount, 'currency', x.currency, 'partyName', " +
+      `CASE x.direction WHEN 'in' THEN ${subjectName("x.payer_type", "x.payer_id")} ` +
+      `ELSE ${subjectName("x.payee_type", "x.payee_id")} END, 'date', x.payment_date, 'review', x.review)`,
+    holder: "(SELECT name FROM projects WHERE id = x.project_id)",
+    at: "x.created_at",
+    deleted: "x.deleted_at",
+  })),
 } satisfies Record<string, Reader>
 
 type ReaderName = keyof typeof READERS
@@ -334,6 +354,16 @@ const refOfAccount = (reference: Reference): { provider: string | null; account:
       ? { provider: reference.provider, account: null }
       : { provider: null, account: null }
 
+/** A summary never throws: fields that no longer parse, after `flat` made them one line, read as no title. */
+const fieldsOf = <T>(json: string | null, line: (fields: T) => string): string | null => {
+  if (json === null) return null
+  try {
+    return line(JSON.parse(json) as T)
+  } catch {
+    return null
+  }
+}
+
 const titleOf = (kind: RefSummaryKind, reference: Reference, found: Found): string | null => {
   switch (kind) {
     case "message": {
@@ -343,6 +373,10 @@ const titleOf = (kind: RefSummaryKind, reference: Reference, found: Found): stri
     case "memory":
     case "fact":
       return cut(found.title, MEMORY_TITLE_CHARS)
+    case "invoice":
+      return fieldsOf(found.title, invoiceLine)
+    case "payment":
+      return fieldsOf(found.title, paymentLine)
     case "folder":
       return reference.type === "folder" && reference.path !== null && found.title !== null
         ? `${found.title}/${reference.path}`

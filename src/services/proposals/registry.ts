@@ -3,6 +3,7 @@ import { mayDecide, type Refusal } from "../../store/decisions.js"
 import type { MessageStore } from "../../store/store.js"
 import { actionKind } from "./kinds/action.js"
 import { factKind } from "./kinds/fact.js"
+import { invoiceKind, paymentKind } from "./kinds/finance.js"
 import { findingsKind } from "./kinds/findings.js"
 import { keyDocumentKind } from "./kinds/key-document.js"
 import { memoryKind } from "./kinds/memory.js"
@@ -130,6 +131,8 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     relationshipUpdateKind(store),
     keyDocumentKind(store),
     factKind(store),
+    invoiceKind(store),
+    paymentKind(store),
     memoryKind(store),
     findingsKind(store),
   ])
