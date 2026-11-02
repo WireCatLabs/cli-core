@@ -58,6 +58,7 @@ const OTHERS: Entry[] = [
   validation("extraction.text-too-long", "the text is too long for memory extraction"),
   validation("file.locked", "another process holds the file's lock"),
   ["mail.source-failed", "provider_error", "the mail server refused or did not complete a request"],
+  ["mail.search-refused", "provider_error", "the mail server refused to search a folder"],
   ["mirror.partial", "provider_error", "some mirrored files were not synced"],
   ["profile.wrong-account", "authentication_error", "the signed-in source account does not match this profile"],
   validation("push.too-many-files", "the folder holds more files than one push takes"),

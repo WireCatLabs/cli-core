@@ -387,6 +387,70 @@ describe("calendar commands", () => {
     })
   })
 
+  it("search all finds a stored message beside the calendar's event and names every account it read", async () => {
+    const notes: string[] = []
+    const app = { command: "gcal", appName: "gcal-cli", envPrefix: "GCAL", description: "", version: "0.0.0" }
+    const { cli, store, program } = await setup({ app, note: (text) => notes.push(text) })
+    await cli("sync")
+    const telegram = { provider: "telegram", account: "500" }
+    await store.chats.saveChats(telegram, [
+      { id: "c1", title: "Team", kind: "group", unreadCount: null, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(
+      telegram,
+      "c1",
+      [
+        {
+          id: "m1",
+          chatId: "c1",
+          senderId: "ana",
+          senderName: "Ana",
+          timestamp: new Date(NOW).toISOString(),
+          editedAt: null,
+          text: "the roadmap draft is ready",
+          outgoing: false,
+          attachments: [],
+          replyTo: null,
+          forwardedFrom: null,
+          reactions: null,
+        },
+      ],
+      { via: "test" },
+    )
+    await store.searchIndex.fillSearchIndex()
+
+    const found = await cli("search", "all", "roadmap")
+    expect(new Set(found.items.map(({ kind }) => kind))).toEqual(new Set(["message", "event"]))
+    expect(found.items.find(({ kind }) => kind === "event")?.untrusted).toEqual(["title", "excerpt"])
+    expect(found.meta).toMatchObject({ accounts: expect.arrayContaining(["telegram:500", "google-calendar:owner-1"]) })
+    expect(notes[0]).toMatch(/^searched: /)
+    expect(notes[0]).toContain("telegram:500")
+    expect(notes[0]).toContain("google-calendar:owner-1")
+    expect(notes).toContain(
+      "meetings not searched: meetings are searched only when --source names a meeting account, zoom or meetings",
+    )
+    await expect(cli("search", "all", "roadmap", "--only", "mail")).rejects.toMatchObject({ code: "validation_error" })
+
+    const locked = (await setup({ app, locked: true })).cli
+    await expect(locked("search", "all", "roadmap", "--source", "telegram")).rejects.toMatchObject({
+      details: { reason: "profile.locked" },
+    })
+    expect(
+      program()
+        .commands.find((one) => one.name() === "search")
+        ?.commands.map((one) => one.name()),
+    ).toEqual(["all", "events"])
+  })
+
+  it("search has no all without the CLI's identity", async () => {
+    const { program } = await setup()
+    expect(
+      program()
+        .commands.find((one) => one.name() === "search")
+        ?.commands.map((one) => one.name()),
+    ).toEqual(["events"])
+  })
+
   it("people: an event's attendees, this week's with counts, and a link to the owner", async () => {
     const { cli } = await setup()
     await cli("sync")

@@ -12,7 +12,7 @@ import { GMAIL_ALL_MAIL } from "./folders.js"
 import { ruleInput } from "./rule-input.js"
 import { mailCriteriaOf } from "./server-query.js"
 import type { MailServerAccess } from "./server-search.js"
-import type { MailSource } from "./source.js"
+import type { MailSource, Quick } from "./source.js"
 import { syncMail } from "./sync.js"
 import { type FakeMail, type FakeMailbox, fakeMailSource } from "./testing/index.js"
 
@@ -25,6 +25,22 @@ const app = {
   messenger: false,
 }
 const MINE: AccountKey = { provider: "email", account: "me@example.com" }
+
+const NULL_ATTACHMENT_FIELDS = [
+  "title",
+  "url",
+  "width",
+  "height",
+  "duration",
+  "providerRef",
+  "localPath",
+  "normalizedText",
+  "extraction",
+  "extractor",
+  "extractionError",
+  "contentSha256",
+  "extractedAt",
+]
 
 const fake = (uid: string, day: number, fields: Partial<FakeMail>): FakeMail => ({
   uid,
@@ -260,12 +276,99 @@ describe("mail server search", () => {
         account: { address: MINE.account },
         since: new Date(Date.UTC(2026, 9, 1)),
       })
-      expect(synced.partial).toEqual({ completed: 1, left: 0 })
+      expect(synced.partial).toEqual({ completed: 1, left: 0, stuck: 0 })
       const whole = await opened.mail.email(account, "m2")
       expect(whole?.attachments).toEqual([expect.objectContaining({ name: "figures.txt" })])
       expect(whole?.metadata).toEqual({})
       expect((await opened.mail.partialEmails(account, 10)).total).toBe(0)
       expect(asked).not.toContain(SERVER_BOUNDS.textBytes)
+    } finally {
+      await opened.close()
+    }
+  })
+
+  it("gives up at once on a partial email whose stored place holds another message, read under its UIDVALIDITY", async () => {
+    const attachment = { name: "figures.txt", mime: "text/plain", content: `Quarterly figures ${"x".repeat(400_000)}` }
+    const { json, mailbox, path } = await setup([fake("2", 10, { attachment })])
+    await json("search", "messages", "invoice")
+    const asked: Quick[] = []
+    const { find: _find, ...plain } = fakeMailSource(mailbox)
+    const elsewhere: MailSource = {
+      ...plain,
+      identify: () => ({ messageId: "someone-else", threadId: "t-else" }),
+      fetchRaw: async (items, options) => {
+        asked.push(...items)
+        return plain.fetchRaw(items, options)
+      },
+    }
+    const opened = await openStore({ path })
+    try {
+      const sync = () => syncMail(elsewhere, opened, { account: { address: MINE.account }, since: new Date(0) })
+      expect((await sync()).partial).toEqual({ completed: 0, left: 0, stuck: 1 })
+      expect(asked.filter(({ uid }) => uid === "2")).toEqual([expect.objectContaining({ validity: "12" })])
+      expect((await sync()).partial).toEqual({ completed: 0, left: 0, stuck: 1 })
+      expect(asked.filter(({ uid }) => uid === "2")).toHaveLength(1)
+      const account = (await opened.accounts.storedAccount(MINE))?.id as number
+      expect(await opened.mail.partialEmails(account, 10)).toMatchObject({ total: 0, stuck: 1 })
+      expect((await opened.mail.email(account, "m2"))?.metadata).toMatchObject({ partial: { tries: 1, stuck: true } })
+    } finally {
+      await opened.close()
+    }
+  })
+
+  it("gives up on a partial email the server keeps not giving after three syncs", async () => {
+    const attachment = { name: "figures.txt", mime: "text/plain", content: `Quarterly figures ${"x".repeat(400_000)}` }
+    const { json, mailbox, path } = await setup([fake("2", 10, { attachment })])
+    await json("search", "messages", "invoice")
+    mailbox.unreadable = ["2"]
+    const opened = await openStore({ path })
+    try {
+      const { find: _find, ...plain } = fakeMailSource(mailbox)
+      const source: MailSource = { ...plain, identify: () => ({ messageId: "m2", threadId: "t2" }) }
+      const sync = () => syncMail(source, opened, { account: { address: MINE.account }, since: new Date(0) })
+      expect((await sync()).partial).toEqual({ completed: 0, left: 1, stuck: 0 })
+      expect((await sync()).partial).toEqual({ completed: 0, left: 1, stuck: 0 })
+      expect((await sync()).partial).toEqual({ completed: 0, left: 0, stuck: 1 })
+    } finally {
+      await opened.close()
+    }
+  })
+
+  it("never stores a partial copy over an email already stored whole", async () => {
+    const { path } = await setup([])
+    const opened = await openStore({ path })
+    try {
+      const account = (await opened.accounts.storedAccount(MINE))?.id as number
+      const save = (metadata: Record<string, unknown>, attachments: { name: string }[]) =>
+        opened.mail.saveThread({
+          accountId: account,
+          externalId: "t9",
+          now: 1,
+          emails: [
+            {
+              externalId: "m9",
+              subject: "Figures",
+              from: null,
+              sentAt: null,
+              bodyText: "text",
+              metadata: metadata as never,
+              attachments: attachments.map(({ name }, position) => ({
+                ...Object.fromEntries(NULL_ATTACHMENT_FIELDS.map((field) => [field, null])),
+                position,
+                kind: "file",
+                name,
+                mime: "text/plain",
+                size: 4,
+                text: "figs",
+              })) as never,
+            },
+          ],
+        })
+      await save({}, [{ name: "figures.txt" }])
+      await save({ partial: { bytes: 262_144 } }, [])
+      const kept = await opened.mail.email(account, "m9")
+      expect(kept?.attachments).toEqual([expect.objectContaining({ name: "figures.txt" })])
+      expect(kept?.metadata).toEqual({})
     } finally {
       await opened.close()
     }

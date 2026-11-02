@@ -9,6 +9,75 @@ shape of this file.
 
 ### Added
 
+- **`scanProjectLinks(store, { project, sources, since, write, scorers?, threshold?, limit?, purposes? })` and
+  `LinkScorer` (`@wirecat/cli-core/services`): memo proposes a project's chats, mail threads and people itself.**
+  Six scorers in `SCORERS` (`chat-title`, `alias-hits`, `member-chats`, `member-dialog`, `chat-senders`,
+  `mail-thread`) and the shared mail domain rule as `email-domain` in `PERSON_SCORERS`. Signals combine as
+  1 − Π(1 − w); at most 20 new proposals a run by the rule bot `memo-scan`, never confirmed by themselves. Each
+  carries `score` and `signals` (scorer, weight, why: ids and counts only). Linked and rejected pairs are skipped,
+  a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
+- **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
+  was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
+
+## 0.550.0 — 02.11.2026
+
+### Changed — may break callers
+
+- **cli-core registers `mail.search-refused`.** A CLI that listed it in its own reasons gets "listed twice" from
+  `defineReasons` and must drop its entry; mail does.
+- **`MailStore` has `markPartial(accountId, externalId, mark)`, and `partialEmails` answers `stuck` and leaves out an
+  email marked `partial.stuck`.** A store of its own must add both. `PartialOutcome` (`syncMail`'s `partial`) gains
+  `stuck`, and `partial` is answered whenever any of `completed`, `left` or `stuck` is not 0.
+- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
+  cli-base bumps it to 0.74.0 together with cli-core.
+
+### Fixed
+
+- **A partial email the server no longer gives at its stored place is given up on instead of read whole on every
+  sync.** `completePartial` reads it at its newest stored location under that location's UIDVALIDITY (the new optional
+  `Quick.validity`, which a source checks before reading), counts each failed read in `metadata.partial.tries`, and
+  after 3, or at once when the place holds another message, marks it `partial.stuck`: it stays readable as it is, is
+  counted in `partial.stuck`, and no longer takes one of the 100 places a run reads, so it never holds back newer ones.
+  An email with no stored location is given up on at once.
+- **A server search never stores a partial copy over an email already stored whole.** A sync in another process could
+  save the email between the search's check and its write; the write then dropped every attachment. The store now
+  keeps a live whole email as it is when a copy marked `partial` is saved over it.
+- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
+  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
+  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
+  `--brief` and `--full` too, and refuse them together as the others do.
+
+### Added
+
+- **`--compact`: one line per item for an agent, from the same answer `--json` prints.** `messages list <chat>
+  --compact` prints `#<id> · 10-01 09:12 · Анна · <text>` under one header line that names the shared ref prefix
+  (`ref: msg:max/500/-1001/<id>`), what every row has in common (the chat's title), the date span and the zone. Rows
+  from several chats keep their whole refs. Text stays on one line with control and direction characters made
+  visible, and is cut at 400 characters with `…(+N)`; `--full` keeps it whole. The paging, `missing`, the next steps
+  and an incomplete answer follow as `# more:`, `# missing:`, `# next:` and `# complete: false` lines on stdout, and
+  each command line in them carries `--compact` again. On 1 000 messages of one chat it is about 48 % of the JSON
+  bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
+  `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
+  - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
+    (`answerEntity(cmd, name, schema, { row })`), its app's (`rows: { name: shape }` in the program definition,
+    which also draws an app entity listed inside one thing), the shared one in `SHARED_ROWS` (`message`,
+    `message.summary`, `message.hit`, `chat`), or the generic row: key, ref or id · title, name or path · state,
+    status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
+    options)` is pure, for an app that prints its own answers.
+  - What a command prints without `renderAnswer` stays JSON under `--compact`.
+
+## 0.549.0 — 02.11.2026
+
+### Added
+
+- **A calendar CLI can mount `search all`.** Given `app` (its identity) beside `messages`, `addCalendarCommands` adds
+  `search all` beside `search events`: calendar events, messages from the other WireCat tools and notes in the shared
+  store, and a meeting account's transcripts only when `--source` names one, ranked together as a messenger's
+  `search all` ranks them. It takes the same `--only`, `--source`, `--max-meetings`, `--limit`, `--page`, `--exact`
+  and `--timezone` (`searchAllOptions`, now shared with the messenger's), refuses mail as the messenger's does, and
+  answers each account it read in `meta.accounts`. Without a messenger server it reads the local store only. A process
+  locked to one profile reads only its own calendar and refuses `--source`. `CalendarCommandDeps` gains `app`, `note`
+  (the "searched:" and "not searched:" lines for a person) and a `view` argument to `write`, the text a person reads.
 - **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
   `mail.search-refused` (`SEARCH_REFUSED`, `searchRefused`) when the server answers SEARCH with NO or BAD. `syncMail`
   reads the other folders, answers `state: "partial"` with `refusedFolders`, and for the refused folder marks no mail
@@ -101,15 +170,6 @@ shape of this file.
 - **`knowledge.updateRelation(scope, id, { role?, purpose?, by })`** sets a relationship's role and purpose; `null`
   clears one. The owner's change applies; an agent's is a `relationship_update` proposal, listed and decided through
   the proposal registry, and `knowledge.decideRelationUpdate(id, decision)` decides it in one transaction.
-- **`scanProjectLinks(store, { project, sources, since, write, scorers?, threshold?, limit?, purposes? })` and
-  `LinkScorer` (`@wirecat/cli-core/services`): memo proposes a project's chats, mail threads and people itself.**
-  Six scorers in `SCORERS` (`chat-title`, `alias-hits`, `member-chats`, `member-dialog`, `chat-senders`,
-  `mail-thread`) and the shared mail domain rule as `email-domain` in `PERSON_SCORERS`. Signals combine as
-  1 − Π(1 − w); at most 20 new proposals a run by the rule bot `memo-scan`, never confirmed by themselves. Each
-  carries `score` and `signals` (scorer, weight, why: ids and counts only). Linked and rejected pairs are skipped,
-  a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
-- **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
-  was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
 
 ### Changed — may break callers
 
@@ -292,22 +352,6 @@ shape of this file.
   **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
   the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
   fact in `metadata.decision`, on an evidence findings receipt.
-- **`--compact`: one line per item for an agent, from the same answer `--json` prints.** `messages list <chat>
-  --compact` prints `#<id> · 10-01 09:12 · Анна · <text>` under one header line that names the shared ref prefix
-  (`ref: msg:max/500/-1001/<id>`), what every row has in common (the chat's title), the date span and the zone. Rows
-  from several chats keep their whole refs. Text stays on one line with control and direction characters made
-  visible, and is cut at 400 characters with `…(+N)`; `--full` keeps it whole. The paging, `missing`, the next steps
-  and an incomplete answer follow as `# more:`, `# missing:`, `# next:` and `# complete: false` lines on stdout, and
-  each command line in them carries `--compact` again. On 1 000 messages of one chat it is about 48 % of the JSON
-  bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
-  `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
-  - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
-    (`answerEntity(cmd, name, schema, { row })`), its app's (`rows: { name: shape }` in the program definition,
-    which also draws an app entity listed inside one thing), the shared one in `SHARED_ROWS` (`message`,
-    `message.summary`, `message.hit`, `chat`), or the generic row: key, ref or id · title, name or path · state,
-    status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
-    options)` is pure, for an app that prints its own answers.
-  - What a command prints without `renderAnswer` stays JSON under `--compact`.
 
 ### Changed — may break callers
 
@@ -350,8 +394,6 @@ shape of this file.
   the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
-- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
-  cli-base bumps it to 0.74.0 together with cli-core.
 
 ### Fixed
 
@@ -365,10 +407,6 @@ shape of this file.
   `starred:`.
 - **An inclusive start keeps a message sent exactly at it.** `messages list 'date>=2026-10-01'` skipped a message
   sent at the first millisecond of the day, and `date<="…"` one sent at that moment.
-- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
-  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
-  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
-  `--brief` and `--full` too, and refuse them together as the others do.
 
 ### Security
 
