@@ -40,7 +40,16 @@ export type {
   ScorePreset,
 } from "./domain/rankings-options.js"
 export { rankingOptions } from "./domain/rankings-options.js"
-export { canonicalReference, formatReference, parseReference, type Reference } from "./domain/references.js"
+export {
+  canonicalReference,
+  formatReference,
+  looksLikeReference,
+  parseReference,
+  REF_KINDS,
+  type Reference,
+  type RefKindName,
+  type RefKindSpec,
+} from "./domain/references.js"
 export { normalizeTag, TAG_TYPES, type TagType } from "./domain/tags.js"
 export { type AppErrors, DETAILS as CORE_DETAILS, failureContext, REASONS as CORE_REASONS } from "./errors/reasons.js"
 export {

@@ -561,6 +561,81 @@ describe("the shared read commands", () => {
     expect(foreign.code).toBe(2)
   })
 
+  it("**take a chat: or msg: reference wherever a chat is named**, and refuse one of another account or messenger", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const online = async () => fake
+    const never = async (): Promise<MessengerAdapter> => {
+      throw new Error("--offline must never connect")
+    }
+    await call(["chats", "list", "--json"], online, env)
+    await call(["messages", "list", "Book", "--json"], online, env)
+
+    for (const [bare, named] of [
+      [
+        ["messages", "list", "7"],
+        ["messages", "list", "chat:chat/500/7"],
+      ],
+      [
+        ["messages", "context", "7", "2"],
+        ["messages", "context", "chat:chat/500/7", "2"],
+      ],
+      [
+        ["messages", "context", "7", "2"],
+        ["messages", "context", "msg:chat/500/7/2"],
+      ],
+    ] as const)
+      for (const [mode, connect] of [
+        [["--json"], online],
+        [["--offline", "--json"], never],
+      ] as const) {
+        const asId = withoutMeta(await call([...bare, ...mode], connect, env))
+        const asRef = withoutMeta(await call([...named, ...mode], connect, env))
+        expect(asId.code).toBe(0)
+        expect(asRef.stdout.map((line) => ({ ...JSON.parse(line), args: undefined }))).toEqual(
+          asId.stdout.map((line) => ({ ...JSON.parse(line), args: undefined })),
+        )
+      }
+
+    const refused = async (argv: string[]) => {
+      const { code, stderr } = await call([...argv, "--json"], online, env)
+      expect(code).toBe(2)
+      return JSON.parse(stderr.at(-1) ?? "").error
+    }
+    for (const argv of [
+      ["messages", "list", "chat:chat/501/7"],
+      ["messages", "list", "chat:chat/501/7", "--offline"],
+      ["messages", "show", "msg:chat/501/7/3"],
+      ["messages", "context", "chat:chat/501/7", "2"],
+    ])
+      expect(await refused(argv)).toMatchObject({
+        reason: "ref.wrong-account",
+        message: expect.stringMatching(/^(chat:chat\/501\/7|msg:chat\/501\/7\/3) belongs to account 501; /),
+      })
+    expect(await refused(["messages", "list", "chat:chat/501/7", "--offline"])).toMatchObject({
+      message:
+        "chat:chat/501/7 belongs to account 501; this profile is account 500. Profiles signed in to 501: none here",
+    })
+    expect(await refused(["messages", "list", "chat:telegram/1/2"])).toMatchObject({
+      reason: "ref.wrong-provider",
+      message: "chat:telegram/1/2 is a Telegram chat; open it with tg <profile> messages list chat:telegram/1/2",
+    })
+    expect(await refused(["messages", "list", "document:4", "--offline"])).toMatchObject({ reason: "ref.wrong-kind" })
+  })
+
+  it("read a negative chat id as the chat, with no -- before it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    for (const argv of [
+      ["messages", "list", "-1001", "--json"],
+      ["messages", "list", "--json", "-1001"],
+      ["messages", "show", "-1001", "2", "--json"],
+    ]) {
+      const { stderr } = await call(argv, async () => fake, env)
+      expect(stderr.join("\n")).not.toMatch(/unknown option|too many arguments/)
+    }
+  })
+
   it("refuse a --limit that is not a whole number, quoting what was typed", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
