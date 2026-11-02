@@ -75,6 +75,7 @@ export const addRemind = (
     if (!opts.dryRun && deps.source && !command.optsWithGlobals<{ offline?: boolean }>().offline) {
       // A reminder from what the store already holds beats none: a failed sync is said in meta and the run goes on.
       try {
+        // Feeds wait for `sync`: a timer runs this every few minutes, and a feed's server is not Google.
         const report = await syncCalendars(deps.source, deps.store, {
           accountId: deps.accountId,
           now: at,
