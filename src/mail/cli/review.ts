@@ -211,7 +211,6 @@ export const mailReviewCommand = (mail: MailReads): Command =>
       `${mail.app.command} personal review "date>2h"`,
       `${mail.app.command} personal review --new`,
       `${mail.app.command} personal review --unanswered 1d`,
-      `${mail.app.command} personal review --waiting 7d`,
     ],
     effects: LOCAL_READ,
     partial: true,

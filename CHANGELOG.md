@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Mail `review` gives three examples**, as the command lint asks; `--waiting` stays in its help.
+
 ## 0.555.0 — 02.11.2026
 
 ### Added
