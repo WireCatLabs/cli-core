@@ -11,90 +11,6 @@ shape of this file.
 
 ### Added
 
-- **A calendar CLI can mount `search all`.** Given `app` (its identity) beside `messages`, `addCalendarCommands` adds
-  `search all` beside `search events`: calendar events, messages from the other WireCat tools and notes in the shared
-  store, and a meeting account's transcripts only when `--source` names one, ranked together as a messenger's
-  `search all` ranks them. It takes the same `--only`, `--source`, `--max-meetings`, `--limit`, `--page`, `--exact`
-  and `--timezone` (`searchAllOptions`, now shared with the messenger's), refuses mail as the messenger's does, and
-  answers each account it read in `meta.accounts`. Without a messenger server it reads the local store only. A process
-  locked to one profile reads only its own calendar and refuses `--source`. `CalendarCommandDeps` gains `app`, `note`
-  (the "searched:" and "not searched:" lines for a person) and a `view` argument to `write`, the text a person reads.
-- **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
-  `mail.search-refused` (`SEARCH_REFUSED`, `searchRefused`) when the server answers SEARCH with NO or BAD. `syncMail`
-  reads the other folders, answers `state: "partial"` with `refusedFolders`, and for the refused folder marks no mail
-  deleted, changes no membership, moves no resume point and leaves `mail_coverage` as it was. Before, a mail source that
-  read the refusal as "nothing found" made the folder look empty.
-- **Server search reads big mail text-first, and the next sync completes it.** A candidate is read up to
-  `SERVER_BOUNDS.textBytes` (256 KiB, `fetchRaw(items, { bytes })`); one cut short is stored with its text and no
-  attachments, marked `metadata.partial`, and `meta.issues` says `search.server-partial`. `syncMail` then reads up to
-  100 partial emails whole and clears the mark (`partial: { completed, left }`; `completePartial: false` skips it).
-  `MailStore.partialEmails` lists them. No store migration: the mark is a JSON key older builds ignore.
-- **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
-  `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
-  (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
-  contents in an error. gcal, drive and mail each kept a copy of this reader.
-- **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
-  `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
-- **iCalendar feeds as read-only calendars.** With `deps.feeds` (`icsFeeds`), `calendars add <url> [--title]` follows a
-  public holiday calendar, a sports schedule or a published `.ics` address, and `calendars remove <calendar>` stops.
-  `sync` reads each feed after the provider (`syncWithFeeds`), so its events show in `events list`,
-  `search events`, `overlapping:` and `events remind`. Repeating events are expanded here (`expandSeries`: RRULE in
-  the event's own zone, RDATE, EXDATE and overrides). The address is a secret input, kept by the CLI and never
-  printed; a fetch follows redirects only to https and stops at 10 MB and 30 s. `readIcs` takes
-  `{ overrides: true }` and returns the calendar's `name`. See `docs/dev/CALENDARS.md`, "Feeds".
-- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
-  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
-  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
-  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
-  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
-  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
-  `setHistoryIncluded`; `Saving` takes `historyLimits`.
-- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
-  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
-  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
-  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
-  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
-  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
-- **A command's own history handler learns whether each batch reached the store**: `HistoryBatchHandler` takes
-  `saved`, a promise of the same `true` or `false` the messenger gets, so a link can count only what was kept.
-- **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
-  `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
-  commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
-  account is refused, naming the account it belongs to and the profiles of this CLI the store saw on it; it never
-  switches account. One of another messenger is refused with the command that opens it (`open it with tg <profile>
-  messages list chat:telegram/…`), and another kind (`document:413` given as a chat) with what the argument takes.
-- **`event:<id>` and `meeting:<account>/<meeting>[/<transcript>[/<cue>]]` parse with `parseReference`** and
-  `canonicalReference`, as every other kind: `event:N` was printed by the calendar and person answers and could not be
-  read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
-  `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
-  `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
-- **`messages list` reads a window bounded on both sides, offline too.** The query takes a start and an end,
-  `'date>=2026-10-01 date<2026-10-20'` or `'date:[2026-10-01 TO 2026-10-19]'`, and `id>` with `date<`. A start reads
-  forward, oldest first, and stops at the end; an end alone reads back from it, newest page first, as before.
-  `--offline` and a messenger whose history is read from the store (WhatsApp) now answer both ways from the store
-  instead of refusing. A forward cursor carries the end, `after:<id>~<epoch ms>`, so the next page stops at the same
-  place. `--since`, `--since-time`, `--until`, `--until-time`, `--after-time` and `--before-time` on `messages list`
-  fail with the query form to type instead. The store's `messages()` window takes `after` (a message or a moment)
-  and `until`.
-- **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
-  (`@wirecat/cli-core/services`) and `mayDecide` (`@wirecat/cli-core/store`).** The registry lists every pending
-  proposal newest first across kinds (`relationship`, `key_document`, `fact`, `memory`, `findings` for evidence
-  findings, and `action` for every other stored proposal), and decides many ids at once, each on its own: the answer
-  lists `decided` and `refused`, and one refusal never undoes the others. A new kind registers itself with its id
-  `prefix` or the `stored` proposal kinds it owns; nothing else changes. `parseProposalIds` reads
-  `17070-17079,fact:500-502,17080/f2` and refuses a range across prefixes. Unconfirmed agent and rule links show as
-  `link:<id>` (relationships) and `key:<id>` (key documents) until the store moves them.
-- **`knowledge.proposeRelation(scope, input, by)`**: an agent's or a rule's relationship is a stored `relationship`
-  proposal for the owner, not a link; the same pending pair returns the proposal already held. Removing a link to a
-  project, or rejecting any suggested link, leaves a rejected `relationship` proposal, so a later scan can skip it.
-- **`proposedActions.list({ kinds, except, project, proposedBy })`**, `proposedBy` on `facts.list` and
-  `memories.list`, `order: "created"` on `facts.list`, and the bot's `kind` (`agent` or `rule`) on the author of a
-  proposed action, a fact, a memory and an evidence findings batch; bots may have the kind `rule`, and an `Author` may
-  name it.
-- **`knowledge.decideLinkProposal(id, decision)`** decides a stored `relationship` or `key_document` proposal, and
-  **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
-  the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
-  fact in `metadata.decision`, on an evidence findings receipt.
 - **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
   it, when, provider, account, the CLI that opens it and whether it is `available`, `deleted` or `unavailable`. One
   statement per kind present, offline. A malformed ref comes back `unknown`, never thrown, so one bad row cannot fail
@@ -105,57 +21,44 @@ shape of this file.
 - **`ProviderEntry.opens`**: the read command that opens each kind of ref (`{ document: "documents show" }`). A CLI
   writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
   this build does not know is dropped, so an older build still reads a newer entry.
+- **`--compact`: one line per item for an agent, from the same answer `--json` prints.** `messages list <chat>
+  --compact` prints `#<id> · 10-01 09:12 · Анна · <text>` under one header line that names the shared ref prefix
+  (`ref: msg:max/500/-1001/<id>`), what every row has in common (the chat's title), the date span and the zone. Rows
+  from several chats keep their whole refs. Text stays on one line with control and direction characters made
+  visible, and is cut at 400 characters with `…(+N)`; `--full` keeps it whole. The paging, `missing`, the next steps
+  and an incomplete answer follow as `# more:`, `# missing:`, `# next:` and `# complete: false` lines on stdout, and
+  each command line in them carries `--compact` again. On 1 000 messages of one chat it is about 48 % of the JSON
+  bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
+  `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
+  - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
+    (`answerEntity(cmd, name, schema, { row })`), its app's (`rows: { name: shape }` in the program definition,
+    which also draws an app entity listed inside one thing), the shared one in `SHARED_ROWS` (`message`,
+    `message.summary`, `message.hit`, `chat`), or the generic row: key, ref or id · title, name or path · state,
+    status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
+    options)` is pure, for an app that prints its own answers.
+  - What a command prints without `renderAnswer` stays JSON under `--compact`.
 - **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
   the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
   purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
 - **`knowledge.updateRelation(scope, id, { role?, purpose?, by })`** sets a relationship's role and purpose; `null`
   clears one. The owner's change applies; an agent's is a `relationship_update` proposal, listed and decided through
   the proposal registry, and `knowledge.decideRelationUpdate(id, decision)` decides it in one transaction.
+- **A calendar CLI can mount `search all`.** Given `app` (its identity) beside `messages`, `addCalendarCommands` adds
+  `search all` beside `search events`: calendar events, messages from the other WireCat tools and notes in the shared
+  store, and a meeting account's transcripts only when `--source` names one, ranked together as a messenger's
+  `search all` ranks them. It takes the same `--only`, `--source`, `--max-meetings`, `--limit`, `--page`, `--exact`
+  and `--timezone` (`searchAllOptions`, now shared with the messenger's), refuses mail as the messenger's does, and
+  answers each account it read in `meta.accounts`. Without a messenger server it reads the local store only. A process
+  locked to one profile reads only its own calendar and refuses `--source`. `CalendarCommandDeps` gains `app`, `note`
+  (the "searched:" and "not searched:" lines for a person) and a `view` argument to `write`, the text a person reads.
 
 ### Changed — may break callers
 
-- **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
-  candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
-- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
-  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
-  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
-  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
-  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
-  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
-  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
-  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
-- **A write to a calendar the account may only read refuses before anything is asked or journaled**
-  (`calendar.read-only`): create, quick add, import, update, delete, respond and move, for a feed and for a provider's
-  `reader` or `free-busy` calendar alike. Before, only the target of a move was checked; the provider refused the rest.
-  `calendars busy` and `search --backend server` leave feed calendars out.
-- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
-  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
-  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
-  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
-  the reason instead.
-- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
-  no longer found by that title; give its id or a part of the title.
-- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
-  provider clash message now shows (`telegram (messages, from tg)`).
-- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
-  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
-  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
-  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
-  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
-  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
-  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
-  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
-  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
-  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
-  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
-  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
-  check read. A host passes the owner only when the owner runs the command, and
-  the agent's bot and reason otherwise.
-  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
-  decider.
 - **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
   keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
   (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
+- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
+  cli-base bumps it to 0.74.0 together with cli-core.
 - **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
   upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
   link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
@@ -165,32 +68,10 @@ shape of this file.
 
 ### Fixed
 
-- **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
-  only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
-  `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
-  decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
-  two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
-- **`page.next` of `messages list` and `messages comments` runs as written.** It repeated the query's `id`/`date`
-  bound beside `--cursor`, which the command refuses as two starting points; it now keeps only `topic:` and
-  `starred:`.
-- **An inclusive start keeps a message sent exactly at it.** `messages list 'date>=2026-10-01'` skipped a message
-  sent at the first millisecond of the day, and `date<="…"` one sent at that moment.
-
-### Security
-
-- **An agent can no longer decide its own proposal.** Before, `facts.accept`/`reject`,
-  `memories.confirm`, `knowledge.confirmRelation`, `proposedActions.approve`/`reject`, `approveAsTask` and both
-  findings reviews never asked who decided, so over MCP an agent could confirm what it had proposed itself. Every one
-  of them, and the registry, now runs `mayDecide`: the owner always may; an agent needs a reason
-  (`proposal.reason-required`), is refused its own bot's proposal (`proposal.own`), a rule scorer's proposal and one
-  that names no author (`proposal.owner-only`), and every decision when the host turns agent decisions off
-  (`proposals.agent-decisions-off`). An agent can no longer add a memory already `confirmed`, mark its own memory
-  stale, write a confirmed project link itself, or remove a link. A link records only free-text provenance, which
-  anyone can write, so only the owner decides an unconfirmed link or removes a link; the rejected record a removal
-  leaves names who removed it. Findings an agent accepted for the owner record that agent, not the owner. Only the
-  owner removes or reverses an accepted fact or another bot's memory; an agent withdraws only its own row while it is
-  proposed. Turning agent decisions off now holds for every store method, not only the registry, and a bot is the
-  same bot whatever its letter case (`Claude-Code` is `claude-code`).
+- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
+  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
+  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
+  `--brief` and `--full` too, and refuse them together as the others do.
 
 ## 0.548.0 — 02.11.2026
 
@@ -293,22 +174,6 @@ shape of this file.
   **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
   the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
   fact in `metadata.decision`, on an evidence findings receipt.
-- **`--compact`: one line per item for an agent, from the same answer `--json` prints.** `messages list <chat>
-  --compact` prints `#<id> · 10-01 09:12 · Анна · <text>` under one header line that names the shared ref prefix
-  (`ref: msg:max/500/-1001/<id>`), what every row has in common (the chat's title), the date span and the zone. Rows
-  from several chats keep their whole refs. Text stays on one line with control and direction characters made
-  visible, and is cut at 400 characters with `…(+N)`; `--full` keeps it whole. The paging, `missing`, the next steps
-  and an incomplete answer follow as `# more:`, `# missing:`, `# next:` and `# complete: false` lines on stdout, and
-  each command line in them carries `--compact` again. On 1 000 messages of one chat it is about 48 % of the JSON
-  bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
-  `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
-  - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
-    (`answerEntity(cmd, name, schema, { row })`), its app's (`rows: { name: shape }` in the program definition,
-    which also draws an app entity listed inside one thing), the shared one in `SHARED_ROWS` (`message`,
-    `message.summary`, `message.hit`, `chat`), or the generic row: key, ref or id · title, name or path · state,
-    status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
-    options)` is pure, for an app that prints its own answers.
-  - What a command prints without `renderAnswer` stays JSON under `--compact`.
 
 ### Changed — may break callers
 
@@ -351,8 +216,6 @@ shape of this file.
   the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
-- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
-  cli-base bumps it to 0.74.0 together with cli-core.
 
 ### Fixed
 
@@ -366,10 +229,6 @@ shape of this file.
   `starred:`.
 - **An inclusive start keeps a message sent exactly at it.** `messages list 'date>=2026-10-01'` skipped a message
   sent at the first millisecond of the day, and `date<="…"` one sent at that moment.
-- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
-  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
-  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
-  `--brief` and `--full` too, and refuse them together as the others do.
 
 ### Security
 
