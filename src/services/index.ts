@@ -1,5 +1,6 @@
 import { type BotCheckService, botCheckService } from "../botcheck/service.js"
 
+export { paymentTitle } from "../meetings/index.js"
 export { amountOf, amountsOf, type TaskAmount } from "../search/task-signature.js"
 export { AGENDA_DEFAULTS } from "./agenda.js"
 export { type ChatCoverage, chatCoverage } from "./chat-coverage.js"
@@ -18,6 +19,32 @@ export type {
 } from "./context-evidence.js"
 export { contextEvidenceFingerprint, createContextEvidenceReader } from "./context-evidence.js"
 export { excerpt } from "./excerpt.js"
+export {
+  aliasHits,
+  BUILT_IN_PURPOSES,
+  chatSenders,
+  chatTitle,
+  combinedScore,
+  DEFAULT_LIMIT as DEFAULT_LINK_SCAN_LIMIT,
+  DEFAULT_THRESHOLD as DEFAULT_LINK_SCAN_THRESHOLD,
+  emailDomain,
+  type LinkCandidate,
+  type LinkScorer,
+  mailThread,
+  memberChats,
+  memberDialog,
+  PERSON_SCORERS,
+  PERSON_THRESHOLD as PERSON_LINK_SCAN_THRESHOLD,
+  SCAN_BOT,
+  SCORERS,
+  type ScanInput as LinkScanInput,
+  type ScannedProject,
+  type ScannedProposal,
+  type ScanResult as LinkScanResult,
+  type ScorerInput,
+  type Signal as LinkSignal,
+  scanProjectLinks,
+} from "./link-scorers/index.js"
 export type { MediaArchiveOptions, MediaArchivePorts } from "./media-archive.js"
 export { archiveMedia, checkMediaArchive } from "./media-archive.js"
 export type { MediaArchiveEntry, MediaIdentity } from "./media-archive-manifest.js"
@@ -446,6 +473,7 @@ export {
   type Decided,
   type Decision,
   emptyProposalRegistry,
+  FACT_SUMMARIES,
   type ProposalFilter,
   type ProposalKind,
   type ProposalRegistry,

@@ -21,6 +21,7 @@ export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
     cited: "reference",
     reference,
     anySubject: true,
+    payments: true,
   })
 
 /** Who decided: the owner, or an agent the host let decide for the owner, with its reason. */

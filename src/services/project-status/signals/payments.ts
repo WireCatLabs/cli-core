@@ -1,34 +1,36 @@
-import { excerpt } from "../items.js"
+import { type Payment, paymentTitle } from "../../../meetings/index.js"
 import type { StatusItem, StatusSignal } from "../types.js"
 
-export interface PaymentsData {
-  statement: string
+export interface PaymentsData extends Payment {
+  title: string
+  /** The fact's review status: proposed or accepted. */
   status: string
 }
 
-/** The type the payment slice adds to facts; until it lands, no fact has it and this reads nothing. */
-const PAYMENT = "payment"
 const HOLDING = new Set(["proposed", "accepted"])
 
 /** Payment facts of the project and its children, proposed or accepted. Only what someone recorded. */
 export const payments: StatusSignal<PaymentsData> = {
   id: "payments",
-  version: 1,
+  version: 2,
   scope: "project",
   read: async (context) => {
     const projects = [context.project.ref, ...context.project.children.map((child) => child.ref)]
-    const facts = (await Promise.all(projects.map((project) => context.store.facts.list({ project })))).flat()
+    const facts = (
+      await Promise.all(projects.map((project) => context.store.facts.list({ project, type: "payment", limit: 500 })))
+    ).flat()
     return facts
-      .filter((fact) => (fact.type as string) === PAYMENT && HOLDING.has(fact.status))
+      .filter((fact) => fact.payment !== null && HOLDING.has(fact.status))
       .map(
         (fact): StatusItem<PaymentsData> => ({
           signal: "payments",
           chat: null,
           at: fact.occurredAt ?? fact.createdAt,
           who: null,
-          evidence: [{ ref: fact.ref, fingerprint: null }],
+          // The fact first, then what it cites, so an amount read from a cited message is not counted twice.
+          evidence: [fact.ref, ...fact.evidence].map((ref) => ({ ref, fingerprint: null })),
           basis: "fact",
-          data: { statement: excerpt(fact.statement), status: fact.status },
+          data: { ...(fact.payment as Payment), title: paymentTitle(fact), status: fact.status },
         }),
       )
   },

@@ -98,6 +98,27 @@ shape of this file.
     status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
+- **`scanProjectLinks(store, { project, sources, since, write, scorers?, threshold?, limit?, purposes? })` and
+  `LinkScorer` (`@wirecat/cli-core/services`): memo proposes a project's chats, mail threads and people itself.**
+  Six scorers in `SCORERS` (`chat-title`, `alias-hits`, `member-chats`, `member-dialog`, `chat-senders`,
+  `mail-thread`) and the shared mail domain rule as `email-domain` in `PERSON_SCORERS`. Signals combine as
+  1 − Π(1 − w); at most 20 new proposals a run by the rule bot `memo-scan`, never confirmed by themselves. Each
+  carries `score` and `signals` (scorer, weight, why: ids and counts only). Linked and rejected pairs are skipped,
+  a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
+- **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
+  was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
+- **Payments are facts of type `payment`.** The amount (text, two decimals), ISO 4217 currency, direction (`to_us` or
+  `from_us`), counterparty ref or name, due date, state (`expected`, `paid`, `cancelled`) and item ride in
+  `metadata.payment`, read back as `Fact.payment`; no migration. A payment fact cites 1 to 8 references. Paid is a new
+  fact that supersedes the expected one, so the history stays. Only the owner accepts or rejects a payment:
+  `mayDecide` takes `ownerOnly`. `facts.list({ payment: { open, direction, state } })` filters them; `open` is
+  expected and still holding. `paymentTitle(fact)` reads "1 200 EUR to us from Ana, due 31.10 (expected)".
+  - **Agents stage payments as findings of kind `payment`** in `projects actions add`; confirming one writes and
+    accepts the fact, and a batch holding one is the owner's to decide. The inbox summarises each finding through
+    `FACT_SUMMARIES`, one row per kind. `projects status` lists payment facts with their title and adds the expected
+    ones to `money.open`, counting an ask the fact cites once.
+  - **For an app's `facts list`: `PAYMENT_QUERY_FIELDS` (`open:true`, `direction:to_us`, `state:paid`) and
+    `paymentFilterOf(terms)`.**
 
 ### Changed — may break callers
 
@@ -128,6 +149,10 @@ shape of this file.
   provider clash message now shows (`telegram (messages, from tg)`).
 - **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
   cli-base bumps it to 0.74.0 together with cli-core.
+- **`FACT_TYPES` gains `payment`, and a `Finding` may be a `PaymentFinding`.** A caller that lists facts with a fixed
+  type list, or reads `finding.title` on every finding that is not a fact, narrows by `kind` first. A memo older than
+  this release refuses a payment fact in `facts list`; ship memo's bump the same day. `MEETING_FACT_TYPES` is gone:
+  `FACT_TYPES` is the one list.
 
 ### Fixed
 

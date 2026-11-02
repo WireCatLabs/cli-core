@@ -1,0 +1,53 @@
+import { formatReference, parseReference } from "../../domain/references.js"
+import { contactRef, personRefOf, sameAccount } from "./shared.js"
+import type { LinkCandidate, LinkScorer } from "./types.js"
+
+const WEIGHT = 0.5
+const LARGE_GROUP_WEIGHT = 0.2
+const LARGE_GROUP = 30
+const MIN_MESSAGES = 5
+const READ_LIMIT = 2000
+
+/**
+ * A person who wrote 5 or more messages in the window in one of the project's confirmed chats, found by the sender's
+ * identity, never by the name a message shows. In a group of more than 30 people writing there says less.
+ */
+export const chatSenders: LinkScorer = {
+  id: "chat-senders",
+  version: 1,
+  candidates: async ({ store, project, confirmed, sources, since, owner, signal }) => {
+    if (!project) return []
+    const found: LinkCandidate[] = []
+    for (const chat of confirmed.chats) {
+      const reference = parseReference(chat)
+      if (reference.type !== "chat") continue
+      const key = sources.find((source) => sameAccount(source, reference))
+      if (!key) continue
+      signal?.throwIfAborted()
+      const page = await store.messages.messages(key, reference.chat, { limit: READ_LIMIT, since, outgoing: false })
+      const senders = new Map<string, { count: number; last: string }>()
+      for (const message of page.items) {
+        if (message.senderId === null || message.senderIsChat) continue
+        const id = String(message.senderId)
+        senders.set(id, { count: (senders.get(id)?.count ?? 0) + 1, last: String(message.id) })
+      }
+      const size = Math.max((await store.roster.members(key, reference.chat)).length, senders.size)
+      const weight = size > LARGE_GROUP ? LARGE_GROUP_WEIGHT : WEIGHT
+      for (const [id, { count, last }] of senders) {
+        if (count < MIN_MESSAGES) continue
+        const person = await personRefOf(store, key.provider, id)
+        if (!person || person === owner) continue
+        found.push({
+          from: person,
+          to: project.ref,
+          kind: "member-of",
+          weight,
+          why: `${count} messages since ${since.slice(0, 10)} in a project chat (${chat})${size > LARGE_GROUP ? `, a group of ${size}` : ""}`,
+          evidence: [formatReference({ ...reference, type: "message", message: last })],
+          identity: contactRef(key.provider, id),
+        })
+      }
+    }
+    return found
+  },
+}
