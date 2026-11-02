@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { hitFiles } from "./attachments.js"
-import { isLocator, parseLocator } from "./locator.js"
 import type { Attachment } from "./models.js"
+import { chatReferenceOf } from "./ref-arguments.js"
 
 export type MessagePermalink =
   | { url: string; access: "public" | "restricted" | "unknown"; reason: null }
@@ -30,24 +30,19 @@ export const fileLinks = (attachments: readonly Attachment[]): FileLink[] =>
     reason: "unsupported_provider",
   }))
 
+/** A chat and a message id, or one reference naming both; a reference's account is for the caller to check. */
 export const messageLinkTarget = (reference: string, message: string | undefined, provider: string) => {
-  if (isLocator(reference)) {
+  const named = chatReferenceOf(reference, provider, "message")
+  if (named?.message !== undefined) {
     if (message !== undefined) throw new CliError("validation_error", "a locator already names the message")
-    let target: ReturnType<typeof parseLocator>
-    try {
-      target = parseLocator(reference)
-    } catch {
-      throw new CliError("validation_error", "expected msg:<provider>/<account>/<chat>/<message>")
-    }
-    if (target.provider !== provider)
-      throw new CliError("validation_error", "that locator belongs to another messenger")
-    validMessageId(target.message)
-    return { chat: target.chat, message: target.message, account: target.account }
+    validMessageId(named.message)
+    return { chat: named.chat, message: named.message, account: named.account, text: named.text }
   }
   if (message === undefined) throw new CliError("validation_error", "which message? give its id after the chat")
   validMessageId(message)
+  if (named) return { chat: named.chat, message, account: named.account, text: named.text }
   if (!reference.trim()) throw new CliError("validation_error", "which chat? give its id or title")
-  return { chat: reference, message, account: undefined }
+  return { chat: reference, message, account: undefined, text: reference }
 }
 
 const validMessageId = (id: string): void => {

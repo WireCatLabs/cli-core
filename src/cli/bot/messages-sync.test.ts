@@ -92,6 +92,22 @@ describe("bot messages sync", () => {
     expect(kept.answer.items).toHaveLength(250)
   })
 
+  it("takes the bot's own chat reference as the chat, and refuses another bot's", async () => {
+    const before = await call(["messages", "list", "chat:chat-bot/900/-100", "--offline", "--json"])
+    expect(before.stderr).toContain("the account of this profile is not known yet")
+    await call(["messages", "sync", "-100", "--limit", "10", "--json"])
+
+    const byId = await call(["messages", "list", "-100", "--offline", "--json"])
+    const byRef = await call(["messages", "list", "chat:chat-bot/900/-100", "--offline", "--json"])
+    expect(byRef.answer.items).toEqual(byId.answer.items)
+    const other = await call(["messages", "list", "chat:chat-bot/901/-100", "--offline", "--json"])
+    expect(other.code).toBe(2)
+    expect(JSON.parse(other.stderr).error).toMatchObject({
+      reason: "ref.wrong-account",
+      message: "chat:chat-bot/901/-100 belongs to account 901; profile sales is account 900",
+    })
+  })
+
   it("stops at --last and at --since-time, and refuses both together", async () => {
     expect(
       (await call(["messages", "sync", "-100", "--last", "50", "--page-size", "20", "--json"])).answer.item,
