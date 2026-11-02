@@ -3,9 +3,9 @@ import { positiveReadInteger } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
 import { read, writeBatch } from "./transaction.js"
 
-export const meetingLanguagesOver = ({
-  database,
-}: StoreContext): Required<Pick<MeetingStore, "fillTranscriptLanguages">> => ({
+export type MeetingLanguageStore = Required<Pick<MeetingStore, "fillTranscriptLanguages">>
+
+export const meetingLanguagesOver = ({ database }: StoreContext): MeetingLanguageStore => ({
   async fillTranscriptLanguages({ accountId, apply, now }) {
     positiveReadInteger(accountId, "accountId")
     const found = read(database, () => {

@@ -27,13 +27,13 @@ const seeded = async () => {
   const input = sampleMeeting()
   const transcript = input.transcripts[0] as (typeof input.transcripts)[0]
   transcript.language = null
-  transcript.rows = [russian, russian, "Let me share my screen, okay?"].map((text, position) => ({
-    ...(transcript.rows[0] as (typeof transcript.rows)[0]),
-    position,
-    startMs: position * 1000,
-    endMs: position * 1000 + 900,
-    text,
-  }))
+  const [first] = transcript.rows
+  if (!first) throw new Error("missing invented row")
+  transcript.rows = [first, { ...first }, { ...first }]
+  transcript.rows.forEach((row, position) => {
+    Object.assign(row, { position, startMs: position * 1000, endMs: position * 1000 + 900 })
+    row.text = position === 2 ? "Let me share my screen, okay?" : russian
+  })
   await store.saveMeeting(input)
   return { database, store }
 }

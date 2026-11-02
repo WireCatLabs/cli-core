@@ -40,7 +40,7 @@ import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
 import { INDEX_CODES, type Indexable, indexedText, meetingRowid, summaryOf } from "./meeting-index-values.js"
-import { meetingLanguagesOver } from "./meeting-languages.js"
+import { type MeetingLanguageStore, meetingLanguagesOver } from "./meeting-languages.js"
 import { meetingParticipantSearchOver } from "./meeting-participant-search.js"
 import { meetingPreparationContextOver } from "./meeting-preparation-context.js"
 import { meetingPreparationKnowledgeOver } from "./meeting-preparation-knowledge.js"
@@ -790,7 +790,8 @@ export type StoredMeetings = MeetingStore &
   MeetingSearchIndexStore &
   MeetingStatsStore &
   MeetingReviewStore &
-  MeetingChatLinesStore
+  MeetingChatLinesStore &
+  MeetingLanguageStore
 
 /** The `MeetingStore` of `src/meetings/` over the shared store. */
 export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
