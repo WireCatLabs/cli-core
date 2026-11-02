@@ -107,9 +107,10 @@ const lockProcess =
 /**
  * `serve` in the background: `start`, `stop`, `restart`, `status`, `logs`. Without a unit, `start`
  * runs `serve` as a process of its own; with one — `install`, a systemd user unit or a launchd
- * agent — it goes through systemd or launchd. **Nothing starts until `start` is typed** (NEED-9):
- * `install` only writes the file. What the server does stays each CLI's; `options.process` says how
- * to find, start and stop it.
+ * agent — it goes through systemd or launchd. **Nothing starts now until `start` is typed** (NEED-9):
+ * `install` writes the file and enables it, so it starts with every session from the next login (or boot,
+ * under linger) until `uninstall`. What the server does stays each CLI's; `options.process` says how to find,
+ * start and stop it.
  */
 export const serverCommand = (messenger: Messenger, options: ServerOptions = {}): Command => {
   const { app } = messenger
@@ -313,8 +314,13 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       const gaveUpReason =
         gaveUp === undefined ? undefined : Object.entries(EXIT_CODES).find(([, code]) => code === gaveUp)?.[0]
       const flood = new FloodMemory(floodPathFor(app, unit.profile, context.env)).read()
+      const startsAtLogin = isInstalled && state.enabled === true
       const unitLine = isInstalled
-        ? `Unit: ${tilde(unit.path, context.env)} — ${state.detail ?? (state.active ? "active" : "inactive")}.`
+        ? `Unit: ${tilde(unit.path, context.env)} — ${state.detail ?? (state.active ? "active" : "inactive")}, ${
+            startsAtLogin
+              ? "starts at login."
+              : `does not start at login — \`${app.command} ${unit.profile} server install\` turns that on.`
+          }`
         : `No unit installed — \`${app.command} ${unit.profile} server install\` adds one, for starting under systemd or launchd.`
       say(
         {
@@ -336,6 +342,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
           ...(gaveUp !== undefined
             ? { stopped: { exitCode: gaveUp, reason: gaveUpReason ?? null, restarts: false } }
             : {}),
+          startsAtLogin,
           unit: { name: unit.name, path: unit.path, installed: isInstalled, ...state },
           flood: { deadlines: flood.deadlines, sendBlock: flood.sendBlock ?? null },
         },
@@ -392,19 +399,37 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       examples: [`${app.command} personal server install`],
     }),
   )
-    .description("write a systemd user unit or a launchd agent for this profile; starts nothing")
-    .action(function (this: Command) {
-      const { context, platform, unit, say } = prepare(this)
+    .summary("install this profile's background server to start at every login")
+    .description(
+      "write a systemd user unit or a launchd agent for this profile and have it start at every login; starts nothing now",
+    )
+    .action(async function (this: Command) {
+      const { context, platform, unit, each, say } = prepare(this)
       const replaced = existsSync(unit.path)
       writeSecurely(unit.path, platform.text(unit, app), 0o644)
       platform.prepare?.(unit)
-      say({ profile: unit.profile, unit: unit.name, path: unit.path, command: unit.command, replaced }, [
-        `${replaced ? "Rewrote" : "Wrote"} ${tilde(unit.path, context.env)} — nothing started.`,
-        `It runs: ${unit.command.map((word) => tilde(word, context.env)).join(" ")}`,
-        `Start it now: ${app.command} ${unit.profile} server start · ${platform.atLogin(unit)}`,
-        // Suggested, never turned on: an agent reading chats every morning is the owner's choice (NEED-161).
-        `A daily follow-up review is off. To turn it on: ${app.command} ${unit.profile} schedule agent follow-ups claude "${followUpsPrompt(app.command)}" --at 08:30`,
-      ])
+      // A unit of moved folders runs a development checkout, which must not start at every login on the owner's keyring.
+      const moved = Object.keys(locationVariables(app, context.env)).length > 0
+      if (!moved) await each(platform.install(unit))
+      say(
+        {
+          profile: unit.profile,
+          unit: unit.name,
+          path: unit.path,
+          command: unit.command,
+          replaced,
+          startsAtLogin: !moved,
+        },
+        [
+          `${replaced ? "Rewrote" : "Wrote"} ${tilde(unit.path, context.env)} — ${
+            moved ? "with moved folders it does not start at login" : "it starts at every login"
+          }, nothing started now.`,
+          `It runs: ${unit.command.map((word) => tilde(word, context.env)).join(" ")}`,
+          `Start it now: ${app.command} ${unit.profile} server start · never at login: ${app.command} ${unit.profile} server uninstall`,
+          // Suggested, never turned on: an agent reading chats every morning is the owner's choice (NEED-161).
+          `A daily follow-up review is off. To turn it on: ${app.command} ${unit.profile} schedule agent follow-ups claude "${followUpsPrompt(app.command)}" --at 08:30`,
+        ],
+      )
     })
 
   grantsAuthority(
@@ -413,9 +438,9 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       examples: [`${app.command} personal server uninstall`],
     }),
   )
-    .description("remove this profile's unit; stop it first")
+    .description("remove this profile's unit, so it no longer starts at login; stop it first")
     .action(async function (this: Command) {
-      const { context, platform, unit, say } = prepare(this)
+      const { context, platform, unit, each, say } = prepare(this)
       installed(unit)
       if ((await platform.state(unit)).active) {
         throw new CliError(
@@ -423,6 +448,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
           `the unit is running — \`${app.command} ${unit.profile} server stop\` first`,
         )
       }
+      await each(platform.uninstall(unit))
       rmSync(unit.path, { force: true })
       say({ profile: unit.profile, unit: unit.name, path: unit.path, removed: true }, [
         `Removed ${tilde(unit.path, context.env)}.`,

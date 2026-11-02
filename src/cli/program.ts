@@ -288,11 +288,14 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   }
   const sigint = () => interrupted("SIGINT")
   const sigterm = () => interrupted("SIGTERM")
+  // A sync, or a one-shot's wait on work it started (`schedule run`), outlives its reader: a desktop that closed the
+  // pipe 18 minutes in must not lose the sync, and the run record still says how it ended. Its later lines go
+  // nowhere. A listening command's stream is its work, so it still ends.
+  let outlivesReader = false
   const pipeError = (error: NodeJS.ErrnoException) => {
-    if (error.code === "EPIPE") {
-      signalExit = 0
-      control.abort(error)
-    }
+    if (error.code !== "EPIPE" || outlivesReader || (phased && !listens)) return
+    signalExit = 0
+    control.abort(error)
   }
   const externalAbort = () => {
     const cancelled = new CliError("cancelled", "command cancelled", { retryable: false })
@@ -474,6 +477,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     const { lifetime, cooperative: stopsAtItsPace, partial: answersPartial } = metaOf(action)
     const persistent = lifetime === "persistent"
     listens = persistent
+    outlivesReader = stopsAtItsPace === true
     const interactiveLogin = !headless && lifetime === "interactive"
     const timeout = flags.timeout ?? (commandEnv[envName(definition.app, "TIMEOUT")]?.trim() || undefined)
     // A background fetch was asked to outlive the shell; only an explicit --timeout bounds it.
