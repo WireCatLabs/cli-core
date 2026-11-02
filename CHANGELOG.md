@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Imports through one envelope (store version 47).** `ingest(store, envelope, { account, dryRun })` in
+  `./services` takes the v1 records envelope (`schema_version`, `source { provider, account, batch_id }`, `records[]`
+  with `key`, `type`, `external_id`, `operation` `upsert` or `delete`, `fields`, `revision`, `relations[]`), or a JSONL
+  file through `envelopeOfJsonl`. Its JSON Schema (Draft 2020-12) is `RECORDS_ENVELOPE_SCHEMA` and
+  `@wirecat/cli-core/schemas/records-envelope.v1.schema.json`. Each record is kept in the new `records` table, unique
+  per account, type and external id: the same import twice writes nothing, a lower revision is refused, a delete is
+  soft, and a field that looks like a secret is refused. The receipt counts created, updated, unchanged, deleted and
+  refused records, and each error carries a JSON pointer and a stable code.
+- **An import never writes confirmed money.** An `invoice` or `payment` record becomes a proposal by the bot `import`,
+  decided in the proposal inbox. A reference to a record not yet imported waits for it, and a person or organization
+  record is linked only by the owner (`store.records.map`), never by name. `store.records` lists and reads records,
+  waiting and flagged ones too.
+
 ## 0.558.0 — 02.11.2026
 
 ### Changed — may break callers
@@ -22,21 +37,6 @@ shape of this file.
 - **`projects status` reads money from `store.finance`.** The `payments` signal (version 3) lists payments and open
   invoices by their `payment:` and `invoice:` refs, `status` being `proposed` or `confirmed`; the open total counts
   confirmed invoices only. Finance rows gain `evidence`, and `addInvoice` and `addPayment` take it.
-
-### Added
-
-- **Imports through one envelope (store version 47).** `ingest(store, envelope, { account, dryRun })` in
-  `./services` takes the v1 records envelope (`schema_version`, `source { provider, account, batch_id }`, `records[]`
-  with `key`, `type`, `external_id`, `operation` `upsert` or `delete`, `fields`, `revision`, `relations[]`), or a JSONL
-  file through `envelopeOfJsonl`. Its JSON Schema (Draft 2020-12) is `RECORDS_ENVELOPE_SCHEMA` and
-  `@wirecat/cli-core/schemas/records-envelope.v1.schema.json`. Each record is kept in the new `records` table, unique
-  per account, type and external id: the same import twice writes nothing, a lower revision is refused, a delete is
-  soft, and a field that looks like a secret is refused. The receipt counts created, updated, unchanged, deleted and
-  refused records, and each error carries a JSON pointer and a stable code.
-- **An import never writes confirmed money.** An `invoice` or `payment` record becomes a proposal by the bot `import`,
-  decided in the proposal inbox. A reference to a record not yet imported waits for it, and a person or organization
-  record is linked only by the owner (`store.records.map`), never by name. `store.records` lists and reads records,
-  waiting and flagged ones too.
 
 ## 0.557.0 — 02.11.2026
 
