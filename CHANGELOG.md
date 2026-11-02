@@ -39,6 +39,17 @@ shape of this file.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
 
+### Changed — may break callers
+
+- **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
+  `AI_AGENT`, `CLAUDECODE`, `OPENCLAW_SHELL=exec` or another agent marker is set is now treated like an MCP agent's
+  call: `mcp.authority` and `bot.api` stay owner-only, and a level may only go down (`readonly` → `deny`, never
+  `readonly` → `allow`). Unsetting a permission, replacing `permissions` whole, or `--defaults`/`--personal`/`--bot`
+  accept only `deny`. Before, Hermes or OpenClaw could undo the read-only the desktop app set, from any chat message
+  that talked it into running `config set`. The owner changes them in a terminal outside the agent; the desktop app
+  already runs the tools without these variables. Not a sandbox: an agent with a general shell can still edit the
+  file itself, so keep its own command approvals on.
+
 ## 0.543.0 — 02.11.2026
 
 ### Added
