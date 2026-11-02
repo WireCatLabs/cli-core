@@ -201,3 +201,81 @@ describe("an agent cannot decide its own proposal", () => {
     })
   })
 })
+
+describe("an agent cannot get round the check", () => {
+  it("SEC-1: by adding a confirmed memory, or by marking its own memory stale", async () => {
+    const store = await opened()
+    const note = await store.notes.addNote({ text: "Prefers mornings" })
+    const input = {
+      kind: "preference" as const,
+      body: "Prefers mornings",
+      scope: "work" as const,
+      evidence: [note.ref],
+    }
+    await expect(store.memories.add({ ...input, author: agent, status: "confirmed" })).rejects.toMatchObject({
+      details: { reason: "proposal.owner-only" },
+    })
+    const memory = await store.memories.add({ ...input, author: agent })
+    await expect(store.memories.markStale(memory.ref, self)).rejects.toMatchObject(own)
+    expect((await store.memories.get(memory.ref)).status).toBe("proposed")
+  })
+
+  it("SEC-2: by writing a confirmed relationship link itself", async () => {
+    const store = await opened()
+    const project = await store.knowledge.addProject({ name: "Harbour" })
+    const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
+    await expect(
+      store.notes.addLink({
+        from: studio.ref,
+        to: project.ref,
+        kind: "member-of",
+        origin: "suggested",
+        confirmed: true,
+      }),
+    ).rejects.toMatchObject({ details: { reason: "proposal.decider-required" } })
+    await expect(
+      store.notes.addLink({ from: studio.ref, to: project.ref, kind: "member-of", by: self }),
+    ).rejects.toMatchObject({ details: { reason: "proposal.owner-only" } })
+    const proposal = await store.knowledge.relate(null, {
+      from: studio.ref,
+      to: project.ref,
+      kind: "member-of",
+      by: agent,
+    })
+    expect(proposal).toMatchObject({ kind: "relationship", status: "proposed" })
+    expect(await store.knowledge.relations(null, studio.ref)).toEqual([])
+  })
+
+  it("SEC-3: by naming another bot in a link's provenance", async () => {
+    const store = await opened()
+    const project = await store.knowledge.addProject({ name: "Harbour" })
+    const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
+    const link = await store.knowledge.relate(null, {
+      from: studio.ref,
+      to: project.ref,
+      kind: "member-of",
+      confirmed: false,
+      provenance: "agent:someone-else",
+      by: "owner",
+    })
+    await expect(store.knowledge.confirmRelation(null, link.id, self)).rejects.toMatchObject({
+      details: { reason: "proposal.owner-only" },
+    })
+  })
+
+  it("SEC-4: by removing a link the owner confirmed", async () => {
+    const store = await opened()
+    const project = await store.knowledge.addProject({ name: "Harbour" })
+    const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
+    const link = await store.knowledge.relate(null, {
+      from: studio.ref,
+      to: project.ref,
+      kind: "member-of",
+      by: "owner",
+    })
+    await expect(store.knowledge.removeRelation(null, link.id, self)).rejects.toMatchObject({
+      details: { reason: "proposal.owner-only" },
+    })
+    expect(await store.knowledge.relations(null, studio.ref)).toHaveLength(1)
+  })
+})
