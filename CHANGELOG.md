@@ -15,6 +15,29 @@ shape of this file.
   stays missing, an `unversioned` one (no released `skill install` wrote it) and a symlink are left as they are, and a
   failure is one note, never a failed command. The version tried is kept in `<state>/skill-refresh.json`. Off in a
   moved run, under vitest, during `skill`, and with `<PREFIX>_NO_SKILL_REFRESH=1`; `--quiet` keeps the line out.
+- **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
+  `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
+  commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
+  account is refused, naming the account it belongs to and the profiles of this CLI the store saw on it; it never
+  switches account. One of another messenger is refused with the command that opens it (`open it with tg <profile>
+  messages list chat:telegram/…`), and another kind (`document:413` given as a chat) with what the argument takes.
+- **`event:<id>` and `meeting:<account>/<meeting>[/<transcript>[/<cue>]]` parse with `parseReference`** and
+  `canonicalReference`, as every other kind: `event:N` was printed by the calendar and person answers and could not be
+  read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
+  `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
+  `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
+
+### Changed — may break callers
+
+- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
+  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
+  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
+  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
+  the reason instead.
+- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
+  no longer found by that title; give its id or a part of the title.
+- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
+  provider clash message now shows (`telegram (messages, from tg)`).
 
 ## 0.543.0 — 02.11.2026
 

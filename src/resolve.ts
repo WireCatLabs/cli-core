@@ -1,8 +1,11 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
-import type { Chat, Contact, Id } from "./domain/models.js"
+import type { Chat, Contact, Id, Provider } from "./domain/models.js"
+import { contactReferenceOf } from "./domain/ref-arguments.js"
 
 /** The part of a store that `pickPerson` reads. */
 export interface PeopleLookup {
+  /** Whose identities these are; a `contact:` reference of another provider is refused when it is set. */
+  provider?: Provider
   get(id: Id): Contact | undefined
   /** Everyone known, in any order. */
   all(): Contact[]
@@ -48,6 +51,12 @@ export const pickChat = (reference: string, chats: Chat[]): Chat => {
  */
 export const pickPerson = (reference: string, people: PeopleLookup): Contact => {
   const trimmed = reference.trim()
+  const contact = contactReferenceOf(trimmed, people.provider)
+  if (contact !== undefined) {
+    const named = people.get(contact)
+    if (named) return named
+    throw new CliError("not_found", `no person ${contact} in what this account has seen`)
+  }
   const known = people.get(trimmed)
   if (known) return known
   if (isId(trimmed)) throw new CliError("not_found", `no person ${trimmed} in what this account has seen`)

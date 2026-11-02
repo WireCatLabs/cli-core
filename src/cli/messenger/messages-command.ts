@@ -122,13 +122,8 @@ export const messagesCommand = (messenger: Messenger): Command => {
 
   const readWindow = async (command: Command, chat: string, message: string | undefined, window: Window) => {
     const context = messengerContext(command, messenger)
-    const target = targetOf(messenger, chat, message)
     const { found, reader } = await context.withServices(async (services) => ({
-      found: await services.messages.around(
-        isLocator(chat) ? chat : target.chat,
-        isLocator(chat) ? undefined : target.message,
-        window,
-      ),
+      found: await services.messages.around(chat, message?.trim(), window),
       reader: await services.messages.reader(),
     }))
     const hearing = await hearForCommand(context, messenger, found, false)
@@ -200,13 +195,8 @@ export const messagesCommand = (messenger: Messenger): Command => {
       const requested = threadRequest(this).thread
       if (requested) {
         const context = messengerContext(this, messenger)
-        const target = targetOf(messenger, chat, message)
         const { found, reader } = await context.withServices(async (services) => ({
-          found: await services.messages.thread(
-            isLocator(chat) ? chat : target.chat,
-            isLocator(chat) ? undefined : target.message,
-            { ...requested, before, after },
-          ),
+          found: await services.messages.thread(chat, message?.trim(), { ...requested, before, after }),
           reader: await services.messages.reader(),
         }))
         if (found.fallback) context.renderer.note(`thread context uses time neighbours: ${found.fallback}`)
@@ -249,20 +239,6 @@ const count = (value: string): number => {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 0) throw new CliError("validation_error", `"${value}" is not a count`)
   return parsed
-}
-
-/** A chat and a message id, or one locator naming both — which must be this messenger's. */
-const targetOf = (messenger: Messenger, chat: string, message: string | undefined) => {
-  if (isLocator(chat)) {
-    if (message !== undefined) throw new CliError("validation_error", "a locator already names the message")
-    const locator = parseLocator(chat)
-    if (locator.provider !== messenger.provider) {
-      throw new CliError("validation_error", `that locator is a ${locator.provider} message, not ${messenger.provider}`)
-    }
-    return { chat: locator.chat, message: locator.message }
-  }
-  if (message === undefined) throw new CliError("validation_error", "which message? give its id after the chat")
-  return { chat, message: message.trim() }
 }
 
 export { sendCommand } from "./messages-send-command.js"

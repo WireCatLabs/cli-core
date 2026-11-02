@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Chat, ChatEvent, Id, Message, MessageEvent, PersonReaction, PollVote } from "../../domain/models.js"
+import { chatReferenceOf, ensureAccount } from "../../domain/ref-arguments.js"
 import {
   capability,
   type HistoryBatch,
@@ -11,7 +12,7 @@ import type { MessengerTraits } from "../../ports/traits.js"
 import { foldName, isId, type PeopleLookup, pickPerson } from "../../resolve.js"
 import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { codeOf } from "../../sends/guarded.js"
-import { chatIdIn } from "../../services/message-resolution.js"
+import { chatIdIn, profilesOnAccount } from "../../services/message-resolution.js"
 import type { AccountKey, DeletionScope, IngestedVia, MessageStore } from "../../store/store.js"
 
 const REKEY_PACING = { lockMs: 50, pauseMs: 25 }
@@ -218,7 +219,7 @@ export const stored = (
     }
   }
   // A method not listed here saves nothing and passes through; a lane that should save adds its line.
-  return throughWrapper(messenger, {
+  const wrapped = throughWrapper(messenger, {
     ...(messenger.forumState
       ? {
           forumState: async (chatId: string) => {
@@ -485,6 +486,59 @@ export const stored = (
       return sent
     },
   })
+  const chatOf = async (typed: string): Promise<string> => {
+    const named = chatReferenceOf(typed, account.provider)
+    if (!named) return typed
+    let known: string | undefined
+    try {
+      known = account.account
+    } catch {}
+    await ensureAccount(named, { account: known, ...(profile ? { profile: profile.name } : {}) }, async (other) => {
+      const opened = await store()
+      return opened && profilesOnAccount(opened, profile?.app, account.provider)(other)
+    })
+    return named.chat
+  }
+  return withChatReferences(wrapped, chatOf)
+}
+
+/** The adapter methods whose first argument is a chat as typed: an id, a title, or a `chat:` or `msg:` reference. */
+const TYPED_CHAT = [
+  "resolve",
+  "chat",
+  "history",
+  "around",
+  "historyAfter",
+  "historyBefore",
+  "historyFrom",
+  "topics",
+  "topic",
+  "topicHistory",
+  "download",
+  "transcribe",
+  "scheduled",
+  "admins",
+  "chatEvents",
+  "leave",
+  "group",
+  "officialChatStats",
+] as const
+
+/**
+ * A reference is read here, not in each adapter: an adapter resolves a typed chat as an id or a title, and would take
+ * `chat:max/…` for a title. One of another account is refused before the messenger is asked.
+ */
+const withChatReferences = (adapter: MessengerAdapter, chatOf: (typed: string) => Promise<string>) => {
+  const methods = adapter as unknown as Record<string, unknown>
+  const own = Object.fromEntries(
+    TYPED_CHAT.flatMap((name) => {
+      const method = methods[name]
+      if (typeof method !== "function") return []
+      const call = async (typed: string, ...rest: unknown[]) => method.call(adapter, await chatOf(typed), ...rest)
+      return [[name, call]]
+    }),
+  )
+  return throughWrapper(adapter, own as unknown as MessengerAdapter)
 }
 
 /**

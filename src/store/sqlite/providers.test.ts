@@ -60,7 +60,7 @@ describe("the stored provider registry", () => {
       "two provider entries disagree on the kind: zoom (meetings) and zoom (events, from zm)",
     )
     await expect(registerProvider(store, { ...calendar, aliases: ["tg"] })).rejects.toThrow(
-      '"tg" names two providers: telegram (messages) and example-calendar (events, from excal)',
+      '"tg" names two providers: telegram (messages, from tg) and example-calendar (events, from excal)',
     )
     expect(() => useProviders([calendar, { ...calendar, kind: "notes" }])).toThrow("disagree on the kind")
     expect(providerNamed("exc")).toBeUndefined()

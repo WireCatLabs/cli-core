@@ -15,11 +15,11 @@ export interface ProviderEntry {
 
 /** The seed: what cli-core knows before any CLI has written its entry into the store. */
 export const PROVIDERS: readonly ProviderEntry[] = [
-  { name: "telegram", kind: "messages", aliases: ["tg"] },
+  { name: "telegram", kind: "messages", aliases: ["tg"], command: "tg" },
   { name: "telegram-bot", kind: "messages", aliases: ["tg-bot"] },
-  { name: "max", kind: "messages", aliases: [] },
+  { name: "max", kind: "messages", aliases: [], command: "max" },
   { name: "max-bot", kind: "messages", aliases: [] },
-  { name: "whatsapp", kind: "messages", aliases: ["wa"] },
+  { name: "whatsapp", kind: "messages", aliases: ["wa"], command: "wa" },
   { name: "whatsapp-bot", kind: "messages", aliases: ["wa-bot"] },
   { name: "email", kind: "mail", aliases: [] },
   { name: "notes", kind: "notes", aliases: [] },
@@ -27,6 +27,20 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "obsidian", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
 ]
+
+const LABELS: Readonly<Record<string, string>> = {
+  telegram: "Telegram",
+  "telegram-bot": "Telegram bot",
+  max: "MAX",
+  "max-bot": "MAX bot",
+  whatsapp: "WhatsApp",
+  "whatsapp-bot": "WhatsApp bot",
+  "google-drive": "Google Drive",
+  email: "mail",
+}
+
+/** How a text names a provider to a person: `MAX`, not `max`. */
+export const providerLabel = (provider: Provider): string => LABELS[provider] ?? provider
 
 /**
  * A notes folder is an `accounts` row of one of these providers; people call every one `notes`. `obsidian` is a vault,

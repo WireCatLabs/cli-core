@@ -297,7 +297,7 @@ describe("a messenger whose history is read from the store", () => {
       const refused = await call(["messages", name, "msg:chat/501/7/2", "--json"], env, connect, "store")
       expect(refused.code).toBe(2)
       expect(refused.stdout).toBe("")
-      expect(refused.stderr).toContain("another account")
+      expect(refused.stderr).toContain("belongs to account 501")
       const accepted = await call(["messages", name, "msg:chat/500/7/2", "--json"], env, connect, "store")
       expect(accepted.code).toBe(0)
       const result = JSON.parse(accepted.stdout)
