@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.553.0 — 02.11.2026
+
 ### Added
 
 - **`projects evidence` and `projects status` read the linked chats of the purposes asked.** `--purpose sales,work`
