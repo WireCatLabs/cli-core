@@ -242,6 +242,8 @@ export interface EmailFilter extends MailFilter {
   until?: number
   /** Only emails with an attachment whose text extraction failed with one of these errors. */
   attachmentErrors?: string[]
+  /** Only these Message-IDs: a sync asks about what it listed, not about the whole account. */
+  externalIds?: readonly string[]
 }
 
 export interface EmailRef {
@@ -677,6 +679,8 @@ const emailWhere = (filter: EmailFilter): [string, SqlValue[]] => {
          AND extraction_error IN (${filter.attachmentErrors.map(() => "?").join(",") || "NULL"}))`,
       ...filter.attachmentErrors,
     )
+  if (filter.externalIds !== undefined)
+    add("e.external_id IN (SELECT value FROM json_each(?))", JSON.stringify(filter.externalIds))
   return [where.join(" AND "), params]
 }
 

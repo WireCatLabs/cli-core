@@ -207,6 +207,53 @@ describe("mail server search", () => {
     expect(await stored()).toEqual(["m1"])
   })
 
+  it("waits as long as the mailbox's own server time when --server-time is not given", async () => {
+    const slow = (mailbox: FakeMailbox): MailSource => ({
+      ...fakeMailSource(mailbox),
+      query: () => new Promise(() => {}),
+    })
+    const { json } = await setup([fake("2", 10, {})], { source: slow, access: { timeMs: 50 } })
+    const began = Date.now()
+    const found = await json("search", "messages", "invoice")
+    expect(Date.now() - began).toBeLessThan(4_000)
+    expect(found.meta.issues).toEqual([expect.objectContaining({ reason: "search.server-timeout" })])
+  })
+
+  it("ends the server's time before the command's deadline, so the search answers in part, not with a timeout", async () => {
+    const slow = (mailbox: FakeMailbox): MailSource => ({
+      ...fakeMailSource(mailbox),
+      query: () => new Promise(() => {}),
+    })
+    const { mail } = await setup([fake("2", 10, {})], { source: slow })
+    const began = Date.now()
+    const answer = await mail("search", "messages", "invoice", "--server-time", "60s", "--timeout", "6s", "--json")
+    expect(Date.now() - began).toBeLessThan(5_500)
+    expect(answer.code, answer.err).toBe(0)
+    expect(JSON.parse(answer.out).meta.issues).toEqual([expect.objectContaining({ reason: "search.server-timeout" })])
+  })
+
+  it("leaves a find too large to download on the server, and says so", async () => {
+    const read: string[] = []
+    const big = (mailbox: FakeMailbox): MailSource => {
+      const inner = fakeMailSource(mailbox)
+      return {
+        ...inner,
+        list: async (...args) =>
+          (await inner.list(...args)).map((item) => (item.uid === "2" ? { ...item, size: 6_000_000 } : item)),
+        fetchRaw: async (items) => {
+          read.push(...items.map(({ uid }) => uid))
+          return inner.fetchRaw(items)
+        },
+      }
+    }
+    const { json, stored } = await setup([fake("2", 10, {}), fake("3", 11, {})], { source: big })
+    const found = await json("search", "messages", "invoice")
+    expect(read).toEqual(["3"])
+    expect(byRef(found.items)).toEqual({ m1: "archive", m3: "server" })
+    expect(found.meta.issues).toEqual([expect.objectContaining({ reason: "search.server-too-large" })])
+    expect((await stored()).sort()).toEqual(["m1", "m3"])
+  })
+
   it("calls a read of the finds that timed out a timeout, not a failed search", async () => {
     const late = (mailbox: FakeMailbox): MailSource => ({
       ...fakeMailSource(mailbox),

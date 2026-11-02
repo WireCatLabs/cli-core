@@ -338,17 +338,8 @@ const syncRound = async (
   /** A quick folder's stored mail as it was before this run changed anything, with the UID of each. */
   const folderMail = new Map<string, FolderEmail[]>()
   const refreshed = new Map<string, { read?: boolean; flagged?: boolean }>()
-  let holding: Set<string> | undefined
-  const holdsMail = async (folder: string) => {
-    holding ??= new Set(
-      (await store.mail.emailRefs({ accountId })).flatMap(({ mailboxes }) =>
-        mailboxes
-          .filter(({ kind }) => kind !== "label" && kind !== ENVELOPE && kind !== BULK)
-          .map((box) => box.externalId),
-      ),
-    )
-    return holding.has(folder)
-  }
+  const holdsMail = async (folder: string) =>
+    (await store.mail.emails({ accountId, mailbox: folder, limit: 1 })).length > 0
   for (const folder of folders) {
     if (mboxPoint !== undefined) break
     let searched: Searched | undefined
@@ -492,6 +483,8 @@ const syncRound = async (
     // Spreading a whole mailbox into push() overflows the stack past ~120,000 emails.
     for (const item of found) collected.push(item)
   }
+  // A listing that came back after the stop writes nothing: the command has answered, and the next run lists again.
+  if (signal?.aborted) throw signal.reason
   const listed = [...new Map(collected.map((item) => [item.messageId, item])).values()].sort((a, b) =>
     b.receivedAt.localeCompare(a.receivedAt),
   )
@@ -627,7 +620,11 @@ const syncRound = async (
   const pending: Listed[] = []
   // IMAP lists what exists now, so a mail marked deleted that it lists again is saved again, which brings it back.
   // An archive is old: what it holds that IMAP proved deleted stays deleted.
-  const refs = await store.mail.emailRefs({ accountId, includeDeleted: snapshot })
+  const refs = await store.mail.emailRefs({
+    accountId,
+    includeDeleted: snapshot,
+    externalIds: listed.map(({ messageId }) => messageId),
+  })
   const known = new Set(refs.map(({ externalId }) => externalId))
 
   const enveloped = new Map(
@@ -879,12 +876,16 @@ const syncRound = async (
       }
       plan?.unreadable.delete(item.messageId)
       const header = mailHeadersOf(raws[index] as Uint8Array)
+      // A stop between attachments ends the chunk; what the earlier slices saved stays.
       const files = await readAttachments(
         mail,
         item.messageId,
-        { loadEngine, maxAttachmentChars, at: startedAt },
+        { loadEngine, maxAttachmentChars, at: startedAt, ...(signal ? { signal } : {}) },
         attachments,
-      )
+      ).catch(async (error: unknown) => {
+        await stopIfAborted()
+        throw error
+      })
       const input: ThreadSave = {
         accountId,
         externalId: item.threadId,

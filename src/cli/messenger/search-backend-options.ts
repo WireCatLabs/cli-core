@@ -11,10 +11,10 @@ const backendOf = (value: string): Backend => {
 }
 
 /** `--backend` and `--server-time`, for any search whose source has a server that searches: `where` names it. */
-export const serverSearchOptions = (command: Command, where: string): Command =>
+export const serverSearchOptions = (command: Command, where: string, defaultTime = "5s"): Command =>
   command
     .option("--backend <archive|server|both>", `where to search: the local archive, ${where}, or both`, backendOf)
-    .option("--server-time <duration>", "stop waiting for the server after this long (default: 5s)")
+    .option("--server-time <duration>", `stop waiting for the server after this long (default: ${defaultTime})`)
 
 /** Mounted only where the messenger's server can search messages. */
 export const backendOptions = (command: Command, messenger: Messenger): Command =>

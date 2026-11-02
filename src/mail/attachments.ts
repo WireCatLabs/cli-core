@@ -16,15 +16,26 @@ export type AttachmentLog = NonNullable<MailSyncResult["attachments"]>
 export const readAttachments = async (
   mail: ParsedMail,
   messageId: string,
-  { loadEngine, maxAttachmentChars, at }: { loadEngine: LoadEngine; maxAttachmentChars: number; at: number },
+  {
+    loadEngine,
+    maxAttachmentChars,
+    at,
+    signal,
+  }: { loadEngine: LoadEngine; maxAttachmentChars: number; at: number; signal?: AbortSignal },
   log: AttachmentLog,
 ): Promise<AttachmentInput[]> => {
   const files: AttachmentInput[] = []
   for (const [position, part] of mail.attachments.entries()) {
+    if (signal?.aborted) throw signal.reason
     const extraction =
       part.bytes === null
         ? { status: "unavailable" as const }
-        : await extractText(part.bytes, { kind: "file", name: part.name, mime: part.mime, path: part.name }, loadEngine)
+        : await extractText(
+            part.bytes,
+            { kind: "file", name: part.name, mime: part.mime, path: part.name },
+            loadEngine,
+            signal,
+          )
     log.push({ message: messageId, part: part.id, status: extraction.status })
     const extracted = extraction.status === "extracted" ? extraction : undefined
     files.push({

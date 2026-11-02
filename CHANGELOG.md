@@ -14,6 +14,29 @@ shape of this file.
   `http://localhost/callback` needs it. The listener then takes `127.0.0.1` and, when the host has IPv6, `::1`, because
   the browser may resolve `localhost` to either. Without `host` nothing changes: Google and the rest keep `127.0.0.1`.
 
+## 0.541.0 — 02.11.2026
+
+### Added
+
+- **`MailServerAccess.timeMs`**: a mailbox's own default for the server search's time bound, for a server whose
+  search is slow; `--server-time` still wins. `MailReads.serverTimeDefault` puts it in the `--server-time` help.
+- **`EmailFilter.externalIds`**: only these Message-IDs, for `emails`, `emailRefs` and `emailFacts`.
+
+### Fixed
+
+- **`schedule exec` and `schedule run` wait for their child as long as the child's own deadline allows**, instead of
+  answering `timeout` (exit 9) at 30 s while the child went on: a scheduled sync of more than 30 s failed every time
+  and kept writing after the answer. A signal or an explicit `--timeout` now stops the child (SIGTERM, then SIGKILL
+  after 10 s), and its exit code is the run's.
+- **A mail sync no longer loads every stored email of the account in each round**: it asks the store about the mail
+  the round listed. On 260,000 stored emails and a 4,900-message window (`bench/mail-sync-scale`), from 17.7 s and
+  1.1 GB peak memory to 0.3 s and 190 MB.
+- **A mail sync that is stopped while a listing is in flight writes nothing for it**, and reading attachments stops
+  at the stop.
+- **The mail server search keeps parsing and attachment reading inside its time bound**, ends that bound before the
+  command's deadline so it answers in part instead of timing out, and stops writing once the command is stopped. A
+  find larger than 5 MB is left on the server unread, and the answer says so (`search.server-too-large`).
+
 ## 0.540.0 — 02.11.2026
 
 ### Added
