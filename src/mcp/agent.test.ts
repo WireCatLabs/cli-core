@@ -434,6 +434,31 @@ it("rechecks a provider command's authority grant before invoking its runner", a
   expect(run).not.toHaveBeenCalled()
 })
 
+it("keeps an agent's positional spelled as an option a positional", async () => {
+  const root = mkdtempSync(join(tmpdir(), "agent-dashes-"))
+  let given: unknown
+  const definition = {
+    app,
+    commands: () => [
+      annotate(new Command("find"), { effects: LOCAL_READ })
+        .argument("[words...]", "what to find")
+        .option("--limit <n>", "at most this many")
+        .action((words: string[], flags: { limit?: string }) => {
+          given = { words, limit: flags.limit }
+        }),
+    ],
+  }
+  const program: AgentProgram = {
+    run: (argv, environment) => run(argv, definition, environment),
+    commands: describeProgram(createProgram(definition)),
+  }
+  const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+
+  await runCommandForAgent(program, ["find"], { words: ["--limit", "5"] }, { profile: "default", env })
+
+  expect(given).toEqual({ words: ["--limit", "5"], limit: undefined })
+})
+
 describe("positional and flag alternatives", () => {
   it.each([false, true])("runs one text input once and preserves positional requiredness: %s", async (required) => {
     const root = new Command("example")
