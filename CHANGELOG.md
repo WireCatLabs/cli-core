@@ -35,6 +35,12 @@ shape of this file.
     status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
+- **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
+  the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
+  purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
+- **`knowledge.updateRelation(scope, id, { role?, purpose?, by })`** sets a relationship's role and purpose; `null`
+  clears one. The owner's change applies; an agent's is a `relationship_update` proposal, listed and decided through
+  the proposal registry, and `knowledge.decideRelationUpdate(id, decision)` decides it in one transaction.
 
 ### Changed — may break callers
 
@@ -43,6 +49,12 @@ shape of this file.
   (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
 - **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
   cli-base bumps it to 0.74.0 together with cli-core.
+- **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
+  upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
+  link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
+  build no longer lists or confirms these as relationships, and a project transfer no longer carries them. Decide them
+  through the proposal registry by their new ids; `link:<id>` and `key:<id>` remain only for suggestions an older
+  build writes later.
 
 ### Fixed
 

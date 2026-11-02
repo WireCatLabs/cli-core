@@ -19,7 +19,14 @@ import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import type { ProposedAction } from "./proposed-actions.js"
 import { queryFilter } from "./query-filter.js"
-import { type LinkDecision, relationProposalsOver } from "./relation-proposals.js"
+import {
+  type KnowledgeRelation,
+  type LinkDecision,
+  type RelateInput,
+  type RelationUpdate,
+  relationOf,
+  relationProposalsOver,
+} from "./relation-proposals.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -38,6 +45,8 @@ import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
 import { referenceOfThing, stateOfThing, storedThing, type Thing, type ThingState, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 import { type VocabularyStore, vocabularyStoreOver } from "./vocabulary.js"
+
+export type { KnowledgeRelation, RelateInput } from "./relation-proposals.js"
 
 const TYPED_KEY_PREFIXES: ReadonlySet<string> = new Set(Object.values(TASK_KEY_PREFIXES))
 
@@ -98,19 +107,6 @@ export interface Project {
   type: (typeof PROJECT_TYPES)[number]
   organizationId: string | null
   scope: (typeof SCOPES)[number]
-  createdAt: string
-}
-
-export interface KnowledgeRelation {
-  id: string
-  from: string
-  to: string
-  kind: (typeof RELATION_KINDS)[number]
-  role: string | null
-  evidence: string | null
-  confirmed: boolean
-  provenance: string | null
-  confidenceCategory: "owner-confirmed" | "weak"
   createdAt: string
 }
 
@@ -188,11 +184,25 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
       to: string
       kind: KnowledgeRelation["kind"]
       role?: string
+      purpose?: string
       evidence?: string[]
       reason?: string
     },
     by: Exclude<Author, "owner">,
   ): Promise<ProposedAction>
+  /** The owner sets a relationship's role and purpose; `null` clears one. */
+  updateRelation(key: KnowledgeScope, id: string, input: RelationUpdate & { by: "owner" }): Promise<KnowledgeRelation>
+  /** An agent's change is a `relationship_update` proposal for the owner; the same pending change is answered again. */
+  updateRelation(
+    key: KnowledgeScope,
+    id: string,
+    input: RelationUpdate & { by: Exclude<Author, "owner">; reason?: string },
+  ): Promise<ProposedAction>
+  /** Decides a `relationship_update` proposal; a confirmed one changes the relationship in the same transaction. */
+  decideRelationUpdate(
+    id: string,
+    decision: LinkDecision,
+  ): Promise<{ proposal: ProposedAction; relation: KnowledgeRelation | null }>
   /** Decides a stored `relationship` or `key_document` proposal; the link and the decision land together. */
   decideLinkProposal(id: string, decision: LinkDecision): Promise<{ proposal: ProposedAction; link: Link | null }>
   /** Decides an unconfirmed link written before proposals were stored. Its author is unknown, so only the owner may. */
@@ -217,16 +227,6 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
  * only the owner decides it.
  */
 const UNVERIFIED = { type: "unknown" } as const
-
-export interface RelateInput {
-  from: string
-  to: string
-  kind: KnowledgeRelation["kind"]
-  role?: string
-  evidence?: string
-  confirmed?: boolean
-  provenance?: string
-}
 
 type Row = Record<string, unknown>
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
@@ -426,18 +426,6 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     createdAt: iso(row.created_at),
   })
 
-  const relationOf = (link: Link): KnowledgeRelation => ({
-    id: link.id,
-    from: link.from,
-    to: String(link.to),
-    kind: link.kind as KnowledgeRelation["kind"],
-    role: link.role,
-    evidence: link.evidence,
-    confirmed: link.confirmed,
-    provenance: link.provenance,
-    confidenceCategory: link.confirmed ? "owner-confirmed" : "weak",
-    createdAt: link.createdAt,
-  })
   const proposals = relationProposalsOver(context)
   const RELATIONS = `SELECT * FROM links WHERE kind IN (${RELATION_KINDS.map(linkKind).join(",")}) AND to_id IS NOT NULL`
   const relation = (id: string) => {
@@ -830,6 +818,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
             origin: confirmed ? "owner" : "suggested",
             confirmed,
             ...(input.role === undefined ? {} : { role: input.role }),
+            ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
             ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
             ...(input.provenance === undefined ? {} : { provenance: input.provenance }),
           }),
@@ -843,6 +832,20 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           reason: "relationship.exists",
         })
       return proposals.propose(from, input, by)
+    },
+    updateRelation: (async (
+      key: KnowledgeScope,
+      id: string,
+      input: RelationUpdate & { by: Author; reason?: string },
+    ) => {
+      checked(key)
+      const link = linkOf(database, relation(id))
+      if (input.by === "owner") return relationOf(proposals.update(link, input))
+      return proposals.proposeUpdate(link, input, input.by)
+    }) as KnowledgeStore["updateRelation"],
+    decideRelationUpdate: async (id, decision) => {
+      const { proposal, link } = proposals.decideUpdate(id, decision)
+      return { proposal, relation: link && relationOf(link) }
     },
     decideLinkProposal: async (id, decision) => proposals.decideProposal(id, decision),
     decideSuggestedLink: async (id, decision) => proposals.decideLink(id, decision),
