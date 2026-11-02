@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.550.0 — 02.11.2026
+
 ### Changed — may break callers
 
 - **cli-core registers `mail.search-refused`.** A CLI that listed it in its own reasons gets "listed twice" from
