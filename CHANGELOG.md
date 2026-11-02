@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.559.0 — 02.11.2026
+
 ### Added
 
 - **Imports through one envelope (store version 47).** `ingest(store, envelope, { account, dryRun })` in
