@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+## 0.545.0 — 02.11.2026
+
+### Added
+
+- **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
+  `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
+  (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
+  contents in an error. gcal, drive and mail each kept a copy of this reader.
+- **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
+  `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
+
 ## 0.544.0 — 02.11.2026
 
 ### Added
