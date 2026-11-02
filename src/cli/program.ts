@@ -12,6 +12,7 @@ import {
 } from "@wirecat/cli-base"
 import { metaOf, refuseJoinedPath } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
+import { COMPACT_FLAG } from "@wirecat/cli-base/standards"
 import { Command, Help } from "commander"
 import { relayCommand } from "../background/relay.js"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
@@ -26,6 +27,7 @@ import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/pe
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
+import { entityRows, type RowTable } from "./compact.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { refuseByCommandPermissions, refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
@@ -96,6 +98,8 @@ export interface ProgramDefinition {
       >
   }
   configure?: (program: Command) => void
+  /** The app's own rows for `--compact`, by entity name; a shared entity's name is refused. */
+  rows?: RowTable
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
   firstScreen?: FirstScreen
   prepare?: (program: Command, environment: RunOptions) => void | Promise<void>
@@ -153,6 +157,10 @@ export const createProgram = (definition: ProgramDefinition, { out, err }: Progr
     .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 4194304; 0 disables)")
     .option("--brief", `${found} as reference, title, time, ${messenger ? "sender" : "author"} and excerpt only`)
     .option("--full", `${found} with their whole text and every provider field`)
+    .option(
+      COMPACT_FLAG,
+      "one line per item for an agent: reference first, text last, paging and next steps as # lines",
+    )
     .option("--dry-run", "preview parsed arguments and permissions before running the action")
     .option("--yes", "go ahead without the question an ask level puts before a write")
     .option(
@@ -165,6 +173,7 @@ export const createProgram = (definition: ProgramDefinition, { out, err }: Progr
   for (const command of mounted) program.addCommand(command)
   configure?.(program)
   if (!contractsChecked.has(definition)) {
+    if (definition.rows) entityRows(definition.rows)
     assertSharedContracts(program)
     contractsChecked.add(definition)
   }
@@ -234,7 +243,9 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   if (!options.streams) quietBrokenPipes()
   const delimiter = argv.indexOf("--")
   const flags = argv.slice(0, delimiter < 0 ? undefined : delimiter)
-  const machine = flags.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl")
+  const machine = flags.some(
+    (word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl" || word === COMPACT_FLAG,
+  )
   const debug = flags.includes("--debug")
   const reporting = machine ? { ...options, tty: false } : options
   const control = execution(streams, { maxOutputBytes: 0 })
@@ -304,6 +315,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     commandSignal: control.signal,
     trackCloseable: control.trackCloseable,
     app: definition.app,
+    ...(definition.rows ? { rows: definition.rows } : {}),
     platform: options.platform ?? process.platform,
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),

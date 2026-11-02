@@ -7,6 +7,32 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`--compact`: one line per item for an agent, from the same answer `--json` prints.** `messages list <chat>
+  --compact` prints `#<id> · 10-01 09:12 · Анна · <text>` under one header line that names the shared ref prefix
+  (`ref: msg:max/500/-1001/<id>`), what every row has in common (the chat's title), the date span and the zone. Rows
+  from several chats keep their whole refs. Text stays on one line with control and direction characters made
+  visible, and is cut at 400 characters with `…(+N)`; `--full` keeps it whole. The paging, `missing`, the next steps
+  and an incomplete answer follow as `# more:`, `# missing:`, `# next:` and `# complete: false` lines on stdout, and
+  each command line in them carries `--compact` again. On 1 000 messages of one chat it is about 48 % of the JSON
+  bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
+  `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
+  - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
+    (`answerEntity(cmd, name, schema, { row })`), its app's (`rows: { name: shape }` in the program definition,
+    which also draws an app entity listed inside one thing), the shared one in `SHARED_ROWS` (`message`,
+    `message.summary`, `message.hit`, `chat`), or the generic row: key, ref or id · title, name or path · state,
+    status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
+    options)` is pure, for an app that prints its own answers.
+  - What a command prints without `renderAnswer` stays JSON under `--compact`.
+
+### Fixed
+
+- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
+  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
+  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
+  `--brief` and `--full` too, and refuse them together as the others do.
+
 ## 0.544.0 — 02.11.2026
 
 ### Added

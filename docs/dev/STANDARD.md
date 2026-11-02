@@ -377,6 +377,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--debug` |  | switch | on failure, show the full error record: cause and stack |  |
 | `--agent-json` |  | switch | JSON with control and direction characters made visible in strings and keys |  |
 | `--brief` |  | switch | each item as its reference, title, time and excerpt only |  |
+| `--compact` |  | switch | one line per item, built from the same answer as --json, with its paging and next steps as # lines |  |
 | `--chart-kind` | `<messages\|active\|membership>` | choice | what a chart draws |  |
 | `--checkpoints` | `<durations>` | list | the ages to report on, comma-separated: 1d,7d,30d |  |
 | `--fields` | `<paths>` | list | only these comma-separated fields of each item; list metadata stays |  |
