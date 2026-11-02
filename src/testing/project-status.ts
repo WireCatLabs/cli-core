@@ -43,6 +43,7 @@ export interface FixtureChat {
   title: string
   kind: ChatKind
   role?: string
+  purpose?: string
   /** Held from its first message; otherwise only part of it is held. */
   whole: boolean
   messages: Said[]
@@ -134,6 +135,7 @@ export const seedChat = async (store: MessageStore, chat: FixtureChat, project: 
     kind: "member-of",
     confirmed: true,
     ...(chat.role ? { role: chat.role } : {}),
+    ...(chat.purpose ? { purpose: chat.purpose } : {}),
   })
 }
 

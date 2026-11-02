@@ -1,8 +1,17 @@
 import { CliError } from "@wirecat/cli-base"
+import type { Id } from "../../domain/models.js"
 import { formatReference } from "../../domain/references.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { chatCoverage } from "../chat-coverage.js"
-import { canonicalProjectRef, type LinkedChat, linkedChatsOf } from "../stored-project-gathering.js"
+import { LINK_PURPOSE, type PurposeConfig, purposeRead, purposesOf } from "../project-purposes.js"
+import {
+  type ChatCount,
+  type ChatCounter,
+  canonicalProjectRef,
+  type LinkedChat,
+  linkedChatsOf,
+  storedChatCount,
+} from "../stored-project-gathering.js"
 import { centsText } from "./signals/amounts.js"
 import { STATUS_SIGNALS } from "./signals/index.js"
 import type {
@@ -25,8 +34,6 @@ export const STATUS_WINDOW = 300
 export const STATUS_CHATS = 16
 const CHILD_DEPTH = 2
 const CHILDREN = 8
-/** What `projects status` reads when no purpose is asked for (built in; memo's config may change it). */
-export const DEFAULT_PURPOSES: readonly string[] = ["work"]
 
 export interface ProjectStatusInput {
   /** An id, key, name or alias, as `canonicalProjectRef` takes it. */
@@ -37,13 +44,22 @@ export interface ProjectStatusInput {
   after?: number
   asOf?: number
   contextQueries?: string[]
-  /** The chat purposes read; `all` reads every one. Default `DEFAULT_PURPOSES`. */
+  /** The chat purposes read; `["all"]` reads every one. Left out, the config's defaults. */
   purposes?: readonly string[]
+  /** The host's purposes; core's built-in ones when left out. */
+  purposeConfig?: PurposeConfig
+  /** How many messages a chat left out by purpose holds in the window; the store's own count when left out. */
+  count?: ChatCounter
   /** Default `STATUS_SIGNALS`; tests pass their own. */
   signals?: readonly StatusSignal[]
 }
 
 export type StatusChatSummary = Omit<StatusChat, "messages" | "account">
+
+/** A linked chat not read; one left out by its purpose says how much it holds in the window. */
+export type OutOfScope =
+  | { chat: string; reason: "other-account" | "linked-chat-limit" }
+  | ({ chat: string; reason: "purpose"; purpose: string; account: AccountKey; chatId: Id } & ChatCount)
 
 export interface MoneyTotal {
   direction: string
@@ -63,7 +79,9 @@ export interface ProjectStatus {
   items: StatusItem[]
   /** Open amounts and expected payment facts, summed per direction and currency. */
   money: { open: MoneyTotal[] }
-  outOfScope: { chat: string; reason: "other-account" | "linked-chat-limit" | "purpose"; purpose?: string }[]
+  outOfScope: OutOfScope[]
+  /** The purposes read: `all`, or the list. */
+  purposes: "all" | string[]
   failed: { signal: string; why: string }[]
   /** Chats worth reading next, highest first. */
   attention: StatusAttention[]
@@ -160,12 +178,13 @@ export const projectStatus = async (store: MessageStore, input: ProjectStatusInp
   const since = input.after ?? now - (input.days ?? 60) * DAY
   if (!(since < now)) throw new CliError("validation_error", "the window must start before it ends")
   const signals = input.signals ?? STATUS_SIGNALS
-  const purposes = new Set(input.purposes ?? DEFAULT_PURPOSES)
   const catalog = await projectsCatalog(store)
   const ref = await canonicalProjectRef(store, input.project)
   const entry = catalog.get(ref)
   if (!entry) throw new CliError("not_found", "the owner project is unavailable")
   const root: StatusProject = { ref, key: entry.key, name: entry.name }
+  const purposes = purposesOf(input.purposes, input.purposeConfig, root)
+  const count = input.count ?? storedChatCount(store)
   const { children, cut } = await childrenOf(store, root, catalog)
 
   const outOfScope: ProjectStatus["outOfScope"] = []
@@ -177,10 +196,17 @@ export const projectStatus = async (store: MessageStore, input: ProjectStatusInp
     }
   const chosen: [string, Link][] = []
   for (const [chat, link] of linked) {
-    // Links carry no purpose yet; every one is `work`, as a link without one will be.
-    const purpose = "work"
-    if (!purposes.has("all") && !purposes.has(purpose)) outOfScope.push({ chat, reason: "purpose", purpose })
-    else if (!inAccounts(input.accounts, link.provider, link.account))
+    if (!purposeRead(purposes, link.purpose)) {
+      const account = { provider: link.provider, account: link.account }
+      outOfScope.push({
+        chat,
+        reason: "purpose",
+        purpose: link.purpose ?? LINK_PURPOSE,
+        account,
+        chatId: link.chat,
+        ...(await count(account, link.chat, { since, until: now })),
+      })
+    } else if (!inAccounts(input.accounts, link.provider, link.account))
       outOfScope.push({ chat, reason: "other-account" })
     else if (chosen.length >= STATUS_CHATS) outOfScope.push({ chat, reason: "linked-chat-limit" })
     else chosen.push([chat, link])
@@ -199,7 +225,7 @@ export const projectStatus = async (store: MessageStore, input: ProjectStatusInp
       title: coverage?.title ?? null,
       kind: (await store.chats.chatKind(account, link.chat)) ?? "unknown",
       role: link.role,
-      purpose: "work",
+      purpose: link.purpose ?? LINK_PURPOSE,
       project: link.project,
       coverage: coverage as NonNullable<typeof coverage>,
       messages: page.items.filter((message) => Date.parse(message.timestamp) <= now),
@@ -254,6 +280,7 @@ export const projectStatus = async (store: MessageStore, input: ProjectStatusInp
     items,
     money: { open: totalsOf(items) },
     outOfScope,
+    purposes: purposes === "all" ? "all" : [...purposes],
     failed,
     attention,
     signals: signals.map(({ id, version }) => ({ id, version })),

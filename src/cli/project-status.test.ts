@@ -82,6 +82,35 @@ describe("projectStatusAnswer", () => {
   })
 })
 
+describe("a chat left out by its purpose", () => {
+  it("is one missing row with its purpose, count, dates and the command that reads it", async () => {
+    const { store } = await harbourStore(
+      HARBOUR.map((chat) => (chat.id === "-950" ? { ...chat, purpose: "sales" } : chat)),
+    )
+    opened.push(store)
+    const found = await projectStatus(store, { project: "HRB", asOf: NOW })
+    const readChat = (chat: { chatId: string }, since: string) => hints.read(chat, since)
+    const { item, missing } = projectStatusAnswer(found, { ...hints, readChat })
+    expect(() => v.parse(projectStatusSchema, item)).not.toThrow()
+    const why =
+      "chat:max/11/-950, purpose sales, not read: 1 message 2026-11-01…2026-11-01; " +
+      "read it: chat messages list -950 date>=2026-09-03"
+    expect(missing).toContainEqual({ field: "chats", why, step: "messages.list" })
+    expect(item.out_of_scope).toEqual([
+      {
+        chat: "chat:max/11/-950",
+        reason: "purpose",
+        purpose: "sales",
+        messages: 1,
+        first_at: "2026-11-01T09:00:00.000Z",
+        last_at: "2026-11-01T09:00:00.000Z",
+        read_command: "chat messages list -950 date>=2026-09-03",
+      },
+    ])
+    expect(projectStatusText(found, { ...hints, readChat })).toContain(`Left out: ${why}`)
+  })
+})
+
 describe("projectStatusText", () => {
   it("says who owes what, whose move it is, what went quiet, and what to run next", async () => {
     const text = projectStatusText(await statusOf(), hints)

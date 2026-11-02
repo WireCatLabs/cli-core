@@ -96,12 +96,23 @@ export const toMessages = ({ orm }: StoreContext, rows: MessageRow[]): Message[]
   return rows.map((row) => toMessage(row, byMessage.get(row.pk) ?? []))
 }
 
-export const countMessages = ({ orm }: StoreContext, chatKey: number, since: string | undefined): number =>
+export const countMessages = (
+  { orm }: StoreContext,
+  chatKey: number,
+  since: string | undefined,
+  until?: string,
+): number =>
   Number(
     orm
       .select({ n: sql<number>`count(*)` })
       .from(messages)
-      .where(live(chatKey, since === undefined ? undefined : gte(messages.sentAt, toMs(since) as number)))
+      .where(
+        live(
+          chatKey,
+          since === undefined ? undefined : gte(messages.sentAt, toMs(since) as number),
+          until === undefined ? undefined : lte(messages.sentAt, toMs(until) as number),
+        ),
+      )
       .get()?.n,
   )
 

@@ -21,6 +21,7 @@ import { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "../../sends/pac
 import { CEILING_KEY, levelFor, type PermissionKey, readKeysForCommand } from "../../sends/permissions.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { OFFLINE, type ServiceDeps, type ServiceMessenger, type Services, servicesFor } from "../../services/index.js"
+import type { PurposeConfig } from "../../services/project-purposes.js"
 import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { type BaseContext, type BaseEnvironment, baseContext, environmentOf } from "../context.js"
@@ -175,6 +176,8 @@ export interface Messenger extends ServiceMessenger {
   profileState?: (profile: string, env: NodeJS.ProcessEnv) => ProfileState
   /** The help for a `<chat>` argument, in this messenger's words. */
   chatArgument: string
+  /** The chat purposes `projects evidence` and `projects status` know; core's built-in ones when unset. */
+  purposes?: PurposeConfig
   /** The group settings this messenger has, as `chats update` offers them; every one when unset. */
   groupSettings?: readonly GroupSettingKey[]
   /** Whether `polls create` makes quizzes (`--quiz --correct --solution`); no when unset. */

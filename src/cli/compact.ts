@@ -16,6 +16,8 @@ export interface RowColumn {
   as?: RowValue
   /** Printed for a field that is `true`, and after a count: `{ field: ["sender_is_me", "sender_name"], tag: "me" }`. */
   tag?: string
+  /** Printed before a text value, so a bare id says what it is: `proposed 17079`. */
+  prefix?: string
 }
 
 export interface RowShape {
@@ -25,6 +27,8 @@ export interface RowShape {
   text?: readonly string[]
   /** An item answer's lists, drawn as rows of another entity: `{ items: "evidence_item" }`. */
   sections?: Readonly<Record<string, string>>
+  /** An item answer's fields printed whole, never cut: a cursor that is pasted back. */
+  whole?: readonly string[]
 }
 
 export interface CompactOptions {
@@ -48,6 +52,63 @@ const messageRow: RowShape = {
     { field: "attachments", as: "files" },
   ],
   text: ["text", "transcript", "excerpt"],
+}
+
+const linkedChatColumns: RowColumn[] = [
+  { field: "ref" },
+  { field: "title" },
+  { field: "purpose" },
+  { field: "proposed", prefix: "proposed" },
+]
+
+/** `projects evidence`: its items, the chats it read and left out, and its members. */
+const EVIDENCE_ROWS: Readonly<Record<string, RowShape>> = {
+  project_evidence: {
+    columns: [],
+    sections: {
+      items: "evidence_item",
+      linked_chats: "linked_chat",
+      left_out: "linked_chat.left_out",
+      members: "evidence_member",
+    },
+    whole: ["checkpoint"],
+  },
+  evidence_item: {
+    columns: [
+      { field: "ref" },
+      { field: "at", as: "day" },
+      { field: "context" },
+      { field: "proposed", prefix: "proposed" },
+    ],
+    text: ["text"],
+  },
+  linked_chat: {
+    columns: [
+      ...linkedChatColumns,
+      { field: "state" },
+      { field: "items", as: "count", tag: "items" },
+      { field: "capped", tag: "capped" },
+      { field: "score", prefix: "score" },
+      { field: "sync_command" },
+    ],
+  },
+  "linked_chat.left_out": {
+    columns: [
+      ...linkedChatColumns,
+      { field: "messages", as: "count", tag: "messages" },
+      { field: "first_at", as: "day" },
+      { field: "last_at", as: "day" },
+      { field: "read_command" },
+    ],
+  },
+  evidence_member: {
+    columns: [
+      { field: "person" },
+      { field: "state" },
+      { field: "proposed", prefix: "proposed" },
+      { field: "score", prefix: "score" },
+    ],
+  },
 }
 
 /** Rows for cli-core's shared entities. */
@@ -74,6 +135,7 @@ export const SHARED_ROWS: Readonly<Record<string, RowShape>> = {
     ],
   },
   ...STATUS_ROWS,
+  ...EVIDENCE_ROWS,
 }
 
 /** Any record: what names it, what it is called, what state it is in, then what it says. */
@@ -206,9 +268,11 @@ const cellOf = (item: Fields, column: RowColumn, clock: Clock): Cell | undefined
   switch (column.as) {
     case "time":
     case "day": {
-      if (typeof value !== "string") return undefined
-      const parts = clock.parts(value)
-      if (!parts) return { text: clean(value) }
+      // Some answers keep their times as epoch milliseconds.
+      const iso = typeof value === "number" && Number.isFinite(value) ? new Date(value).toISOString() : value
+      if (typeof iso !== "string") return undefined
+      const parts = clock.parts(iso)
+      if (!parts) return { text: clean(iso) }
       const day = parts.date.slice(5)
       return { text: column.as === "day" ? day : `${day} ${parts.time}`, date: parts.date }
     }
@@ -230,7 +294,8 @@ const cellOf = (item: Fields, column: RowColumn, clock: Clock): Cell | undefined
     }
     default:
       if (value === true) return column.tag ? { text: column.tag } : undefined
-      if (typeof value === "string" || typeof value === "number") return { text: clean(String(value)) }
+      if (typeof value === "string" || typeof value === "number")
+        return { text: clean(column.prefix ? `${column.prefix} ${value}` : String(value)) }
       return undefined
   }
 }
@@ -308,7 +373,7 @@ const rowsOfItems = (items: readonly unknown[], shape: RowShape, clock: Clock, c
 const blockLine = (fields: Fields, chars: number) => blockOf(fields, chars).join("  ")
 
 /** A record as `field: value` lines; a nested record is indented under its field, a list of records counted. */
-const blockOf = (fields: Fields, chars: number, indent = ""): string[] =>
+const blockOf = (fields: Fields, chars: number, indent = "", whole: readonly string[] = []): string[] =>
   Object.entries(fields)
     .filter(([name]) => !(name === "priority" && "priority_label" in fields))
     .filter(([, value]) => present(value) || value === false)
@@ -319,7 +384,7 @@ const blockOf = (fields: Fields, chars: number, indent = ""): string[] =>
         return value.every((one) => !isFields(one) && !Array.isArray(one))
           ? [`${label} ${cut(clean(value.join(", ")), chars)}`]
           : [`${label} ${value.length} — --json shows them`]
-      return [`${label} ${cut(clean(String(value)), chars)}`]
+      return [`${label} ${whole.includes(name) ? clean(String(value)) : cut(clean(String(value)), chars)}`]
     })
 
 const footerOf = (body: Body): string[] => {
@@ -381,7 +446,7 @@ export const compactText = <T>(
   } else if (isFields(body.item)) {
     const sections = shape.sections ?? {}
     const rest = Object.fromEntries(Object.entries(body.item).filter(([name]) => !Object.hasOwn(sections, name)))
-    lines = blockOf(rest, chars).map(guarded)
+    lines = blockOf(rest, chars, "", shape.whole).map(guarded)
     for (const [name, entity] of Object.entries(sections)) {
       const list = body.item[name]
       if (!Array.isArray(list)) continue

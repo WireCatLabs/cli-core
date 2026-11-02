@@ -16,9 +16,9 @@ import { projectsCommand } from "./projects-command.js"
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const account = { provider: "chat", account: "500" }
 
-const message = (id: number): Message => ({
+const message = (id: number, chatId = "7"): Message => ({
   id: String(id),
-  chatId: "7",
+  chatId,
   senderId: "9",
   senderName: "Olga",
   timestamp: new Date(Date.UTC(2026, 0, 1) + id * 60_000).toISOString(),
@@ -94,7 +94,7 @@ const setUp = async () => {
     )
     return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("") }
   }
-  return { call, asked }
+  return { call, asked, env, project: project.ref }
 }
 
 const WINDOW = ["--since-time", "2025-12-01", "--before-time", "2026-02-01T00:00:00Z"]
@@ -182,5 +182,133 @@ describe("projects status", () => {
 
   it("is guarded by the messages permission: it prints what people wrote", () => {
     expect(keyForCommand(["projects", "status"])).toBe("messages")
+  })
+})
+
+describe("projects evidence purposes and proposed links", () => {
+  const withChats = async () => {
+    const set = await setUp()
+    const store = await openStore({ env: set.env })
+    for (const chat of ["8", "11"])
+      await store.messages.saveMessages(
+        account,
+        chat,
+        [1, 2, 3].map((id) => message(id, chat)),
+        { via: "test" },
+      )
+    await store.knowledge.relate(null, {
+      by: "owner",
+      from: "chat:chat/500/8",
+      to: set.project,
+      kind: "member-of",
+      confirmed: true,
+      purpose: "sales",
+    })
+    const proposal = await store.knowledge.proposeRelation(
+      null,
+      { from: "chat:chat/500/11", to: set.project, kind: "member-of" },
+      { bot: "claude-code" },
+    )
+    await store.close()
+    return { ...set, proposal: proposal.id }
+  }
+  const read = 'chat default messages list 8 "date>=2025-11-30"'
+
+  it("reads the default purpose and leaves a sales chat as one missing row with its count and read command", async () => {
+    const { call } = await withChats()
+    const { code, stdout } = await call("projects", "evidence", "Harbour", ...WINDOW, "--json")
+    expect(code).toBe(0)
+    const body = JSON.parse(stdout)
+    expect(body.item.purposes).toEqual(["work"])
+    expect(body.item.linked_chats.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/7"])
+    expect(body.item.left_out).toEqual([
+      expect.objectContaining({
+        ref: "chat:chat/500/8",
+        purpose: "sales",
+        messages: 3,
+        first_at: "2026-01-01T00:01:00.000Z",
+        last_at: "2026-01-01T00:03:00.000Z",
+        read_command: read,
+      }),
+    ])
+    expect(body.item.items.some((one: { ref: string }) => one.ref.startsWith("msg:chat/500/8/"))).toBe(false)
+    expect(body.missing).toContainEqual({
+      field: "linked_chats",
+      why: `chat:chat/500/8, purpose sales, not read: 3 messages 2026-01-01…2026-01-01; read it: ${read}`,
+      step: "messages.list",
+    })
+  })
+
+  it("reads every linked chat with --purpose all, and the asked one with --purpose sales", async () => {
+    const { call } = await withChats()
+    const all = JSON.parse(
+      (await call("projects", "evidence", "Harbour", ...WINDOW, "--purpose", "all", "--json")).stdout,
+    )
+    expect(all.item.purposes).toBe("all")
+    expect(all.item.left_out).toEqual([])
+    expect(all.item.linked_chats.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/7", "chat:chat/500/8"])
+    const sales = JSON.parse(
+      (await call("projects", "evidence", "Harbour", ...WINDOW, "--purpose", "sales", "--json")).stdout,
+    )
+    expect(sales.item.linked_chats.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/8"])
+    expect(sales.item.left_out.map((one: { purpose: string }) => one.purpose)).toEqual(["work"])
+  })
+
+  it("refuses an unknown purpose and lists the configured ones", async () => {
+    const { call } = await withChats()
+    const { code, stderr } = await call("projects", "evidence", "Harbour", ...WINDOW, "--purpose", "leads", "--json")
+    expect(code).not.toBe(0)
+    expect(JSON.parse(stderr).error.message).toBe(
+      "unknown purpose leads; the configured ones are work, sales, support, other, or all",
+    )
+  })
+
+  it("reads a proposed chat only with --include-proposed, and marks every item it alone brought", async () => {
+    const { call, proposal } = await withChats()
+    const without = JSON.parse((await call("projects", "evidence", "Harbour", ...WINDOW, "--json")).stdout)
+    expect(without.item.linked_chats.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/7"])
+    expect(without.item.items.some((one: { proposed?: string }) => one.proposed)).toBe(false)
+
+    const found = await call("projects", "evidence", "Harbour", ...WINDOW, "--include-proposed", "--json")
+    const body = JSON.parse(found.stdout)
+    expect(body.item.linked_chats.at(-1)).toMatchObject({ ref: "chat:chat/500/11", proposed: proposal })
+    const fromProposed = body.item.items.filter((one: { ref: string }) => one.ref.startsWith("msg:chat/500/11/"))
+    expect(fromProposed).toHaveLength(3)
+    expect(fromProposed.every((one: { proposed?: string }) => one.proposed === proposal)).toBe(true)
+    expect(
+      body.item.items
+        .filter((one: { proposed?: string }) => one.proposed)
+        .every((one: { ref: string }) => one.ref.startsWith("msg:chat/500/11/")),
+    ).toBe(true)
+
+    const text = (await call("projects", "evidence", "Harbour", ...WINDOW, "--include-proposed")).stdout
+    expect(text).toContain("[proposed, not confirmed]")
+    expect(text).toContain(`read as proposed, not confirmed: chat:chat/500/11 (${proposal})`)
+  })
+
+  it("draws items, linked chats and the left-out chat as compact rows", async () => {
+    const { call, proposal } = await withChats()
+    const { code, stdout } = await call("projects", "evidence", "Harbour", ...WINDOW, "--include-proposed", "--compact")
+    expect(code).toBe(0)
+    expect(stdout).toContain("# items: 5 · at: 01-01 · context: linked-chat")
+    expect(stdout).toContain(`msg:chat/500/11/3 · proposed ${proposal} · crew note 3`)
+    expect(stdout).toContain(`#11 · proposed ${proposal} · 3 items`)
+    expect(stdout).toContain(`chat:chat/500/8 · sales · 3 messages · 01-01 · 01-01 · ${read}`)
+    expect(stdout).toContain("# missing: linked_chats: chat:chat/500/8, purpose sales, not read: 3 messages")
+  })
+
+  it("suggests a purpose once when one linked chat with none gives most items, and never changes the link", async () => {
+    const { call, env } = await withChats()
+    const store = await openStore({ env })
+    const many = Array.from({ length: 30 }, (_, index) => message(index + 1))
+    await store.messages.saveMessages(account, "7", many, { via: "test" })
+    await store.close()
+    const body = JSON.parse((await call("projects", "evidence", "Harbour", ...WINDOW, "--json")).stdout)
+    expect(body.item.purpose_hint).toMatchObject({ chat: "chat:chat/500/7", items: 30, of: 30 })
+    const why = body.missing.find((one: { field: string }) => one.field === "purpose")?.why
+    expect(why).toMatch(/^chat:chat\/500\/7 gave 30 of 30 items by membership alone; .* --purpose <purpose>$/)
+    const again = await openStore({ env })
+    expect((await again.knowledge.relations(null, "chat:chat/500/7"))[0]?.purpose).toBeNull()
+    await again.close()
   })
 })

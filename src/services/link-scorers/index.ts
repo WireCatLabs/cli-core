@@ -6,7 +6,6 @@ export { mailThread } from "./mail-thread.js"
 export { memberChats } from "./member-chats.js"
 export { memberDialog } from "./member-dialog.js"
 export {
-  BUILT_IN_PURPOSES,
   combinedScore,
   DEFAULT_LIMIT,
   DEFAULT_THRESHOLD,

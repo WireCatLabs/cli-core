@@ -112,6 +112,30 @@ describe("projectStatus on the harbour fixture", () => {
     expect(sales.outOfScope.map((one) => one.reason)).toEqual(["purpose", "purpose", "purpose", "purpose"])
   })
 
+  it("leaves a sales chat out by default and counts what it holds in the window, never its text", async () => {
+    const { store } = await seeded(HARBOUR.map((chat) => (chat.id === "-950" ? { ...chat, purpose: "sales" } : chat)))
+    const found = await projectStatus(store, { project: "HRB", asOf: NOW })
+    expect(found.chats.map((chat) => chat.ref)).not.toContain("chat:max/11/-950")
+    expect(found.purposes).toEqual(["work"])
+    expect(found.outOfScope).toEqual([
+      {
+        chat: "chat:max/11/-950",
+        reason: "purpose",
+        purpose: "sales",
+        account: CLIENT,
+        chatId: "-950",
+        messages: 1,
+        firstAt: "2026-11-01T09:00:00.000Z",
+        lastAt: "2026-11-01T09:00:00.000Z",
+      },
+    ])
+    const all = await projectStatus(store, { project: "HRB", asOf: NOW, purposes: ["all"] })
+    expect(all.chats.find((chat) => chat.ref === "chat:max/11/-950")?.purpose).toBe("sales")
+    await expect(projectStatus(store, { project: "HRB", asOf: NOW, purposes: ["leads"] })).rejects.toThrow(
+      "unknown purpose leads; the configured ones are work, sales, support, other, or all",
+    )
+  })
+
   it("keeps answering when a signal throws, and names it in failed", async () => {
     const { store } = await seeded()
     const broken: StatusSignal = {

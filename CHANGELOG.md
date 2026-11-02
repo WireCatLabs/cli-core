@@ -7,6 +7,28 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`projects evidence` and `projects status` read the linked chats of the purposes asked.** `--purpose sales,work`
+  or `--purpose all` picks them; without it, the configured defaults (built in: `work`). A chat left out is one
+  `missing` row with its purpose, message count, dates and the command that reads it; an unknown purpose is refused
+  with the configured list. `gatherStoredProject` and `projectStatus` take `purposes`, `purposeConfig` and a `count`
+  port (`storedChatCount`); `purposesOf`, `BUILT_IN_PURPOSE_CONFIG` and `Messenger.purposes` let a host pass its list.
+  When one linked chat with no purpose gives most of a run's items, the answer suggests a purpose once.
+- **`projects evidence --include-proposed` reads chats and members proposed for the project**, after the confirmed
+  ones. Each linked chat and member row carries `proposed` and `score`, and each item only they brought `proposed`.
+  `gatherStoredProject` takes `includeProposed`; `linkedChatsOf` takes `{ includeProposed }`.
+- **`--compact` rows for `projects evidence`**: items, linked chats, chats left out by purpose and members. A row
+  column may take a `prefix`, a shape may print fields `whole` (the cursor), and `time`/`day` columns read epoch ms.
+- `countMessages` takes `until`.
+
+### Changed — may break callers
+
+- **`LinkedChat` gains `purpose` and `relationship`, `ProjectStatus` gains `purposes`, and a status chat left out by
+  purpose carries its account, chat id and counts.** `StoredProjectGathering` gains `leftOut`, `members`, `purposes`
+  and `purposeHint`. A caller that builds these by hand adds the fields. `DEFAULT_PURPOSES` moved to
+  `project-purposes`, still exported from `@wirecat/cli-core/services`.
+
 ## 0.552.0 — 02.11.2026
 
 ### Added

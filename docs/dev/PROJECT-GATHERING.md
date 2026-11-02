@@ -79,6 +79,22 @@ const result = await gatherProjectEvidence(
   carries the same command. The command declares `partial`: a chat held in part makes `meta.complete` false and
   still exits 0.
 
+- **Purposes.** Each link has a `purpose` (null means `work`). `gatherStoredProject` and `projectStatus` read only
+  the linked chats whose purpose is asked (`purposes`, `["all"]` for every one), else the project's own defaults in
+  `purposeConfig.projects`, else `purposeConfig.defaults`. Core knows only the built-in config (`work`, `sales`,
+  `support`, `other`; default `work`); a host with its own list passes it (`Messenger.purposes`, memo's config). An
+  asked purpose not in the list is refused with the list. A chat left out is never dropped silently: it is a
+  `leftOut` row (status: an `outOfScope` row) with its purpose, its message count and first and last time in the
+  window from the `count` port (`storedChatCount` by default), and the hosts add one `missing` entry with the command
+  that reads it. When one linked chat with no purpose gives more than half of a first run's items, and at least 20,
+  `purposeHint` says so once, for the owner to decide; nothing is changed or left out because of it.
+
+- **Proposed links.** With `includeProposed`, pending `member-of` proposals to the project (`relationship` proposals,
+  and unconfirmed links written before them as `link:<id>`) count as linked chats and person members after the
+  confirmed ones, inside the same limits. Their rows carry `proposed` (the inbox id) and `score`. An item carries
+  `proposed` when only proposed links found it; an item a word or a confirmed link found is evidence anyway. Off by
+  default; `projects evidence --include-proposed` turns it on.
+
 - **Index.** New mail and imported documents wait in a queue before the word index holds them, and the
   context reader reads only the index. With `index: "update"` (the default) the service first runs the host's
   `ContextIndex` (`store.contextIndex`): the same fills a mail search and the notes search run. `index: "as-is"`

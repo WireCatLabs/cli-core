@@ -41,8 +41,10 @@ it("lists the confirmed linked chats with their account and role", async () => {
     const chats = await linkedChatsOf(store, project.ref)
 
     expect(chats).toHaveLength(2)
-    expect(chats).toContainEqual({ provider: "chat", account: "500", chat: "7", role: "source report" })
-    expect(chats).toContainEqual({ provider: "chat", account: "501", chat: "8", role: null })
+    expect(chats).toContainEqual(
+      expect.objectContaining({ provider: "chat", account: "500", chat: "7", role: "source report", purpose: null }),
+    )
+    expect(chats).toContainEqual(expect.objectContaining({ provider: "chat", account: "501", chat: "8", role: null }))
   } finally {
     await store.close()
   }

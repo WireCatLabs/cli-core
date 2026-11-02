@@ -21,7 +21,6 @@ export { contextEvidenceFingerprint, createContextEvidenceReader } from "./conte
 export { excerpt } from "./excerpt.js"
 export {
   aliasHits,
-  BUILT_IN_PURPOSES,
   chatSenders,
   chatTitle,
   combinedScore,
@@ -86,8 +85,19 @@ export type {
   ProjectUnitState,
 } from "./project-gathering-request.js"
 export {
+  BUILT_IN_PURPOSE_CONFIG,
+  BUILT_IN_PURPOSES,
   DEFAULT_PURPOSES,
+  LINK_PURPOSE,
+  type PurposeChoice,
+  type PurposeConfig,
+  purposeList,
+  purposeRead,
+  purposesOf,
+} from "./project-purposes.js"
+export {
   type MoneyTotal,
+  type OutOfScope,
   type ProjectStatus,
   type ProjectStatusInput,
   projectStatus,
@@ -103,12 +113,17 @@ export {
 } from "./project-status/index.js"
 export { questions } from "./questions.js"
 export {
+  type ChatCount,
+  type ChatCounter,
   canonicalProjectRef,
   gatherStoredProject,
+  type LeftOutChat,
   type LinkedChat,
   linkedChatsOf,
+  type ProjectMember,
   type StoredProjectGathering,
   type StoredProjectInput,
+  storedChatCount,
 } from "./stored-project-gathering.js"
 
 import { type AccountService, accountService } from "./account.js"
