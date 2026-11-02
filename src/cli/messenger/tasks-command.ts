@@ -5,6 +5,7 @@ import { readOnlyLockOf, readOnlyRefusal } from "../../ports/app.js"
 import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
 import { storedChatId } from "../../services/message-resolution.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
+import { refuseAlreadyRead } from "../../services/task-analysis.js"
 import { unlistedNote } from "../../services/task-categories.js"
 import { ARRIVAL_WINDOW, applyTaskRulesToChats, type ChatRulePass } from "../../services/task-rules.js"
 import {
@@ -264,7 +265,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
         "--into <id>",
         "when tasks add listed tasks that may be the same job: link the message to this one instead of opening a task",
       )
-      .option("--new", "when tasks add listed tasks that may be the same job: open the task anyway"),
+      .option("--new", "when tasks add listed tasks that may be the same job: open the task anyway")
+      .option(
+        "--open-new",
+        "open a task from a message the chat's task point already passed (a read again with tasks review " +
+          "--since-time); without it such a read only updates and closes tasks",
+      ),
     "send Alex the API token",
   ).action(async function (this: Command, message: string) {
     const context = messengerContext(this, messenger)
@@ -278,8 +284,13 @@ export const tasksCommand = (messenger: Messenger): Command => {
       assignee?: string[]
       into?: string
       new?: boolean
+      openNew?: boolean
     }>()
-    const { into, new: anyway, ...rest } = options
+    const { into, new: anyway, openNew, ...rest } = options
+    if (!openNew)
+      await context.withStore((store, account) => refuseAlreadyRead(store, account, message), {
+        name: "tasks add",
+      })
     const plan = planFrom(rest)
     const {
       task,

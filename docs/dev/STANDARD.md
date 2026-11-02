@@ -1065,6 +1065,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--only-admins-send` | `<on\|off>` | only admins may send messages |  | `chats update` (planned) |
 | `--only-missing` |  | only chats with no metadata yet; without --chat, every stored group/channel |  | `metadata sync` (planned) |
 | `--only-owner-edits-info` | `<on\|off>` | only the owner may change the name and photo |  | `chats update` (max-only) |
+| `--open-new` |  | open a task from a message the chat's task point already passed; without it a read again only updates and closes tasks |  | `tasks add` |
 | `--operation-id` | `<id>` | identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated |  | `messages forward`, `messages send`, `polls create`, `topics create` (tg-only) |
 | `--order` | `<recent\|name>` | newest conversation first, or alphabetical |  | `contacts list` |
 | `--others` |  | every session but this one. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `account sessions end` |

@@ -154,17 +154,11 @@ Proposal:
 
 Recommendation: 1 only, then decide on 2 from what the owner does by hand after a week.
 
-## Open decisions for the owner
+## Owner decisions
 
-1. **One point per chat for all agents, or one per agent?** One shared (built): the owner asked for "the date of
-   the last analysis"; two agents reading the same chat would double the cost. Per agent is a key change only.
-2. **Should reading old history open tasks, or only update existing ones?** Today history opens none
-   (`task_first_pass_per_chat` 0, "History is not work"). Recommendation: a read again (`--since-time`) opens tasks
-   only from the last 30 days and only updates or closes older ones.
-3. **Should `tasks review` fetch missing history itself?** Recommendation: no, it names `messages sync` as the next
-   step (part 2.2).
-4. **The command words.** The shared vocabulary defines `review` as "list what waits for the owner's decision" and
-   `acknowledge` as "record delivery using the receipt issued when the item was claimed"; `tasks review` also sits
-   beside the top-level `review --new`. Keep them, or register clearer words in cli-base first (for example
-   `tasks unread`/`tasks done-through`)? Recommendation: keep them for this release, rename before 1.0 if the owner
-   finds them confusing.
+1. **One point per chat for all agents** (owner, 2026-11-03), with `by` recording who moved it last.
+2. **Reading old history opens tasks only with a flag** (owner, 2026-11-03: "only if using a flag"). `tasks add`
+   refuses a message the chat's point already passed (`task.already-read`) unless given `--open-new`; built.
+3. **`tasks review` reads only the store** (owner, 2026-11-03); missing history is fetched by `messages sync`, which
+   part 2.2 names as the next step.
+4. **The words `review` and `acknowledge` stay** (owner, 2026-11-03).

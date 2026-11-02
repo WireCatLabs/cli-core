@@ -207,6 +207,28 @@ describe("tasks", () => {
     ])
   })
 
+  it("**a read again only updates and closes tasks**, and opens one from history only with --open-new", async () => {
+    const call = await setup()
+    await call("tasks", "acknowledge", "7", "1", "--since-time", "2026-10-01T00:00:00Z", "--json")
+
+    const refused = await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+    expect(refused.code).not.toBe(0)
+    expect(JSON.parse(refused.stderr).error.reason).toBe("task.already-read")
+    expect(json(await call("tasks", "list", "--json")).items).toEqual([])
+
+    const after = item(
+      await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--category", "access", "--json"),
+    )
+    expect(after.created).toBe(true)
+    const opened = item(
+      await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--open-new", "--json"),
+    )
+    expect(opened).toMatchObject({ source: PROMISE, created: true })
+    expect(
+      item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")).created,
+    ).toBe(false)
+  })
+
   it("lists a group's open tasks beside its messages, whose id starts with a minus", async () => {
     const call = await setup()
     const store = await openStore({ path: call.env.MESSAGING_STORE as string })

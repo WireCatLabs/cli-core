@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { isLocator, parseLocator } from "../domain/locator.js"
 import type { ChatKind, Id, Message } from "../domain/models.js"
 import type { AccountKey, MessageStore, TaskAnalysisMark, TaskAnalysisMarkWrite } from "../store/index.js"
-import { FIRST_PASS_DAYS, RULES_IN } from "./task-rules.js"
+import { FIRST_PASS_DAYS, RULES_IN, taskAccount } from "./task-rules.js"
 
 /** How many messages one read gives an agent: a page it can judge in one go. */
 export const ANALYSIS_PAGE = 100
@@ -140,4 +141,26 @@ export const acknowledgeTaskAnalysis = async (
   const saved = await store.sync.taskAnalysisMark(account, chatId)
   if (!saved) throw new Error(`the task analysis mark of chat ${chatId} was not saved`)
   return { mark: saved, moved: true }
+}
+
+/**
+ * A read again of history the chat's task point already passed only updates and closes tasks (owner, 2026-11-03):
+ * a new task from such a message needs `--open-new`. A message that already has a task, or one after the point, is
+ * let through.
+ */
+export const refuseAlreadyRead = async (store: MessageStore, account: AccountKey, source: string): Promise<void> => {
+  if (!isLocator(source)) return
+  const { provider, account: owner, chat, message } = parseLocator(source)
+  if (provider !== account.provider || owner !== account.account) return
+  const mark = await store.sync.taskAnalysisMark(account, chat)
+  if (!mark) return
+  const stored = await store.messages.message(account, message, { chatId: chat })
+  if (!stored || stored.timestamp > mark.through) return
+  if ((await store.tasks.findBySource(taskAccount(account), source)).length > 0) return
+  throw new CliError(
+    "validation_error",
+    `${source} was already read for tasks (the point is at ${mark.through}): a read again only updates and closes ` +
+      "tasks; add --open-new to open a task from it anyway",
+    { reason: "task.already-read" },
+  )
 }

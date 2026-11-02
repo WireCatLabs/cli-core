@@ -113,7 +113,11 @@ export const analysisCommands = (tasks: Command, messenger: Messenger): void => 
       `how many messages (default ${ANALYSIS_PAGE}, ${ANALYSIS_PAGE_MAX} with --since-time; at most ${ANALYSIS_PAGE_MAX})`,
       positiveCount("--limit"),
     )
-    .option("--since-time <time>", "read again from this ISO 8601 time, or 30d ago, whatever the point says")
+    .option(
+      "--since-time <time>",
+      "read again from this ISO 8601 time, or 30d ago, whatever the point says; what the point already passed only " +
+        "updates and closes tasks, unless tasks add is given --open-new",
+    )
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       const { sinceTime, ...options } = this.opts<{ limit?: number; sinceTime?: string }>()

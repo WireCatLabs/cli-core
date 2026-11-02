@@ -735,6 +735,9 @@
       "value": "<on|off>",
       "meaning": "only the owner may change the name and photo"
     },
+    "--open-new": {
+      "meaning": "open a task from a message the chat's task point already passed; without it a read again only updates and closes tasks"
+    },
     "--operation-id": {
       "value": "<id>",
       "meaning": "identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated"
@@ -4831,6 +4834,7 @@
         "--due": "all",
         "--into": "all",
         "--new": "all",
+        "--open-new": "all",
         "--remind-time": "all",
         "--title": "all",
         "--type": {

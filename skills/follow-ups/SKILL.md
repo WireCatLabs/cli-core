@@ -52,7 +52,9 @@ For each chat with `waiting` above 0: `tasks review`, then open new tasks, updat
 the new messages settle, then run the `next` step the answer gives (`tasks acknowledge`). Acknowledge only what you
 finished; a page with `has_more: true` is followed by the next one. A chat with `late` above 0 got older history
 after it was read: `tasks review "<chat>" --since-time <mark.from>` reads the stretch again (up to 1000 messages),
-and acknowledging that read clears it. When that answer has `has_more: true` it gives no acknowledge step: the stretch
+and acknowledging that read clears it. A read again only updates and closes tasks: `tasks add` refuses a message the
+point already passed (`task.already-read`) unless it is given `--open-new`, which you pass only when the owner asked
+for tasks from that history. When that answer has `has_more: true` it gives no acknowledge step: the stretch
 is too long to read again in one page, so tell the owner and move on. A chat whose history is not stored yet is fetched by `messages sync` first; `tasks review` reads
 only the store.
 

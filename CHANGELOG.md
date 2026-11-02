@@ -74,6 +74,8 @@ shape of this file.
   back. A chat never read starts 14 days back; `--since-time` reads a stretch again. The points live in
   `store_settings`, so no migration; `SyncStore.taskAnalysisMarks`, `taskAnalysisMark` and `setTaskAnalysisMark`
   read and write them. The follow-ups skill uses them. New permission key `tasks.acknowledge`.
+  A read again only updates and closes tasks: `tasks add` refuses a message the chat's point already passed
+  (`task.already-read`) unless given `--open-new`; a message that already has a task is returned as before.
 - **`serve` reads back on start what arrived while nothing listened.** A provider's own catch-up drops a gap it
   finds too long (Telegram's `differenceTooLong`, and `channelDifferenceTooLong` past 100 updates in a channel), so
   30 seconds after connecting `serve` lists the chats once and reads each chat whose newest message is newer than the
