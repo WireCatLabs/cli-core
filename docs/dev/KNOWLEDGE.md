@@ -87,7 +87,9 @@ Every decide method takes a `Decider`: `"owner"`, or `{ bot, model?, reason }` f
 decide for the owner. Each runs `mayDecide` before it changes anything: an agent needs a reason, never
 decides its own bot's proposal (every Claude Code session is the bot `claude-code`), never a rule scorer's or
 one that names no author, and nothing unless the host's `agent_decisions` is on: `openStore` keeps it off unless
-the host passes `decisions: { agentDecisions: true }` from the owner's explicit `agent_decisions: true`. `proposalRegistry`
+the host passes `decisions: { agentDecisions: true }` from the owner's explicit `agent_decisions: true`. Mail and
+meeting findings, and any row marked `ownerOnly` (a registry row takes it from its kind), are the owner's alone even
+then: `mayDecide` reads the row's stored `kind`, so a path that sees the batch as a generic action refuses too. `proposalRegistry`
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `invoice`, `payment`,
 `memory`, `findings`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
 Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `memory:`, `link:`, `key:` for the rest;

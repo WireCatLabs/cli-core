@@ -319,7 +319,11 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         )
           return invalid("accept only unique IDs shown in this batch")
         if (decision.by === undefined) return invalid("a findings review names who decides: the owner")
-        assertMayDecide({ id, proposedBy: proposals.proposer(id), ownerOnly: true }, decision.by, context.decisions)
+        assertMayDecide(
+          { id, kind: MAIL_FINDINGS_KIND, proposedBy: proposals.proposer(id) },
+          decision.by,
+          context.decisions,
+        )
         const accepted = [...decision.accept].sort()
         if (batch.receipt) {
           if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))

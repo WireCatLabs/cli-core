@@ -3,12 +3,16 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { contextEvidenceFingerprint } from "../context/evidence.js"
+import { formatLocator } from "../domain/locator.js"
+import type { MailFinding } from "../mail/findings.js"
 import type { MeetingFindingsInput } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { cueEvidence } from "../services/meeting-evidence.js"
 import { approveAsTask } from "../services/proposal-tasks.js"
+import { actionKind } from "../services/proposals/kinds/action.js"
+import { emptyProposalRegistry, proposalRegistry } from "../services/proposals/registry.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
-import { type Decider, mayDecide, type Proposer } from "./decisions.js"
+import { assertMayDecide, type Decider, mayDecide, type Proposer } from "./decisions.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const handles: { close(): unknown }[] = []
@@ -63,6 +67,13 @@ const opened = async (): Promise<MessageStore> => {
   return store
 }
 const own = { details: { reason: "proposal.own" } }
+
+/** A host that registers no findings kind: every stored proposal falls to the generic action kind. */
+const onlyActions = (store: MessageStore) => {
+  const registry = emptyProposalRegistry(store)
+  registry.register(actionKind(store, registry.claimed))
+  return registry
+}
 const agent = { bot: "claude-code", model: "synthetic" }
 
 /** SEC-118: every decide path in core refuses an agent deciding its own proposal, and lets the owner decide it. */
@@ -172,40 +183,119 @@ describe("an agent cannot decide its own proposal", () => {
       status: "reviewed",
     })
   })
+})
 
-  it("on a meeting findings batch", async () => {
+const meetingBatch = async (store: MessageStore) => {
+  const account = { provider: "example", account: "synthetic-findings" }
+  const accountId = await store.accounts.saveAccount(account, { name: "Synthetic" })
+  const seed = sampleMeeting()
+  seed.meeting.accountId = accountId
+  const details = await store.meetings.saveMeeting(seed)
+  const project = await store.knowledge.addProject({ name: "Harbour Observatory", key: "HOB" })
+  await store.knowledge.linkMeetingProject(account, String(details.meeting.id), project.id, { by: "owner" })
+  const transcript = details.transcripts[0]
+  if (!transcript?.rows[0]) throw new Error("Missing synthetic cue")
+  const cue = cueEvidence(accountId, details.meeting.id, transcript.transcript, transcript.rows[0])
+  const input: MeetingFindingsInput = {
+    schemaVersion: 1,
+    key: "own",
+    extractor: "synthetic",
+    findings: [
+      {
+        id: "decision",
+        kind: "fact",
+        type: "decision",
+        statement: "Launch in November",
+        project: project.ref,
+        evidence: [{ reference: cue.reference, fingerprint: cue.fingerprint }],
+      },
+    ],
+  }
+  const batch = await store.meetingFindings.stage(account, input, agent)
+  const decision = { fingerprint: batch.fingerprint, accept: ["decision"] }
+  return {
+    id: batch.id,
+    review: (by: Decider) => store.meetingFindings.review(account, batch.id, { ...decision, by }),
+  }
+}
+
+const mailBatch = async (store: MessageStore) => {
+  const mailbox = { provider: "email", account: "me@example.com" }
+  const accountId = await store.accounts.saveAccount(mailbox, { name: null })
+  const message = "<lease@example.com>"
+  await store.mail.saveThread({
+    accountId,
+    externalId: "t-lease",
+    now: Date.now(),
+    emails: [
+      {
+        externalId: message,
+        subject: "Lease",
+        from: { address: "ann@example.com", name: "Ann" },
+        to: [{ address: mailbox.account, name: "Me" }],
+        sentAt: Date.now(),
+        receivedAt: Date.now(),
+        bodyText: "Please send the signed lease",
+      },
+    ],
+  })
+  const fingerprint = (await store.mail.emailMarks(accountId, [message])).get(message)?.fingerprint as string
+  const reference = formatLocator({ provider: "email", account: mailbox.account, chat: "t-lease", message })
+  const finding: MailFinding = {
+    id: "t1",
+    kind: "task",
+    type: "chore",
+    title: "Send the signed lease",
+    reason: "Ann asks for it",
+    commitment: "explicit",
+    evidence: [{ reference, fingerprint }],
+  }
+  const batch = await store.mailFindings.stage(
+    mailbox,
+    { schemaVersion: 1, key: "mail-triage:1", extractor: "synthetic", findings: [finding] },
+    agent,
+  )
+  return {
+    id: batch.id,
+    review: (by: Decider) =>
+      store.mailFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["t1"], by }),
+  }
+}
+
+/** SEC-121: an owner-only kind refuses an agent with a reason on every decide path, even with agent decisions on. */
+describe.each([
+  ["mail findings", mailBatch],
+  ["meeting findings", meetingBatch],
+])("%s", (_, staged) => {
+  const other: Decider = { bot: "codex", reason: "the email asks for it" }
+  const ownerOnly = { code: "permission_error", details: { reason: "proposal.owner-only" } }
+
+  it("refuse an agent through their review, the registry, a host's registry, and the generic action paths", async () => {
     const store = await opened()
-    const account = { provider: "example", account: "synthetic-findings" }
-    const accountId = await store.accounts.saveAccount(account, { name: "Synthetic" })
-    const seed = sampleMeeting()
-    seed.meeting.accountId = accountId
-    const details = await store.meetings.saveMeeting(seed)
-    const project = await store.knowledge.addProject({ name: "Harbour Observatory", key: "HOB" })
-    await store.knowledge.linkMeetingProject(account, String(details.meeting.id), project.id, { by: "owner" })
-    const transcript = details.transcripts[0]
-    if (!transcript?.rows[0]) throw new Error("Missing synthetic cue")
-    const cue = cueEvidence(accountId, details.meeting.id, transcript.transcript, transcript.rows[0])
-    const input: MeetingFindingsInput = {
-      schemaVersion: 1,
-      key: "own",
-      extractor: "synthetic",
-      findings: [
-        {
-          id: "decision",
-          kind: "fact",
-          type: "decision",
-          statement: "Launch in November",
-          project: project.ref,
-          evidence: [{ reference: cue.reference, fingerprint: cue.fingerprint }],
-        },
-      ],
+    const batch = await staged(store)
+    await expect(batch.review(other)).rejects.toMatchObject(ownerOnly)
+    for (const registry of [proposalRegistry(store), onlyActions(store)]) {
+      expect(await registry.get(batch.id)).toMatchObject({ ownerOnly: true })
+      await expect(
+        (async () => assertMayDecide(await registry.get(batch.id), other, store.decisionPolicy))(),
+      ).rejects.toMatchObject(ownerOnly)
+      for (const confirm of [true, false])
+        expect((await registry.decide([batch.id], { confirm, by: other })).refused).toMatchObject([
+          { code: "permission_error", reason: "proposal.owner-only" },
+        ])
     }
-    const batch = await store.meetingFindings.stage(account, input, agent)
-    const decision = { fingerprint: batch.fingerprint, accept: ["decision"] }
-    await expect(store.meetingFindings.review(account, batch.id, { ...decision, by: self })).rejects.toMatchObject(own)
-    expect(await store.meetingFindings.review(account, batch.id, { ...decision, by: "owner" })).toMatchObject({
-      status: "reviewed",
-    })
+    const dedicated = { code: "validation_error", details: { reason: expect.stringMatching(/dedicated-review$/) } }
+    await expect(approveAsTask(store, batch.id, other)).rejects.toMatchObject(dedicated)
+    await expect(store.proposedActions.approve(batch.id, other)).rejects.toMatchObject(dedicated)
+    await expect(store.proposedActions.reject(batch.id, other)).rejects.toMatchObject(dedicated)
+    expect((await store.proposedActions.get(batch.id)).status).toBe("proposed")
+    expect(await store.tasks.list({})).toHaveLength(0)
+  })
+
+  it("let the owner decide", async () => {
+    const store = await opened()
+    const batch = await staged(store)
+    expect(await batch.review("owner")).toMatchObject({ status: "reviewed" })
   })
 })
 

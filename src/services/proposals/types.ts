@@ -20,6 +20,8 @@ export interface ProposalRow {
   signals: { scorer: string; weight: number; why: string }[] | null
   parts: { id: string; kind: string; summary: string; outcome: "accepted" | "rejected" | null }[] | null
   createdAt: string
+  /** Only the owner decides it: its kind says so, whichever path decides it. */
+  ownerOnly?: boolean
 }
 
 export interface ProposalFilter {
