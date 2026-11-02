@@ -41,7 +41,34 @@ export interface EmailMarks {
   ruleId: number | null
 }
 
+/** One email as a processing mark sees it, by its store id; never its text. */
+export interface MarkedEmail {
+  id: number
+  externalId: string
+  thread: string
+  /** ms: received, or sent when that is unknown. */
+  at: number | null
+  /** ms: when the store saved it first, and last changed it. */
+  storedAt: number
+  changedAt: number
+  /** Sent to many: the bulk mailbox or a List-Id. */
+  bulk: boolean
+  envelope: boolean
+  /** Stored from its first bytes, not whole yet. */
+  partial: boolean
+  draft: boolean
+}
+
 export interface MailActivityStore {
+  /**
+   * The account's live emails stored after `afterId`, oldest first, at most `limit`, and those of `ids`: what a
+   * processing mark reads next. The id is the store's insert order, so mail stored late is never behind the mark.
+   */
+  emailsAfter(accountId: number, afterId: number, limit: number, ids?: readonly number[]): Promise<MarkedEmail[]>
+  /** The account's newest store id; 0 with no mail. */
+  newestEmailId(accountId: number): Promise<number>
+  /** Every `sync_cursors` value of the account whose key starts with `prefix`. */
+  statesLike(accountId: number, prefix: string): Promise<{ key: string; value: string; at: number }[]>
   /** Each live email's marks, by its Message-ID; one the store does not hold is left out. */
   emailMarks(accountId: number, externalIds: readonly string[]): Promise<Map<string, EmailMarks>>
   /**
@@ -137,7 +164,56 @@ export const emailMarks = (database: CacheDatabase, accountId: number, externalI
   return marks
 }
 
+const MARKED = `
+  SELECT e.id, e.external_id, t.external_id AS thread, coalesce(e.received_at, e.sent_at) AS at, e.created_at,
+    e.updated_at, coalesce(e.draft, 0) AS draft, json_extract(e.metadata, '$.partial') IS NOT NULL AS partial,
+    coalesce(json_extract(e.headers, '$."list-id"'), json_extract(e.metadata, '$.listId')) IS NOT NULL
+      OR EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
+        WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk,
+    EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
+      WHERE m.email_id = e.id AND b.kind = 'envelope') AS envelope
+  FROM emails e JOIN email_threads t ON t.id = e.email_thread_id`
+
+const markedOf = (row: Record<string, unknown>): MarkedEmail => ({
+  id: Number(row.id),
+  externalId: String(row.external_id),
+  thread: String(row.thread),
+  at: int(row.at),
+  storedAt: Number(row.created_at),
+  changedAt: Number(row.updated_at),
+  bulk: Boolean(row.bulk),
+  envelope: Boolean(row.envelope),
+  partial: Boolean(row.partial),
+  draft: Boolean(row.draft),
+})
+
+export const emailsAfter = (
+  database: CacheDatabase,
+  accountId: number,
+  afterId: number,
+  limit: number,
+  ids: readonly number[] = [],
+): MarkedEmail[] => {
+  const next = database
+    .prepare(`${MARKED} WHERE e.id > ? AND e.account_id = ? AND e.deleted_at IS NULL ORDER BY e.id LIMIT ?`)
+    .all(afterId, accountId, limit)
+  const one = database.prepare(`${MARKED} WHERE e.id = ? AND e.account_id = ? AND e.deleted_at IS NULL`)
+  const named = ids.flatMap((id) => {
+    const row = one.get(id, accountId)
+    return row ? [row] : []
+  })
+  return [...named, ...next].map(markedOf)
+}
+
 export const mailActivity = (database: CacheDatabase): MailActivityStore => ({
+  emailsAfter: async (accountId, afterId, limit, ids) => emailsAfter(database, accountId, afterId, limit, ids),
+  newestEmailId: async (accountId) =>
+    Number(database.prepare("SELECT max(id) AS id FROM emails WHERE account_id = ?").get(accountId)?.id ?? 0),
+  statesLike: async (accountId, prefix) =>
+    database
+      .prepare("SELECT key, value, updated_at FROM sync_cursors WHERE account_id = ? AND substr(key, 1, ?) = ?")
+      .all(accountId, prefix.length, prefix)
+      .map((row) => ({ key: String(row.key), value: String(row.value), at: Number(row.updated_at) })),
   emailMarks: async (accountId, externalIds) => emailMarks(database, accountId, externalIds),
   threadActivity: async (accountId, since, where) => threadActivity(database, accountId, since, where),
 })

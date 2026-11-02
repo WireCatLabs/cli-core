@@ -20,8 +20,10 @@ import { atDetail } from "../../output-detail.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { type ServerSearched, type ServerSkip, sourceKey } from "../../services/server-search.js"
 import { type AccountKey, type MessageStore, queryFilter, THREAD_COLUMNS } from "../../store/store.js"
+import { acknowledgeCommand } from "./marks.js"
 import { mailReviewCommand } from "./review.js"
 
+export { mailMark, markItem, markText } from "./marks.js"
 export { MAIL_REVIEW_QUERY, MAIL_REVIEW_STEPS } from "./review.js"
 
 /** A locked or broken store must fail the command, not read as "nothing stored yet". */
@@ -277,6 +279,7 @@ const messagesCommand = (mail: MailReads): Command => {
         () => shownText(emails),
       )
     })
+  messages.addCommand(acknowledgeCommand(mail))
   return messages
 }
 

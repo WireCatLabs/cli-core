@@ -6,6 +6,19 @@ export { dropMissing, type Gone, tooManyGone } from "./gone.js"
 export { type AuthVerdicts, HEADER_FIELDS, headersOf, type MailHeaders, mailHeadersOf } from "./headers.js"
 export { type MailIdsInput, mailIds } from "./ids.js"
 export { decodedLabelName, decodeMailboxName, labelName, systemLabel } from "./labels.js"
+export {
+  acknowledgeMark,
+  cursorOf,
+  HOLD_PARTIAL_MS,
+  HOLDER,
+  MARK_BATCH,
+  type MailMark,
+  type MarkRead,
+  markOf,
+  marksOf,
+  readPastMark,
+  type SkipReason,
+} from "./marks.js"
 export { type MailTurn, mailTurn } from "./owed.js"
 export {
   type Address,

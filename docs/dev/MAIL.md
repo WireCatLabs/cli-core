@@ -118,6 +118,19 @@ names the owner in To or Cc; waiting when the owner wrote it. Mail sent to many 
 at all mail). Each review item's `email` carries `bulk`, `list_id`, `rule_id` and the sender score instead, and the
 query term `bulk:false` leaves out threads whose newest email is bulk, a list's or an envelope (`isBulk`).
 
+## Processing marks
+
+A holder — an agent or a pipeline — keeps how far it processed an account's mail in the shared store, key
+`consumer:<holder>` under the account in `sync_cursors` (`src/mail/marks.ts`); purging the account clears it with the
+mail. The mark counts by `emails.id`, the store's insert order, so mail stored late with an old date is still after
+it. `review --holder <name>` reads up to 200 emails past the mark, and the held ones now whole, and gives a cursor
+(`<last id>.<read time>`); it moves nothing. `messages acknowledge --holder <name> --cursor <cursor>` moves the mark
+there, never back; it only adds to the holder's own bookkeeping, so a read-only scheduled run may run it
+(`destroysNothing`). Mail sent to many (the bulk mailbox or a List-Id), envelopes and drafts are skipped and counted;
+a partial email is held until it is whole, or skipped after 7 days; one that changed after the read is held once more,
+so the holder sees it at least once. A holder with no mark starts from the newest stored email. Reads stop at mail a
+running sync stored, which files bulk mail only at its end. `marksOf` lists the marks, for `status`.
+
 ## Sync state
 
 All under the account, in `store.sync` (`syncState`, `setSyncState`):
@@ -129,6 +142,7 @@ All under the account, in `store.sync` (`syncState`, `setSyncState`):
 | `mail_folder_scope` | the mode and folders of the last run; a change skips deletions once |
 | `mail_coverage` | the folders, window and whether the last run was complete |
 | `mail_sender_scores` | when `scoreSenders` last ran, its version (`SCORE_VERSION`) and the senders it ranks lower |
+| `consumer:<holder>` | a holder's processing mark: `throughId`, `throughAt`, `held`, `read`, `skipped` by reason |
 
 Mail sent to many is in the mailbox `memo:bulk` (`BULK`); mail an envelope rule recorded is in a mailbox of kind
 `envelope` named by the rule (`envelopeBox`). Neither is a folder, so neither proves a deletion.

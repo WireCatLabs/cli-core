@@ -21,6 +21,7 @@ import { messagesCommand } from "./messenger/messages-command.js"
 import { modelsCommand } from "./messenger/models-command.js"
 import { reviewCommand } from "./messenger/review.js"
 import { serverCommand } from "./messenger/server-command.js"
+import { tasksCommand } from "./messenger/tasks-command.js"
 import { commandWords, liftProfile } from "./profile.js"
 import { createProgram, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -47,6 +48,7 @@ const program = createProgram({
     inboxCommand(messenger),
     reviewCommand(messenger),
     storeCommand(messenger),
+    tasksCommand(messenger),
     attachmentsCommand(messenger),
     conversationsCommand(messenger),
     doctorCommand(messenger),

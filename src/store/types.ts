@@ -240,3 +240,28 @@ export interface Range {
   from: number
   to: number
 }
+
+/**
+ * How far a chat's messages were read for tasks: every stored message sent from `from` through `through`, the one
+ * with id `throughId` last. Its own point, so reading a chat, marking it read or another reader's `--new` never
+ * moves it.
+ */
+export interface TaskAnalysisMark {
+  chatId: Id
+  from: string
+  through: string
+  throughId: Id
+  /** Who moved it last: an agent's name or the owner. */
+  by: string
+  /**
+   * At `checkedAt` every stored message sent from `from` through `checkedThrough` had been read; one saved or edited
+   * later inside that stretch (history fetched afterwards) was not.
+   */
+  checkedAt: string
+  checkedThrough: string
+  /** When it last moved. */
+  at: string
+}
+
+/** `checked` stamps `checkedAt` with the store's clock; otherwise the mark keeps its earlier one. */
+export type TaskAnalysisMarkWrite = Omit<TaskAnalysisMark, "at" | "checkedAt"> & { checked: boolean }

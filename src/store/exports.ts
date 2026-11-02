@@ -33,6 +33,7 @@ export type { CounterTarget } from "./sqlite/counters.js"
 export {
   type EmailMarks,
   MAIL_AGENDA_COLUMNS,
+  type MarkedEmail,
   type NewestEmail,
   type ThreadActivity,
 } from "./sqlite/email-activity.js"
@@ -133,5 +134,7 @@ export type {
   StoredHit,
   StoredLink,
   StoredReadiness,
+  TaskAnalysisMark,
+  TaskAnalysisMarkWrite,
 } from "./types.js"
 export type { AccountVectors, VectorsStore } from "./vectors.js"

@@ -21,6 +21,34 @@ shape of this file.
   same write, or is refused while other confirmed payments already cover the invoice; rejecting drops them.
 - **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
   `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
+
+## 0.556.0 — 02.11.2026
+
+### Added
+
+- **A processing mark per holder and mail account** (`src/mail/marks.ts`): `review --holder <name>` reads what is
+  stored past the holder's mark, by store order (`emails.id`), so mail stored late is not skipped; bulk mail, envelopes
+  and drafts are skipped and counted, partial mail held until whole. `messages acknowledge --holder <name> --cursor
+  <cursor>` moves the mark forward; a read-only scheduled run may run it. Kept in `sync_cursors` as
+  `consumer:<holder>`, no schema change. `readPastMark`, `acknowledgeMark`, `marksOf`, `markItem` and the
+  `mail_mark` entity are exported for `status`; `store.mail` gains `emailsAfter`, `newestEmailId`, `statesLike` and
+  `emailHits`.
+
+## 0.555.0 — 02.11.2026
+
+### Added
+
+- **Each chat keeps its own point of reading for tasks.** `review --new`, `inbox --new`, the messenger's read state
+  and other agents move their own points, so a message one of them showed could be skipped by the next task pass.
+  `tasks status` lists every chat that can hold tasks (not channels or Saved Messages) with how far it was read for
+  tasks, how many stored messages wait after that, and how many arrived late inside the stretch already read
+  (history fetched afterwards). `tasks review <chat>` gives the waiting messages, oldest first, with the chat's open
+  tasks, and moves nothing; `tasks acknowledge <chat> <message>` moves the point once the tasks are written, never
+  back. A chat never read starts 14 days back; `--since-time` reads a stretch again. The points live in
+  `store_settings`, so no migration; `SyncStore.taskAnalysisMarks`, `taskAnalysisMark` and `setTaskAnalysisMark`
+  read and write them. The follow-ups skill uses them. New permission key `tasks.acknowledge`.
+  A read again only updates and closes tasks: `tasks add` refuses a message the chat's point already passed
+  (`task.already-read`) unless given `--open-new`; a message that already has a task is returned as before.
 - **`review` for mail CLIs** (`mailReadCommands`): every stored email, both sides, in threads that changed since a
   point, in messenger `review`'s item shape plus `email` (people, labels, sender score and the marks `bulk`,
   `list_id`, `rule_id`); `--new` keeps a point per mailbox, `--unanswered [duration]` keeps threads whose newest email
@@ -31,6 +59,21 @@ shape of this file.
   `email` gains optional `bulk`, `list_id` and `rule_id`, and its `summary` view may carry `email`.
 - **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
   of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
+- **`config repair` mends a settings file whose JSON is broken only in its syntax**, without AI or network (the file
+  may hold keys). It fixes a byte-order mark, `//` and `/* */` comments, trailing commas, a missing comma between
+  entries on separate lines, unquoted keys, single-quoted text, and closing brackets missing at the end. Every value,
+  permissions included, stays as written, in the file's key order. The old file is kept beside it as
+  `config.json.bak-<time>` in its old mode, and the new one is written atomically at 0600. It refuses damage with
+  more than one reading (two entries on one line, a key twice, a bare word as a value, a file that stops after a
+  closing bracket or inside a value, text that is not JSON or not text) with `configuration_error` and the line and
+  column, and changes nothing. It prints the line and kind of each fix, never a value; `--dry-run` writes nothing.
+  `--json` gives `file`, `found`, `repaired`, `dry_run`, `changes` (`{ line, kind }`), `backup`, and for a file that
+  needs nothing `reason` (`nothing to repair`, `no settings file`); a refusal is the error reason `config.unrepairable`
+  with `details.file`, `details.line` and `details.column`.
+  It changes what a later run may do, so the read-only lock refuses it and an MCP server runs it only with
+  `mcp.authority`; an agent's shell may not repair a file cut off before its end. `repairConfigText` exports it.
+- **`doctor` offers `<tool> config repair` as the `fix` of an `invalid_json` issue** when the repair would succeed, so
+  the desktop can show a Repair button; a command refused on such a file names it too.
 
 ### Fixed
 
