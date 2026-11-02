@@ -124,6 +124,7 @@ export interface MessageStore {
   close(): Promise<void>
 }
 
+export type { ChatHistoryShape, StoredHistorySkip } from "./sqlite/history-skips.js"
 export { BACKFILL_ON_OPEN, type StoreOptions } from "./sqlite/open-store.js"
 export { fileFacts, readStoreTables, type TableKind } from "./sqlite/store-tables.js"
 

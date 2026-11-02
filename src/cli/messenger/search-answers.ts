@@ -15,9 +15,11 @@ import type { MeaningSkipped } from "../../services/messages-discovery.js"
 import type { FoundNote, NotesFoundOf } from "../../services/notes-search.js"
 import type { SearchAllItem } from "../../services/search-all.js"
 import type { MeetingSearchItem, SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
+import type { StoredHistorySkip } from "../../store/store.js"
 import { type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { archiveSummary } from "./archive-summary.js"
+import { historyLimitGaps } from "./history-gaps.js"
 
 /** What a source tool's `search all` reads: never mail, which is memo's (docs/dev/TOOL-BOUNDARIES.md). */
 export const SOURCE_SEARCHED = ["messages", "notes", "events", "meetings"] as const
@@ -296,8 +298,11 @@ export const messagesAnswer = (
   found: SearchFound,
   { limit, page, again }: Paging,
   query = "",
+  skips: StoredHistorySkip[] = [],
 ): ListBody<MessageHitItem> => {
   const accounts = found.coverage?.accounts ?? found.accounts ?? []
+  const gaps = gapsOf(found)
+  const limited = historyLimitGaps(skips)
   return listOf(command, {
     items: [...found.items.map((hit) => messageHitItem(hit, query)), ...pictureItems(found)],
     limit,
@@ -305,8 +310,9 @@ export const messagesAnswer = (
     page: page ?? 1,
     ...(found.total ? { total: found.total } : {}),
     ...(again ? { args: again } : {}),
-    ...gapsOf(found),
-    meta: metaOf(accounts, found.skipped, coverageGaps(found).missing.length > 0),
+    next: [...gaps.next, ...limited.next],
+    missing: [...gaps.missing, ...limited.missing],
+    meta: metaOf(accounts, found.skipped, coverageGaps(found).missing.length > 0 || skips.length > 0),
   })
 }
 
@@ -395,7 +401,9 @@ export const allAnswer = (
   found: SearchAllIncludingMeetingsFound,
   { limit, page, again }: Paging,
   exact = false,
+  skips: StoredHistorySkip[] = [],
 ): ListBody<HitItem> => {
+  const limited = historyLimitGaps(skips)
   const scan = found.meetings?.complete === false ? found.meetings : undefined
   const notes = meaningGap(found.notes?.meaningSkipped, exact)
   const messages = messageMeaningGap(found.messages?.meaningSkipped, "found_by")
@@ -419,6 +427,7 @@ export const allAnswer = (
       ...notes.next,
       ...messages.next.filter((step) => !notes.next.some((asked) => JSON.stringify(asked) === JSON.stringify(step))),
       ...archive.next,
+      ...limited.next,
     ],
     missing: [
       ...(scan
@@ -433,7 +442,8 @@ export const allAnswer = (
       ...notes.missing,
       ...messages.missing,
       ...archive.missing,
+      ...limited.missing,
     ],
-    meta: metaOf(found.accounts, found.skipped, archive.missing.length > 0),
+    meta: metaOf(found.accounts, found.skipped, archive.missing.length > 0 || skips.length > 0),
   })
 }
