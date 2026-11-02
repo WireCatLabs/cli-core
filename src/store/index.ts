@@ -81,6 +81,7 @@ export {
   REMINDERS_QUERY,
   reminder,
 } from "./knowledge-query.js"
+export { MAIL_FINDINGS_KIND, type MailFindingsBatch, type MailFindingsStore } from "./mail-findings.js"
 export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"
 export { openCache } from "./open.js"

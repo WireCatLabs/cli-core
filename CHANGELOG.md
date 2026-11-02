@@ -23,6 +23,23 @@ shape of this file.
   same write, or is refused while other confirmed payments already cover the invoice; rejecting drops them.
 - **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
   `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
+- **A `propose` tier under `<PREFIX>_READ_ONLY`.** `proposesOnly(command)` marks a command that only stages
+  something for the owner or moves its caller's own mark; the lock lets it run only when its path also ends with one
+  of `PROPOSE_COMMANDS` — `messages acknowledge` and `mail findings add` — a closed list. `isStoreChange` applies it,
+  so every host's lock does. `messages acknowledge` moved from `destroysNothing` to this tier.
+- **Mail findings for the owner** (`mail_findings` in `proposed_actions`, no schema change): `store.mailFindings`
+  stages one batch per mailbox and run (`key` `<holder>:<through_id>`), of up to 30 findings — `task`,
+  `task_update` (close, due, detail), `fact`, `memory`, `link` (address → person, person → organization, thread →
+  project) and `new_contact` — each citing 1–8 `msg:email/…` emails by fingerprint, at most five per sender. Changed
+  or partial mail refuses the batch. Only the owner decides one, whatever `agent_decisions` says; the registry kind
+  `mail_findings` is owner-only too (`ProposalKind.ownerOnly`). `parseMailFindingsJson` reads the file;
+  the `mail_findings` entity describes it.
+- **Mail `review` items carry what a pipeline cites and checks:** each email's evidence `fingerprint`, `new_sender`
+  (no earlier stored email from the address) and `sender_identities`. `review --holder` also leaves out senders whose
+  score is demoted, counted as `suspicious` in the mark.
+- **`schedule agent --on-new-mail <holder>`,** where the host passes `newMail` (`holderHasMail`): the agent starts
+  only when mail is stored past the holder's mark, and may check every 5 minutes; a run with nothing new costs no
+  model call and records nothing. Mail that is only skipped moves the holder's mark without the agent.
 
 ### Fixed
 

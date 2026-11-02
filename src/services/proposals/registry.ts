@@ -6,6 +6,7 @@ import { factKind } from "./kinds/fact.js"
 import { invoiceKind, paymentKind } from "./kinds/finance.js"
 import { findingsKind } from "./kinds/findings.js"
 import { keyDocumentKind } from "./kinds/key-document.js"
+import { mailFindingsKind } from "./kinds/mail-findings.js"
 import { memoryKind } from "./kinds/memory.js"
 import { relationshipKind } from "./kinds/relationship.js"
 import { relationshipUpdateKind } from "./kinds/relationship-update.js"
@@ -106,7 +107,7 @@ export const emptyProposalRegistry = (
             })
             continue
           }
-          const refusal = mayDecide(row, decision.by, policy)
+          const refusal = mayDecide(kind.ownerOnly ? { ...row, ownerOnly: true } : row, decision.by, policy)
           if (refusal) {
             refused.push(refusal)
             continue
@@ -135,6 +136,7 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     paymentKind(store),
     memoryKind(store),
     findingsKind(store),
+    mailFindingsKind(store),
   ])
     registry.register(kind)
   registry.register(actionKind(store, registry.claimed))

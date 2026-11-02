@@ -3,7 +3,7 @@ import { Command } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { outputFor } from "../../cli/context.js"
-import { destroysNothing, LOCAL_WRITE } from "../../cli/effects.js"
+import { LOCAL_WRITE, proposesOnly } from "../../cli/effects.js"
 import { itemOf, renderAnswer } from "../../cli/envelope.js"
 import { acknowledgeMark, type MailMark } from "../marks.js"
 import type { MailReads } from "./index.js"
@@ -17,7 +17,13 @@ export const mailMark = v.strictObject({
   through_received_at: v.nullable(v.string()),
   held: v.number(),
   read: v.number(),
-  skipped: v.strictObject({ bulk: v.number(), envelope: v.number(), partial: v.number(), draft: v.number() }),
+  skipped: v.strictObject({
+    bulk: v.number(),
+    envelope: v.number(),
+    partial: v.number(),
+    draft: v.number(),
+    suspicious: v.number(),
+  }),
   updated_at: v.string(),
 })
 
@@ -34,7 +40,8 @@ export const markItem = (mark: MailMark): v.InferOutput<typeof mailMark> => ({
 export const markText = (mark: MailMark) =>
   `${mark.holder}  through ${mark.throughId}${mark.throughAt === null ? "" : ` (${iso(mark.throughAt)})`}  ` +
   `read ${mark.read}  held ${mark.held.length}  skipped bulk ${mark.skipped.bulk}, envelope ${mark.skipped.envelope}, ` +
-  `partial ${mark.skipped.partial}, draft ${mark.skipped.draft}  updated ${iso(mark.updatedAt)}\n`
+  `partial ${mark.skipped.partial}, draft ${mark.skipped.draft}, suspicious ${mark.skipped.suspicious}  ` +
+  `updated ${iso(mark.updatedAt)}\n`
 
 /**
  * `messages acknowledge`: a holder says it is done with what `review --holder` gave it, and its mark moves there. It
@@ -42,7 +49,7 @@ export const markText = (mark: MailMark) =>
  */
 export const acknowledgeCommand = (mail: MailReads): Command =>
   answerEntity(
-    destroysNothing(
+    proposesOnly(
       annotate(new Command("acknowledge"), {
         effects: LOCAL_WRITE,
         examples: [

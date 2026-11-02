@@ -1,3 +1,5 @@
+import { contextEvidenceFingerprint } from "../../context/evidence.js"
+import { formatLocator } from "../../domain/locator.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { int, str } from "./events.js"
 import type { ColumnMap, Where } from "./query-filter.js"
@@ -39,6 +41,12 @@ export interface EmailMarks {
   listId: string | null
   /** The mail rule that decided how it is stored, by its id in `rules list`. */
   ruleId: number | null
+  /** What a finding citing this email gives as its evidence fingerprint: a hash of its stored subject and text. */
+  fingerprint: string
+  /** No earlier stored email, in any account, came from this address. */
+  newSender: boolean
+  /** How many identities the sender's person has; 1 is this address alone. 0 when the sender is unknown. */
+  senderIdentities: number
 }
 
 /** One email as a processing mark sees it, by its store id; never its text. */
@@ -57,6 +65,8 @@ export interface MarkedEmail {
   /** Stored from its first bytes, not whole yet. */
   partial: boolean
   draft: boolean
+  /** Its sender's mail looks like spam, a scam or a robot (the sender score). */
+  demoted: boolean
 }
 
 export interface MailActivityStore {
@@ -148,18 +158,39 @@ export const threadEmailIds = (
     .all(accountId, thread, after ?? null, until ?? null)
     .map(({ id }) => Number(id))
 
+// The subject and text are read only to hash them as `contextRecordOf` does, so a cited fingerprint matches.
 const MARKS = `
   SELECT e.mail_rule_id, coalesce(json_extract(e.headers, '$."list-id"'), json_extract(e.metadata, '$.listId')) AS list_id,
     EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
-      WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk
-  FROM emails e WHERE e.account_id = ? AND e.external_id = ? AND e.deleted_at IS NULL`
+      WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk,
+    a.provider, a.external_id AS account, t.external_id AS thread, e.subject, coalesce(e.body_text, '') AS body,
+    e.from_identity_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM emails f
+      WHERE f.from_identity_id = e.from_identity_id AND f.id < e.id AND f.deleted_at IS NULL) AS new_sender,
+    (SELECT count(*) FROM identity_links o WHERE o.person_id =
+      (SELECT l.person_id FROM identity_links l WHERE l.identity_id = e.from_identity_id)) AS identities
+  FROM emails e JOIN accounts a ON a.id = e.account_id JOIN email_threads t ON t.id = e.email_thread_id
+  WHERE e.account_id = ? AND e.external_id = ? AND e.deleted_at IS NULL`
 
 export const emailMarks = (database: CacheDatabase, accountId: number, externalIds: readonly string[]) => {
   const one = database.prepare(MARKS)
   const marks = new Map<string, EmailMarks>()
   for (const id of externalIds) {
     const row = one.get(accountId, id)
-    if (row) marks.set(id, { bulk: Boolean(row.bulk), listId: str(row.list_id), ruleId: int(row.mail_rule_id) })
+    if (!row) continue
+    const ref = formatLocator({
+      provider: String(row.provider),
+      account: String(row.account),
+      chat: String(row.thread),
+      message: id,
+    })
+    marks.set(id, {
+      bulk: Boolean(row.bulk),
+      listId: str(row.list_id),
+      ruleId: int(row.mail_rule_id),
+      fingerprint: contextEvidenceFingerprint({ ref, title: str(row.subject), text: String(row.body), revision: null }),
+      newSender: Boolean(row.new_sender),
+      senderIdentities: Number(row.identities ?? 0),
+    })
   }
   return marks
 }
@@ -171,7 +202,9 @@ const MARKED = `
       OR EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
         WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk,
     EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
-      WHERE m.email_id = e.id AND b.kind = 'envelope') AS envelope
+      WHERE m.email_id = e.id AND b.kind = 'envelope') AS envelope,
+    EXISTS (SELECT 1 FROM account_identities ai WHERE ai.account_id = e.account_id
+      AND ai.identity_id = e.from_identity_id AND ai.mail_demoted = 1) AS demoted
   FROM emails e JOIN email_threads t ON t.id = e.email_thread_id`
 
 const markedOf = (row: Record<string, unknown>): MarkedEmail => ({
@@ -185,6 +218,7 @@ const markedOf = (row: Record<string, unknown>): MarkedEmail => ({
   envelope: Boolean(row.envelope),
   partial: Boolean(row.partial),
   draft: Boolean(row.draft),
+  demoted: Boolean(row.demoted),
 })
 
 export const emailsAfter = (

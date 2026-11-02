@@ -79,6 +79,7 @@ import {
   topicIcon,
 } from "./list-results.js"
 import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
+import { mailFindings } from "./mail-findings.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
   event,
@@ -529,6 +530,7 @@ export const ENTITIES = {
   meeting_project_evidence: meetingProjectEvidence,
   meeting_preparation: meetingPreparation,
   meeting_findings: meetingFindings,
+  mail_findings: mailFindings,
   meeting_transcript: meetingTranscript,
   meeting_summary: meetingSummary,
   meeting_evidence: meetingEvidence,
@@ -658,5 +660,6 @@ export const entityDefinitions = (): Record<EntityName, unknown> =>
   ) as Record<EntityName, unknown>
 
 export { zonedTime } from "./fields.js"
+export { mailFindings } from "./mail-findings.js"
 export { meetingFindings } from "./meeting-findings.js"
 export { meetingPreparation } from "./meeting-preparation.js"

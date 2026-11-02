@@ -19,6 +19,7 @@ import {
 import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { locationVariables } from "../../background/units.js"
 import { parseDuration } from "../../domain/duration.js"
+import { HOLDER } from "../../mail/marks.js"
 import { type AppIdentity, readOnlyLockOf } from "../../ports/app.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
@@ -31,6 +32,8 @@ import { lineOf } from "../steps.js"
 
 /** Each run of an agent is a paid model call that reads chats; keeping the store current is `serve`'s job. */
 const AGENT_MINIMUM_MINUTES = 60
+/** A run gated on new mail costs a store read when nothing came, so it may check as often as mail syncs. */
+const GATED_AGENT_MINIMUM_MINUTES = 5
 const COMMAND_MINIMUM_MINUTES = 1
 const HARNESSES = ["claude", "codex"] as const
 type Harness = (typeof HARNESSES)[number]
@@ -110,6 +113,11 @@ export interface ScheduleHost {
     command: Command,
     resolving?: { needsProfile?: boolean },
   ): AnswerOutput & { env: NodeJS.ProcessEnv; profile: string }
+  /**
+   * Whether mail is stored past the holder's mark (`holderHasMail`). Given, `schedule agent` takes `--on-new-mail`:
+   * the agent then runs only after a sync stored mail it has not processed.
+   */
+  newMail?: (command: Command, holder: string) => Promise<boolean>
 }
 
 /**
@@ -117,7 +125,7 @@ export interface ScheduleHost {
  * (macOS) or Task Scheduler (Windows). Every timer runs `schedule exec <file>`; the schedule file holds
  * the rest, so what runs and with which variables is the same on all three.
  */
-export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): Command => {
+export const scheduleCommandFor = ({ app, context: contextOf, newMail }: ScheduleHost): Command => {
   const command = new Command("schedule").description(
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
   )
@@ -158,6 +166,12 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
       ])
     }
     return { context, system, state, say, timer, environment, save }
+  }
+  /** A schedule gated on new mail waits while nothing is stored past its holder's mark. */
+  const waits = async (self: Command, file: string): Promise<string | undefined> => {
+    const holder = existsSync(file) ? readSchedule(file).onNewMail : undefined
+    if (holder === undefined || !newMail || (await newMail(self, holder))) return undefined
+    return holder
   }
 
   withWhen(
@@ -212,7 +226,9 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
       ),
   ).action(async function (this: Command, name: string, harness: Harness, prompt: string) {
     const { context, system, environment, save } = prepare(this)
-    const options = this.opts<WhenOptions & { maxCost?: number }>()
+    const options = this.opts<WhenOptions & { maxCost?: number; onNewMail?: string }>()
+    if (options.onNewMail !== undefined && !HOLDER.test(options.onNewMail))
+      throw new CliError("validation_error", `--on-new-mail takes a holder: lower-case letters, digits and dashes`)
     const program = findProgram(harness, context.env, system.platform)
     if (!program) throw new CliError("not_found", `${harness} is not on PATH`)
     const paths = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: context.env })
@@ -250,11 +266,19 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
       name: scheduleName(name),
       kind: "agent",
       argv,
-      when: whenOf(options, AGENT_MINIMUM_MINUTES),
+      when: whenOf(options, options.onNewMail ? GATED_AGENT_MINIMUM_MINUTES : AGENT_MINIMUM_MINUTES),
       environment: environment(),
       createdAt: new Date().toISOString(),
+      ...(options.onNewMail ? { onNewMail: options.onNewMail } : {}),
     })
   })
+  if (newMail)
+    command.commands
+      .find((one) => one.name() === "agent")
+      ?.option(
+        "--on-new-mail <holder>",
+        `run only when mail is stored past this holder's mark — after a sync brought new mail; may check every ${GATED_AGENT_MINIMUM_MINUTES}m`,
+      )
 
   withQuery(
     annotate(command.command("list"), {
@@ -310,6 +334,9 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
     .argument("<name>", "the schedule's name, as `schedule list` shows it")
     .action(async function (this: Command, name: string) {
       const { context, system, state, say, timer } = prepare(this)
+      const holder = await waits(this, scheduleFile(state, scheduleName(name)))
+      if (holder !== undefined)
+        return say({ name, skipped: true, holder }, [`${name}: skipped — no mail stored past ${holder}'s mark`])
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
           timer: timer(),
@@ -347,6 +374,7 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
     .action(async function (this: Command, file: string) {
       // A timer starts it with no profile named; the schedule's own environment carries the profile.
       const { context, system, timer } = prepare(this, { needsProfile: false })
+      if ((await waits(this, file)) !== undefined) return
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, file, {
           timer: timer(),

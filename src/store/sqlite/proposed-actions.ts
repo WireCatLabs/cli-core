@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
 import { assertMayDecide, type Decider, deciderAuthor, type Proposer } from "../decisions.js"
 import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
+import { MAIL_FINDINGS_KIND } from "../mail-findings.js"
 import type { AccountKey } from "../types.js"
 import { type Actor, type ProposedByFilter, proposedBySql } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
@@ -81,7 +82,7 @@ const json = (value: unknown) => (value == null ? null : JSON.parse(String(value
  * `rejected`, the decision the owner made.
  */
 const STATUS =
-  `CASE WHEN p.status = 'approved' AND p.kind IN ('${MEETING_FINDINGS_KIND}', '${EVIDENCE_FINDINGS_KIND}') ` +
+  `CASE WHEN p.status = 'approved' AND p.kind IN ('${MEETING_FINDINGS_KIND}', '${EVIDENCE_FINDINGS_KIND}', '${MAIL_FINDINGS_KIND}') ` +
   "AND json_array_length(p.result, '$.accepted') = 0 THEN 'rejected' ELSE p.status END"
 const NAMED =
   `SELECT p.*, ${STATUS} AS shown_status, b.name AS proposer_name, b.kind AS proposer_kind FROM proposed_actions p ` +

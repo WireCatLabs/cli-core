@@ -19,6 +19,8 @@ export interface Schedule {
   /** The variables the run gets on top of the timer's: the profile, where the files are, PATH. Never a credential. */
   environment: Record<string, string>
   createdAt: string
+  /** A holder whose mark gates the run: it starts only when mail is stored past that mark. */
+  onNewMail?: string
 }
 
 export interface LastRun {

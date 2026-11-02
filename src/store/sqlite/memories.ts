@@ -234,7 +234,9 @@ export const erase = <T>(database: StoreContext["database"], work: () => T): T =
   }
 }
 
-export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
+export const memoriesStoreOver = (
+  context: StoreContext,
+): MemoriesStore & { addNow(input: MemoryInput): Memory; confirmNow(reference: string, by: Decider): Memory } => {
   const { database, now } = context
   const stemmerFor: (stemmers: Stemmers) => Stemmer = stemmerCache()
   const memoryOf = (row: Row): Memory => ({
@@ -279,72 +281,76 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     return memoryOf(rowOf(reference))
   }
 
-  return {
-    add: async (input) => {
-      const kind = oneOf(input.kind, MEMORY_KINDS, "a memory's kind")
-      if (input.scope === undefined || input.scope === null)
-        throw new CliError("validation_error", "a memory needs its scope — personal or work; there is no default", {
-          reason: "memory.scope-required",
-        })
-      const scope = oneOf(input.scope, MEMORY_SCOPES, "a memory's scope")
-      if (!Array.isArray(input.evidence) || input.evidence.length === 0)
-        throw new CliError("validation_error", "a memory needs at least one piece of evidence it rests on", {
-          reason: "memory.evidence-required",
-        })
-      const body = input.body?.trim() ?? ""
-      if (!body || body.length > 20_000)
-        throw new CliError("validation_error", "a memory's body takes 1–20000 characters")
-      if (input.confidence !== undefined && !(input.confidence >= 0 && input.confidence <= 1))
-        throw new CliError("validation_error", "confidence takes 0–1")
-      const status = oneOf(input.status ?? "proposed", ["proposed", "confirmed"] as const, "a new memory's status")
-      if (status === "confirmed" && input.author !== "owner")
-        throw new CliError("permission_error", "an agent's memory waits as proposed; only the owner confirms it", {
-          reason: "proposal.owner-only",
-        })
-      const id = write(database, () => {
-        const { actor, model } = authorActor(context, input.author)
-        const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
-        const project = input.project === undefined ? null : projectId(database, input.project)
-        const replaced = input.supersedes === undefined ? undefined : Number(rowOf(input.supersedes).id)
-        const at = now()
-        const made = Number(
-          database
-            .prepare(
-              "INSERT INTO memories (id, kind, body, subject_type, subject_id, author_type, author_id, model, confidence, status, " +
-                "last_verified_at, supersedes_id, scope, project_id, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            )
-            .get(
-              nextId(database, "memories"),
-              kind,
-              body,
-              subject?.type ?? null,
-              subject?.id ?? null,
-              actor.type,
-              actor.id,
-              model,
-              input.confidence ?? null,
-              status,
-              status === "confirmed" ? at : null,
-              replaced ?? null,
-              scope,
-              project,
-              at,
-              at,
-            )?.id,
-        )
-        linkEvidence(
-          context,
-          { type: "memory", id: made },
-          input.evidence,
-          input.author === "owner" ? "owner" : "agent",
-        )
-        if (replaced !== undefined)
-          database.prepare("UPDATE memories SET status = 'superseded', updated_at = ? WHERE id = ?").run(at, replaced)
-        return made
+  /** `add` inside the caller's write, so a decision that adds a memory rolls back with it. */
+  const addNow = (input: MemoryInput): Memory => {
+    const kind = oneOf(input.kind, MEMORY_KINDS, "a memory's kind")
+    if (input.scope === undefined || input.scope === null)
+      throw new CliError("validation_error", "a memory needs its scope — personal or work; there is no default", {
+        reason: "memory.scope-required",
       })
-      return memoryOf(rowOf(`memory:${id}`))
-    },
+    const scope = oneOf(input.scope, MEMORY_SCOPES, "a memory's scope")
+    if (!Array.isArray(input.evidence) || input.evidence.length === 0)
+      throw new CliError("validation_error", "a memory needs at least one piece of evidence it rests on", {
+        reason: "memory.evidence-required",
+      })
+    const body = input.body?.trim() ?? ""
+    if (!body || body.length > 20_000)
+      throw new CliError("validation_error", "a memory's body takes 1–20000 characters")
+    if (input.confidence !== undefined && !(input.confidence >= 0 && input.confidence <= 1))
+      throw new CliError("validation_error", "confidence takes 0–1")
+    const status = oneOf(input.status ?? "proposed", ["proposed", "confirmed"] as const, "a new memory's status")
+    if (status === "confirmed" && input.author !== "owner")
+      throw new CliError("permission_error", "an agent's memory waits as proposed; only the owner confirms it", {
+        reason: "proposal.owner-only",
+      })
+    const id = write(database, () => {
+      const { actor, model } = authorActor(context, input.author)
+      const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
+      const project = input.project === undefined ? null : projectId(database, input.project)
+      const replaced = input.supersedes === undefined ? undefined : Number(rowOf(input.supersedes).id)
+      const at = now()
+      const made = Number(
+        database
+          .prepare(
+            "INSERT INTO memories (id, kind, body, subject_type, subject_id, author_type, author_id, model, confidence, status, " +
+              "last_verified_at, supersedes_id, scope, project_id, created_at, updated_at) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+          )
+          .get(
+            nextId(database, "memories"),
+            kind,
+            body,
+            subject?.type ?? null,
+            subject?.id ?? null,
+            actor.type,
+            actor.id,
+            model,
+            input.confidence ?? null,
+            status,
+            status === "confirmed" ? at : null,
+            replaced ?? null,
+            scope,
+            project,
+            at,
+            at,
+          )?.id,
+      )
+      linkEvidence(context, { type: "memory", id: made }, input.evidence, input.author === "owner" ? "owner" : "agent")
+      if (replaced !== undefined)
+        database.prepare("UPDATE memories SET status = 'superseded', updated_at = ? WHERE id = ?").run(at, replaced)
+      return made
+    })
+    return memoryOf(rowOf(`memory:${id}`))
+  }
+  const confirmNow = (reference: string, by: Decider): Memory => {
+    decided(reference, by)
+    return setStatus(reference, "confirmed", true)
+  }
+
+  return {
+    addNow,
+    confirmNow,
+    add: async (input) => addNow(input),
     get: async (reference) => memoryOf(rowOf(reference)),
     list: async (options = {}) => {
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
@@ -380,10 +386,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
         database.prepare("UPDATE memories SET project_id = ?, updated_at = ? WHERE id = ?").run(project, now(), id)
         return memoryOf(rowOf(`memory:${id}`))
       }),
-    confirm: async (reference, by) => {
-      decided(reference, by)
-      return setStatus(reference, "confirmed", true)
-    },
+    confirm: async (reference, by) => confirmNow(reference, by),
     markStale: async (reference, by) => {
       decided(reference, by)
       return setStatus(reference, "stale", false)

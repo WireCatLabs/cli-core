@@ -165,5 +165,5 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
       }
     })
 
-  return { snapshot, snapshotParts, previous, outcomes }
+  return { snapshot, snapshotParts, previous, outcomes, create }
 }

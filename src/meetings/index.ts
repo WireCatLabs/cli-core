@@ -73,13 +73,21 @@ export {
   validateMeetingFindings,
 } from "./findings.js"
 export {
+  type FactFinding,
   type Finding,
   type FindingsInput,
   type FindingsReceipt,
   type FindingsRules,
+  findingFields,
   findingFingerprint,
+  findingId,
+  findingText,
   type PaymentFinding,
+  type TaskFinding,
+  validateBatch,
+  validateFinding,
   validateFindings,
+  validEvidence,
 } from "./findings-rules.js"
 export { liftMeetingFields, MEETING_HIT_QUERY, meetingWordsQuery, parseMeetingQuery } from "./hit-query.js"
 export { type ImportFile, importFiles } from "./import.js"
@@ -372,6 +380,7 @@ export type {
   TranscriptLanguageFill,
   TranscriptRowInput,
 } from "./store.js"
+export { meetingTimestamp } from "./timestamp.js"
 export type {
   MeetingTranscriptReceiptStore,
   MeetingTranscriptStore,

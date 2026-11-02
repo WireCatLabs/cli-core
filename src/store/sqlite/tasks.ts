@@ -70,35 +70,42 @@ const COLUMNS =
   "t.id AS row_id, t.package_id, t.source_locator, t.source_kind, t.source_group, t.type, t.status, t.close_reason, t.source, t.created_at, t.due_at, t.closed_at, " +
   "t.closed_by_type, t.closed_by_id, t.key, t.category, t.claimed_by, t.claimed_until, p.name AS account"
 
+/** The inbox project of a task account (`telegram:100`), made the first time `create` asks for it. */
+export const inboxProject = (
+  { database, now }: Pick<StoreContext, "database" | "now">,
+  account: string,
+  create: boolean,
+): number | undefined => {
+  const key = inboxKey(account)
+  const found = database.prepare("SELECT id FROM projects WHERE key = ?").get(key)
+  if (!create) return found ? Number(found.id) : undefined
+  const [provider, external] = [account.slice(0, account.indexOf(":")), account.slice(account.indexOf(":") + 1)]
+  const owning = database
+    .prepare("SELECT id FROM accounts WHERE provider = ? AND external_id = ?")
+    .get(provider, external)
+  const accountId = owning ? Number(owning.id) : null
+  // A task can arrive before its messenger saved the account; the project learns it on a later task.
+  if (found) {
+    if (accountId !== null)
+      database
+        .prepare("UPDATE projects SET account_id = ? WHERE id = ? AND account_id IS NULL")
+        .run(accountId, Number(found.id))
+    return Number(found.id)
+  }
+  const at = now()
+  return Number(
+    database
+      .prepare(
+        "INSERT INTO projects (key, name, name_folded, description, type, account_id, scope, tasks_count, status, created_at, updated_at) " +
+          "VALUES (?, ?, ?, ?, 'personal', ?, 'personal', 0, 'active', ?, ?) RETURNING id",
+      )
+      .get(key, account, folded(account), `What waits on the owner in ${account}`, accountId, at, at)?.id,
+  )
+}
+
 export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
   const { database, now } = context
-  const inbox = (account: string, create: boolean): number | undefined => {
-    const key = inboxKey(account)
-    const found = database.prepare("SELECT id FROM projects WHERE key = ?").get(key)
-    if (!create) return found ? Number(found.id) : undefined
-    const [provider, external] = [account.slice(0, account.indexOf(":")), account.slice(account.indexOf(":") + 1)]
-    const owning = database
-      .prepare("SELECT id FROM accounts WHERE provider = ? AND external_id = ?")
-      .get(provider, external)
-    const accountId = owning ? Number(owning.id) : null
-    // A task can arrive before its messenger saved the account; the project learns it on a later task.
-    if (found) {
-      if (accountId !== null)
-        database
-          .prepare("UPDATE projects SET account_id = ? WHERE id = ? AND account_id IS NULL")
-          .run(accountId, Number(found.id))
-      return Number(found.id)
-    }
-    const at = now()
-    return Number(
-      database
-        .prepare(
-          "INSERT INTO projects (key, name, name_folded, description, type, account_id, scope, tasks_count, status, created_at, updated_at) " +
-            "VALUES (?, ?, ?, ?, 'personal', ?, 'personal', 0, 'active', ?, ?) RETURNING id",
-        )
-        .get(key, account, folded(account), `What waits on the owner in ${account}`, accountId, at, at)?.id,
-    )
-  }
+  const inbox = (account: string, create: boolean) => inboxProject(context, account, create)
   // A task made here has no package id and may be a type the package does not know; the package never sees it.
   const select = (where: string) =>
     database.prepare(
