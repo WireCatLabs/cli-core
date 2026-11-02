@@ -18,6 +18,7 @@ import { assertReadCompatible } from "./read-compatibility.js"
 import { stemsState } from "./stems.js"
 import { fillStems, followDefaultStemmers } from "./stems-fill.js"
 import { moveSuggestedLinks } from "./suggested-links.js"
+import { purgeTestAccounts } from "./test-accounts.js"
 import { fillVectorIndexes } from "./vector-index.js"
 
 export interface StoreOptions {
@@ -85,6 +86,7 @@ export const openStoreContext = async ({
       fillJoinKeys(database)
       moveSuggestedLinks(database, now)
       movePaymentFacts({ ...opened, now, decisions })
+      purgeTestAccounts({ ...opened, now, decisions }, warn)
       const pending = pendingNormalization(database)
       if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)
       followDefaultStemmers(database, now)

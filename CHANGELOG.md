@@ -33,6 +33,11 @@ shape of this file.
   (found from the account's home, not `HOME`) throws, read-only or not. This holds in every CLI's tests that open the
   store through cli-core. cli-core's own suite now refuses vitest's threads pool. There a test env without `HOME`
   reached the real home folder: on 2026-10-18 a `--pool=threads` run wrote test rows into the real store.
+- **The test rows that leaked into a real store are removed (store version 48).** A store that holds an account of
+  the test messenger `chat` gets a mark from the migration. The next writable open then removes every such account
+  with all it holds, as `cache clear` removes one, so the search and vector indexes stay in step. A store without
+  one is unchanged. If the removal fails, the store still opens: a warning names the error and the next open tries
+  again.
 
 ## 0.559.0 — 02.11.2026
 
