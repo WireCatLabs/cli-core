@@ -35,6 +35,10 @@ shape of this file.
   `validation_error`, `query.too-large` and `budget: "time"` or `"milliseconds"`. The message says the query is valid
   and the time limit was reached. The details keep `budget: "time"` and `complete: false`, and add `limit_ms`. A caller
   that told the person to change the query on `query.too-large` no longer does it for a slow search.
+- **`server install` runs `systemctl --user` (or `launchctl enable`)**, and fails where that does not work, after it
+  wrote the file. **Under launchd `server stop` only unloads the agent**: it starts again at the next login, as a
+  systemd unit does; `server uninstall` stops that. `Platform` (`@wirecat/cli-core/background`) drops `atLogin` and
+  requires `install` and `uninstall`; its `state` may answer `enabled`.
 
 ### Fixed
 
@@ -43,6 +47,22 @@ shape of this file.
   command's `--timeout 60s`. Under Node the message search statements now carry a check of the limit on every row
   (the SQL function `wc_time_limit`) and stop when it passes. Bun has no SQL functions; there the limit is still
   checked only between statements.
+- **`server install` enables the unit, so serve starts with the owner's session after a reboot.** It wrote the unit
+  and never enabled it, and after a reboot nothing started. Under systemd it runs `systemctl --user enable` (still
+  `WantedBy=default.target`, so it also starts at boot under linger and over ssh); under launchd it clears a
+  `launchctl disable` and the agent no longer carries `Disabled`. Nothing starts now; `server start` does that.
+  A unit written with moved folders (a development checkout) is not enabled, so a branch build never starts at
+  login on the owner's keyring. `server uninstall` disables before it removes the file. `server status` answers
+  `starts_at_login` and `unit.enabled`. A unit installed before this needs `server install` once more.
+- **A timer that fires before the login unlocks the keyring tries again.** A daily or one-off schedule that catches up
+  at boot ran before the keyring was unlocked and failed for the day. `schedule exec` now runs it again when it fails
+  with reason `credentials.unreachable` (tg and max give it when a profile that has logged in here cannot read its
+  sign-in): a minute later, then up to 15 minutes apart, for up to 12 hours, and notifies once, with how it ended.
+  `schedule run` and repeating schedules do not wait. `runSchedule` takes `untilUnlocked` and `wait` for this.
+- **A sync whose reader goes away finishes its work.** A closed stdout or stderr (EPIPE) aborted every command, so a
+  desktop that closed the pipe ended an 18-minute `messages sync` with `write EPIPE`. A cooperative command (a sync)
+  and a command waiting in an `untilStopped()` phase (`schedule run`, `schedule exec`) now keep working, their later
+  output goes nowhere, and the run record says how they ended. Other commands still end with 0, as `| head` expects.
 
 ## 0.551.0 — 02.11.2026
 

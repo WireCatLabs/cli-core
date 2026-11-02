@@ -427,11 +427,38 @@ export const findProgram = (name: string, env: NodeJS.ProcessEnv, platform: Node
 const KEEP_RUNS = 30
 /** How long a stopped child has to save and answer after SIGTERM before it is killed. */
 const KILL_AFTER_MS = 10_000
+/**
+ * The reason tg and max give when a profile that has logged in here cannot read its sign-in: the keyring is
+ * locked or out of reach, which a later try fixes and a new login does not.
+ */
+export const CREDENTIALS_UNREACHABLE = "credentials.unreachable"
+const LOCKED_FIRST_WAIT_MS = 60_000
+const LOCKED_LONGEST_WAIT_MS = 15 * 60_000
+/** A night's catch-up waits for the morning's login; past that the run fails as it is. */
+const LOCKED_GIVE_UP_MS = 12 * 60 * 60_000
+
+const lockedOut = (last: LastRun) => last.reason?.endsWith(`(${CREDENTIALS_UNREACHABLE})`) === true
+
+const pause = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve()
+    const done = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener("abort", done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal?.addEventListener("abort", done, { once: true })
+  })
 
 /**
  * One run: the command or the agent with the schedule's variables, its output kept beside the schedule,
  * the last result in `last.json`. An agent runs under `<PREFIX>_READ_ONLY`, so nothing it is talked
  * into can send. A one-off removes itself afterwards.
+ *
+ * `untilUnlocked` is for the timer's run: a timer that catches up at boot runs before the login unlocks the
+ * keyring, so a run that fails for that reason is tried again, a minute then up to 15 minutes apart, for up to
+ * 12 hours. A schedule that repeats every few minutes is left to its next tick; a run by hand fails at once.
  */
 export const runSchedule = async (
   app: AppIdentity,
@@ -443,12 +470,70 @@ export const runSchedule = async (
     timer,
     signal,
     killAfterMs = KILL_AFTER_MS,
-  }: { now?: () => Date; timer?: Timer; signal?: AbortSignal; killAfterMs?: number } = {},
+    untilUnlocked = false,
+    wait = pause,
+  }: {
+    now?: () => Date
+    timer?: Timer
+    signal?: AbortSignal
+    killAfterMs?: number
+    untilUnlocked?: boolean
+    wait?: (ms: number, signal?: AbortSignal) => Promise<void>
+  } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
   const folder = join(file, "..")
   const runs = join(folder, "runs")
   mkdirSync(runs, { recursive: true, mode: 0o700 })
+  const agent = schedule.kind === "agent"
+  const retries = untilUnlocked && !("every" in schedule.when)
+  const firstAt = now().getTime()
+  let last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs })
+  for (
+    let delay = LOCKED_FIRST_WAIT_MS;
+    retries && lockedOut(last) && !signal?.aborted && now().getTime() - firstAt + delay <= LOCKED_GIVE_UP_MS;
+    delay = Math.min(delay * 2, LOCKED_LONGEST_WAIT_MS)
+  ) {
+    await wait(delay, signal)
+    if (signal?.aborted) break
+    last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs })
+  }
+  const { exitCode, output } = last
+  const errors = agent ? output.replace(/\.md$/, ".log") : output
+  if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
+
+  const stampOf = (file: string) => file.split(".")[0] ?? file
+  const kept = new Set([...new Set(readdirSync(runs).map(stampOf))].sort().slice(-KEEP_RUNS))
+  for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
+
+  const title = `${app.command} ${schedule.name}`
+  if (agent && exitCode === 0) {
+    const first =
+      readFileSync(output, "utf8")
+        .split("\n")
+        .find((line) => line.trim()) ?? "report ready"
+    await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
+  } else if (exitCode !== 0) {
+    await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
+  }
+
+  if ("once" in schedule.when) {
+    await timer?.remove(schedule.name)
+    rmSync(file, { force: true })
+  }
+  return last
+}
+
+/** One run of the schedule's command or agent: its output in `runs/`, its result in `last.json`. */
+const attemptSchedule = async (
+  app: AppIdentity,
+  system: ServerSystem,
+  env: NodeJS.ProcessEnv,
+  schedule: Schedule,
+  folder: string,
+  { now, signal, killAfterMs }: { now: () => Date; signal: AbortSignal | undefined; killAfterMs: number },
+): Promise<LastRun> => {
+  const runs = join(folder, "runs")
   const stamp = now()
     .toISOString()
     .replaceAll(":", "-")
@@ -505,33 +590,11 @@ export const runSchedule = async (
     exitCode,
     durationMs: ended.getTime() - began,
   })
-  const last = recordRun(join(folder, "last.json"), {
+  return recordRun(join(folder, "last.json"), {
     at: ended.toISOString(),
     exitCode,
     output,
     traceId: trace.traceId,
     ...(exitCode === 0 ? {} : failureOf(readFileSync(errors, "utf8"), exitCode)),
   })
-  if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
-
-  const stampOf = (file: string) => file.split(".")[0] ?? file
-  const kept = new Set([...new Set(readdirSync(runs).map(stampOf))].sort().slice(-KEEP_RUNS))
-  for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
-
-  const title = `${app.command} ${schedule.name}`
-  if (agent && exitCode === 0) {
-    const first =
-      readFileSync(output, "utf8")
-        .split("\n")
-        .find((line) => line.trim()) ?? "report ready"
-    await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
-  } else if (exitCode !== 0) {
-    await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
-  }
-
-  if ("once" in schedule.when) {
-    await timer?.remove(schedule.name)
-    rmSync(file, { force: true })
-  }
-  return last
 }

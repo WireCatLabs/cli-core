@@ -342,7 +342,11 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
       // A timer starts it with no profile named; the schedule's own environment carries the profile.
       const { context, system, timer } = prepare(this, { needsProfile: false })
       const last = await untilChildEnds(this, (signal) =>
-        runSchedule(app, system, context.env, file, { timer: timer(), ...(signal ? { signal } : {}) }),
+        runSchedule(app, system, context.env, file, {
+          timer: timer(),
+          untilUnlocked: true,
+          ...(signal ? { signal } : {}),
+        }),
       )
       if (last.exitCode !== 0) setExitCode(this, 1)
     })
