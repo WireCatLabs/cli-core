@@ -11,6 +11,7 @@ import { runsSearchCommand } from "../runs/search-command.js"
 import { commandAt } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { conversationsSearchCommand } from "./conversations-command.js"
+import { historySkipsOf } from "./history-gaps.js"
 import { messagesSearchCommand } from "./messages-search-command.js"
 import {
   allAnswer,
@@ -148,7 +149,8 @@ const allCommand = (messenger: Messenger): Command => {
       ...(exact ? { exact: true } : {}),
       ...(timezone === undefined ? {} : { timezone }),
     }
-    renderAnswer(this, context, allAnswer("search all", found, { limit, page: page ?? 1, again }), () => {
+    const skips = await context.withStore((store) => historySkipsOf(store, found.accounts)).catch(() => [])
+    renderAnswer(this, context, allAnswer("search all", found, { limit, page: page ?? 1, again }, false, skips), () => {
       if (found.items.length === 0)
         context.renderer.note(
           found.server && !found.server.skipped
