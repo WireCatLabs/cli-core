@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.552.0 — 02.11.2026
+
 ### Added
 
 - **`serve` reads back on start what arrived while nothing listened.** A provider's own catch-up drops a gap it
