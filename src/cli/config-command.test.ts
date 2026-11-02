@@ -268,4 +268,31 @@ describe("config", () => {
     expect(existsSync(join(root, "config"))).toBe(false)
     expect((await call(["config", "show", "--json"], env)).code).toBe(0)
   })
+
+  it("**an agent's shell may tighten a permission but never loosen it** (SEC-116)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const saved = () =>
+      JSON.parse(readFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), "utf8")).profiles.work.permissions
+    expect((await call(["work", "config", "set", "permissions.messages", "readonly"], env)).code).toBe(0)
+
+    for (const agent of [{ AI_AGENT: "hermes-agent" }, { OPENCLAW_SHELL: "exec" }, { CLAUDECODE: "1" }]) {
+      const as = { ...env, ...agent }
+      const raised = await call(["work", "config", "set", "permissions.messages", "allow"], as)
+      expect(raised.code).toBe(5)
+      expect(raised.stderr.join("\n")).toContain("an agent cannot loosen permissions")
+      expect((await call(["work", "config", "set", "permissions.messages.send", "ask"], as)).code).toBe(5)
+      expect((await call(["work", "config", "unset", "permissions.messages"], as)).code).toBe(5)
+      expect((await call(["config", "set", "permissions.messages", "allow", "--defaults"], as)).code).toBe(5)
+      expect((await call(["work", "config", "set", "permissions", '{"messages":"allow"}'], as)).code).toBe(5)
+    }
+    expect(saved()).toEqual({ messages: "readonly" })
+
+    const agent = { ...env, AI_AGENT: "hermes-agent" }
+    expect((await call(["work", "config", "set", "permissions.messages", "readonly"], agent)).code).toBe(0)
+    expect((await call(["work", "config", "set", "permissions.contacts", "deny"], agent)).code).toBe(0)
+    expect((await call(["config", "set", "permissions.contacts", "deny", "--defaults"], agent)).code).toBe(0)
+    expect((await call(["work", "config", "set", "permissions.messages", "allow"], env)).code).toBe(0)
+    expect(saved()).toMatchObject({ messages: "allow", contacts: "deny" })
+  })
 })

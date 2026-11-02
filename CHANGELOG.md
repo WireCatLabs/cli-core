@@ -40,6 +40,14 @@ shape of this file.
   `confirm`. A host passes the owner only when the owner runs the command, and the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
+- **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
+  `AI_AGENT`, `CLAUDECODE`, `OPENCLAW_SHELL=exec` or another agent marker is set is now treated like an MCP agent's
+  call: `mcp.authority` and `bot.api` stay owner-only, and a level may only go down (`readonly` → `deny`, never
+  `readonly` → `allow`). Unsetting a permission, replacing `permissions` whole, or `--defaults`/`--personal`/`--bot`
+  accept only `deny`. Before, Hermes or OpenClaw could undo the read-only the desktop app set, from any chat message
+  that talked it into running `config set`. The owner changes them in a terminal outside the agent; the desktop app
+  already runs the tools without these variables. Not a sandbox: an agent with a general shell can still edit the
+  file itself, so keep its own command approvals on.
 
 ### Security
 
