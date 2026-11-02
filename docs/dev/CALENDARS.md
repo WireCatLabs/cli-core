@@ -237,6 +237,20 @@ takes only an existing calendar's `id`), so the CLI reads the feed itself.
   `syncCalendars`, then the feeds', under one budget, into one report with `feeds` (each feed's `events` and the
   `skipped` it could not take). `sync` calls it; `events remind` syncs the provider only, since a timer runs it every
   few minutes and a feed's server is somebody else's. A full list marks what the feed dropped.
+- **Asking whether it changed:** the feed source keeps the last answer's `ETag` and `Last-Modified` with the window it
+  read as its calendar's sync token, in the store (not a secret). `fullListOnly` sources get that token in `changes()`
+  on their full round, and the feed sends it back as `If-None-Match` / `If-Modified-Since` while the window is the
+  same (`fetchFeedIfChanged`). A `304` returns a page with `unchanged: true`: the engine saves nothing and marks
+  nothing unseen, and `feeds` says `unchanged`. A moved window (once a day, `calendarSyncWindow`) or `sync --rescan`
+  reads the feed in full, since events and slots entering the window are found only by a read.
+- **Removing:** `calendars remove` forgets the address, then `EventStore.forgetCalendar` deletes the calendar, its
+  entries, the events and series only it held, their links, tags, search words and vectors, its cursor, and the
+  people only it had seen. An event another calendar also holds (the same iCalUID) stays, with that copy's fields; a
+  meeting linked to a gone event stays, unlinked; a note the owner wrote on one stays. A feed is somebody else's data
+  and nothing syncs back, so nothing is kept as history. `calendars unsync` is unchanged: it stops a calendar's sync
+  and keeps what is stored, as it was.
+- **An `http://` address** is allowed; `calendars add` writes one warning line on stderr that the feed and any token
+  in its address travel unencrypted. `webcal://` is read as `https://` and does not warn.
 - **Reading:** `readFeed` takes the events inside the window, `X-WR-TIMEZONE` for floating times, and overrides
   (`RECURRENCE-ID`, `readIcs(…, { overrides: true })`), which take the place of the slot they name. Text goes through
   `calendarText`, as an invitation's: feed text is somebody else's.
@@ -249,8 +263,8 @@ takes only an existing calendar's `id`), so the CLI reads the feed itself.
 - **What the CLI keeps:** a `FeedRegistry` (`read`, `write`) of `{ id, url, title }`, in the keyring or a 0600 file
   as its other secrets.
 
-Not done: VTIMEZONE (a `TZID` must be an IANA name; an Outlook feed's Windows zone names are skipped), conditional
-requests (`ETag`, `304`), and refreshing a feed on its own schedule apart from `sync`.
+Not done: VTIMEZONE (a `TZID` must be an IANA name; an Outlook feed's Windows zone names are skipped), and refreshing
+a feed on its own schedule apart from `sync` (a CLI documents a timer that runs `sync`).
 
 ## Testing an adapter
 

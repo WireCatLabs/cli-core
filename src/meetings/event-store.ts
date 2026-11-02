@@ -268,6 +268,13 @@ export interface EventStore {
   saveCalendars(accountId: number, calendars: CalendarInput[], now: number): Promise<StoredCalendar[]>
   calendars(accountId: number): Promise<StoredCalendar[]>
   setCalendarSynced(calendarId: number, synced: boolean, now: number): Promise<void>
+  /**
+   * The calendar and everything stored from it go, for a calendar that is not the owner's data (a followed feed): its
+   * entries, the events and series only it held, what was built from them (links, tags, search pieces, people seen
+   * only there) and its cursor. An event another calendar also holds stays, with that copy's fields; a meeting linked
+   * to a gone event stays, unlinked. Notes the owner wrote stay.
+   */
+  forgetCalendar(calendarId: number, now: number): Promise<{ entries: number; events: number }>
   /** One sync page, matched by rules 1–5, in one transaction. */
   saveEntries(calendarId: number, entries: EntryInput[], now: number): Promise<StoredEntry[]>
   /**
