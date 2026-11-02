@@ -113,9 +113,10 @@ has not stored yet is not passed. A complete `--new` run moves the mailbox's sta
 points behind it.
 
 Whose turn a thread is, owed or waiting, is `mailTurn` (`src/mail/owed.ts`), the one rule `review --unanswered`,
-`--waiting` and `tasks agenda` over an email account share: owed when the newest email that is not a draft came in,
-names the owner in To and is personal mail (`isPersonal`: not bulk, no List-Id, not an envelope, sender not demoted);
-waiting when the owner wrote it.
+`--waiting` and `tasks agenda` over an email account share: owed when the newest email that is not a draft came in and
+names the owner in To or Cc; waiting when the owner wrote it. Mail sent to many counts too (the owner's ruling: look
+at all mail). Each review item's `email` carries `bulk`, `list_id`, `rule_id` and the sender score instead, and the
+query term `bulk:false` leaves out threads whose newest email is bulk, a list's or an envelope (`isBulk`).
 
 ## Sync state
 

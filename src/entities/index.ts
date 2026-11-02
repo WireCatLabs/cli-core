@@ -412,6 +412,7 @@ export const ENTITIES = {
     "text",
     "transcript",
     "attachments",
+    "email",
   ]),
   message_link: messageLink,
   message_write: messageWrite,

@@ -1,7 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Review, type ReviewChat, senderIsMe } from "../domain/models.js"
-import type { AccountKey, MessageStore, StoredAccount, StoredHit, ThreadActivity } from "../store/store.js"
-import { isPersonal, mailTurn } from "./owed.js"
+import type {
+  AccountKey,
+  EmailMarks,
+  MessageStore,
+  NewestEmail,
+  StoredAccount,
+  StoredHit,
+  ThreadActivity,
+} from "../store/store.js"
+import { mailTurn } from "./owed.js"
 
 /** Every thread is a local read; this many keep one answer readable, and the rest wait in `skipped`. */
 export const REVIEW_THREADS = 50
@@ -18,8 +26,8 @@ export interface MailReviewOptions {
   since: number
   /** A thread's own start, by its external id. */
   points?: ReadonlyMap<string, number>
-  /** Mail sent to many, lists, envelopes and suspect senders too. */
-  all?: boolean
+  /** Leave out threads whose newest email is mail sent to many, a list's or an envelope (`bulk:false`). */
+  noBulk?: boolean
   /** Only threads the owner owes an answer for at least this many hours (`mailTurn`). */
   unansweredAfterHours?: number
   /** Only threads where the owner wrote last and nobody answered for at least this many hours. */
@@ -28,9 +36,14 @@ export interface MailReviewOptions {
 }
 
 /** A review of mail: each thread a chat, each email a stored hit with its locator. */
+export type MailHit = StoredHit & { marks?: EmailMarks }
+
 export interface MailReview extends Review {
-  chats: (ReviewChat & { messages: StoredHit[] })[]
+  chats: (Omit<ReviewChat, "messages"> & { messages: MailHit[] })[]
 }
+
+/** Mail sent to many, a list's, or recorded by an envelope rule without its text. */
+export const isBulk = (email: NewestEmail): boolean => email.bulk || email.list || email.envelope
 
 const absent = (error: unknown): undefined => {
   if (error instanceof CliError && error.code === "not_found") return undefined
@@ -55,7 +68,7 @@ const syncedThrough = async (store: MessageStore, mailbox: AccountKey) => {
 
 const wanted = (
   thread: ThreadActivity,
-  { all, unansweredAfterHours, waitingAfterHours }: MailReviewOptions,
+  { noBulk, unansweredAfterHours, waitingAfterHours }: MailReviewOptions,
   now: number,
 ): "read" | "quiet" | "no" => {
   const newest = thread.newest
@@ -64,10 +77,9 @@ const wanted = (
     const age = newest === null ? 0 : now - newest.at
     const owed = turn === "owed" && unansweredAfterHours !== undefined && age >= unansweredAfterHours * HOUR
     const waiting = turn === "waiting" && waitingAfterHours !== undefined && age >= waitingAfterHours * HOUR
-    return owed || waiting ? "read" : "no"
+    if (!owed && !waiting) return "no"
   }
-  if (all || newest === null || newest.outgoing || isPersonal(newest)) return "read"
-  return "quiet"
+  return noBulk && newest !== null && !newest.outgoing && isBulk(newest) ? "quiet" : "read"
 }
 
 /** The emails after the other side last wrote: what is owed, or what waits for an answer. */
@@ -114,7 +126,15 @@ export const reviewMail = async (
       after: startOf(thread.threadId),
       until: cut,
     })
-    const messages = turns ? turnTail(hits, mailbox.account, thread.newest?.outgoing === true) : hits
+    const tail = turns ? turnTail(hits, mailbox.account, thread.newest?.outgoing === true) : hits
+    const marks = await store.mail.emailMarks(
+      account?.id ?? 0,
+      tail.map((hit) => hit.id),
+    )
+    const messages = tail.map((hit) => {
+      const mark = marks.get(hit.id)
+      return mark ? { ...hit, marks: mark } : hit
+    })
     const more = messages.length > REVIEW_PER_THREAD
     if (messages.length > 0)
       chats.push({

@@ -30,7 +30,12 @@ export { storeClients } from "./sqlite/clients.js"
 export { CHAT_LIST_KEY, type ChatCompleteness, fetchedKey, historyStartKey } from "./sqlite/completeness.js"
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export type { CounterTarget } from "./sqlite/counters.js"
-export { MAIL_AGENDA_COLUMNS, type NewestEmail, type ThreadActivity } from "./sqlite/email-activity.js"
+export {
+  type EmailMarks,
+  MAIL_AGENDA_COLUMNS,
+  type NewestEmail,
+  type ThreadActivity,
+} from "./sqlite/email-activity.js"
 export { messageOfEmail, threadConversation } from "./sqlite/emails.js"
 export { orphanPointers } from "./sqlite/entity-types.js"
 export { involvementStoreOver } from "./sqlite/involvements.js"

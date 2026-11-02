@@ -311,11 +311,15 @@ it("fills owed and waiting for an email account from its threads, by the mail ru
 
     const shown = await agendaService(storeOnlyDeps(store, mailbox, { app }), () => now).show({ query: kinds("") })
 
-    expect(shown.owed.map(({ chatId }) => chatId)).toEqual(["owed"])
+    expect(shown.owed.map(({ chatId }) => chatId).sort()).toEqual(["bulk", "cc-only", "owed"])
     expect(shown.waiting.map(({ chatId }) => chatId)).toEqual(["waiting"])
     expect(shown.unsynced).toEqual([])
     expect(shown.stale).toBe(false)
-    expect(shown.owed[0]).toMatchObject({ title: "ask", kind: "dialog", lastMessage: expect.stringContaining("ask") })
+    expect(shown.owed.find(({ chatId }) => chatId === "owed")).toMatchObject({
+      title: "ask",
+      kind: "dialog",
+      lastMessage: expect.stringContaining("ask"),
+    })
     expect(v.safeParse(agendaEntity, agendaItem(shown)).success).toBe(true)
   } finally {
     await store.close()

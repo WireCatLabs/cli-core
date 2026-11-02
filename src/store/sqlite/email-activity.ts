@@ -8,8 +8,8 @@ export interface NewestEmail {
   /** ms: when it was received, or sent when that is unknown. */
   at: number
   outgoing: boolean
-  /** The mailbox's own address is in To; Cc alone does not count. */
-  toOwner: boolean
+  /** The mailbox's own address is in To or Cc. */
+  addressed: boolean
   /** Filed in the mailbox of mail sent to many. */
   bulk: boolean
   /** Carries a List-Id. */
@@ -32,7 +32,18 @@ export interface ThreadActivity {
   newest: NewestEmail | null
 }
 
+/** What a reader sorts mail by, per email: never its text. */
+export interface EmailMarks {
+  /** Filed in the mailbox of mail sent to many. */
+  bulk: boolean
+  listId: string | null
+  /** The mail rule that decided how it is stored, by its id in `rules list`. */
+  ruleId: number | null
+}
+
 export interface MailActivityStore {
+  /** Each live email's marks, by its Message-ID; one the store does not hold is left out. */
+  emailMarks(accountId: number, externalIds: readonly string[]): Promise<Map<string, EmailMarks>>
   /**
    * Each live thread of the account whose newest email is after `since` (ms), newest first, with the facts of that
    * email. `where` is a `tasks agenda` query compiled over `MAIL_AGENDA_COLUMNS`.
@@ -49,8 +60,8 @@ const ACTIVITY = `
   SELECT t.external_id AS thread, t.subject, t.last_email_at, t.emails_count,
     e.external_id, coalesce(e.received_at, e.sent_at) AS at,
     coalesce(e.outgoing, lower(e.from_address) = lower(a.external_id)) AS outgoing,
-    EXISTS (SELECT 1 FROM email_recipients r WHERE r.email_id = e.id AND r.role = 'to'
-      AND lower(r.address) = lower(a.external_id)) AS to_owner,
+    EXISTS (SELECT 1 FROM email_recipients r WHERE r.email_id = e.id AND r.role IN ('to', 'cc')
+      AND lower(r.address) = lower(a.external_id)) AS addressed,
     EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
       WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk,
     coalesce(json_extract(e.headers, '$."list-id"'), json_extract(e.metadata, '$.listId')) IS NOT NULL AS list,
@@ -84,7 +95,7 @@ export const threadActivity = (
               externalId: String(row.external_id),
               at: int(row.at) ?? Number(row.last_email_at),
               outgoing: Boolean(row.outgoing),
-              toOwner: Boolean(row.to_owner),
+              addressed: Boolean(row.addressed),
               bulk: Boolean(row.bulk),
               list: Boolean(row.list),
               envelope: Boolean(row.envelope),
@@ -110,6 +121,23 @@ export const threadEmailIds = (
     .all(accountId, thread, after ?? null, until ?? null)
     .map(({ id }) => Number(id))
 
+const MARKS = `
+  SELECT e.mail_rule_id, coalesce(json_extract(e.headers, '$."list-id"'), json_extract(e.metadata, '$.listId')) AS list_id,
+    EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
+      WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk
+  FROM emails e WHERE e.account_id = ? AND e.external_id = ? AND e.deleted_at IS NULL`
+
+export const emailMarks = (database: CacheDatabase, accountId: number, externalIds: readonly string[]) => {
+  const one = database.prepare(MARKS)
+  const marks = new Map<string, EmailMarks>()
+  for (const id of externalIds) {
+    const row = one.get(accountId, id)
+    if (row) marks.set(id, { bulk: Boolean(row.bulk), listId: str(row.list_id), ruleId: int(row.mail_rule_id) })
+  }
+  return marks
+}
+
 export const mailActivity = (database: CacheDatabase): MailActivityStore => ({
+  emailMarks: async (accountId, externalIds) => emailMarks(database, accountId, externalIds),
   threadActivity: async (accountId, since, where) => threadActivity(database, accountId, since, where),
 })

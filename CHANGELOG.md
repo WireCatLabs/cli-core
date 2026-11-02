@@ -10,11 +10,13 @@ shape of this file.
 ### Added
 
 - **`review` for mail CLIs** (`mailReadCommands`): every stored email, both sides, in threads that changed since a
-  point, in messenger `review`'s item shape; `--new` keeps a point per mailbox, `--unanswered [duration]` keeps
-  threads owed an answer, `--waiting [duration]` threads where the owner wrote last, `--all` adds mail sent to many,
-  lists, envelopes and suspect senders. It reads the store only, cuts at the last finished sync and opens no task.
-  `reviewMail`, `mailTurn`, `isPersonal`, `MAIL_REVIEW_STEPS` and `store.mail.threadActivity` are exported;
-  `store.mail.threadHits` takes a received-time window.
+  point, in messenger `review`'s item shape plus `email` (people, labels, sender score and the marks `bulk`,
+  `list_id`, `rule_id`); `--new` keeps a point per mailbox, `--unanswered [duration]` keeps threads whose newest email
+  came to the owner in To or Cc with no answer, `--waiting [duration]` threads where the owner wrote last;
+  `bulk:false` leaves out mail sent to many. It reads the store only, cuts at the last finished sync and opens no
+  task. `reviewMail`, `mailTurn`, `isBulk`, `MAIL_REVIEW_STEPS`, `store.mail.threadActivity` and
+  `store.mail.emailMarks` are exported; `store.mail.threadHits` takes a received-time window; the `message` entity's
+  `email` gains optional `bulk`, `list_id` and `rule_id`, and its `summary` view may carry `email`.
 - **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
   of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
 

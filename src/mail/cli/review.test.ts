@@ -80,7 +80,14 @@ const mailbox = async () => {
     })
     expect(code, streams.stderr.join("")).toBe(0)
     return JSON.parse(streams.stdout.join("")) as {
-      items: { ref: string; chat_id: string; chat_title: string; text: string; sender_is_me: boolean }[]
+      items: {
+        ref: string
+        chat_id: string
+        chat_title: string
+        text: string
+        sender_is_me: boolean
+        email: Record<string, unknown>
+      }[]
       missing?: { why: string; step?: string }[]
       next?: { command: string }[]
       meta?: { complete?: boolean }
@@ -118,6 +125,7 @@ describe("mail review", () => {
       "attachments",
       "chat_id",
       "chat_title",
+      "email",
       "outgoing",
       "ref",
       "sender_is_me",
@@ -172,7 +180,7 @@ describe("mail review", () => {
     ])
   })
 
-  it("leaves out mail sent to many, lists, envelopes and suspect senders unless --all", async () => {
+  it("shows all mail, each email marked bulk, list and rule; bulk:false leaves out mail sent to many", async () => {
     const box = await mailbox()
     await box.thread("t-bulk", email("bulk", 2, { mailboxes: [BULK] }))
     await box.thread("t-list", email("list", 2, { headers: { "list-id": "news.example.com" } }))
@@ -181,32 +189,41 @@ describe("mail review", () => {
     await box.thread("t-ann", email("ann", 2))
     await box.withStore((store) =>
       store.mail.setSenderScores(
-        1,
+        box.accountId,
         [{ address: "scam@example.net", score: 9, signals: ["brand_spoof"], demoted: true }],
         Date.now(),
       ),
     )
     await box.synced()
 
-    const quiet = await box.json([])
-    expect(threads(quiet)).toEqual(["t-ann"])
-    expect(quiet.missing).toContainEqual(expect.objectContaining({ step: "mail-review.all" }))
-    expect(threads(await box.json(["--all"])).sort()).toEqual(["t-ann", "t-bulk", "t-envelope", "t-list", "t-scam"])
+    const all = await box.json([])
+    expect(threads(all).sort()).toEqual(["t-ann", "t-bulk", "t-envelope", "t-list", "t-scam"])
+    const marks = Object.fromEntries(all.items.map((one) => [one.chat_id, one.email]))
+    expect(marks["t-bulk"]).toMatchObject({ bulk: true, list_id: null, rule_id: null })
+    expect(marks["t-list"]).toMatchObject({ bulk: false, list_id: "news.example.com" })
+    expect(marks["t-ann"]).toMatchObject({ bulk: false, list_id: null, rule_id: null })
+    expect(marks["t-scam"]).toMatchObject({ sender_score: { demoted: true } })
+
+    const personal = await box.json(["bulk:false"])
+    expect(threads(personal).sort()).toEqual(["t-ann", "t-scam"])
+    expect(personal.missing).toContainEqual(expect.objectContaining({ why: expect.stringContaining("bulk:false") }))
+    expect(await box.refused(["bulk:true"])).toBe(2)
   })
 
-  it("--unanswered: personal mail to you in To with no answer; your reply and Cc alone take a thread off", async () => {
+  it("--unanswered: the newest email came to you in To or Cc, with no answer; your reply takes a thread off", async () => {
     const box = await mailbox()
     await box.thread("t-owed", email("owed-1", 50), email("owed-2", 48))
     await box.thread("t-answered", email("asked", 50), email("answered", 40, { from: me, to: [ann], outgoing: true }))
     await box.thread("t-cc", email("cc", 50, { to: [{ address: "bob@example.com", name: null }], cc: [me] }))
+    await box.thread("t-bcc", email("bcc", 50, { to: [{ address: "bob@example.com", name: null }] }))
     await box.thread("t-fresh", email("fresh", 2))
     await box.thread("t-bulk", email("bulk", 50, { mailboxes: [BULK] }))
     await box.synced()
 
     const owed = await box.json(["--unanswered", "1d"])
-    expect(threads(owed)).toEqual(["t-owed"])
-    expect(texts(owed)).toEqual(["text of owed-1", "text of owed-2"])
-    expect(threads(await box.json(["--unanswered"]))).toEqual(["t-owed"])
+    expect(threads(owed).sort()).toEqual(["t-bulk", "t-cc", "t-owed"])
+    expect(texts(owed).filter((text) => text?.startsWith("text of owed"))).toEqual(["text of owed-1", "text of owed-2"])
+    expect(threads(await box.json(["bulk:false", "--unanswered", "1d"])).sort()).toEqual(["t-cc", "t-owed"])
   })
 
   it("--waiting: threads where you wrote last, older than the duration, only your unanswered emails", async () => {
