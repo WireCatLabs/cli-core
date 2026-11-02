@@ -8,6 +8,7 @@ import { type Messenger, messengerContext } from "./context.js"
 /** `messages press` — one of a bot's callback buttons; the bot sees who pressed it. */
 export const pressCommand = (messenger: Messenger): Command =>
   annotate(new Command("press"), {
+    literal_after_dashes: true,
     effects: REMOTE_WRITE,
     examples: [`${messenger.app.command} personal messages press "Example Bot" 101 1`],
   })
