@@ -3,6 +3,7 @@ import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
 import { financeTables } from "./finance.mjs"
+import { recordTables } from "./records.mjs"
 import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
@@ -1686,6 +1687,13 @@ const GROUPS = [
     "Invoices, payments and what settles what, in exact minor units per currency. Totals are per currency: the store converts nothing.",
     [],
     financeTables,
+  ],
+  [
+    "records",
+    "Source records",
+    "What each import said, keyed by the source's own identity, under the entities made from it. An import never confirms money: an invoice or a payment it brings is a proposal.",
+    [],
+    recordTables,
   ],
   [
     "actions",

@@ -932,5 +932,15 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER facts_no_payment_bu BEFORE UPDATE OF type ON facts WHEN new.type = 'payment' BEGIN\n  SELECT RAISE(ABORT, 'facts: a payment is a payments row in store.finance, not a fact; upgrade the CLI');\nEND;",
       "INSERT OR REPLACE INTO store_settings (key, value, at) VALUES ('payment_facts_to_move', '1', unixepoch() * 1000);"
     ]
+  },
+  {
+    "name": "20261102192959_version-47-records",
+    "statements": [
+      "CREATE TABLE `record_relations` (\n\t`id` integer PRIMARY KEY,\n\t`record_id` integer NOT NULL,\n\t`role` text NOT NULL,\n\t`target_type` text NOT NULL,\n\t`target_external_id` text NOT NULL,\n\t`target_id` integer,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `fk_record_relations_record_id_records_id_fk` FOREIGN KEY (`record_id`) REFERENCES `records`(`id`),\n\tCONSTRAINT `fk_record_relations_target_id_records_id_fk` FOREIGN KEY (`target_id`) REFERENCES `records`(`id`),\n\tCONSTRAINT `record_relations_record_id_role_target_type_target_external_id_unique` UNIQUE(`record_id`,`role`,`target_type`,`target_external_id`)\n);",
+      "CREATE TABLE `records` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`type` text NOT NULL,\n\t`external_id` text NOT NULL,\n\t`fields` text NOT NULL,\n\t`revision` integer,\n\t`fingerprint` text NOT NULL,\n\t`entity_type` text,\n\t`entity_id` integer,\n\t`projected_fingerprint` text,\n\t`batch_id` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_records_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `records_account_id_type_external_id_unique` UNIQUE(`account_id`,`type`,`external_id`)\n);",
+      "CREATE INDEX `record_relations_by_target_type_target_external_id` ON `record_relations` (`target_type`,`target_external_id`);",
+      "CREATE INDEX `record_relations_by_target_id` ON `record_relations` (`target_id`);",
+      "CREATE INDEX `records_by_entity_type_entity_id` ON `records` (`entity_type`,`entity_id`);"
+    ]
   }
 ]

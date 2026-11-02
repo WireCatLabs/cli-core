@@ -1900,6 +1900,53 @@ export const paymentAllocations = sqliteTable(
   ],
 )
 
+/** What a source said about one of its records, as it said it: the layer under the entity an import makes. */
+export const records = sqliteTable(
+  "records",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    type: text("type").notNull(),
+    externalId: text("external_id").notNull(),
+    fields: text("fields").notNull(),
+    revision: integer("revision"),
+    fingerprint: text("fingerprint").notNull(),
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    projectedFingerprint: text("projected_fingerprint"),
+    batchId: text("batch_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    unique().on(table.accountId, table.type, table.externalId),
+    index("records_by_entity_type_entity_id").on(table.entityType, table.entityId),
+  ],
+)
+
+export const recordRelations = sqliteTable(
+  "record_relations",
+  {
+    id: integer("id").primaryKey(),
+    recordId: integer("record_id")
+      .notNull()
+      .references(() => records.id),
+    role: text("role").notNull(),
+    targetType: text("target_type").notNull(),
+    targetExternalId: text("target_external_id").notNull(),
+    targetId: integer("target_id").references(() => records.id),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.recordId, table.role, table.targetType, table.targetExternalId),
+    index("record_relations_by_target_type_target_external_id").on(table.targetType, table.targetExternalId),
+    index("record_relations_by_target_id").on(table.targetId),
+  ],
+)
+
 export const proposedActions = sqliteTable(
   "proposed_actions",
   {

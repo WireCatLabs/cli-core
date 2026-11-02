@@ -59,6 +59,20 @@ export type {
 } from "./domain/rankings-options.js"
 export { rankingOptions } from "./domain/rankings-options.js"
 export {
+  type EnvelopeRecord,
+  type EnvelopeSource,
+  envelopeOfJsonl,
+  type IngestError,
+  RECORD_ENTITY_TYPES,
+  RECORD_OPERATIONS,
+  RECORDS_ENVELOPE_SCHEMA,
+  RECORDS_SCHEMA_VERSION,
+  type RecordEntityType,
+  type RecordOperation,
+  type RecordRelation,
+  type RecordsEnvelope,
+} from "./domain/records.js"
+export {
   canonicalReference,
   formatReference,
   looksLikeReference,

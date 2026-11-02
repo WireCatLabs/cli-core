@@ -25,9 +25,11 @@
     "CHANGELOG.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES",
-    "docs/search/recipes.json"
+    "docs/search/recipes.json",
+    "schemas"
   ],
   "exports": {
+    "./schemas/records-envelope.v1.schema.json": "./schemas/records-envelope.v1.schema.json",
     "./documents": {
       "types": "./dist/documents.d.ts",
       "default": "./dist/documents.js"
