@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.544.0 — 02.11.2026
+
 ### Added
 
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
