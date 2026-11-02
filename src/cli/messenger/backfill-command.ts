@@ -51,6 +51,23 @@ const ALL_SINCE = "90d"
 /** What a background `--all` job is listed under; no chat argument is spelled like it. */
 const ALL_CHATS = "--all"
 
+/** Says where the history limits (history_* settings) stopped the read, so an agent does not take it for all. */
+const limitedLine = (result: Fetched | FetchedAll, status: string): string | undefined => {
+  if ("items" in result) {
+    const { groupTooLarge = 0, olderThanWindow = 0 } = result.limited ?? {}
+    if (groupTooLarge + olderThanWindow === 0) return undefined
+    return (
+      `the history limits (history_* settings) left ${groupTooLarge} big group(s) unread and read ${olderThanWindow} ` +
+      `chat(s) only to the window's start — \`${status}\` lists them; \`messages sync <chat> --full-history\` reads one in full`
+    )
+  }
+  if (result.limited === "group_too_large")
+    return "not read: a group above history_group_members_max — `--full-history` reads it and keeps it in full"
+  if (result.limited === "older_than_window")
+    return "read to the history window's start (history_dialog_days / history_group_days) — `--full-history` reads further"
+  return undefined
+}
+
 export const syncCommand = (messenger: Messenger): Command => {
   const fetching = messenger.fetching ?? FETCHING
   return annotate(new Command("sync"), {
@@ -91,7 +108,7 @@ export const syncCommand = (messenger: Messenger): Command => {
     .option("--catch-up-time <duration>", "local preparation time budget, 30s by default")
     .option(
       "--full-history",
-      "keep this chat's pushed history in full from now on, past the history limits (history_* settings)",
+      "read and keep this chat's history in full from now on, past the history limits (history_* settings)",
     )
     .option("--background", "run as a job that outlives this command; `store jobs show` follows it")
     .option(
@@ -229,6 +246,7 @@ export const syncCommand = (messenger: Messenger): Command => {
           limit,
           pageSize,
           pauseMs,
+          ...(include ? { fullHistory: true } : {}),
           catchUp: prepare ? preparation : (false as const),
           ...(sinceMs === undefined ? {} : { sinceMs }),
           ...(last === undefined ? {} : { last }),
@@ -276,11 +294,21 @@ export const syncCommand = (messenger: Messenger): Command => {
                     ]
                   : []),
                 ...(toReview > 0 ? [nextStep("mentions.review", { args: { new: true }, values: { shown } })] : []),
+                ...("limited" in result && result.limited && "chat" in result && result.chat
+                  ? [
+                      {
+                        ...nextStep("messages.sync", { args: { chat: result.chat, full_history: true } }),
+                        why: "reads this chat past the history limits and keeps it in full from now on",
+                      },
+                    ]
+                  : []),
               ],
               meta: window.meta,
             },
           ),
         )
+        const limitedNote = limitedLine(result, lineOf(this, "store status"))
+        if (limitedNote) context.renderer.note(limitedNote)
         if (tasks?.held)
           context.renderer.note(
             `the first sync left ${tasks.held} possible task(s) in ${tasks.heldChats ?? 0} chat(s) unopened ` +

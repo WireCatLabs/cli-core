@@ -17,6 +17,7 @@ import {
 import { type Estimate, estimateBackfill } from "./backfill-estimate.js"
 import { actionable, batchProgress } from "./batch.js"
 import type { ServiceDeps } from "./deps.js"
+import { type ChatShape, historyWindow } from "./history-limits.js"
 import { storedChatId } from "./message-resolution.js"
 import { patiently } from "./patience.js"
 import { type CatchUpOptions, type CatchUpResult, catchUpSearch, validateCatchUp } from "./search-catchup.js"
@@ -65,6 +66,10 @@ export interface FetchOptions {
   onPage: (progress: { fetched: number; chatId: string; oldest: number }) => void
   /** `fetchAll` only: once the chat list is read, then after each chat, current or not; counts across every chat. */
   onChat?: (progress: { chats: number; done: number; fetched: number }) => void
+  /** Past the history limits for this chat (`--full-history`). */
+  fullHistory?: boolean
+  /** The chat's kind and size as the messenger lists it, for a chat the store does not hold yet. */
+  shape?: ChatShape
 }
 
 /** A type, not an interface: a job keeps it as a plain record. */
@@ -81,6 +86,8 @@ export type Fetched = {
   reachedSince?: true
   reachedLast?: true
   stopped?: true
+  /** The history limits stopped this read: a group too large to read, or the window's start reached. */
+  limited?: "group_too_large" | "older_than_window"
 }
 
 const done = (one: { complete: boolean; error?: string; stopped?: true }) => one.complete && !one.error && !one.stopped
@@ -102,7 +109,10 @@ export type FetchedAll = {
     stopped?: true
     error?: string
     issue?: ActionableError
+    limited?: "group_too_large" | "older_than_window"
   }[]
+  /** How many chats the history limits left unread (big groups) or read only to the window's start. */
+  limited?: { groupTooLarge: number; olderThanWindow: number }
 }
 
 /** The local store of messages: what it holds, filling it from the messenger, and reading it out. */
@@ -248,13 +258,30 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       if (self !== (await deps.account()).account)
         throw new CliError("authentication_error", "the connection belongs to another account")
       if (options.stop.aborted) return { chat: null, fetched: 0, complete: false, ranges: [], stopped: true }
-      const result = await fetchInto({
+      const store = await deps.store()
+      const account = { provider: deps.messenger.provider, account: self }
+      const limit = await limitOf(deps, store, account, chat, options)
+      if (limit?.skip) {
+        await recordSkip(store, account, limit.chatId, { reason: "group_too_large", members: limit.skip.members })
+        return { chat: limit.chatId ?? null, fetched: 0, complete: false, ranges: [], limited: "group_too_large" }
+      }
+      const windowed =
+        limit?.keepFrom !== undefined && !(limit.keepFrom <= (options.sinceMs ?? Number.NEGATIVE_INFINITY))
+      const fetched = await fetchInto({
         history: (window) => history(chat, { ...window, reactions: false }),
-        store: await deps.store(),
-        account: { provider: deps.messenger.provider, account: self },
+        store,
+        account,
         fetching: deps.messenger.fetching ?? FETCHING,
         ...options,
+        ...(windowed ? { sinceMs: limit.keepFrom } : {}),
       })
+      const result: Fetched =
+        windowed && fetched.reachedSince ? { ...fetched, limited: "older_than_window" as const } : fetched
+      if (result.limited && limit?.keepFrom !== undefined)
+        await recordSkip(store, account, result.chat ?? limit.chatId, {
+          reason: "older_than_window",
+          keptFrom: new Date(limit.keepFrom).toISOString(),
+        })
       return requested && result.chat
         ? { ...result, prepared: await catchUpSearch(deps, result.chat, requested, options.stop) }
         : result
@@ -298,7 +325,15 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
           continue
         }
         try {
-          const one = await own.fetch(chat.id, options)
+          const one = await own.fetch(chat.id, {
+            ...options,
+            shape: { kind: chat.kind, participantsCount: chat.participantsCount ?? null },
+          })
+          if (one.limited) {
+            answer.limited ??= { groupTooLarge: 0, olderThanWindow: 0 }
+            if (one.limited === "group_too_large") answer.limited.groupTooLarge += 1
+            else answer.limited.olderThanWindow += 1
+          }
           if (one.issue) batch.fail(chat.id, "history", one.issue)
           else batch.ok()
           answer.fetched += one.fetched
@@ -307,7 +342,9 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
             title: chat.title,
             fetched: one.fetched,
             // Reaching the window is what --all asked for; older history was not.
-            complete: one.complete || one.reachedSince === true || one.reachedLast === true,
+            complete:
+              one.complete || one.reachedSince === true || one.reachedLast === true || one.limited !== undefined,
+            ...(one.limited ? { limited: one.limited } : {}),
             ...(one.issue ? { error: one.issue.code, issue: one.issue } : {}),
             ...(one.stopped ? { stopped: true as const } : {}),
           })
@@ -327,6 +364,43 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       return answer
     },
   }
+}
+
+/**
+ * Where the history limits stop this chat's read: not at all for a group above the cap, else at the window's start.
+ * None for a lifted chat or without limits. A chat the store does not hold yet is judged by the shape the list gave.
+ */
+const limitOf = async (
+  deps: ServiceDeps,
+  store: MessageStore,
+  account: AccountKey,
+  chat: string,
+  options: FetchOptions,
+): Promise<{ chatId?: Id; keepFrom?: number; skip?: { members: number } } | undefined> => {
+  if (!deps.historyLimits || options.fullHistory) return undefined
+  const chatId = await storedChatId(deps.messenger, chat, store, account, { includeLeft: true }).catch(() => undefined)
+  const stored = chatId === undefined ? undefined : (await store.chats.historyShapes(account, [chatId])).get(chatId)
+  if (stored?.included) return undefined
+  const window = historyWindow(stored ?? options.shape, deps.historyLimits, Date.now())
+  return {
+    ...(chatId === undefined ? {} : { chatId }),
+    ...("skip" in window ? { skip: { members: window.members } } : { keepFrom: window.keepFrom }),
+  }
+}
+
+/** A read the limits stopped, for `store status` and the answers that say not all is there; the count is unknown. */
+const recordSkip = async (
+  store: MessageStore,
+  account: AccountKey,
+  chatId: Id | null | undefined,
+  skip: { reason: "group_too_large"; members: number } | { reason: "older_than_window"; keptFrom: string },
+) => {
+  if (!chatId) return
+  const at = new Date().toISOString()
+  await store.chats.recordHistorySkips(
+    account,
+    new Map([[chatId, { ...skip, messages: 0, oldestAt: at, newestAt: at, unread: true }]]),
+  )
 }
 
 /** One page of a chat's history, newest first, older than `before` when it is given. */
