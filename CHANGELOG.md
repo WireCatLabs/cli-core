@@ -17,20 +17,20 @@ shape of this file.
   `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
   notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
   lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
-
-## 0.545.0 — 02.11.2026
+- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
+  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
+  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
+  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
+  the reason instead.
+- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
+  no longer found by that title; give its id or a part of the title.
+- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
+  provider clash message now shows (`telegram (messages, from tg)`).
 
 ### Added
 
 - **A command's own history handler learns whether each batch reached the store**: `HistoryBatchHandler` takes
   `saved`, a promise of the same `true` or `false` the messenger gets, so a link can count only what was kept.
-- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
-  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
-  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
-  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
-  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
-  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
-  `setHistoryIncluded`; `Saving` takes `historyLimits`.
 - **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
   `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
   commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
@@ -43,17 +43,17 @@ shape of this file.
   `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
   `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
 
-### Changed — may break callers
+## 0.545.0 — 02.11.2026
 
-- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
-  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
-  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
-  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
-  the reason instead.
-- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
-  no longer found by that title; give its id or a part of the title.
-- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
-  provider clash message now shows (`telegram (messages, from tg)`).
+### Added
+
+- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
+  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
+  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
+  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
+  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
+  `setHistoryIncluded`; `Saving` takes `historyLimits`.
 
 ## 0.544.0 — 02.11.2026
 
