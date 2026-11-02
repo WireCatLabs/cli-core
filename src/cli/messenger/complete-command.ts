@@ -35,6 +35,7 @@ export const completeCommand = (
   options: CompletionOptions = {},
 ): Command =>
   annotate(new Command("complete"), {
+    literal_after_dashes: true,
     effects: LOCAL_READ,
     mcp: false,
     examples: [`${messenger.app.command} complete zsh`],

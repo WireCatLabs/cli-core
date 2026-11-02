@@ -344,6 +344,44 @@ describe("forum setup commands", () => {
   })
 })
 
+describe("options after --", () => {
+  const sandbox = () => {
+    const root = mkdtempSync(join(tmpdir(), "dashes-cli-"))
+    return {
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CONFIG_DIR: join(root, "config"),
+      MESSAGING_STORE: join(root, "m.db"),
+    }
+  }
+
+  it("reads the command's own option after -- as that option", async () => {
+    const env = sandbox()
+    const synced = await call(["messages", "sync", "--", "-100", "--json"], async () => fake, env)
+    expect(synced.code).toBe(0)
+    const kept = await call(["messages", "sync", "--", "-100", "--json=chat"], async () => fake, env, { tty: true })
+    expect(Object.keys(JSON.parse(kept.stdout[0] ?? "").item)).toEqual(["chat"])
+  })
+
+  it("leaves -- with no option after it as it was", async () => {
+    const env = sandbox()
+    const synced = await call(["messages", "sync", "--", "-100"], async () => fake, env, { tty: true })
+    expect(synced.code).toBe(0)
+    expect(() => JSON.parse(synced.stdout.join("\n"))).toThrow()
+  })
+
+  it("sends a text that is spelled as an option", async () => {
+    const env = sandbox()
+    const send = vi.fn(async (_chat: string, _text: string, options: SendOptions) => ({
+      message,
+      sendId: options.sendId,
+    }))
+    const sent = await call(["messages", "send", "7", "--", "--json"], async () => ({ ...fake, send }), env)
+    expect(sent.code).toBe(0)
+    expect(send).toHaveBeenCalledWith("7", "--json", expect.anything())
+  })
+})
+
 describe("explicit topic addressing", () => {
   it("passes message and poll topics through the CLI and journal", async () => {
     const root = mkdtempSync(join(tmpdir(), "topic-cli-"))
