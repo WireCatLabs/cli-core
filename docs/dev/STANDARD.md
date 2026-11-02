@@ -166,6 +166,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `vote` | answer a poll |  |
 | `answer` | reply to a button someone pressed under a bot's message |  |
 | `respond` | answer an invitation: accept, tentatively accept or decline it |  |
+| `remind` | tell the owner once about what starts soon: print it, or run the owner's own program for it |  |
 | `press` | press a button under a bot's message; the bot sees who pressed it |  |
 | `action` | show what a bot is doing in a chat, such as typing, for a few seconds |  |
 | `watch` | follow new events as they come, and keep them |  |

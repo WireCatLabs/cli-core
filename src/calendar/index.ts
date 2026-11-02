@@ -53,6 +53,7 @@ export {
   calendarConflict,
   EVENTS_DELETE_SERIES_KEY,
   EVENTS_NOTIFY_KEY,
+  EVENTS_REMIND_HOOK_KEY,
   type EventDraft,
   type EventPatch,
   type EventResponse,

@@ -142,6 +142,17 @@ export const calendarEvent = v.strictObject({
   untrusted,
 })
 
+/** One event `events remind` told about: the event, its reference, and the fields a stranger wrote. */
+const {
+  change: _change,
+  changed_at: _changedAt,
+  was: _was,
+  overlapping: _overlapping,
+  overlaps: _overlaps,
+  ...listed
+} = event.entries
+export const calendarReminder = v.strictObject({ ...listed, ref: text })
+
 const hitFields = {
   provider: nullableText,
   account: nullableText,
@@ -269,6 +280,7 @@ const ANSWERS: Record<string, { name: string; schema?: v.GenericSchema }> = {
   "events show": { name: "calendar_event", schema: calendarEvent },
   "events prepare": { name: "calendar_event_preparation", schema: calendarEventPreparation },
   "events export": { name: "calendar_export", schema: calendarExport },
+  "events remind": { name: "calendar_reminder", schema: calendarReminder },
   "events import": { name: "calendar_import", schema: calendarImport },
   "events create": { name: "calendar_event_write", schema: calendarEventWrite },
   "events update": { name: "calendar_event_write", schema: calendarEventWrite },
