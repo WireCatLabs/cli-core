@@ -1,11 +1,11 @@
 import { mkdtempSync, statSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { tmpdir, userInfo } from "node:os"
 import { join, sep } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../domain/models.js"
 import { MIGRATIONS, migrate } from "./migrations.js"
 import { openCache } from "./open.js"
-import { storePath, wirecatDirectory } from "./path.js"
+import { refuseOwnerStoreInTests, storePath, wirecatDirectory } from "./path.js"
 import { type AccountKey, openStore } from "./store.js"
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "store-")), "messages.db")
@@ -350,6 +350,29 @@ describe("the message store", () => {
     )
     expect(storePath({ ...posix, WIRECAT_STATE_DIR: "/x" })).toBe("/x/wirecat.db")
     expect(storePath({ ...posix, WIRECAT_STATE_DIR: "/x", MESSAGING_STORE: "/y/m.db" })).toBe("/y/m.db")
+  })
+
+  it("**refuses the owner's real WireCat folder under vitest**, whatever HOME a test passed", () => {
+    const home = "/home/owner"
+    const refuse =
+      (file: string, env: NodeJS.ProcessEnv = { VITEST: "true" }) =>
+      () =>
+        refuseOwnerStoreInTests(file, env, home)
+
+    expect(refuse(storePath({ HOME: home }))).toThrow("owner's real WireCat folder")
+    expect(refuse("/home/owner/.local/share/WireCat/backups/wirecat-1.db")).toThrow("owner's real WireCat folder")
+    expect(refuse(`${process.env.TMPDIR}/m.db`)).not.toThrow()
+    expect(refuse("/home/owner/.local/share/WireCatalog/wirecat.db")).not.toThrow()
+    expect(refuse(":memory:")).not.toThrow()
+    expect(refuse(storePath({ HOME: home }), {})).not.toThrow()
+  })
+
+  // Read-only, so a broken guard fails on the missing file instead of creating anything in the owner's folder.
+  it("**will not open a store in the owner's real WireCat folder**", async () => {
+    const home = userInfo().homedir
+    const path = join(wirecatDirectory({ HOME: home, USERPROFILE: home }), "no-such-test-file", "wirecat.db")
+
+    await expect(openStore({ path, readOnly: true })).rejects.toThrow("owner's real WireCat folder")
   })
 })
 

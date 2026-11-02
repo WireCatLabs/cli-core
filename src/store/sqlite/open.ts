@@ -1,6 +1,7 @@
 import type { DecisionPolicy } from "../decisions.js"
 // biome-ignore-all lint/plugin/no-sqlite-driver: cli-core owns the store, so it opens the driver itself
 import { type CacheDatabase, PRAGMAS } from "../driver.js"
+import { refuseOwnerStoreInTests } from "../path.js"
 import { quietSqliteWarning } from "../sqlite-warning.js"
 import type { SQLiteAsyncDatabase } from "./drizzle/core.js"
 
@@ -31,6 +32,7 @@ export const openSqlite = async (
   path: string,
   { readOnly = false }: { readOnly?: boolean } = {},
 ): Promise<OpenedSqlite> => {
+  refuseOwnerStoreInTests(path)
   const opened = "Bun" in globalThis ? await openUnderBun(path, readOnly) : await openUnderNode(path, readOnly)
   try {
     opened.database.exec(readOnly ? "PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; PRAGMA query_only=ON" : PRAGMAS)
