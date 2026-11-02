@@ -15,20 +15,13 @@ shape of this file.
   contents in an error. gcal, drive and mail each kept a copy of this reader.
 - **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
   `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
-
-### Changed — may break callers
-
-- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
-  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
-  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
-  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
-  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
-  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
-  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
-  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
-
-### Added
-
+- **iCalendar feeds as read-only calendars.** With `deps.feeds` (`icsFeeds`), `calendars add <url> [--title]` follows a
+  public holiday calendar, a sports schedule or a published `.ics` address, and `calendars remove <calendar>` stops.
+  `sync` reads each feed after the provider (`syncWithFeeds`), so its events show in `events list`,
+  `search events`, `overlapping:` and `events remind`. Repeating events are expanded here (`expandSeries`: RRULE in
+  the event's own zone, RDATE, EXDATE and overrides). The address is a secret input, kept by the CLI and never
+  printed; a fetch follows redirects only to https and stops at 10 MB and 30 s. `readIcs` takes
+  `{ overrides: true }` and returns the calendar's `name`. See `docs/dev/CALENDARS.md`, "Feeds".
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
@@ -42,6 +35,21 @@ shape of this file.
   owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
   `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
   `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
+
+### Changed — may break callers
+
+- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
+  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
+  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
+  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
+  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
+  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
+  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
+  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+- **A write to a calendar the account may only read refuses before anything is asked or journaled**
+  (`calendar.read-only`): create, quick add, import, update, delete, respond and move, for a feed and for a provider's
+  `reader` or `free-busy` calendar alike. Before, only the target of a move was checked; the provider refused the rest.
+  `calendars busy` and `search --backend server` leave feed calendars out.
 
 ### Fixed
 
