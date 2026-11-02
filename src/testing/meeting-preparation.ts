@@ -4,12 +4,13 @@ import { join } from "node:path"
 import { createUpcomingMeetingReader } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { createTaskFromMeeting } from "../services/meeting-tasks.js"
+import type { DecisionPolicy } from "../store/decisions.js"
 import { openCache } from "../store/open.js"
 import { openStore } from "../store/store.js"
 
-export const preparationFixture = async (provider = "example-calendar") => {
+export const preparationFixture = async (provider = "example-calendar", decisions?: DecisionPolicy) => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-preparation-")), "fixture.db")
-  const store = await openStore({ path, now: () => 5000 })
+  const store = await openStore({ path, now: () => 5000, decisions })
   const db = await openCache(path)
   const key = { provider, account: "AliceExample" }
   const accountId = await store.accounts.saveAccount(key, { name: "Alice Example" })

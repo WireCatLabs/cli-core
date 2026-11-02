@@ -84,6 +84,7 @@ const fixture = async () => {
   const store = await openStore({
     path: join(mkdtempSync(join(tmpdir(), "link-scan-")), "store.db"),
     now: () => clock++,
+    decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
   })
   handles.push(store)
   for (const key of [TG, MAX, MAIL]) await store.accounts.saveAccount(key, { name: null })

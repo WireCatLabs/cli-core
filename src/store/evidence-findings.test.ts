@@ -11,7 +11,7 @@ afterEach(async () => {
 const agent = { bot: "evidence-test", model: "synthetic-extractor" }
 
 const fixture = async () => {
-  const f = await contextEvidenceFixture()
+  const f = await contextEvidenceFixture(undefined, { agentDecisions: true, ruleProposalsOwnerOnly: true })
   handles.push(f)
   const records = f.store.contextRecords
   if (!records) throw new Error("Missing record reader")

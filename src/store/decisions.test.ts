@@ -142,7 +142,7 @@ describe("an agent cannot decide its own proposal", () => {
   })
 
   it("on an evidence findings batch", async () => {
-    const f = await contextEvidenceFixture()
+    const f = await contextEvidenceFixture(undefined, { agentDecisions: true, ruleProposalsOwnerOnly: true })
     handles.push(f)
     const record = await f.store.contextRecords?.read(f.doc.ref)
     if (!record) throw new Error("Missing record")

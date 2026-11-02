@@ -1,13 +1,14 @@
 import type { ContextEvidenceRequest, ContextSource } from "../context/evidence.js"
 import { createContextEvidenceReader } from "../services/context-evidence.js"
+import type { DecisionPolicy } from "../store/decisions.js"
 import { normalize } from "../store/normalize.js"
 import { contextEvidenceOver } from "../store/sqlite/context-evidence.js"
 import { drainNoteIndex } from "../store/sqlite/note-index.js"
 import { stemmerCache } from "../store/sqlite/stems.js"
 import { preparationFixture } from "./meeting-preparation.js"
 
-export const contextEvidenceFixture = async (provider = "example-calendar") => {
-  const f = await preparationFixture(provider)
+export const contextEvidenceFixture = async (provider = "example-calendar", decisions?: DecisionPolicy) => {
+  const f = await preparationFixture(provider, decisions)
   const db = f.db
   for (const id of [f.accountId, f.otherId]) {
     db.prepare(

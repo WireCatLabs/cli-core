@@ -11,7 +11,7 @@ const agent = { bot: "claude-code", model: "synthetic" }
 const codex = { bot: "codex", reason: "the evidence names the project" }
 
 const fixture = async () => {
-  const f = await contextEvidenceFixture()
+  const f = await contextEvidenceFixture(undefined, { agentDecisions: true, ruleProposalsOwnerOnly: true })
   handles.push(f)
   const project = (await f.store.knowledge.projects())[0]
   if (!project) throw new Error("Missing project")

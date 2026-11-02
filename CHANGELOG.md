@@ -9,7 +9,7 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **Agents no longer decide for the owner by default (NEED-2188).** `DEFAULT_DECISION_POLICY.agentDecisions` is now
+- **Agents no longer decide for the owner by default; the owner turns it on.** `DEFAULT_DECISION_POLICY.agentDecisions` is now
   `false`, so a store opened without `decisions` refuses every agent confirm or reject with
   `proposals.agent-decisions-off`; before, an agent with a reason could decide facts, memories, links and project
   findings. A host turns it back on only from the owner's explicit config, `"agent_decisions": true`, passed as
