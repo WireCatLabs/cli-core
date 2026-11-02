@@ -18,16 +18,19 @@ interface FindingBase {
 }
 export interface FactFinding extends FindingBase {
   kind: "fact"
-  type: Exclude<(typeof FACT_TYPES)[number], "payment">
+  type: (typeof FACT_TYPES)[number]
   statement: string
 }
-/** A payment an agent read; confirming it records a `payment` fact. A paid one supersedes the expected one. */
+/**
+ * A payment an agent read. Confirming it writes money through `store.finance`, never a fact: a paid one a `payments`
+ * row, an expected one an invoice; a paid one that supersedes an invoice settles it, a cancelled one voids it.
+ */
 export interface PaymentFinding extends FindingBase {
   kind: "payment"
-  /** The fact's full sentence; without one, the payment's title. */
+  /** The full sentence, kept as the proposal's reason; without one, the payment's title. */
   statement?: string
   payment: Payment
-  /** The `fact:` of the expected payment this one replaces, once it is paid or cancelled. */
+  /** The `invoice:` of the expected payment this one settles (paid) or voids (cancelled). */
   supersedes?: string
 }
 export interface TaskFinding extends FindingBase {
@@ -141,7 +144,8 @@ export const validateFindings = (input: FindingsInput, rules: FindingsRules): Fi
     }
     if (finding.kind === "fact") {
       fields(finding, ["id", "project", "subject", "evidence", "kind", "type", "statement"], rules.singular)
-      if ((finding.type as string) === "payment") return invalid("a payment is a finding of kind payment")
+      if ((finding.type as string) === "payment")
+        return invalid("a payment is a finding of kind payment; money is a payments row, not a fact")
       if (!FACT_TYPES.includes(finding.type)) return invalid("unknown fact finding type")
       return { ...base, kind: "fact", type: finding.type, statement: text(finding.statement, 2000) }
     }
@@ -151,13 +155,22 @@ export const validateFindings = (input: FindingsInput, rules: FindingsRules): Fi
         ["id", "project", "subject", "evidence", "kind", "statement", "payment", "supersedes"],
         rules.singular,
       )
-      if (finding.supersedes !== undefined && !/^fact:[1-9]\d*$/.test(String(finding.supersedes)))
-        return invalid("a payment finding supersedes a fact: reference")
+      if (finding.supersedes !== undefined && !/^invoice:[1-9]\d*$/.test(String(finding.supersedes)))
+        return invalid("a payment finding supersedes an invoice: reference, the expected payment it settles or voids")
+      const payment = validatePayment(finding.payment)
+      if (payment.state === "expected" && finding.supersedes !== undefined)
+        return invalid("an expected payment supersedes nothing; a paid or cancelled one supersedes its invoice")
+      if (payment.state === "cancelled" && finding.supersedes === undefined)
+        return invalid("a cancelled payment names the invoice: it cancels in supersedes")
+      if (payment.state === "expected" && !/^(person|organization):/.test(payment.counterparty ?? ""))
+        return invalid(
+          "an expected payment becomes an invoice, which names its counterparty as a person: or organization:",
+        )
       return {
         ...base,
         kind: "payment",
         ...(finding.statement === undefined ? {} : { statement: text(finding.statement, 2000) }),
-        payment: validatePayment(finding.payment),
+        payment,
         ...(finding.supersedes === undefined ? {} : { supersedes: finding.supersedes }),
       }
     }

@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A payment is no longer a fact (store version 46).** Money lives only in `store.finance`. `facts.add` refuses type
+  `payment` with reason `fact.payment-retired`, naming `store.finance.addPayment`, and a trigger refuses one from an
+  older build. `FACT_TYPES`, the `fact` entity and `Fact` lose `payment`; `PaymentFilter`, `facts.list({ payment })`,
+  `PAYMENT_QUERY_FIELDS` and `paymentFilterOf` are gone. The first writable open moves stored payment facts into rows.
+- **An accepted payment finding writes a finance row, not a fact.** A paid one is a `payment:` row, an expected one
+  an `invoice:` of one line, proposed by the agent and confirmed by the owner's acceptance. `supersedes` now names
+  the `invoice:` a paid one settles or a cancelled one voids, not a `fact:`. An expected one needs a `person:` or
+  `organization:` counterparty, and the amount must fit the currency's decimals. New optional field `paid_at`.
+- **`projects status` reads money from `store.finance`.** The `payments` signal (version 3) lists payments and open
+  invoices by their `payment:` and `invoice:` refs, `status` being `proposed` or `confirmed`; the open total counts
+  confirmed invoices only. Finance rows gain `evidence`, and `addInvoice` and `addPayment` take it.
+
 ### Added
 
 - **Invoices and payments in the store (store version 45).** `store.finance` adds, lists and shows invoices with

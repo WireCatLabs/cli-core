@@ -25,7 +25,16 @@ import {
 } from "../../domain/money.js"
 import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
-import { type Author, authorActor, authorOf, projectId, projectOf, subjectOf } from "./memories.js"
+import {
+  type Author,
+  authorActor,
+  authorOf,
+  evidenceOf,
+  linkEvidence,
+  projectId,
+  projectOf,
+  subjectOf,
+} from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
@@ -47,6 +56,8 @@ interface Reviewed {
   source: string
   /** Why an agent or an import proposed it. */
   reason: string | null
+  /** What it was read from: the messages, documents or notes an agent or the owner cited. */
+  evidence: string[]
   project: string | null
   projectName: string | null
   createdAt: string
@@ -123,6 +134,8 @@ interface Written {
   source?: string
   /** Why a bot proposes it, kept for the reviewer. */
   reason?: string
+  /** References it was read from, linked as `evidence`. */
+  evidence?: string[]
 }
 
 export interface InvoiceLineInput {
@@ -242,6 +255,13 @@ const isoDate = (value: unknown, what: string): string | null => {
 }
 
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
+
+const evidenceList = (value: unknown): string[] => {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > 8 || value.some((one) => typeof one !== "string" || !one.trim()))
+    return refuse("evidence is a list of at most 8 references", "finance.field")
+  return [...new Set(value.map((one: string) => one.trim()))]
+}
 const MAX_LINES = 500
 
 const reasonOf = (metadata: unknown): string | null => {
@@ -284,7 +304,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       return refuse(`${what} is a person: or organization: reference, not ${reference}`, "finance.party")
     return thing
   }
-  const reviewedOf = (row: Row): Reviewed => ({
+  const reviewedOf = (row: Row, type: "invoice" | "payment"): Reviewed => ({
     review: row.review as FinanceReview,
     author: authorOf(row),
     model: row.model == null ? null : String(row.model),
@@ -294,6 +314,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
         : { type: row.confirmed_by_type as Actor["type"], id: String(row.confirmed_by_id) },
     source: String(row.source),
     reason: reasonOf(row.metadata),
+    evidence: evidenceOf(context, { type, id: Number(row.id) }),
     ...projectOf(database, row),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -330,7 +351,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       issueDate: row.issue_date == null ? null : String(row.issue_date),
       dueDate: fields.dueDate,
       status: fields.status,
-      ...reviewedOf(row),
+      ...reviewedOf(row, "invoice"),
     }
   }
 
@@ -362,7 +383,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       reference: row.reference == null ? null : String(row.reference),
       allocated: formatDecimal(allocated, scale),
       unallocated: formatDecimal(amount - allocated, scale),
-      ...reviewedOf(row),
+      ...reviewedOf(row, "payment"),
     }
   }
 
@@ -483,7 +504,12 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       confirmedId: owner ? actor.id : null,
       metadata: reason === null ? null : JSON.stringify({ reason }),
       project: input.project === undefined ? null : projectId(database, input.project),
+      evidence: evidenceList(input.evidence),
     }
+  }
+
+  const keepEvidence = (type: "invoice" | "payment", id: number, by: ReturnType<typeof written>) => {
+    if (by.evidence.length) linkEvidence(context, { type, id }, by.evidence, by.owner ? "owner" : "agent")
   }
 
   const ownerOnly = (by: Author, what: string) => {
@@ -653,6 +679,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
         )
         for (const [index, line] of lines.entries())
           insert.run(made, index + 1, line.description, line.quantity, line.unitPrice, line.amount, at, at)
+        keepEvidence("invoice", made, by)
         return made
       })
       return invoiceDetail(`invoice:${id}`)
@@ -768,6 +795,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
             at,
             at,
           ) as Row
+        keepEvidence("payment", Number(made.id), by)
         const touched = allocations.map(({ invoice, units }) => allocateRow(made, invoice, units, by.actor))
         for (const invoice of touched) settle(invoice)
         return Number(made.id)

@@ -146,6 +146,7 @@ const OTHERS: Entry[] = [
   validation("input.required", "the command needs an answer and cannot ask for one"),
   validation("input.too-large", "the input is over its size limit"),
   ["meeting-project.stale", "configuration_error", "the meeting's project changed meanwhile"],
+  validation("fact.payment-retired", "a payment is a payments row in store.finance, not a fact"),
   validation("finance.allocate", "the invoice or payment cannot take an allocation in its state"),
   validation("finance.currency", "the payment and the invoice are in different currencies; nothing is converted"),
   validation("finance.field", "a field of the invoice or payment is not valid"),
