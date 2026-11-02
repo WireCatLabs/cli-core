@@ -31,6 +31,41 @@ shape of this file.
   decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
   two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
 
+## 0.545.0 — 02.11.2026
+
+### Added
+
+- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
+  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
+  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
+  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
+  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
+  `setHistoryIncluded`; `Saving` takes `historyLimits`.
+- **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
+  `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
+  commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
+  account is refused, naming the account it belongs to and the profiles of this CLI the store saw on it; it never
+  switches account. One of another messenger is refused with the command that opens it (`open it with tg <profile>
+  messages list chat:telegram/…`), and another kind (`document:413` given as a chat) with what the argument takes.
+- **`event:<id>` and `meeting:<account>/<meeting>[/<transcript>[/<cue>]]` parse with `parseReference`** and
+  `canonicalReference`, as every other kind: `event:N` was printed by the calendar and person answers and could not be
+  read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
+  `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
+  `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
+
+### Changed — may break callers
+
+- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
+  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
+  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
+  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
+  the reason instead.
+- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
+  no longer found by that title; give its id or a part of the title.
+- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
+  provider clash message now shows (`telegram (messages, from tg)`).
+
 ## 0.544.0 — 02.11.2026
 
 ### Added
