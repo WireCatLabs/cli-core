@@ -95,6 +95,7 @@ const seen = (context: BotContext, message: Message) => {
 
 const sendCommand = (bot: BotMessenger): Command =>
   annotate(new Command("send"), {
+    literal_after_dashes: true,
     effects: REMOTE_WRITE,
     examples: botExamples(
       bot,
@@ -271,6 +272,7 @@ const showCommand = (bot: BotMessenger): Command =>
 
 const editCommand = (bot: BotMessenger): Command =>
   annotate(new Command("edit"), {
+    literal_after_dashes: true,
     effects: REMOTE_WRITE,
     examples: botExamples(bot, 'messages edit Team 101 "Doors open at 10"'),
   })

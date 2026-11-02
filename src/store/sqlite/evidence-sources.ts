@@ -1,6 +1,6 @@
 import type { CacheDatabase } from "../driver.js"
 import { linkKind } from "./link-kinds.js"
-import { canonicalThingReference, referenceOfThing, stateOfThing, storedThing, type Thing, thingOf } from "./things.js"
+import { referenceOfThing, stateOfThing, storedThing, type Thing, thingOf } from "./things.js"
 
 /** One reference a memory or fact rests on, read back whole enough to judge it without opening it. */
 export interface EvidenceSource {
@@ -90,7 +90,7 @@ export const evidenceSourcesOf = (database: CacheDatabase, from: { type: string;
 
 const thingNamed = (database: CacheDatabase, reference: string): Thing | undefined => {
   try {
-    return thingOf(database, canonicalThingReference(reference))
+    return thingOf(database, reference)
   } catch {
     return undefined
   }

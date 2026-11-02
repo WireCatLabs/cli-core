@@ -1,7 +1,7 @@
 import { formatLocator } from "../../domain/locator.js"
 import { filesAccountSql } from "../../domain/providers.js"
-import { canonicalReference, formatReference, parseReference, type Reference } from "../../domain/references.js"
-import { canonicalMeetingReference, formatMeetingReference, parseMeetingReference } from "../../meetings/index.js"
+import { formatReference, parseReference, type Reference } from "../../domain/references.js"
+import { formatMeetingReference, type MeetingReference } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { ENTITY_TABLES, type EntityType, isEntityType } from "./entity-types.js"
 
@@ -27,6 +27,7 @@ const REFERABLE: Partial<Record<EntityType, { tombstone: boolean }>> = {
   memory: { tombstone: true },
   fact: { tombstone: true },
   bot: { tombstone: false },
+  event: { tombstone: true },
   message: { tombstone: true },
   email: { tombstone: true },
   email_thread: { tombstone: true },
@@ -45,27 +46,12 @@ const storeId = (text: string) => (/^[1-9]\d{0,15}$/.test(text) ? Number(text) :
  * `messages.db` (a ULID, an `entity:`) is simply not found: it is never guessed at.
  */
 export const thingOf = (database: CacheDatabase, reference: Reference | string): Thing | undefined => {
-  if (typeof reference === "string" && reference.trim().startsWith("meeting:")) {
-    const parsed = parseMeetingReference(reference)
-    const meeting = database
-      .prepare("SELECT id FROM meetings WHERE id=? AND account_id=? AND deleted_at IS NULL")
-      .get(parsed.meetingId, parsed.accountId)
-    if (!meeting) return undefined
-    if (parsed.transcriptId === undefined) return { type: "meeting", id: parsed.meetingId }
-    const transcript = database
-      .prepare("SELECT id FROM meeting_transcripts WHERE id=? AND meeting_id=? AND deleted_at IS NULL")
-      .get(parsed.transcriptId, parsed.meetingId)
-    if (!transcript) return undefined
-    if (parsed.cuePosition === undefined) return { type: "meeting_transcript", id: parsed.transcriptId }
-    const row = database
-      .prepare("SELECT id FROM meeting_transcript_rows WHERE meeting_transcript_id=? AND position=?")
-      .get(parsed.transcriptId, parsed.cuePosition)
-    return row ? { type: "meeting_transcript_row", id: Number(row.id) } : undefined
-  }
   const parsed = typeof reference === "string" ? parseReference(reference) : reference
   const found = (type: EntityType, row: Record<string, unknown> | undefined) =>
     row ? { type, id: Number(row.id) } : undefined
   switch (parsed.type) {
+    case "meeting":
+      return meetingThingOf(database, parsed)
     case "message":
       return (
         (parsed.provider === "email" ? emailOf(database, parsed.account, parsed.chat, parsed.message) : undefined) ??
@@ -117,6 +103,23 @@ export const thingOf = (database: CacheDatabase, reference: Reference | string):
       return found(parsed.type, database.prepare(`SELECT id FROM ${known.table} WHERE id = ?`).get(id))
     }
   }
+}
+
+const meetingThingOf = (database: CacheDatabase, parsed: MeetingReference): Thing | undefined => {
+  const meeting = database
+    .prepare("SELECT id FROM meetings WHERE id=? AND account_id=? AND deleted_at IS NULL")
+    .get(parsed.meetingId, parsed.accountId)
+  if (!meeting) return undefined
+  if (parsed.transcriptId === undefined) return { type: "meeting", id: parsed.meetingId }
+  const transcript = database
+    .prepare("SELECT id FROM meeting_transcripts WHERE id=? AND meeting_id=? AND deleted_at IS NULL")
+    .get(parsed.transcriptId, parsed.meetingId)
+  if (!transcript) return undefined
+  if (parsed.cuePosition === undefined) return { type: "meeting_transcript", id: parsed.transcriptId }
+  const row = database
+    .prepare("SELECT id FROM meeting_transcript_rows WHERE meeting_transcript_id=? AND position=?")
+    .get(parsed.transcriptId, parsed.cuePosition)
+  return row ? { type: "meeting_transcript_row", id: Number(row.id) } : undefined
 }
 
 /** Mail that memo saved before it wrote the mail tables is still messages, so the caller falls back to them. */
@@ -286,6 +289,3 @@ export const taskIdOf = (database: CacheDatabase, rowId: number): string | undef
   const row = database.prepare("SELECT key, package_id AS id FROM tasks WHERE id = ?").get(rowId)
   return row ? String(row.id ?? row.key) : undefined
 }
-
-export const canonicalThingReference = (reference: string): string =>
-  reference.trim().startsWith("meeting:") ? canonicalMeetingReference(reference) : canonicalReference(reference)

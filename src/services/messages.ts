@@ -5,6 +5,7 @@ import { formatLocator } from "../domain/locator.js"
 import { fileLinks, type MessageLink, messageLinkTarget, validatePermalink } from "../domain/message-link.js"
 import type { Deletion, Discussion, Id, Message, Page, Provider, WindowedMessage } from "../domain/models.js"
 import { pinDurationsText } from "../domain/pin-duration.js"
+import { ensureAccount } from "../domain/ref-arguments.js"
 import { threadIdOf } from "../domain/thread.js"
 import { type After, capability, type Download, type MessengerAdapter, type Sent } from "../ports/messenger.js"
 import type { MediaOption, MessengerTraits } from "../ports/traits.js"
@@ -294,6 +295,16 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
   const { guard } = deps
   const inStore = async <T>(read: (store: MessageStore, account: AccountKey) => Promise<T>): Promise<T> =>
     read(await deps.store(), await deps.account())
+  /** A message named by a reference is read only in the account the reference names; the store is not opened to say so. */
+  const ownTarget = async (target: { text: string; account: string | undefined }, account: AccountKey) => {
+    if (account.provider !== deps.messenger.provider)
+      throw new CliError("validation_error", "that locator belongs to another account; select its profile first")
+    if (target.account === undefined) return
+    await ensureAccount(
+      { text: target.text, account: target.account },
+      { account: account.account, ...(deps.profile === undefined ? {} : { profile: deps.profile }) },
+    )
+  }
 
   const serverThenStore = async (store: MessageStore, account: AccountKey, query: SearchQuery) => {
     const server = await searchServer(deps, query)
@@ -455,11 +466,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
 
     around: async (reference, message, window) => {
       const target = messageLinkTarget(reference, message, deps.messenger.provider)
-      if (target.account !== undefined) {
-        const account = await deps.account()
-        if (account.provider !== deps.messenger.provider || target.account !== account.account)
-          throw new CliError("validation_error", "that locator belongs to another account; select its profile first")
-      }
+      if (target.account !== undefined) await ownTarget(target, await deps.account())
       if (fromStore(deps)) {
         return inStore(async (store, account) =>
           store.messages.around(account, await readChatId(deps, target.chat, store, account), target.message, window),
@@ -475,11 +482,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     thread: (reference, message, options) =>
       inStore(async (store, account) => {
         const target = messageLinkTarget(reference, message, deps.messenger.provider)
-        if (
-          account.provider !== deps.messenger.provider ||
-          (target.account !== undefined && target.account !== account.account)
-        )
-          throw new CliError("validation_error", "that locator belongs to another account; select its profile first")
+        await ownTarget(target, account)
         return readThreadContext(
           store,
           account,
@@ -505,11 +508,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     link: async (reference, message) => {
       const target = messageLinkTarget(reference, message, deps.messenger.provider)
       const account = await deps.account()
-      if (
-        account.provider !== deps.messenger.provider ||
-        (target.account !== undefined && target.account !== account.account)
-      )
-        throw new CliError("validation_error", "that locator belongs to another account; select its profile first")
+      await ownTarget(target, account)
       if (fromStore(deps)) {
         const store = await deps.store()
         const chat = await readChatId(deps, target.chat, store, account)
@@ -552,8 +551,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
 
     download: async (reference, message) => {
       const target = messageLinkTarget(reference, message, deps.messenger.provider)
-      if (target.account !== undefined && target.account !== (await deps.account()).account)
-        throw new CliError("validation_error", "that locator belongs to another account; select its profile first")
+      if (target.account !== undefined) await ownTarget(target, await deps.account())
       const connection = await deps.connection()
       const download = capability(connection, "download", "download attachments")
       return download((await connection.resolve(target.chat)).id, target.message)

@@ -24,7 +24,7 @@ import { holdingText } from "./note-index.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
-import { canonicalThingReference, referenceOfThing, storedThing, type Thing, thingOf } from "./things.js"
+import { referenceOfThing, storedThing, type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
 export const NOTE_FORMATS = ["obsidian", "markdown"] as const
@@ -262,7 +262,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
 
 /** The row a reference names, refused when the store holds none. */
 export const requiredThing = (database: CacheDatabase, reference: string, what = "the target"): Thing => {
-  const thing = thingOf(database, canonicalThingReference(reference))
+  const thing = thingOf(database, reference)
   if (!thing) throw new CliError("not_found", `${what} ${reference} is not in the local store`)
   return thing
 }
@@ -768,7 +768,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
     notes: async (options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       if (options.source !== undefined) oneOf(options.source, ["file", "internal"] as const, "a note's source")
-      const about = options.about === undefined ? undefined : thingOf(database, canonicalThingReference(options.about))
+      const about = options.about === undefined ? undefined : thingOf(database, options.about)
       if (options.about !== undefined && !about) return { items: [], hasMore: false }
       const folder = options.folderId === undefined ? null : Number(folderRow(options.folderId).id)
       const documentText = options.search === undefined ? undefined : holdingText("document", "d.id", options.search)
@@ -854,7 +854,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
     links: async (options = {}) => {
       const pair = (reference: string | undefined) => {
         if (reference === undefined) return { known: true, type: null, id: null }
-        const thing = thingOf(database, canonicalThingReference(reference))
+        const thing = thingOf(database, reference)
         return thing ? { known: true, type: thing.type, id: thing.id } : { known: false, type: null, id: null }
       }
       const from = pair(options.from)

@@ -7,10 +7,32 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
+  `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
+  (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
+  contents in an error. gcal, drive and mail each kept a copy of this reader.
+- **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
+  `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
+
+### Changed — may break callers
+
+- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
+  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
+  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
+  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
+  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
+  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
+  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
+  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+
 ## 0.545.0 — 02.11.2026
 
 ### Added
 
+- **A command's own history handler learns whether each batch reached the store**: `HistoryBatchHandler` takes
+  `saved`, a promise of the same `true` or `false` the messenger gets, so a link can count only what was kept.
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
@@ -18,12 +40,29 @@ shape of this file.
   never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
   (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
   `setHistoryIncluded`; `Saving` takes `historyLimits`.
-- **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
-  `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
-  (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
-  contents in an error. gcal, drive and mail each kept a copy of this reader.
-- **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
-  `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
+- **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
+  `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
+  commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
+  account is refused, naming the account it belongs to and the profiles of this CLI the store saw on it; it never
+  switches account. One of another messenger is refused with the command that opens it (`open it with tg <profile>
+  messages list chat:telegram/…`), and another kind (`document:413` given as a chat) with what the argument takes.
+- **`event:<id>` and `meeting:<account>/<meeting>[/<transcript>[/<cue>]]` parse with `parseReference`** and
+  `canonicalReference`, as every other kind: `event:N` was printed by the calendar and person answers and could not be
+  read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
+  `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
+  `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
+
+### Changed — may break callers
+
+- **A locator of another account or messenger is refused with a new text and a reason.** `messages show`, `context`,
+  `link` and `download` said "that locator belongs to another account; select its profile first" or "…belongs to
+  another messenger"; they now say `<ref> belongs to account <id>; profile <name> is account <id>` (`ref.wrong-account`)
+  or `<ref> is a <messenger> message; open it with …` (`ref.wrong-provider`). A script matching the old text matches
+  the reason instead.
+- **A text of the form `<kind>:<no spaces>` given as a chat is read as a reference**, so a chat titled `note:plan` is
+  no longer found by that title; give its id or a part of the title.
+- The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
+  provider clash message now shows (`telegram (messages, from tg)`).
 
 ## 0.544.0 — 02.11.2026
 

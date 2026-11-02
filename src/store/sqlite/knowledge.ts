@@ -295,12 +295,19 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   const targetOfThing = (thing: Thing): KnowledgeTarget | undefined => {
     if (thing.type === "meeting") return { type: "meeting", id: String(thing.id) }
     const reference = referenceOfThing(database, thing)
-    if (reference === undefined || reference.startsWith("meeting:")) return undefined
+    if (reference === undefined) return undefined
     const parsed = parseReference(reference)
     if (parsed.type === "message") return { type: "message", locator: reference }
     if (parsed.type === "chat") return { type: "chat", id: parsed.chat }
     if (parsed.type === "folder") return { type: "folder", id: parsed.id, path: parsed.path }
-    if (parsed.type === "entity" || parsed.type === "memory" || parsed.type === "fact" || parsed.type === "bot")
+    if (
+      parsed.type === "entity" ||
+      parsed.type === "memory" ||
+      parsed.type === "fact" ||
+      parsed.type === "bot" ||
+      parsed.type === "event" ||
+      parsed.type === "meeting"
+    )
       return undefined
     return { type: parsed.type, id: parsed.id }
   }
