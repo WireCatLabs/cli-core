@@ -84,7 +84,7 @@ arguments; `list` filters by tool and by the agent's name, such as `tg-mcp`.
 ## Who decides a proposal
 
 Every decide method takes a `Decider`: `"owner"`, or `{ bot, model?, reason }` for an agent the host lets
-decide for the owner. Each runs `mayDecide` before it changes anything (SEC-118): an agent needs a reason, never
+decide for the owner. Each runs `mayDecide` before it changes anything: an agent needs a reason, never
 decides its own bot's proposal (every Claude Code session is the bot `claude-code`), never a rule scorer's or
 one that names no author, and nothing when the host's `agent_decisions` is off. `proposalRegistry`
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `memory`, `findings`,

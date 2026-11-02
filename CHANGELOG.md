@@ -43,7 +43,7 @@ shape of this file.
 
 ### Security
 
-- **An agent can no longer decide its own proposal (SEC-118).** Before, `facts.accept`/`reject`,
+- **An agent can no longer decide its own proposal.** Before, `facts.accept`/`reject`,
   `memories.confirm`, `knowledge.confirmRelation`, `proposedActions.approve`/`reject`, `approveAsTask` and both
   findings reviews never asked who decided, so over MCP an agent could confirm what it had proposed itself. Every one
   of them, and the registry, now runs `mayDecide`: the owner always may; an agent needs a reason

@@ -15,7 +15,7 @@ export type Decider = "owner" | { bot: string; model?: string; reason: string }
 export interface DecisionPolicy {
   /** The host's `agent_decisions`: `false` keeps every decision with the owner. */
   agentDecisions: boolean
-  /** A rule scorer's proposal is the owner's alone to decide (NEED-2135 A). */
+  /** A rule scorer's proposal is the owner's alone to decide. */
   ruleProposalsOwnerOnly: boolean
 }
 
