@@ -586,6 +586,7 @@ describe("the generated bot catalogue", () => {
       "config show": [],
       "config set": ["setting", "value"],
       "config unset": ["setting"],
+      "config repair": ["dry_run"],
       "chats admins add": ["can", "chat", "person", "title"],
       "chats admins remove": ["chat", "person"],
       "chats leave": ["chat"],

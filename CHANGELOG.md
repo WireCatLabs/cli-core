@@ -20,6 +20,22 @@ shape of this file.
 - **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
   of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
 
+- **`config repair` mends a settings file whose JSON is broken only in its syntax**, without AI or network (the file
+  may hold keys). It fixes a byte-order mark, `//` and `/* */` comments, trailing commas, a missing comma between
+  entries on separate lines, unquoted keys, single-quoted text, and closing brackets missing at the end. Every value,
+  permissions included, stays as written, in the file's key order. The old file is kept beside it as
+  `config.json.bak-<time>` in its old mode, and the new one is written atomically at 0600. It refuses damage with
+  more than one reading (two entries on one line, a key twice, a bare word as a value, a file that stops after a
+  closing bracket or inside a value, text that is not JSON or not text) with `configuration_error` and the line and
+  column, and changes nothing. It prints the line and kind of each fix, never a value; `--dry-run` writes nothing.
+  `--json` gives `file`, `found`, `repaired`, `dry_run`, `changes` (`{ line, kind }`), `backup`, and for a file that
+  needs nothing `reason` (`nothing to repair`, `no settings file`); a refusal is the error reason `config.unrepairable`
+  with `details.file`, `details.line` and `details.column`.
+  It changes what a later run may do, so the read-only lock refuses it and an MCP server runs it only with
+  `mcp.authority`; an agent's shell may not repair a file cut off before its end. `repairConfigText` exports it.
+- **`doctor` offers `<tool> config repair` as the `fix` of an `invalid_json` issue** when the repair would succeed, so
+  the desktop can show a Repair button; a command refused on such a file names it too.
+
 ### Fixed
 
 - **A scheduled run's `inbox --new` and `review --new` keep their own point** (`schedule-<name>-review`), so a

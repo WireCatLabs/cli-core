@@ -1,9 +1,19 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { commandsCommand } from "./commands-command.js"
 import { configCommand } from "./config-command.js"
 import { run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -294,5 +304,169 @@ describe("config", () => {
     expect((await call(["config", "set", "permissions.contacts", "deny", "--defaults"], agent)).code).toBe(0)
     expect((await call(["work", "config", "set", "permissions.messages", "allow"], env)).code).toBe(0)
     expect(saved()).toMatchObject({ messages: "allow", contacts: "deny" })
+  })
+
+  describe("repair", () => {
+    const BROKEN = `{
+  // the owner's settings
+  "profiles": {
+    work: {
+      'permissions': { "messages": "readonly", "mcp.authority": "deny", },
+      "region": "sk-SENTINEL",
+      "limit": 7
+    }
+  },
+}`
+    const setUp = (text: string, mode = 0o600) => {
+      const root = mkdtempSync(join(tmpdir(), "config-"))
+      const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+      mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+      const file = join(env.CHAT_CONFIG_DIR, "config.json")
+      writeFileSync(file, text)
+      chmodSync(file, mode)
+      return { env, file, backups: () => readdirSync(env.CHAT_CONFIG_DIR).filter((name) => name.includes(".bak-")) }
+    }
+    const repairCall = async (argv: string[], env: NodeJS.ProcessEnv, options: Record<string, unknown> = {}) => {
+      const streams = captureStreams()
+      const code = await run(
+        argv,
+        { app, commands: () => [configCommand(app, config)] },
+        { streams, tty: false, env, ...options },
+      )
+      const out = `${streams.stdout.join("")}${streams.stderr.join("")}`
+      return { code, out, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined }
+    }
+
+    it("**fixes syntax and keeps every value, permissions included**, with a backup in the old mode", async () => {
+      const { env, file, backups } = setUp(BROKEN, 0o640)
+      const { code, answer, out } = await repairCall(["config", "repair", "--json"], env)
+
+      expect(code, out).toBe(0)
+      expect(answer).toMatchObject({ file, found: true, repaired: true, dry_run: false })
+      expect(answer.changes.map((fix: { kind: string }) => fix.kind)).toEqual([
+        "comment",
+        "unquoted_key",
+        "single_quotes",
+        "trailing_comma",
+        "trailing_comma",
+      ])
+      expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
+        profiles: {
+          work: { permissions: { messages: "readonly", "mcp.authority": "deny" }, region: "sk-SENTINEL", limit: 7 },
+        },
+      })
+      expect(config.resolveSettings({ profile: "work" }, { env }).permissions).toEqual({
+        messages: "readonly",
+        "mcp.authority": "deny",
+      })
+      expect(statSync(file).mode & 0o777).toBe(0o600)
+      expect(backups()).toHaveLength(1)
+      expect(answer.backup).toBe(join(env.CHAT_CONFIG_DIR, backups()[0] as string))
+      expect(readFileSync(answer.backup, "utf8")).toBe(BROKEN)
+      expect(statSync(answer.backup).mode & 0o777).toBe(0o640)
+      expect(out).not.toContain("SENTINEL")
+    })
+
+    it("**prints lines and kinds, never a value**", async () => {
+      const { env } = setUp(BROKEN)
+      const { code, out } = await repairCall(["config", "repair"], env)
+      expect(code).toBe(0)
+      expect(out).toContain("line 2: fixed a comment")
+      expect(out).toContain("the old file is kept as")
+      expect(out).not.toContain("SENTINEL")
+    })
+
+    it("**--dry-run says what it would fix and writes nothing**", async () => {
+      const { env, file, backups } = setUp(BROKEN)
+      const { code, answer } = await repairCall(["config", "repair", "--dry-run", "--json"], env)
+      expect(code).toBe(0)
+      expect(answer).toMatchObject({ repaired: false, dry_run: true, backup: null })
+      expect(answer.changes.length).toBe(5)
+      expect(readFileSync(file, "utf8")).toBe(BROKEN)
+      expect(backups()).toEqual([])
+    })
+
+    it("**says a valid file or no file needs nothing**, and leaves it as it is", async () => {
+      const valid = '{"profiles":{"work":{"limit":3}}}'
+      const { env, file, backups } = setUp(valid)
+      const { code, answer } = await repairCall(["config", "repair", "--json"], env)
+      expect(code).toBe(0)
+      expect(answer).toMatchObject({ repaired: false, reason: "nothing to repair", changes: [], backup: null })
+      expect(readFileSync(file, "utf8")).toBe(valid)
+      expect(backups()).toEqual([])
+
+      const none = { CHAT_CONFIG_DIR: join(mkdtempSync(join(tmpdir(), "config-")), "config") }
+      expect((await repairCall(["config", "repair", "--json"], none)).answer).toMatchObject({
+        found: false,
+        reason: "no settings file",
+      })
+    })
+
+    it("**gives up and changes nothing** when the damage has two readings", async () => {
+      const text = '{"region": "sk-SENTINEL" "limit": 2}'
+      const { env, file, backups } = setUp(text)
+      const { code, out } = await repairCall(["config", "repair"], env)
+      expect(code).toBe(3)
+      expect(out).toContain("cannot repair it safely")
+      expect(out).toContain("line 1")
+      expect(out).not.toContain("SENTINEL")
+      expect(readFileSync(file, "utf8")).toBe(text)
+      expect(backups()).toEqual([])
+    })
+
+    it("**leaves a cut-off file to the owner** when an agent runs it", async () => {
+      const text = '{\n  "profiles": {\n    "work": {"limit": 2,\n'
+      const { env, file } = setUp(text)
+      const { code, out } = await repairCall(["config", "repair"], { ...env, AI_AGENT: "hermes-agent" })
+      expect(code).toBe(5)
+      expect(out).toContain("the owner repairs it in a terminal")
+      expect(readFileSync(file, "utf8")).toBe(text)
+      expect((await repairCall(["config", "repair", "--dry-run"], { ...env, AI_AGENT: "hermes-agent" })).code).toBe(0)
+      expect((await repairCall(["config", "repair"], env)).code).toBe(0)
+    })
+
+    it("**needs mcp.authority over MCP and is refused under the read-only lock**, but may look", async () => {
+      const { env, file } = setUp(BROKEN)
+      const agent = { result: () => {}, failure: () => {}, authority: false }
+      expect((await repairCall(["config", "repair"], env, { agent })).code).toBe(5)
+      expect((await repairCall(["config", "repair"], { ...env, CHAT_READ_ONLY: "1" })).code).toBe(5)
+      expect((await repairCall(["config", "repair", "--dry-run"], { ...env, CHAT_READ_ONLY: "1" })).code).toBe(0)
+      expect(readFileSync(file, "utf8")).toBe(BROKEN)
+    })
+
+    it("**answers the desktop's call**: a profile first, --record, listed in commands, errors with file and line", async () => {
+      const { env, file } = setUp(BROKEN)
+      const streams = captureStreams()
+      const program = { app, commands: () => [configCommand(app, config), commandsCommand(app)] }
+      expect(await run(["work", "commands", "--json"], program, { streams, tty: false, env })).toBe(0)
+      expect(streams.stdout.join("")).toContain('"path":["config","repair"]')
+      const done = await repairCall(["work", "config", "repair", "--record", "--json"], env)
+      expect(done.code, done.out).toBe(0)
+      expect(done.answer).toMatchObject({ repaired: true, file, backup: expect.any(String) })
+      expect(done.answer.changes[0]).toEqual({ line: 2, kind: "comment" })
+
+      const broken = setUp('{"a": 1 "b": 2}')
+      const failed = captureStreams()
+      const code = await run(["work", "config", "repair", "--json"], program, {
+        streams: failed,
+        tty: false,
+        env: broken.env,
+      })
+      expect(code).toBe(3)
+      expect(JSON.parse(failed.stderr.join("")).error).toMatchObject({
+        code: "configuration_error",
+        reason: "config.unrepairable",
+        details: { file: broken.file, line: 1, column: 9 },
+      })
+    })
+
+    it("**doctor's issue offers the repair only when it would work**", async () => {
+      const issueOf = (text: string) =>
+        config.resolveSettings({}, { env: setUp(text).env, needsProfile: false, withIssues: true }).configIssues?.[0]
+      expect(issueOf(BROKEN)).toMatchObject({ kind: "invalid_json", fix: "chat config repair" })
+      expect(issueOf('{"a": 1 "b": 2}')).not.toHaveProperty("fix")
+      const refused = await repairCall(["config", "show"], setUp(BROKEN).env)
+      expect(refused.out).toContain("`chat config repair` repairs it")
+    })
   })
 })
