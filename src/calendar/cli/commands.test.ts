@@ -542,6 +542,37 @@ describe("calendar commands", () => {
     await expect(cli("events", "list", "--source", "all")).rejects.toMatchObject({ code: "permission_error" })
   })
 
+  it("prints times to a person on the zone's wall clock and names the zone; JSON keeps UTC (UX-109)", async () => {
+    const shown: { value: unknown; view?: (body?: unknown) => string }[] = []
+    const { program, source } = await setup({
+      timezone: "Europe/Madrid",
+      write: (value, _format, view) => shown.push({ value, ...(view ? { view } : {}) }),
+    })
+    source.put("primary", {
+      ...planning(),
+      externalId: "holiday",
+      title: "Example holiday",
+      allDay: true,
+      startDate: "2026-10-28",
+      endDate: "2026-10-29",
+      startsAt: Date.UTC(2026, 9, 27, 23),
+      endsAt: Date.UTC(2026, 9, 28, 23),
+      participants: [],
+    })
+    await program().parseAsync(["sync"], { from: "user" })
+    await program().parseAsync(["events", "list", "starts_at:[2026-10-27 TO 2026-10-29}"], { from: "user" })
+    const { value, view } = shown.at(-1) as (typeof shown)[number]
+    expect((value as { items: { starts_at: string }[] }).items.map(({ starts_at }) => starts_at)).toEqual([
+      "2026-10-27T11:00:00.000Z",
+      "2026-10-27T23:00:00.000Z",
+    ])
+    const text = view?.() ?? ""
+    expect(text).toContain("2026-10-27 12:00")
+    expect(text).toMatch(/Example holiday.*2026-10-28 .*2026-10-29/su)
+    expect(text).not.toContain("T11:00:00")
+    expect(text.split("\n").at(-1)).toBe("times in Europe/Madrid")
+  })
+
   it("links review and resolve: a copy that fits two events waits for the owner", async () => {
     const { cli, store, accountId } = await setup()
     const calendars = await store.calendar.saveCalendars(
@@ -563,7 +594,7 @@ describe("calendar commands", () => {
     await store.calendar.saveEntries(b, [planning({ externalId: "b", icalUid: "shared" })], NOW)
     await store.calendar.saveEntries(c, [planning({ externalId: "c", icalUid: "shared" })], NOW)
     const review = await cli("links", "review")
-    expect(review.accounts).toBe("all")
+    expect(review.meta).toEqual({ accounts: ["google-calendar:owner-1"], complete: true })
     const [open] = review.items as { id: string; candidates: { ref: string; title: string }[] }[]
     expect(open?.candidates).toHaveLength(2)
     expect(open?.candidates[0]?.title).toBe("Example roadmap planning")
@@ -580,10 +611,50 @@ describe("calendar commands", () => {
     await store.calendar.saveEntries(d?.id as number, [planning({ externalId: "d", icalUid: "shared" })], NOW)
     const [theirs] = await store.calendar.reviews({ status: "open" })
     expect(theirs?.calendarId).toBe(d?.id)
+    const across = await cli("links", "review")
+    expect(across.items.map(({ id }) => id)).toEqual([String(theirs?.id)])
+    expect(across.meta).toEqual({ accounts: ["google-calendar:owner-1", "google-calendar:owner-2"], complete: true })
     await expect(cli("links", "resolve", String(theirs?.id), `event:${first?.eventId}`)).rejects.toMatchObject({
       code: "permission_error",
     })
     expect((await store.calendar.reviews({ status: "open" }))[0]?.id).toBe(theirs?.id)
+  })
+
+  it("links review under a profile lock lists only the profile's choices, and no other account's titles", async () => {
+    const { cli, store, accountId } = await setup({ locked: true })
+    const other = await store.accounts.saveAccount({ provider: "google-calendar", account: "owner-2" }, { name: null })
+    const theirs = await store.calendar.saveCalendars(
+      other,
+      ["a", "b"].map((externalId) => ({
+        externalId,
+        title: externalId,
+        timezone: null,
+        accessRole: "owner" as const,
+        primary: false,
+        syncByDefault: true,
+      })),
+      NOW,
+    )
+    const [a, b] = theirs.map(({ id }) => id) as [number, number]
+    await store.calendar.saveEntries(a, [planning({ externalId: "a", icalUid: "one" })], NOW)
+    await store.calendar.saveEntries(b, [planning({ externalId: "b", icalUid: "two" })], NOW)
+    await store.calendar.saveEntries(a, [planning({ externalId: "a", icalUid: "shared" })], NOW)
+    await store.calendar.saveEntries(b, [planning({ externalId: "b", icalUid: "shared" })], NOW)
+    await store.calendar.saveEntries(a, [planning({ externalId: "a2", icalUid: "shared" })], NOW)
+    expect(await cli("links", "review")).toMatchObject({ items: [], meta: { accounts: ["google-calendar:owner-1"] } })
+    const [own] = await store.calendar.saveCalendars(
+      accountId,
+      [{ externalId: "d", title: "d", timezone: null, accessRole: "owner", primary: false, syncByDefault: true }],
+      NOW,
+    )
+    await store.calendar.saveEntries(own?.id as number, [planning({ externalId: "d", icalUid: "shared" })], NOW)
+    const open = (await store.calendar.reviews({ status: "open" })).filter(({ calendarId }) => calendarId === own?.id)
+    expect(open).toHaveLength(1)
+    const review = await cli("links", "review")
+    expect(review.items.map(({ id }) => id)).toEqual([String(open[0]?.id)])
+    const [item] = review.items as { candidates: { ref: string; title: string | null; starts_at: string | null }[] }[]
+    expect(item?.candidates.length).toBeGreaterThan(1)
+    for (const candidate of item?.candidates ?? []) expect(candidate).toMatchObject({ title: null, starts_at: null })
   })
 
   it("sync --embed embeds after the sync; a calendar that fails makes the run partial", async () => {
@@ -848,6 +919,25 @@ describe("calendar commands", () => {
     expect(infos.filter(({ output }) => output === undefined).map(({ path }) => path.join(" "))).toEqual([])
     const { schemas } = contractEvidence(root)
     for (const { output } of infos) expect(schemas).toHaveProperty([output?.entity as string])
+  })
+
+  it("run every help example with a query without a query error (BUG-512)", async () => {
+    const { cli, program } = await setup({ freeBusy: true, serverSearch: true })
+    const words = (line: string) =>
+      [...line.matchAll(/'[^']*'|"[^"]*"|\S+/gu)].map(([word]) => word.replace(/^(['"])(.*)\1$/u, "$2"))
+    const examples = flatten(describeProgram(program()))
+      .filter(({ commands, query }) => commands.length === 0 && query !== undefined)
+      .flatMap(({ examples = [] }) => examples.map((line) => words(line).slice(2)))
+    expect(examples.length).toBeGreaterThan(5)
+    const refused: string[] = []
+    for (const argv of examples) {
+      const reason = await cli(...argv).then(
+        () => undefined,
+        (error: { details?: { reason?: string } }) => error.details?.reason,
+      )
+      if (reason?.startsWith("query.")) refused.push(`${argv.join(" ")}: ${reason}`)
+    }
+    expect(refused).toEqual([])
   })
 
   it("leave --json and --jsonl to the host, so no MCP tool takes json or jsonl (BUG-459)", () => {
