@@ -96,6 +96,25 @@ describe("task analysis marks", () => {
     await store.close()
   })
 
+  it("leaves late messages counted when a read again stops before the point", async () => {
+    const store = await storeWith([{ id: "-1001", kind: "dialog", messages: [said("1", 1), said("4", 4)] }])
+    await acknowledgeTaskAnalysis(store, account, "-1001", "4", { by: "agent", now })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await store.messages.saveMessages(account, "-1001", [said("2", 2), said("3", 3)], { via: "backfill" })
+    const mark = await store.sync.taskAnalysisMark(account, "-1001")
+
+    const again = await unanalysedMessages(store, account, "-1001", { since: mark?.from, limit: 2, now })
+    expect([ids(again.messages), again.more]).toEqual([["1", "2"], true])
+    const acknowledged = await acknowledgeTaskAnalysis(store, account, "-1001", "2", {
+      since: mark?.from,
+      by: "agent",
+      now,
+    })
+    expect(acknowledged.moved).toBe(false)
+    expect((await taskAnalysisList(store, account, now))[0]).toMatchObject({ late: 2 })
+    await store.close()
+  })
+
   it("keeps each account's marks apart and lists no channel", async () => {
     const store = await storeWith([
       { id: "-1001", kind: "dialog", messages: [said("1", 1)] },

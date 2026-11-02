@@ -68,8 +68,13 @@ Known limits of part 1:
 
 - A message stored inside the stretch between a `tasks review` and its `tasks acknowledge` is not counted as late.
   The window is the agent's working time on one chat.
-- A read again that takes several pages clears `late` only when one acknowledge covers the whole stretch. Pages of
-  up to 1000 cover most chats; part 2 removes the limit.
+- A read again that takes several pages clears `late` only when one acknowledge covers the whole stretch. With
+  `--since-time` a page is 1000 messages; a longer stretch gives no acknowledge step and `late` stays until part 2.
+- `waiting` counts by sent time after the point, while `tasks review` reads after the point's message id: a message
+  sent in the same millisecond as the point is read but not counted.
+- `tasks status` computes every chat before it applies `--limit`, and a chat whose `late` never clears reads every
+  change since its `checked_at`. Fine for hundreds of chats; for the desktop's per-profile call, part 3 adds a
+  `waiting:>0` filter and counts `late` in SQL.
 
 ## Part 2 — the rules and the fetch on the same point (next)
 
@@ -158,3 +163,8 @@ Recommendation: 1 only, then decide on 2 from what the owner does by hand after 
    only from the last 30 days and only updates or closes older ones.
 3. **Should `tasks review` fetch missing history itself?** Recommendation: no, it names `messages sync` as the next
    step (part 2.2).
+4. **The command words.** The shared vocabulary defines `review` as "list what waits for the owner's decision" and
+   `acknowledge` as "record delivery using the receipt issued when the item was claimed"; `tasks review` also sits
+   beside the top-level `review --new`. Keep them, or register clearer words in cli-base first (for example
+   `tasks unread`/`tasks done-through`)? Recommendation: keep them for this release, rename before 1.0 if the owner
+   finds them confusing.

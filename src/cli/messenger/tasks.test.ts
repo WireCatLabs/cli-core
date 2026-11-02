@@ -207,6 +207,24 @@ describe("tasks", () => {
     ])
   })
 
+  it("lists a group's open tasks beside its messages, whose id starts with a minus", async () => {
+    const call = await setup()
+    const store = await openStore({ path: call.env.MESSAGING_STORE as string })
+    await store.chats.saveChats(account, [
+      { id: "-1001", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(account, "-1001", [{ ...said("1", "pay me back?"), chatId: "-1001" }], {
+      via: "test",
+    })
+    await store.close()
+    await call("tasks", "add", "msg:chat/500/-1001/1", "--type", "request", "--category", "money", "--json")
+
+    const answer = await call("tasks", "review", "-1001", "--since-time", "2026-10-01T00:00:00Z", "--json")
+    expect(answer.code, answer.stderr).toBe(0)
+    const read = item(answer)
+    expect(read.open_tasks).toEqual([expect.objectContaining({ source: "msg:chat/500/-1001/1" })])
+  })
+
   it("**lists what someone owes the owner with assignee:**, after tasks add --assignee sender", async () => {
     const call = await setup()
     const added = item(

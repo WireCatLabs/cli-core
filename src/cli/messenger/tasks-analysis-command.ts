@@ -110,14 +110,16 @@ export const analysisCommands = (tasks: Command, messenger: Messenger): void => 
     .argument("<chat>", messenger.chatArgument)
     .option(
       "--limit <n>",
-      `how many messages (default ${ANALYSIS_PAGE}, at most ${ANALYSIS_PAGE_MAX})`,
+      `how many messages (default ${ANALYSIS_PAGE}, ${ANALYSIS_PAGE_MAX} with --since-time; at most ${ANALYSIS_PAGE_MAX})`,
       positiveCount("--limit"),
     )
     .option("--since-time <time>", "read again from this ISO 8601 time, or 30d ago, whatever the point says")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      const { limit = ANALYSIS_PAGE, sinceTime } = this.opts<{ limit?: number; sinceTime?: string }>()
+      const { sinceTime, ...options } = this.opts<{ limit?: number; sinceTime?: string }>()
       const since = sinceOf(sinceTime)
+      // A read again clears late messages only when one acknowledge covers the whole stretch, so it takes one page.
+      const limit = options.limit ?? (since === undefined ? ANALYSIS_PAGE : ANALYSIS_PAGE_MAX)
       const { id, page, sourceOf } = await context.withStore(
         async (store, account) => {
           const id = await storedChatId(messenger, chat, store, account, { includeLeft: true })
@@ -134,7 +136,7 @@ export const analysisCommands = (tasks: Command, messenger: Messenger): void => 
       )
       const open = await context.withServices((services) =>
         services.tasks.list({
-          query: listQuery(typedQuery([`chat:${id}`, "state:open"]), TASK_QUERY, "tasks review"),
+          query: listQuery(typedQuery([`chat:${JSON.stringify(id)}`, "state:open"]), TASK_QUERY, "tasks review"),
           limit: 100,
           offset: 0,
         }),
@@ -168,14 +170,15 @@ export const analysisCommands = (tasks: Command, messenger: Messenger): void => 
             untrusted: ["messages.text", "messages.sender"],
           },
           {
-            next: last
-              ? [
-                  nextStep("tasks.acknowledge", {
-                    args: { chat: id, message: last.id, since_time: since },
-                    values: { shown: page.messages.length },
-                  }),
-                ]
-              : [],
+            next:
+              last && !(since !== undefined && page.more)
+                ? [
+                    nextStep("tasks.acknowledge", {
+                      args: { chat: id, message: last.id, since_time: since },
+                      values: { shown: page.messages.length },
+                    }),
+                  ]
+                : [],
           },
         ),
         () =>
@@ -190,7 +193,14 @@ export const analysisCommands = (tasks: Command, messenger: Messenger): void => 
             ),
             `open tasks (${open.items.length})`,
             ...open.items.map((task) => `  ${task.key}  ${task.kind}  ${task.title ?? ""}`),
-            ...(last ? [`done reading: ${tool} tasks acknowledge ${id} ${last.id}`] : []),
+            ...(since !== undefined && page.more
+              ? [
+                  `this read again does not reach the point in one page: acknowledging it moves nothing and late ` +
+                    "messages stay until a later version pages a read again (tell the owner)",
+                ]
+              : last
+                ? [`done reading: ${tool} tasks acknowledge ${id} ${last.id}`]
+                : []),
             "",
           ].join("\n"),
       )
