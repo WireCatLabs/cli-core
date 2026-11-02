@@ -21,6 +21,21 @@ shape of this file.
   same write, or is refused while other confirmed payments already cover the invoice; rejecting drops them.
 - **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
   `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
+- **`review` for mail CLIs** (`mailReadCommands`): every stored email, both sides, in threads that changed since a
+  point, in messenger `review`'s item shape plus `email` (people, labels, sender score and the marks `bulk`,
+  `list_id`, `rule_id`); `--new` keeps a point per mailbox, `--unanswered [duration]` keeps threads whose newest email
+  came to the owner in To or Cc with no answer, `--waiting [duration]` threads where the owner wrote last;
+  `bulk:false` leaves out mail sent to many. It reads the store only, cuts at the last finished sync and opens no
+  task. `reviewMail`, `mailTurn`, `isBulk`, `MAIL_REVIEW_STEPS`, `store.mail.threadActivity` and
+  `store.mail.emailMarks` are exported; `store.mail.threadHits` takes a received-time window; the `message` entity's
+  `email` gains optional `bulk`, `list_id` and `rule_id`, and its `summary` view may carry `email`.
+- **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
+  of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
+
+### Fixed
+
+- **A scheduled run's `inbox --new` and `review --new` keep their own point** (`schedule-<name>-review`), so a
+  schedule no longer moves the owner's. An agent over MCP keeps its own, as before.
 
 ## 0.554.0 — 02.11.2026
 

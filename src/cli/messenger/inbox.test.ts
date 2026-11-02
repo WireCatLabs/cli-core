@@ -350,23 +350,25 @@ describe("inbox --new", () => {
           : scripted.adapter,
       chatArgument: "a chat",
     }
-    const command = (name: "inbox" | "review") => async (argv: string[]) => {
-      const streams = captureStreams()
-      const code = await run(
-        [name, ...argv, "--json"],
-        { app, commands: () => [inboxCommand(messenger), reviewCommand(messenger)] },
-        {
-          streams,
-          tty: false,
-          env,
-        },
-      )
-      return {
-        code,
-        answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined,
-        stderr: streams.stderr.join("\n"),
+    const command =
+      (name: "inbox" | "review") =>
+      async (argv: string[], extra: Record<string, string> = {}) => {
+        const streams = captureStreams()
+        const code = await run(
+          [name, ...argv, "--json"],
+          { app, commands: () => [inboxCommand(messenger), reviewCommand(messenger)] },
+          {
+            streams,
+            tty: false,
+            env: { ...env, ...extra },
+          },
+        )
+        return {
+          code,
+          answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined,
+          stderr: streams.stderr.join("\n"),
+        }
       }
-    }
     const inbox = command("inbox")
     const review = command("review")
     const pointFile = join(env.CHAT_STATE_DIR, "inbox", "default.json")
@@ -507,6 +509,19 @@ describe("inbox --new", () => {
 
     expect(chatIds(first.answer)).toEqual(["g"])
     expect(second.answer.items).toEqual([])
+  })
+
+  it("a scheduled run keeps its own --new point: it never moves the owner's", async () => {
+    const chats = [recentChat("g", 2)]
+    const { review } = setup({ g: [recentMessage("g", 2)] }, chats)
+
+    const scheduled = await review(["--new"], { CHAT_SCHEDULED: "nightly" })
+    const owner = await review(["--new"])
+    const again = await review(["--new"], { CHAT_SCHEDULED: "nightly" })
+
+    expect(chatIds(scheduled.answer)).toEqual(["g"])
+    expect(chatIds(owner.answer)).toEqual(["g"])
+    expect(again.answer.items).toEqual([])
   })
 
   it("review --new refuses a date and --unanswered: it keeps its own point", async () => {

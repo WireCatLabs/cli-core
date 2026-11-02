@@ -15,14 +15,17 @@ export interface CheckPoints {
   first: number
   /** ms, per chat: where its next check starts. */
   chats: ReadonlyMap<Id, number>
-  /** Moves the chats checked; the rest keep their point. */
-  save(checked: Record<Id, string>): void
+  /**
+   * Moves the chats checked; the rest keep their point. With `through`, everything up to it was read: the start for
+   * a chat never checked moves there, and the points it passes are dropped, so the file stays small.
+   */
+  save(checked: Record<Id, string>, options?: { through?: string }): void
 }
 
 /**
  * Where `<command> --new` stopped, per chat and profile, beside the remembered account. `inbox` and
  * `review` keep a file each: sharing one, an `inbox` run would move `review` past what it never showed.
- * The MCP tools keep their own too, so an agent's run never moves the owner's `--new`.
+ * Each reader keeps its own too (`pointsOf`), so an agent's or a schedule's run never moves the owner's `--new`.
  */
 export const checkPoints = (
   app: AppIdentity,
@@ -32,7 +35,7 @@ export const checkPoints = (
     env,
     firstLookMs,
   }: {
-    command: "inbox" | "review" | "mcp-inbox" | "mcp-review"
+    command: string
     profile: string
     env: NodeJS.ProcessEnv
     firstLookMs: number
@@ -48,9 +51,16 @@ export const checkPoints = (
   return {
     first: Date.parse(first),
     chats: new Map(Object.entries(saved.chats ?? {}).map(([chat, at]) => [chat, Date.parse(at)])),
-    save: (checked) => {
-      if (Object.keys(checked).length === 0) return
-      const kept: Saved = { lastCheckAt: first, chats: { ...saved.chats, ...checked } }
+    save: (checked, { through } = {}) => {
+      if (Object.keys(checked).length === 0 && through === undefined) return
+      const chats = { ...saved.chats, ...checked }
+      const kept: Saved =
+        through === undefined
+          ? { lastCheckAt: first, chats }
+          : {
+              lastCheckAt: through,
+              chats: Object.fromEntries(Object.entries(chats).filter(([, at]) => Date.parse(at) > Date.parse(through))),
+            }
       writeSecurely(file, `${JSON.stringify(kept)}\n`, 0o600)
     },
   }

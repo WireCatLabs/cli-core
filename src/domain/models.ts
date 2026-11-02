@@ -578,6 +578,8 @@ export interface Review {
   quiet: number
   /** `--unanswered`: only questions still open after this many hours are in `chats`. */
   unanswered?: { olderThanHours: number }
+  /** `--waiting` (mail): only threads where the owner wrote last and nobody answered for this many hours. */
+  waiting?: { olderThanHours: number }
   /** With saved points: each chat read whole, and the time its next check starts from. */
   checked?: Record<Id, string>
   /** Tasks the review opened and closed in the store, by the rules; absent when the store was not open. */
