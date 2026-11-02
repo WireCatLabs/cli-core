@@ -8,6 +8,7 @@ import { typedCommand } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
 import type { AccountStore } from "../store/account-store.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import type { HistoryLimits } from "./history-limits.js"
 import type { Override } from "./index.js"
 
 export interface ServiceMessenger extends MessengerTraits {
@@ -44,6 +45,8 @@ export interface ServiceDeps {
   /** `false` keeps no search history: recording was turned off by name. Kept when unset. */
   history?: boolean
   searchCatchUp?: boolean
+  /** How far back `messages sync` reads each kind of chat, and which groups it does not read at all. */
+  historyLimits?: HistoryLimits
   /** This account has picture search on (`pictureSearch`): its images are embedded and searched by their pixels. */
   pictures?: boolean
   /** Which reranker orders `--discover`'s first hits (`searchReranker`), or `off`; the default when unset. */

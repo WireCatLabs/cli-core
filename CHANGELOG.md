@@ -9,6 +9,11 @@ shape of this file.
 
 ### Added
 
+- **`messages sync` keeps to the history limits too**, for every messenger: it does not read a group above
+  `history_group_members_max` people and stops a chat at its window (`history_dialog_days`, `history_group_days`). The
+  answer says `limited` (`group_too_large`, `older_than_window`; `--all` counts both), the skip is recorded for
+  `store status` and the search answers' `missing.history_limits`, and `--full-history` reads past it. Live messages
+  are never dropped.
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's

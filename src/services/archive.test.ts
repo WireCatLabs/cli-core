@@ -392,3 +392,101 @@ it("fails the fetch when the first page fails, as there is nothing to resume", a
     }),
   ).rejects.toMatchObject({ code: "validation_error" })
 })
+
+describe("the history limits on a fetch", () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const limits = { dialogDays: 1095, groupDays: 365, groupMembersMax: 50 }
+  const old = (id: number, daysAgo: number, chatId = "7"): Message => ({
+    ...messageAt(id),
+    chatId,
+    timestamp: new Date(Date.now() - daysAgo * DAY).toISOString(),
+  })
+  const reading = (store: MessageStore, history: Message[], asked: string[]) =>
+    ({
+      self: () => "500",
+      history: async (reference: string, { limit, before }: { limit: number; before?: string }) => {
+        asked.push(reference)
+        const older = history.filter((one) => before === undefined || Number(one.id) < Number(before))
+        const items = older.slice(-limit)
+        await store.messages.saveMessages(account, reference, items, { via: "history" })
+        return { items, hasMore: older.length > items.length }
+      },
+    }) as unknown as MessengerAdapter
+  const options = {
+    limit: 1000,
+    pageSize: 2,
+    pauseMs: 0,
+    note: () => {},
+    stop: new AbortController().signal,
+    onPage: () => {},
+  }
+
+  it("reads a group only to its window's start, and records that it stopped there", async () => {
+    const store = await emptyStore()
+    const asked: string[] = []
+    const history = [old(1, 900), old(2, 800), old(3, 400), old(4, 10), old(5, 1)]
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      historyLimits: limits,
+      connection: async () => reading(store, history, asked),
+    })
+
+    const one = await service.fetch("7", options)
+
+    expect(one.limited).toBe("older_than_window")
+    const kept = (await store.messages.messages(account, "7", { limit: 100 })).items.map((message) => message.id)
+    expect(kept).not.toContain("1")
+    expect(await store.chats.historySkips(account)).toEqual([
+      expect.objectContaining({ chatId: "7", reason: "older_than_window", unread: true }),
+    ])
+  })
+
+  it("does not read a group above the members cap, and reads it in full with --full-history", async () => {
+    const store = await emptyStore()
+    await store.chats.saveChats(account, [{ ...chat, participantsCount: 214 }])
+    const asked: string[] = []
+    const history = [old(1, 900), old(2, 1)]
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      historyLimits: limits,
+      connection: async () => reading(store, history, asked),
+    })
+
+    const skipped = await service.fetch("7", options)
+    expect(skipped).toMatchObject({ fetched: 0, limited: "group_too_large" })
+    expect(asked).toEqual([])
+    expect(await store.chats.historySkips(account)).toEqual([
+      expect.objectContaining({ chatId: "7", reason: "group_too_large", members: 214 }),
+    ])
+
+    const full = await service.fetch("7", { ...options, fullHistory: true })
+    expect(full.limited).toBeUndefined()
+    expect(full.fetched).toBe(2)
+  })
+
+  it("counts in --all what the limits left unread or read only to the window", async () => {
+    const store = await emptyStore()
+    const asked: string[] = []
+    const big = { ...chat, id: "8", title: "Town square", participantsCount: 214 }
+    await store.chats.saveChats(account, [big])
+    const history = [old(1, 900), old(2, 800), old(3, 1)]
+    const adapter = {
+      ...(reading(store, history, asked) as object),
+      chats: async () => ({ items: [chat, big], hasMore: false }),
+    } as unknown as MessengerAdapter
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      historyLimits: limits,
+      connection: async () => adapter,
+    })
+
+    const all = await service.fetchAll(options)
+
+    expect(asked).not.toContain("8")
+    expect(all.limited).toEqual({ groupTooLarge: 1, olderThanWindow: 1 })
+    expect(all.items.find((one) => one.chat === "8")).toMatchObject({ limited: "group_too_large", complete: true })
+  })
+})

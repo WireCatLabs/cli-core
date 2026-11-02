@@ -50,6 +50,7 @@ const tasks = v.optional(
     held_chats: v.optional(count),
   }),
 )
+const historyLimited = v.picklist(["group_too_large", "older_than_window"])
 export const messageSyncChat = v.strictObject({
   issue: v.optional(actionableError),
   resume: v.optional(v.strictObject({ before: v.optional(text) })),
@@ -63,6 +64,8 @@ export const messageSyncChat = v.strictObject({
   reached_since: v.optional(v.literal(true)),
   reached_last: v.optional(v.literal(true)),
   stopped: v.optional(v.literal(true)),
+  /** The history limits stopped the read: a group too large to read, or the window's start reached. */
+  limited: v.optional(historyLimited),
   tasks,
   /** `--full-history`: the chat's pushed history is now kept in full; `false` when the store does not know the chat. */
   history_included: v.optional(v.boolean()),
@@ -83,8 +86,11 @@ export const messageSyncAll = v.strictObject({
       stopped: v.optional(v.literal(true)),
       error: v.optional(text),
       issue: v.optional(actionableError),
+      limited: v.optional(historyLimited),
     }),
   ),
+  /** How many chats the history limits left unread (big groups) or read only to the window's start. */
+  limited: v.optional(v.strictObject({ group_too_large: count, older_than_window: count })),
   tasks,
 })
 export const messageSyncStarted = v.strictObject({ job: id, pid: count, chat: text, log: text })
