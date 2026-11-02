@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.551.0 — 02.11.2026
+
 ### Added
 
 - **`messages sync` keeps to the history limits too**, for every messenger: it does not read a group above
