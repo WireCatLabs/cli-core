@@ -47,7 +47,7 @@ export const STATUS_SIGNAL_ROWS: Readonly<Record<string, RowShape>> = {
   },
   "status.payments": {
     columns: [{ field: "ref" }, { field: "at", as: "day" }, { field: "data.status" }],
-    text: ["data.statement"],
+    text: ["data.title"],
   },
   "status.topics": {
     columns: [

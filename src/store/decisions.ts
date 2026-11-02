@@ -34,7 +34,8 @@ export interface Refusal {
  * Code session is the bot `claude-code`, so comparing bot names keeps one session from deciding another's proposal.
  */
 export const mayDecide = (
-  row: { id: string; proposedBy: Proposer },
+  /** `ownerOnly`: what only the owner may say, such as that a payment was made. */
+  row: { id: string; proposedBy: Proposer; ownerOnly?: boolean },
   by: Decider,
   policy: DecisionPolicy = DEFAULT_DECISION_POLICY,
 ): Refusal | null => {
@@ -45,6 +46,7 @@ export const mayDecide = (
     reason,
     message,
   })
+  if (row.ownerOnly) return refuse("permission_error", "proposal.owner-only", `only the owner decides ${row.id}`)
   if (!policy.agentDecisions)
     return refuse(
       "permission_error",
@@ -101,7 +103,7 @@ export const assertMayWithdraw = (
 
 /** `mayDecide` for a store method: throws the refusal instead of returning it. */
 export const assertMayDecide = (
-  row: { id: string; proposedBy: Proposer },
+  row: { id: string; proposedBy: Proposer; ownerOnly?: boolean },
   by: Decider,
   policy: DecisionPolicy = DEFAULT_DECISION_POLICY,
 ): void => {

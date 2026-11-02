@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import { MEETING_FACT_TYPES as FACT_TYPES } from "./meeting-context.js"
+import { FACT_TYPES, type Payment, validatePayment } from "./payment.js"
 import { meetingTimestamp } from "./timestamp.js"
 
 const TASK_TYPES = ["bug", "feature", "chore"] as const
@@ -18,8 +18,17 @@ interface FindingBase {
 }
 export interface FactFinding extends FindingBase {
   kind: "fact"
-  type: (typeof FACT_TYPES)[number]
+  type: Exclude<(typeof FACT_TYPES)[number], "payment">
   statement: string
+}
+/** A payment an agent read; confirming it records a `payment` fact. A paid one supersedes the expected one. */
+export interface PaymentFinding extends FindingBase {
+  kind: "payment"
+  /** The fact's full sentence; without one, the payment's title. */
+  statement?: string
+  payment: Payment
+  /** The `fact:` of the expected payment this one replaces, once it is paid or cancelled. */
+  supersedes?: string
 }
 export interface TaskFinding extends FindingBase {
   kind: "task"
@@ -32,7 +41,7 @@ export interface TaskFinding extends FindingBase {
   assignee?: string
   assigneeEvidence?: string[]
 }
-export type Finding = FactFinding | TaskFinding
+export type Finding = FactFinding | TaskFinding | PaymentFinding
 export interface FindingsInput {
   schemaVersion: 1
   key: string
@@ -74,6 +83,8 @@ export interface FindingsRules {
   reference: (raw: string) => string
   /** A fact finding may name no project, and any finding may name a subject. */
   anySubject?: boolean
+  /** Payment findings are staged on a project's evidence, not from a meeting. */
+  payments?: boolean
 }
 
 const SUBJECT = /^(person|organization|project):[1-9]\d*$|^task:[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
@@ -130,10 +141,27 @@ export const validateFindings = (input: FindingsInput, rules: FindingsRules): Fi
     }
     if (finding.kind === "fact") {
       fields(finding, ["id", "project", "subject", "evidence", "kind", "type", "statement"], rules.singular)
+      if ((finding.type as string) === "payment") return invalid("a payment is a finding of kind payment")
       if (!FACT_TYPES.includes(finding.type)) return invalid("unknown fact finding type")
       return { ...base, kind: "fact", type: finding.type, statement: text(finding.statement, 2000) }
     }
-    if (finding.kind !== "task") return invalid("a finding is a fact or task")
+    if (finding.kind === "payment" && rules.payments) {
+      fields(
+        finding,
+        ["id", "project", "subject", "evidence", "kind", "statement", "payment", "supersedes"],
+        rules.singular,
+      )
+      if (finding.supersedes !== undefined && !/^fact:[1-9]\d*$/.test(String(finding.supersedes)))
+        return invalid("a payment finding supersedes a fact: reference")
+      return {
+        ...base,
+        kind: "payment",
+        ...(finding.statement === undefined ? {} : { statement: text(finding.statement, 2000) }),
+        payment: validatePayment(finding.payment),
+        ...(finding.supersedes === undefined ? {} : { supersedes: finding.supersedes }),
+      }
+    }
+    if (finding.kind !== "task") return invalid(`a finding is a fact${rules.payments ? ", payment" : ""} or task`)
     fields(
       finding,
       [

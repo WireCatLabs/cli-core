@@ -17,16 +17,17 @@ const parseFindingsJson = (text: string, label: string, validate: (input: Findin
   } catch {
     throw new CliError("validation_error", `${label} input must be valid JSON`)
   }
-  const decode = (value: unknown, depth = 0): unknown => {
+  // A payment keeps its snake_case fields: it is stored and printed as written.
+  const decode = (value: unknown, depth = 0, verbatim = false): unknown => {
     if (depth > 16) throw new CliError("validation_error", `${label} JSON is nested too deeply`)
     if (Array.isArray(value)) return value.map((item) => decode(item, depth + 1))
     if (value === null || typeof value !== "object") return value
     const output: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(value)) {
       if (/[A-Z]/.test(key)) throw new CliError("validation_error", `${label} JSON fields use snake_case`)
-      const name = keys[key] ?? key
+      const name = verbatim ? key : (keys[key] ?? key)
       if (Object.hasOwn(output, name)) throw new CliError("validation_error", `duplicate ${label} field`)
-      Object.defineProperty(output, name, { value: decode(item, depth + 1), enumerable: true })
+      Object.defineProperty(output, name, { value: decode(item, depth + 1, key === "payment"), enumerable: true })
     }
     return output
   }

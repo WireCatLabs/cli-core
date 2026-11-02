@@ -85,7 +85,7 @@ Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a r
 | review list | pairs that may be one thing, kept for the owner to decide instead of linked by a rule (not built yet) | duplicates, merge queue | none |
 | identity | one way to reach a person or an organization: an account in a messenger or mailbox, an e-mail address, a phone (`contact:<provider>/<id>`) | contact (when meaning the account), user | memo `note <identity>` takes `<messenger>:<name>` |
 | key document | **open (NEED-990)**: no CLI, help text or doc defines it today | — | — |
-| fact | what happened: a statement, question, decision or promise, with evidence | memory | none |
+| fact | what happened: a statement, question, decision, promise or payment, with evidence | memory | none |
 | memory | what an agent concluded, with evidence and scope | fact, summary | none |
 | relationship | a confirmed or suggested link between a person, organization or project | relation, link | memo `tasks relations` (task to task); drive `links` (links between references) |
 | mention | a phone, e-mail address, link, document or known person's name found in one place of a stored text, normalized; found → linked or dismissed | extraction, entity, link (`links` joins two stored records) | none |

@@ -1,6 +1,6 @@
 import { TASK_KINDS } from "../tasks/index.js"
 
-export const FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
+export { FACT_TYPES } from "../meetings/index.js"
 export const FACT_STATUSES = ["proposed", "accepted", "superseded", "reversed", "rejected"] as const
 
 export const MEMORY_KINDS = ["summary", "digest", "preference"] as const

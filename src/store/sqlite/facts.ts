@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { calendarMoment } from "../../domain/moment.js"
+import { type PAYMENT_DIRECTIONS, type PAYMENT_STATES, type Payment, validatePayment } from "../../meetings/index.js"
 import { assertMayDecide, assertMayWithdraw, type Decider, deciderAuthor } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
@@ -44,6 +45,8 @@ export interface Fact {
   scope: (typeof MEMORY_SCOPES)[number] | null
   source: string
   evidence: string[]
+  /** Set on a `payment` fact only. */
+  payment: Payment | null
   createdAt: string
   updatedAt: string
 }
@@ -63,6 +66,15 @@ export interface FactInput {
   supersedes?: string
   /** The memory an agent drew it from: a `created-from` link. */
   createdFrom?: string
+  /** Required on a `payment` fact, refused on any other; checked as `validatePayment` does. */
+  payment?: Payment
+}
+
+/** `open` is an expected payment that still holds: not superseded, rejected or cancelled. */
+export interface PaymentFilter {
+  direction?: (typeof PAYMENT_DIRECTIONS)[number]
+  state?: (typeof PAYMENT_STATES)[number]
+  open?: boolean
 }
 
 export interface FactsStore {
@@ -74,6 +86,8 @@ export interface FactsStore {
     subject?: string
     status?: Fact["status"]
     proposedBy?: ProposedByFilter
+    /** Narrows to payment facts by their fields. */
+    payment?: PaymentFilter
     /** `created` lists the newest written first; by default the newest by when it happened. */
     order?: "occurred" | "created"
     limit?: number
@@ -132,6 +146,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     scope: row.scope == null ? null : (row.scope as Fact["scope"]),
     source: String(row.source),
     evidence: evidenceOf(context, { type: "fact", id: Number(row.id) }),
+    payment: row.type === "payment" ? paymentOf(row.metadata) : null,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
   })
@@ -151,7 +166,11 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     )
   const decided = (row: Row, by: Decider) =>
     assertMayDecide(
-      { id: `fact:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) },
+      {
+        id: `fact:${row.id}`,
+        proposedBy: proposerOf(database, row.author_type, row.author_id),
+        ownerOnly: row.type === "payment",
+      },
       by,
       context.decisions,
     )
@@ -194,6 +213,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       const occurredAt = input.occurredAt === undefined ? null : calendarMoment(input.occurredAt, "occurredAt")
       if (occurredAt !== null && !Number.isFinite(occurredAt))
         throw new CliError("validation_error", "occurredAt takes an ISO timestamp")
+      const payment = paymentInput(type, input)
       const id = write(database, () => {
         const project = input.project === undefined ? undefined : requiredThing(database, input.project, "the project")
         if (project && project.type !== "project")
@@ -205,6 +225,9 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
             "validation_error",
             `${input.supersedes} is ${String(replaced.status)}; only a proposed or accepted fact can be corrected`,
           )
+        if (replaced && (replaced.type === "payment") !== (type === "payment"))
+          throw new CliError("validation_error", "a payment fact corrects a payment fact, and only one")
+        if (payment?.counterparty) requiredThing(database, payment.counterparty, "the counterparty")
         const owner = input.by === "owner"
         const { actor, model } = authorActor(context, input.by)
         const at = now()
@@ -212,8 +235,8 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
           database
             .prepare(
               "INSERT INTO facts (id, type, statement, status, project_id, subject_type, subject_id, occurred_at, supersedes_id, " +
-                "author_type, author_id, model, scope, source, created_at, updated_at) " +
-                "VALUES (?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "author_type, author_id, model, scope, source, metadata, created_at, updated_at) " +
+                "VALUES (?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
               nextId(database, "facts"),
@@ -229,6 +252,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
               model,
               scope,
               owner ? "owner" : "agent",
+              payment ? JSON.stringify({ payment }) : null,
               at,
               at,
             )?.id,
@@ -255,11 +279,12 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
       const by = proposedBySql("f.author_type", "f.author_id", options.proposedBy)
       const order = options.order === "created" ? "f.created_at" : "coalesce(f.occurred_at, f.created_at)"
+      const paid = paymentSql(options.payment)
       return database
         .prepare(
           `${NAMED} WHERE f.deleted_at IS NULL AND (? IS NULL OR f.type = ?) AND (? IS NULL OR f.project_id = ?) ` +
             "AND (? IS NULL OR (f.subject_type = ? AND f.subject_id = ?)) AND (? IS NULL OR f.status = ?) " +
-            `AND ${by.sql} ORDER BY ${order} DESC, f.id DESC LIMIT ?`,
+            `AND ${by.sql}${paid.sql} ORDER BY ${order} DESC, f.id DESC LIMIT ?`,
         )
         .all(
           options.type ?? null,
@@ -272,6 +297,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
           options.status ?? null,
           options.status ?? null,
           ...by.params,
+          ...paid.params,
           Math.min(Math.max(options.limit ?? 100, 1), 500),
         )
         .map(factOf)
@@ -330,6 +356,51 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     },
     sources: (reference) => evidenceSourcesOf(database, { type: "fact", id: Number(rowOf(reference).id) }),
   }
+}
+
+const paymentInput = (type: Fact["type"], input: FactInput): Payment | undefined => {
+  if (type !== "payment") {
+    if (input.payment !== undefined) throw new CliError("validation_error", "only a payment fact takes a payment")
+    return undefined
+  }
+  if (input.payment === undefined)
+    throw new CliError("validation_error", "a payment fact needs its payment: amount, currency, direction and state")
+  const evidence = input.evidence?.length ?? 0
+  if (evidence < 1 || evidence > 8)
+    throw new CliError("validation_error", "a payment fact cites 1–8 references: the ask, the transfer or a sheet row")
+  return validatePayment(input.payment)
+}
+
+const paymentOf = (metadata: unknown): Payment | null => {
+  if (metadata == null) return null
+  try {
+    const { payment } = JSON.parse(String(metadata)) as { payment?: Payment }
+    return payment ?? null
+  } catch {
+    return null
+  }
+}
+
+const paymentSql = (filter: PaymentFilter | undefined): { sql: string; params: string[] } => {
+  if (filter === undefined) return { sql: "", params: [] }
+  const parts = ["f.type = 'payment'"]
+  const params: string[] = []
+  const state = filter.open ? "expected" : filter.state
+  if (filter.open && filter.state !== undefined && filter.state !== "expected") parts.push("0")
+  if (filter.direction !== undefined) {
+    parts.push("json_extract(f.metadata, '$.payment.direction') = ?")
+    params.push(filter.direction)
+  }
+  if (state !== undefined) {
+    parts.push("json_extract(f.metadata, '$.payment.state') = ?")
+    params.push(state)
+  }
+  if (filter.open) parts.push("f.status IN ('proposed', 'accepted')")
+  if (filter.open === false)
+    parts.push(
+      "NOT (json_extract(f.metadata, '$.payment.state') = 'expected' AND f.status IN ('proposed', 'accepted'))",
+    )
+  return { sql: ` AND ${parts.join(" AND ")}`, params }
 }
 
 const migratedFrom = (metadata: string): number | undefined => {

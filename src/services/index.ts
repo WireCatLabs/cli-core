@@ -1,5 +1,6 @@
 import { type BotCheckService, botCheckService } from "../botcheck/service.js"
 
+export { paymentTitle } from "../meetings/index.js"
 export { amountOf, amountsOf, type TaskAmount } from "../search/task-signature.js"
 export { AGENDA_DEFAULTS } from "./agenda.js"
 export { type ChatCoverage, chatCoverage } from "./chat-coverage.js"
@@ -456,6 +457,7 @@ export {
   type Decided,
   type Decision,
   emptyProposalRegistry,
+  FACT_SUMMARIES,
   type ProposalFilter,
   type ProposalKind,
   type ProposalRegistry,
