@@ -97,7 +97,11 @@ export const foldersCommand = (messenger: Messenger): Command => {
   )
   folders.addCommand(
     withRules(
-      annotate(new Command("create"), { output: { entity: "chat_folder_change" }, effects: REMOTE_WRITE })
+      annotate(new Command("create"), {
+        output: { entity: "chat_folder_change" },
+        effects: REMOTE_WRITE,
+        literal_after_dashes: true,
+      })
         .description("create a chat folder")
         .argument("<title>", "the folder's name; the app may refuse a long one")
         .option("--chat <chat>", "a chat to put in it, by id or name; repeat it for more", collect),

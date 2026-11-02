@@ -10,6 +10,7 @@ import { readAll } from "./stdin.js"
 
 export const editCommand = (messenger: Messenger): Command => {
   const edit = annotate(new Command("edit"), {
+    literal_after_dashes: true,
     examples: [`${messenger.app.command} personal messages edit "Book club" 101 "The meeting starts at 11."`],
     effects: REMOTE_WRITE,
     output: { entity: "message_write" },
