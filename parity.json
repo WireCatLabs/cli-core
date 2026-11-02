@@ -2763,6 +2763,12 @@
     "config": {
       "in": "all"
     },
+    "config repair": {
+      "in": "all",
+      "options": {
+        "--dry-run": "all"
+      }
+    },
     "config set": {
       "in": "all",
       "options": {

@@ -19,7 +19,6 @@ shape of this file.
   `email` gains optional `bulk`, `list_id` and `rule_id`, and its `summary` view may carry `email`.
 - **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
   of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
-
 - **`config repair` mends a settings file whose JSON is broken only in its syntax**, without AI or network (the file
   may hold keys). It fixes a byte-order mark, `//` and `/* */` comments, trailing commas, a missing comma between
   entries on separate lines, unquoted keys, single-quoted text, and closing brackets missing at the end. Every value,
