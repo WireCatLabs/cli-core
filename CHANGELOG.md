@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A test can no longer open the owner's real store.** Under vitest, opening a file in the owner's WireCat folder
+  (found from the account's home, not `HOME`) throws, read-only or not. This holds in every CLI's tests that open the
+  store through cli-core. cli-core's own suite now refuses vitest's threads pool. There a test env without `HOME`
+  reached the real home folder: on 2026-10-18 a `--pool=threads` run wrote test rows into the real store.
+
 ## 0.559.0 — 02.11.2026
 
 ### Added

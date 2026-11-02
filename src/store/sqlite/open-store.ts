@@ -4,7 +4,7 @@ import { CliError } from "@wirecat/cli-base"
 import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "../decisions.js"
 import { migrate } from "../migrations.js"
 import { storeCapable } from "../open.js"
-import { storePath } from "../path.js"
+import { refuseOwnerStoreInTests, storePath } from "../path.js"
 import { sharedConfigPath } from "../shared-config.js"
 import { backfillNormalized, pendingNormalization } from "./backfill.js"
 import { fillFiles } from "./files.js"
@@ -68,6 +68,7 @@ export const openStoreContext = async ({
   if (typeof readOnly !== "boolean") throw new CliError("validation_error", "readOnly must be a boolean")
   await storeCapable()
   const file = path ?? storePath(env)
+  refuseOwnerStoreInTests(file)
   if (readOnly) {
     if (!statSync(file, { throwIfNoEntry: false })?.isFile())
       throw new CliError("not_found", "The store does not exist as a file; read-only opening does not create it")
