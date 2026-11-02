@@ -126,6 +126,7 @@ describe("stats messages responses and waiting", () => {
     expect((await call("stats", "messages", "responses", "--json", "--", "kind:group")).json.item.replies).toBe(0)
     const words = await call("stats", "messages", "responses", "--json", "--", "hello")
     expect([words.code, words.stderr]).toEqual([2, expect.stringContaining("date:, chat: and kind:")])
+    expect((await call("stats", "messages", "waiting", "--json", "--", "chat:Al*")).code).toBe(2)
   })
 
   it("counts chats whose newest message asks the owner, leaving out muted chats and channels", async () => {

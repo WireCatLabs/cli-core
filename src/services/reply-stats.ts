@@ -58,7 +58,7 @@ const plainOnly = (text: string | undefined, command: string) => {
         if (clause.occur !== "must") refuse()
         visit(clause.node)
       }
-    else if (!FIELDS.includes(node.field)) refuse()
+    else if (!FIELDS.includes(node.field) || !["term", "phrase", "range"].includes(node.operator)) refuse()
   }
   visit(parseLucene(text, { ...MESSAGE_PARSING, defaultField: "text" }).root)
 }
