@@ -86,6 +86,15 @@ shape of this file.
     status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
+- **`scanProjectLinks(store, { project, sources, since, write, scorers?, threshold?, limit?, purposes? })` and
+  `LinkScorer` (`@wirecat/cli-core/services`): memo proposes a project's chats, mail threads and people itself.**
+  Six scorers in `SCORERS` (`chat-title`, `alias-hits`, `member-chats`, `member-dialog`, `chat-senders`,
+  `mail-thread`) and the shared mail domain rule as `email-domain` in `PERSON_SCORERS`. Signals combine as
+  1 − Π(1 − w); at most 20 new proposals a run by the rule bot `memo-scan`, never confirmed by themselves. Each
+  carries `score` and `signals` (scorer, weight, why: ids and counts only). Linked and rejected pairs are skipped,
+  a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
+- **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
+  was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
 - **Payments are facts of type `payment`.** The amount (text, two decimals), ISO 4217 currency, direction (`to_us` or
   `from_us`), counterparty ref or name, due date, state (`expected`, `paid`, `cancelled`) and item ride in
   `metadata.payment`, read back as `Fact.payment`; no migration. A payment fact cites 1 to 8 references. Paid is a new

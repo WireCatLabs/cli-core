@@ -26,6 +26,7 @@ import {
   type RelationUpdate,
   relationOf,
   relationProposalsOver,
+  type Scored,
 } from "./relation-proposals.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
@@ -187,9 +188,17 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
       purpose?: string
       evidence?: string[]
       reason?: string
-    },
+    } & Scored,
     by: Exclude<Author, "owner">,
   ): Promise<ProposedAction>
+  /**
+   * Where a pair stands for a scan: `linked` when a link already joins it, `rejected` when any `relationship`
+   * proposal for it was rejected, and the pending proposal if one waits. `undefined` when either end is not stored.
+   */
+  relationState(
+    key: KnowledgeScope,
+    input: { from: string; to: string; kind: KnowledgeRelation["kind"] },
+  ): Promise<{ linked: boolean; confirmed: boolean; rejected: boolean; pending: ProposedAction | null } | undefined>
   /** The owner sets a relationship's role and purpose; `null` clears one. */
   updateRelation(key: KnowledgeScope, id: string, input: RelationUpdate & { by: "owner" }): Promise<KnowledgeRelation>
   /** An agent's change is a `relationship_update` proposal for the owner; the same pending change is answered again. */
@@ -833,6 +842,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         })
       return proposals.propose(from, input, by)
     },
+    relationState: async (key, input) => proposals.state(() => pair(key, input), input),
     updateRelation: (async (
       key: KnowledgeScope,
       id: string,
