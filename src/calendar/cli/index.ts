@@ -5,16 +5,18 @@ import { clockMeta, type Effects } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
+import { changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
+import { secretInput } from "../../runs/run-context.js"
 import { searchEvents } from "../../services/events-search.js"
 import { dateWindow } from "../../services/moment.js"
 import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { BUSY_QUERY, BUSY_QUERY_NOTE, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
+import { type CalendarFeeds, isFeedCalendar, syncWithFeeds } from "../feeds.js"
 import { eventPreparation, nextMeeting, PREPARE_MESSAGES } from "../prepare.js"
 import {
   accountsMeta,
@@ -41,7 +43,7 @@ import {
 import { REPEAT_HELP } from "../recurrence.js"
 import { bothSearchAnswer, serverSearchAnswer } from "../server-search.js"
 import type { CalendarExpander, CalendarSource } from "../source.js"
-import { calendarStatus, syncCalendars } from "../sync.js"
+import { calendarStatus } from "../sync.js"
 import type { EventResponse } from "../writer.js"
 import {
   type CalendarWrites,
@@ -84,6 +86,11 @@ export interface CalendarCommandDeps {
   serverSearch?: boolean
   /** For a source with `expands: "local"`. */
   expand?: CalendarExpander
+  /**
+   * The iCalendar feeds the profile follows, as read-only calendars of its account: mounts `calendars add|remove`,
+   * and `sync` and `calendars list` read them after the provider. Read only once a profile is open.
+   */
+  feeds?: CalendarFeeds
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
   embed?: (max: number) => Promise<{ model: string; embedded: number; left: boolean }>
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
@@ -107,6 +114,8 @@ const REMOTE_READ: Effects = { remote: "read", local: "none" }
 const LOCAL_OR_REMOTE_READ: Effects = { remote: "read", local: "read" }
 const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 const GROUP: Effects = { remote: "none", local: "none" }
+/** Every time a store can hold, for marking all of a calendar's entries at once. */
+const EVERYWHERE = { from: -8.64e15, to: 8.64e15 }
 /** How many pieces one `sync --embed` embeds, as drive's. */
 const EMBED_MAX = 600
 
@@ -186,7 +195,8 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     CALENDARS_QUERY,
   ).action(async (words: string[], _opts: unknown, command: Command) => {
     const terms = [...queryTerms(words, CALENDARS_QUERY, "calendars list")]
-    const listed = await deps.store.saveCalendars(deps.accountId, await source().calendars(), now())
+    const found = [...(await source().calendars()), ...((await deps.feeds?.source.calendars()) ?? [])]
+    const listed = await deps.store.saveCalendars(deps.accountId, found, now())
     const items = listed
       .map(calendarItem)
       .filter((item) => terms.every(([field, value]) => String(item[field as keyof typeof item]) === value))
@@ -206,6 +216,55 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       await deps.store.setCalendarSynced(calendar.id, synced, now())
       print(calendarItem({ ...calendar, synced }), command)
     })
+
+  if (deps.feeds) {
+    const feeds = () => deps.feeds as CalendarFeeds
+    example(
+      // A fetch, but also a new secret and a new address every later sync reads: the read-only lock refuses it.
+      changesStore(annotate(calendars.command("add"), { effects: FETCH, offline: false, mcp: false }))
+        .description(
+          "follow an iCalendar feed, such as a holiday calendar or a published .ics address, as a read-only calendar " +
+            "of this profile; sync reads it again each time. The address is kept as a secret and never printed",
+        )
+        .summary("follow an iCalendar feed as a read-only calendar")
+        .addArgument(secretInput(new Argument("<url>", "the feed's https://, http:// or webcal:// address")))
+        .option("--title <title>", "the calendar's title; the feed's own name if not given"),
+      "calendars add webcal://example.com/holidays.ics --title Holidays",
+    ).action(async (url: string, opts: { title?: string }, command: Command) => {
+      if (command.optsWithGlobals<{ offline?: boolean }>().offline)
+        throw new CliError("permission_error", "calendars add reads the feed; leave out --offline")
+      const { calendar, events } = await feeds().add(url, opts.title === undefined ? {} : { title: opts.title })
+      const [saved] = await deps.store.saveCalendars(deps.accountId, [calendar], now())
+      print(
+        {
+          ...calendarItem(saved as NonNullable<typeof saved>),
+          events,
+          hint: `run ${lineOf(command, "sync")} to store its events`,
+        },
+        command,
+      )
+    })
+    example(
+      annotate(calendars.command("remove"), { effects: LOCAL_WRITE, mcp: false })
+        .description("stop following a feed calendars add added: its address is forgotten and its stored events go")
+        .argument("<calendar>", "the feed calendar's id, its ics: id, or its title"),
+      "calendars remove 7",
+    ).action(async (reference: string, _opts: unknown, command: Command) => {
+      const calendar = await calendarIn(deps.store, deps.accountId, reference)
+      if (!isFeedCalendar(calendar))
+        throw new CliError(
+          "validation_error",
+          `calendar ${calendar.id} is not a feed; calendars remove takes only feeds`,
+          {
+            reason: "feed.not-a-feed",
+          },
+        )
+      await feeds().remove(calendar.externalId)
+      await deps.store.setCalendarSynced(calendar.id, false, now())
+      const removed = await deps.store.markUnseen(calendar.id, now() + 1, EVERYWHERE, now())
+      print({ ...calendarItem({ ...calendar, synced: false }), removed }, command)
+    })
+  }
 
   if (deps.freeBusy)
     example(
@@ -269,7 +328,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       if (command.optsWithGlobals<{ full?: boolean }>().full)
         throw new CliError("validation_error", "sync starts over with --rescan; --full only widens output")
       const { signal } = environmentOf(command)
-      const report = await syncCalendars(source(), deps.store, {
+      const report = await syncWithFeeds(source(), deps.feeds, deps.store, {
         accountId: deps.accountId,
         now: now(),
         budget: runBudgetOf(command, opts.maxPages),
