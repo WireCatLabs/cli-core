@@ -439,9 +439,10 @@ export interface HistoryBatch {
 /**
  * Takes one pushed batch. The CLI's own handler resolves `true` once the batch is in the local store and `false` when it
  * could not be written, so a messenger that pushes history once can keep a batch until it is saved; a handler that
- * stores nothing returns nothing.
+ * stores nothing returns nothing. A command's own handler, called through the store, is handed that answer as `saved`,
+ * so what it reports as kept is what reached the store.
  */
-export type HistoryBatchHandler = (batch: HistoryBatch) => void | Promise<boolean>
+export type HistoryBatchHandler = (batch: HistoryBatch, saved?: Promise<boolean>) => void | Promise<boolean>
 
 /** For a messenger that pushes its history to the client instead of answering for it (`Messenger.history: "store"`). */
 export interface PushedHistory {

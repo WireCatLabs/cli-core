@@ -774,7 +774,7 @@ describe("a search hit's files", () => {
     const done = await call("messages", "download", "msg:chat/500/7/7", "--output-dir", into, "--json")
     expect(done.code).toBe(0)
     expect(json(done).files).toEqual([expect.objectContaining({ path: join(into, "fetched.txt") })])
-    expect((await call("messages", "download", "msg:other/500/7/7")).stderr).toContain("another messenger")
+    expect((await call("messages", "download", "msg:other/500/7/7")).stderr).toContain("ref.wrong-provider")
   })
 
   it("messages link lists the message's files, each with no link of its own", async () => {
