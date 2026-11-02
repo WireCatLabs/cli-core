@@ -260,7 +260,7 @@ export const stored = (
         pending?.delete(saving)
         rekeysOnly.delete(saving)
       })
-      void onBatch(batch)
+      void onBatch(batch, saving)
       return saving
     }
   }

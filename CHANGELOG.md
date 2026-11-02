@@ -11,6 +11,8 @@ shape of this file.
 
 ### Added
 
+- **A command's own history handler learns whether each batch reached the store**: `HistoryBatchHandler` takes
+  `saved`, a promise of the same `true` or `false` the messenger gets, so a link can count only what was kept.
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
