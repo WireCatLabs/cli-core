@@ -9,6 +9,15 @@ shape of this file.
 
 ### Added
 
+- **`scanProjectLinks(store, { project, sources, since, write, scorers?, threshold?, limit?, purposes? })` and
+  `LinkScorer` (`@wirecat/cli-core/services`): memo proposes a project's chats, mail threads and people itself.**
+  Six scorers in `SCORERS` (`chat-title`, `alias-hits`, `member-chats`, `member-dialog`, `chat-senders`,
+  `mail-thread`) and the shared mail domain rule as `email-domain` in `PERSON_SCORERS`. Signals combine as
+  1 − Π(1 − w); at most 20 new proposals a run by the rule bot `memo-scan`, never confirmed by themselves. Each
+  carries `score` and `signals` (scorer, weight, why: ids and counts only). Linked and rejected pairs are skipped,
+  a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
+- **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
+  was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
 - **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
   (`@wirecat/cli-core/services`) and `mayDecide` (`@wirecat/cli-core/store`).** The registry lists every pending
   proposal newest first across kinds (`relationship`, `key_document`, `fact`, `memory`, `findings` for evidence
