@@ -157,6 +157,7 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
   withWhen(
     grantsAuthority(
       annotate(command.command("command"), {
+        literal_after_dashes: true,
         effects: LOCAL_WRITE,
         examples: [
           `${app.command} personal schedule command health --every 1h -- doctor`,

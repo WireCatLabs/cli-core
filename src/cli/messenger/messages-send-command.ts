@@ -25,6 +25,7 @@ const repeatable = (flags: string, description: string) =>
 
 export const sendCommand = (messenger: Messenger): Command => {
   const send = annotate(new Command("send"), {
+    literal_after_dashes: true,
     examples: [`${messenger.app.command} personal messages send "Book club" "The meeting starts at 10."`],
     effects: REMOTE_WRITE,
     output: { entity: messenger.drafts === true ? "message_send" : "message_write" },
