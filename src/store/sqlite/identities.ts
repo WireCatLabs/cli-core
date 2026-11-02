@@ -294,7 +294,7 @@ export const people = (
     }
   }
   const byId = new Map(everyone.map((person) => [person.id, person]))
-  return { get: (id) => byId.get(id), all: () => everyone }
+  return { provider, get: (id) => byId.get(id), all: () => everyone }
 }
 
 /** A contact: someone other than the account itself, in one of its one-to-one chats. */
