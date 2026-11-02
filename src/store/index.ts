@@ -53,6 +53,7 @@ export {
   DEFAULT_DECISION_POLICY,
   type Decider,
   type DecisionPolicy,
+  isOwnerOnlyKind,
   mayDecide,
   type Proposer,
   type Refusal,
@@ -222,6 +223,7 @@ export type {
 } from "./sqlite/notes.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export {
+  assertGenericAction,
   PROPOSAL_STATUSES,
   type ProposalInput,
   type ProposedAction,

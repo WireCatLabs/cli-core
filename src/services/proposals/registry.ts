@@ -14,6 +14,9 @@ import type { Decided, ProposalFilter, ProposalKind, ProposalRegistry, ProposalR
 
 const PREFIX = /^([a-z][a-z_]*):/
 
+const marked = (kind: ProposalKind, row: ProposalRow): ProposalRow =>
+  kind.ownerOnly ? { ...row, ownerOnly: true } : row
+
 const refusalOf = (id: string, error: unknown): Refusal => {
   if (!(error instanceof CliError)) throw error
   const code = error.code === "not_found" || error.code === "permission_error" ? error.code : "validation_error"
@@ -61,12 +64,17 @@ export const emptyProposalRegistry = (
         throw new CliError("validation_error", "a proposal list takes a nonnegative offset")
       const asked = filter.kinds === undefined ? kinds : kinds.filter((kind) => filter.kinds?.includes(kind.kind))
       const wide: ProposalFilter = { ...filter, offset: 0, limit: filter.offset + filter.limit + 1 }
-      const rows = (await Promise.all(asked.map((kind) => kind.list(wide)))).flat()
+      const rows = (
+        await Promise.all(asked.map(async (kind) => (await kind.list(wide)).map((row) => marked(kind, row))))
+      ).flat()
       rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
       const page = rows.slice(filter.offset, filter.offset + filter.limit + 1)
       return { items: page.slice(0, filter.limit), hasMore: page.length > filter.limit }
     },
-    get: async (id) => (await kindOf(id)).get(id),
+    get: async (id) => {
+      const kind = await kindOf(id)
+      return marked(kind, await kind.get(id))
+    },
     decide: async (ids, decision) => {
       const parts = new Map<string, string[]>()
       const whole = new Set<string>()
@@ -97,7 +105,7 @@ export const emptyProposalRegistry = (
             refuseIds(id, `a ${kind.kind} proposal has no parts; name ${id} alone`)
             continue
           }
-          const row: ProposalRow = await kind.get(id)
+          const row = marked(kind, await kind.get(id))
           if (row.status !== "proposed") {
             refused.push({
               id,
@@ -107,7 +115,7 @@ export const emptyProposalRegistry = (
             })
             continue
           }
-          const refusal = mayDecide(kind.ownerOnly ? { ...row, ownerOnly: true } : row, decision.by, policy)
+          const refusal = mayDecide(row, decision.by, policy)
           if (refusal) {
             refused.push(refusal)
             continue

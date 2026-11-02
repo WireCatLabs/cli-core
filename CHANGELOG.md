@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Owner-only proposals refuse an agent on every decide path.** `mayDecide` and `assertMayDecide` now read
+  the row's stored `kind`: a `mail_findings` or `meeting_findings` row is the owner's alone, whatever
+  `agent_decisions` says. The registry's `get` and `list` rows carry `ownerOnly` from their kind, and the generic
+  action kind marks a stored findings row too, so a host checking `assertMayDecide(await registry.get(id), …)` is
+  refused. `approveAsTask` and `proposedActions.approve` / `reject` refuse a mail findings batch as they refuse
+  meeting and evidence findings (`mail-findings.dedicated-review`), and the generic action kind no longer lists any
+  findings batch. Meeting findings were open to another agent with a reason before; now only the owner reviews them.
+
 ### Added
 
 - **A CLI can write each of its settings into its config file with the default, so the owner sees every setting
@@ -17,6 +27,12 @@ shape of this file.
   (`config file` or `default`). memo is the first user (cli-base WC-CMD-30).
 - **`KEEP_SUCCESSFUL_RUNS_FOR_DAYS` and `RUNS_SIZE_LIMIT_MB` are exported** beside `KEEP_RUNS_FOR_DAYS`. A host can
   then name the run-record defaults it writes into its config file.
+
+- **`MailReads.mount`: the steps a mail review hands on name where the host mounted it.** A host that mounts `review`
+  and `messages acknowledge` elsewhere passes their paths and the option naming the mailbox — memo passes
+  `review: "mail review"`, `conversation: null` (it mounts no thread read) and `mailbox: { option: "source", value }`
+  — and `next` names those paths and `--source email:<account>`. `mailReviewSteps(mount)` gives the definitions for
+  a host's step checks; a mail CLI leaves it out, and its step lines carry the profile as before.
 
 ## 0.561.0 — 03.11.2026
 

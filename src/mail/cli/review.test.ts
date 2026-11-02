@@ -8,10 +8,11 @@ import { describe, expect, it } from "vitest"
 import { LOCAL_WRITE, proposesOnly } from "../../cli/effects.js"
 import { type ProgramDefinition, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
+import { overrideSharedContract } from "../../cli/shared-contracts.js"
 import type { EmailInput, MailboxInput } from "../../store/index.js"
 import { type AccountKey, openStore } from "../../store/store.js"
 import { holderHasMail, marksOf } from "../marks.js"
-import { mailReadCommands } from "./index.js"
+import { type MailMount, mailReadCommands } from "./index.js"
 
 const app = {
   command: "mail",
@@ -43,7 +44,26 @@ const email = (id: string, hoursAgo: number, fields: Partial<EmailInput> = {}): 
   }
 }
 
-const mailbox = async () => {
+/** memo's shape: review under `mail`, acknowledge under `messages`, and `--source` naming the mailbox. */
+const MEMO_MOUNT: MailMount = {
+  review: "mail review",
+  acknowledge: "messages acknowledge",
+  conversation: null,
+  mailbox: { option: "source", value: (mailbox) => `email:${mailbox.account}` },
+}
+
+const mounted = (shared: Command[]): Command[] => {
+  const review = shared.find((one) => one.name() === "review") as Command
+  const messages = shared.find((one) => one.name() === "messages") as Command
+  const acknowledge = messages.commands.find((one) => one.name() === "acknowledge") as Command
+  for (const command of [review, acknowledge])
+    overrideSharedContract(command, "the host names the mailbox with --source.", (one) => {
+      one.option("--source <accounts>", "the one mailbox")
+    })
+  return [new Command("mail").addCommand(review), new Command("messages").addCommand(acknowledge)]
+}
+
+const mailbox = async (mount?: MailMount) => {
   const root = mkdtempSync(join(tmpdir(), "mail-review-"))
   const env = { MAIL_CONFIG_DIR: join(root, "config"), MAIL_STATE_DIR: join(root, "state") }
   mkdirSync(env.MAIL_CONFIG_DIR, { recursive: true })
@@ -74,7 +94,9 @@ const mailbox = async () => {
     app,
     configuration: settingsFor(app),
     commands: () => [
-      ...mailReadCommands({ app, read: (_command, work) => withStore((store) => work(store, MINE)) }),
+      ...(mount
+        ? mounted(mailReadCommands({ app, read: (_command, work) => withStore((store) => work(store, MINE)), mount }))
+        : mailReadCommands({ app, read: (_command, work) => withStore((store) => work(store, MINE)) })),
       // Two local writes outside the propose tier: one unmarked, one marked on a path the tier does not list.
       annotate(new Command("scribble"), { effects: LOCAL_WRITE }).action(() => {}),
       proposesOnly(annotate(new Command("sneak"), { effects: LOCAL_WRITE })).action(() => {}),
@@ -441,5 +463,51 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
     await box.thread("t-ann", email("ann", 1))
     await box.synced()
     expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(true)
+  })
+})
+
+describe("the steps a review hands on", () => {
+  const steps = (out: string) =>
+    (JSON.parse(out) as { next?: { step: string; command: string; args: Record<string, unknown>; line?: string }[] })
+      .next ?? []
+
+  it("in a mail CLI, run the profile's own commands", async () => {
+    const box = await mailbox()
+    await box.thread("t-1", email("one", 1))
+    await box.synced()
+    const [acknowledge] = steps((await box.cli(["review", "--holder", "triage"])).out)
+    expect(acknowledge).toMatchObject({ step: "mail-messages.acknowledge", command: "messages acknowledge" })
+    expect(acknowledge?.line).toMatch(/^mail ya messages acknowledge --holder triage --cursor /)
+    expect(steps((await box.cli(["review", "date>2h"])).out)).toMatchObject([
+      { step: "mail-review.next", command: "review", line: expect.stringMatching(/^mail ya review /) },
+    ])
+  })
+
+  it("in a host, run where it mounted them, naming the mailbox", async () => {
+    const box = await mailbox(MEMO_MOUNT)
+    await box.thread("t-1", email("one", 1))
+    await box.synced()
+    const held = await box.cli(["mail", "review", "--holder", "triage", "--source", "email:me@example.com"])
+    expect(held.code, held.err).toBe(0)
+    const [acknowledge] = steps(held.out)
+    expect(acknowledge).toMatchObject({
+      command: "messages acknowledge",
+      args: { holder: "triage", source: "email:me@example.com" },
+    })
+    const done = await box.cli([
+      "messages",
+      "acknowledge",
+      "--holder",
+      "triage",
+      "--cursor",
+      String(acknowledge?.args.cursor),
+      "--source",
+      "email:me@example.com",
+    ])
+    expect(done.code, done.err).toBe(0)
+    const dated = await box.cli(["mail", "review", "date>2h", "--source", "email:me@example.com"])
+    expect(steps(dated.out)).toMatchObject([
+      { step: "mail-review.next", command: "mail review", args: { source: "email:me@example.com" } },
+    ])
   })
 })
