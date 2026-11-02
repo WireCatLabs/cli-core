@@ -13,6 +13,7 @@ import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { historySkipsOf } from "./history-gaps.js"
 import { meaningNote, messagesAnswer, offsetOf, shownOf } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { syncOptions, syncRequest, syncsFirst } from "./search-sync-options.js"
@@ -261,10 +262,13 @@ const searchAction = (messenger: Messenger) =>
       ...(newest ? { newest: true } : {}),
       ...(timezone === undefined ? {} : { timezone }),
     }
+    const skips = await context
+      .withStore((store) => historySkipsOf(store, found.coverage?.accounts ?? found.accounts ?? []))
+      .catch(() => [])
     renderAnswer(
       this,
       context,
-      messagesAnswer("search messages", found, { limit, page: page ?? 1, again }, given.join(" ")),
+      messagesAnswer("search messages", found, { limit, page: page ?? 1, again }, given.join(" "), skips),
       view,
     )
   }

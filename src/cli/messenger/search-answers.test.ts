@@ -149,6 +149,38 @@ describe("the total of a search", () => {
   })
 })
 
+describe("history the limits left out", () => {
+  it("makes a search say not all is there, names the chats and the sync that keeps one in full", () => {
+    const body = messagesAnswer(
+      "search messages",
+      { items: [], hasMore: false, skipped: [] } as unknown as SearchFound,
+      { limit: 20 },
+      "",
+      [
+        {
+          chatId: "120363000000000001@g.us",
+          title: "Town square",
+          reason: "group_too_large",
+          members: 214,
+          messages: 5200,
+          oldestAt: "2025-01-01T00:00:00.000Z",
+          newestAt: "2026-11-01T00:00:00.000Z",
+        },
+      ],
+    )
+    expect(body.meta?.complete).toBe(false)
+    expect(body.missing).toContainEqual(
+      expect.objectContaining({
+        field: "history_limits",
+        why: expect.stringContaining("Town square (5200, a group of 214 people, not saved)"),
+      }),
+    )
+    expect(body.next).toContainEqual(
+      expect.objectContaining({ args: { chat: "120363000000000001@g.us", include: true } }),
+    )
+  })
+})
+
 describe("untrusted text in search answers", () => {
   const hitOf = (kind: SearchAllItem["kind"], account: string): SearchAllItem => ({
     kind,

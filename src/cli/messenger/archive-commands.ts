@@ -14,11 +14,12 @@ import { dateWindow } from "../../services/moment.js"
 import type { LeftChat } from "../../store/chats.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { commandAt } from "../steps.js"
+import { commandAt, lineOf } from "../steps.js"
 import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { admitPassword, linesOf, openFolder, runFileFor, saveManifest, sealRun, writeChanges } from "./export-folder.js"
 import { gapsCommand } from "./gaps-command.js"
+import { historyLimitGaps } from "./history-gaps.js"
 import { messageItems } from "./message-items.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
 import { storeMaintenanceCommands } from "./store-maintenance-command.js"
@@ -74,13 +75,34 @@ const statusCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, chat: string | undefined) {
       const context = messengerContext(this, messenger)
       const rows = await context.withServices((services) => services.archive.status(chat))
+      const skips = await context
+        .withStore((store, account) => store.chats.historySkips(account))
+        .then((all) =>
+          chat === undefined ? all : all.filter((skip) => rows.some((row) => row.chatId === skip.chatId)),
+        )
+        .catch(() => [])
+      const limited = historyLimitGaps(skips)
       renderAnswer(
         this,
         context,
-        listOf("store status", { items: rows.map(snakeKeys), limit: Math.max(1, rows.length), has_more: false }),
+        listOf("store status", {
+          items: rows.map(snakeKeys),
+          limit: Math.max(1, rows.length),
+          has_more: false,
+          next: limited.next,
+          missing: limited.missing,
+        }),
       )
       if (rows.length === 0 && context.format === "pretty")
         context.renderer.note("the store holds no messages for this profile yet")
+      if (skips.length > 0 && context.format === "pretty")
+        context.renderer.note(
+          `history limits left out pushed history of ${skips.length} chats — \`${lineOf(this, "messages sync <chat> --include")}\` fetches one and keeps it in full:\n` +
+            skips
+              .slice(0, 20)
+              .map((skip) => `  ${skip.title ?? skip.chatId}  ${skip.messages} messages  ${skip.reason}`)
+              .join("\n"),
+        )
     })
 
 const LISTED = 20

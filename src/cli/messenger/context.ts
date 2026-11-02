@@ -556,6 +556,9 @@ export const connected = (
             ),
           ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
           ...(unreadCounts === "store" ? { countsUnread: true } : {}),
+          ...(history === "store" && settings.historyLimits
+            ? { historyLimits: settings.historyLimits, command: `${app.command} ${settings.profile}` }
+            : {}),
         })
   const passives =
     history === "store" && self !== null && !watching

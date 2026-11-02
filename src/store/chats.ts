@@ -1,12 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../domain/channel-tags.js"
 import type { Chat, ChatKind, ChatUpdate, Id, Page } from "../domain/models.js"
+import type { HistorySkip } from "../services/history-limits.js"
 import { keysOver } from "./keys.js"
 import { type ChatRekey, type ChatRekeys, rekeyChat, rekeyChats } from "./sqlite/chat-rekey.js"
 import type { ChatMetadata, LeftChat } from "./sqlite/chats.js"
 import * as chatQueries from "./sqlite/chats.js"
 import type { ChatCompleteness } from "./sqlite/completeness.js"
 import * as completeness from "./sqlite/completeness.js"
+import type { ChatHistoryShape, StoredHistorySkip } from "./sqlite/history-skips.js"
+import * as history from "./sqlite/history-skips.js"
 import type { StoreContext } from "./sqlite/open.js"
 import type { Where } from "./sqlite/query-filter.js"
 import * as reads from "./sqlite/reads.js"
@@ -65,6 +68,14 @@ export interface ChatsStore {
    * `chatId` itself. Only for finding the chat: the old id and its history are never shown or searched.
    */
   renamedChatId(key: AccountKey, chatId: Id): Promise<Id | undefined>
+  /** Per stored chat: its kind, how many people, and whether the owner lifted its history limits. */
+  historyShapes(key: AccountKey, chatIds: Id[]): Promise<Map<Id, ChatHistoryShape>>
+  /** Adds what the history limits left out of pushed history, per chat. */
+  recordHistorySkips(key: AccountKey, skips: Map<Id, HistorySkip>): Promise<void>
+  /** Lifts the history limits for one chat, or puts them back; `false` when the store does not know the chat. */
+  setHistoryIncluded(key: AccountKey, chatId: Id, included: boolean): Promise<boolean>
+  /** Every chat whose pushed history the limits left out, most messages first. */
+  historySkips(key: AccountKey): Promise<StoredHistorySkip[]>
   /** A stored chat's kind, with or without messages; `undefined` when the store does not know the chat. */
   chatKind(key: AccountKey, chatId: Id): Promise<ChatKind | undefined>
   /** A stored chat's title, with or without messages; `null` when it has none or the store does not know the chat. */
@@ -170,6 +181,32 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     renamedChatId: async (key, chatId) => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined ? undefined : chatQueries.renamedChatId(context, accountKey, chatId)
+    },
+
+    historyShapes: async (key, chatIds) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined ? new Map() : history.historyShapes(context, accountKey, chatIds)
+    },
+
+    recordHistorySkips: async (key, skips) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined || skips.size === 0) return
+      write(database, () => history.recordHistorySkips(context, accountKey, skips))
+    },
+
+    setHistoryIncluded: async (key, chatId, included) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) return false
+      let done = false
+      write(database, () => {
+        done = history.setHistoryIncluded(context, accountKey, chatId, included)
+      })
+      return done
+    },
+
+    historySkips: async (key) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined ? [] : history.historySkips(context, accountKey)
     },
 
     chatKind: async (key, chatId) => {

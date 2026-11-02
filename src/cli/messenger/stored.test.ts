@@ -1260,6 +1260,60 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     expect(warnings).toEqual([expect.stringContaining("recipient list")])
   })
 
+  it("saves pushed history inside the history limits, and records per chat what it left out", async () => {
+    const { store, found } = await setUp()
+    const old = { ...message("71", "an old line", "8"), timestamp: "2020-01-01T10:00:00.000Z" }
+    const big = {
+      id: "12",
+      title: "Town square",
+      kind: "group" as const,
+      unreadCount: 0,
+      lastMessageAt: null,
+      participantsCount: 214,
+    }
+    const { codes, events } = await feeding(
+      store,
+      {
+        storedChats: async () => {},
+        feed: async (onBatch) => {
+          await onBatch({
+            chats: [big],
+            messages: [old, message("72", "busy square", "12"), message("73", "kept", "8")],
+          })
+        },
+      },
+      { historyLimits: { dialogDays: 1095, groupDays: 365, groupMembersMax: 50 } },
+    )
+
+    expect(await found("square")).toEqual([])
+    expect(await found("kept")).toEqual(["73"])
+    expect(await found("old line")).toEqual([])
+    expect(codes).toContain("history_limited")
+    expect(events.find((one) => one.event === "warning" && one.code === "history_limited")).toMatchObject({
+      counts: { chats: 2, messages: 2, group_too_large: 1, older_than_window: 1 },
+    })
+    const skips = await store.chats.historySkips(account)
+    expect(skips.map((skip) => [skip.chatId, skip.reason, skip.messages])).toEqual(
+      expect.arrayContaining([
+        ["8", "older_than_window", 1],
+        ["12", "group_too_large", 1],
+      ]),
+    )
+    const chats = (await store.chats.chats(account, {})).items
+    expect(chats.find((chat) => chat.id === "12")?.providerMetadata ?? {}).not.toHaveProperty("$history")
+
+    expect(await store.chats.setHistoryIncluded(account, "12", true)).toBe(true)
+    await feeding(
+      store,
+      {
+        storedChats: async () => {},
+        feed: async (onBatch) => void (await onBatch({ messages: [message("74", "lifted square", "12")] })),
+      },
+      { historyLimits: { dialogDays: 1095, groupDays: 365, groupMembersMax: 50 } },
+    )
+    expect(await found("lifted")).toEqual(["74"])
+  })
+
   it("tells the messenger whether each pushed batch reached the store", async () => {
     const { store } = await setUp()
     const answers: (boolean | void)[] = []

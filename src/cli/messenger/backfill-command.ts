@@ -89,6 +89,10 @@ export const syncCommand = (messenger: Messenger): Command => {
     .option("--catch-up-chunks <n>", "at most this many local vector chunks", wholeNumber)
     .option("--catch-up-messages <n>", "skip a graph rebuild larger than this many messages", wholeNumber)
     .option("--catch-up-time <duration>", "local preparation time budget, 30s by default")
+    .option(
+      "--include",
+      "keep this chat's pushed history in full from now on, past the history limits (history_* settings)",
+    )
     .option("--background", "run as a job that outlives this command; `store jobs show` follows it")
     .option(
       "--dry-run",
@@ -106,8 +110,10 @@ export const syncCommand = (messenger: Messenger): Command => {
         catchUpChunks,
         catchUpMessages,
         catchUpTime,
+        include,
         ...sizes
       } = this.opts<{
+        include?: boolean
         all?: boolean
         limit?: number
         pageSize?: number
@@ -124,6 +130,7 @@ export const syncCommand = (messenger: Messenger): Command => {
       if ((chat === undefined) === (all !== true))
         throw new CliError("validation_error", "name a chat, or --all for every chat")
       if (all && estimate) throw new CliError("validation_error", "--dry-run prices one chat; not with --all")
+      if (include && chat === undefined) throw new CliError("validation_error", "--include keeps one chat: name it")
       if (all && messenger.history === "store") {
         throw new CliError(
           "validation_error",
@@ -238,6 +245,11 @@ export const syncCommand = (messenger: Messenger): Command => {
             chat === undefined ? services.archive.fetchAll(options) : services.archive.fetch(chat, options),
         )
         if (jobId) finishJob(messenger.app, jobs, jobId, { finishedAt: new Date().toISOString(), result })
+        const synced = "chat" in result ? result.chat : null
+        const included =
+          include && synced
+            ? await context.withStore((store, account) => store.chats.setHistoryIncluded(account, synced, true))
+            : undefined
         const tasks = await taskRulesAfterSync(context)
         const prepared = "prepared" in result ? result.prepared : undefined
         const unprepared = prepared && !prepared.complete && "chat" in result && result.chat !== null
@@ -249,7 +261,11 @@ export const syncCommand = (messenger: Messenger): Command => {
           this,
           context,
           itemOf(
-            snakeKeys(tasks && tasks.added + tasks.closed + (tasks.held ?? 0) > 0 ? { ...result, tasks } : result),
+            snakeKeys({
+              ...result,
+              ...(tasks && tasks.added + tasks.closed + (tasks.held ?? 0) > 0 ? { tasks } : {}),
+              ...(included === undefined ? {} : { historyIncluded: included }),
+            }),
             {
               next: [
                 ...(unprepared

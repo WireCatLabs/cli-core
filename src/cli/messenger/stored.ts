@@ -11,6 +11,7 @@ import type { MessengerTraits } from "../../ports/traits.js"
 import { foldName, isId, type PeopleLookup, pickPerson } from "../../resolve.js"
 import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { codeOf } from "../../sends/guarded.js"
+import { type HistoryLimits, type HistorySkip, limitBatch } from "../../services/history-limits.js"
 import { chatIdIn } from "../../services/message-resolution.js"
 import type { AccountKey, DeletionScope, IngestedVia, MessageStore } from "../../store/store.js"
 
@@ -48,6 +49,10 @@ export interface Saving {
   namesFromStore?: Pick<MessengerTraits, "savedChatId">
   /** `MessengerTraits.unreadCounts: "store"`: a message `watch` or `listen` saves raises its chat's unread count. */
   countsUnread?: boolean
+  /** Pushed history (`feed`, `listenHistory`) outside these is not saved, and each chat records what it left out. */
+  historyLimits?: HistoryLimits
+  /** The app command and profile, for the warning that names the command listing what the limits left out. */
+  command?: string
 }
 
 /**
@@ -75,9 +80,45 @@ export const stored = (
     namesFromStore,
     recipientIds,
     countsUnread = false,
+    historyLimits,
+    command = "cli",
   }: Saving,
 ): MessengerAdapter => {
   let warned = false
+  let limitedNoted = false
+  const limited = async (opened: MessageStore, batch: HistoryBatch) => {
+    if (!historyLimits || !batch.messages?.length) return { batch, skipped: new Map<Id, HistorySkip>() }
+    const shapes = await opened.chats.historyShapes(account, [...new Set(batch.messages.map((one) => one.chatId))])
+    return limitBatch(
+      batch,
+      (chatId) => shapes.get(chatId),
+      (chatId) => shapes.get(chatId)?.included === true,
+      historyLimits,
+    )
+  }
+  const noteLimited = (skipped: Map<Id, HistorySkip>) => {
+    if (skipped.size === 0) return
+    const counts: Record<string, number> = {
+      chats: skipped.size,
+      messages: 0,
+      group_too_large: 0,
+      older_than_window: 0,
+    }
+    for (const skip of skipped.values()) {
+      counts.messages = (counts.messages ?? 0) + skip.messages
+      counts[skip.reason] = (counts[skip.reason] ?? 0) + 1
+    }
+    const warning: WarningEvent = { event: "warning", code: "history_limited", operation: "history.save", counts }
+    events(warning)
+    if (limitedNoted) return
+    limitedNoted = true
+    warn(
+      `history limits left out ${counts.messages} pushed messages of ${skipped.size} chats (big groups, older ` +
+        `than the window) — \`${command} store status\` lists them; \`${command} messages sync <chat> --include\` ` +
+        "fetches one and keeps it in full",
+      warning,
+    )
+  }
   let recorded = profile === undefined
   const notWritten = (operation: string, error: unknown): void => {
     const warning: WarningEvent = { event: "warning", code: "store_not_written", operation }
@@ -204,7 +245,12 @@ export const stored = (
       // A refused re-key leaves its chat split, never the others or the batch's history unsaved.
       const saving = previous.then(async () => {
         await saveRekeys(rekeys, round)
-        return attempt(operation, (opened) => fill(opened, account, batch))
+        return attempt(operation, async (opened) => {
+          const { batch: kept, skipped } = await limited(opened, batch)
+          await fill(opened, account, kept)
+          await opened.chats.recordHistorySkips(account, skipped)
+          noteLimited(skipped)
+        })
       })
       previous = saving
       pending?.add(saving)
