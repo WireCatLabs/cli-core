@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { parseReference } from "../../domain/references.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
+import { BUILT_IN_PURPOSES } from "../project-purposes.js"
 import { canonicalProjectRef } from "../stored-project-gathering.js"
 import { aliasHits } from "./alias-hits.js"
 import { chatSenders } from "./chat-senders.js"
@@ -29,8 +30,6 @@ export const PERSON_SCORERS: readonly LinkScorer[] = [emailDomain]
 
 /** The rule bot every scan proposal is written by: only the owner decides its proposals. */
 export const SCAN_BOT = { bot: "memo-scan", kind: "rule" } as const
-
-export const BUILT_IN_PURPOSES = ["work", "sales", "support", "other"] as const
 
 export const DEFAULT_THRESHOLD = 0.5
 /** A person ↔ person scan keeps the old rule's reach: one weak signal is enough to ask the owner. */

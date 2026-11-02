@@ -21,7 +21,6 @@ export { contextEvidenceFingerprint, createContextEvidenceReader } from "./conte
 export { excerpt } from "./excerpt.js"
 export {
   aliasHits,
-  BUILT_IN_PURPOSES,
   chatSenders,
   chatTitle,
   combinedScore,
