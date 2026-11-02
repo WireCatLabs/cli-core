@@ -9,10 +9,32 @@ shape of this file.
 
 ### Added
 
+- **`events remind`: tell once about each event that starts soon, for cron or a timer to run every few minutes**,
+  as gcalcli's `remind` is run. It syncs first unless `--offline`, then takes the events that start within
+  `--due-within <duration>` (`10m` if not given, `1m` to `1d`) and take the owner's time: timed, not cancelled, not
+  declined, no focus time, out-of-office or working location. It prints each one, or, after `--`, runs the owner's
+  program once per event, with the event as JSON on its standard input and `<PREFIX>_EVENT=event:<id>` and
+  `<PREFIX>_PROFILE` in its environment. The program runs without a shell, and the event's text is never on its
+  command line: an invitation is a stranger's text. A program still running after 60 s is stopped.
+  - What was reminded is kept per profile in `<state>/checkpoints/<profile>/events-remind.json` (0600), one key per
+    event and start, so a moved meeting is reminded again. An event whose program failed is not kept, and the next
+    run tries it again; the answer is then `configuration_error` (`remind.hook-failed`). A lock keeps two runs from
+    reminding the same event. `--dry-run` runs, syncs and remembers nothing.
+  - A failed sync does not stop it: the answer says so in `meta.issues` and reminds from the store.
+  - The command needs the CLI's `writes` (`CalendarCommandDeps.writes`), whose settings it reads. It is never an MCP
+    tool.
+- **`EVENTS_REMIND_HOOK_KEY` (`events.remind.hook`), in `CALENDAR_WRITE_KEYS` and `CALENDAR_WRITE_DEFAULTS` as
+  `deny`.** Running a program is a big permission, and `ask` would not be enough: `--yes` answers `ask`, and anything
+  that can type a command can add it. The owner allows it with `config set permissions.events.remind.hook allow`.
+  Under `<PREFIX>_READ_ONLY` the program never runs, whatever the level.
 - **A pushed history batch tells its messenger whether it was saved.** `feed` and `listenHistory` take a
   `HistoryBatchHandler`, `(batch) => void | Promise<boolean>`: the CLI's own handler resolves `true` once the batch is
   in the local store and `false` when it could not be written, so an adapter can keep a batch it cannot get again
   until it is stored. An adapter that ignores the answer works as before.
+
+### Changed — may break callers
+
+- **`@wirecat/cli-base` 0.73.0**, for the verb `remind`. The peer range is now `>=0.73.0 <0.74.0`.
 
 ## 0.542.0 — 02.11.2026
 

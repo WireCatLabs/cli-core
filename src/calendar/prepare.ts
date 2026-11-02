@@ -29,16 +29,19 @@ const nameOf = ({ provider, account }: AccountKey) => `${provider}:${account}`
 const size = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8")
 
 /**
- * What makes an event the next meeting: timed, not cancelled, not declined by the owner, an ordinary event (no focus
- * time, out-of-office or working location), and someone other than the owner and the rooms invited.
+ * An event that takes the owner's time: timed, not cancelled, not declined by the owner, and an ordinary event (no
+ * focus time, out-of-office or working location).
  */
-const isMeeting = (details: EventDetails) => {
+export const ownsTime = (details: EventDetails): boolean => {
   if (details.event.allDay || details.event.status === "cancelled") return false
   const live = details.entries.filter((entry) => entry.deletedAt === null && entry.status !== "cancelled")
   if (!live.length || live.every((entry) => entry.ownResponse === "declined")) return false
-  if (live.every((entry) => entry.eventType !== null && entry.eventType !== "default")) return false
-  return details.participants.some((one) => !one.self && !one.resource)
+  return !live.every((entry) => entry.eventType !== null && entry.eventType !== "default")
 }
+
+/** The next meeting: an event that takes the owner's time, with someone other than the owner and the rooms invited. */
+const isMeeting = (details: EventDetails) =>
+  ownsTime(details) && details.participants.some((one) => !one.self && !one.resource)
 
 /** The account's next meeting that has not started yet, by the rule of `isMeeting`. */
 export const nextMeeting = async (store: EventStore, accountId: number, now: number): Promise<EventDetails> => {

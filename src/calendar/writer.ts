@@ -98,9 +98,15 @@ export type CalendarWrite = "create" | "quick-add" | "import" | "update" | "dele
 /** Mailing the other attendees: an agent may write to the calendar and still not to people (WC-PERM-14's spirit). */
 export const EVENTS_NOTIFY_KEY: PermissionKey = "events.notify"
 export const EVENTS_DELETE_SERIES_KEY: PermissionKey = "events.delete.series"
+/** `events remind -- <program>`: runs a program of the owner's on this machine, so it waits for the owner's allow. */
+export const EVENTS_REMIND_HOOK_KEY: PermissionKey = "events.remind.hook"
 
 /** The keys the calendar writes check beyond their command paths, for a CLI's `commandPermissions({ extra })`. */
-export const CALENDAR_WRITE_KEYS: readonly PermissionKey[] = [EVENTS_NOTIFY_KEY, EVENTS_DELETE_SERIES_KEY]
+export const CALENDAR_WRITE_KEYS: readonly PermissionKey[] = [
+  EVENTS_NOTIFY_KEY,
+  EVENTS_DELETE_SERIES_KEY,
+  EVENTS_REMIND_HOOK_KEY,
+]
 
 /**
  * Built in, and only ever tightening (WC-PERM-7). A change that is easy to undo goes ahead, as tg's and drive's writes
@@ -116,6 +122,8 @@ export const CALENDAR_WRITE_DEFAULTS: Readonly<Record<PermissionKey, Level>> = {
   "events.delete": "ask",
   [EVENTS_DELETE_SERIES_KEY]: "deny",
   [EVENTS_NOTIFY_KEY]: "deny",
+  // Not ask: `--yes` answers ask, and anything that can type a gcal command can add it.
+  [EVENTS_REMIND_HOOK_KEY]: "deny",
 }
 
 /** What an adapter throws when the provider refused a write because the entry's `etag` is old (HTTP 412). */

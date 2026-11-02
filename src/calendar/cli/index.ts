@@ -58,6 +58,7 @@ import {
   type WriteContext,
 } from "../writes.js"
 import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
+import { addRemind } from "./remind.js"
 
 export interface CalendarCommandDeps {
   store: EventStore
@@ -486,6 +487,8 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       })
       print({ ...prepared, meta: { ...meta, ...window.meta, ...clockMeta(now(), zone()) } }, command)
     })
+
+  if (deps.writes) addRemind(events, deps.writes, { deps, now, zone, print, example })
 
   const searches = annotate(program.command("search").description("find stored things by text: events"), {
     effects: GROUP,
