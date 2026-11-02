@@ -140,6 +140,9 @@ shape of this file.
 
 ### Fixed
 
+- **An MCP read or write whose answer named a step only the person can take (`user_action`) failed as a bug.** The
+  router dropped next steps this server does not offer by their command, and such a step has none. It is kept now;
+  a command step this server does not offer is still dropped.
 - **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
   only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
   `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
