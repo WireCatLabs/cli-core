@@ -95,6 +95,12 @@ shape of this file.
 - **`ProviderEntry.opens`**: the read command that opens each kind of ref (`{ document: "documents show" }`). A CLI
   writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
   this build does not know is dropped, so an older build still reads a newer entry.
+- **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
+  the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
+  purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
+- **`knowledge.updateRelation(scope, id, { role?, purpose?, by })`** sets a relationship's role and purpose; `null`
+  clears one. The owner's change applies; an agent's is a `relationship_update` proposal, listed and decided through
+  the proposal registry, and `knowledge.decideRelationUpdate(id, decision)` decides it in one transaction.
 
 ### Changed — may break callers
 
@@ -140,6 +146,12 @@ shape of this file.
 - **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
   keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
   (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
+- **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
+  upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
+  link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
+  build no longer lists or confirms these as relationships, and a project transfer no longer carries them. Decide them
+  through the proposal registry by their new ids; `link:<id>` and `key:<id>` remain only for suggestions an older
+  build writes later.
 
 ### Fixed
 

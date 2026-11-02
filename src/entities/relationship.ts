@@ -9,6 +9,8 @@ export const relationship = v.strictObject({
   to: reference,
   kind: v.picklist(RELATION_KINDS),
   role: v.nullable(text),
+  /** A purpose from memo's config; `null` means `work`. */
+  purpose: v.nullable(text),
   evidence: v.nullable(text),
   /** An agent's suggestion stays unconfirmed, and `weak`, until the owner confirms it. */
   confirmed: v.boolean(),

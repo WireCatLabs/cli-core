@@ -7,6 +7,7 @@ import { findingsKind } from "./kinds/findings.js"
 import { keyDocumentKind } from "./kinds/key-document.js"
 import { memoryKind } from "./kinds/memory.js"
 import { relationshipKind } from "./kinds/relationship.js"
+import { relationshipUpdateKind } from "./kinds/relationship-update.js"
 import type { Decided, ProposalFilter, ProposalKind, ProposalRegistry, ProposalRow } from "./types.js"
 
 const PREFIX = /^([a-z][a-z_]*):/
@@ -126,6 +127,7 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
   const registry = emptyProposalRegistry(store)
   for (const kind of [
     relationshipKind(store),
+    relationshipUpdateKind(store),
     keyDocumentKind(store),
     factKind(store),
     memoryKind(store),
