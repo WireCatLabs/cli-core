@@ -1,4 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
+import { MEETING_FINDINGS_KIND } from "../meetings/index.js"
+import { MAIL_FINDINGS_KIND } from "./mail-findings.js"
 
 /**
  * Who proposed something waiting for the owner. `unknown` is a suggestion that names no author, such as an
@@ -12,6 +14,13 @@ export type Proposer =
 
 /** Who decides: the owner, or an agent the host lets decide for the owner, with its reason. */
 export type Decider = "owner" | { bot: string; model?: string; reason: string }
+
+export interface DecidedRow {
+  id: string
+  proposedBy: Proposer
+  ownerOnly?: boolean
+  kind?: string
+}
 
 export interface DecisionPolicy {
   /** The host's `agent_decisions`: off unless the owner sets it to `true`; off keeps every decision with the owner. */
@@ -30,12 +39,19 @@ export interface Refusal {
 }
 
 /**
+ * Stored proposal kinds only the owner decides, whatever `agent_decisions` says. Read from the row's kind, so a path
+ * that sees the row as something else — a generic action, a host's own kind — still refuses an agent.
+ */
+export const isOwnerOnlyKind = (kind: string | undefined): boolean =>
+  kind === MAIL_FINDINGS_KIND || kind === MEETING_FINDINGS_KIND
+
+/**
  * The one check every decide path runs before it confirms or rejects a proposal. `null` means allowed. Every Claude
  * Code session is the bot `claude-code`, so comparing bot names keeps one session from deciding another's proposal.
  */
 export const mayDecide = (
-  /** `ownerOnly`: what only the owner may say, such as that a payment was made. */
-  row: { id: string; proposedBy: Proposer; ownerOnly?: boolean },
+  /** `ownerOnly`: what only the owner may say, such as that a payment was made; `kind`: the stored kind. */
+  row: DecidedRow,
   by: Decider,
   policy: DecisionPolicy = DEFAULT_DECISION_POLICY,
 ): Refusal | null => {
@@ -46,7 +62,8 @@ export const mayDecide = (
     reason,
     message,
   })
-  if (row.ownerOnly) return refuse("permission_error", "proposal.owner-only", `only the owner decides ${row.id}`)
+  if (row.ownerOnly || isOwnerOnlyKind(row.kind))
+    return refuse("permission_error", "proposal.owner-only", `only the owner decides ${row.id}`)
   if (!policy.agentDecisions)
     return refuse(
       "permission_error",
@@ -103,7 +120,7 @@ export const assertMayWithdraw = (
 
 /** `mayDecide` for a store method: throws the refusal instead of returning it. */
 export const assertMayDecide = (
-  row: { id: string; proposedBy: Proposer; ownerOnly?: boolean },
+  row: DecidedRow,
   by: Decider,
   policy: DecisionPolicy = DEFAULT_DECISION_POLICY,
 ): void => {

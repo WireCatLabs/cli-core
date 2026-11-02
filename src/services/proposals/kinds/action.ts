@@ -1,5 +1,12 @@
 import { MEETING_FINDINGS_KIND } from "../../../meetings/index.js"
-import { type MessageStore, type ProposedAction, proposerOfAction } from "../../../store/index.js"
+import {
+  EVIDENCE_FINDINGS_KIND,
+  isOwnerOnlyKind,
+  MAIL_FINDINGS_KIND,
+  type MessageStore,
+  type ProposedAction,
+  proposerOfAction,
+} from "../../../store/index.js"
 import { approveAsTask } from "../../proposal-tasks.js"
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
 import { actionStatus, kept, projectOf, pushed, storedStatus } from "./shared.js"
@@ -19,6 +26,7 @@ const rowOf = (action: ProposedAction): ProposalRow => ({
   signals: null,
   parts: null,
   createdAt: action.createdAt,
+  ...(isOwnerOnlyKind(action.kind) ? { ownerOnly: true } : {}),
 })
 
 /**
@@ -33,7 +41,7 @@ export const actionKind = (
   list: async (filter) => {
     const status = storedStatus(filter)
     const actions = await store.proposedActions.list({
-      except: [...claimed(), MEETING_FINDINGS_KIND],
+      except: [...claimed(), MEETING_FINDINGS_KIND, EVIDENCE_FINDINGS_KIND, MAIL_FINDINGS_KIND],
       ...(status === undefined ? {} : { status }),
       ...pushed(filter),
     })

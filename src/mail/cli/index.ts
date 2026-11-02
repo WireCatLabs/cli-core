@@ -24,12 +24,25 @@ import { acknowledgeCommand } from "./marks.js"
 import { mailReviewCommand } from "./review.js"
 
 export { mailMark, markItem, markText } from "./marks.js"
-export { MAIL_REVIEW_QUERY, MAIL_REVIEW_STEPS } from "./review.js"
+export { MAIL_REVIEW_QUERY, MAIL_REVIEW_STEPS, mailReviewSteps } from "./review.js"
 
 /** A locked or broken store must fail the command, not read as "nothing stored yet". */
 const absentAccount = (error: unknown): undefined => {
   if (error instanceof CliError && error.code === "not_found") return undefined
   throw error
+}
+
+/**
+ * Where a host mounted `review`, `messages acknowledge` and `conversations show`, and the option that names one
+ * mailbox, so the steps a review hands on run there. A mail CLI leaves it out: its profile names the mailbox.
+ */
+export interface MailMount {
+  review?: string
+  acknowledge?: string
+  /** `null`: the host mounts no thread read, so a review offers none. */
+  conversation?: string | null
+  /** In snake_case, as a step names it: memo's `source`, with `email:<account>`. */
+  mailbox?: { option: string; value: (mailbox: AccountKey) => string }
 }
 
 /** What a mail CLI hands the shared commands: how to open the store for one run, and whose mail it reads. */
@@ -42,6 +55,7 @@ export interface MailReads {
   read: <T>(command: Command, work: (store: MessageStore, mailbox: AccountKey) => Promise<T>) => Promise<T>
   /** The mailbox's server, for `search messages --backend`; without it the search reads the store only. */
   server?: (command: Command) => MailServerAccess
+  mount?: MailMount
   /** How `--server-time` help states its default when a provider's own differs (`MailServerAccess.timeMs`). */
   serverTimeDefault?: string
 }
