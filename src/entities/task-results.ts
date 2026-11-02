@@ -16,6 +16,7 @@ const link = v.strictObject({
   origin: v.picklist(LINK_SOURCES),
   target_text: v.nullable(text),
   role: v.nullable(text),
+  purpose: v.nullable(text),
   evidence: v.nullable(text),
   provenance: v.nullable(text),
   confirmed: v.boolean(),

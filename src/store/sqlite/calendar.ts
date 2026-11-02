@@ -20,6 +20,7 @@ import {
 } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { listEvents } from "./calendar-events.js"
+import { forgetCalendarRows } from "./calendar-forget.js"
 import { bool, eventOf, fromJson, int, str, toJson } from "./events.js"
 import { driveDocumentOf, driveFileTarget, logFileLink } from "./files.js"
 import { identityOf } from "./identities.js"
@@ -704,6 +705,18 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
         database
           .prepare("UPDATE calendars SET synced = ?, updated_at = ? WHERE id = ?")
           .run(flag(synced), now, calendarId)
+      }),
+    forgetCalendar: async (calendarId, now) =>
+      write(database, () => {
+        const accountId = Number(calendarRow(calendarId).account_id)
+        return forgetCalendarRows(
+          database,
+          { calendarId, accountId, cursorKey: cursorKey(calendarId), now },
+          {
+            event: refreshEvent,
+            series: refreshSeries,
+          },
+        )
       }),
     saveEntries: async (calendarId, entries, now) => write(database, () => saveAll(calendarId, entries, now)),
     removeEntries: async (calendarId, externalIds, now) =>

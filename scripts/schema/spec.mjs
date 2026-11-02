@@ -334,6 +334,11 @@ const EDITS = {
     add: [
       ["author", "text", { note: "`owner`, `agent`, `rule`" }],
       ["updated_at", "integer", { notnull: true }],
+      [
+        "purpose",
+        "text",
+        { note: "what a chat is for in a project: a purpose from memo's config, no fixed set; null means `work`" },
+      ],
     ],
     keys: ["INDEX (target_folded) WHERE to_id IS NULL"],
     doc: "Every connection between two things that no column holds. Kinds: `blocked-by` (a task needs another task to finish first), `follow-up-of` (a task continues an earlier task), `links-to` (a document, note or message links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from), `attached` (a calendar entry → the document of a Drive file attached to it; `target_text` names the file as `google-drive:<file id>` while Drive has not stored it). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.",

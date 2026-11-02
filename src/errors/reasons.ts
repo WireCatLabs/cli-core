@@ -58,6 +58,7 @@ const OTHERS: Entry[] = [
   validation("extraction.text-too-long", "the text is too long for memory extraction"),
   validation("file.locked", "another process holds the file's lock"),
   ["mail.source-failed", "provider_error", "the mail server refused or did not complete a request"],
+  ["mail.search-refused", "provider_error", "the mail server refused to search a folder"],
   ["mirror.partial", "provider_error", "some mirrored files were not synced"],
   ["profile.wrong-account", "authentication_error", "the signed-in source account does not match this profile"],
   validation("push.too-many-files", "the folder holds more files than one push takes"),
@@ -118,7 +119,11 @@ const OTHERS: Entry[] = [
   ["search.server-failed", "provider_unavailable", "the server did not answer a search"],
   ["search.server-timeout", "timeout", "the server did not answer within --server-time"],
   ["search.server-capped", "outcome_unknown", "the server found more than one search reads, or a branch was not sent"],
-  ["search.server-too-large", "outcome_unknown", "a message the server found is too large to download during a search"],
+  [
+    "search.server-partial",
+    "outcome_unknown",
+    "a message the server found was stored without its attachments; the next sync reads it whole",
+  ],
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
   [

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Provider } from "./models.js"
+import { REF_KINDS, type RefKindName } from "./references.js"
 
 /** What a search reads; the same names `--only`, `searched` and `skipped` use. */
 export const KINDS = ["messages", "mail", "notes", "documents", "meetings", "events"] as const
@@ -11,15 +12,19 @@ export interface ProviderEntry {
   aliases: readonly string[]
   /** The CLI that wrote the entry (`zm`, `drive`). One CLI may write several providers, so it is not an alias. */
   command?: string
+  /** The read command, after `<command> <profile>`, that opens a ref of each kind: `{ chat: "messages list" }`. */
+  opens?: Partial<Record<RefKindName, string>>
 }
+
+const MESSENGER_OPENS = { chat: "messages list", message: "messages show", contact: "contacts show" } as const
 
 /** The seed: what cli-core knows before any CLI has written its entry into the store. */
 export const PROVIDERS: readonly ProviderEntry[] = [
-  { name: "telegram", kind: "messages", aliases: ["tg"], command: "tg" },
+  { name: "telegram", kind: "messages", aliases: ["tg"], command: "tg", opens: MESSENGER_OPENS },
   { name: "telegram-bot", kind: "messages", aliases: ["tg-bot"] },
-  { name: "max", kind: "messages", aliases: [], command: "max" },
+  { name: "max", kind: "messages", aliases: [], command: "max", opens: MESSENGER_OPENS },
   { name: "max-bot", kind: "messages", aliases: [] },
-  { name: "whatsapp", kind: "messages", aliases: ["wa"], command: "wa" },
+  { name: "whatsapp", kind: "messages", aliases: ["wa"], command: "wa", opens: MESSENGER_OPENS },
   { name: "whatsapp-bot", kind: "messages", aliases: ["wa-bot"] },
   { name: "email", kind: "mail", aliases: [] },
   { name: "notes", kind: "notes", aliases: [] },
@@ -84,11 +89,25 @@ const wordOf = (value: unknown, what: string): string =>
     ? value
     : invalid(`${what} is lowercase letters, digits, - and _ — not ${JSON.stringify(value)}`)
 
+const OPEN_KINDS = new Set<string>(REF_KINDS.map(({ type }) => type).filter((type) => type !== "entity"))
+const COMMAND_WORDS = /^[a-z0-9][a-z0-9_-]*( [a-z0-9][a-z0-9_-]*)*$/
+
+/** A kind this build does not know is dropped, not refused: a newer CLI may open kinds added after this release. */
+const opensOf = (value: unknown, named: string): Partial<Record<RefKindName, string>> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return invalid(`provider ${named}'s opens maps a kind of reference to a command`)
+  const known = Object.entries(value).filter(([kind]) => OPEN_KINDS.has(kind))
+  for (const [kind, command] of known)
+    if (typeof command !== "string" || !COMMAND_WORDS.test(command))
+      invalid(`provider ${named} opens a ${kind} with command words, not ${JSON.stringify(command)}`)
+  return Object.fromEntries(known)
+}
+
 /** An entry as a CLI or the store gives it, checked: anything else is a `validation_error`. */
 export const providerEntryOf = (value: unknown): ProviderEntry => {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return invalid("a provider entry is an object")
-  const { name, kind, aliases = [], command } = value as Record<string, unknown>
+  const { name, kind, aliases = [], command, opens } = value as Record<string, unknown>
   const named = wordOf(name, "a provider's name")
   if (typeof kind !== "string" || !(KINDS as readonly string[]).includes(kind))
     invalid(`provider ${named}'s kind is one of ${KINDS.join(", ")} — not ${JSON.stringify(kind)}`)
@@ -98,6 +117,7 @@ export const providerEntryOf = (value: unknown): ProviderEntry => {
     kind: kind as Kind,
     aliases: [...new Set((aliases as unknown[]).map((alias) => wordOf(alias, `an alias of ${named}`)))],
     ...(command === undefined ? {} : { command: wordOf(command, `the command of ${named}`) }),
+    ...(opens === undefined ? {} : { opens: opensOf(opens, named) }),
   }
 }
 
@@ -115,6 +135,7 @@ const joined = (known: readonly ProviderEntry[], entry: ProviderEntry): Provider
         ...same,
         aliases: [...new Set([...same.aliases, ...entry.aliases])],
         ...(entry.command ? { command: entry.command } : {}),
+        ...(entry.opens ? { opens: { ...same.opens, ...entry.opens } } : {}),
       }
     : entry
   const others = known.filter((one) => one !== same)

@@ -1881,6 +1881,7 @@ export const links = sqliteTable(
     createdAt: integer("created_at").notNull(),
     author: text("author"),
     updatedAt: integer("updated_at").notNull(),
+    purpose: text("purpose"),
   },
   (table) => [
     index("links_unresolved").on(table.targetFolded).where(sql`to_id IS NULL`),

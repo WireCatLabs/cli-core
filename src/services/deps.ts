@@ -120,9 +120,6 @@ export const fromStore = (deps: Pick<ServiceDeps, "offline" | "reads">): boolean
 export const nothingStored = (messenger: MessengerTraits): string =>
   `nothing stored for this chat yet — keep \`${typedCommand(messenger.app.command, "serve")}\` running`
 
-/** Where a store-mode messenger's history comes from, for what it cannot do. */
-export const PUSHED = "this messenger's history is read from the local store"
-
 export const OFFLINE =
   "--offline answers only from what is kept locally: `chats list|show`, `messages list|show|context|download`, `contacts list|show` and `review`"
 

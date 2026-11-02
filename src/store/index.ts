@@ -15,6 +15,7 @@ export {
   TASK_TYPES,
   WORK_TASK_TYPES,
 } from "../domain/knowledge.js"
+export type { RefState, RefSummary, RefSummaryKind, RefsStore } from "../domain/ref-summaries.js"
 export type {
   TagConsolidationApplyOptions,
   TagConsolidationOptions,
@@ -140,6 +141,7 @@ export type {
   MailboxInput,
   MailFilter,
   MailStore,
+  PartialEmail,
   SenderScore,
   ThreadDetails,
   ThreadSave,
@@ -210,7 +212,7 @@ export {
   type ProposedActionsStore,
   proposerOfAction,
 } from "./sqlite/proposed-actions.js"
-export type { LinkDecision } from "./sqlite/relation-proposals.js"
+export type { LinkDecision, RelationUpdate } from "./sqlite/relation-proposals.js"
 export {
   fillSearchIndex,
   resetSearchIndex,

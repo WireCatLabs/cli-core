@@ -1,4 +1,7 @@
+import type { Metadata } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
+import { fromJson } from "./events.js"
+import { write } from "./transaction.js"
 
 /** Where an IMAP server holds an email: `folder` is the mailbox's external id. */
 export interface EmailLocationInput {
@@ -54,6 +57,92 @@ export const folderEmails = (
       locations: Number(row.locations),
       folders: Number(row.folders),
     }))
+
+/**
+ * An email stored from its first bytes only (`metadata.partial`): a sync reads it whole and clears the mark.
+ * `partialEmails` lists an account's live ones newest first, with how many there are in all; one given up on
+ * (`partial.stuck`) is left out and only counted, so it never holds back newer ones. Its newest location comes first.
+ */
+export interface PartialEmail {
+  externalId: string
+  threadExternalId: string
+  receivedAt: number | null
+  metadata: Metadata
+  locations: EmailLocationInput[]
+}
+
+export const partialEmails = (
+  database: CacheDatabase,
+  accountId: number,
+  limit: number,
+): { emails: PartialEmail[]; total: number; stuck: number } => {
+  const rows = database
+    .prepare(
+      `SELECT e.external_id, t.external_id AS thread, coalesce(e.received_at, e.sent_at) AS at, e.metadata,
+         count(*) OVER () AS total,
+         (SELECT json_group_array(json_object('folder', folder, 'uidvalidity', uidvalidity, 'uid', uid))
+            FROM (SELECT b.external_id AS folder, l.uidvalidity, l.uid
+                    FROM email_locations l JOIN mailboxes b ON b.id = l.mailbox_id
+                    WHERE l.email_id = e.id ORDER BY l.rowid DESC)) AS places
+       FROM emails e JOIN email_threads t ON t.id = e.email_thread_id
+       WHERE e.account_id = ? AND e.deleted_at IS NULL AND json_extract(e.metadata, '$.partial') IS NOT NULL
+         AND json_extract(e.metadata, '$.partial.stuck') IS NULL
+       ORDER BY at DESC, e.id DESC LIMIT ?`,
+    )
+    .all(accountId, limit)
+  const stuck = database
+    .prepare(
+      `SELECT count(*) AS n FROM emails WHERE account_id = ? AND deleted_at IS NULL
+         AND json_extract(metadata, '$.partial.stuck') IS NOT NULL`,
+    )
+    .get(accountId)
+  return {
+    total: rows.length ? Number(rows[0]?.total) : 0,
+    stuck: Number(stuck?.n ?? 0),
+    emails: rows.map((row) => ({
+      externalId: String(row.external_id),
+      threadExternalId: String(row.thread),
+      receivedAt: row.at === null ? null : Number(row.at),
+      metadata: fromJson(row.metadata),
+      locations: (JSON.parse(String(row.places)) as EmailLocationInput[]).map((place) => ({
+        folder: String(place.folder),
+        uidvalidity: String(place.uidvalidity),
+        uid: Number(place.uid),
+      })),
+    })),
+  }
+}
+
+/** Replaces a partial email's `metadata.partial`, as a failed read records itself; a whole email is left alone. */
+export const markPartial = (database: CacheDatabase, accountId: number, externalId: string, mark: Metadata) =>
+  database
+    .prepare(
+      `UPDATE emails SET metadata = json_set(metadata, '$.partial', json(?)) WHERE account_id = ? AND external_id = ?
+         AND json_extract(metadata, '$.partial') IS NOT NULL`,
+    )
+    .run(JSON.stringify(mark), accountId, externalId)
+
+export interface PartialMailStore {
+  partialEmails(accountId: number, limit: number): Promise<{ emails: PartialEmail[]; total: number; stuck: number }>
+  /** Records a failed read of a partial email in its `metadata.partial`; a whole email is left alone. */
+  markPartial(accountId: number, externalId: string, mark: Metadata): Promise<void>
+}
+
+export const partialMail = (database: CacheDatabase): PartialMailStore => ({
+  partialEmails: async (accountId, limit) => partialEmails(database, accountId, limit),
+  markPartial: async (accountId, externalId, mark) => {
+    write(database, () => markPartial(database, accountId, externalId, mark))
+  },
+})
+
+/**
+ * A live email stored whole, which a partial copy must not replace: a server search checks what is held before its
+ * slow read, and a sync in another process may store the email whole in between.
+ */
+export const storedWhole = (database: CacheDatabase, emailId: number): boolean =>
+  database
+    .prepare("SELECT 1 FROM emails WHERE id = ? AND deleted_at IS NULL AND json_extract(metadata, '$.partial') IS NULL")
+    .get(emailId) !== undefined
 
 export const setLocations = (
   database: CacheDatabase,
