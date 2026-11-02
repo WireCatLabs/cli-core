@@ -9,6 +9,20 @@ shape of this file.
 
 ### Added
 
+- **`projects status <project>`: where a project stands, from the store alone, with no model call.** For each chat
+  confirmed as the project's or a child project's, in this profile's account: the last message, who replies next
+  (you, them, a member a message names, or nobody), open questions both ways, promises (stored tasks, promise facts,
+  and first person future words such as "пришлю" or "I'll send"), amounts with their direction and whether a later
+  message says paid, payment facts, how long each `--topic` word has been quiet on their side, and how much of the
+  chat the store holds. Open amounts are summed per direction and currency. Word matches are marked `basis: pattern`;
+  a message saying "paid" is `paid-mentioned`, never paid. At most two steps: sync the chat held in part, then read
+  the chat that needs you most. The other accounts' linked chats are named in `out_of_scope`. tg and max get it with
+  the `projects` group; `--compact` draws each signal with its own row.
+  - **For an app: `projectStatus(store, input)`, a list of signals in `STATUS_SIGNALS`.** A signal is one file with an
+    id, a version and `read`; one that throws is named in `failed` and the others still answer. Each built in signal
+    has its compact row in `STATUS_SIGNAL_ROWS`, also in `SHARED_ROWS`. `projectStatusAnswer` and `projectStatusText`
+    build the answer and the human form. `input.purposes` picks which chat purposes are read (`["work"]` until links
+    carry one). The `messages.list` step takes a `query`.
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.

@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { expect, it } from "vitest"
+import { Command } from "commander"
+import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
 import { keyForCommand } from "../../sends/permissions.js"
@@ -43,6 +44,22 @@ const chatOf = (asked: (string | undefined)[]): MessengerAdapter & ServerReads =
     },
   }) as unknown as MessengerAdapter & ServerReads
 
+/** Only so the steps `projects status` names exist in this program. */
+const messagesStub = () => {
+  const messages = new Command("messages")
+  messages
+    .command("sync")
+    .argument("[chat]")
+    .option("--since-time <time>")
+    .action(() => {})
+  messages
+    .command("list")
+    .argument("<chat>")
+    .argument("[query...]")
+    .action(() => {})
+  return messages
+}
+
 const setUp = async () => {
   const root = mkdtempSync(join(tmpdir(), "projects-"))
   const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
@@ -64,7 +81,11 @@ const setUp = async () => {
   const call = async (...argv: string[]) => {
     const streams = captureStreams()
     const tty = !argv.includes("--json")
-    const code = await run(argv, { app, commands: () => [projectsCommand(messenger)] }, { streams, tty, env })
+    const code = await run(
+      argv,
+      { app, commands: () => [projectsCommand(messenger), messagesStub()] },
+      { streams, tty, env },
+    )
     return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("") }
   }
   return { call, asked }
@@ -115,4 +136,37 @@ it("with --sync-first syncs the linked chat back to the window first, then reads
 
 it("is guarded by the messages permission: it prints what people wrote", () => {
   expect(keyForCommand(["projects", "evidence"])).toBe("messages")
+})
+
+describe("projects status", () => {
+  it("answers from the store alone, for this profile's account, and syncs the chat it holds in part first", async () => {
+    const { call, asked } = await setUp()
+    const { code, stdout } = await call("projects", "status", "Harbour", ...WINDOW, "--topic", "crew", "--json")
+    expect(code).toBe(0)
+    expect(asked).toEqual([])
+    const body = JSON.parse(stdout)
+    expect(body.item).toMatchObject({ project: expect.stringMatching(/^project:\d+$/), name: "Harbour" })
+    expect(body.item.chats).toEqual([expect.objectContaining({ chat: "chat:chat/500/7", coverage: "unknown" })])
+    expect(body.item.reply_next[0].data.next).toBe("nobody")
+    expect(body.item.topics[0].data).toMatchObject({ topic: "crew", theirs_last: "2026-01-01T00:10:00.000Z" })
+    expect(body.meta).toMatchObject({ complete: false, accounts: ["chat/500"] })
+    expect(body.next[0]).toMatchObject({
+      command: "messages sync",
+      line: "chat messages sync 7 --since-time 2025-11-30",
+    })
+  })
+
+  it("prints one line per item with --compact, and a human summary on a terminal", async () => {
+    const { call } = await setUp()
+    const compact = await call("projects", "status", "Harbour", ...WINDOW, "--compact")
+    expect(compact.code).toBe(0)
+    expect(compact.stdout).toContain("msg:chat/500/7/10 · chat:chat/500/7 · nobody · 01-01")
+    const text = await call("projects", "status", "Harbour", ...WINDOW)
+    expect(text.stdout).toContain("HARB · Harbour · 1 linked chats in 1 accounts, 2025-11-30 to 2026-02-01")
+    expect(text.stdout).toContain("  1. chat default messages sync 7 --since-time 2025-11-30")
+  })
+
+  it("is guarded by the messages permission: it prints what people wrote", () => {
+    expect(keyForCommand(["projects", "status"])).toBe("messages")
+  })
 })

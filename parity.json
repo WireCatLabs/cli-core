@@ -3715,6 +3715,17 @@
         "--sync-time": "all"
       }
     },
+    "projects status": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount projectsCommand once wa is on cli-core 0.504.0"
+      },
+      "options": {
+        "--before-time": "all",
+        "--since-time": "all",
+        "--topic": "all"
+      }
+    },
     "reactions": {
       "in": "all"
     },

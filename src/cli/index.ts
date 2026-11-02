@@ -478,6 +478,15 @@ export {
   projectWindowOf,
   withSyncCommands,
 } from "./project-evidence.js"
+export {
+  type ProjectStatusHints,
+  type ProjectStatusItem,
+  projectStatusAnswer,
+  projectStatusRow,
+  projectStatusSchema,
+  projectStatusText,
+} from "./project-status.js"
+export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export type { ScheduleHost } from "./schedule/schedule-command.js"
 export {
