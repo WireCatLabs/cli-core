@@ -17,6 +17,19 @@ shape of this file.
   stays missing, an `unversioned` one (no released `skill install` wrote it) and a symlink are left as they are, and a
   failure is one note, never a failed command. The version tried is kept in `<state>/skill-refresh.json`. Off in a
   moved run, under vitest, during `skill`, and with `<PREFIX>_NO_SKILL_REFRESH=1`; `--quiet` keeps the line out.
+- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
+  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
+  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
+  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
+  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
+  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
+
+### Fixed
+
+- **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
+  only the last group was read. Groups after a space, a no-break space or a dot (`50 000`, `50\u00a0000`, `1.200 €`)
+  are one number now. This is the amount the duplicate check compares between two tasks, so a reminder worded with
+  a grouped sum is no longer compared on the wrong figure.
 
 ### Changed — may break callers
 

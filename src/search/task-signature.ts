@@ -16,19 +16,41 @@ const CURRENCY: [RegExp, string][] = [
 const currencyOf = (word: string | undefined): string | null =>
   word ? (CURRENCY.find(([pattern]) => pattern.test(word))?.[1] ?? null) : null
 
-const AMOUNT =
-  /(?<![\p{L}\p{N}])([$€₽])?\s?(\d+(?:[.,]\d+)?)(?:([кk])(?![\p{L}])|\s?(тыс\.?|тысяч\p{L}*))?(?![\p{N}])\s?(₽|руб\p{L}*\.?|р\.|р(?![\p{L}])|rub|eur|евро|€|\$|usd|долл\p{L}*|dollars?|euros?)?(?![\p{L}])/gu
+const SEPARATORS = String.raw`[ \u00a0\u2009\u202f.,]`
+/**
+ * Groups of three after a space (also no-break, thin, narrow no-break), a dot or a comma (`50 000`, `1.200`,
+ * `$1,200`) are one number, with an optional one or two digit decimal after (`5 000.50`). A lone `1,5` is a decimal.
+ */
+const NUMBER = String.raw`\d{1,3}(?:${SEPARATORS}\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?`
+const AMOUNT = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])([$€₽])?\s?(${NUMBER})(?:([кk])(?![\p{L}])|\s?(тыс\.?|тысяч\p{L}*))?(?![\p{N}])\s?(₽|руб\p{L}*\.?|р\.|р(?![\p{L}])|rub|eur|евро|€|\$|usd|долл\p{L}*|dollars?|euros?)?(?![\p{L}])`,
+  "gu",
+)
+const GROUPED = new RegExp(String.raw`^(\d{1,3}(?:${SEPARATORS}\d{3})+)([.,]\d{1,2})?$`, "u")
 
-/** A bare number is not an amount: `верни 3000 за бензин` has none, so a reminder about it compares as missing. */
-export const amountOf = (text: string): TaskAmount | null => {
-  for (const [, before, number = "", short, long, after] of text.matchAll(AMOUNT)) {
-    const multiplier = short ?? long
-    if (!before && !after && !multiplier) continue
-    const value = Math.round(Number(number.replace(",", ".")) * (multiplier ? 1000 : 1))
-    return { value, currency: currencyOf(before ?? after?.replace(/\.$/u, "")) }
-  }
-  return null
+const amountValue = (number: string, thousands: boolean): number => {
+  const grouped = GROUPED.exec(number)
+  const plain = grouped
+    ? `${(grouped[1] ?? "").replace(new RegExp(SEPARATORS, "gu"), "")}${(grouped[2] ?? "").replace(",", ".")}`
+    : number.replace(",", ".")
+  return Math.round(Number(plain) * (thousands ? 1000 : 1) * 100) / 100
 }
+
+/**
+ * A bare number is not an amount: `верни 3000 за бензин` has none, so a reminder about it compares as missing.
+ * Takes the text as written; it is lower-cased here.
+ */
+export const amountsOf = (text: string): TaskAmount[] => {
+  const found: TaskAmount[] = []
+  for (const [, before, number = "", short, long, after] of text.toLowerCase().matchAll(AMOUNT)) {
+    const thousands = (short ?? long) !== undefined
+    if (!before && !after && !thousands) continue
+    found.push({ value: amountValue(number, thousands), currency: currencyOf(before ?? after?.replace(/\.$/u, "")) })
+  }
+  return found
+}
+
+export const amountOf = (text: string): TaskAmount | null => amountsOf(text)[0] ?? null
 
 const RU_WEEKDAYS = ["воскресен", "понедельник", "вторник", "сред", "четверг", "пятниц", "суббот"]
 const EN_WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]

@@ -17,16 +17,24 @@ export const unanswered = (
     .filter(({ question, answer }) => answer === undefined && Date.parse(question.timestamp) < before)
     .map(({ question }) => question)
 
-/** Every question from others, as `unanswered` reads them, with the message that answered it, if one did. */
+/**
+ * Every question from others, as `unanswered` reads them, with the message that answered it, if one did.
+ * With `asker: "owner"` it is the owner's own questions instead, and anyone but the owner answers: by replying to
+ * it, or by speaking next. `answerers` is not read then.
+ */
 export const questions = (
   messages: Message[],
-  { answerers }: { answerers: ReadonlySet<Id> },
+  { answerers, asker = "others" }: { answerers: ReadonlySet<Id>; asker?: "others" | "owner" },
 ): { question: Message; answer?: Message }[] => {
-  const answers = (message: Message) =>
-    message.outgoing === true || (message.senderId !== null && answerers.has(message.senderId))
+  const fromOwner = (message: Message) => message.outgoing === true
+  const answers =
+    asker === "owner"
+      ? (message: Message) => !fromOwner(message)
+      : (message: Message) => fromOwner(message) || (message.senderId !== null && answerers.has(message.senderId))
   const byId = new Map(messages.map((message) => [message.id, message]))
   // Telegram names only the id a reply answers; the message itself is found in the window, or not at all.
   const repliesToAnswerer = (message: Message) => {
+    if (asker === "owner") return false
     const to = message.replyTo?.id ?? message.replyToId
     const quoted = to === undefined ? undefined : byId.get(to)
     if (quoted) return answers(quoted)
@@ -36,7 +44,7 @@ export const questions = (
   }
 
   return messages.flatMap((message, index) => {
-    if (answers(message)) return []
+    if (asker === "owner" ? !fromOwner(message) : answers(message)) return []
     const transcript = "transcript" in message && typeof message.transcript === "string" ? message.transcript : ""
     if (![message.text, transcript].join("\n").replace(LINKS, "").includes("?") && !repliesToAnswerer(message))
       return []

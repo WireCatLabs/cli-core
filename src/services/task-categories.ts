@@ -61,15 +61,12 @@ const triggerStems = (categories: readonly TaskCategory[]) => {
   return built
 }
 
-/**
- * The category with the most distinct trigger stems in the text; none is `other`, a tie goes to the earlier one.
- * A word hits by its English stem first, so a cognate (`hospital`) counts once, not twice.
- */
-export const categorize = (text: string, categories: readonly TaskCategory[] = DEFAULT_TASK_CATEGORIES): string => {
+/** For each list the text hits, the number of distinct trigger stems it hit, in list order. */
+const hitsByList = (text: string, categories: readonly TaskCategory[]): { name: string; hits: number }[] => {
   const stem = stemmersOf()
   const english = stem.english.stemTokens(text)
   const spanish = readsSpanish(text) ? stem.spanish.stemTokens(text) : []
-  let best = { name: FALLBACK_CATEGORY, hits: 0 }
+  const counted: { name: string; hits: number }[] = []
   for (const triggers of triggerStems(categories)) {
     const hit = new Set<string>()
     english.forEach((word, at) => {
@@ -77,7 +74,23 @@ export const categorize = (text: string, categories: readonly TaskCategory[] = D
       if (triggers.english.has(word)) hit.add(word)
       else if (other !== undefined && triggers.spanish.has(other)) hit.add(other)
     })
-    if (hit.size > best.hits) best = { name: triggers.name, hits: hit.size }
+    counted.push({ name: triggers.name, hits: hit.size })
   }
+  return counted
+}
+
+/** The names of every list the text hits, so a message can be a request and a promise at once. */
+export const listsHit = (text: string, categories: readonly TaskCategory[]): string[] =>
+  hitsByList(text, categories)
+    .filter(({ hits }) => hits > 0)
+    .map(({ name }) => name)
+
+/**
+ * The category with the most distinct trigger stems in the text; none is `other`, a tie goes to the earlier one.
+ * A word hits by its English stem first, so a cognate (`hospital`) counts once, not twice.
+ */
+export const categorize = (text: string, categories: readonly TaskCategory[] = DEFAULT_TASK_CATEGORIES): string => {
+  let best = { name: FALLBACK_CATEGORY, hits: 0 }
+  for (const counted of hitsByList(text, categories)) if (counted.hits > best.hits) best = counted
   return best.name
 }
