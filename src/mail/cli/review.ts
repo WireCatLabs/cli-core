@@ -206,6 +206,10 @@ an agent over MCP, and each scheduled run.`,
               .join(", ")}, threads active from ${found.since}`,
           )
         else output.renderer.note(`from ${found.since} to ${found.until}${found.complete ? "" : ", incomplete"}`)
+        if (found.quiet > 0)
+          output.renderer.note(
+            `${found.quiet} threads of mail sent to many, lists or suspect senders left out; --all reads them`,
+          )
         if (read.length === 0) output.renderer.note("nothing new in the stored mail")
         return read
           .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
