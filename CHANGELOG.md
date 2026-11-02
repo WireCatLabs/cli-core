@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.548.0 — 02.11.2026
+
 ### Added
 
 - **A feed is asked whether it changed.** `sync` sends a feed the last answer's `ETag` / `Last-Modified` back as
