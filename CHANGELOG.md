@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.557.0 — 02.11.2026
+
 ### Added
 
 - **Invoices and payments in the store (store version 45).** `store.finance` adds, lists and shows invoices with
