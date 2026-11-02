@@ -34,3 +34,13 @@ it("every declared output of a shared command names an entity cli-core has", () 
 
   expect(unknown).toEqual([])
 })
+
+// commander reads `-1001` as an option once any command defines a digit short option, and every negative chat id breaks.
+it("no shared command defines a digit short option", () => {
+  const all = (command: Command): Command[] => [command, ...command.commands.flatMap(all)]
+  const digits = all(createProgram(sharedProgram)).flatMap((command) =>
+    command.options.filter((option) => /^-\d$/.test(option.short ?? "")).map((option) => option.flags),
+  )
+
+  expect(digits).toEqual([])
+})

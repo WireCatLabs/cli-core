@@ -1,5 +1,6 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 import type { Chat, Id, Page, Provider } from "../domain/models.js"
+import { chatReferenceOf, ensureAccount, type ProfilesOn } from "../domain/ref-arguments.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
 import { codeOf } from "../sends/guarded.js"
@@ -48,10 +49,12 @@ export const storedChatId = (
   { includeLeft = false }: { includeLeft?: boolean } = {},
 ): Promise<string> => {
   const renamed = (id: Id) => store.chats.renamedChatId(account, id)
+  const profilesOn = profilesOnAccount(store, messenger.app?.command, account.provider)
   const among = chatIdAmong(messenger, reference, account, {
     held: () => store.chats.chats(account, {}),
     renamed,
     left: async (id) => leftIn(await store.chats.chats(account, byId(id))),
+    profilesOn,
   })
   if (!includeLeft) return among
   return among.catch((error: unknown) => {
@@ -59,6 +62,7 @@ export const storedChatId = (
     return chatIdAmong(messenger, reference, account, {
       held: () => store.chats.chats(account, { includeLeft: true }),
       renamed,
+      profilesOn,
     })
   })
 }
@@ -97,6 +101,16 @@ const byId = (id: Id): StoredChatFilter & { limit: number } => ({
 
 const leftIn = ({ items }: Page<Chat>) => items.some((one) => one.membershipState === "left")
 
+/** The profiles of `app` the store recorded on an account of this provider, for a refusal to name. */
+export const profilesOnAccount =
+  (store: Pick<MessageStore, "accounts">, app: string | undefined, provider: Provider): ProfilesOn =>
+  async (account) => {
+    if (app === undefined) return undefined
+    return Object.entries((await store.accounts.profiles())[app] ?? {})
+      .filter(([, key]) => key.provider === provider && key.account === account)
+      .map(([name]) => name)
+  }
+
 /** `left` is given where a left chat is refused; it lets a numeric id the store does not hold through as typed. */
 const chatIdAmong = async (
   messenger: Saved,
@@ -106,18 +120,23 @@ const chatIdAmong = async (
     held,
     renamed,
     left,
+    profilesOn,
   }: {
     held: () => Promise<Page<Chat>>
     renamed: (id: Id) => Promise<Id | undefined>
     left?: (id: Id) => Promise<boolean>
+    profilesOn?: ProfilesOn
   },
 ): Promise<string> => {
   const trimmed = reference.trim()
   if (messenger.savedChatId && ["me", "self", "saved"].includes(trimmed.toLowerCase())) {
     return messenger.savedChatId(account)
   }
-  if (/^-?\d+$/.test(trimmed)) {
-    const id = (await renamed(trimmed)) ?? trimmed
+  const named = chatReferenceOf(trimmed, account.provider)
+  if (named) await ensureAccount(named, { account: account.account }, profilesOn)
+  if (named || /^-?\d+$/.test(trimmed)) {
+    const typed = named?.chat ?? trimmed
+    const id = (await renamed(typed)) ?? typed
     if (await left?.(id)) throw new CliError("not_found", `you left chat ${id}`)
     return id
   }

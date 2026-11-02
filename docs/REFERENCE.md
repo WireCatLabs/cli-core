@@ -20,8 +20,8 @@ the [publication guide](dev/NATIVE-RECORDING-PUBLICATION.md).
 records as `meeting:<accountId>/<meetingId>`, a retained transcript revision with `/<transcriptId>`,
 and one cue with `/<cuePosition>`. IDs are positive safe integers; cue positions start at zero.
 These references stay within one store and retain the exact revision after a correction.
-They use a dedicated parser; the general `parseReference` and existing knowledge targets do not
-accept them yet. A reader must verify the caller's authorized account before returning content.
+`parseReference` reads them too, as one row of `REF_KINDS`, the table of every reference kind; knowledge
+targets do not accept them yet. A reader must verify the caller's authorized account before returning content.
 
 ## Canonical project and label vocabulary
 
