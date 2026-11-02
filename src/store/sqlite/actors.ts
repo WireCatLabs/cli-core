@@ -65,12 +65,3 @@ export const proposerOf = (database: CacheDatabase, type: unknown, id: unknown):
   const name = String(bot.name)
   return { type: "bot", id: String(id), name, kind: bot.kind === "rule" || name === "rule" ? "rule" : "agent" }
 }
-
-/** Who proposed an unconfirmed link, from the `agent:<bot>` or `rule:<id>` its provenance starts with. */
-export const proposerOfProvenance = (database: CacheDatabase, provenance: string | null): Proposer => {
-  const [, kind, name] = /^(agent|rule):([^\s;]+)/.exec(provenance ?? "") ?? []
-  if (!kind || !name) return { type: "unknown" }
-  if (kind === "rule") return { type: "bot", id: "", name: `rule:${name}`, kind: "rule" }
-  const bot = database.prepare("SELECT id FROM bots WHERE name = ?").get(name)
-  return { type: "bot", id: bot ? String(bot.id) : "", name, kind: "agent" }
-}

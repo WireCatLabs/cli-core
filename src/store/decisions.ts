@@ -45,7 +45,11 @@ export const mayDecide = (
     message,
   })
   if (!policy.agentDecisions)
-    return refuse("permission_error", "proposals.agent-decisions-off", "agent decisions are turned off; the owner decides")
+    return refuse(
+      "permission_error",
+      "proposals.agent-decisions-off",
+      "agent decisions are turned off; the owner decides",
+    )
   if (typeof by.reason !== "string" || !by.reason.trim() || by.reason.length > 2000)
     return refuse("validation_error", "proposal.reason-required", "an agent deciding for the owner gives a reason")
   const proposer = row.proposedBy
@@ -56,6 +60,15 @@ export const mayDecide = (
   if (proposer.type === "bot" && proposer.kind === "agent" && proposer.name === by.bot.trim())
     return refuse("permission_error", "proposal.own", `${by.bot} proposed this; another decider must decide it`)
   return null
+}
+
+/** Who proposed an unconfirmed link, from the `agent:<bot>` or `rule:<id>` its provenance starts with. */
+export const proposerOfProvenance = (provenance: string | null): Proposer => {
+  const [, kind, name] = /^(agent|rule):([^\s;]+)/.exec(provenance ?? "") ?? []
+  if (!kind || !name) return { type: "unknown" }
+  return kind === "rule"
+    ? { type: "bot", id: "", name: `rule:${name}`, kind: "rule" }
+    : { type: "bot", id: "", name, kind: "agent" }
 }
 
 /** `mayDecide` for a store method: throws the refusal instead of returning it. */

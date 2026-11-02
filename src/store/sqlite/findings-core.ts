@@ -104,7 +104,7 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
         evidence,
         by: agent,
       })
-      return facts.accept(fact.ref).ref
+      return facts.acceptChecked(fact.ref).ref
     }
     if (finding.project === undefined) return invalid("a task finding names the project the task goes in")
     const task = tasks.create(

@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEMORY_KINDS, MEMORY_SCOPES, type MEMORY_STATUSES } from "../../domain/knowledge.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
+import { assertMayDecide, type Decider } from "../decisions.js"
 import { normalize } from "../normalize.js"
-import { type Actor, botNamed, ownerPerson } from "./actors.js"
+import { type Actor, botNamed, ownerPerson, proposerOf } from "./actors.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
@@ -72,8 +73,8 @@ export interface MemoriesStore {
   }): Promise<Memory[]>
   /** Moves it to another project, or to none with `null`. */
   update(reference: string, change: { project: string | null }): Promise<Memory>
-  /** The owner stands behind it; its evidence was checked now. */
-  confirm(reference: string): Promise<Memory>
+  /** The owner, or an agent for the owner, stands behind it; its evidence was checked now. */
+  confirm(reference: string, by: Decider): Promise<Memory>
   /** Its evidence no longer holds. */
   markStale(reference: string): Promise<Memory>
   /**
@@ -363,7 +364,11 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
         database.prepare("UPDATE memories SET project_id = ?, updated_at = ? WHERE id = ?").run(project, now(), id)
         return memoryOf(rowOf(`memory:${id}`))
       }),
-    confirm: async (reference) => setStatus(reference, "confirmed", true),
+    confirm: async (reference, by) => {
+      const row = rowOf(reference)
+      assertMayDecide({ id: `memory:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) }, by)
+      return setStatus(reference, "confirmed", true)
+    },
     markStale: async (reference) => setStatus(reference, "stale", false),
     remove: async (reference) => {
       const id = Number(rowOf(reference).id)

@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { calendarMoment } from "../../domain/moment.js"
-import type { Actor } from "./actors.js"
+import { assertMayDecide, type Decider, deciderAuthor } from "../decisions.js"
+import { type Actor, proposerOf } from "./actors.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
 import {
@@ -74,12 +75,12 @@ export interface FactsStore {
     status?: Fact["status"]
     limit?: number
   }): Promise<Fact[]>
-  /** The owner accepts a proposed fact; the fact it supersedes stops holding. */
-  accept(reference: string): Promise<Fact>
+  /** The owner, or an agent for the owner, accepts a proposed fact; the fact it supersedes stops holding. */
+  accept(reference: string, by: Decider): Promise<Fact>
   /** An accepted decision no longer holds and nothing replaced it. */
   reverse(reference: string): Promise<Fact>
-  /** The owner turns down a proposed fact; it stays, marked `rejected`. */
-  reject(reference: string): Promise<Fact>
+  /** The owner, or an agent for the owner, turns down a proposed fact; it stays, marked `rejected`. */
+  reject(reference: string, by: Decider): Promise<Fact>
   /**
    * Erases the fact: its row, its links, its tags, and the memory it was migrated from, which still held its text.
    * A decision that replaced it no longer names it. A backup made before keeps it.
@@ -102,6 +103,9 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: st
 
 type FactOperations = {
   [K in keyof FactsStore]: FactsStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
+} & {
+  /** Accepts as part of a decision already checked, such as a reviewed findings batch. */
+  acceptChecked(reference: string): Fact
 }
 
 export const factOperationsOver = (context: StoreContext): FactOperations => {
@@ -133,11 +137,13 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     if (thing.type !== "fact") throw new CliError("validation_error", `${reference} is not a fact`)
     return database.prepare(`${NAMED} WHERE f.id = ?`).get(thing.id) as Row
   }
-  const accept = (id: number) => {
+  const decided = (row: Row, by: Decider) =>
+    assertMayDecide({ id: `fact:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) }, by)
+  const accept = (id: number, by: Decider = "owner") => {
     const row = database.prepare("SELECT * FROM facts WHERE id = ?").get(id) as Row
     if (row.status !== "proposed" && row.status !== "accepted")
       throw new CliError("validation_error", `a ${String(row.status)} fact cannot be accepted`)
-    const { actor } = authorActor(context, "owner")
+    const { actor } = authorActor(context, deciderAuthor(by))
     const at = now()
     database
       .prepare(
@@ -241,7 +247,13 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         )
         .map(factOf)
     },
-    accept: (reference) => {
+    accept: (reference, by) => {
+      const row = rowOf(reference)
+      decided(row, by)
+      write(database, () => accept(Number(row.id), by))
+      return factOf(rowOf(reference))
+    },
+    acceptChecked: (reference) => {
       const id = Number(rowOf(reference).id)
       write(database, () => accept(id))
       return factOf(rowOf(reference))
@@ -253,8 +265,9 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
       return factOf(rowOf(reference))
     },
-    reject: (reference) => {
+    reject: (reference, by) => {
       const row = rowOf(reference)
+      decided(row, by)
       if (row.status !== "proposed")
         throw new CliError(
           "validation_error",
@@ -300,9 +313,9 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
     add: async (input) => operations.add(input),
     get: async (reference) => operations.get(reference),
     list: async (options) => operations.list(options),
-    accept: async (reference) => operations.accept(reference),
+    accept: async (reference, by) => operations.accept(reference, by),
     reverse: async (reference) => operations.reverse(reference),
-    reject: async (reference) => operations.reject(reference),
+    reject: async (reference, by) => operations.reject(reference, by),
     remove: async (reference) => operations.remove(reference),
     sources: async (reference) => operations.sources(reference),
   }

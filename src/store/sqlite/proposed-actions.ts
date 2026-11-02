@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
+import { assertMayDecide, type Decider, deciderAuthor, type Proposer } from "../decisions.js"
 import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
 import type { AccountKey } from "../types.js"
 import type { Actor } from "./actors.js"
@@ -26,8 +27,8 @@ export interface ProposedAction {
   payload: unknown
   reason: string | null
   status: (typeof PROPOSAL_STATUSES)[number]
-  /** `name` is a bot's handle; `null` for a person. */
-  proposedBy: { type: Actor["type"]; id: string; name: string | null }
+  /** `name` is a bot's handle and `kind` whether it is an agent or a rule; both `null` for a person. */
+  proposedBy: { type: Actor["type"]; id: string; name: string | null; kind: "agent" | "rule" | null }
   decidedBy: { type: Actor["type"]; id: string } | null
   decidedAt: string | null
   executedAt: string | null
@@ -51,11 +52,16 @@ export interface ProposedActionsStore {
   get(id: string): Promise<ProposedAction>
   /** What waits for a decision, oldest first. */
   pending(options?: { limit?: number }): Promise<ProposedAction[]>
-  /** Newest first; every status unless one is named. */
-  list(options?: { status?: ProposedAction["status"]; limit?: number }): Promise<ProposedAction[]>
-  /** `result` records what the approval made, such as the task it became. */
-  approve(id: string, result?: unknown): Promise<ProposedAction>
-  reject(id: string): Promise<ProposedAction>
+  /** Newest first; every status unless one is named, every kind unless `kinds` names some or `except` leaves some out. */
+  list(options?: {
+    status?: ProposedAction["status"]
+    limit?: number
+    kinds?: readonly string[]
+    except?: readonly string[]
+  }): Promise<ProposedAction[]>
+  /** `result` records what the approval made, such as the task it became. `by` must be allowed to decide it. */
+  approve(id: string, by: Decider, result?: unknown): Promise<ProposedAction>
+  reject(id: string, by: Decider): Promise<ProposedAction>
   /** An approved action the adapter carried out, with what the provider answered. */
   executed(id: string, result?: unknown): Promise<ProposedAction>
   failed(id: string, error: string): Promise<ProposedAction>
@@ -74,7 +80,7 @@ const STATUS =
   `CASE WHEN p.status = 'approved' AND p.kind IN ('${MEETING_FINDINGS_KIND}', '${EVIDENCE_FINDINGS_KIND}') ` +
   "AND json_array_length(p.result, '$.accepted') = 0 THEN 'rejected' ELSE p.status END"
 const NAMED =
-  `SELECT p.*, ${STATUS} AS shown_status, b.name AS proposer_name FROM proposed_actions p ` +
+  `SELECT p.*, ${STATUS} AS shown_status, b.name AS proposer_name, b.kind AS proposer_kind FROM proposed_actions p ` +
   "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
 
 type ProposalOperations = Omit<
@@ -83,11 +89,22 @@ type ProposalOperations = Omit<
       ? (...args: A) => R
       : never
   },
-  "approve"
+  "approve" | "reject"
 > & {
-  /** `by` records an agent deciding for the owner; the public store always records the owner. */
+  /** Records a decision already checked; `by` records an agent deciding for the owner. */
   approve(id: string, result?: unknown, by?: Author): ProposedAction
+  reject(id: string, by?: Author): ProposedAction
+  /** Who proposed it, for `mayDecide`. */
+  proposer(id: string): Proposer
 }
+
+/** Who proposed an action, for `mayDecide`. */
+export const proposerOfAction = ({ proposedBy }: ProposedAction): Proposer =>
+  proposedBy.type === "person"
+    ? { type: "person", id: proposedBy.id }
+    : proposedBy.name === null
+      ? { type: "unknown" }
+      : { type: "bot", id: proposedBy.id, name: proposedBy.name, kind: proposedBy.kind ?? "agent" }
 
 export const proposalOperationsOver = (context: StoreContext): ProposalOperations => {
   const { database, now } = context
@@ -111,6 +128,12 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         type: row.proposed_by_type as Actor["type"],
         id: String(row.proposed_by_id),
         name: row.proposer_name == null ? null : String(row.proposer_name),
+        kind:
+          row.proposed_by_type !== "bot"
+            ? null
+            : row.proposer_kind === "rule" || row.proposer_name === "rule"
+              ? "rule"
+              : "agent",
       },
       decidedBy:
         row.decided_by_type == null
@@ -207,16 +230,27 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         .prepare(`${NAMED} WHERE p.status = 'proposed' ORDER BY p.created_at, p.id LIMIT ?`)
         .all(Math.min(Math.max(limit, 1), 500))
         .map(actionOf),
-    list: ({ status, limit = 100 } = {}) => {
+    list: ({ status, limit = 100, kinds, except } = {}) => {
       if (status !== undefined && !PROPOSAL_STATUSES.includes(status))
         throw new CliError("validation_error", `a status is one of ${PROPOSAL_STATUSES.join(", ")}`)
       return database
-        .prepare(`${NAMED} WHERE (? IS NULL OR ${STATUS} = ?) ORDER BY p.created_at DESC, p.id DESC LIMIT ?`)
-        .all(status ?? null, status ?? null, Math.min(Math.max(limit, 1), 500))
+        .prepare(
+          `${NAMED} WHERE (? IS NULL OR ${STATUS} = ?) AND (? IS NULL OR p.kind IN (SELECT value FROM json_each(?))) ` +
+            "AND p.kind NOT IN (SELECT value FROM json_each(?)) ORDER BY p.created_at DESC, p.id DESC LIMIT ?",
+        )
+        .all(
+          status ?? null,
+          status ?? null,
+          kinds === undefined ? null : 1,
+          JSON.stringify(kinds ?? []),
+          JSON.stringify(except ?? []),
+          Math.min(Math.max(limit, 1), 500),
+        )
         .map(actionOf)
     },
     approve: (id, result, by) => decide(id, "approved", result, by),
-    reject: (id) => decide(id, "rejected"),
+    reject: (id, by) => decide(id, "rejected", undefined, by),
+    proposer: (id) => proposerOfAction(actionOf(rowOf(id))),
     executed: (id, result) =>
       move(id, ["approved"], "executed", ", executed_at = ?, result = ?", [
         now(),
@@ -263,13 +297,15 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
     get: async (id) => operations.get(id),
     pending: async (options) => operations.pending(options),
     list: async (options) => operations.list(options),
-    approve: async (id, result) => {
+    approve: async (id, by, result) => {
       generic(id)
-      return operations.approve(id, result)
+      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by)
+      return operations.approve(id, result, deciderAuthor(by))
     },
-    reject: async (id) => {
+    reject: async (id, by) => {
       generic(id)
-      return operations.reject(id)
+      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by)
+      return operations.reject(id, deciderAuthor(by))
     },
     executed: async (id, result) => {
       generic(id)

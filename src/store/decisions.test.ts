@@ -25,11 +25,29 @@ describe("mayDecide", () => {
     ["the owner, always", bot("claude-code"), "owner", policy, null],
     ["an agent with a reason, on another bot's proposal", bot("codex"), self, policy, null],
     ["an agent on the owner's proposal", { type: "person", id: "1" }, self, policy, null],
-    ["an agent without a reason", bot("codex"), { bot: "claude-code", reason: " " }, policy, "proposal.reason-required"],
-    ["an agent when agent decisions are off", bot("codex"), self, { ...policy, agentDecisions: false }, "proposals.agent-decisions-off"],
+    [
+      "an agent without a reason",
+      bot("codex"),
+      { bot: "claude-code", reason: " " },
+      policy,
+      "proposal.reason-required",
+    ],
+    [
+      "an agent when agent decisions are off",
+      bot("codex"),
+      self,
+      { ...policy, agentDecisions: false },
+      "proposals.agent-decisions-off",
+    ],
     ["an agent on its own proposal", bot("claude-code"), self, policy, "proposal.own"],
     ["an agent on a rule's proposal", bot("memo-scan", "rule"), self, policy, "proposal.owner-only"],
-    ["an agent on a rule's proposal the policy opens", bot("memo-scan", "rule"), self, { ...policy, ruleProposalsOwnerOnly: false }, null],
+    [
+      "an agent on a rule's proposal the policy opens",
+      bot("memo-scan", "rule"),
+      self,
+      { ...policy, ruleProposalsOwnerOnly: false },
+      null,
+    ],
     ["an agent on a proposal with no author", { type: "unknown" }, self, policy, "proposal.owner-only"],
   ] as [string, Proposer, Decider, typeof policy, string | null][])("%s", (_, proposedBy, by, rules, reason) => {
     expect(mayDecide({ id: "1", proposedBy }, by, rules)?.reason ?? null).toBe(reason)

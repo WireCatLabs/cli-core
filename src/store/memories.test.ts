@@ -311,7 +311,7 @@ describe("facts", () => {
       evidence: [note.ref],
       project: project.ref,
     })
-    expect(await store.facts.accept(proposed.ref)).toMatchObject({
+    expect(await store.facts.accept(proposed.ref, "owner")).toMatchObject({
       status: "accepted",
       confirmedBy: { type: "person" },
     })
@@ -376,7 +376,7 @@ describe("facts", () => {
       supersedes: question.ref,
     })
     expect(await store.facts.get(question.ref)).toMatchObject({ status: "accepted" })
-    await store.facts.accept(proposal.ref)
+    await store.facts.accept(proposal.ref, "owner")
     expect(await store.facts.get(question.ref)).toMatchObject({ status: "superseded" })
 
     for (const done of [statement, question])
@@ -396,8 +396,8 @@ describe("facts", () => {
       evidence: [note.ref],
     })
     const owned = await store.facts.add({ type: "fact", statement: "The draft is due", by: "owner" })
-    await expect(store.facts.reject(owned.ref)).rejects.toMatchObject({ code: "validation_error" })
-    expect(await store.facts.reject(proposed.ref)).toMatchObject({ status: "rejected" })
+    await expect(store.facts.reject(owned.ref, "owner")).rejects.toMatchObject({ code: "validation_error" })
+    expect(await store.facts.reject(proposed.ref, "owner")).toMatchObject({ status: "rejected" })
     expect((await store.facts.list({ status: "rejected" })).map(({ ref }) => ref)).toEqual([proposed.ref])
 
     const first = await store.facts.add({
