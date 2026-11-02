@@ -6,12 +6,14 @@ import { join } from "node:path"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
+import { provide } from "../cli/context.js"
 import { isStoreChange } from "../cli/effects.js"
 import { maskArgv } from "../runs/run-context.js"
 import type { GuardSettings } from "../sends/guard.js"
-import { type MessageStore, openStore } from "../store/store.js"
+import { openCache } from "../store/open.js"
+import { type MessageStore, openStore, orphanPointers } from "../store/store.js"
 import { addCalendarCommands } from "./cli/index.js"
-import { type FeedRecord, fetchFeed, icsFeeds } from "./feeds.js"
+import { type FeedRecord, fetchFeed, fetchFeedIfChanged, icsFeeds } from "./feeds.js"
 import { checkCalendarAnswer } from "./testing/answers.js"
 import { fakeCalendarSource, fakeCalendarWriter } from "./testing/index.js"
 
@@ -57,11 +59,22 @@ const WEEKLY = [
   "END:VEVENT",
 ].join("\r\n")
 
+const GUEST = [
+  "BEGIN:VEVENT",
+  "UID:guest-call@example.com",
+  "DTSTART:20261029T150000Z",
+  "DTEND:20261029T153000Z",
+  "SUMMARY:Example call",
+  "ORGANIZER;CN=Example Host:mailto:host.only.in.feed@example.com",
+  "ATTENDEE;CN=Example Guest:mailto:guest.only.in.feed@example.com",
+  "END:VEVENT",
+].join("\r\n")
+
 const servers: Server[] = []
-const opened: MessageStore[] = []
+const opened: { close(): unknown }[] = []
 afterEach(async () => {
   for (const server of servers.splice(0)) server.close()
-  for (const store of opened.splice(0)) await store.close()
+  for (const one of opened.splice(0)) await one.close()
 })
 
 const serve = async (handle: Parameters<typeof createServer>[1]) => {
@@ -105,6 +118,35 @@ describe("fetchFeed", () => {
     })
   })
 
+  it("sends the last ETag and Last-Modified back, and a 304 is unchanged with no body read", async () => {
+    const asked: Record<string, string | undefined>[] = []
+    const base = await serve((request, response) => {
+      asked.push({ etag: request.headers["if-none-match"], since: request.headers["if-modified-since"] })
+      if (request.url === "/tagged") {
+        if (request.headers["if-none-match"] === '"v1"') response.writeHead(304).end()
+        else response.writeHead(200, { etag: '"v1"' }).end(ics(MATCH))
+      } else {
+        const stamp = "Tue, 27 Oct 2026 08:00:00 GMT"
+        if (request.headers["if-modified-since"] === stamp) response.writeHead(304).end()
+        else response.writeHead(200, { "last-modified": stamp }).end(ics(MATCH))
+      }
+    })
+    const first = await fetchFeedIfChanged(`${base}/tagged`, { name: "feed 1" })
+    expect(first).toMatchObject({ validators: { etag: '"v1"', lastModified: null } })
+    const since = (first as { validators: { etag: string | null; lastModified: string | null } }).validators
+    expect(await fetchFeedIfChanged(`${base}/tagged`, { name: "feed 1", since })).toBe("unchanged")
+    const dated = await fetchFeedIfChanged(`${base}/dated`, { name: "feed 2" })
+    const later = (dated as { validators: { etag: string | null; lastModified: string | null } }).validators
+    expect(later).toEqual({ etag: null, lastModified: "Tue, 27 Oct 2026 08:00:00 GMT" })
+    expect(await fetchFeedIfChanged(`${base}/dated`, { name: "feed 2", since: later })).toBe("unchanged")
+    expect(asked).toEqual([
+      { etag: undefined, since: undefined },
+      { etag: '"v1"', since: undefined },
+      { etag: undefined, since: undefined },
+      { etag: undefined, since: "Tue, 27 Oct 2026 08:00:00 GMT" },
+    ])
+  })
+
   it("reads webcal:// as https:// and follows an https redirect", async () => {
     const asked: string[] = []
     const fake = (async (url: URL) => {
@@ -118,8 +160,9 @@ describe("fetchFeed", () => {
   })
 })
 
-const setup = async () => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "calendar-feeds-")), "store.db") })
+const setup = async ({ realFetch = false } = {}) => {
+  const path = join(mkdtempSync(join(tmpdir(), "calendar-feeds-")), "store.db")
+  const store: MessageStore = await openStore({ path })
   opened.push(store)
   const account = { provider: "google-calendar", account: "owner-1" }
   const accountId = await store.accounts.saveAccount(account, { name: null })
@@ -134,11 +177,17 @@ const setup = async () => {
       },
     },
     zone: "UTC",
-    fetch: (async (url: URL) => {
-      asked.push(url.href)
-      return new Response(served)
-    }) as unknown as typeof fetch,
+    ...(realFetch
+      ? {}
+      : {
+          fetch: (async (url: URL) => {
+            asked.push(url.href)
+            return new Response(served)
+          }) as unknown as typeof fetch,
+        }),
   })
+  const source = fakeCalendarSource()
+  const stderr: string[] = []
   const writer = fakeCalendarWriter()
   const home = mkdtempSync(join(tmpdir(), "calendar-feeds-home-"))
   const settings = (): GuardSettings => ({ profile: "work", permissions: {}, permissionSources: {}, sendsPerHour: 30 })
@@ -151,7 +200,8 @@ const setup = async () => {
       store: store.calendar,
       accountId,
       account,
-      source: fakeCalendarSource(),
+      messages: store,
+      source,
       freeBusy: true,
       feeds,
       write: (value) => written.push(value as Record<string, unknown>),
@@ -159,6 +209,7 @@ const setup = async () => {
       timezone: "UTC",
       writes: { writer, app, settings, env: { HOME: home, GCAL_STATE_DIR: home } },
     })
+    provide(root, { streams: { data: () => undefined, diagnostic: (text) => stderr.push(text) } })
     return root
   }
   const cli = async (...args: string[]) => {
@@ -173,7 +224,13 @@ const setup = async () => {
     program,
     writer,
     asked,
+    source,
+    stderr,
+    path,
     saved: () => saved,
+    later: (ms: number) => {
+      now += ms
+    },
     serve: (text: string) => {
       served = text
       now += 60_000
@@ -240,26 +297,125 @@ describe("feed calendars", () => {
     expect(writer.calls).toEqual([])
   })
 
-  it("drops an event the feed no longer holds, and calendars remove forgets the feed and its events", async () => {
-    const { cli, saved, serve } = await setup()
+  it("cancels an event the feed no longer holds on the next sync", async () => {
+    const { cli, serve } = await setup()
     const feed = String((await cli("calendars", "add", ADDRESS, "--title", "Matches")).id)
     await cli("sync")
     serve(ics(HOLIDAY, WEEKLY))
     await cli("sync")
-    const live = async () =>
-      (await cli("events", "list", `calendar:${feed}`)).items
-        .filter((one) => one.status !== "cancelled")
-        .map((one) => one.title)
-    expect(await live()).not.toContain("Example match")
-    expect(await live()).toContain("Example holiday")
+    const live = (await cli("events", "list", `calendar:${feed}`)).items
+      .filter((one) => one.status !== "cancelled")
+      .map((one) => one.title)
+    expect(live).not.toContain("Example match")
+    expect(live).toContain("Example holiday")
     await expect(cli("calendars", "add", ADDRESS)).rejects.toMatchObject({ details: { reason: "feed.duplicate" } })
+  })
+
+  it("calendars remove deletes the feed's events and what was built from them, and keeps a Google copy", async () => {
+    const { cli, saved, serve, source, path } = await setup()
+    source.put("primary", {
+      externalId: "google-match",
+      kind: "single",
+      icalUid: "match-1@example.com",
+      status: "confirmed",
+      title: "Example match, my copy",
+      startsAt: Date.UTC(2026, 9, 28, 18),
+      endsAt: Date.UTC(2026, 9, 28, 20),
+    })
+    const feed = String((await cli("calendars", "add", ADDRESS, "--title", "Matches")).id)
+    serve(ics(HOLIDAY, MATCH, WEEKLY, GUEST))
+    await cli("sync")
+    const db = await openCache(path)
+    opened.push(db)
+    const count = (sql: string) => Number(db.prepare(sql).get()?.n)
+    const people = "SELECT count(*) AS n FROM identities WHERE external_id LIKE '%.only.in.feed@example.com'"
+    expect(count(people)).toBe(2)
+    const found = async () =>
+      ((await cli("search", "events", "weekly")).hits as { title: string }[]).map((one) => one.title)
+    expect(await found()).not.toEqual([])
+
     const removed = await cli("calendars", "remove", "Matches")
-    expect(removed).toMatchObject({ id: feed, synced: false, removed: 5 })
+    expect(removed).toMatchObject({ id: feed, synced: false, removed: expect.any(Number), events: 5 })
     expect(saved()).toEqual([])
-    expect(await live()).toEqual([])
+    await expect(cli("events", "list", `calendar:${feed}`)).rejects.toMatchObject({ code: "not_found" })
+    const left = (await cli("events", "list", "starts_at>=2026-10-01")).items
+    expect(left.map((one) => [one.title, one.status])).toEqual([["Example match, my copy", "confirmed"]])
+    expect(await found()).toEqual([])
+    expect(count("SELECT count(*) AS n FROM event_words WHERE rowid NOT IN (SELECT id FROM events)")).toBe(0)
+    expect(count(`SELECT count(*) AS n FROM calendar_entries WHERE calendar_id = ${Number(feed)}`)).toBe(0)
+    expect(count(`SELECT count(*) AS n FROM calendars WHERE id = ${Number(feed)}`)).toBe(0)
+    expect(count(`SELECT count(*) AS n FROM sync_cursors WHERE key = 'calendar:${Number(feed)}'`)).toBe(0)
+    expect(count("SELECT count(*) AS n FROM events")).toBe(1)
+    expect(count(people)).toBe(0)
+    expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
     await expect(cli("calendars", "remove", "primary")).rejects.toMatchObject({
       details: { reason: "feed.not-a-feed" },
     })
+  })
+
+  it("calendars unsync stops a Google calendar's sync and keeps its stored events as they are", async () => {
+    const { cli, source } = await setup()
+    source.put("primary", {
+      externalId: "google-review",
+      kind: "single",
+      status: "confirmed",
+      title: "Example review",
+      startsAt: Date.UTC(2026, 9, 29, 10),
+      endsAt: Date.UTC(2026, 9, 29, 11),
+    })
+    await cli("sync")
+    const primary = (await cli("calendars", "list")).items.find((one) => one.external_id === "primary")
+    expect(await cli("calendars", "unsync", String(primary?.id))).toMatchObject({ synced: false })
+    source.remove("primary", "google-review")
+    await cli("sync")
+    expect(
+      (await cli("events", "list", `calendar:${primary?.id}`)).items.map((one) => [one.title, one.status]),
+    ).toEqual([["Example review", "confirmed"]])
+  })
+
+  it("asks a feed whether it changed, and a 304 keeps every stored event without reading it again", async () => {
+    let body = ics(HOLIDAY, MATCH, WEEKLY)
+    let version = 1
+    const asked: (string | undefined)[] = []
+    const base = await serve((request, response) => {
+      asked.push(request.headers["if-none-match"])
+      if (request.headers["if-none-match"] === `"v${version}"`) response.writeHead(304).end()
+      else response.writeHead(200, { etag: `"v${version}"` }).end(body)
+    })
+    const { cli, later, stderr } = await setup({ realFetch: true })
+    const feed = String((await cli("calendars", "add", `${base}/feed/${TOKEN}.ics`, "--title", "Matches")).id)
+    expect(stderr.join("")).toContain("http://")
+    expect(stderr.join("")).not.toContain(TOKEN)
+    expect(stderr.filter((line) => line.includes("unencrypted"))).toHaveLength(1)
+    const titles = async () =>
+      (await cli("events", "list", `calendar:${feed}`)).items
+        .filter((one) => one.status !== "cancelled")
+        .map((one) => one.title)
+    await cli("sync")
+    const before = await titles()
+    expect(before).toContain("Example match")
+
+    later(3_600_000)
+    const unchanged = await cli("sync")
+    expect(unchanged).toMatchObject({ feeds: [{ calendarId: Number(feed), events: 4, skipped: 0, unchanged: true }] })
+    expect((unchanged.synced as { unseen: number }[]).every((one) => one.unseen === 0)).toBe(true)
+    expect(await titles()).toEqual(before)
+
+    body = ics(HOLIDAY, WEEKLY)
+    version = 2
+    later(3_600_000)
+    await cli("sync")
+    expect(await titles()).not.toContain("Example match")
+
+    later(86_400_000)
+    await cli("sync")
+    expect(asked).toEqual([undefined, undefined, '"v1"', '"v1"', undefined])
+  })
+
+  it("does not warn about an https or webcal address", async () => {
+    const { cli, stderr } = await setup()
+    await cli("calendars", "add", ADDRESS.replace("https://", "webcal://"))
+    expect(stderr).toEqual([])
   })
 
   it("keeps the address out of the run record and off MCP", async () => {

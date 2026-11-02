@@ -2,11 +2,12 @@ import { CliError } from "@wirecat/cli-base"
 
 /**
  * Who proposed something waiting for the owner. `unknown` is a suggestion that names no author, such as an
- * unconfirmed link written without provenance: only the owner decides it.
+ * unconfirmed link written without provenance: only the owner decides it. `verified: false` is a bot named only by
+ * free text anyone could write, as an old suggested link's provenance: only the owner decides that one too.
  */
 export type Proposer =
   | { type: "person"; id: string }
-  | { type: "bot"; id: string; name: string; kind: "agent" | "rule" }
+  | { type: "bot"; id: string; name: string; kind: "agent" | "rule"; verified?: false }
   | { type: "unknown" }
 
 /** Who decides: the owner, or an agent the host lets decide for the owner, with its reason. */
@@ -33,8 +34,7 @@ export interface Refusal {
  * Code session is the bot `claude-code`, so comparing bot names keeps one session from deciding another's proposal.
  */
 export const mayDecide = (
-  /** `ownerOnly`: what only the owner may say, such as that a payment was made. */
-  row: { id: string; proposedBy: Proposer; ownerOnly?: boolean },
+  row: { id: string; proposedBy: Proposer },
   by: Decider,
   policy: DecisionPolicy = DEFAULT_DECISION_POLICY,
 ): Refusal | null => {
@@ -45,7 +45,6 @@ export const mayDecide = (
     reason,
     message,
   })
-  if (row.ownerOnly) return refuse("permission_error", "proposal.owner-only", `only the owner decides ${row.id}`)
   if (!policy.agentDecisions)
     return refuse(
       "permission_error",
@@ -57,6 +56,12 @@ export const mayDecide = (
   const proposer = row.proposedBy
   if (proposer.type === "unknown")
     return refuse("permission_error", "proposal.owner-only", "this proposal names no author; only the owner decides it")
+  if (proposer.type === "bot" && proposer.verified === false)
+    return refuse(
+      "permission_error",
+      "proposal.owner-only",
+      `${proposer.name} is named only by an old link's provenance; only the owner decides it`,
+    )
   if (proposer.type === "bot" && proposer.kind === "rule" && policy.ruleProposalsOwnerOnly)
     return refuse("permission_error", "proposal.owner-only", `proposed by ${proposer.name}: only the owner decides it`)
   if (proposer.type === "bot" && proposer.kind === "agent" && botKey(proposer.name) === botKey(by.bot))
@@ -81,7 +86,13 @@ export const assertMayWithdraw = (
 ): void => {
   if (by === "owner") return
   const proposer = row.proposedBy
-  if (row.proposed && proposer.type === "bot" && proposer.kind === "agent" && botKey(proposer.name) === botKey(by.bot))
+  if (
+    row.proposed &&
+    proposer.type === "bot" &&
+    proposer.kind === "agent" &&
+    proposer.verified !== false &&
+    botKey(proposer.name) === botKey(by.bot)
+  )
     return
   throw new CliError("permission_error", `only the owner removes or reverses ${row.id}`, {
     reason: "proposal.owner-only",
@@ -90,7 +101,7 @@ export const assertMayWithdraw = (
 
 /** `mayDecide` for a store method: throws the refusal instead of returning it. */
 export const assertMayDecide = (
-  row: { id: string; proposedBy: Proposer; ownerOnly?: boolean },
+  row: { id: string; proposedBy: Proposer },
   by: Decider,
   policy: DecisionPolicy = DEFAULT_DECISION_POLICY,
 ): void => {

@@ -1914,6 +1914,7 @@ Every connection between two things that no column holds. Kinds: `blocked-by` (a
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text |  |  | `owner`, `agent`, `rule` |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `purpose` | text |  |  | what a chat is for in a project: a purpose from memo's config, no fixed set; null means `work` |
 
 *Keys and indexes:* `INDEX (target_folded) WHERE to_id IS NULL`, `INDEX (from_type, from_id)`, `INDEX (to_type, to_id)`
 

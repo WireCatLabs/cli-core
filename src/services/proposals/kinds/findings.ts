@@ -1,15 +1,6 @@
-import type { Finding } from "../../../meetings/index.js"
-import { paymentTitle } from "../../../meetings/index.js"
 import { EVIDENCE_FINDINGS_KIND, type EvidenceFindingsBatch, type MessageStore } from "../../../store/index.js"
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
 import { kept, proposerOfAuthor } from "./shared.js"
-
-/** A finding's one line in the inbox, per kind; a new fact kind adds its row here. */
-export const FACT_SUMMARIES: Record<string, (finding: Finding) => string> = {
-  fact: (finding) => (finding as Extract<Finding, { kind: "fact" }>).statement,
-  task: (finding) => (finding as Extract<Finding, { kind: "task" }>).title,
-  payment: (finding) => paymentTitle(finding as Extract<Finding, { kind: "payment" }>),
-}
 
 const statusOf = (batch: EvidenceFindingsBatch): ProposalRow["status"] =>
   batch.status === "proposed" ? "proposed" : batch.receipt?.accepted.length ? "confirmed" : "rejected"
@@ -33,7 +24,7 @@ const rowOf = (batch: EvidenceFindingsBatch, createdAt: string): ProposalRow => 
     parts: findings.map((finding) => ({
       id: finding.id,
       kind: finding.kind,
-      summary: FACT_SUMMARIES[finding.kind]?.(finding) ?? finding.kind,
+      summary: finding.kind === "fact" ? finding.statement : finding.title,
       outcome: outcome(finding.id),
     })),
     createdAt,

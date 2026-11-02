@@ -197,15 +197,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
             : reason && checked.by === "agent"
               ? { ...checked, reason: `${checked.reason}: ${reason}` }
               : checked
-        assertMayDecide(
-          {
-            id,
-            proposedBy: proposals.proposer(id),
-            ownerOnly: batch.input.findings.some((finding) => finding.kind === "payment"),
-          },
-          decision.by,
-          context.decisions,
-        )
+        assertMayDecide({ id, proposedBy: proposals.proposer(id) }, decision.by, context.decisions)
         if (batch.receipt) {
           if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
             return invalid("this findings batch was already reviewed with a different decision")

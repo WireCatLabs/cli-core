@@ -176,13 +176,40 @@ describe("the messages service", () => {
     expect(page.items.map((one) => one.chatId)).toEqual(["room-b"])
   })
 
-  it("refuses to read forward offline, and online when the messenger cannot", async () => {
-    const offline = messagesService(storedDeps(messenger, await keptStore(), account, guard))
+  it("refuses to read forward online when the messenger cannot", async () => {
     const online = messagesService(onlineDeps(messenger, adapter, guard))
-    const after = { id: "1" }
 
-    await expect(offline.list("7", { limit: 5, after })).rejects.toThrow(/the store pages only backwards/)
-    await expect(online.list("7", { limit: 5, after })).rejects.toThrow(/read forward from a message/)
+    await expect(online.list("7", { limit: 5, after: { id: "1" } })).rejects.toThrow(/read forward from a message/)
+  })
+
+  it("**reads a window offline**, oldest first, ending inclusive at until", async () => {
+    const offline = messagesService(storedDeps(messenger, await keptStore(), account, guard))
+    const at = (minute: number) => Date.parse(`2026-09-27T10:0${minute}:00.000Z`)
+    const ids = async (window: Omit<Parameters<typeof offline.list>[1], "limit">, limit = 5) =>
+      (await offline.list("7", { limit, ...window })).items.map((one) => one.id)
+
+    expect(await ids({ after: { time: at(0) - 1 }, until: at(1) })).toEqual(["1", "2"])
+    expect(await ids({ after: { id: "1" } })).toEqual(["2", "3"])
+    expect(await ids({ beforeTime: at(2) })).toEqual(["1", "2"])
+    expect(await offline.list("7", { limit: 1, after: { time: 0 }, until: at(1) })).toEqual({
+      items: [expect.objectContaining({ id: "1" })],
+      hasMore: true,
+    })
+    expect((await offline.list("7", { limit: 2, after: { time: 0 }, until: at(1) })).hasMore).toBe(false)
+  })
+
+  it("**drops what the messenger returns past the window's end** and stops paging there", async () => {
+    const forward = {
+      ...adapter,
+      historyAfter: async () => ({ items: thread, hasMore: true }),
+    } as unknown as MessengerAdapter
+    const page = await messagesService(onlineDeps(messenger, forward, guard)).list("7", {
+      limit: 5,
+      after: { time: 0 },
+      until: Date.parse("2026-09-27T10:01:00.000Z"),
+    })
+
+    expect(page).toEqual({ items: thread.slice(0, 2), hasMore: false })
   })
 
   it("searches only the store, and never asks the messenger", async () => {

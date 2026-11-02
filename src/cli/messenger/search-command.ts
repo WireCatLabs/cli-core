@@ -25,7 +25,7 @@ import {
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { topicsSearchCommand } from "./topics-command.js"
 
-const onlyOf = (value: string): SourceSearched[] => {
+export const searchAllOnlyOf = (value: string): SourceSearched[] => {
   const chosen = value.split(",").map((one) => one.trim())
   if (chosen.includes("mail"))
     throw new CliError(
@@ -41,7 +41,8 @@ const onlyOf = (value: string): SourceSearched[] => {
   return [...new Set(chosen)] as SourceSearched[]
 }
 
-const lineOf = (item: SearchAllIncludingMeetingsFound["items"][number]): string =>
+/** One `search all` hit as a person reads it. */
+export const searchAllLine = (item: SearchAllIncludingMeetingsFound["items"][number]): string =>
   item.kind === "meeting"
     ? `meeting · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp ?? "time unknown"}  ${singleLine(item.text).slice(0, 200)}\n`
     : `${item.kind} · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}${item.url ? `\n  ${singleLine(item.url)}` : ""}\n  ${item.timestamp}${item.from?.name ? `  ${singleLine(item.from.name)}` : ""}  ${singleLine(item.text)}\n`
@@ -52,6 +53,32 @@ const maxMeetingsOf = (value: string): number | "all" => {
     throw new CliError("validation_error", "--max-meetings takes a whole number from 1, or all")
   return Number(value)
 }
+
+/**
+ * `search all`'s scope, paging and matching options, the same in every CLI that mounts it (WC-ACCT-8): a messenger's
+ * and a calendar's.
+ */
+export const searchAllOptions = (command: Command): Command =>
+  command
+    .option(
+      "--only <resources>",
+      "only these resources, separated by commas: messages, notes, events; meetings when --source names a meeting account",
+      searchAllOnlyOf,
+    )
+    .option(
+      "--source <accounts>",
+      "only these accounts, separated by commas: provider:account as a hit shows it, a provider, a kind or " +
+        "group:<name>; each resource reads the ones of its kind, and meetings only when it names one",
+    )
+    .option(
+      "--max-meetings <n>",
+      "how many of the meeting account's meetings to look through, newest first, or all for every one (default 100)",
+      maxMeetingsOf,
+    )
+    .option("--limit <n>", "how many", positiveCount("--limit"))
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
+    .option("--exact", "bare words and quotes match their exact form only, as exact:word does")
+    .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
 
 const allCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("all"), { effects: REMOTE_READ, partial: true })
@@ -73,93 +100,79 @@ const allCommand = (messenger: Messenger): Command => {
       `transcript: narrows a message search to voice transcripts, content: to the text of files, filename: to their names — \`${messenger.app.command} search all 'content:invoice'\`.
 --json: the list is items; each result's reference is ref, with its kind.`,
     )
-    .option(
-      "--only <resources>",
-      "only these resources, separated by commas: messages, notes, events; meetings when --source names a meeting account",
-      onlyOf,
-    )
-    .option(
-      "--source <accounts>",
-      "only these accounts, separated by commas: provider:account as a hit shows it, a provider, a kind or " +
-        "group:<name>; each resource reads the ones of its kind, and meetings only when it names one",
-    )
-    .option(
-      "--max-meetings <n>",
-      "how many of the meeting account's meetings to look through, newest first, or all for every one (default 100)",
-      maxMeetingsOf,
-    )
-    .option("--limit <n>", "how many", positiveCount("--limit"))
-    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
-    .option("--exact", "bare words and quotes match their exact form only, as exact:word does")
-    .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
-  return backendOptions(annotate(command, { output: { entity: "hit" } }), messenger).action(async function (
-    this: Command,
-    words: string[],
-  ) {
-    const context = messengerContext(this, messenger)
-    const {
-      only,
-      source,
-      maxMeetings,
-      limit: typed,
-      page,
-      exact,
-      timezone,
-    } = this.opts<{
-      only?: SourceSearched[]
-      source?: string
-      maxMeetings?: number | "all"
-      limit?: number
-      page?: number
-      exact?: boolean
-      timezone?: string
-    }>()
-    const limit = typed ?? context.settings.limit
-    const offset = offsetOf(page, limit)
-    const found = await context.withServices<SearchAllIncludingMeetingsFound>((services) =>
-      services.messages.searchAllWithMeetings({
-        text: words.join(" "),
-        limit,
-        ...(offset === undefined ? {} : { offset }),
+
+  return backendOptions(annotate(searchAllOptions(command), { output: { entity: "hit" } }), messenger).action(
+    async function (this: Command, words: string[]) {
+      const context = messengerContext(this, messenger)
+      const {
+        only,
+        source,
+        maxMeetings,
+        limit: typed,
+        page,
+        exact,
+        timezone,
+      } = this.opts<{
+        only?: SourceSearched[]
+        source?: string
+        maxMeetings?: number | "all"
+        limit?: number
+        page?: number
+        exact?: boolean
+        timezone?: string
+      }>()
+      const limit = typed ?? context.settings.limit
+      const offset = offsetOf(page, limit)
+      const found = await context.withServices<SearchAllIncludingMeetingsFound>((services) =>
+        services.messages.searchAllWithMeetings({
+          text: words.join(" "),
+          limit,
+          ...(offset === undefined ? {} : { offset }),
+          ...(exact ? { exact: true } : {}),
+          ...(timezone === undefined ? {} : { timezone }),
+          ...backendRequest(this),
+          env: context.env,
+          only: only ?? SOURCE_SEARCHED,
+          ...(source === undefined ? {} : { source }),
+          ...(maxMeetings === undefined ? {} : { maxMeetings }),
+        }),
+      )
+      noteServer(context, found.server)
+      if (context.format === "pretty")
+        context.renderer.note(
+          `searched: ${found.accounts.map(({ provider, account }) => `${provider}:${account}`).join(", ") || "nothing"}`,
+        )
+      for (const { resource, source, reason } of found.skipped)
+        context.renderer.note(`${resource ?? source} not searched: ${reason}`)
+      if (found.notes?.meaningSkipped) context.renderer.note(`notes by words only: ${found.notes.meaningSkipped}`)
+      if (found.events?.meaningSkipped) context.renderer.note(`events by words only: ${found.events.meaningSkipped}`)
+      if (found.messages?.meaningSkipped)
+        context.renderer.note(`messages: ${meaningNote(found.messages.meaningSkipped, messenger.app.command)}`)
+      const again = {
+        query: words.join(" "),
+        ...(only === undefined ? {} : { only: only.join(",") }),
+        ...(source === undefined ? {} : { source }),
+        ...(maxMeetings === undefined ? {} : { max_meetings: maxMeetings }),
         ...(exact ? { exact: true } : {}),
         ...(timezone === undefined ? {} : { timezone }),
-        ...backendRequest(this),
-        env: context.env,
-        only: only ?? SOURCE_SEARCHED,
-        ...(source === undefined ? {} : { source }),
-        ...(maxMeetings === undefined ? {} : { maxMeetings }),
-      }),
-    )
-    noteServer(context, found.server)
-    if (context.format === "pretty")
-      context.renderer.note(
-        `searched: ${found.accounts.map(({ provider, account }) => `${provider}:${account}`).join(", ") || "nothing"}`,
+      }
+      const skips = await context.withStore((store) => historySkipsOf(store, found.accounts)).catch(() => [])
+      renderAnswer(
+        this,
+        context,
+        allAnswer("search all", found, { limit, page: page ?? 1, again }, false, skips),
+        () => {
+          if (found.items.length === 0)
+            context.renderer.note(
+              found.server && !found.server.skipped
+                ? "nothing found in the local store or on the messenger's server"
+                : "nothing found in what the local store holds",
+            )
+          return found.items.map(searchAllLine).join("")
+        },
       )
-    for (const { resource, source, reason } of found.skipped)
-      context.renderer.note(`${resource ?? source} not searched: ${reason}`)
-    if (found.notes?.meaningSkipped) context.renderer.note(`notes by words only: ${found.notes.meaningSkipped}`)
-    if (found.events?.meaningSkipped) context.renderer.note(`events by words only: ${found.events.meaningSkipped}`)
-    if (found.messages?.meaningSkipped)
-      context.renderer.note(`messages: ${meaningNote(found.messages.meaningSkipped, messenger.app.command)}`)
-    const again = {
-      query: words.join(" "),
-      ...(only === undefined ? {} : { only: only.join(",") }),
-      ...(source === undefined ? {} : { source }),
-      ...(maxMeetings === undefined ? {} : { max_meetings: maxMeetings }),
-      ...(exact ? { exact: true } : {}),
-      ...(timezone === undefined ? {} : { timezone }),
-    }
-    const skips = await context.withStore((store) => historySkipsOf(store, found.accounts)).catch(() => [])
-    renderAnswer(this, context, allAnswer("search all", found, { limit, page: page ?? 1, again }, false, skips), () => {
-      if (found.items.length === 0)
-        context.renderer.note(
-          found.server && !found.server.skipped
-            ? "nothing found in the local store or on the messenger's server"
-            : "nothing found in what the local store holds",
-        )
-      return found.items.map(lineOf).join("")
-    })
-  })
+    },
+  )
 }
 
 const notesCommand = (messenger: Messenger): Command =>

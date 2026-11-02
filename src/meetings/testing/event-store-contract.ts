@@ -282,6 +282,58 @@ export const eventStoreContract = (make: () => EventStoreFixture | Promise<Event
       assert.equal(occurrence?.entries[0]?.deletedAt, null)
       assert.equal(await store.removeEntries(calendar, ["p"], CONTRACT_NOW + 1), 0)
     }),
+    test("a forgotten calendar goes with its entries and the events only it held; a shared event keeps the other copy", async (fixture) => {
+      const { store, calendar, accountId } = fixture
+      const feed = await second(fixture, "ics:example")
+      await store.saveEntries(calendar, [single("w1", later, { icalUid: "shared@example.com", title: "Mine" })], 2)
+      const series: EntryInput = {
+        ...single("weekly", later, { title: "Weekly" }),
+        kind: "series",
+        recurrence: ["RRULE:FREQ=WEEKLY"],
+      }
+      await store.saveEntries(
+        feed,
+        [
+          single("f1", later, { icalUid: "shared@example.com", title: "Theirs", description: "longer text" }),
+          single("f2", later + HOUR, { title: "Only in the feed", participants: [{ email: "guest@example.com" }] }),
+          series,
+        ],
+        3,
+      )
+      await store.saveSlots(
+        feed,
+        [
+          {
+            series: "weekly",
+            slots: [
+              {
+                ...single("weekly@1", later + 2 * HOUR),
+                kind: "occurrence",
+                seriesExternalId: "weekly",
+                originalStartsAt: later + 2 * HOUR,
+              },
+            ],
+          },
+        ],
+        { from: earlier, to: later + 7 * 24 * HOUR },
+        "cursor",
+        3,
+      )
+      await store.setCursor(feed, "cursor", 3)
+      const forgotten = await store.forgetCalendar(feed, 4)
+      assert.deepEqual(forgotten, { entries: 4, events: 2 })
+      assert.deepEqual(
+        (await store.calendars(accountId)).map(({ externalId }) => externalId),
+        ["primary"],
+      )
+      const left = await store.events({ accountId })
+      assert.deepEqual(
+        left.map(({ title, status }) => [title, status]),
+        [["Mine", "confirmed"]],
+      )
+      assert.equal((await store.event(left[0]?.id as number))?.entries.length, 1)
+      assert.equal(await store.entry(feed, "weekly"), null)
+    }),
     test("a calendar's cursor is its own, and null forgets it", async (fixture) => {
       const { store, calendar } = fixture
       const other = await second(fixture)

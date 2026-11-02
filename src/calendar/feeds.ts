@@ -42,6 +42,8 @@ export interface FeedSyncStats {
   calendarId: number
   events: number
   skipped: number
+  /** The feed answered 304: nothing was read again, and the counts are those of the read before. */
+  unchanged?: true
 }
 
 /** The profile's iCalendar feeds: a source the engine expands locally, and how one is added and forgotten. */
@@ -73,6 +75,9 @@ export const feedAddress = (text: string): URL => {
   return url
 }
 
+/** An `http://` address: allowed, but the feed and any token in its address travel unencrypted. */
+export const isPlainHttp = (text: string): boolean => feedAddress(text).protocol === "http:"
+
 const sameAddress = (a: string, b: string) => feedAddress(a).href === feedAddress(b).href
 
 export interface FetchFeedOptions {
@@ -81,6 +86,12 @@ export interface FetchFeedOptions {
   fetch?: typeof fetch
   signal?: AbortSignal
   limits?: FeedLimits
+}
+
+/** The last answer's `ETag` and `Last-Modified`, sent back so the server can say the feed has not changed. */
+export interface FeedValidators {
+  etag: string | null
+  lastModified: string | null
 }
 
 const readBody = async (response: Response, name: string, maxBytes: number) => {
@@ -115,8 +126,22 @@ const STATUS_ERRORS: Record<number, [code: "authentication_error" | "permission_
  * The feed's text: http or https, each redirect followed by hand and only to https, the body cut off at its limit and
  * the request at its time. Errors name the feed and the status, never the address, which may hold a token.
  */
-export const fetchFeed = async (address: string, options: FetchFeedOptions): Promise<string> => {
-  const { name, limits = FEED_LIMITS } = options
+export const fetchFeed = async (address: string, options: FetchFeedOptions): Promise<string> =>
+  ((await fetchFeedIfChanged(address, options)) as { text: string }).text
+
+/**
+ * `fetchFeed` that sends `since` as `If-None-Match` and `If-Modified-Since`: `"unchanged"` when the server answers 304,
+ * otherwise the text and the validators to send next time.
+ */
+export const fetchFeedIfChanged = async (
+  address: string,
+  options: FetchFeedOptions & { since?: FeedValidators },
+): Promise<{ text: string; validators: FeedValidators } | "unchanged"> => {
+  const { name, limits = FEED_LIMITS, since } = options
+  const conditional = {
+    ...(since?.etag ? { "if-none-match": since.etag } : {}),
+    ...(since?.lastModified ? { "if-modified-since": since.lastModified } : {}),
+  }
   const run = options.fetch ?? fetch
   const timeout = AbortSignal.timeout(limits.timeoutMs)
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
@@ -126,8 +151,12 @@ export const fetchFeed = async (address: string, options: FetchFeedOptions): Pro
       const response = await run(url, {
         redirect: "manual",
         signal,
-        headers: { accept: "text/calendar, text/plain;q=0.5, */*;q=0.1" },
+        headers: { accept: "text/calendar, text/plain;q=0.5, */*;q=0.1", ...conditional },
       })
+      if (response.status === 304 && Object.keys(conditional).length) {
+        await response.body?.cancel()
+        return "unchanged"
+      }
       const location = response.headers.get("location")
       if (response.status >= 300 && response.status < 400 && location) {
         await response.body?.cancel()
@@ -152,7 +181,11 @@ export const fetchFeed = async (address: string, options: FetchFeedOptions): Pro
           retryable: response.status >= 500 || response.status === 429,
         })
       }
-      return await readBody(response, name, limits.maxBytes)
+      const text = await readBody(response, name, limits.maxBytes)
+      return {
+        text,
+        validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") },
+      }
     }
   } catch (error) {
     if (isCliError(error)) throw error
@@ -285,6 +318,31 @@ export const readFeed = (text: string, zone: string, window?: SyncWindow): FeedR
   }
 }
 
+/**
+ * What the engine keeps as a feed calendar's token: the validators of the last full read, and the window it was read
+ * for. Valid only for the same window: a feed that has not changed still has slots and events entering a moved
+ * window, which only a read finds.
+ */
+interface FeedToken {
+  v: 1
+  validators: FeedValidators
+  window: SyncWindow
+  events: number
+  skipped: number
+}
+
+const lastRead = (token: string | null, window: SyncWindow): FeedToken | null => {
+  if (token === null) return null
+  try {
+    const held = JSON.parse(token) as Partial<FeedToken> | null
+    if (held?.v !== 1 || held.window?.from !== window.from || held.window.to !== window.to || !held.validators)
+      return null
+    return held as FeedToken
+  } catch {
+    return null
+  }
+}
+
 const calendarOf = (feed: FeedRecord, timezone: string | null = null): CalendarInput => ({
   externalId: `${FEED_PREFIX}${feed.id}`,
   title: feed.title,
@@ -322,9 +380,10 @@ export const icsFeeds = (options: IcsFeedsOptions): CalendarFeeds => {
       )
     return feed
   }
-  const read = (url: string, name: string) =>
-    fetchFeed(url, {
+  const read = (url: string, name: string, since?: FeedValidators) =>
+    fetchFeedIfChanged(url, {
       name,
+      ...(since ? { since } : {}),
       ...(options.fetch ? { fetch: options.fetch } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(options.limits ? { limits: options.limits } : {}),
@@ -336,16 +395,27 @@ export const icsFeeds = (options: IcsFeedsOptions): CalendarFeeds => {
     async calendars() {
       return (await options.registry.read()).map((feed) => calendarOf(feed))
     },
-    async changes(calendar, { window }) {
+    async changes(calendar, { cursor, window }) {
       const feed = await feedOf(calendar.externalId)
-      const text = await read(feed.url, `feed ${calendar.id}`)
+      const held = lastRead(cursor, window)
+      const got = await read(feed.url, `feed ${calendar.id}`, held?.validators)
+      if (got === "unchanged") {
+        const [events, skipped] = [held?.events ?? 0, held?.skipped ?? 0]
+        stats.set(calendar.id, { calendarId: calendar.id, events, skipped, unchanged: true })
+        return { entries: [], removed: [], cursor, unchanged: true }
+      }
+      const { text, validators } = got
       const found = readFeed(text, calendar.timezone ?? options.zone, window)
       for (const entry of found.entries) {
         const changed = found.overrides.get(entry.externalId)
         if (changed) overridesOf.set(entry, changed)
       }
       stats.set(calendar.id, { calendarId: calendar.id, events: found.events, skipped: found.skipped })
-      return { entries: found.entries, removed: [], cursor: null }
+      const next: FeedToken | null =
+        validators.etag || validators.lastModified
+          ? { v: 1, validators, window, events: found.events, skipped: found.skipped }
+          : null
+      return { entries: found.entries, removed: [], cursor: next && JSON.stringify(next) }
     },
   }
 
@@ -359,7 +429,7 @@ export const icsFeeds = (options: IcsFeedsOptions): CalendarFeeds => {
         throw new CliError("validation_error", "this profile follows a feed at this address already", {
           reason: "feed.duplicate",
         })
-      const found = readFeed(await read(address, "the feed"), options.zone)
+      const found = readFeed(((await read(address, "the feed")) as { text: string }).text, options.zone)
       const feed: FeedRecord = {
         id: randomBytes(6).toString("hex"),
         url: address,

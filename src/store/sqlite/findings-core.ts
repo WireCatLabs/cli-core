@@ -6,7 +6,6 @@ import {
   type FindingsInput,
   findingFingerprint,
   findingHash,
-  paymentTitle,
 } from "../../meetings/index.js"
 import type { Decider } from "../decisions.js"
 import { factOperationsOver } from "./facts.js"
@@ -103,19 +102,6 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
         statement: finding.statement,
         ...(finding.project === undefined ? {} : { project: finding.project }),
         ...(finding.subject === undefined ? {} : { subject: finding.subject }),
-        evidence,
-        by: agent,
-      })
-      return facts.acceptChecked(fact.ref, decidedBy).ref
-    }
-    if (finding.kind === "payment") {
-      const fact = facts.add({
-        type: "payment",
-        statement: finding.statement ?? paymentTitle(finding),
-        payment: finding.payment,
-        ...(finding.project === undefined ? {} : { project: finding.project }),
-        ...(finding.subject === undefined ? {} : { subject: finding.subject }),
-        ...(finding.supersedes === undefined ? {} : { supersedes: finding.supersedes }),
         evidence,
         by: agent,
       })

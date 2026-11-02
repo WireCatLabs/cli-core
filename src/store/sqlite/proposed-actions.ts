@@ -103,12 +103,22 @@ type ProposalOperations = Omit<
 }
 
 /** Who proposed an action, for `mayDecide`. */
-export const proposerOfAction = ({ proposedBy }: ProposedAction): Proposer =>
+export const proposerOfAction = ({ proposedBy, payload }: ProposedAction): Proposer =>
   proposedBy.type === "person"
     ? { type: "person", id: proposedBy.id }
     : proposedBy.name === null
       ? { type: "unknown" }
-      : { type: "bot", id: proposedBy.id, name: proposedBy.name, kind: proposedBy.kind ?? "agent" }
+      : {
+          type: "bot",
+          id: proposedBy.id,
+          name: proposedBy.name,
+          kind: proposedBy.kind ?? "agent",
+          ...(movedSuggestion(payload) ? { verified: false as const } : {}),
+        }
+
+/** A suggestion moved from `links` names its bot only as the link's provenance text said it (store version 44). */
+const movedSuggestion = (payload: unknown): boolean =>
+  typeof payload === "object" && payload !== null && "suggestedLink" in payload
 
 export const proposalOperationsOver = (context: StoreContext): ProposalOperations => {
   const { database, now } = context

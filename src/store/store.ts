@@ -1,4 +1,5 @@
 import type { ContextEvidenceReader, ContextIndex, ContextRecordReader } from "../context/evidence.js"
+import type { RefsStore } from "../domain/ref-summaries.js"
 import type { EventStore } from "../meetings/index.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
@@ -48,6 +49,7 @@ import type { StoreContext } from "./sqlite/open.js"
 import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
 import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
+import { refSummariesOf } from "./sqlite/ref-summaries.js"
 import * as stems from "./sqlite/stems.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
@@ -108,6 +110,8 @@ export interface MessageStore {
   readonly meetingFindings: MeetingFindingsStore
   /** Cited facts and follow-ups about one project from stored messages, mail and documents, for review. */
   readonly evidenceFindings: EvidenceFindingsStore
+  /** What any ref names, a page of them at a time: read once per page, never once per row. */
+  readonly refs: RefsStore
   readonly facts: FactsStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
   readonly memories: MemoriesStore
@@ -218,6 +222,9 @@ const storeOver = (context: StoreContext): MessageStore => {
   const calendar = once(() => ({ ...eventStoreOver(context), ...eventSearchOver(context) }))
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
+  const refs: RefsStore = {
+    summaries: async (texts, options) => refSummariesOf(context.database, texts, options),
+  }
   const facts = once(() => factsStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
@@ -313,6 +320,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     get meetingFindings() {
       return meetingFindings()
     },
+    refs,
     get evidenceFindings() {
       return evidenceFindings()
     },

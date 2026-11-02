@@ -5,7 +5,6 @@ import type { Command } from "commander"
 import { ENTITIES } from "../entities/index.js"
 import { answerRow } from "./answer-entity.js"
 import type { Body } from "./envelope.js"
-import { STATUS_ROWS } from "./project-status-rows.js"
 
 /** How one column prints. `text` by default. */
 export type RowValue = "text" | "time" | "day" | "count" | "files" | "reply" | "forward"
@@ -73,7 +72,6 @@ export const SHARED_ROWS: Readonly<Record<string, RowShape>> = {
       { field: "last_message_at", as: "time" },
     ],
   },
-  ...STATUS_ROWS,
 }
 
 /** Any record: what names it, what it is called, what state it is in, then what it says. */

@@ -3,20 +3,21 @@ import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import { clockMeta, type Effects } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
-import { environmentOf, runBudgetOf } from "../../cli/context.js"
+import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
+import type { AppIdentity } from "../../ports/app.js"
 import { secretInput } from "../../runs/run-context.js"
 import { searchEvents } from "../../services/events-search.js"
 import { dateWindow } from "../../services/moment.js"
 import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { BUSY_QUERY, BUSY_QUERY_NOTE, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
-import { type CalendarFeeds, isFeedCalendar, syncWithFeeds } from "../feeds.js"
+import { type CalendarFeeds, isFeedCalendar, isPlainHttp, syncWithFeeds } from "../feeds.js"
 import { eventPreparation, nextMeeting, PREPARE_MESSAGES } from "../prepare.js"
 import {
   accountsMeta,
@@ -61,6 +62,7 @@ import {
 } from "../writes.js"
 import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
 import { addRemind } from "./remind.js"
+import { addSearchAll } from "./search-all.js"
 
 export interface CalendarCommandDeps {
   store: EventStore
@@ -93,7 +95,15 @@ export interface CalendarCommandDeps {
   feeds?: CalendarFeeds
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
   embed?: (max: number) => Promise<{ model: string; embedded: number; left: boolean }>
-  write: (value: unknown, format: "json" | "jsonl" | "text") => void
+  /** `view` is the text a person reads in place of the default rendering, where a command has one. */
+  write: (value: unknown, format: "json" | "jsonl" | "text", view?: () => string) => void
+  /** A line for the person beside the answer, never in it: which accounts `search all` read and which it skipped. */
+  note?: (text: string) => void
+  /**
+   * The CLI itself. With it and `messages`, `search` also has `all`: messages, notes, events and named meetings in the
+   * shared store, as a messenger's `search all`.
+   */
+  app?: AppIdentity
   now?: () => number
   /** The zone `today`, `week` and a bare date are read in; the computer's when absent. */
   timezone?: string
@@ -114,8 +124,6 @@ const REMOTE_READ: Effects = { remote: "read", local: "none" }
 const LOCAL_OR_REMOTE_READ: Effects = { remote: "read", local: "read" }
 const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 const GROUP: Effects = { remote: "none", local: "none" }
-/** Every time a store can hold, for marking all of a calendar's entries at once. */
-const EVERYWHERE = { from: -8.64e15, to: 8.64e15 }
 /** How many pieces one `sync --embed` embeds, as drive's. */
 const EMBED_MAX = 600
 
@@ -234,6 +242,11 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       if (command.optsWithGlobals<{ offline?: boolean }>().offline)
         throw new CliError("permission_error", "calendars add reads the feed; leave out --offline")
       const { calendar, events } = await feeds().add(url, opts.title === undefined ? {} : { title: opts.title })
+      if (isPlainHttp(url))
+        outputFor(command).renderer.warn(
+          "this feed's address starts with http://, so the feed and any token in its address travel unencrypted; " +
+            "use https:// if the server offers it",
+        )
       const [saved] = await deps.store.saveCalendars(deps.accountId, [calendar], now())
       print(
         {
@@ -246,7 +259,10 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     })
     example(
       annotate(calendars.command("remove"), { effects: LOCAL_WRITE, mcp: false })
-        .description("stop following a feed calendars add added: its address is forgotten and its stored events go")
+        .description(
+          "stop following a feed calendars add added: its address is forgotten and its stored events are deleted, " +
+            "not cancelled. Only a feed; calendars unsync stops a provider's calendar",
+        )
         .argument("<calendar>", "the feed calendar's id, its ics: id, or its title"),
       "calendars remove 7",
     ).action(async (reference: string, _opts: unknown, command: Command) => {
@@ -260,9 +276,8 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
           },
         )
       await feeds().remove(calendar.externalId)
-      await deps.store.setCalendarSynced(calendar.id, false, now())
-      const removed = await deps.store.markUnseen(calendar.id, now() + 1, EVERYWHERE, now())
-      print({ ...calendarItem({ ...calendar, synced: false }), removed }, command)
+      const { entries, events } = await deps.store.forgetCalendar(calendar.id, now())
+      print({ ...calendarItem({ ...calendar, synced: false }), removed: entries, events }, command)
     })
   }
 
@@ -549,9 +564,18 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
 
   if (deps.writes) addRemind(events, deps.writes, { deps, now, zone, print, example })
 
-  const searches = annotate(program.command("search").description("find stored things by text: events"), {
-    effects: GROUP,
-  })
+  const app = deps.messages ? deps.app : undefined
+  const searches = annotate(
+    program
+      .command("search")
+      .description(
+        app
+          ? "find stored things by text: events, or all of messages, notes and events"
+          : "find stored things by text: events",
+      ),
+    { effects: GROUP },
+  )
+  if (app) addSearchAll(searches, { deps, app, zone, messages, example })
   const search = example(
     annotate(searches.command("events"), { effects: deps.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
       .description(
