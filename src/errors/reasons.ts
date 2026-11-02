@@ -36,6 +36,8 @@ const SIGN_IN: Entry[] = [
   ["oauth.revoke-failed", "outcome_unknown", "the provider did not confirm the revoke"],
   ["oauth.invalid", "authentication_error", "the saved sign-in cannot be read"],
   ["oauth.not-saved", "configuration_error", "the sign-in cannot be saved or read where it is kept"],
+  ["sign-in.client-file-open", "configuration_error", "other users of this computer can read the client file"],
+  ["sign-in.client-file-invalid", "configuration_error", "the file is not a Desktop app OAuth client JSON"],
 ]
 
 const OTHERS: Entry[] = [
