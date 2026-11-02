@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { assertMayDecide, type Decider, deciderAuthor } from "../decisions.js"
+import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
 import { actorOfOrigin, botNamed, ownerPerson } from "./actors.js"
 import type { RELATION_KINDS } from "./link-kinds.js"
 import type { Author } from "./memories.js"
@@ -104,8 +104,70 @@ export const relationProposalsOver = (context: StoreContext) => {
       )
     return linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(Number(link.id)) as Row)
   }
+  /**
+   * A scan's newer score on a pending proposal, in place under the same id. A rule's own row takes the new score,
+   * signals, evidence and purpose; another proposer's row keeps its author, evidence and purpose and gains the signals.
+   */
+  const rescored = (
+    action: ProposedAction,
+    input: { evidence?: string[]; purpose?: string; reason?: string },
+    scored: Required<Scored>,
+    by: Exclude<Author, "owner">,
+  ): ProposedAction => {
+    const proposer = proposerOfAction(action)
+    const own = proposer.type === "bot" && proposer.kind === "rule" && botKey(proposer.name) === botKey(by.bot)
+    const before = action.payload as Record<string, unknown>
+    const payload = own
+      ? {
+          ...before,
+          ...scored,
+          evidence: input.evidence ?? [],
+          ...(input.purpose === undefined ? {} : { purpose: purposeOf(input.purpose) }),
+        }
+      : { ...before, ...scored }
+    const reason = own && input.reason !== undefined ? input.reason : action.reason
+    if (JSON.stringify(payload) === JSON.stringify(before) && reason === action.reason) return action
+    database
+      .prepare(
+        "UPDATE proposed_actions SET payload = ?, reason = ?, updated_at = ? WHERE id = ? AND status = 'proposed'",
+      )
+      .run(JSON.stringify(payload), reason, now(), Number(action.id))
+    return operations.get(action.id)
+  }
   return {
-    /** The same pending pair returns the proposal already held. */
+    /**
+     * Where a pair stands before a scan proposes it: a link joins it, a `relationship` proposal for it was rejected,
+     * or one is pending. A rejection is matched by the pair alone, whoever proposed it and with whatever scorer.
+     */
+    state: (
+      paired: () => { from: Thing; existing: Row | undefined },
+      { to, kind }: { to: string; kind: string },
+    ): { linked: boolean; confirmed: boolean; rejected: boolean; pending: ProposedAction | null } | undefined => {
+      let found: { from: Thing; existing: Row | undefined }
+      try {
+        found = paired()
+      } catch (error) {
+        if (error instanceof CliError && (error.code === "not_found" || error.code === "validation_error")) return
+        throw error
+      }
+      const { from, existing } = found
+      const rows = database
+        .prepare(
+          "SELECT id, status FROM proposed_actions WHERE kind='relationship' AND status IN ('proposed','rejected') " +
+            "AND target_type=? AND target_id=? AND json_extract(payload,'$.to')=? AND json_extract(payload,'$.kind')=? " +
+            "ORDER BY id",
+        )
+        .all(from.type, from.id, to, kind)
+      const pending = rows.find((row) => row.status === "proposed")
+      return {
+        linked: existing !== undefined,
+        confirmed: existing !== undefined && Number(existing.confirmed) === 1,
+        rejected: rows.some((row) => row.status === "rejected"),
+        pending: pending ? operations.get(String(pending.id)) : null,
+      }
+    },
+
+    /** The same pending pair returns the proposal already held; a scored one updates its score in place. */
     propose: (
       from: Thing,
       input: {
@@ -116,12 +178,13 @@ export const relationProposalsOver = (context: StoreContext) => {
         purpose?: string
         evidence?: string[]
         reason?: string
-      },
+      } & Scored,
       by: Exclude<Author, "owner">,
     ): ProposedAction => {
       const evidence = input.evidence ?? []
       if (!Array.isArray(evidence) || evidence.length > 5 || evidence.some((ref) => typeof ref !== "string"))
         throw new CliError("validation_error", "a relationship proposal cites up to 5 references")
+      const scored = scoredOf(input)
       return write(database, () => {
         const held = database
           .prepare(
@@ -129,7 +192,10 @@ export const relationProposalsOver = (context: StoreContext) => {
               "AND json_extract(payload,'$.to')=? AND json_extract(payload,'$.kind')=? ORDER BY id LIMIT 1",
           )
           .get(from.type, from.id, input.to, input.kind)
-        if (held) return operations.get(String(held.id))
+        if (held) {
+          const action = operations.get(String(held.id))
+          return scored ? rescored(action, input, scored, by) : action
+        }
         return operations.propose({
           kind: "relationship",
           by,
@@ -141,6 +207,7 @@ export const relationProposalsOver = (context: StoreContext) => {
             ...(input.role === undefined ? {} : { role: input.role }),
             ...(input.purpose === undefined ? {} : { purpose: purposeOf(input.purpose) }),
             evidence,
+            ...scored,
           },
           ...(input.reason === undefined ? {} : { reason: input.reason }),
         })
@@ -266,6 +333,29 @@ export const relationProposalsOver = (context: StoreContext) => {
         )
       }),
   }
+}
+
+/** What a scan adds to a relationship proposal: the combined score and each scorer's part in it. */
+export interface Scored {
+  score?: number
+  signals?: { scorer: string; weight: number; why: string }[]
+}
+
+const scoredOf = (input: Scored): Required<Scored> | undefined => {
+  if (input.score === undefined && input.signals === undefined) return undefined
+  const { score, signals } = input
+  if (typeof score !== "number" || !(score >= 0 && score <= 1) || !Array.isArray(signals) || signals.length > 20)
+    throw new CliError("validation_error", "a scored proposal takes a score of 0–1 and up to 20 signals")
+  for (const signal of signals)
+    if (
+      typeof signal?.scorer !== "string" ||
+      typeof signal.why !== "string" ||
+      signal.why.length > 500 ||
+      typeof signal.weight !== "number" ||
+      !(signal.weight >= 0 && signal.weight <= 1)
+    )
+      throw new CliError("validation_error", "a signal names its scorer, a weight of 0–1 and why, up to 500 characters")
+  return { score, signals: signals.map(({ scorer, weight, why }) => ({ scorer, weight, why })) }
 }
 
 /** A relationship's role and purpose to set; `null` clears one. */
