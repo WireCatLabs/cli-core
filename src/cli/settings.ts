@@ -19,6 +19,7 @@ import {
   RESOURCE_KEY,
   RESOURCES,
 } from "../sends/permissions.js"
+import { DEFAULT_HISTORY_LIMITS, HISTORY_MAX_DAYS, type HistoryLimits } from "../services/history-limits.js"
 import { storePath } from "../store/path.js"
 import { sharedConfigPath } from "../store/shared-config.js"
 import {
@@ -66,6 +67,13 @@ export const count = v.pipe(v.number(wholeNumber), v.integer(wholeNumber), v.min
 const zeroOrMore = plain("has to be a whole number, 0 or more")
 const countOrZero = v.pipe(v.number(zeroOrMore), v.integer(zeroOrMore), v.minValue(0, zeroOrMore))
 export const flag = v.boolean(plain("has to be true or false"))
+const historyDaysMessage = plain(`has to be a whole number of days, 1 to ${HISTORY_MAX_DAYS}`)
+const historyDays = v.pipe(
+  v.number(historyDaysMessage),
+  v.integer(historyDaysMessage),
+  v.minValue(1, historyDaysMessage),
+  v.maxValue(HISTORY_MAX_DAYS, historyDaysMessage),
+)
 /** `record_input`: true, false, or "failed" — the words typed kept only in a run that failed. */
 export const recordInputSetting = v.union(
   [v.boolean(), v.literal("failed")],
@@ -130,6 +138,9 @@ const SHARED_PROFILE_ENTRIES = {
   transcribe_with: v.optional(v.picklist(["auto", "messenger", "local"], plain("has to be auto, messenger or local"))),
   speech_model: v.optional(v.string(plain("has to be a model id from `models list`, in quotes"))),
   search_catch_up: v.optional(flag),
+  history_dialog_days: v.optional(historyDays),
+  history_group_days: v.optional(historyDays),
+  history_group_members_max: v.optional(count),
   picture_search: v.optional(flag),
   search_reranker: v.optional(
     v.picklist(
@@ -162,6 +173,9 @@ export const MESSENGER_ONLY_SETTINGS: readonly string[] = [
   "sends_per_hour",
   "transcribe_with",
   "search_catch_up",
+  "history_dialog_days",
+  "history_group_days",
+  "history_group_members_max",
   "read_other_bots",
 ]
 
@@ -251,6 +265,8 @@ export interface Settings extends AISettings {
   color: boolean | undefined
   senderColors: boolean
   searchCatchUp?: boolean
+  /** How much pushed history the store keeps, by chat kind; a messenger that answers history on request ignores it. */
+  historyLimits?: HistoryLimits
   /** Search and `images embed` read the pictures themselves, with a model on this machine. Off until set. */
   pictureSearch?: boolean
   /** The reranker that orders `search messages --discover`'s first hits once it is downloaded, or `off`. */
@@ -550,6 +566,9 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const color = fromLayers<boolean | undefined>("color", undefined)
     const senderColors = fromLayers("sender_colors", false)
     const searchCatchUp = fromLayers("search_catch_up", false)
+    const historyDialogDays = fromLayers("history_dialog_days", DEFAULT_HISTORY_LIMITS.dialogDays)
+    const historyGroupDays = fromLayers("history_group_days", DEFAULT_HISTORY_LIMITS.groupDays)
+    const historyGroupMembersMax = fromLayers("history_group_members_max", DEFAULT_HISTORY_LIMITS.groupMembersMax)
     const pictureSearch = fromLayers("picture_search", false)
     const searchReranker = fromLayers<string>("search_reranker", DEFAULT_RERANK_MODEL)
     const recordInput = fromLayers<RecordInput>("record_input", true)
@@ -614,6 +633,11 @@ export const settingsFor = <T extends object = Record<never, never>>(
       color: color.value,
       senderColors: senderColors.value,
       searchCatchUp: searchCatchUp.value,
+      historyLimits: {
+        dialogDays: historyDialogDays.value,
+        groupDays: historyGroupDays.value,
+        groupMembersMax: historyGroupMembersMax.value,
+      },
       pictureSearch: pictureSearch.value,
       searchReranker: searchReranker.value,
       limit: limit.value,
@@ -652,6 +676,9 @@ export const settingsFor = <T extends object = Record<never, never>>(
         color: color.from,
         senderColors: senderColors.from,
         searchCatchUp: searchCatchUp.from,
+        historyDialogDays: historyDialogDays.from,
+        historyGroupDays: historyGroupDays.from,
+        historyGroupMembersMax: historyGroupMembersMax.from,
         pictureSearch: pictureSearch.from,
         searchReranker: searchReranker.from,
         record: record.from,
