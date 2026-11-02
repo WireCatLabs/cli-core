@@ -114,7 +114,7 @@ export const stored = (
     limitedNoted = true
     warn(
       `history limits left out ${counts.messages} pushed messages of ${skipped.size} chats (big groups, older ` +
-        `than the window) — \`${command} store status\` lists them; \`${command} messages sync <chat> --include\` ` +
+        `than the window) — \`${command} store status\` lists them; \`${command} messages sync <chat> --full-history\` ` +
         "fetches one and keeps it in full",
       warning,
     )
@@ -248,7 +248,7 @@ export const stored = (
         return attempt(operation, async (opened) => {
           const { batch: kept, skipped } = await limited(opened, batch)
           await fill(opened, account, kept)
-          await opened.chats.recordHistorySkips(account, skipped)
+          if (skipped.size > 0) await opened.chats.recordHistorySkips(account, skipped)
           noteLimited(skipped)
         })
       })

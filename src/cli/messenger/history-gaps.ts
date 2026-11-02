@@ -27,7 +27,7 @@ export const historyLimitGaps = (skips: StoredHistorySkip[]): { next: NextStep[]
   return {
     next: [
       {
-        ...nextStep("messages.sync", { args: { chat: first.chatId, include: true } }),
+        ...nextStep("messages.sync", { args: { chat: first.chatId, full_history: true } }),
         why: "fetches this chat's history and keeps it in full from now on, past the history limits",
       },
     ],

@@ -90,7 +90,7 @@ export const syncCommand = (messenger: Messenger): Command => {
     .option("--catch-up-messages <n>", "skip a graph rebuild larger than this many messages", wholeNumber)
     .option("--catch-up-time <duration>", "local preparation time budget, 30s by default")
     .option(
-      "--include",
+      "--full-history",
       "keep this chat's pushed history in full from now on, past the history limits (history_* settings)",
     )
     .option("--background", "run as a job that outlives this command; `store jobs show` follows it")
@@ -110,10 +110,10 @@ export const syncCommand = (messenger: Messenger): Command => {
         catchUpChunks,
         catchUpMessages,
         catchUpTime,
-        include,
+        fullHistory: include,
         ...sizes
       } = this.opts<{
-        include?: boolean
+        fullHistory?: boolean
         all?: boolean
         limit?: number
         pageSize?: number
@@ -130,7 +130,8 @@ export const syncCommand = (messenger: Messenger): Command => {
       if ((chat === undefined) === (all !== true))
         throw new CliError("validation_error", "name a chat, or --all for every chat")
       if (all && estimate) throw new CliError("validation_error", "--dry-run prices one chat; not with --all")
-      if (include && chat === undefined) throw new CliError("validation_error", "--include keeps one chat: name it")
+      if (include && chat === undefined)
+        throw new CliError("validation_error", "--full-history keeps one chat: name it")
       if (all && messenger.history === "store") {
         throw new CliError(
           "validation_error",

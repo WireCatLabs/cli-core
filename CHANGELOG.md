@@ -13,7 +13,7 @@ shape of this file.
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
   The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
-  never dropped. `messages sync <chat> --include` fetches a chat and keeps its pushed history in full from then on
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
   (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
   `setHistoryIncluded`; `Saving` takes `historyLimits`.
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`

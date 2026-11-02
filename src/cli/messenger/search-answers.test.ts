@@ -176,7 +176,7 @@ describe("history the limits left out", () => {
       }),
     )
     expect(body.next).toContainEqual(
-      expect.objectContaining({ args: { chat: "120363000000000001@g.us", include: true } }),
+      expect.objectContaining({ args: { chat: "120363000000000001@g.us", full_history: true } }),
     )
   })
 })

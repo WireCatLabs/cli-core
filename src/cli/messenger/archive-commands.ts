@@ -97,7 +97,7 @@ const statusCommand = (messenger: Messenger): Command =>
         context.renderer.note("the store holds no messages for this profile yet")
       if (skips.length > 0 && context.format === "pretty")
         context.renderer.note(
-          `history limits left out pushed history of ${skips.length} chats — \`${lineOf(this, "messages sync <chat> --include")}\` fetches one and keeps it in full:\n` +
+          `history limits left out pushed history of ${skips.length} chats — \`${lineOf(this, "messages sync <chat> --full-history")}\` fetches one and keeps it in full:\n` +
             skips
               .slice(0, 20)
               .map((skip) => `  ${skip.title ?? skip.chatId}  ${skip.messages} messages  ${skip.reason}`)

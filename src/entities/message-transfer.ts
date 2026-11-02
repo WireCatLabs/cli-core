@@ -64,7 +64,7 @@ export const messageSyncChat = v.strictObject({
   reached_last: v.optional(v.literal(true)),
   stopped: v.optional(v.literal(true)),
   tasks,
-  /** `--include`: the chat's pushed history is now kept in full; `false` when the store does not know the chat. */
+  /** `--full-history`: the chat's pushed history is now kept in full; `false` when the store does not know the chat. */
   history_included: v.optional(v.boolean()),
 })
 export const messageSyncAll = v.strictObject({

@@ -765,7 +765,7 @@ A messenger whose history is pushed (`history: "store"`, WhatsApp) can push year
 (`src/services/history-limits.ts`, `limitBatch`, at most 1095 days). A group above the size keeps its chat row and
 none of its pushed messages. Live messages, `messages sync` and anything already stored are never touched. What was
 left out is summed per chat in the chat row's `metadata` under `$history` (`src/store/sqlite/history-skips.ts`; no
-store version) and `Chat.providerMetadata` leaves it out. `messages sync <chat> --include` fetches the chat and marks
+store version) and `Chat.providerMetadata` leaves it out. `messages sync <chat> --full-history` fetches the chat and marks
 it kept in full from then on.
 
 Every store-read answer that could pass for the whole archive says so: `store status`, `search messages`,
