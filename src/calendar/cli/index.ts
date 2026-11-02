@@ -10,6 +10,7 @@ import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
+import type { AppIdentity } from "../../ports/app.js"
 import { secretInput } from "../../runs/run-context.js"
 import { searchEvents } from "../../services/events-search.js"
 import { dateWindow } from "../../services/moment.js"
@@ -61,6 +62,7 @@ import {
 } from "../writes.js"
 import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
 import { addRemind } from "./remind.js"
+import { addSearchAll } from "./search-all.js"
 
 export interface CalendarCommandDeps {
   store: EventStore
@@ -93,7 +95,15 @@ export interface CalendarCommandDeps {
   feeds?: CalendarFeeds
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
   embed?: (max: number) => Promise<{ model: string; embedded: number; left: boolean }>
-  write: (value: unknown, format: "json" | "jsonl" | "text") => void
+  /** `view` is the text a person reads in place of the default rendering, where a command has one. */
+  write: (value: unknown, format: "json" | "jsonl" | "text", view?: () => string) => void
+  /** A line for the person beside the answer, never in it: which accounts `search all` read and which it skipped. */
+  note?: (text: string) => void
+  /**
+   * The CLI itself. With it and `messages`, `search` also has `all`: messages, notes, events and named meetings in the
+   * shared store, as a messenger's `search all`.
+   */
+  app?: AppIdentity
   now?: () => number
   /** The zone `today`, `week` and a bare date are read in; the computer's when absent. */
   timezone?: string
@@ -554,9 +564,18 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
 
   if (deps.writes) addRemind(events, deps.writes, { deps, now, zone, print, example })
 
-  const searches = annotate(program.command("search").description("find stored things by text: events"), {
-    effects: GROUP,
-  })
+  const app = deps.messages ? deps.app : undefined
+  const searches = annotate(
+    program
+      .command("search")
+      .description(
+        app
+          ? "find stored things by text: events, or all of messages, notes and events"
+          : "find stored things by text: events",
+      ),
+    { effects: GROUP },
+  )
+  if (app) addSearchAll(searches, { deps, app, zone, messages, example })
   const search = example(
     annotate(searches.command("events"), { effects: deps.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
       .description(

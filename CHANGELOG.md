@@ -9,6 +9,14 @@ shape of this file.
 
 ### Added
 
+- **A calendar CLI can mount `search all`.** Given `app` (its identity) beside `messages`, `addCalendarCommands` adds
+  `search all` beside `search events`: calendar events, messages from the other WireCat tools and notes in the shared
+  store, and a meeting account's transcripts only when `--source` names one, ranked together as a messenger's
+  `search all` ranks them. It takes the same `--only`, `--source`, `--max-meetings`, `--limit`, `--page`, `--exact`
+  and `--timezone` (`searchAllOptions`, now shared with the messenger's), refuses mail as the messenger's does, and
+  answers each account it read in `meta.accounts`. Without a messenger server it reads the local store only. A process
+  locked to one profile reads only its own calendar and refuses `--source`. `CalendarCommandDeps` gains `app`, `note`
+  (the "searched:" and "not searched:" lines for a person) and a `view` argument to `write`, the text a person reads.
 - **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
   `mail.search-refused` (`SEARCH_REFUSED`, `searchRefused`) when the server answers SEARCH with NO or BAD. `syncMail`
   reads the other folders, answers `state: "partial"` with `refusedFolders`, and for the refused folder marks no mail
