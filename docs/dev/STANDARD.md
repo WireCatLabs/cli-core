@@ -984,6 +984,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--from` | `<who>` | sender to match in `bot search messages` |  | `bot search messages` (planned) |
 | `--from-dir` | `<dir>` | read nonrecursive files from this directory for one explicit chat |  | `attachments extract` |
 | `--full` |  | found messages with their whole text and every provider field |  | every command |
+| `--full-history` |  | keep this chat's pushed history in full from now on, past the history limits |  | `messages sync` |
 | `--hidden` | `<on\|off>` | on hides a forum's General topic from the topic list, off shows it |  | `topics edit` (tg-only) |
 | `--hide-online` | `<on\|off>` | hide online status and last seen |  | `account privacy set` (planned) |
 | `--hide-phone` |  | leave the phone number out |  | `account show`, `account update`, `contacts show` |
