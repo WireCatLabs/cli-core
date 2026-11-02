@@ -21,7 +21,6 @@ read  chats requests list
 read  chats rules show
 read  chats send-as
 read  chats show
-read  chats status
 read  chats tracking list
 read  chats tracking show
 read  commands
@@ -105,6 +104,7 @@ read  stats messages top
 read  stats messages unanswered
 read  stats messages waiting
 read  stats tasks show
+read  store chats status
 read  store check
 read  store gaps show
 read  store info

@@ -29,6 +29,7 @@ export const storeCommand = (messenger: Messenger): Command => {
   const store = new Command("store")
     .description("the local store of messages")
     .addCommand(statusCommand(messenger))
+    .addCommand(storedChatsCommand(messenger))
     .addCommand(gapsCommand(messenger))
     .addCommand(jobsCommand(messenger))
     .addCommand(exportCommand(messenger))
@@ -37,6 +38,7 @@ export const storeCommand = (messenger: Messenger): Command => {
   const examples: Record<string, string> = {
     backup: "./backup.db",
     check: "",
+    "chats status": "",
     clear: "--left --dry-run",
     "copies delete": "messages_copy_1",
     decrypt: "./backup.enc --output ./restored.db",
@@ -104,6 +106,24 @@ const statusCommand = (messenger: Messenger): Command =>
               .join("\n"),
         )
     })
+
+/** `store status` summed over the account's chats, for a count of what the archive holds without a list of them. */
+const storedChatsCommand = (messenger: Messenger): Command => {
+  const chats = new Command("chats").description("the account's chats as the store holds them")
+  annotate(chats.command("status"), { output: { entity: "chat_coverage" }, effects: LOCAL_READ })
+    .summary("how many chats the archive holds in full, in part, or not at all")
+    .description(
+      "over this account's searchable chats of every kind, channels included: fetched (back to the first message, " +
+        "up to date, no gaps), partial, never (no fetch recorded and no message held), and the oldest message held; " +
+        "reads the store only",
+    )
+    .action(async function (this: Command) {
+      const context = messengerContext(this, messenger)
+      const coverage = await context.withStore((store, account) => store.chats.chatCoverage(account))
+      renderAnswer(this, context, itemOf(snakeKeys(coverage)))
+    })
+  return chats
+}
 
 const LISTED = 20
 

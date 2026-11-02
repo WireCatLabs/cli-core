@@ -13,7 +13,7 @@ import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
-import { chatsCommand } from "./chats-command.js"
+import { storeCommand } from "./archive-commands.js"
 import type { Messenger } from "./context.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
@@ -93,15 +93,15 @@ const setup = async () => {
     provider: "chat",
     resolveSettings: settingsFor(app).resolveSettings,
     connect: async () => {
-      throw new Error("chats status never connects")
+      throw new Error("store chats status never connects")
     },
     chatArgument: "a chat",
   }
   const call = async (args: string[]) => {
     const streams = captureStreams()
     const code = await run(
-      ["chats", "status", ...args],
-      { app, commands: () => [chatsCommand(messenger)] },
+      ["store", "chats", "status", ...args],
+      { app, commands: () => [storeCommand(messenger)] },
       {
         streams,
         tty: false,
@@ -121,7 +121,7 @@ const setup = async () => {
   return { env, call, searches }
 }
 
-describe("chats status", () => {
+describe("store chats status", () => {
   it("splits the account's searchable chats into fetched, partial and never, without recording", async () => {
     const { call, searches } = await setup()
     const before = await searches()

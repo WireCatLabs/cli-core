@@ -582,7 +582,7 @@ plus zrender and tslib total about 61.6 MiB before package-manager deduplication
 
 ## Archive coverage
 
-`chats status` answers, from the store alone, how many of the account's searchable chats (every kind, channels
+`store chats status` answers, from the store alone, how many of the account's searchable chats (every kind, channels
 included) the archive holds in full: `{ chats, fetched, partial, never, oldest_message_at }`, and
 `fetched + partial + never` is always `chats`. `fetched` is a chat that `ChatStore.chatCompleteness` calls
 `complete` — held back to its first message, up to date with the chat list and without gaps. `never` has no fetch

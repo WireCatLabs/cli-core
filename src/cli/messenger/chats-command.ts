@@ -134,19 +134,6 @@ export const chatsCommand = (messenger: Messenger): Command => {
         renderAnswer(this, context, wholeList("chats send-as", identities.map(snakeKeys)))
       })
 
-  annotate(chats.command("status"), { output: { entity: "chat_coverage" }, effects: LOCAL_READ })
-    .summary("how many chats the archive holds in full, in part, or not at all")
-    .description(
-      "over this account's searchable chats of every kind, channels included: fetched (back to the first message, " +
-        "up to date, no gaps), partial, never (no fetch recorded and no message held), and the oldest message held; " +
-        "reads the store only",
-    )
-    .action(async function (this: Command) {
-      const context = messengerContext(this, messenger)
-      const coverage = await context.withStore((store, account) => store.chats.chatCoverage(account))
-      renderAnswer(this, context, itemOf(snakeKeys(coverage)))
-    })
-
   chats.addCommand(documentsCommand(messenger))
   chats.addCommand(membersCommand(messenger))
   chats.addCommand(markReadCommand(messenger))
@@ -204,7 +191,6 @@ export const chatsCommand = (messenger: Messenger): Command => {
     "rules unset": '"Book club" links',
     "send-as": '"Project room"',
     show: '"Book club"',
-    status: "",
     "tracking add": '"Book club"',
     "tracking list": "",
     "tracking remove": '"Book club"',

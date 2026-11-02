@@ -18,7 +18,7 @@ export const storeChatStatus = v.strictObject({
   last_stored_at: v.nullable(time),
   held: v.array(range),
 })
-/** `chats status`: chats = fetched + partial + never, over the account's searchable chats of every kind. */
+/** `store chats status`: chats = fetched + partial + never, over the account's searchable chats of every kind. */
 export const chatCoverage = v.strictObject({
   chats: count,
   fetched: count,
