@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.543.0 — 02.11.2026
+
 ### Added
 
 - **A pushed history batch tells its messenger whether it was saved.** `feed` and `listenHistory` take a
