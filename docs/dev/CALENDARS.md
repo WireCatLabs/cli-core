@@ -235,7 +235,8 @@ takes only an existing calendar's `id`), so the CLI reads the feed itself.
   `search --backend server` does not ask the provider about them: the stored search covers them.
 - **Its own source:** `provider: "ics"`, `expands: "local"`, `fullListOnly: true`. `syncWithFeeds` runs the provider's
   `syncCalendars`, then the feeds', under one budget, into one report with `feeds` (each feed's `events` and the
-  `skipped` it could not take). `sync` and `events remind` call it. A full list marks what the feed dropped.
+  `skipped` it could not take). `sync` calls it; `events remind` syncs the provider only, since a timer runs it every
+  few minutes and a feed's server is somebody else's. A full list marks what the feed dropped.
 - **Reading:** `readFeed` takes the events inside the window, `X-WR-TIMEZONE` for floating times, and overrides
   (`RECURRENCE-ID`, `readIcs(…, { overrides: true })`), which take the place of the slot they name. Text goes through
   `calendarText`, as an invitation's: feed text is somebody else's.

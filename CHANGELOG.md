@@ -17,7 +17,7 @@ shape of this file.
   `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
 - **iCalendar feeds as read-only calendars.** With `deps.feeds` (`icsFeeds`), `calendars add <url> [--title]` follows a
   public holiday calendar, a sports schedule or a published `.ics` address, and `calendars remove <calendar>` stops.
-  `sync` and `events remind` read each feed after the provider (`syncWithFeeds`), so its events show in `events list`,
+  `sync` reads each feed after the provider (`syncWithFeeds`), so its events show in `events list`,
   `search events`, `overlapping:` and `events remind`. Repeating events are expanded here (`expandSeries`: RRULE in
   the event's own zone, RDATE, EXDATE and overrides). The address is a secret input, kept by the CLI and never
   printed; a fetch follows redirects only to https and stops at 10 MB and 30 s. `readIcs` takes

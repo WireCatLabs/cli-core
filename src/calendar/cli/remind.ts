@@ -9,8 +9,8 @@ import { parseDuration } from "../../domain/duration.js"
 import { readOnlyRefusal } from "../../ports/app.js"
 import { levelRefusal } from "../../sends/guard.js"
 import { DEFAULT_PERMISSIONS, levelFor } from "../../sends/permissions.js"
-import { syncWithFeeds } from "../feeds.js"
 import { dueEvents, openReminders, reminderItem, remindersPath, runHook } from "../remind.js"
+import { syncCalendars } from "../sync.js"
 import { CALENDAR_WRITE_DEFAULTS, EVENTS_REMIND_HOOK_KEY } from "../writer.js"
 import type { CalendarWrites } from "../writes.js"
 import type { CalendarCommandDeps } from "./index.js"
@@ -75,7 +75,8 @@ export const addRemind = (
     if (!opts.dryRun && deps.source && !command.optsWithGlobals<{ offline?: boolean }>().offline) {
       // A reminder from what the store already holds beats none: a failed sync is said in meta and the run goes on.
       try {
-        const report = await syncWithFeeds(deps.source, deps.feeds, deps.store, {
+        // Feeds wait for `sync`: a timer runs this every few minutes, and a feed's server is not Google.
+        const report = await syncCalendars(deps.source, deps.store, {
           accountId: deps.accountId,
           now: at,
           budget: runBudgetOf(command),

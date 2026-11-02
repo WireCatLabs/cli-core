@@ -265,9 +265,13 @@ export const readFeed = (text: string, zone: string, window?: SyncWindow): FeedR
     if (!window || inWindow(entry, window)) entries.push(entry)
   }
   const series = new Set(entries.filter((one) => one.kind === "series").map((one) => one.externalId))
+  const inFeed = new Set(read.events.map((one) => one.uid))
   const overrides = new Map<string, (EntryInput & { originalStartsAt: number })[]>()
   for (const override of read.overrides as IcsOverride[]) {
-    if (!series.has(override.uid)) continue
+    if (!series.has(override.uid)) {
+      if (!inFeed.has(override.uid)) skipped++
+      continue
+    }
     const entry = { ...feedEntry(override, where), originalStartsAt: override.recurrenceId }
     overrides.set(override.uid, [...(overrides.get(override.uid) ?? []), entry])
   }
