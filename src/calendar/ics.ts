@@ -235,11 +235,19 @@ export interface IcsSkip {
   reason: string
 }
 
-const eventOf = (lines: ContentLine[], zone: string): IcsEvent => {
+/** One changed occurrence of a repeating event: `recurrenceId` is the slot it replaces, as `originalStartsAt`. */
+export interface IcsOverride extends IcsEvent {
+  recurrenceId: number
+}
+
+const slotMoment = (moment: Moment) => ("date" in moment ? Date.parse(`${moment.date}T00:00:00Z`) : moment.at)
+
+const eventOf = (lines: ContentLine[], zone: string, overrides = false): IcsEvent | IcsOverride => {
   const one = (name: string) => lines.find((line) => line.name === name)
   const uid = one("UID")?.value.trim()
   if (!uid) throw new Error("the event has no UID")
-  if (one("RECURRENCE-ID"))
+  const recurrenceLine = one("RECURRENCE-ID")
+  if (recurrenceLine && !overrides)
     throw new Error("a changed occurrence of a repeating event (RECURRENCE-ID) is not imported on its own")
   const startLine = one("DTSTART")
   if (!startLine) throw new Error("the event has no DTSTART")
@@ -302,14 +310,23 @@ const eventOf = (lines: ContentLine[], zone: string): IcsEvent => {
   if (attendees.length) event.attendees = attendees
   const url = one("URL")?.value.trim()
   if (url) event.url = url
-  return event
+  return recurrenceLine ? { ...event, recurrenceId: slotMoment(momentOf(recurrenceLine, zone)) } : event
+}
+
+export interface IcsRead {
+  events: IcsEvent[]
+  skipped: IcsSkip[]
+  /** With `overrides`: the changed occurrences, which are otherwise skipped. */
+  overrides: IcsOverride[]
+  /** The calendar's own name (`X-WR-CALNAME`), as the text has it. */
+  name: string | null
 }
 
 /**
  * The VEVENTs of an iCalendar text; times with neither `Z` nor a TZID are read in `zone`. An event that cannot be
  * imported alone is in `skipped` with the reason; a text with no VCALENDAR is refused.
  */
-export const readIcs = (text: string, zone: string): { events: IcsEvent[]; skipped: IcsSkip[] } => {
+export const readIcs = (text: string, zone: string, options: { overrides?: boolean } = {}): IcsRead => {
   const unfolded = text.replace(/^\uFEFF/u, "").replace(/\r?\n[ \t]/gu, "")
   const lines = unfolded.split(/\r?\n/u).filter((line) => line.trim() !== "")
   if (!/^BEGIN:VCALENDAR$/iu.test(lines[0]?.trim() ?? ""))
@@ -318,6 +335,8 @@ export const readIcs = (text: string, zone: string): { events: IcsEvent[]; skipp
     })
   const events: IcsEvent[] = []
   const skipped: IcsSkip[] = []
+  const overrides: IcsOverride[] = []
+  let name: string | null = null
   let held: ContentLine[] | null = null
   // Components inside a VEVENT, such as VALARM, are passed over whole.
   let inner = 0
@@ -329,12 +348,17 @@ export const readIcs = (text: string, zone: string): { events: IcsEvent[]; skipp
       held = []
       continue
     }
-    if (held === null) continue
+    if (held === null) {
+      if (line.name === "X-WR-CALNAME" && name === null) name = unescapeText(line.value).trim() || null
+      continue
+    }
     if (line.name === "BEGIN") inner++
     else if (line.name === "END" && inner > 0) inner--
     else if (line.name === "END" && value === "VEVENT") {
       try {
-        events.push(eventOf(held, zone))
+        const event = eventOf(held, zone, options.overrides)
+        if ("recurrenceId" in event) overrides.push(event)
+        else events.push(event)
       } catch (error) {
         const uid = held.find(({ name }) => name === "UID")?.value.trim() || null
         skipped.push({ uid, reason: error instanceof Error ? error.message : String(error) })
@@ -342,5 +366,5 @@ export const readIcs = (text: string, zone: string): { events: IcsEvent[]; skipp
       held = null
     } else if (inner === 0) held.push(line)
   }
-  return { events, skipped }
+  return { events, skipped, overrides, name }
 }

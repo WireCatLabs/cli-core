@@ -21,7 +21,24 @@ export type {
   StoredEntry,
   StoredParticipant,
 } from "../meetings/index.js"
-export { type IcsEvent, type IcsSkip, readIcs, writeIcs } from "./ics.js"
+export { expandSeries, localMoment, unexpandable } from "./expand.js"
+export {
+  type CalendarFeeds,
+  FEED_LIMITS,
+  FEED_PREFIX,
+  type FeedLimits,
+  type FeedRecord,
+  type FeedRegistry,
+  type FeedSyncStats,
+  type FeedsSyncReport,
+  feedAddress,
+  fetchFeed,
+  icsFeeds,
+  isFeedCalendar,
+  readFeed,
+  syncWithFeeds,
+} from "./feeds.js"
+export { type IcsEvent, type IcsOverride, type IcsRead, type IcsSkip, readIcs, writeIcs } from "./ics.js"
 export { repeatRule } from "./recurrence.js"
 export type {
   BusyTimes,
