@@ -63,7 +63,7 @@ describe("a file with the content of one document (rule 2)", () => {
     const { store, work, home, save, listed, sql } = await setup()
     const { note } = await save(work, "spec.md", "The spec")
     await store.knowledge.addTags(null, { type: "document", id: note.id }, ["kept-tag"])
-    await store.notes.addLink({ from: note.ref, targetText: "Example Person", kind: "links-to" })
+    await store.notes.addLink({ by: "owner", from: note.ref, targetText: "Example Person", kind: "links-to" })
     await store.notes.deleteFileNotes(work, ["spec.md"])
     expect((await store.notes.note(note.ref)).deletedAt).not.toBeNull()
     const { note: moved } = await save(home, "spec.md", "The spec")

@@ -160,7 +160,7 @@ describe("projectStatus on the harbour fixture", () => {
     const deep = await store.knowledge.addProject({ name: "Too deep", key: "HRZ" })
     const unconfirmed = await store.knowledge.addProject({ name: "Guess", key: "HRG" })
     const member = (from: string, to: string, confirmed = true) =>
-      store.knowledge.relate(null, { from, to, kind: "member-of", confirmed })
+      store.knowledge.relate(null, { by: "owner", from, to, kind: "member-of", confirmed })
     await member(child.ref, project)
     await member(grandchild.ref, child.ref)
     await member(deep.ref, grandchild.ref)

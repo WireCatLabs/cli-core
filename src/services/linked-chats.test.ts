@@ -33,7 +33,7 @@ it("lists the confirmed linked chats with their account and role", async () => {
       await store.messages.saveMessages({ provider: "chat", account }, chat, [note(chat)], { via: "test" })
     const project = await store.knowledge.addProject({ name: "Harbour" })
     const link = (from: string, extra: { role?: string; confirmed: boolean }) =>
-      store.knowledge.relate(null, { from, to: project.ref, kind: "member-of", ...extra })
+      store.knowledge.relate(null, { by: "owner", from, to: project.ref, kind: "member-of", ...extra })
     await link("chat:chat/500/7", { role: "source report", confirmed: true })
     await link("chat:chat/501/8", { confirmed: true })
     await link("chat:chat/500/9", { confirmed: false })

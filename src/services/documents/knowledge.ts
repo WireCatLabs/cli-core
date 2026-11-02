@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import type {
   Author,
+  Decider,
   Fact,
   Link,
   LinkInput,
@@ -28,7 +29,7 @@ export interface DocumentKnowledge {
   ): Promise<string[]>
   links(principal: string, ref: string, filter?: Omit<LinkListFilter, "from" | "to">): Promise<Link[]>
   addLink(principal: string, ref: string, input: Omit<LinkInput, "from" | "origin">): Promise<Link>
-  removeLink(principal: string, ref: string, id: string): Promise<unknown>
+  removeLink(principal: string, ref: string, id: string, by: Decider): Promise<unknown>
   notes(
     principal: string,
     ref: string,
@@ -41,14 +42,16 @@ export interface DocumentKnowledge {
   addMemory(
     principal: string,
     ref: string,
-    input: Pick<MemoryInput, "body" | "kind" | "scope" | "status" | "supersedes"> & { author?: MemoryInput["author"] },
+    input: Pick<MemoryInput, "body" | "kind" | "scope" | "status" | "supersedes"> & { author: MemoryInput["author"] },
   ): Promise<Memory>
   memories(
     principal: string,
     ref: string,
     options?: { scope?: Memory["scope"]; kind?: Memory["kind"]; status?: Memory["status"]; limit?: number },
   ): Promise<Memory[]>
-  memory(principal: string, ref: string, memoryRef: string, action?: "show" | "confirm" | "stale"): Promise<Memory>
+  memory(principal: string, ref: string, memoryRef: string, action?: "show"): Promise<Memory>
+  /** `by` decides: the owner, or an agent for the owner that did not propose it. */
+  memory(principal: string, ref: string, memoryRef: string, action: "confirm" | "stale", by: Decider): Promise<Memory>
   searchMemories(
     principal: string,
     ref: string,
@@ -62,7 +65,7 @@ export interface DocumentKnowledge {
       statement: string
       type: Fact["type"]
       scope?: Memory["scope"]
-      by?: Author
+      by: Author
       supersedes?: string
       occurredAt?: string
     },
@@ -72,8 +75,26 @@ export interface DocumentKnowledge {
     ref: string,
     options?: { type?: Fact["type"]; status?: Fact["status"]; limit?: number },
   ): Promise<Fact[]>
-  fact(principal: string, ref: string, factRef: string, action?: "show" | "confirm" | "reverse"): Promise<Fact>
+  fact(principal: string, ref: string, factRef: string, action?: "show"): Promise<Fact>
+  /** `by` decides: the owner, or an agent for the owner that did not propose it; only the owner reverses. */
+  fact(principal: string, ref: string, factRef: string, action: "confirm" | "reverse", by: Decider): Promise<Fact>
 }
+const writer = <T>(by: T | undefined): T => {
+  if (by === undefined)
+    throw new CliError("validation_error", "name who writes it: the owner or an agent; there is no default", {
+      reason: "proposal.decider-required",
+    })
+  return by
+}
+
+const decider = (by: Decider | undefined): Decider => {
+  if (by === undefined)
+    throw new CliError("validation_error", "a confirm names who decides: the owner or an agent with a reason", {
+      reason: "proposal.decider-required",
+    })
+  return by
+}
+
 export const documentKnowledge = (
   store: Pick<MessageStore, "notes" | "facts" | "memories" | "knowledge">,
   folder: (principal: string) => Promise<string | undefined>,
@@ -135,13 +156,13 @@ export const documentKnowledge = (
     },
     addLink: async (principal, ref, input) => {
       await document(principal, ref)
-      return store.notes.addLink({ ...input, from: ref, origin: "owner" })
+      return store.notes.addLink({ ...input, from: ref, origin: input.by === "owner" ? "owner" : "suggested" })
     },
-    removeLink: async (principal, ref, id) => {
+    removeLink: async (principal, ref, id, by) => {
       const links = await port.links(principal, ref)
       if (!links.some((link) => link.id === id && link.origin === "owner"))
         throw new CliError("not_found", "owner link is not attached to this document")
-      return store.notes.removeLink(id)
+      return store.notes.removeLink(id, by)
     },
     notes: async (principal, ref, options) => {
       await document(principal, ref)
@@ -163,16 +184,16 @@ export const documentKnowledge = (
     addMemory: async (principal, ref, input) => {
       await document(principal, ref)
       if (input.supersedes) await memoryFor(principal, ref, input.supersedes)
-      return store.memories.add({ ...input, subject: ref, evidence: [ref], author: input.author ?? "owner" })
+      return store.memories.add({ ...input, subject: ref, evidence: [ref], author: writer(input.author) })
     },
     memories: async (principal, ref, options) => {
       await document(principal, ref)
       return store.memories.list({ ...options, subject: ref })
     },
-    memory: async (principal, ref, memoryRef, action = "show") => {
+    memory: async (principal: string, ref: string, memoryRef: string, action = "show", by?: Decider) => {
       const memory = await memoryFor(principal, ref, memoryRef)
-      if (action === "confirm") return store.memories.confirm(memory.ref)
-      if (action === "stale") return store.memories.markStale(memory.ref)
+      if (action === "confirm") return store.memories.confirm(memory.ref, decider(by))
+      if (action === "stale") return store.memories.markStale(memory.ref, decider(by))
       return memory
     },
     searchMemories: async (principal, ref, query, scope) => {
@@ -186,7 +207,7 @@ export const documentKnowledge = (
       return store.facts.add({
         type,
         statement,
-        by: by ?? "owner",
+        by: writer(by),
         ...(supersedes === undefined ? {} : { supersedes }),
         ...(occurredAt === undefined ? {} : { occurredAt }),
         subject: ref,
@@ -198,10 +219,10 @@ export const documentKnowledge = (
       await document(principal, ref)
       return store.facts.list({ ...options, subject: ref })
     },
-    fact: async (principal, ref, factRef, action = "show") => {
+    fact: async (principal: string, ref: string, factRef: string, action = "show", by?: Decider) => {
       const fact = await factFor(principal, ref, factRef)
-      if (action === "confirm") return store.facts.accept(fact.ref)
-      if (action === "reverse") return store.facts.reverse(fact.ref)
+      if (action === "confirm") return store.facts.accept(fact.ref, decider(by))
+      if (action === "reverse") return store.facts.reverse(fact.ref, decider(by))
       return fact
     },
   }

@@ -128,6 +128,7 @@ export const seedChat = async (store: MessageStore, chat: FixtureChat, project: 
   await store.sync.markRange(chat.account, chat.id, Math.min(...ids), Math.max(...ids))
   if (chat.whole) await store.sync.setSyncState(chat.account, historyStartKey(chat.id), String(Math.min(...ids)))
   await store.knowledge.relate(null, {
+    by: "owner",
     from: `chat:${chat.account.provider}/${chat.account.account}/${chat.id}`,
     to: project,
     kind: "member-of",

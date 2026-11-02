@@ -54,6 +54,7 @@ describe("labels that belong to no account", () => {
       expect(await store.knowledge.tags(telegram, target)).toEqual(["client"])
     }
     const relation = await store.knowledge.relate(null, {
+      by: "owner",
       from: `person:${person?.uid}`,
       to: organization.ref,
       kind: "member-of",

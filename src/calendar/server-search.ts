@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { EventStore } from "../meetings/index.js"
 import type { EventsFound, FoundEvent } from "../services/events-search.js"
 import type { AccountKey } from "../store/store.js"
+import { isFeedCalendar } from "./feeds.js"
 import type { CalendarSource } from "./source.js"
 
 const iso = (at: number | null | undefined) => (at == null ? null : new Date(at).toISOString())
@@ -16,7 +17,10 @@ export const serverSearchAnswer = async (
   { accountId, account, query, limit }: { accountId: number; account: AccountKey; query: string; limit: number },
 ) => {
   if (!source.search) throw new CliError("configuration_error", "this calendar provider has no search of its own")
-  const calendars = (await store.calendars(accountId)).filter(({ synced, deletedAt }) => synced && deletedAt === null)
+  // A feed is read whole into the store, so the stored search already covers it; the provider has never seen it.
+  const calendars = (await store.calendars(accountId)).filter(
+    (calendar) => calendar.synced && calendar.deletedAt === null && !isFeedCalendar(calendar),
+  )
   if (calendars.length === 0)
     throw new CliError("validation_error", "no calendar syncs yet; run sync, or calendars sync <calendar>", {
       reason: "search.no-calendars",

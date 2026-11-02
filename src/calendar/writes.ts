@@ -8,6 +8,7 @@ import { type Asker, type GuardRequest, type GuardSettings, guardFor, type SendG
 import { guardedWrite } from "../sends/guarded.js"
 import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
+import { isFeedCalendar } from "./feeds.js"
 import { readIcs } from "./ics.js"
 import { calendarIn, entryItem, eventIdOf, eventOf, plusDays } from "./reads.js"
 import { kindBoundLines, repeatRule, ruleCount, ruleEnd, ruleEndingBefore, ruleLine, splitDates } from "./recurrence.js"
@@ -265,13 +266,28 @@ const savedAfterCreate = async <T>(context: WriteContext, id: string, save: () =
   }
 }
 
+const READ_ONLY = new Set(["reader", "free-busy"])
+
+/** A calendar the account may only read refuses here, before any question is asked or anything is journaled. */
+const writable = (calendar: StoredCalendar): StoredCalendar => {
+  if (READ_ONLY.has(calendar.accessRole ?? ""))
+    throw new CliError(
+      "permission_error",
+      isFeedCalendar(calendar)
+        ? `calendar ${calendar.id} is a feed, read again from its address on every sync; its events cannot be changed`
+        : `calendar ${calendar.id} is read-only for this account`,
+      { reason: "calendar.read-only", sent: false },
+    )
+  return calendar
+}
+
 export const createEvent = async (
   context: WriteContext,
   calendarReference: string,
   fields: EventFields,
   options: { notify?: boolean; id?: string } = {},
 ) => {
-  const calendar = await calendarIn(context.store, context.accountId, calendarReference)
+  const calendar = writable(await calendarIn(context.store, context.accountId, calendarReference))
   const draft = draftOf(fields, context.zone, { whole: true }) as EventDraft
   const id = idOf(context, options.id)
   const notify = notifyOf(context, options.notify, (draft.attendees?.length ?? 0) > 0)
@@ -308,7 +324,7 @@ export const createEventFromText = async (
   if (!line) throw new CliError("validation_error", "the text is empty: say what, when and where")
   if (line.length > TEXT_MAX || /[\r\n]/u.test(line))
     throw new CliError("validation_error", `the text is one line of at most ${TEXT_MAX} characters`)
-  const calendar = await calendarIn(context.store, context.accountId, calendarReference)
+  const calendar = writable(await calendarIn(context.store, context.accountId, calendarReference))
   const notify = options.notify ?? false
   const guard = writeGuard(context, keysFor(context, "quick-add", notify))
   const id = newEventId()
@@ -368,7 +384,7 @@ export const importEvents = async (context: WriteContext, calendarReference: str
       `the file holds ${events.length} events; one import takes at most ${IMPORT_MAX}`,
       { reason: "ics.too-many" },
     )
-  const calendar = await calendarIn(context.store, context.accountId, calendarReference)
+  const calendar = writable(await calendarIn(context.store, context.accountId, calendarReference))
   const guard = writeGuard(context, keysFor(context, "import", false))
   const id = newEventId()
   const imported: { uid: string; event: string | null; entry: ReturnType<typeof entryItem> | null }[] = []
@@ -442,6 +458,7 @@ const targetOf = async (
         `${context.names.calendar}`,
       { param: context.names.calendar },
     )
+  const owner = writable(calendars.find(({ id }) => id === entry.calendarId) as StoredCalendar)
   let target = entry
   if (scope !== "this") {
     const flag = scope === "series" ? context.names.series : context.names.following
@@ -457,7 +474,7 @@ const targetOf = async (
       sent: false,
     })
   return {
-    calendar: calendars.find(({ id }) => id === entry.calendarId) as StoredCalendar,
+    calendar: owner,
     entry,
     target,
     participants: details.participants.filter(({ entryId }) => entryId === entry.id),

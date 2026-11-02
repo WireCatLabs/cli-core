@@ -193,7 +193,7 @@ describe("forgetting a memory", () => {
     })
     await store.memories.search("harbour")
 
-    expect(await store.memories.remove(wrong.ref)).toEqual({ ref: wrong.ref, removed: true, links: 2 })
+    expect(await store.memories.remove(wrong.ref, "owner")).toEqual({ ref: wrong.ref, removed: true, links: 2 })
 
     await expect(store.memories.get(wrong.ref)).rejects.toMatchObject({ code: "not_found" })
     expect(await store.memories.get(right.ref)).toMatchObject({ supersedes: null, status: "confirmed" })
@@ -213,9 +213,9 @@ describe("forgetting a memory", () => {
       ),
     ).toEqual([{ rows: 0, links: 0, pieces: 0, words: 0, vectors: 0, memories: 2, notes: 1 }])
     expect(fileHolds(path, "zanzibarcalls")).toBe(false)
-    await expect(store.memories.remove(wrong.ref)).rejects.toMatchObject({ code: "not_found" })
+    await expect(store.memories.remove(wrong.ref, "owner")).rejects.toMatchObject({ code: "not_found" })
 
-    expect(await store.memories.remove(kept.ref)).toMatchObject({ removed: true, links: 1 })
+    expect(await store.memories.remove(kept.ref, "owner")).toMatchObject({ removed: true, links: 1 })
     expect(await store.memories.search("harbour")).toEqual([])
     expect(await sql(path, "SELECT count(*) AS n FROM memory_words_vocab WHERE term LIKE 'harbour%'")).toEqual([
       { n: 0 },
@@ -311,7 +311,7 @@ describe("facts", () => {
       evidence: [note.ref],
       project: project.ref,
     })
-    expect(await store.facts.accept(proposed.ref)).toMatchObject({
+    expect(await store.facts.accept(proposed.ref, "owner")).toMatchObject({
       status: "accepted",
       confirmedBy: { type: "person" },
     })
@@ -327,7 +327,7 @@ describe("facts", () => {
     expect((await store.facts.list({ project: project.ref })).map(({ ref, author }) => [ref, author.name])).toEqual([
       [proposed.ref, "digest-writer"],
     ])
-    expect(await store.facts.reverse(replacement.ref)).toMatchObject({ status: "reversed" })
+    expect(await store.facts.reverse(replacement.ref, "owner")).toMatchObject({ status: "reversed" })
   })
 
   it("reverse only decisions, and list by type and subject", async () => {
@@ -345,7 +345,7 @@ describe("facts", () => {
     const statement = await store.facts.add({ type: "statement", statement: "The review moved", by: agent })
     expect(question).toMatchObject({ status: "accepted", subject: note.ref, scope: "work" })
     expect(statement.status).toBe("proposed")
-    await expect(store.facts.reverse(question.ref)).rejects.toMatchObject({ code: "validation_error" })
+    await expect(store.facts.reverse(question.ref, "owner")).rejects.toMatchObject({ code: "validation_error" })
     await expect(store.facts.add({ type: "rumour" as "fact", statement: "x", by: "owner" })).rejects.toMatchObject({
       code: "validation_error",
     })
@@ -376,7 +376,7 @@ describe("facts", () => {
       supersedes: question.ref,
     })
     expect(await store.facts.get(question.ref)).toMatchObject({ status: "accepted" })
-    await store.facts.accept(proposal.ref)
+    await store.facts.accept(proposal.ref, "owner")
     expect(await store.facts.get(question.ref)).toMatchObject({ status: "superseded" })
 
     for (const done of [statement, question])
@@ -396,8 +396,8 @@ describe("facts", () => {
       evidence: [note.ref],
     })
     const owned = await store.facts.add({ type: "fact", statement: "The draft is due", by: "owner" })
-    await expect(store.facts.reject(owned.ref)).rejects.toMatchObject({ code: "validation_error" })
-    expect(await store.facts.reject(proposed.ref)).toMatchObject({ status: "rejected" })
+    await expect(store.facts.reject(owned.ref, "owner")).rejects.toMatchObject({ code: "validation_error" })
+    expect(await store.facts.reject(proposed.ref, "owner")).toMatchObject({ status: "rejected" })
     expect((await store.facts.list({ status: "rejected" })).map(({ ref }) => ref)).toEqual([proposed.ref])
 
     const first = await store.facts.add({
@@ -419,7 +419,7 @@ describe("facts", () => {
     )
     await sql(path, `UPDATE facts SET source = 'memory', metadata = '{"memory":90}' WHERE id = ${first.id}`)
 
-    expect(await store.facts.remove(first.ref)).toEqual({ ref: first.ref, removed: true, links: 1 })
+    expect(await store.facts.remove(first.ref, "owner")).toEqual({ ref: first.ref, removed: true, links: 1 })
     await expect(store.facts.get(first.ref)).rejects.toMatchObject({ code: "not_found" })
     expect(await store.facts.get(second.ref)).toMatchObject({ supersedes: null, status: "accepted" })
     expect(
@@ -444,8 +444,8 @@ describe("facts", () => {
     const highestMemory = await memory()
     await fact()
     const highestFact = await fact()
-    await store.memories.remove(highestMemory.ref)
-    await store.facts.remove(highestFact.ref)
+    await store.memories.remove(highestMemory.ref, "owner")
+    await store.facts.remove(highestFact.ref, "owner")
     await store.close()
     live.splice(live.indexOf(store), 1)
 
