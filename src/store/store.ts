@@ -35,6 +35,7 @@ import { type EventSearch, eventSearchOver } from "./sqlite/event-search.js"
 import { evidenceFindingsStoreOver } from "./sqlite/evidence-findings.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import { type FilesStore, filesStoreOver } from "./sqlite/files.js"
+import { type FinanceStore, financeStoreOver } from "./sqlite/finance.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
@@ -113,6 +114,8 @@ export interface MessageStore {
   /** What any ref names, a page of them at a time: read once per page, never once per row. */
   readonly refs: RefsStore
   readonly facts: FactsStore
+  /** Invoices, payments and their allocations, in exact minor units; an agent's or an import's wait for the owner. */
+  readonly finance: FinanceStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
   readonly memories: MemoriesStore
   /** What an agent wants done outside the store, waiting for the owner's approval. */
@@ -226,6 +229,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     summaries: async (texts, options) => refSummariesOf(context.database, texts, options),
   }
   const facts = once(() => factsStoreOver(context))
+  const finance = once(() => financeStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
   const agentActions = once(() => agentActionsStoreOver(context, pruneLogsWhenDue))
@@ -326,6 +330,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get facts() {
       return facts()
+    },
+    get finance() {
+      return finance()
     },
     get memories() {
       return memories()

@@ -1,0 +1,869 @@
+import { CliError } from "@wirecat/cli-base"
+import {
+  FINANCE_REVIEWS,
+  type FinanceReview,
+  INVOICE_DIRECTIONS,
+  INVOICE_STATUSES,
+  type InvoiceDirection,
+  type InvoiceStatus,
+  invoiceTitle,
+  MONEY_DIRECTIONS,
+  type MoneyDirection,
+  paymentEntryTitle,
+  settledStatus,
+} from "../../domain/finance.js"
+import {
+  currencyOf,
+  formatDecimal,
+  lineUnits,
+  type Money,
+  minorUnits,
+  moneyLabel,
+  moneyOf,
+  quantityOf,
+  scaleOf,
+} from "../../domain/money.js"
+import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
+import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
+import { type Author, authorActor, authorOf, projectId, projectOf, subjectOf } from "./memories.js"
+import { requiredThing } from "./notes.js"
+import type { StoreContext } from "./open.js"
+import { write } from "./transaction.js"
+
+/** A `person:` or `organization:` on an invoice or a payment, with its name so a list needs no lookup. */
+export interface Party {
+  ref: string
+  name: string | null
+  /** The owner's own person row. */
+  owner: boolean
+}
+
+interface Reviewed {
+  review: FinanceReview
+  /** `name` is a bot's handle and `kind` whether it is an agent or a rule; both `null` for a person. */
+  author: { type: Actor["type"]; id: string; name: string | null; kind: "agent" | "rule" | null }
+  model: string | null
+  confirmedBy: { type: Actor["type"]; id: string } | null
+  source: string
+  /** Why an agent or an import proposed it. */
+  reason: string | null
+  project: string | null
+  projectName: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Invoice extends Reviewed {
+  id: string
+  ref: string
+  /** One line, as a list or the review inbox prints it. */
+  title: string
+  direction: InvoiceDirection
+  number: string | null
+  issuer: Party | null
+  counterparty: Party
+  currency: string
+  total: string
+  /** Settled by confirmed payments. */
+  paid: string
+  /** Still owed: `total − paid`. */
+  open: string
+  issueDate: string | null
+  dueDate: string | null
+  status: InvoiceStatus
+}
+
+export interface InvoiceLine {
+  position: number
+  description: string
+  quantity: string
+  unitPrice: string | null
+  amount: string
+}
+
+export interface Allocation {
+  payment: string
+  invoice: string
+  amount: string
+  currency: string
+  createdAt: string
+}
+
+export interface InvoiceDetail extends Invoice {
+  lines: InvoiceLine[]
+  allocations: Allocation[]
+}
+
+export interface Payment extends Reviewed {
+  id: string
+  ref: string
+  title: string
+  direction: MoneyDirection
+  payer: Party | null
+  payee: Party | null
+  amount: string
+  currency: string
+  /** `YYYY-MM-DD`. */
+  date: string
+  reference: string | null
+  /** Allocated to invoices, confirmed or not. */
+  allocated: string
+  unallocated: string
+}
+
+export interface PaymentDetail extends Payment {
+  allocations: Allocation[]
+}
+
+interface Written {
+  /** The owner's entry is confirmed at once; a bot's waits as proposed for the owner. */
+  by: Author
+  project?: string
+  /** Where a bot's row came from, such as `agent` or an importer's name; the owner's is always `owner`. */
+  source?: string
+  /** Why a bot proposes it, kept for the reviewer. */
+  reason?: string
+}
+
+export interface InvoiceLineInput {
+  description: string
+  /** A decimal string; `1` when not given. */
+  quantity?: string
+  /** Decimal strings in the invoice's currency. Give either or both: both must agree, quantity × unit price. */
+  unitPrice?: string
+  amount?: string
+}
+
+export interface InvoiceInput extends Written {
+  direction: InvoiceDirection
+  number?: string
+  /** `person:` or `organization:`. */
+  issuer?: string
+  counterparty: string
+  currency: string
+  /** `YYYY-MM-DD`. */
+  issueDate?: string
+  dueDate?: string
+  /** Kept as a draft until `issueInvoice`; otherwise issued at once. */
+  draft?: boolean
+  lines: InvoiceLineInput[]
+  /** The total printed on the invoice: refused when it is not the sum of the lines. */
+  total?: string
+}
+
+export interface PaymentInput extends Written {
+  direction: MoneyDirection
+  payer?: string
+  payee?: string
+  amount: string
+  currency: string
+  date: string
+  reference?: string
+  /** Invoices it settles, in the payment's currency; a bot's count only once the owner confirms the payment. */
+  allocations?: { invoice: string; amount: string }[]
+}
+
+interface ListFilter {
+  project?: string
+  review?: FinanceReview
+  proposedBy?: ProposedByFilter
+  /** 1–500, 100 by default; newest written first. */
+  limit?: number
+}
+
+export interface OpenTotal extends Money {
+  invoices: number
+}
+
+export interface FinanceStore {
+  addInvoice(input: InvoiceInput): Promise<InvoiceDetail>
+  invoice(reference: string): Promise<InvoiceDetail>
+  invoices(
+    filter?: ListFilter & {
+      direction?: InvoiceDirection
+      status?: InvoiceStatus
+      /** Issued or partly paid. */
+      open?: boolean
+      counterparty?: string
+    },
+  ): Promise<Invoice[]>
+  /** The owner sends a draft: its status then follows its allocations. */
+  issueInvoice(reference: string, by: Author): Promise<InvoiceDetail>
+  /** The owner cancels an invoice no confirmed payment is allocated to; proposed allocations to it go. */
+  voidInvoice(reference: string, by: Author): Promise<InvoiceDetail>
+  addPayment(input: PaymentInput): Promise<PaymentDetail>
+  payment(reference: string): Promise<PaymentDetail>
+  payments(filter?: ListFilter & { direction?: MoneyDirection; party?: string }): Promise<Payment[]>
+  /**
+   * Settles part of an invoice with part of a payment, in one currency, never beyond either. The owner allocates any
+   * payment; a bot only one it proposed that is still proposed.
+   */
+  allocate(input: { payment: string; invoice: string; amount: string; by: Author }): Promise<Allocation>
+  /**
+   * The owner confirms a proposed `invoice:` or `payment:`; only the owner decides money. A payment whose allocations
+   * would settle more than an invoice's total, given the confirmed payments by then, is refused and stays proposed.
+   */
+  confirm(reference: string, by: Decider, reason?: string): Promise<InvoiceDetail | PaymentDetail>
+  /** The owner turns a proposal down; it stays, `rejected`, and its allocations go. */
+  reject(reference: string, by: Decider, reason?: string): Promise<InvoiceDetail | PaymentDetail>
+  /** What is still owed on confirmed open invoices, per direction and per currency: nothing is converted. */
+  openTotals(filter?: { project?: string }): Promise<{ receivable: OpenTotal[]; payable: OpenTotal[] }>
+}
+
+type Row = Record<string, unknown>
+
+const refuse = (
+  message: string,
+  reason: string,
+  code: "validation_error" | "permission_error" = "validation_error",
+) => {
+  throw new CliError(code, message, { reason })
+}
+
+const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
+  if (typeof value !== "string" || !allowed.includes(value as T))
+    return refuse(`${what} is one of ${allowed.join(", ")}`, "finance.field")
+  return value as T
+}
+
+const text = (value: unknown, what: string, limit: number): string | null => {
+  if (value === undefined || value === null) return null
+  if (typeof value !== "string" || !value.trim() || value.length > limit || value.includes("\0"))
+    return refuse(`${what} takes 1–${limit} characters`, "finance.field")
+  return value.trim()
+}
+
+const isoDate = (value: unknown, what: string): string | null => {
+  if (value === undefined || value === null) return null
+  const date = typeof value === "string" ? value.trim() : ""
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
+    return refuse(`${what} is a date such as 2026-11-15`, "finance.field")
+  return date
+}
+
+const iso = (value: unknown) => new Date(Number(value)).toISOString()
+const MAX_LINES = 500
+
+const reasonOf = (metadata: unknown): string | null => {
+  if (metadata == null) return null
+  try {
+    const { reason } = JSON.parse(String(metadata)) as { reason?: unknown }
+    return typeof reason === "string" ? reason : null
+  } catch {
+    return null
+  }
+}
+
+/** Money settled by confirmed payments only: a proposed payment promises nothing yet. */
+const PAID =
+  "(SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
+  "WHERE a.invoice_id = i.id AND p.review = 'confirmed' AND p.deleted_at IS NULL)"
+const INVOICES =
+  `SELECT i.*, ${PAID} AS paid, b.name AS author_name, b.kind AS author_kind FROM invoices i ` +
+  "LEFT JOIN bots b ON i.author_type = 'bot' AND b.id = i.author_id"
+const PAYMENTS =
+  "SELECT p.*, (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = p.id) AS allocated, " +
+  "b.name AS author_name, b.kind AS author_kind FROM payments p LEFT JOIN bots b ON p.author_type = 'bot' AND b.id = p.author_id"
+
+type FinanceOperations = {
+  [K in keyof FinanceStore]: FinanceStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
+}
+
+export const financeOperationsOver = (context: StoreContext): FinanceOperations => {
+  const { database, now } = context
+
+  const partyOf = (type: unknown, id: unknown): Party | null => {
+    if (type == null) return null
+    const { subject, subjectName, subjectIsOwner } = subjectOf(database, { subject_type: type, subject_id: id })
+    return subject === null ? null : { ref: subject, name: subjectName, owner: subjectIsOwner }
+  }
+  const partyThing = (reference: string | undefined, what: string) => {
+    if (reference === undefined) return undefined
+    const thing = requiredThing(database, reference, what)
+    if (thing.type !== "person" && thing.type !== "organization")
+      return refuse(`${what} is a person: or organization: reference, not ${reference}`, "finance.party")
+    return thing
+  }
+  const reviewedOf = (row: Row): Reviewed => ({
+    review: row.review as FinanceReview,
+    author: authorOf(row),
+    model: row.model == null ? null : String(row.model),
+    confirmedBy:
+      row.confirmed_by_type == null
+        ? null
+        : { type: row.confirmed_by_type as Actor["type"], id: String(row.confirmed_by_id) },
+    source: String(row.source),
+    reason: reasonOf(row.metadata),
+    ...projectOf(database, row),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+  })
+
+  const invoiceOf = (row: Row): Invoice => {
+    const currency = String(row.currency)
+    const scale = scaleOf(currency)
+    const [total, paid] = [Number(row.total), Number(row.paid)]
+    const counterparty = partyOf(row.counterparty_type, row.counterparty_id) as Party
+    const fields = {
+      id: Number(row.id),
+      number: row.number == null ? null : String(row.number),
+      direction: row.direction as InvoiceDirection,
+      total,
+      currency,
+      counterpartyName: counterparty?.name ?? null,
+      dueDate: row.due_date == null ? null : String(row.due_date),
+      status: row.status as InvoiceStatus,
+      review: row.review as FinanceReview,
+    }
+    return {
+      id: String(row.id),
+      ref: `invoice:${row.id}`,
+      title: invoiceTitle(fields),
+      direction: fields.direction,
+      number: fields.number,
+      issuer: partyOf(row.issuer_type, row.issuer_id),
+      counterparty,
+      currency,
+      total: formatDecimal(total, scale),
+      paid: formatDecimal(paid, scale),
+      open: formatDecimal(Math.max(total - paid, 0), scale),
+      issueDate: row.issue_date == null ? null : String(row.issue_date),
+      dueDate: fields.dueDate,
+      status: fields.status,
+      ...reviewedOf(row),
+    }
+  }
+
+  const paymentOf = (row: Row): Payment => {
+    const currency = String(row.currency)
+    const scale = scaleOf(currency)
+    const [amount, allocated] = [Number(row.amount), Number(row.allocated)]
+    const direction = row.direction as MoneyDirection
+    const payer = partyOf(row.payer_type, row.payer_id)
+    const payee = partyOf(row.payee_type, row.payee_id)
+    const date = String(row.payment_date)
+    return {
+      id: String(row.id),
+      ref: `payment:${row.id}`,
+      title: paymentEntryTitle({
+        direction,
+        amount,
+        currency,
+        partyName: (direction === "in" ? payer : payee)?.name ?? null,
+        date,
+        review: row.review as FinanceReview,
+      }),
+      direction,
+      payer,
+      payee,
+      amount: formatDecimal(amount, scale),
+      currency,
+      date,
+      reference: row.reference == null ? null : String(row.reference),
+      allocated: formatDecimal(allocated, scale),
+      unallocated: formatDecimal(amount - allocated, scale),
+      ...reviewedOf(row),
+    }
+  }
+
+  const allocationsWhere = (column: "payment_id" | "invoice_id", id: number): Allocation[] =>
+    database
+      .prepare(
+        "SELECT a.*, p.currency FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
+          `WHERE a.${column} = ? ORDER BY a.id`,
+      )
+      .all(id)
+      .map((row) => ({
+        payment: `payment:${row.payment_id}`,
+        invoice: `invoice:${row.invoice_id}`,
+        amount: formatDecimal(Number(row.amount), scaleOf(String(row.currency))),
+        currency: String(row.currency),
+        createdAt: iso(row.created_at),
+      }))
+
+  const rowOf = (reference: string, type: "invoice" | "payment"): Row => {
+    const thing = requiredThing(database, reference.includes(":") ? reference : `${type}:${reference}`, `the ${type}`)
+    if (thing.type !== type) return refuse(`${reference} is not an ${type}`, "finance.ref")
+    return database.prepare(`${type === "invoice" ? INVOICES : PAYMENTS} WHERE ${type[0]}.id = ?`).get(thing.id) as Row
+  }
+
+  const invoiceDetail = (reference: string): InvoiceDetail => {
+    const row = rowOf(reference, "invoice")
+    const scale = scaleOf(String(row.currency))
+    const lines = database
+      .prepare("SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY position")
+      .all(Number(row.id))
+      .map((line) => ({
+        position: Number(line.position),
+        description: String(line.description),
+        quantity: String(line.quantity),
+        unitPrice: line.unit_price == null ? null : formatDecimal(Number(line.unit_price), scale),
+        amount: formatDecimal(Number(line.amount), scale),
+      }))
+    return { ...invoiceOf(row), lines, allocations: allocationsWhere("invoice_id", Number(row.id)) }
+  }
+
+  const paymentDetail = (reference: string): PaymentDetail => {
+    const row = rowOf(reference, "payment")
+    return { ...paymentOf(row), allocations: allocationsWhere("payment_id", Number(row.id)) }
+  }
+
+  const settle = (invoiceId: number) => {
+    const row = database
+      .prepare(`SELECT i.status, i.total, ${PAID} AS paid FROM invoices i WHERE i.id = ?`)
+      .get(invoiceId)
+    if (!row) return
+    const status = settledStatus(row.status as InvoiceStatus, Number(row.total), Number(row.paid))
+    database
+      .prepare("UPDATE invoices SET status = ?, updated_at = ? WHERE id = ? AND status <> ?")
+      .run(status, now(), invoiceId, status)
+  }
+
+  const allocateRow = (payment: Row, reference: string, units: number, actor: Actor) => {
+    const invoice = rowOf(reference, "invoice")
+    const [paymentRef, invoiceRef] = [`payment:${payment.id}`, `invoice:${invoice.id}`]
+    if (invoice.deleted_at != null || invoice.review === "rejected")
+      refuse(`${invoiceRef} is ${invoice.review === "rejected" ? "rejected" : "deleted"}`, "finance.allocate")
+    if (invoice.status === "draft" || invoice.status === "void")
+      refuse(`${invoiceRef} is ${invoice.status}; only an issued invoice is paid`, "finance.allocate")
+    const currency = String(payment.currency)
+    if (invoice.currency !== currency)
+      refuse(
+        `${paymentRef} is in ${currency} and ${invoiceRef} in ${String(invoice.currency)}; the store converts nothing`,
+        "finance.currency",
+      )
+    const fromPayment = Number(
+      database
+        .prepare("SELECT coalesce(sum(amount), 0) AS n FROM payment_allocations WHERE payment_id = ?")
+        .get(Number(payment.id))?.n,
+    )
+    if (fromPayment + units > Number(payment.amount))
+      refuse(
+        `${paymentRef} is ${moneyLabel(Number(payment.amount), currency)} and ` +
+          `${moneyLabel(fromPayment, currency)} of it is already allocated; ${moneyLabel(units, currency)} more is too much`,
+        "finance.over-payment",
+      )
+    const toInvoice = Number(
+      database
+        .prepare(
+          "SELECT coalesce(sum(a.amount), 0) AS n FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
+            "WHERE a.invoice_id = ? AND ((p.review = 'confirmed' AND p.deleted_at IS NULL) OR a.payment_id = ?)",
+        )
+        .get(Number(invoice.id), Number(payment.id))?.n,
+    )
+    if (toInvoice + units > Number(invoice.total))
+      refuse(
+        `${invoiceRef} totals ${moneyLabel(Number(invoice.total), currency)} and ` +
+          `${moneyLabel(toInvoice, currency)} is already allocated to it; ${moneyLabel(units, currency)} more is too much`,
+        "finance.over-invoice",
+      )
+    const at = now()
+    database
+      .prepare(
+        "INSERT INTO payment_allocations (payment_id, invoice_id, amount, author_type, author_id, created_at, updated_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (payment_id, invoice_id) " +
+          "DO UPDATE SET amount = amount + excluded.amount, updated_at = excluded.updated_at",
+      )
+      .run(Number(payment.id), Number(invoice.id), units, actor.type, actor.id, at, at)
+    return Number(invoice.id)
+  }
+
+  const written = (input: Written) => {
+    const owner = input.by === "owner"
+    const { actor, model } = authorActor(context, input.by)
+    const source = owner ? "owner" : (text(input.source, "a source", 80) ?? "agent")
+    const reason = owner ? null : text(input.reason, "a reason", 2000)
+    return {
+      owner,
+      actor,
+      model,
+      source,
+      review: owner ? "confirmed" : "proposed",
+      confirmedType: owner ? actor.type : null,
+      confirmedId: owner ? actor.id : null,
+      metadata: reason === null ? null : JSON.stringify({ reason }),
+      project: input.project === undefined ? null : projectId(database, input.project),
+    }
+  }
+
+  const ownerOnly = (by: Author, what: string) => {
+    if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
+  }
+
+  const keepDecision = (table: "invoices" | "payments", id: number, by: Decider, reason?: string) => {
+    const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
+    if (by === "owner" && !why) return
+    const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
+    database
+      .prepare(`UPDATE ${table} SET metadata = json_set(coalesce(metadata, '{}'), '$.decision', json(?)) WHERE id = ?`)
+      .run(JSON.stringify(decision), id)
+  }
+
+  /** A proposed payment's allocations count once confirmed; by then other confirmed payments may cover the invoice. */
+  const coveredElsewhere = (paymentId: number) => {
+    const over = database
+      .prepare(
+        "SELECT a.invoice_id, a.amount, i.total, i.currency, (SELECT coalesce(sum(o.amount), 0) FROM payment_allocations o " +
+          "JOIN payments p ON p.id = o.payment_id WHERE o.invoice_id = a.invoice_id AND o.payment_id <> a.payment_id " +
+          "AND p.review = 'confirmed' AND p.deleted_at IS NULL) AS others FROM payment_allocations a " +
+          "JOIN invoices i ON i.id = a.invoice_id WHERE a.payment_id = ? AND a.amount + others > i.total LIMIT 1",
+      )
+      .get(paymentId)
+    if (!over) return
+    const currency = String(over.currency)
+    refuse(
+      `invoice:${over.invoice_id} is already covered by other payments: ${moneyLabel(Number(over.others), currency)} ` +
+        `of ${moneyLabel(Number(over.total), currency)}; payment:${paymentId} would add ` +
+        `${moneyLabel(Number(over.amount), currency)}, so it stays proposed`,
+      "finance.over-invoice",
+    )
+  }
+
+  const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean) => {
+    const thing = requiredThing(database, reference, "the proposal")
+    if (thing.type !== "invoice" && thing.type !== "payment")
+      return refuse(`${reference} is not an invoice: or payment:`, "finance.ref")
+    const type = thing.type
+    const table = type === "invoice" ? "invoices" : "payments"
+    const row = rowOf(reference, type)
+    const ref = `${type}:${row.id}`
+    assertMayDecide(
+      { id: ref, proposedBy: proposerOf(database, row.author_type, row.author_id), ownerOnly: true },
+      by,
+      context.decisions,
+    )
+    if (row.review !== "proposed") refuse(`${ref} is already ${String(row.review)}`, "proposal.wrong-state")
+    const id = Number(row.id)
+    write(database, () => {
+      const at = now()
+      if (confirm && type === "payment") coveredElsewhere(id)
+      if (confirm) {
+        const { actor } = authorActor(context, deciderAuthor(by))
+        database
+          .prepare(
+            `UPDATE ${table} SET review = 'confirmed', confirmed_by_type = ?, confirmed_by_id = ?, updated_at = ? WHERE id = ?`,
+          )
+          .run(actor.type, actor.id, at, id)
+      } else database.prepare(`UPDATE ${table} SET review = 'rejected', updated_at = ? WHERE id = ?`).run(at, id)
+      keepDecision(table, id, by, reason)
+      const touched =
+        type === "invoice"
+          ? [id]
+          : database
+              .prepare("SELECT invoice_id FROM payment_allocations WHERE payment_id = ?")
+              .all(id)
+              .map((one) => Number(one.invoice_id))
+      if (!confirm)
+        database
+          .prepare(`DELETE FROM payment_allocations WHERE ${type === "invoice" ? "invoice_id" : "payment_id"} = ?`)
+          .run(id)
+      for (const invoice of touched) settle(invoice)
+    })
+    return type === "invoice" ? invoiceDetail(ref) : paymentDetail(ref)
+  }
+
+  const limitOf = (limit: number | undefined) => Math.min(Math.max(limit ?? 100, 1), 500)
+
+  return {
+    addInvoice: (input) => {
+      const direction = oneOf(input.direction, INVOICE_DIRECTIONS, "an invoice's direction")
+      const currency = currencyOf(input.currency)
+      if (!Array.isArray(input.lines) || input.lines.length === 0 || input.lines.length > MAX_LINES)
+        refuse(`an invoice has 1–${MAX_LINES} lines`, "finance.lines")
+      const lines = input.lines.map((line, at) => {
+        const what = `line ${at + 1}`
+        const quantity = quantityOf(line.quantity ?? "1")
+        const unitPrice =
+          line.unitPrice === undefined ? null : minorUnits(line.unitPrice, currency, `${what}'s unit price`)
+        const computed = unitPrice === null ? null : lineUnits(quantity.thousandths, unitPrice)
+        const amount = line.amount === undefined ? computed : minorUnits(line.amount, currency, `${what}'s amount`)
+        if (amount === null) return refuse(`${what} takes a unit price, an amount or both`, "finance.lines")
+        if (computed !== null && computed !== amount)
+          refuse(
+            `${what}: ${quantity.text} × ${moneyLabel(unitPrice as number, currency)} is ` +
+              `${moneyLabel(computed, currency)}, not ${moneyLabel(amount, currency)}`,
+            "finance.line-amount",
+          )
+        return {
+          description:
+            text(line.description, `${what}'s description`, 500) ??
+            refuse(`${what} needs a description`, "finance.lines"),
+          quantity: quantity.text,
+          unitPrice: unitPrice ?? (quantity.thousandths === 1000n ? amount : null),
+          amount,
+        }
+      })
+      const total = lines.reduce((sum, line) => sum + line.amount, 0)
+      if (!Number.isSafeInteger(total)) refuse("an invoice's total is too large", "finance.total")
+      if (total <= 0) refuse("an invoice totals more than 0", "finance.total")
+      if (input.total !== undefined) {
+        const printed = minorUnits(input.total, currency, "an invoice's total")
+        if (printed !== total)
+          refuse(
+            `the invoice's total ${moneyLabel(printed, currency)} is not the sum of its lines, ${moneyLabel(total, currency)}`,
+            "finance.total",
+          )
+      }
+      const number = text(input.number, "an invoice's number", 80)
+      const issueDate = isoDate(input.issueDate, "an invoice's issue date")
+      const dueDate = isoDate(input.dueDate, "an invoice's due date")
+      const id = write(database, () => {
+        const issuer = partyThing(input.issuer, "the issuer")
+        const counterparty =
+          partyThing(input.counterparty, "the counterparty") ??
+          refuse("an invoice names its counterparty, a person: or organization:", "finance.party")
+        const by = written(input)
+        const at = now()
+        const made = Number(
+          database
+            .prepare(
+              "INSERT INTO invoices (direction, number, issuer_type, issuer_id, counterparty_type, counterparty_id, project_id, " +
+                "currency, total, issue_date, due_date, status, review, author_type, author_id, model, confirmed_by_type, " +
+                "confirmed_by_id, source, metadata, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            )
+            .get(
+              direction,
+              number,
+              issuer?.type ?? null,
+              issuer?.id ?? null,
+              counterparty.type,
+              counterparty.id,
+              by.project,
+              currency,
+              total,
+              issueDate,
+              dueDate,
+              input.draft ? "draft" : "issued",
+              by.review,
+              by.actor.type,
+              by.actor.id,
+              by.model,
+              by.confirmedType,
+              by.confirmedId,
+              by.source,
+              by.metadata,
+              at,
+              at,
+            )?.id,
+        )
+        const insert = database.prepare(
+          "INSERT INTO invoice_lines (invoice_id, position, description, quantity, unit_price, amount, created_at, updated_at) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        for (const [index, line] of lines.entries())
+          insert.run(made, index + 1, line.description, line.quantity, line.unitPrice, line.amount, at, at)
+        return made
+      })
+      return invoiceDetail(`invoice:${id}`)
+    },
+    invoice: (reference) => invoiceDetail(reference),
+    invoices: (filter = {}) => {
+      const project = filter.project === undefined ? null : projectId(database, filter.project)
+      const counterparty = partyThing(filter.counterparty, "the counterparty")
+      const by = proposedBySql("i.author_type", "i.author_id", filter.proposedBy)
+      const status = filter.status === undefined ? null : oneOf(filter.status, INVOICE_STATUSES, "a status")
+      const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
+      return database
+        .prepare(
+          `${INVOICES} WHERE i.deleted_at IS NULL AND (? IS NULL OR i.direction = ?) AND (? IS NULL OR i.status = ?) ` +
+            "AND (? IS NULL OR i.review = ?) AND (? IS NULL OR i.project_id = ?) " +
+            "AND (? IS NULL OR (i.counterparty_type = ? AND i.counterparty_id = ?)) " +
+            `${filter.open ? "AND i.status IN ('issued', 'partly_paid') " : ""}AND ${by.sql} ` +
+            "ORDER BY i.created_at DESC, i.id DESC LIMIT ?",
+        )
+        .all(
+          filter.direction ?? null,
+          filter.direction ?? null,
+          status,
+          status,
+          review,
+          review,
+          project,
+          project,
+          counterparty?.type ?? null,
+          counterparty?.type ?? null,
+          counterparty?.id ?? null,
+          ...by.params,
+          limitOf(filter.limit),
+        )
+        .map(invoiceOf)
+    },
+    issueInvoice: (reference, by) => {
+      ownerOnly(by, "issues an invoice")
+      const row = rowOf(reference, "invoice")
+      if (row.status !== "draft") refuse(`invoice:${row.id} is ${String(row.status)}, not a draft`, "finance.status")
+      write(database, () => {
+        database
+          .prepare("UPDATE invoices SET status = 'issued', updated_at = ? WHERE id = ?")
+          .run(now(), Number(row.id))
+        settle(Number(row.id))
+      })
+      return invoiceDetail(`invoice:${row.id}`)
+    },
+    voidInvoice: (reference, by) => {
+      ownerOnly(by, "voids an invoice")
+      const row = rowOf(reference, "invoice")
+      if (row.status === "void") refuse(`invoice:${row.id} is already void`, "finance.status")
+      const allocated = database
+        .prepare(
+          "SELECT 1 FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
+            "WHERE a.invoice_id = ? AND p.review = 'confirmed' AND p.deleted_at IS NULL LIMIT 1",
+        )
+        .get(Number(row.id))
+      if (allocated)
+        refuse(`payments are allocated to invoice:${row.id}; a paid invoice is not voided`, "finance.status")
+      write(database, () => {
+        database
+          .prepare(
+            "DELETE FROM payment_allocations WHERE invoice_id = ? " +
+              "AND payment_id IN (SELECT id FROM payments WHERE review = 'proposed')",
+          )
+          .run(Number(row.id))
+        database.prepare("UPDATE invoices SET status = 'void', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+      })
+      return invoiceDetail(`invoice:${row.id}`)
+    },
+    addPayment: (input) => {
+      const direction = oneOf(input.direction, MONEY_DIRECTIONS, "a payment's direction")
+      const currency = currencyOf(input.currency)
+      const amount = minorUnits(input.amount, currency, "a payment's amount")
+      if (amount <= 0) refuse("a payment's amount is more than 0", "money.amount")
+      const date = isoDate(input.date, "a payment's date") ?? refuse("a payment has a date", "finance.field")
+      const reference = text(input.reference, "a payment's reference", 500)
+      const allocations = (input.allocations ?? []).map(({ invoice, amount: share }) => ({
+        invoice,
+        units: minorUnits(share, currency, `the amount allocated to ${invoice}`),
+      }))
+      const id = write(database, () => {
+        const payer = partyThing(input.payer, "the payer")
+        const payee = partyThing(input.payee, "the payee")
+        const by = written(input)
+        const at = now()
+        const made = database
+          .prepare(
+            "INSERT INTO payments (direction, payer_type, payer_id, payee_type, payee_id, amount, currency, payment_date, " +
+              "reference, project_id, review, author_type, author_id, model, confirmed_by_type, confirmed_by_id, source, " +
+              "metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+          )
+          .get(
+            direction,
+            payer?.type ?? null,
+            payer?.id ?? null,
+            payee?.type ?? null,
+            payee?.id ?? null,
+            amount,
+            currency,
+            date,
+            reference,
+            by.project,
+            by.review,
+            by.actor.type,
+            by.actor.id,
+            by.model,
+            by.confirmedType,
+            by.confirmedId,
+            by.source,
+            by.metadata,
+            at,
+            at,
+          ) as Row
+        const touched = allocations.map(({ invoice, units }) => allocateRow(made, invoice, units, by.actor))
+        for (const invoice of touched) settle(invoice)
+        return Number(made.id)
+      })
+      return paymentDetail(`payment:${id}`)
+    },
+    payment: (reference) => paymentDetail(reference),
+    payments: (filter = {}) => {
+      const project = filter.project === undefined ? null : projectId(database, filter.project)
+      const party = partyThing(filter.party, "the party")
+      const by = proposedBySql("p.author_type", "p.author_id", filter.proposedBy)
+      const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
+      return database
+        .prepare(
+          `${PAYMENTS} WHERE p.deleted_at IS NULL AND (? IS NULL OR p.direction = ?) AND (? IS NULL OR p.review = ?) ` +
+            "AND (? IS NULL OR p.project_id = ?) AND (? IS NULL OR (p.payer_type = ? AND p.payer_id = ?) " +
+            `OR (p.payee_type = ? AND p.payee_id = ?)) AND ${by.sql} ORDER BY p.created_at DESC, p.id DESC LIMIT ?`,
+        )
+        .all(
+          filter.direction ?? null,
+          filter.direction ?? null,
+          review,
+          review,
+          project,
+          project,
+          party?.type ?? null,
+          party?.type ?? null,
+          party?.id ?? null,
+          party?.type ?? null,
+          party?.id ?? null,
+          ...by.params,
+          limitOf(filter.limit),
+        )
+        .map(paymentOf)
+    },
+    allocate: ({ payment, invoice, amount, by }) => {
+      const row = rowOf(payment, "payment")
+      const ref = `payment:${row.id}`
+      if (by !== "owner") {
+        const own =
+          row.author_type === "bot" && row.author_name != null && botKey(String(row.author_name)) === botKey(by.bot)
+        if (row.review !== "proposed" || !own)
+          refuse(
+            `only the owner allocates ${ref}; a bot allocates only from a payment it proposed that is still proposed`,
+            "finance.owner-only",
+            "permission_error",
+          )
+      }
+      if (row.review === "rejected" || row.deleted_at != null)
+        refuse(`${ref} is ${String(row.review)}`, "finance.allocate")
+      const currency = String(row.currency)
+      const units = minorUnits(amount, currency, "an allocation")
+      if (units <= 0) refuse("an allocation is more than 0", "money.amount")
+      const invoiceId = write(database, () => {
+        const { actor } = authorActor(context, by)
+        const made = allocateRow(row, invoice, units, actor)
+        settle(made)
+        return made
+      })
+      const found = allocationsWhere("payment_id", Number(row.id)).find((one) => one.invoice === `invoice:${invoiceId}`)
+      return found as Allocation
+    },
+    confirm: (reference, by, reason) => decide(reference, by, reason, true),
+    reject: (reference, by, reason) => decide(reference, by, reason, false),
+    openTotals: (filter = {}) => {
+      const project = filter.project === undefined ? null : projectId(database, filter.project)
+      const rows = database
+        .prepare(
+          `SELECT i.direction, i.currency, sum(i.total - ${PAID}) AS open, count(*) AS n FROM invoices i ` +
+            "WHERE i.review = 'confirmed' AND i.deleted_at IS NULL AND i.status IN ('issued', 'partly_paid') " +
+            "AND (? IS NULL OR i.project_id = ?) GROUP BY i.direction, i.currency ORDER BY i.currency",
+        )
+        .all(project, project)
+      const totals = (direction: InvoiceDirection): OpenTotal[] =>
+        rows
+          .filter((row) => row.direction === direction)
+          .map((row) => ({ ...moneyOf(Number(row.open), String(row.currency)), invoices: Number(row.n) }))
+      return { receivable: totals("receivable"), payable: totals("payable") }
+    },
+  }
+}
+
+export const financeStoreOver = (context: StoreContext): FinanceStore => {
+  const operations = financeOperationsOver(context)
+  return {
+    addInvoice: async (input) => operations.addInvoice(input),
+    invoice: async (reference) => operations.invoice(reference),
+    invoices: async (filter) => operations.invoices(filter),
+    issueInvoice: async (reference, by) => operations.issueInvoice(reference, by),
+    voidInvoice: async (reference, by) => operations.voidInvoice(reference, by),
+    addPayment: async (input) => operations.addPayment(input),
+    payment: async (reference) => operations.payment(reference),
+    payments: async (filter) => operations.payments(filter),
+    allocate: async (input) => operations.allocate(input),
+    confirm: async (reference, by, reason) => operations.confirm(reference, by, reason),
+    reject: async (reference, by, reason) => operations.reject(reference, by, reason),
+    openTotals: async (filter) => operations.openTotals(filter),
+  }
+}

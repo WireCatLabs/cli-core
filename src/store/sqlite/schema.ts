@@ -1782,6 +1782,124 @@ export const facts = sqliteTable(
   ],
 )
 
+/** An invoice the owner issued or received; its total is the sum of its lines, its status follows allocations. */
+export const invoices = sqliteTable(
+  "invoices",
+  {
+    id: integer("id").primaryKey(),
+    direction: text("direction").notNull(),
+    number: text("number"),
+    issuerType: text("issuer_type"),
+    issuerId: integer("issuer_id"),
+    counterpartyType: text("counterparty_type").notNull(),
+    counterpartyId: integer("counterparty_id").notNull(),
+    projectId: integer("project_id").references(() => projects.id),
+    currency: text("currency").notNull(),
+    /** Minor units of `currency`. */
+    total: integer("total").notNull(),
+    issueDate: text("issue_date"),
+    dueDate: text("due_date"),
+    status: text("status").notNull(),
+    review: text("review").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("invoices_by_issuer_type_issuer_id").on(table.issuerType, table.issuerId),
+    index("invoices_by_counterparty_type_counterparty_id").on(table.counterpartyType, table.counterpartyId),
+    index("invoices_by_project_id").on(table.projectId),
+    index("invoices_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("invoices_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
+export const invoiceLines = sqliteTable(
+  "invoice_lines",
+  {
+    id: integer("id").primaryKey(),
+    invoiceId: integer("invoice_id")
+      .notNull()
+      .references(() => invoices.id),
+    position: integer("position").notNull(),
+    description: text("description").notNull(),
+    /** A decimal as text: never a float. */
+    quantity: text("quantity").notNull(),
+    unitPrice: integer("unit_price"),
+    amount: integer("amount").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [unique().on(table.invoiceId, table.position)],
+)
+
+/** Money that moved to or from the owner, in minor units of its currency. */
+export const payments = sqliteTable(
+  "payments",
+  {
+    id: integer("id").primaryKey(),
+    direction: text("direction").notNull(),
+    payerType: text("payer_type"),
+    payerId: integer("payer_id"),
+    payeeType: text("payee_type"),
+    payeeId: integer("payee_id"),
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull(),
+    paymentDate: text("payment_date").notNull(),
+    reference: text("reference"),
+    projectId: integer("project_id").references(() => projects.id),
+    review: text("review").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("payments_by_payer_type_payer_id").on(table.payerType, table.payerId),
+    index("payments_by_payee_type_payee_id").on(table.payeeType, table.payeeId),
+    index("payments_by_project_id").on(table.projectId),
+    index("payments_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("payments_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
+/** How much of a payment settles an invoice; triggers keep it within both and in one currency. */
+export const paymentAllocations = sqliteTable(
+  "payment_allocations",
+  {
+    id: integer("id").primaryKey(),
+    paymentId: integer("payment_id")
+      .notNull()
+      .references(() => payments.id),
+    invoiceId: integer("invoice_id")
+      .notNull()
+      .references(() => invoices.id),
+    amount: integer("amount").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.paymentId, table.invoiceId),
+    index("payment_allocations_by_invoice_id").on(table.invoiceId),
+    index("payment_allocations_by_author_type_author_id").on(table.authorType, table.authorId),
+  ],
+)
+
 export const proposedActions = sqliteTable(
   "proposed_actions",
   {

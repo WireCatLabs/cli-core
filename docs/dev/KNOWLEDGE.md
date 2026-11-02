@@ -87,9 +87,9 @@ Every decide method takes a `Decider`: `"owner"`, or `{ bot, model?, reason }` f
 decide for the owner. Each runs `mayDecide` before it changes anything: an agent needs a reason, never
 decides its own bot's proposal (every Claude Code session is the bot `claude-code`), never a rule scorer's or
 one that names no author, and nothing when the host's `agent_decisions` is off. `proposalRegistry`
-(`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `memory`, `findings`,
-`action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
-Ids are bare numbers for stored proposals and `fact:`, `memory:`, `link:`, `key:` for the rest;
+(`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `invoice`, `payment`,
+`memory`, `findings`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
+Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `memory:`, `link:`, `key:` for the rest;
 `parseProposalIds` reads ranges and lists of them; only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
 removes a link or writes a confirmed link of any kind (`notes.addLink`, `relate` with `by: "owner"`); an agent's
@@ -105,6 +105,23 @@ rule links into `relationship` and `key_document` proposals on the first writabl
 reason and time. The bot comes from the link's provenance text, which anyone could write, so the moved row keeps that
 text under `suggestedLink` and only the owner decides it. Drive's editor links stay links. A suggestion an older build
 writes after that stays a link and is still listed as `link:<id>` or `key:<id>`.
+
+## Money
+
+`store.finance` keeps invoices, their lines, payments and allocations as typed tables (store version 45), not facts.
+An amount is an integer in the currency's minor units (`CURRENCY_SCALES`, ISO 4217: RUB 2, JPY 0); callers pass and
+read decimal strings ("50000.00"), and a currency outside the table is refused. Nothing is converted: totals are per
+currency. An invoice's total is the sum of its lines, a line's amount is quantity × unit price, a payment's
+allocations never exceed it nor an invoice's total, and both sides share one currency; the code refuses each with a
+reason and triggers refuse a write that slips past. The status (`draft`, `issued`, `partly_paid`, `paid`, `void`)
+follows the allocations of confirmed payments; only the owner issues a draft or voids an invoice nothing is
+allocated to. The owner's entry is confirmed at once; an agent's or an import's is `review: proposed`, an `invoice`
+or `payment` proposal named by its own ref, which only the owner decides. A bot allocates only from a payment it
+proposed that is still proposed. An invoice's limit counts confirmed payments only, so a pending proposal never blocks
+the owner; confirming a payment checks the limit again and is refused, the payment staying proposed, when other
+confirmed payments already cover the invoice. A rejected payment's allocations go, and so do pending ones to an
+invoice the owner voids. `openTotals` sums what confirmed open invoices
+still owe, per direction and currency.
 
 ## Link proposals from scorers
 

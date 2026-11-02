@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-108 tables, 25 full-text indexes.
+112 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -1807,6 +1807,109 @@ What happened, as its evidence shows: a fact, a statement, a question, a decisio
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (project_id)`, `INDEX (subject_type, subject_id)`, `INDEX (supersedes_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+## Money
+
+Invoices, payments and what settles what, in exact minor units per currency. Totals are per currency: the store converts nothing.
+
+### `invoices`
+
+An invoice the owner issued or received. Its lines are `invoice_lines` and its total is their sum; its status follows the confirmed payments allocated to it.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `direction` | text | not null |  | receivable (owed to the owner), payable (the owner owes) |
+| `number` | text |  |  | the number printed on it |
+| `issuer_type` | text |  |  | `person` or `organization` |
+| `issuer_id` | integer |  |  | the row in the `issuer_type` table |
+| `counterparty_type` | text | not null |  | `person` or `organization` |
+| `counterparty_id` | integer | not null |  | the row in the `counterparty_type` table |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `currency` | text | not null |  | ISO 4217, upper case |
+| `total` | integer | not null |  | the sum of its lines, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `issue_date` | text |  |  | `YYYY-MM-DD` |
+| `due_date` | text |  |  | `YYYY-MM-DD` |
+| `status` | text | not null |  | draft, issued, partly_paid, paid, void: the store derives it from confirmed allocations; only void and draft → issued are set |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (issuer_type, issuer_id)`, `INDEX (counterparty_type, counterparty_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `invoice_lines`
+
+One line of an invoice, in its currency.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `invoice_id` | integer | not null | → `invoices.id` | the `invoice` it belongs to |
+| `position` | integer | not null |  | 1, 2, …, in the order the invoice lists them |
+| `description` | text | not null |  |  |
+| `quantity` | text | not null |  | a decimal as text, `1` or `1.5`: never a float |
+| `unit_price` | integer |  |  | in minor units of `currency` (kopecks, cents; yen for JPY): never a float; null when only the line's amount is known |
+| `amount` | integer | not null |  | quantity × unit price, half rounded up, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (invoice_id, position)`
+
+### `payments`
+
+Money that moved to or from the owner. A refund is a payment the other way, allocated to the invoice it refunds.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `direction` | text | not null |  | in (to the owner), out (from the owner) |
+| `payer_type` | text |  |  | `person` or `organization` |
+| `payer_id` | integer |  |  | the row in the `payer_type` table |
+| `payee_type` | text |  |  | `person` or `organization` |
+| `payee_id` | integer |  |  | the row in the `payee_type` table |
+| `amount` | integer | not null |  | more than 0, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `currency` | text | not null |  | ISO 4217, upper case |
+| `payment_date` | text | not null |  | `YYYY-MM-DD` |
+| `reference` | text |  |  | the payment's reference text, as the bank or the payer wrote it |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (payer_type, payer_id)`, `INDEX (payee_type, payee_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `payment_allocations`
+
+How much of a payment settles an invoice. A payment's allocations never exceed it, an invoice's never exceed its total, and both sides share one currency (triggers refuse the rest). Only a confirmed payment's allocations count towards the invoice's status.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `payment_id` | integer | not null | → `payments.id` | the `payment` it belongs to |
+| `invoice_id` | integer | not null | → `invoices.id` | the `invoice` it belongs to |
+| `amount` | integer | not null |  | more than 0, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (payment_id, invoice_id)`, `INDEX (invoice_id)`, `INDEX (author_type, author_id)`
 
 ## Agents and actions
 
