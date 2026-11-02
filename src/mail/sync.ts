@@ -42,6 +42,8 @@ const DAY = 86_400_000
 const EDGE = 2 * DAY
 /** How often a long run saves where it is, so a kill costs at most this much listing again. */
 const SAVE_EVERY_MS = 30_000
+/** About 55 runs clear a 276,000-email account; each is a short write that does not hold the sync up. */
+const SENT_AT_BACKFILL_PER_RUN = 5000
 const SLICE_SIZE = 50
 const SLICE_PAUSE_MS = 100
 /** About a minute of listing; the 30-day window of the timer stays below it. */
@@ -766,7 +768,7 @@ const syncRound = async (
           // Subject and text stay out of the columns search reads, so recorded mail is never a search hit.
           subject: null,
           from: headers?.from === undefined ? null : { address: headers.from, name: headers.fromName ?? null },
-          sentAt: null,
+          sentAt: Date.parse(item.receivedAt),
           receivedAt: Date.parse(item.receivedAt),
           bodyText: null,
           size: item.size ?? null,
@@ -911,6 +913,7 @@ const syncRound = async (
   )
   if (bulk.size) await store.mail.setMailboxes(accountId, [bulkBox], bulk, startedAt)
   if (!snapshot) await store.sync.setSyncState(key, "mail_folder_scope", scope)
+  if (!snapshot) await store.mail.backfillSentAt(accountId, SENT_AT_BACKFILL_PER_RUN)
   await stopIfAborted()
   const indexed = await index?.(store, key)
   const coverage = {

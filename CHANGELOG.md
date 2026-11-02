@@ -21,6 +21,18 @@ shape of this file.
 - **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
   `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
 
+## 0.554.0 — 02.11.2026
+
+### Fixed
+
+- **`schedule agent` help no longer shows `skill show follow-ups` to a CLI without that skill.** The prompt example is
+  the follow-up review for a messenger and a read-only `search messages` summary for a CLI with `messenger: false`
+  (mail).
+- **Mail sync stores `sent_at`.** It is the Date header, or the server's internal date when the header is missing or
+  unreadable; `received_at` is unchanged. Each sync also gives up to 5,000 emails stored without `sent_at` the internal
+  date (`MailStore.backfillSentAt`), so the `emails_by_time` index becomes useful and an account fills in about a day.
+  No schema change.
+
 ## 0.553.0 — 02.11.2026
 
 ### Added

@@ -98,6 +98,12 @@ const withWhen = (command: Command) =>
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
 
 /** What the schedule command needs of a CLI: who it is and, per command, where it prints and which profile runs. */
+/** `skill show follow-ups` exists only for messenger CLIs; any other CLI gets a read-only summary it can run. */
+const promptExample = (app: AppIdentity) =>
+  app.messenger === false
+    ? `summarize what came in during the last day: ${app.command} personal search messages 'date>1d' --newest --limit 20`
+    : `run the daily follow-up review: ${app.command} skill show follow-ups`
+
 export interface ScheduleHost {
   app: AppIdentity
   context(
@@ -198,7 +204,7 @@ export const scheduleCommandFor = ({ app, context: contextOf }: ScheduleHost): C
       )
       .argument("<name>", "lowercase letters, digits and dashes")
       .addArgument(new Argument("<harness>", "the agent to start").choices(HARNESSES))
-      .argument("<prompt>", `what to do, e.g. "run the daily follow-up review: ${app.command} skill show follow-ups"`)
+      .argument("<prompt>", `what to do, e.g. "${promptExample(app)}"`)
       .addOption(
         new Option("--max-cost <usd>", "claude only: stop a run that costs more than this, in US dollars").argParser(
           Number,

@@ -103,6 +103,44 @@ describe("syncMail", () => {
     expect(thread).toMatchObject({ externalId: "9001", subject: "Synthetic subject 1", emailsCount: 2 })
   })
 
+  it("stores sent_at from the Date header, and the internal date when the header is unreadable", async () => {
+    const { env } = setup([mail(1, { date: "Tue, 08 Sep 2026 06:30:00 +0000" }), mail(2, { date: "not a date" })])
+
+    await importInto(env)
+
+    const saved = await emails(env)
+    const byId = new Map(saved.map((email) => [email.externalId, email]))
+    expect(byId.get("9001")).toMatchObject({
+      sentAt: Date.parse("2026-09-08T06:30:00Z"),
+      receivedAt: Date.parse("2026-09-11T08:00:00Z"),
+    })
+    expect(byId.get("9002")?.sentAt).toBe(Date.parse("2026-09-12T08:00:00Z"))
+  })
+
+  it("gives mail stored without sent_at the internal date, a few thousand a run", async () => {
+    const { env } = setup([mail(1), mail(2)])
+    await importInto(env)
+    const opening = await store(env)
+    const accountId = (await opening.accounts.storedAccount(KEY)).id
+    for (const email of await emails(env))
+      await opening.mail.saveThread({
+        accountId,
+        externalId: email.externalId,
+        now: NOW,
+        emails: [{ externalId: email.externalId, subject: email.subject, from: null, sentAt: null, bodyText: null }],
+      })
+    expect((await emails(env)).map((email) => email.sentAt)).toEqual([null, null])
+
+    expect(await opening.mail.backfillSentAt(accountId, 1)).toBe(1)
+    await importInto(env)
+
+    expect((await emails(env)).map((email) => email.sentAt)).toEqual([
+      Date.parse("2026-09-12T08:00:00Z"),
+      Date.parse("2026-09-11T08:00:00Z"),
+    ])
+    expect(await opening.mail.backfillSentAt(accountId, 100)).toBe(0)
+  })
+
   it("finds All Mail by its role when Gmail names it in another language", async () => {
     const { env } = setup([mail(1)], { allMail: "[Gmail]/Todos" })
 
