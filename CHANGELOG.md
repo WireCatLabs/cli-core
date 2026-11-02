@@ -28,8 +28,8 @@ shape of this file.
 - **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
   only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
   `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
-  decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between two tasks, so a reminder worded with
-  a grouped sum is no longer compared on the wrong figure.
+  decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
+  two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
 
 ## 0.544.0 — 02.11.2026
 
