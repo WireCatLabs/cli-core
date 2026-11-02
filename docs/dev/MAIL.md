@@ -57,6 +57,16 @@ account `{ provider: "email", account: <address, lower case> }`.
 - **Deletions.** Stored mail the listing no longer holds is marked deleted, in the window without its first two days
   (IMAP's SINCE counts whole days) and only when the run listed everything. `tooManyGone` refuses 5 or more and over a
   fifth of what is stored, and a snapshot source (`mode: "mbox"`) never proves one.
+- **Refused SEARCH.** `search`, `query` and `present` throw a `CliError` with reason `mail.search-refused`
+  (`SEARCH_REFUSED`) when the server answers SEARCH with NO or BAD. The sync leaves that folder unread and keeps
+  reading the others; the run is partial (`refusedFolders`), proves no deletion, changes no membership of the refused
+  folder, moves none of its resume point and leaves `mail_coverage` as the last run set it.
+- **Partial emails.** A server search reads a candidate up to `SERVER_BOUNDS.textBytes` (`fetchRaw(items, { bytes })`);
+  one cut short is stored with its headers and text, no attachments, and `metadata.partial`. After its rounds a sync
+  (unless `completePartial: false`) reads up to 100 of them whole (`completePartial`, `src/mail/partial.ts`): Gmail's by
+  id with `find`, elsewhere at a stored location, kept only when `identify` gives the stored id. It saves them as a sync
+  would and clears the mark; the result has `partial: { completed, left }`. The mark is a JSON key, not a column: no
+  store version, and an older build simply leaves the email partial.
 - **Limits.** `max` new messages a run, newest first (200; no limit when budgeted); `maxBodyChars` (`MAX_BODY_CHARS`); attachment text up to
   `MAX_ATTACHMENT_CHARS` (200,000); a run stops between batches of 50 on `signal`, after saving its resume point.
 - **Transport failures.** A chunk in which every message failed stops the run, after saving its resume point; one
