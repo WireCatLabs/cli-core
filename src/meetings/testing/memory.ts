@@ -147,6 +147,9 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
               text: r.text,
               startMs: r.startMs,
               speakerName: r.speakerName,
+              language: t.transcript.language,
+              line: r.position + 1,
+              linesTotal: t.rows.length,
             })),
           )
         rows.push(

@@ -53,12 +53,24 @@ export interface Platform {
   text: (unit: Unit, app: AppIdentity) => string
   start: (unit: Unit) => string[][]
   stop: (unit: Unit) => string[][]
-  state: (unit: Unit) => Promise<{ loaded: boolean; active: boolean; pid?: number; detail?: string; exitCode?: number }>
+  state: (unit: Unit) => Promise<UnitState>
   logs: (unit: Unit, lines: number) => Promise<string>
   /** What must exist before the unit first runs. */
   prepare?: (unit: Unit) => void
-  /** How to have it start at every login too. */
-  atLogin: (unit: Unit) => string
+  /** Run once the file is written: the unit starts with every login from then on, and nothing starts now. */
+  install: (unit: Unit) => string[][]
+  /** Run before the file is removed: it no longer starts at login. */
+  uninstall: (unit: Unit) => string[][]
+}
+
+export interface UnitState {
+  loaded: boolean
+  active: boolean
+  /** It starts with the owner's session: at login, or at boot when systemd keeps the user's services (linger). */
+  enabled?: boolean
+  pid?: number
+  detail?: string
+  exitCode?: number
 }
 
 const home = (env: NodeJS.ProcessEnv): string => {
@@ -97,9 +109,16 @@ export const systemd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
         ...(unit.noRestartOn?.length ? [`RestartPreventExitStatus=${unit.noRestartOn.join(" ")}`] : []),
         "",
         "[Install]",
+        // Not graphical-session.target: a desktop without systemd's session targets, or a machine reached only
+        // over ssh, would never start it. A keyring still locked at boot ends serve with a code that restarts.
         "WantedBy=default.target",
         "",
       ].join("\n"),
+    install: (unit) => [
+      ["systemctl", "--user", "daemon-reload"],
+      ["systemctl", "--user", "enable", unit.name],
+    ],
+    uninstall: (unit) => [["systemctl", "--user", "disable", unit.name]],
     start: (unit) => [
       ["systemctl", "--user", "daemon-reload"],
       ["systemctl", "--user", "start", unit.name],
@@ -124,6 +143,8 @@ export const systemd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
           "ExecMainCode",
           "-p",
           "ExecMainStatus",
+          "-p",
+          "UnitFileState",
         ],
         env,
       )
@@ -139,13 +160,13 @@ export const systemd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
       return {
         loaded: fields.LoadState === "loaded",
         active: fields.ActiveState === "active",
+        ...(fields.UnitFileState ? { enabled: fields.UnitFileState === "enabled" } : {}),
         ...(pid > 0 ? { pid } : {}),
         ...(exitCode > 0 ? { exitCode } : {}),
         ...(fields.ActiveState ? { detail: `${fields.ActiveState} (${fields.SubState})` } : {}),
       }
     },
     logs: (unit, lines) => checked(["journalctl", "--user", "-u", unit.name, "-n", String(lines), "--no-pager"]),
-    atLogin: (unit) => `at every login too: systemctl --user enable ${unit.name.replace(/\.service$/, "")}`,
   }
 }
 
@@ -176,8 +197,6 @@ export const launchd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
           ([name, value]) => `    <key>${xml(name)}</key><string>${xml(value)}</string>`,
         ),
         "  </dict>",
-        // launchd loads every agent here at login; disabled, it waits for `server start` to enable it.
-        "  <key>Disabled</key><true/>",
         // biome-ignore lint/security/noSecrets: launchd plist template, not a key
         "  <key>RunAtLoad</key><true/>",
         ...(unit.noRestartOn?.length ? [] : ["  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>"]),
@@ -188,24 +207,26 @@ export const launchd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
         "</plist>",
         "",
       ].join("\n"),
-    // RunAtLoad makes loading the agent the start; `enable` overrides the file's Disabled until `disable`.
+    // launchd loads every agent in the folder at login, RunAtLoad starts it; `enable` clears a `disable` left by
+    // an older stop or uninstall, which would outrank the file.
+    install: (unit) => [["launchctl", "enable", `${domain}/${unit.name}`]],
+    uninstall: (unit) => [["launchctl", "disable", `${domain}/${unit.name}`]],
     start: (unit) => [
       ["launchctl", "enable", `${domain}/${unit.name}`],
       ["launchctl", "bootstrap", domain, unit.path],
     ],
-    stop: (unit) => [
-      ["launchctl", "bootout", `${domain}/${unit.name}`],
-      ["launchctl", "disable", `${domain}/${unit.name}`],
-    ],
+    stop: (unit) => [["launchctl", "bootout", `${domain}/${unit.name}`]],
     state: async (unit) => {
+      const enabled = launchdEnabled((await system.run(["launchctl", "print-disabled", domain], env)).stdout, unit.name)
       const ran = await system.run(["launchctl", "print", `${domain}/${unit.name}`], env)
-      if (ran.code !== 0) return { loaded: false, active: false }
+      if (ran.code !== 0) return { loaded: false, active: false, enabled }
       const state = /^\s*state = (.+)$/m.exec(ran.stdout)?.[1]?.trim()
       const pid = Number(/^\s*pid = (\d+)$/m.exec(ran.stdout)?.[1])
       const exitCode = Number(/^\s*last exit code = (\d+)/m.exec(ran.stdout)?.[1])
       return {
         loaded: true,
         active: state === "running",
+        enabled,
         ...(pid > 0 ? { pid } : {}),
         ...(exitCode > 0 ? { exitCode } : {}),
         ...(state ? { detail: state } : {}),
@@ -216,9 +237,14 @@ export const launchd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
       if (unit.logPath) mkdirSync(dirname(unit.logPath), { recursive: true, mode: 0o700 })
     },
     logs: async (unit, lines) => tail(unit.logPath, lines),
-    atLogin: (unit) =>
-      `from then on it also starts at every login, until \`${app.command} ${unit.profile} server stop\``,
   }
+}
+
+/** `launchctl print-disabled` lists overrides as `"label" => disabled` (older macOS: `=> true`); none is enabled. */
+export const launchdEnabled = (listing: string, label: string): boolean => {
+  const quoted = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const value = new RegExp(`"${quoted}"\\s*=>\\s*(\\w+)`).exec(listing)?.[1]
+  return value !== "disabled" && value !== "true"
 }
 
 /**
@@ -258,9 +284,10 @@ export const noUnits = (app: AppIdentity, system: ServerSystem): Platform => {
     text: refuse,
     start: refuse,
     stop: refuse,
+    install: refuse,
+    uninstall: refuse,
     state: async () => ({ loaded: false, active: false }),
     logs: async () => "",
-    atLogin: () => "",
   }
 }
 

@@ -172,7 +172,7 @@ run a read, run a write — so an agent's context does not fill with a hundred t
 over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner OAuth login.
 
 `serve` keeps the store current, one process per profile by a lock file; `server install` adds a systemd user unit
-or a launchd agent.
+or a launchd agent that starts at every login.
 
 ### Every write behind a guard
 

@@ -24,6 +24,26 @@ export interface CacheDatabase {
   exec(sql: string): void
   prepare(sql: string): CacheStatement
   close(): void
+  /**
+   * Set when the connection has `TIME_LIMIT_FUNCTION`. A statement runs to its end before any timer can fire, so a
+   * long one is stopped from inside: `WHERE … AND wc_time_limit(<epoch ms>)` throws `TimeLimitReached` once past it.
+   */
+  timeLimit?: true
+}
+
+export const TIME_LIMIT_FUNCTION = "wc_time_limit"
+
+export class TimeLimitReached extends Error {
+  constructor() {
+    super("the statement ran past its time limit")
+    this.name = "TimeLimitReached"
+  }
+}
+
+/** The SQL function's body: 1 until `until` (epoch milliseconds) has passed. */
+export const beforeTimeLimit = (until: unknown): number => {
+  if (Date.now() > Number(until)) throw new TimeLimitReached()
+  return 1
 }
 
 export type OpenDatabase = (path: string) => CacheDatabase

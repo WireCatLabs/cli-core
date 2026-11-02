@@ -433,6 +433,70 @@ describe("a run", () => {
     expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).exitCode).toBe(143)
   })
 
+  describe("a keyring still locked when the timer fires", () => {
+    const locked = JSON.stringify({
+      error: { code: "provider_unavailable", reason: "credentials.unreachable", message: "the keyring is locked" },
+    })
+    /** Fails as tg does with the keyring locked for the first `lockedRuns` runs, then succeeds. */
+    const child = (root: string, lockedRuns: number) => {
+      const count = join(root, "count")
+      return `const fs = require("fs"); const n = fs.existsSync(${JSON.stringify(count)}) ? Number(fs.readFileSync(${JSON.stringify(count)}, "utf8")) : 0; fs.writeFileSync(${JSON.stringify(count)}, String(n + 1)); if (n < ${lockedRuns}) { console.error(${JSON.stringify(locked)}); process.exit(12) }`
+    }
+    const clock = () => {
+      let at = Date.parse("2026-11-02T03:49:00Z")
+      const waits: number[] = []
+      return {
+        waits,
+        now: () => new Date(at),
+        wait: async (ms: number) => {
+          waits.push(ms)
+          at += ms
+        },
+      }
+    }
+
+    it("tries again, a minute then longer apart, and notifies only how it ended", async () => {
+      const { env, root } = setup()
+      const { system, ran } = machine("linux", [process.execPath, "-e", child(root, 2)])
+      const file = scheduled(env.CHAT_STATE_DIR, { name: "sync", kind: "command", argv: [], when: { daily: "04:30" } })
+      const { waits, now, wait } = clock()
+
+      const last = await runSchedule(app, system, env, file, { untilUnlocked: true, now, wait })
+
+      expect(last.exitCode).toBe(0)
+      expect(waits).toEqual([60_000, 120_000])
+      expect(ran.filter((one) => one.argv[0] === "notify-send")).toEqual([])
+    })
+
+    it("gives up after twelve hours with the failure as it is", async () => {
+      const { env, root } = setup()
+      const { system, ran } = machine("linux", [process.execPath, "-e", child(root, 1000)])
+      const file = scheduled(env.CHAT_STATE_DIR, { name: "sync", kind: "command", argv: [], when: { daily: "04:30" } })
+      const { waits, now, wait } = clock()
+
+      const last = await runSchedule(app, system, env, file, { untilUnlocked: true, now, wait })
+
+      expect(last).toMatchObject({ exitCode: 12, reason: "provider_unavailable (credentials.unreachable)" })
+      expect(waits.reduce((sum, ms) => sum + ms, 0)).toBeLessThanOrEqual(12 * 60 * 60_000)
+      expect(Math.max(...waits)).toBe(15 * 60_000)
+      expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(1)
+    })
+
+    it("does not wait in a run by hand, in a schedule that repeats, or for any other failure", async () => {
+      const { env, root } = setup()
+      const { system } = machine("linux", [process.execPath, "-e", child(root, 1000)])
+      const daily = scheduled(env.CHAT_STATE_DIR, { name: "sync", kind: "command", argv: [], when: { daily: "04:30" } })
+      const repeating = scheduled(env.CHAT_STATE_DIR, { name: "often", kind: "command", argv: [], when: { every: 5 } })
+      const { waits, now, wait } = clock()
+
+      expect((await runSchedule(app, system, env, daily, { now, wait })).exitCode).toBe(12)
+      expect((await runSchedule(app, system, env, repeating, { untilUnlocked: true, now, wait })).exitCode).toBe(12)
+      const other = machine("linux", [process.execPath, "-e", "process.exit(4)"]).system
+      expect((await runSchedule(app, other, env, daily, { untilUnlocked: true, now, wait })).exitCode).toBe(4)
+      expect(waits).toEqual([])
+    })
+  })
+
   it("kills a child that ignores SIGTERM once its grace is over", async () => {
     const { env, root } = setup()
     const ready = join(root, "ready")

@@ -21,6 +21,82 @@ shape of this file.
 - **`--compact` rows for `projects evidence`**: items, linked chats, chats left out by purpose and members. A row
   column may take a `prefix`, a shape may print fields `whole` (the cursor), and `time`/`day` columns read epoch ms.
 - `countMessages` takes `until`.
+
+### Changed — may break callers
+
+- **`LinkedChat` gains `purpose` and `relationship`, `ProjectStatus` gains `purposes`, and a status chat left out by
+  purpose carries its account, chat id and counts.** `StoredProjectGathering` gains `leftOut`, `members`, `purposes`
+  and `purposeHint`. A caller that builds these by hand adds the fields. `DEFAULT_PURPOSES` moved to
+  `project-purposes`, still exported from `@wirecat/cli-core/services`.
+
+## 0.552.0 — 02.11.2026
+
+### Added
+
+- **`serve` reads back on start what arrived while nothing listened.** A provider's own catch-up drops a gap it
+  finds too long (Telegram's `differenceTooLong`, and `channelDifferenceTooLong` past 100 updates in a channel), so
+  30 seconds after connecting `serve` lists the chats once and reads each chat whose newest message is newer than the
+  newest one held from before it started back to that one; a chat never held, back to the newest message held
+  anywhere. At most 7 days back, 500 messages a chat and 5 minutes; an empty store is left to `messages sync --all`,
+  and a messenger that pushes its history (`history: "store"`) is skipped. The summary gains
+  `caught_up: { chats, fetched, failed, stopped }`; the log gains `start_sync`, `start_sync_chat_failed` and
+  `start_sync_failed`.
+- **A meeting transcript knows its language.** `transcriptInput` (provider fetches and imports) and local
+  transcription fill `language` instead of `null`: a one-language speech model gives its own (`gigaam-v3` and
+  `gigaam-v3-ctc` write Russian, `LocalSpeechRecognitionModel.language`), any other transcript is read from its
+  letters — Cyrillic is `ru` (`uk` when Ukrainian letters show), Latin is told apart by frequent words (`en`, `es`,
+  `de`, `fr`, `it`, `pt`), and a mixed, short or undecided one stays `null`. A meeting that is mostly Russian with a
+  few English lines is `ru`. `transcriptLanguage(texts)` is exported for providers that build their own transcripts.
+- **Meeting search hits say the transcript's language and where in it the line is**: `language`, `line` (from 1) and
+  `lines_total` on transcript hits of `search meetings` and `search all` ("line 161 of 192").
+- **`meetings repair`** previews filling what older builds left out of stored transcripts — their language, for
+  transcripts that have none; `--yes` stores it (`meeting_repair`, `MeetingStore.fillTranscriptLanguages`). Nothing is
+  written on a read.
+
+### Changed — may break callers
+
+- **A search that runs out of time fails with `timeout` and the reason `query.time-limit`**, no longer with
+  `validation_error`, `query.too-large` and `budget: "time"` or `"milliseconds"`. The message says the query is valid
+  and the time limit was reached. The details keep `budget: "time"` and `complete: false`, and add `limit_ms`. A caller
+  that told the person to change the query on `query.too-large` no longer does it for a slow search.
+- **`server install` runs `systemctl --user` (or `launchctl enable`)**, and fails where that does not work, after it
+  wrote the file. **Under launchd `server stop` only unloads the agent**: it starts again at the next login, as a
+  systemd unit does; `server uninstall` stops that. `Platform` (`@wirecat/cli-core/background`) drops `atLogin` and
+  requires `install` and `uninstall`; its `state` may answer `enabled`.
+
+### Fixed
+
+- **A search stops at its time limit even inside one long SQLite statement.** A statement runs to its end before any
+  timer can fire, so a search over a large store ran far past the limit: 66 s against a 2 s limit, and past a
+  command's `--timeout 60s`. Under Node the message search statements now carry a check of the limit on every row
+  (the SQL function `wc_time_limit`) and stop when it passes. Bun has no SQL functions; there the limit is still
+  checked only between statements.
+- **`server install` enables the unit, so serve starts with the owner's session after a reboot.** It wrote the unit
+  and never enabled it, and after a reboot nothing started. Under systemd it runs `systemctl --user enable` (still
+  `WantedBy=default.target`, so it also starts at boot under linger and over ssh); under launchd it clears a
+  `launchctl disable` and the agent no longer carries `Disabled`. Nothing starts now; `server start` does that.
+  A unit written with moved folders (a development checkout) is not enabled, so a branch build never starts at
+  login on the owner's keyring. `server uninstall` disables before it removes the file. `server status` answers
+  `starts_at_login` and `unit.enabled`. A unit installed before this needs `server install` once more.
+- **A timer that fires before the login unlocks the keyring tries again.** A daily or one-off schedule that catches up
+  at boot ran before the keyring was unlocked and failed for the day. `schedule exec` now runs it again when it fails
+  with reason `credentials.unreachable` (tg and max give it when a profile that has logged in here cannot read its
+  sign-in): a minute later, then up to 15 minutes apart, for up to 12 hours, and notifies once, with how it ended.
+  `schedule run` and repeating schedules do not wait. `runSchedule` takes `untilUnlocked` and `wait` for this.
+- **A sync whose reader goes away finishes its work.** A closed stdout or stderr (EPIPE) aborted every command, so a
+  desktop that closed the pipe ended an 18-minute `messages sync` with `write EPIPE`. A cooperative command (a sync)
+  and a command waiting in an `untilStopped()` phase (`schedule run`, `schedule exec`) now keep working, their later
+  output goes nowhere, and the run record says how they ended. Other commands still end with 0, as `| head` expects.
+
+## 0.551.0 — 02.11.2026
+
+### Added
+
+- **`messages sync` keeps to the history limits too**, for every messenger: it does not read a group above
+  `history_group_members_max` people and stops a chat at its window (`history_dialog_days`, `history_group_days`). The
+  answer says `limited` (`group_too_large`, `older_than_window`; `--all` counts both), the skip is recorded for
+  `store status` and the search answers' `missing.history_limits`, and `--full-history` reads past it. Live messages
+  are never dropped.
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -122,10 +198,6 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **`LinkedChat` gains `purpose` and `relationship`, `ProjectStatus` gains `purposes`, and a status chat left out by
-  purpose carries its account, chat id and counts.** `StoredProjectGathering` gains `leftOut`, `members`, `purposes`
-  and `purposeHint`. A caller that builds these by hand adds the fields. `DEFAULT_PURPOSES` moved to
-  `project-purposes`, still exported from `@wirecat/cli-core/services`.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
   it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
   global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
@@ -147,8 +219,8 @@ shape of this file.
   no longer found by that title; give its id or a part of the title.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
-- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
-  cli-base bumps it to 0.74.0 together with cli-core.
+- **cli-core now needs `@wirecat/cli-base` 0.75.0**, which holds the `--full-history` switch's name and the help
+  without `OR` for a list its provider filters. A CLI that pins cli-base bumps it to 0.75.0 together with cli-core.
 - **`FACT_TYPES` gains `payment`, and a `Finding` may be a `PaymentFinding`.** A caller that lists facts with a fixed
   type list, or reads `finding.title` on every finding that is not a fact, narrows by `kind` first. A memo older than
   this release refuses a payment fact in `facts list`; ship memo's bump the same day. `MEETING_FACT_TYPES` is gone:
@@ -156,6 +228,8 @@ shape of this file.
 
 ### Fixed
 
+- **`messages delete` with no message id refuses with `validation_error`** before it connects. An empty id (`""`
+  or a lone comma) used to reach the messenger as a deletion of nothing and answer success.
 - **An MCP read or write whose answer named a step only the person can take (`user_action`) failed as a bug.** The
   router dropped next steps this server does not offer by their command, and such a step has none. It is kept now;
   a command step this server does not offer is still dropped.
@@ -173,6 +247,22 @@ shape of this file.
   tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
   `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
   `--brief` and `--full` too, and refuse them together as the others do.
+- **An Outlook or Exchange feed's events are read, no longer skipped.** Those feeds name time zones the Windows way,
+  `TZID:W. Europe Standard Time`, and the iCalendar reader took only IANA names (`Europe/Berlin`), so `calendars add`
+  and `sync` skipped every timed event of such a feed and counted it under `skipped`. A Windows name is now read as
+  the IANA zone Unicode CLDR gives it worldwide (territory `001`), in DTSTART, DTEND, RECURRENCE-ID, and in the TZID of
+  RDATE and EXDATE, which are stored with the IANA name. The 142 names are a table generated from CLDR release-49
+  (`scripts/windows-zones.ts` regenerates it); no new dependency. A TZID that is neither, such as Outlook's
+  `(UTC+01:00) Amsterdam, Berlin, Bern`, is still skipped.
+- **A list whose provider filters it no longer says in `--help` that its query takes `OR`.** With
+  `@wirecat/cli-base` 0.74.0 → 0.75.0, its `Syntax:` line names only what it takes: `field:value` terms joined by AND,
+  and the phrase, `word*` and range forms where a field takes them. Every CLI picks this up at its next cli-core bump.
+- **The browser login page of `mcp serve --http` names what the app asks to reach and the right command.** It always
+  said "reach your messages through `<app> mcp --http`"; a CLI that is not a messenger now says what it serves (gcal:
+  "your Google Calendar"), and every CLI names `<app> mcp serve --http`. `HttpOptions` takes `reaches` for the
+  wording; unset, the page says "your `<app>` data".
+- **`store jobs list` says in its help and its MCP description that its query takes `OR`.** The list reads every job
+  file and takes the whole query language, but its registry said the source filters it (`native`).
 
 ## 0.550.0 — 02.11.2026
 

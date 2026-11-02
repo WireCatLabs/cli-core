@@ -2,9 +2,10 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { holdLock, lockPath, releaseLock, takeLock } from "../../background/lock.js"
-import type { ChatKind, Message, MessageEvent } from "../../domain/models.js"
+import { parseDuration } from "../../domain/duration.js"
+import type { Chat, ChatKind, Message, MessageEvent } from "../../domain/models.js"
 import { failureKey } from "../../errors/failures.js"
-import type { MessengerAdapter } from "../../ports/messenger.js"
+import { capability, type MessengerAdapter } from "../../ports/messenger.js"
 import { senderFacts } from "../../replies/dry-run.js"
 import { replyRenderer } from "../../replies/rendering.js"
 import { audienceWarnings, readReplies, repliesPathFor } from "../../replies/rules.js"
@@ -13,14 +14,17 @@ import { repliesStatePathFor } from "../../replies/state.js"
 import type { Warn } from "../../runs/events.js"
 import { levelFor } from "../../sends/permissions.js"
 import { newSendId } from "../../sends/send-id.js"
+import { FETCHING } from "../../services/archive.js"
 import { onlineDeps } from "../../services/deps.js"
 import { servicesFor } from "../../services/index.js"
+import { patiently } from "../../services/patience.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
+import { START_SYNC_PER_CHAT, startSync } from "./serve-catch-up.js"
 import { memberFetches } from "./serve-members.js"
 import { noticeFor, recordDiagnostics, type ServeNotice } from "./serve-notice.js"
 import { serveRelay } from "./serve-relay.js"
@@ -83,7 +87,7 @@ export const serveCommand = (messenger: Messenger): Command => {
     const counts: Record<string, number> = {}
     const rules = replying(context, messenger, Date.parse(startedAt))
     const tasks = tasking(context, warn)
-    const { handled } = environmentOf(this)
+    const { handled, startSyncDelayMs } = environmentOf(this)
     const count = (event: MessageEvent) => {
       counts[event.event] = (counts[event.event] ?? 0) + 1
       if (event.event === "message") {
@@ -107,6 +111,57 @@ export const serveCommand = (messenger: Messenger): Command => {
         }).chats.fetchMembers(chatId, {}),
       warn,
     })
+    const fetching = messenger.fetching ?? FETCHING
+    const catchingUp = startSync({
+      chats: async (stop) => {
+        const list = capability(connection as MessengerAdapter, "chats", "list its chats")
+        const all: Chat[] = []
+        for (let offset = 0; ; ) {
+          const page = await patiently(() => list({ offset, limit: 100 }), context.renderer.note, stop)
+          for (const chat of page.items) all.push(chat)
+          offset += page.items.length
+          if (!page.hasMore || page.items.length === 0) return all
+        }
+      },
+      newestHeld: (chatId) =>
+        context.withStore(
+          async (store, account) => {
+            // What this serve stored itself would hide the gap before it.
+            const [newest] = await store.messages.messagesWindow(account, chatId, {
+              at: startedAt,
+              before: 1,
+              after: 0,
+            })
+            return newest ? Date.parse(newest.timestamp) : undefined
+          },
+          { name: "serve catch-up" },
+        ),
+      fetch: (chatId, sinceMs, stop) =>
+        context.withStore(
+          (store, account) =>
+            servicesFor({
+              ...onlineDeps(messenger, connection as MessengerAdapter, context.guard, {
+                profile: context.profile,
+                env: context.env,
+              }),
+              store: async () => store,
+              account: async () => account,
+            }).archive.fetch(chatId, {
+              limit: START_SYNC_PER_CHAT,
+              pageSize: fetching.page,
+              pauseMs: parseDuration(fetching.pause, "pause"),
+              sinceMs,
+              catchUp: false,
+              note: context.renderer.note,
+              stop,
+              onPage: () => {},
+            }),
+          { name: "serve catch-up" },
+        ),
+      note,
+      warn,
+      ...(startSyncDelayMs === undefined ? {} : { delayMs: startSyncDelayMs }),
+    })
     const stems = stemFills({
       withStore: (work) => context.withStore((store) => work(store), { name: "serve stems" }),
       warn,
@@ -121,12 +176,14 @@ export const serveCommand = (messenger: Messenger): Command => {
           rules.connected(open)
           members.start()
           stems.start()
+          if (messenger.history !== "store" && typeof open.chats === "function") catchingUp.start()
         },
       })
     } finally {
       await relaying
       await relay?.close()
       rules.stop()
+      await catchingUp.stop()
       await members.stop()
       await stems.stop()
       await rules.settled()
@@ -145,6 +202,7 @@ export const serveCommand = (messenger: Messenger): Command => {
         ...rules.summary(),
         ...(members.summary().fetched + members.summary().failed > 0 ? { members: members.summary() } : {}),
         ...(stems.summary().stemmed > 0 ? { stems: stems.summary() } : {}),
+        ...(catchingUp.summary() ? { caught_up: catchingUp.summary() } : {}),
         ...tasks.summary(),
       }),
     )

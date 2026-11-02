@@ -1,3 +1,4 @@
+import { transcriptLanguage } from "./language.js"
 import type { TranscriptLine } from "./model.js"
 import type { ParticipantInput, TranscriptInput } from "./store.js"
 
@@ -19,7 +20,7 @@ export const transcriptInput = async (
 ): Promise<TranscriptInput> => ({
   source,
   format,
-  language: null,
+  language: transcriptLanguage(lines.map((line) => line.text)),
   contentHash: await contentHash(hashText),
   externalCreatedAt: null,
   metadata: null,

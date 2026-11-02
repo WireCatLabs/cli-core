@@ -765,20 +765,28 @@ configured provider with consent; see [AI providers](../search/ai-providers.md).
 Consumer parity: planned for both CLIs on their next SDK adoption. Source-level shared schema and
 synthetic MCP proof are tested here; installed consumer parity is not claimed before publication.
 
-## History limits on pushed history
+## History limits
 
 A messenger whose history is pushed (`history: "store"`, WhatsApp) can push years of every chat. Per profile,
 `history_dialog_days` (default 1095), `history_group_days` (default 365, groups of more than two people) and
 `history_group_members_max` (default 50) bound what `stored`'s `feed` and `listenHistory` save
 (`src/services/history-limits.ts`, `limitBatch`, at most 1095 days). A group above the size keeps its chat row and
-none of its pushed messages. Live messages, `messages sync` and anything already stored are never touched. What was
+none of its pushed messages. Live messages and anything already stored are never touched. What was
 left out is summed per chat in the chat row's `metadata` under `$history` (`src/store/sqlite/history-skips.ts`; no
 store version) and `Chat.providerMetadata` leaves it out. `messages sync <chat> --full-history` fetches the chat and marks
 it kept in full from then on.
 
+The same settings bound what `messages sync` reads (`archiveService.fetch`, `limitOf`), for every messenger: it does
+not read a group above the size (`limited: "group_too_large"`, nothing asked), and it stops a chat at its window's start
+as `--since-time` would (`limited: "older_than_window"`, only when older history was there). Each is recorded like a
+pushed skip with `unread: true` and `messages: 0`, since how much was not read is unknown. `--all` counts both under
+`limited` and judges a chat the store lacks by the kind and size the chat list gives. A lifted chat and
+`--full-history` read without limits.
+
 Every store-read answer that could pass for the whole archive says so: `store status`, `search messages`,
 `search all` and `messages list --offline` add `missing` (`field: "history_limits"`, the chats and counts),
-`next` (`messages.sync` with `include`) and `meta.complete: false`. `serve` and a link warn once
+`next` (`messages.sync` with `full_history`) and `meta.complete: false`; `messages sync` adds the same `next` step
+and a note when the limits stopped it. `serve` and a link warn once
 (`history_limited`, with counts) with the commands that list and fetch it.
 
 ## Bounded preparation after history fetch

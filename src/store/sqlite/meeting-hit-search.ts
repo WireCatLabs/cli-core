@@ -146,9 +146,9 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             after.id,
           )
         const sql = `WITH matches AS (${matching}), matching AS (SELECT rid,tier FROM matches h WHERE NOT EXISTS(SELECT 1 FROM meeting_index_pending p WHERE p.id=h.rid/4 AND p.indexable_type=CASE h.rid%4 WHEN 1 THEN 'meeting_transcript_row' WHEN 2 THEN 'meeting_chat_message' ELSE 'meeting_summary' END)), selected AS (SELECT m.id,coalesce(m.started_at,0) AS started FROM meetings m WHERE ${clauses.join(" AND ")}), hits AS (
-        SELECT h.tier,m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes,t.id AS transcript_id,r.position FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
-        UNION ALL SELECT h.tier,m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])},NULL,NULL FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
-        UNION ALL SELECT h.tier,m.started,m.id,2,s.id,NULL,${bytes("s", fields)},NULL,NULL FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
+        SELECT h.tier,m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes,t.id AS transcript_id,r.position,t.language,(SELECT count(*) FROM meeting_transcript_rows n WHERE n.meeting_transcript_id=t.id) AS lines_total FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
+        UNION ALL SELECT h.tier,m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])},NULL,NULL,NULL,NULL FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
+        UNION ALL SELECT h.tier,m.started,m.id,2,s.id,NULL,${bytes("s", fields)},NULL,NULL,NULL,NULL FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
         SELECT h.*,${bytes("m", ["title"])}+${bytes("s", ["doc_url"])} AS context_bytes FROM hits h
         JOIN meetings m ON m.id=h.meeting_id LEFT JOIN meeting_summaries s ON h.kind=2 AND s.id=h.id
         ${seek} ORDER BY h.tier,h.started DESC,h.meeting_id,h.kind,h.id LIMIT ?`
@@ -200,6 +200,13 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             id: Number(row.id),
             text,
             startMs: row.start_ms === null ? null : Number(row.start_ms),
+            ...(kind === 0
+              ? {
+                  language: row.language === null ? null : String(row.language),
+                  line: Number(row.position) + 1,
+                  linesTotal: Number(row.lines_total),
+                }
+              : {}),
           }
         })
         const fresh = items.flatMap((item) => {

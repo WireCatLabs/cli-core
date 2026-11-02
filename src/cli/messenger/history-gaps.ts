@@ -6,7 +6,7 @@ const SHOWN = 5
 
 const reasonOf = (skip: StoredHistorySkip) =>
   skip.reason === "group_too_large"
-    ? `a group of ${skip.members ?? "many"} people, not saved`
+    ? `a group of ${skip.members ?? "many"} people, not ${skip.unread ? "read" : "saved"}`
     : `only from ${skip.keptFrom?.slice(0, 10) ?? "the window's start"}`
 
 const nameOf = (skip: StoredHistorySkip) => skip.title ?? skip.chatId
@@ -21,7 +21,7 @@ export const historyLimitGaps = (skips: StoredHistorySkip[]): { next: NextStep[]
   const messages = skips.reduce((sum, skip) => sum + skip.messages, 0)
   const listed = skips
     .slice(0, SHOWN)
-    .map((skip) => `${nameOf(skip)} (${skip.messages}, ${reasonOf(skip)})`)
+    .map((skip) => `${nameOf(skip)} (${skip.messages > 0 ? `${skip.messages}, ` : ""}${reasonOf(skip)})`)
     .join("; ")
   const more = skips.length > SHOWN ? `; and ${skips.length - SHOWN} more — \`store status\` lists them` : ""
   return {
@@ -35,8 +35,8 @@ export const historyLimitGaps = (skips: StoredHistorySkip[]): { next: NextStep[]
       {
         field: "history_limits",
         why:
-          `the history limits (history_* settings) left ${messages} pushed messages of ${skips.length} chats out of ` +
-          `the store: ${listed}${more}`,
+          `the history limits (history_* settings) left history of ${skips.length} chats out of the store` +
+          `${messages > 0 ? ` (${messages} pushed messages counted)` : ""}: ${listed}${more}`,
         step: "messages.sync",
       },
     ],

@@ -31,6 +31,11 @@ export const meetingHit = v.strictObject({
   excerpt: text,
   /** How far into the meeting the passage is. */
   offset_ms: v.nullable(count),
+  /** A transcript passage's transcript language (`ru`, `en`…), `null` when unknown. */
+  language: v.optional(v.nullable(text)),
+  /** A transcript passage's line, from 1, of `lines_total`. */
+  line: v.optional(v.pipe(count, v.minValue(1))),
+  lines_total: v.optional(count),
   /** `corrected`: a query word matched only a garbled form of itself, listed in `corrections`. */
   match: v.optional(v.picklist(["words", "corrected"])),
   corrections: v.optional(v.array(v.strictObject({ from: text, to: v.array(text) }))),
@@ -239,6 +244,9 @@ export const meetingHitItem = (hit: SearchHit & { ref: string }): MeetingHitItem
   id: String(hit.id),
   excerpt: hit.text,
   offset_ms: hit.startMs,
+  ...(hit.language === undefined ? {} : { language: hit.language }),
+  ...(hit.line === undefined ? {} : { line: hit.line }),
+  ...(hit.linesTotal === undefined ? {} : { lines_total: hit.linesTotal }),
   untrusted: hit.source === undefined ? ["excerpt"] : ["excerpt", "source.title"],
   ...(hit.match === undefined ? {} : { match: hit.match }),
   ...(hit.corrections === undefined ? {} : { corrections: hit.corrections }),

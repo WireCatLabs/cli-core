@@ -27,6 +27,8 @@ export interface HistorySkip {
   members?: number
   /** For `older_than_window`: the window's start when the push was saved. */
   keptFrom?: string
+  /** `messages sync` stopped there, so how many messages were left out is not known (`messages` is 0). */
+  unread?: true
 }
 
 /** The kind and size of a chat, as the batch names it or the store holds it. */

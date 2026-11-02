@@ -90,6 +90,7 @@ export const ownerLogin = ({
   resource,
   file,
   appName,
+  reaches = `your ${appName} data`,
   onCode,
   now = () => Date.now(),
 }: {
@@ -97,6 +98,7 @@ export const ownerLogin = ({
   resource: URL
   file: string
   appName: string
+  reaches?: string
   /** The code for the next login, for the owner's eyes only: their terminal, or the server's status file. */
   onCode: (code: string, expires: Date) => void
   now?: () => number
@@ -212,7 +214,7 @@ export const ownerLogin = ({
       .join("")
     const who = escapeHtml(client.name ?? "an application")
     const target = new URL(params.get("redirect_uri") ?? "")
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(appName)} login</title><style>body{font:16px system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#1d2430}input[type=text]{font:20px ui-monospace,monospace;letter-spacing:.1em;width:100%;padding:.5rem;margin:.5rem 0 1rem;box-sizing:border-box}button{font:inherit;padding:.5rem 1rem}.error{color:#b42318}</style></head><body><h1>${escapeHtml(appName)}</h1><p>An app that calls itself <strong>${who}</strong> asks to reach your messages through <code>${escapeHtml(appName)} mcp --http</code>.</p><p>After you allow it, the login goes to <strong>${escapeHtml(target.host)}</strong>. Allow only if that is the app you are connecting, such as chatgpt.com or claude.ai.</p><p>Type the code shown in WireCat Desktop, or in the terminal where the server runs. If you did not start this login, close this page.</p>${message ? `<p class="error">${escapeHtml(message)}</p>` : ""}<form method="post" action="${escapeHtml(`${base}/authorize`)}">${hidden}<label>Login code<input type="text" name="login_code" autocomplete="off" autofocus required></label><button type="submit">Allow</button></form></body></html>`
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(appName)} login</title><style>body{font:16px system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;color:#1d2430}input[type=text]{font:20px ui-monospace,monospace;letter-spacing:.1em;width:100%;padding:.5rem;margin:.5rem 0 1rem;box-sizing:border-box}button{font:inherit;padding:.5rem 1rem}.error{color:#b42318}</style></head><body><h1>${escapeHtml(appName)}</h1><p>An app that calls itself <strong>${who}</strong> asks to reach ${escapeHtml(reaches)} through <code>${escapeHtml(appName)} mcp serve --http</code>.</p><p>After you allow it, the login goes to <strong>${escapeHtml(target.host)}</strong>. Allow only if that is the app you are connecting, such as chatgpt.com or claude.ai.</p><p>Type the code shown in WireCat Desktop, or in the terminal where the server runs. If you did not start this login, close this page.</p>${message ? `<p class="error">${escapeHtml(message)}</p>` : ""}<form method="post" action="${escapeHtml(`${base}/authorize`)}">${hidden}<label>Login code<input type="text" name="login_code" autocomplete="off" autofocus required></label><button type="submit">Allow</button></form></body></html>`
     return new Response(html, {
       status: message ? 400 : 200,
       headers: {

@@ -38,6 +38,62 @@ const call = async (argv: string[], action: (command: Command) => Promise<void> 
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 
+describe("a reader that closes the output", () => {
+  const brokenPipe = () => process.stdout.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }))
+  const env = { ...process.env, APP_STATE_DIR: mkdtempSync(join(tmpdir(), "pipe-")) }
+
+  it("**leaves a sync to finish its work**, and its answer is the sync's own", async () => {
+    let finished = false
+    const code = await run(
+      ["chats", "list"],
+      definition(
+        async (command) => {
+          brokenPipe()
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          environmentOf(command).signal?.throwIfAborted()
+          finished = true
+          throw new CliError("not_found", "no such chat")
+        },
+        { cooperative: true },
+      ),
+      { tty: false, env },
+    )
+    expect(finished).toBe(true)
+    expect(code).toBe(6)
+  })
+
+  it("leaves a wait on work the run started, as `schedule run` is, to wait for it", async () => {
+    let aborted: boolean | undefined
+    await run(
+      ["chats", "list"],
+      definition(async (command) => {
+        const phase = environmentOf(command).untilStopped?.()
+        brokenPipe()
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        aborted = phase?.aborted === true || environmentOf(command).signal?.aborted === true
+        environmentOf(command).endUntilStopped?.()
+      }),
+      { tty: false, env },
+    )
+    expect(aborted).toBe(false)
+  })
+
+  it("ends any other command quietly with 0, as `| head` expects", async () => {
+    let stopped = false
+    const code = await run(
+      ["chats", "list"],
+      definition(async (command) => {
+        brokenPipe()
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        stopped = environmentOf(command).signal?.aborted === true
+      }),
+      { tty: false, env },
+    )
+    expect(stopped).toBe(true)
+    expect(code).toBe(0)
+  })
+})
+
 describe("running a messenger CLI", () => {
   it("**knows a CliError built by another copy of cli-base**, and keeps its code and details", async () => {
     const { code, stdout, stderr } = await call(["chats", "list"], async () => {

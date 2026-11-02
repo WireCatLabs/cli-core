@@ -809,6 +809,7 @@ export const messengerContext = (
             // Turning recording off by name (--no-record, or record: false) keeps no search history either.
             history: base.settings.record,
             searchCatchUp: base.settings.searchCatchUp,
+            ...(base.settings.historyLimits ? { historyLimits: base.settings.historyLimits } : {}),
             pictures: base.settings.pictureSearch,
             reranker: base.settings.searchReranker,
             guard,

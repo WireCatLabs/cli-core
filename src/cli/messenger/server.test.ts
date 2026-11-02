@@ -5,7 +5,7 @@ import { dirname, join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it, onTestFinished } from "vitest"
-import { unitScope } from "../../background/units.js"
+import { launchdEnabled, unitScope } from "../../background/units.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { FloodMemory } from "../../sends/flood.js"
 import { run } from "../program.js"
@@ -265,7 +265,26 @@ describe("server without a unit", () => {
 })
 
 describe("server with a systemd unit", () => {
-  it("**install writes the unit — under the name tg 0.5.0 gave it — and neither starts nor enables it**", async () => {
+  it("**install writes the unit under the name tg 0.5.0 gave it and enables it for every login, starting nothing**", async () => {
+    const { env } = setup()
+    const { CHAT_STATE_DIR: _state, MESSAGING_STORE: _store, ...installed } = env
+    const { system, ran } = machine("linux")
+
+    const { answer } = await call(["install", "--json"], installed, system)
+
+    expect(ran).toEqual([
+      ["systemctl", "--user", "daemon-reload"],
+      ["systemctl", "--user", "enable", "chat-serve-default.service"],
+    ])
+    expect(answer).toMatchObject({ unit: "chat-serve-default.service", replaced: false, starts_at_login: true })
+    expect((await call(["install"], installed, system, true)).text.split("\n").slice(0, 3)).toEqual([
+      "Rewrote ~/.config/systemd/user/chat-serve-default.service — it starts at every login, nothing started now.",
+      "It runs: /opt/node /opt/chat/bin/chat.js serve",
+      "Start it now: chat default server start · never at login: chat default server uninstall",
+    ])
+  })
+
+  it("**a unit of moved folders is written but not enabled**: a checkout must not start at login on the owner's keyring", async () => {
     const { env } = setup()
     const { system, ran } = machine("linux")
 
@@ -276,18 +295,20 @@ describe("server with a systemd unit", () => {
       unit: `chat-serve-${unitScope(app, "default", env)}.service`,
       path: unitPath(env),
       replaced: false,
+      starts_at_login: false,
     })
     const unit = readFileSync(unitPath(env), "utf8")
     expect(unit).toContain('ExecStart="/opt/node" "/opt/chat/bin/chat.js" "serve"')
     expect(unit).toContain('Environment="CHAT_PROFILE=default"')
     expect(unit).toContain(`Environment="CHAT_STATE_DIR=${env.CHAT_STATE_DIR}"`)
     expect(unit).not.toContain("never-in-a-unit")
+    expect(unit).toContain("WantedBy=default.target")
 
     expect((await call(["install"], env, system, true)).text).toBe(
       [
-        `Rewrote ~/.config/systemd/user/chat-serve-${unitScope(app, "default", env)}.service — nothing started.`,
+        `Rewrote ~/.config/systemd/user/chat-serve-${unitScope(app, "default", env)}.service — with moved folders it does not start at login, nothing started now.`,
         "It runs: /opt/node /opt/chat/bin/chat.js serve",
-        `Start it now: chat default server start · at every login too: systemctl --user enable chat-serve-${unitScope(app, "default", env)}`,
+        "Start it now: chat default server start · never at login: chat default server uninstall",
         `A daily follow-up review is off. To turn it on: chat default schedule agent follow-ups claude "${followUpsPrompt("chat")}" --at 08:30`,
       ].join("\n"),
     )
@@ -363,7 +384,25 @@ describe("server with a systemd unit", () => {
     expect(stderr).toContain("Unit not found.")
   })
 
-  it("uninstall refuses while the unit runs, and removes it once stopped", async () => {
+  it("status says whether the unit starts at login", async () => {
+    const { env } = setup()
+    await call(["install"], env, machine("linux").system)
+    const shown = (fileState: string) =>
+      machine("linux", {
+        answers: {
+          "systemctl --user show": {
+            stdout: `LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nUnitFileState=${fileState}\n`,
+          },
+        },
+      }).system
+
+    const enabled = await call(["status", "--json"], env, shown("enabled"))
+    expect(enabled.answer).toMatchObject({ starts_at_login: true, unit: { enabled: true } })
+    const disabled = await call(["status"], env, shown("disabled"), true)
+    expect(disabled.text).toContain("does not start at login — `chat default server install` turns that on.")
+  })
+
+  it("uninstall refuses while the unit runs, and disables and removes it once stopped", async () => {
     const { env } = setup()
     await call(["install"], env, machine("linux").system)
 
@@ -372,8 +411,15 @@ describe("server with a systemd unit", () => {
     expect(refused.stderr).toContain("the unit is running — `chat default server stop` first")
     expect(existsSync(unitPath(env))).toBe(true)
 
-    const removed = await call(["uninstall", "--json"], env, machine("linux", { answers: showing("inactive") }).system)
+    const stopped = machine("linux", { answers: showing("inactive") })
+    const removed = await call(["uninstall", "--json"], env, stopped.system)
     expect(removed.answer).toMatchObject({ removed: true })
+    expect(stopped.ran.at(-1)).toEqual([
+      "systemctl",
+      "--user",
+      "disable",
+      `chat-serve-${unitScope(app, "default", env)}.service`,
+    ])
     expect(existsSync(unitPath(env))).toBe(false)
   })
 
@@ -419,7 +465,7 @@ describe("server logs for a person", () => {
 })
 
 describe("server with a launchd agent", () => {
-  it("install writes an agent that is disabled until start enables it; stop disables it again", async () => {
+  it("install writes an agent and enables it for every login; start loads it now", async () => {
     const { env } = setup()
     const { system, ran } = machine("darwin", { answers: { "launchctl print": { code: 113 } } })
     const path = join(
@@ -434,36 +480,49 @@ describe("server with a launchd agent", () => {
       path,
     })
     expect(ran).toEqual([])
-    expect((await call(["install"], env, system, true)).text).toContain(
-      "from then on it also starts at every login, until `chat default server stop`",
-    )
+    const { CHAT_STATE_DIR: _state, MESSAGING_STORE: _store, ...installed } = env
+    await call(["install"], installed, system)
+    expect(ran).toEqual([["launchctl", "enable", "gui/501/chat-cli.serve.default"]])
     const plist = readFileSync(path, "utf8")
-    expect(plist).toContain("<key>Disabled</key><true/>")
+    expect(plist).not.toContain("<key>Disabled</key>")
     expect(plist).toContain(`<string>${join(env.CHAT_STATE_DIR, "serve", "default.log")}</string>`)
     expect(existsSync(join(env.CHAT_STATE_DIR, "serve"))).toBe(true)
 
+    ran.length = 0
     await call(["start"], env, system)
-    expect(ran.filter((argv) => argv[1] !== "print")).toEqual([
+    expect(ran.filter((argv) => !argv[1]?.startsWith("print"))).toEqual([
       ["launchctl", "enable", `gui/501/chat-cli.serve.${unitScope(app, "default", env, ".")}`],
       ["launchctl", "bootstrap", "gui/501", path],
     ])
   })
 
-  it("status reads launchctl print, and stop unloads and disables", async () => {
+  it("status reads launchctl print and its overrides; stop only unloads, and uninstall disables", async () => {
     const { env } = setup()
+    const label = `chat-cli.serve.${unitScope(app, "default", env, ".")}`
     const { system, ran } = machine("darwin", {
-      answers: { "launchctl print": { stdout: "\tstate = running\n\tpid = 77\n" } },
+      answers: {
+        "launchctl print-disabled": { stdout: `disabled services = {\n\t"${label}" => disabled\n}\n` },
+        "launchctl print gui": { stdout: "\tstate = running\n\tpid = 77\n" },
+      },
     })
     await call(["install"], env, system)
 
     expect((await call(["status", "--json"], env, system)).answer).toMatchObject({
-      unit: { loaded: true, active: true, pid: 77 },
+      starts_at_login: false,
+      unit: { loaded: true, active: true, enabled: false, pid: 77 },
     })
     await call(["stop"], env, system)
-    expect(ran.slice(-2)).toEqual([
-      ["launchctl", "bootout", `gui/501/chat-cli.serve.${unitScope(app, "default", env, ".")}`],
-      ["launchctl", "disable", `gui/501/chat-cli.serve.${unitScope(app, "default", env, ".")}`],
-    ])
+    expect(ran.at(-1)).toEqual(["launchctl", "bootout", `gui/501/${label}`])
+
+    const stopped = machine("darwin", { answers: { "launchctl print gui": { code: 113 } } })
+    await call(["uninstall"], env, stopped.system)
+    expect(stopped.ran.at(-1)).toEqual(["launchctl", "disable", `gui/501/${label}`])
+  })
+
+  it("an agent with no override is enabled; older macOS writes true for disabled", () => {
+    expect(launchdEnabled("disabled services = {\n}\n", "a.b")).toBe(true)
+    expect(launchdEnabled('\t"a.b" => true\n\t"a.bc" => false\n', "a.b")).toBe(false)
+    expect(launchdEnabled('\t"a.b" => enabled\n', "a.b")).toBe(true)
   })
 })
 

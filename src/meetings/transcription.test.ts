@@ -123,6 +123,7 @@ describe("local meeting transcription", () => {
     { recognition: { engine: "", model: "example" } },
     { format: "\n" },
     { recognition: { engine: "example", model: "example", timing: "invalid" as never } },
+    { recognition: { engine: "example", model: "example", language: "Russian" } },
   ])("refuses invalid media descriptors %#", async (change) => {
     const fixture = await setup()
     fixture.source.describe.mockResolvedValue({ ...media(), ...change })
@@ -319,5 +320,22 @@ describe("local meeting transcription", () => {
       source: "openai/gpt-transcribe",
       format: "openai-transcription",
     })
+  })
+
+  it("stores the language a one-language model writes, and reads it from the text of any other", async () => {
+    const russian = "Давайте обсудим план на следующую неделю и сроки по проекту."
+    const fixture = await setup([{ startMs: 0, endMs: 1000, text: russian }])
+    await transcribeMeeting(fixture.source, fixture.store, target, { apply: true })
+    fixture.source.describe.mockResolvedValue({
+      ...media(),
+      recognition: { engine: "example-engine", model: "example-russian", language: "ru" },
+    })
+    fixture.source.segments.mockImplementation(async function* () {
+      yield { startMs: 0, endMs: 1000, text: "Okay" }
+    })
+    await transcribeMeeting(fixture.source, fixture.store, target, { apply: true })
+    expect(
+      fixture.store.appendTranscriptsWithReceipt.mock.calls.map((call) => call[0].transcripts[0]?.language),
+    ).toEqual(["ru", "ru"])
   })
 })

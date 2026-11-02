@@ -21,6 +21,8 @@ export interface SpeechModel {
   id: string
   title: string
   languages: string
+  /** The one language the model writes, so its transcripts need no guessing; absent for multilingual models. */
+  language?: string
   files: ModelFile[]
   /** The part of sherpa-onnx's `modelConfig` that names the files, given where they are. */
   config: (path: (name: string) => string) => Record<string, unknown>
@@ -45,6 +47,7 @@ export const MODELS: SpeechModel[] = [
     id: "gigaam-v3",
     title: "GigaAM v3, with punctuation",
     languages: "Russian — the best of the three for Russian",
+    language: "ru",
     featureDim: 64,
     files: [
       {
@@ -82,6 +85,7 @@ export const MODELS: SpeechModel[] = [
     id: "gigaam-v3-ctc",
     title: "GigaAM v3 CTC, with punctuation — a little faster",
     languages: "Russian — a little faster, rougher with capital letters",
+    language: "ru",
     featureDim: 64,
     files: [
       {
