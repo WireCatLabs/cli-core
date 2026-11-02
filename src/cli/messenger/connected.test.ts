@@ -208,7 +208,9 @@ const historyFake = (listening: Partial<{ hangs: boolean }> = {}) => {
   const listen = passiveListen<HistoryBatch>(listening)
   const adapter = {
     ...arriving,
-    feed: async (onBatch: (batch: HistoryBatch) => void) => onBatch(pushed),
+    feed: async (onBatch: (batch: HistoryBatch) => void) => {
+      onBatch(pushed)
+    },
     listenHistory: listen.listens,
   } as unknown as MessengerAdapter
   return { adapter, ...listen }

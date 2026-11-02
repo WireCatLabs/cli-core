@@ -386,7 +386,7 @@ export interface PassiveUpdates {
    * has it saved by a command that never feeds. Optional within the group, so an adapter typed as having
    * `PassiveUpdates` before it existed still is one.
    */
-  listenHistory?(onBatch: (batch: HistoryBatch) => void, signal: AbortSignal): Promise<void>
+  listenHistory?(onBatch: HistoryBatchHandler, signal: AbortSignal): Promise<void>
 }
 
 /** One voter's vote in the poll message `messageId` of `chatId` carries, as `PollVoteEvent` has it. */
@@ -436,10 +436,17 @@ export interface HistoryBatch {
   events?: HistoryChatEvent[]
 }
 
+/**
+ * Takes one pushed batch. The CLI's own handler resolves `true` once the batch is in the local store and `false` when it
+ * could not be written, so a messenger that pushes history once can keep a batch until it is saved; a handler that
+ * stores nothing returns nothing.
+ */
+export type HistoryBatchHandler = (batch: HistoryBatch) => void | Promise<boolean>
+
 /** For a messenger that pushes its history to the client instead of answering for it (`Messenger.history: "store"`). */
 export interface PushedHistory {
   /** Chats, people and past messages as the messenger pushes them, until `signal` aborts. */
-  feed(onBatch: (batch: HistoryBatch) => void, signal: AbortSignal): Promise<void>
+  feed(onBatch: HistoryBatchHandler, signal: AbortSignal): Promise<void>
   /**
    * Every chat id the store holds for this account, handed over once as `feed` starts, so a chat nothing names again
    * can still be re-keyed through a later batch's `rekeys`. `recipients`, when given, are ids the profile's recipient

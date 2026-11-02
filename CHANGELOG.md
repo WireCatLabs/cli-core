@@ -11,6 +11,10 @@ shape of this file.
 
 ### Added
 
+- **A pushed history batch tells its messenger whether it was saved.** `feed` and `listenHistory` take a
+  `HistoryBatchHandler`, `(batch) => void | Promise<boolean>`: the CLI's own handler resolves `true` once the batch is
+  in the local store and `false` when it could not be written, so an adapter can keep a batch it cannot get again
+  until it is stored. An adapter that ignores the answer works as before.
 - **`redirect: { kind: "loopback", host: "localhost" }` signs in through `http://localhost:<port>/callback`.** Microsoft
   Entra ignores the port only for `localhost` redirect URIs, so a public-client app registered as
   `http://localhost/callback` needs it. The listener then takes `127.0.0.1` and, when the host has IPv6, `::1`, because

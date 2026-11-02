@@ -137,7 +137,7 @@ describe("observed feed", () => {
     const batches: HistoryBatch[] = []
 
     await observed(adapter, (event) => recorded.push(event)).feed?.(
-      (batch) => batches.push(batch),
+      (batch) => void batches.push(batch),
       new AbortController().signal,
     )
 

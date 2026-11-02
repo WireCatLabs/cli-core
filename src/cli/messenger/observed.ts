@@ -45,10 +45,10 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
     }
   }
 
-  const counted = async <T>(
+  const counted = async <T, R>(
     operation: string,
-    onItem: (item: T) => void,
-    work: (onItem: (item: T) => void) => Promise<void>,
+    onItem: (item: T) => R,
+    work: (onItem: (item: T) => R) => Promise<void>,
     count: (item: T, counts: Record<string, number>) => void,
   ) => {
     const counts: Record<string, number> = {}
@@ -58,7 +58,7 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
       () =>
         work((item) => {
           count(item, counts)
-          onItem(item)
+          return onItem(item)
         }),
       () => ({ counts }),
     )

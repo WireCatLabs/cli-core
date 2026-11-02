@@ -1,6 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Chat, ChatEvent, Id, Message, MessageEvent, PersonReaction, PollVote } from "../../domain/models.js"
-import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
+import {
+  capability,
+  type HistoryBatch,
+  type HistoryBatchHandler,
+  type MessengerAdapter,
+  throughWrapper,
+} from "../../ports/messenger.js"
 import type { MessengerTraits } from "../../ports/traits.js"
 import { foldName, isId, type PeopleLookup, pickPerson } from "../../resolve.js"
 import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
@@ -17,7 +23,7 @@ export interface Saving {
   warn: Warn
   events: EventSink
   /** Saves still writing, for the closer to wait on: `watch` does not hold the next event for one. */
-  pending?: Set<Promise<void>>
+  pending?: Set<Promise<unknown>>
   /** `storedChats` calls still running, apart from `pending`: one abandoned at exit leaves nothing unsaved. */
   announcing?: Set<Promise<void>>
   deletedWithoutChat?: DeletionScope
@@ -80,10 +86,11 @@ export const stored = (
       warn(`not saved to the local store: ${error instanceof Error ? error.message : String(error)}`, warning)
     warned = true
   }
-  const attempt = async (operation: string, write: (store: MessageStore) => Promise<unknown>): Promise<void> => {
+  const attempt = async (operation: string, write: (store: MessageStore) => Promise<unknown>): Promise<boolean> => {
     try {
       const opened = await store()
-      if (opened) await write(opened)
+      if (!opened) return false
+      await write(opened)
       // After the write, so saves keep their order; a convenience for naming this account from another app.
       if (opened && !recorded && profile) {
         recorded = true
@@ -91,11 +98,13 @@ export const stored = (
           .then(() => opened.accounts.saveProfile(profile.app, profile.name, account))
           .catch(() => {})
       }
+      return true
     } catch (error) {
       notWritten(operation, error)
+      return false
     }
   }
-  const save = (operation: string, writing: (store: MessageStore) => Promise<unknown>): Promise<void> => {
+  const save = (operation: string, writing: (store: MessageStore) => Promise<unknown>): Promise<boolean> => {
     const saving = attempt(operation, writing)
     pending?.add(saving)
     return saving.finally(() => pending?.delete(saving))
@@ -136,7 +145,7 @@ export const stored = (
    */
   let rekeysQueued = 0
   let rekeyRound = 0
-  const rekeysOnly = new Set<Promise<void>>()
+  const rekeysOnly = new Set<Promise<unknown>>()
   // wa sends each re-key as its own batch, so a closed store would otherwise refuse, and warn for, every chat left.
   const giveUpRekeys = (): void => {
     rekeyRound += 1
@@ -177,9 +186,9 @@ export const stored = (
       if (rest.length > 0) await new Promise((resolve) => setTimeout(resolve, rekeyPacing.pauseMs))
     }
   }
-  const saveBatches = (operation: string, onBatch: (batch: HistoryBatch) => void) => {
+  const saveBatches = (operation: string, onBatch: HistoryBatchHandler): HistoryBatchHandler => {
     // In order: a batch's messages may belong to chats only an earlier batch named.
-    let previous: Promise<void> = Promise.resolve()
+    let previous: Promise<unknown> = Promise.resolve()
     return (batch: HistoryBatch) => {
       if (namesFromStore) {
         for (const { from, to } of batch.rekeys ?? []) {
@@ -195,7 +204,7 @@ export const stored = (
       // A refused re-key leaves its chat split, never the others or the batch's history unsaved.
       const saving = previous.then(async () => {
         await saveRekeys(rekeys, round)
-        await attempt(operation, (opened) => fill(opened, account, batch))
+        return attempt(operation, (opened) => fill(opened, account, batch))
       })
       previous = saving
       pending?.add(saving)
@@ -204,7 +213,8 @@ export const stored = (
         pending?.delete(saving)
         rekeysOnly.delete(saving)
       })
-      onBatch(batch)
+      void onBatch(batch)
+      return saving
     }
   }
   // A method not listed here saves nothing and passes through; a lane that should save adds its line.

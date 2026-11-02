@@ -34,6 +34,7 @@ export type {
   GroupAdmin,
   GroupModeration,
   HistoryBatch,
+  HistoryBatchHandler,
   HistoryChatEvent,
   HistoryReaction,
   HistoryStar,
