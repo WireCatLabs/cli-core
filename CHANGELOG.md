@@ -38,8 +38,12 @@ shape of this file.
   `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
   `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
   stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
-  `relationship` proposal it returns instead. `notes.addLink` refuses a confirmed project link (`member-of`, or
-  `related-to` a project) without `by: "owner"`. A host passes the owner only when the owner runs the command, and
+  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
+  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
+  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
+  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
+  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
+  check read. A host passes the owner only when the owner runs the command, and
   the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
@@ -55,7 +59,10 @@ shape of this file.
   (`proposals.agent-decisions-off`). An agent can no longer add a memory already `confirmed`, mark its own memory
   stale, write a confirmed project link itself, or remove a link. A link records only free-text provenance, which
   anyone can write, so only the owner decides an unconfirmed link or removes a link; the rejected record a removal
-  leaves names who removed it. Findings an agent accepted for the owner record that agent, not the owner.
+  leaves names who removed it. Findings an agent accepted for the owner record that agent, not the owner. Only the
+  owner removes or reverses an accepted fact or another bot's memory; an agent withdraws only its own row while it is
+  proposed. Turning agent decisions off now holds for every store method, not only the registry, and a bot is the
+  same bot whatever its letter case (`Claude-Code` is `claude-code`).
 
 ## 0.544.0 — 02.11.2026
 

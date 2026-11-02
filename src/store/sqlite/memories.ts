@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEMORY_KINDS, MEMORY_SCOPES, type MEMORY_STATUSES } from "../../domain/knowledge.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
-import { assertMayDecide, type Decider } from "../decisions.js"
+import { assertMayDecide, assertMayWithdraw, type Decider } from "../decisions.js"
 import { normalize } from "../normalize.js"
 import { type Actor, botNamed, ownerPerson, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
@@ -82,7 +82,7 @@ export interface MemoriesStore {
    * Erases the memory: its row, its text in the search and meaning indexes, and every link from or to it. A memory
    * that replaced it no longer names it. A backup made before keeps it.
    */
-  remove(reference: string): Promise<{ ref: string; removed: true; links: number }>
+  remove(reference: string, by: Decider): Promise<{ ref: string; removed: true; links: number }>
   /** Each reference it rests on, read back; one deleted since is `missing`. */
   sources(reference: string): Promise<EvidenceSource[]>
   /** Indexes what was written since, then finds memories holding every word or a longer one it starts, best first. */
@@ -264,7 +264,11 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
   }
   const decided = (reference: string, by: Decider) => {
     const row = rowOf(reference)
-    assertMayDecide({ id: `memory:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) }, by)
+    assertMayDecide(
+      { id: `memory:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) },
+      by,
+      context.decisions,
+    )
   }
   const setStatus = (reference: string, status: Memory["status"], verified: boolean) => {
     const row = rowOf(reference)
@@ -384,8 +388,17 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       decided(reference, by)
       return setStatus(reference, "stale", false)
     },
-    remove: async (reference) => {
-      const id = Number(rowOf(reference).id)
+    remove: async (reference, by) => {
+      const row = rowOf(reference)
+      assertMayWithdraw(
+        {
+          id: `memory:${row.id}`,
+          proposedBy: proposerOf(database, row.author_type, row.author_id),
+          proposed: row.status === "proposed",
+        },
+        by,
+      )
+      const id = Number(row.id)
       const links = erase(database, () => {
         keepHighestId(database, "memories", now())
         database.prepare("UPDATE memories SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)

@@ -308,12 +308,12 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
     list: async (options) => operations.list(options),
     approve: async (id, by, result) => {
       generic(id)
-      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by)
+      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by, context.decisions)
       return operations.approve(id, result, deciderAuthor(by))
     },
     reject: async (id, by, reason) => {
       generic(id)
-      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by)
+      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by, context.decisions)
       return operations.reject(id, deciderAuthor(by), reason?.trim() ? { reason: reason.trim() } : undefined)
     },
     executed: async (id, result) => {

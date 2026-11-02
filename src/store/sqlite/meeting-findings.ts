@@ -212,7 +212,7 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
           return invalid("accept only unique IDs shown in this batch")
         const accepted = [...decision.accept].sort()
         if (decision.by === undefined) return invalid("a findings review names who decides: the owner or an agent")
-        assertMayDecide({ id, proposedBy: proposals.proposer(id) }, decision.by)
+        assertMayDecide({ id, proposedBy: proposals.proposer(id) }, decision.by, context.decisions)
         if (batch.receipt) {
           if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
             return invalid("this findings batch was already reviewed with a different decision")

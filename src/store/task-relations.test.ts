@@ -80,7 +80,7 @@ it("keeps related and follow-up links informational, normalizes related pairs, a
   await expect(store.tasks.linkTask(a.id, b.id, "blocked-by", { bot: "planner" })).rejects.toMatchObject({
     code: "permission_error",
   })
-  await expect(store.notes.addLink({ from: a.ref, to: b.ref, kind: "blocked-by" })).rejects.toMatchObject({
+  await expect(store.notes.addLink({ by: "owner", from: a.ref, to: b.ref, kind: "blocked-by" })).rejects.toMatchObject({
     code: "validation_error",
   })
   await expect(store.tasks.readyTasks("RES", { limit: 501 })).rejects.toMatchObject({ code: "validation_error" })

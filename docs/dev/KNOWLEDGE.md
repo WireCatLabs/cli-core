@@ -92,7 +92,9 @@ one that names no author, and nothing when the host's `agent_decisions` is off. 
 Ids are bare numbers for stored proposals and `fact:`, `memory:`, `link:`, `key:` for the rest;
 `parseProposalIds` reads ranges and lists of them; only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
-removes a link or writes a confirmed project link (`notes.addLink`, `relate` with `by: "owner"`). An agent's
+removes a link or writes a confirmed link of any kind (`notes.addLink`, `relate` with `by: "owner"`); an agent's
+link is written unconfirmed. Only the owner removes or reverses an accepted fact; an agent withdraws only its own
+proposed fact or memory. The policy is set once at `openStore({ decisions })` and read by every check. An agent's
 `relate` returns a `relationship` proposal.
 
 ## Document extraction

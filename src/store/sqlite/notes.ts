@@ -11,7 +11,7 @@ import {
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
-import type { Decider } from "../decisions.js"
+import { assertMayWithdraw, type Decider } from "../decisions.js"
 import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
@@ -104,7 +104,7 @@ export interface LinkInput {
   evidence?: string
   provenance?: string
   confirmed?: boolean
-  /** Who stands behind a confirmed project link (`member-of`, or `related-to` a project); only the owner may. */
+  /** Who writes it: a confirmed link needs the owner. */
   by?: Decider
 }
 
@@ -161,7 +161,8 @@ export interface NotesStore extends NoteSearch, ImportedDocuments {
   removeNote(id: string): Promise<{ id: string; removed: true }>
   addLink(input: LinkInput): Promise<Link>
   links(options?: LinkListFilter): Promise<Link[]>
-  removeLink(id: string): Promise<{ id: string; removed: true }>
+  /** Only the owner removes a link: it records no actor, so who proposed it cannot be checked. */
+  removeLink(id: string, by: Decider): Promise<{ id: string; removed: true }>
   /** The links a file states, replacing what its last import stated; links the owner added stay. */
   replaceFileLinks(documentId: string, links: Omit<LinkInput, "from" | "origin">[]): Promise<Link[]>
   /**
@@ -321,19 +322,15 @@ export const resolvePersonLinks = (database: CacheDatabase, names: (string | nul
   for (const key of keys) if (check.get(key)) resolveKey(database, key)
 }
 
-/**
- * A confirmed project link is a decision: an agent proposes it (`knowledge.proposeRelation`) and the owner decides,
- * so writing one directly names the owner.
- */
+/** A confirmed link is the owner's statement, of any kind; an agent's link is written unconfirmed. */
 const ownerLink = (input: LinkInput): LinkInput => {
-  const decision = input.kind === "member-of" || (input.kind === "related-to" && input.to?.startsWith("project:"))
-  if (!decision || input.confirmed === false) return input
+  if (input.confirmed === false) return input
   if (input.by === undefined)
-    throw new CliError("validation_error", "a confirmed project link names who decides: the owner", {
+    throw new CliError("validation_error", "a confirmed link names who writes it: the owner", {
       reason: "proposal.decider-required",
     })
   if (input.by !== "owner")
-    throw new CliError("permission_error", "an agent proposes a project link; only the owner confirms it", {
+    throw new CliError("permission_error", "an agent's link is written unconfirmed; only the owner confirms one", {
       reason: "proposal.owner-only",
     })
   return input
@@ -905,8 +902,9 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         )
         .map((row) => linkOf(database, row))
     },
-    removeLink: async (id) =>
+    removeLink: async (id, by) =>
       write(database, () => {
+        assertMayWithdraw({ id: `link:${id}`, proposedBy: { type: "unknown" }, proposed: false }, by)
         if (!/^\d+$/.test(id) || !database.prepare("DELETE FROM links WHERE id = ?").run(Number(id)).changes)
           throw new CliError("not_found", `no link ${id} in the local store`)
         return { id, removed: true as const }

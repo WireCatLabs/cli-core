@@ -854,7 +854,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       checked(key)
       const row = relation(id)
       const link = linkOf(database, row)
-      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by)
+      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
       write(database, () => {
         if (!link.confirmed || String(row.to_type) === "project") proposals.rejected(link, by)
         database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
@@ -865,7 +865,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       checked(key)
       const row = relation(id)
       const link = linkOf(database, row)
-      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by)
+      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
       related(key, link.from, true)
       related(key, String(link.to))
       database

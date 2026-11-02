@@ -17,10 +17,10 @@ afterEach(async () => {
 const claude = { bot: "claude-code", model: "synthetic" }
 const codex = { bot: "codex", reason: "the evidence names the project" }
 
-const fixture = async () => {
+const fixture = async (decisions = DEFAULT_DECISION_POLICY) => {
   let clock = 1_000
   const path = join(mkdtempSync(join(tmpdir(), "proposals-")), "store.db")
-  const store = await openStore({ path, now: () => clock++ })
+  const store = await openStore({ path, now: () => clock++, decisions })
   handles.push(store)
   const project = await store.knowledge.addProject({ name: "Harbour Clinic", key: "HRB" })
   const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
@@ -67,7 +67,7 @@ const fixture = async () => {
     memory,
     relation,
     legacy,
-    registry: proposalRegistry(store, DEFAULT_DECISION_POLICY),
+    registry: proposalRegistry(store),
   }
 }
 
@@ -159,10 +159,15 @@ describe("the proposal registry", () => {
   })
 
   it("keeps the agent's decisions with the owner when the host turns them off", async () => {
-    const f = await fixture()
-    const registry = proposalRegistry(f.store, { ...DEFAULT_DECISION_POLICY, agentDecisions: false })
-    const { refused } = await registry.decide([`link:${f.legacy.id}`], { confirm: true, by: codex })
-    expect(refused).toMatchObject([{ code: "permission_error", reason: "proposals.agent-decisions-off" }])
+    const f = await fixture({ ...DEFAULT_DECISION_POLICY, agentDecisions: false })
+    const { refused } = await f.registry.decide([`link:${f.legacy.id}`, f.relation.id], { confirm: true, by: codex })
+    expect(refused).toMatchObject([
+      { code: "permission_error", reason: "proposals.agent-decisions-off" },
+      { code: "permission_error", reason: "proposals.agent-decisions-off" },
+    ])
+    await expect(f.store.proposedActions.reject(f.relation.id, codex)).rejects.toMatchObject({
+      details: { reason: "proposals.agent-decisions-off" },
+    })
   })
 
   it("leaves a rejected relationship behind a rejected or removed project link, and dedupes a pending pair", async () => {
@@ -210,7 +215,7 @@ describe("the proposal registry", () => {
       get: async () => merge,
       decide: async (id) => ({ id, kind: "person_merge", status: "confirmed", made: [] }),
     }
-    const registry = emptyProposalRegistry(f.store, DEFAULT_DECISION_POLICY)
+    const registry = emptyProposalRegistry(f.store)
     registry.register(kind)
     expect((await registry.list({ limit: 5, offset: 0 })).items).toEqual([merge])
     expect(

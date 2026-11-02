@@ -132,9 +132,9 @@ describe("similar tasks", () => {
     expect(before).toMatchObject({ band: "different", levels: { text: "low", amount: "missing" } })
 
     const ref = (await store.tasks.details(plumber)).ref
-    await store.notes.addLink({ from: ref, to: "msg:chat/500/7/4", kind: "related-to" })
+    await store.notes.addLink({ by: "owner", from: ref, to: "msg:chat/500/7/4", kind: "related-to" })
     expect((await store.tasks.compare({ task: reminder }, plumber)).score).toBe(before.score)
-    await store.notes.addLink({ from: ref, to: "msg:chat/500/7/2", kind: "evidence" })
+    await store.notes.addLink({ by: "owner", from: ref, to: "msg:chat/500/7/2", kind: "evidence" })
     const after = await store.tasks.compare({ task: reminder }, plumber)
     expect(after).toMatchObject({ band: "likely", levels: { amount: "equal", person: "same" } })
     expect((await store.tasks.similar({ task: reminder })).map(({ key }) => key)).toEqual([plumber])
@@ -161,6 +161,7 @@ describe("similar tasks", () => {
     ])
     const venue = await add("1", { title: "Book the venue" })
     await store.notes.addLink({
+      by: "owner",
       from: (await store.tasks.details(venue)).ref,
       to: "msg:chat/500/7/2",
       kind: "evidence",

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { calendarMoment } from "../../domain/moment.js"
-import { assertMayDecide, type Decider, deciderAuthor } from "../decisions.js"
+import { assertMayDecide, assertMayWithdraw, type Decider, deciderAuthor } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
@@ -81,14 +81,14 @@ export interface FactsStore {
   /** The owner, or an agent for the owner, accepts a proposed fact; the fact it supersedes stops holding. */
   accept(reference: string, by: Decider, reason?: string): Promise<Fact>
   /** An accepted decision no longer holds and nothing replaced it. */
-  reverse(reference: string): Promise<Fact>
+  reverse(reference: string, by: Decider): Promise<Fact>
   /** The owner, or an agent for the owner, turns down a proposed fact; it stays, marked `rejected`. */
   reject(reference: string, by: Decider, reason?: string): Promise<Fact>
   /**
    * Erases the fact: its row, its links, its tags, and the memory it was migrated from, which still held its text.
    * A decision that replaced it no longer names it. A backup made before keeps it.
    */
-  remove(reference: string): Promise<{ ref: string; removed: true; links: number }>
+  remove(reference: string, by: Decider): Promise<{ ref: string; removed: true; links: number }>
   /** Each reference it rests on, read back; one deleted since is `missing`. */
   sources(reference: string): Promise<EvidenceSource[]>
 }
@@ -140,8 +140,21 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     if (thing.type !== "fact") throw new CliError("validation_error", `${reference} is not a fact`)
     return database.prepare(`${NAMED} WHERE f.id = ?`).get(thing.id) as Row
   }
+  const withdrawn = (row: Row, by: Decider) =>
+    assertMayWithdraw(
+      {
+        id: `fact:${row.id}`,
+        proposedBy: proposerOf(database, row.author_type, row.author_id),
+        proposed: row.status === "proposed",
+      },
+      by,
+    )
   const decided = (row: Row, by: Decider) =>
-    assertMayDecide({ id: `fact:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) }, by)
+    assertMayDecide(
+      { id: `fact:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) },
+      by,
+      context.decisions,
+    )
   /** Keeps who decided for the owner and why in `metadata.decision`; the decider's actor is in `confirmed_by`. */
   const keepDecision = (id: number, by: Decider, reason?: string) => {
     const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
@@ -274,8 +287,9 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       write(database, () => accept(id, by))
       return factOf(rowOf(reference))
     },
-    reverse: (reference) => {
+    reverse: (reference, by) => {
       const row = rowOf(reference)
+      assertMayWithdraw({ id: `fact:${row.id}`, proposedBy: { type: "unknown" }, proposed: false }, by)
       if (row.type !== "decision") throw new CliError("validation_error", "only a decision can be reversed")
       if (row.status !== "accepted") throw new CliError("validation_error", "only an accepted decision can be reversed")
       database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
@@ -295,8 +309,9 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       })
       return factOf(rowOf(reference))
     },
-    remove: (reference) => {
+    remove: (reference, by) => {
       const row = rowOf(reference)
+      withdrawn(row, by)
       const id = Number(row.id)
       const twin = row.source === "memory" && row.metadata != null ? migratedFrom(String(row.metadata)) : undefined
       const links = erase(database, () => {
@@ -333,9 +348,9 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
     get: async (reference) => operations.get(reference),
     list: async (options) => operations.list(options),
     accept: async (reference, by, reason) => operations.accept(reference, by, reason),
-    reverse: async (reference) => operations.reverse(reference),
+    reverse: async (reference, by) => operations.reverse(reference, by),
     reject: async (reference, by, reason) => operations.reject(reference, by, reason),
-    remove: async (reference) => operations.remove(reference),
+    remove: async (reference, by) => operations.remove(reference, by),
     sources: async (reference) => operations.sources(reference),
   }
 }

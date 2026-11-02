@@ -85,8 +85,9 @@ const seed = async (name = collection) => {
     scope: "work",
   })
   await store.facts.accept(nextFact.ref, "owner")
-  await store.facts.reverse(nextFact.ref)
+  await store.facts.reverse(nextFact.ref, "owner")
   await store.notes.addLink({
+    by: "owner",
     from: doc.ref,
     to: note.ref,
     kind: "links-to",
@@ -96,6 +97,7 @@ const seed = async (name = collection) => {
     provenance: "synthetic-provenance",
   })
   await store.notes.addLink({
+    by: "owner",
     from: doc.ref,
     kind: "links-to",
     targetText: "Unknown synthetic colleague",
@@ -278,7 +280,7 @@ describe("provider-neutral document annotation transfer", () => {
     const f = await seed()
     const source = await open(f.source)
     const project = await source.knowledge.addProject({ name: "Synthetic source project" })
-    await source.notes.addLink({ from: project.ref, to: f.doc.ref, kind: "links-to", origin: "owner" })
+    await source.notes.addLink({ by: "owner", from: project.ref, to: f.doc.ref, kind: "links-to", origin: "owner" })
     const target = await open(f.destination)
     const collision = await target.knowledge.addProject({ name: "Unrelated colliding project" })
     const selected = await target.knowledge.addProject({ name: "Explicitly selected project" })
@@ -318,6 +320,7 @@ describe("provider-neutral document annotation transfer", () => {
     const editor = await source.people.personOf({ provider: key.provider, id: "editor-42" })
     expect(editor).toBeDefined()
     await source.notes.addLink({
+      by: "owner",
       from: f.doc.ref,
       to: `person:${editor?.uid}`,
       kind: "links-to",
@@ -428,7 +431,13 @@ describe("provider-neutral document annotation transfer", () => {
       { provider: second.provider, id: "73" },
       { method: "manual", by: "owner" },
     )
-    await source.notes.addLink({ from: f.doc.ref, to: `person:${merged.uid}`, kind: "links-to", origin: "owner" })
+    await source.notes.addLink({
+      by: "owner",
+      from: f.doc.ref,
+      to: `person:${merged.uid}`,
+      kind: "links-to",
+      origin: "owner",
+    })
     const preview = await previewDocumentTransfer(f.options)
     expect(preview.ready).toBe(false)
     expect(preview.conflicts).toContain(
@@ -513,7 +522,7 @@ describe("provider-neutral document annotation transfer", () => {
       text: "Original external evidence",
       contentHash: "external-h1",
     })
-    await source.notes.addLink({ from: f.doc.ref, to: evidence.ref, kind: "evidence", origin: "owner" })
+    await source.notes.addLink({ by: "owner", from: f.doc.ref, to: evidence.ref, kind: "evidence", origin: "owner" })
     const destinationFolder = await target.notes.addFolder({ name: "other-documents:synthetic" })
     await target.notes.saveFileNote({
       folderId: destinationFolder.id,

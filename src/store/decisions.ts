@@ -57,9 +57,33 @@ export const mayDecide = (
     return refuse("permission_error", "proposal.owner-only", "this proposal names no author; only the owner decides it")
   if (proposer.type === "bot" && proposer.kind === "rule" && policy.ruleProposalsOwnerOnly)
     return refuse("permission_error", "proposal.owner-only", `proposed by ${proposer.name}: only the owner decides it`)
-  if (proposer.type === "bot" && proposer.kind === "agent" && proposer.name === by.bot.trim())
+  if (proposer.type === "bot" && proposer.kind === "agent" && botKey(proposer.name) === botKey(by.bot))
     return refuse("permission_error", "proposal.own", `${by.bot} proposed this; another decider must decide it`)
   return null
+}
+
+/** One bot whatever its letter case or spacing: `Claude-Code` is `claude-code`. */
+export const botKey = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+
+/**
+ * Removing or reversing a row: the owner always may; an agent only withdraws its own row while it is still
+ * proposed. Everything else stays the owner's.
+ */
+export const assertMayWithdraw = (
+  row: { id: string; proposedBy: Proposer; proposed: boolean },
+  by: Decider | Exclude<Decider, "owner"> | { bot: string },
+): void => {
+  if (by === "owner") return
+  const proposer = row.proposedBy
+  if (row.proposed && proposer.type === "bot" && proposer.kind === "agent" && botKey(proposer.name) === botKey(by.bot))
+    return
+  throw new CliError("permission_error", `only the owner removes or reverses ${row.id}`, {
+    reason: "proposal.owner-only",
+  })
 }
 
 /** `mayDecide` for a store method: throws the refusal instead of returning it. */

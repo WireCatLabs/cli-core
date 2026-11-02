@@ -49,7 +49,7 @@ it("preserves superseded and reversed decision history with mapped predecessor r
     project: f.source.project.ref,
     supersedes: f.source.accepted.ref,
   })
-  await f.source.store.facts.reverse(replacement.ref)
+  await f.source.store.facts.reverse(replacement.ref, "owner")
   const source = await snapshotProjectAnnotations({ source: f.source.path, project: f.source.project.ref })
   const input = { ...request(f), snapshot: JSON.stringify(source.snapshot) }
   const preview = await api.preview(input),

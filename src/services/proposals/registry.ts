@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type DecisionPolicy, mayDecide, type Refusal } from "../../store/decisions.js"
+import { mayDecide, type Refusal } from "../../store/decisions.js"
 import type { MessageStore } from "../../store/store.js"
 import { actionKind } from "./kinds/action.js"
 import { factKind } from "./kinds/fact.js"
@@ -20,9 +20,9 @@ const refusalOf = (id: string, error: unknown): Refusal => {
 
 /** An empty registry: the host registers its kinds. `proposalRegistry` is this with the core kinds. */
 export const emptyProposalRegistry = (
-  store: Pick<MessageStore, "proposedActions">,
-  policy: DecisionPolicy,
+  store: Pick<MessageStore, "proposedActions" | "decisionPolicy">,
 ): ProposalRegistry & { claimed(): string[] } => {
+  const policy = store.decisionPolicy
   const kinds: ProposalKind[] = []
   const claimed = () => kinds.flatMap((kind) => kind.stored ?? [])
 
@@ -121,8 +121,9 @@ export const emptyProposalRegistry = (
 }
 
 /** Every proposal kind core knows, behind one check of who may decide. */
-export const proposalRegistry = (store: MessageStore, policy: DecisionPolicy): ProposalRegistry => {
-  const registry = emptyProposalRegistry(store, policy)
+/** The policy is the store's, set when it was opened, so the registry and the store methods never disagree. */
+export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
+  const registry = emptyProposalRegistry(store)
   for (const kind of [
     relationshipKind(store),
     keyDocumentKind(store),

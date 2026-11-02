@@ -89,7 +89,7 @@ export const relationProposalsOver = (context: StoreContext) => {
         const proposal = operations.get(id)
         if (proposal.kind !== "relationship" && proposal.kind !== "key_document")
           throw new CliError("validation_error", `${id} is a ${proposal.kind} proposal, not a link`)
-        assertMayDecide({ id, proposedBy: proposerOfAction(proposal) }, decision.by)
+        assertMayDecide({ id, proposedBy: proposerOfAction(proposal) }, decision.by, context.decisions)
         const author = deciderAuthor(decision.by)
         const reason = decision.reason?.trim() || undefined
         if (!decision.confirm)
@@ -124,7 +124,7 @@ export const relationProposalsOver = (context: StoreContext) => {
           ? database.prepare("SELECT * FROM links WHERE id = ? AND confirmed = 0").get(Number(id))
           : undefined
         if (!row) throw new CliError("not_found", `no suggested link ${id}`)
-        assertMayDecide({ id: `link:${id}`, proposedBy: { type: "unknown" } }, decision.by)
+        assertMayDecide({ id: `link:${id}`, proposedBy: { type: "unknown" } }, decision.by, context.decisions)
         const link = linkOf(database, row)
         if (!decision.confirm) {
           rejected(link, decision.by, decision.reason)

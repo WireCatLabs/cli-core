@@ -26,7 +26,7 @@ const rowOf = (action: ProposedAction): ProposalRow => ({
  * in the account that would act; nothing is carried out. Meeting findings are reviewed with their meeting.
  */
 export const actionKind = (
-  store: Pick<MessageStore, "proposedActions" | "tasks">,
+  store: Pick<MessageStore, "proposedActions" | "tasks" | "decisionPolicy">,
   claimed: () => readonly string[],
 ): ProposalKind => ({
   kind: "action",

@@ -7,7 +7,7 @@ import type { MessageStore, ProposedAction } from "../store/store.js"
 import { createTaskService, type Task } from "../tasks/index.js"
 import { taskAccount } from "./task-rules.js"
 
-export type ProposalTaskStore = Pick<MessageStore, "proposedActions" | "tasks">
+export type ProposalTaskStore = Pick<MessageStore, "proposedActions" | "tasks" | "decisionPolicy">
 
 /** The source a proposal's task keeps: found again on a retry, so one proposal never makes two tasks. */
 export const proposalSource = (id: string): string => `proposed-action:${id}`
@@ -34,7 +34,7 @@ export const approveAsTask = async (
     throw new CliError("validation_error", `a ${proposal.status} action cannot be approved`, {
       reason: "proposal.wrong-state",
     })
-  assertMayDecide({ id: proposal.id, proposedBy: proposerOfAction(proposal) }, by)
+  assertMayDecide({ id: proposal.id, proposedBy: proposerOfAction(proposal) }, by, store.decisionPolicy)
   if (proposal.account === null)
     throw new CliError("validation_error", "a proposal names the account that would act; this one names none")
   const { task } = await createTaskService({ store: store.tasks }).add({
