@@ -166,17 +166,31 @@ const memberLanesOf = async (store: MessageStore, project: string | null, given:
   return { lanes, left }
 }
 
+export interface LinkedChat {
+  provider: string
+  account: string
+  chat: string
+  /** The link's free role (`source report`, `what worked`), if the owner set one. */
+  role: string | null
+}
+
 /** Only links the owner confirmed: a suggested one would put a whole chat into the evidence on a guess. */
-const linkedChatsOf = async (store: MessageStore, project: string | null) => {
+export const linkedChatsOf = async (store: MessageStore, project: string | null): Promise<LinkedChat[]> => {
   if (!project) return []
-  const chats = []
+  const chats: LinkedChat[] = []
   for (const relation of await store.knowledge.relations(null, project)) {
     if (!relation.confirmed || relation.kind !== "member-of" || relation.to !== project) continue
     if (!relation.from.startsWith("chat:")) continue
     const reference = parseReference(relation.from)
-    if (reference.type === "chat") chats.push(reference)
+    if (reference.type === "chat")
+      chats.push({
+        provider: reference.provider,
+        account: reference.account,
+        chat: reference.chat,
+        role: relation.role,
+      })
   }
-  return chats.map(({ provider, account, chat }) => ({ provider, account, chat }))
+  return chats
 }
 
 export type StoredProjectGathering = Awaited<ReturnType<typeof gatherProjectEvidence>> & {
@@ -223,7 +237,7 @@ export const gatherStoredProject = async (
   const members = await memberLanesOf(store, project.ref, new Set(contacts.flatMap((one) => one.reference ?? [])), room)
   const people = [...contacts, ...members.lanes]
   const linked = await linkedChatsOf(store, project.ref)
-  const linkedChats = linked.slice(0, LINKED_CHATS)
+  const linkedChats = linked.slice(0, LINKED_CHATS).map(({ provider, account, chat }) => ({ provider, account, chat }))
   const budgets = {
     ...(input.maxReads === undefined ? {} : { maxReads: input.maxReads }),
     ...(input.limit === undefined ? {} : { maxItems: input.limit }),

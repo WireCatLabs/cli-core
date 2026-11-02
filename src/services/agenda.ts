@@ -27,6 +27,9 @@ import { taskTagFilters } from "./task-tag-filters.js"
 
 const DAY = 86_400_000
 
+/** How long a chat must be silent before `tasks agenda` lists it, per side. */
+export const AGENDA_DEFAULTS = { unanswered: DAY, waiting: 7 * DAY } as const
+
 export interface AgendaOptions {
   /** ms: a task due within this is listed. */
   dueWithin?: number
@@ -140,7 +143,14 @@ export interface AgendaService {
 }
 
 export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): AgendaService => ({
-  show: async ({ dueWithin = DAY, waiting = 7 * DAY, unanswered = DAY, within = 30 * DAY, query, holder } = {}) => {
+  show: async ({
+    dueWithin = DAY,
+    waiting = AGENDA_DEFAULTS.waiting,
+    unanswered = AGENDA_DEFAULTS.unanswered,
+    within = 30 * DAY,
+    query,
+    holder,
+  } = {}) => {
     const [store, account] = [await deps.store(), await deps.account()]
     const at = now()
     const parts = query ? split(query) : { tasks: undefined, chats: undefined }
