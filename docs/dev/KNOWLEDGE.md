@@ -86,7 +86,8 @@ arguments; `list` filters by tool and by the agent's name, such as `tg-mcp`.
 Every decide method takes a `Decider`: `"owner"`, or `{ bot, model?, reason }` for an agent the host lets
 decide for the owner. Each runs `mayDecide` before it changes anything: an agent needs a reason, never
 decides its own bot's proposal (every Claude Code session is the bot `claude-code`), never a rule scorer's or
-one that names no author, and nothing when the host's `agent_decisions` is off. `proposalRegistry`
+one that names no author, and nothing unless the host's `agent_decisions` is on: `openStore` keeps it off unless
+the host passes `decisions: { agentDecisions: true }` from the owner's explicit `agent_decisions: true`. `proposalRegistry`
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `invoice`, `payment`,
 `memory`, `findings`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
 Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `memory:`, `link:`, `key:` for the rest;

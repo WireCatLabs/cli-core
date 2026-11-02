@@ -14,13 +14,13 @@ export type Proposer =
 export type Decider = "owner" | { bot: string; model?: string; reason: string }
 
 export interface DecisionPolicy {
-  /** The host's `agent_decisions`: `false` keeps every decision with the owner. */
+  /** The host's `agent_decisions`: off unless the owner sets it to `true`; off keeps every decision with the owner. */
   agentDecisions: boolean
   /** A rule scorer's proposal is the owner's alone to decide. */
   ruleProposalsOwnerOnly: boolean
 }
 
-export const DEFAULT_DECISION_POLICY: DecisionPolicy = { agentDecisions: true, ruleProposalsOwnerOnly: true }
+export const DEFAULT_DECISION_POLICY: DecisionPolicy = { agentDecisions: false, ruleProposalsOwnerOnly: true }
 
 export interface Refusal {
   id: string

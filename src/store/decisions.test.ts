@@ -55,7 +55,10 @@ describe("mayDecide", () => {
 })
 
 const opened = async (): Promise<MessageStore> => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "decisions-")), "store.db") })
+  const store = await openStore({
+    path: join(mkdtempSync(join(tmpdir(), "decisions-")), "store.db"),
+    decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
+  })
   handles.push(store)
   return store
 }
@@ -322,6 +325,32 @@ describe("the second review", () => {
     await expect(f.store.memories.remove(memory.ref, self)).rejects.toMatchObject(ownerOnly)
     const mine = await f.store.facts.add({ type: "fact", statement: "Mine", by: agent, evidence: [f.note.ref] })
     expect(await f.store.facts.remove(mine.ref, self)).toMatchObject({ removed: true })
+  })
+
+  it("keeps agent decisions off unless the host turns them on, and owner-only rows off either way", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "decisions-"))
+    const off = await openStore({ path: join(dir, "store.db") })
+    handles.push(off)
+    const note = await off.notes.addNote({ text: "Kickoff moved" })
+    const fact = await off.facts.add({ type: "fact", statement: "Kickoff", by: agent, evidence: [note.ref] })
+    await expect(off.facts.accept(fact.ref, { bot: "codex", reason: "the note" })).rejects.toMatchObject({
+      details: { reason: "proposals.agent-decisions-off" },
+    })
+    await off.close()
+    handles.pop()
+
+    const on = await openStore({
+      path: join(dir, "store.db"),
+      decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
+    })
+    handles.push(on)
+    expect(await on.facts.accept(fact.ref, { bot: "codex", reason: "the note" })).toMatchObject({ status: "accepted" })
+
+    const ownerOnly = { id: "mail:1", proposedBy: bot("codex"), ownerOnly: true }
+    for (const agentDecisions of [false, true])
+      expect(mayDecide(ownerOnly, self, { agentDecisions, ruleProposalsOwnerOnly: true })?.reason).toBe(
+        "proposal.owner-only",
+      )
   })
 
   it("SEC-9: the store keeps agent decisions off when the host turns them off", async () => {
