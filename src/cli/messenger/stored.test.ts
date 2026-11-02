@@ -1091,7 +1091,7 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
 
     await feeding(
       wrapped,
-      { storedChats: async () => {}, feed: async (onBatch) => onBatch({ rekeys: rekeysOf(["7", "8"]) }) },
+      { storedChats: async () => {}, feed: async (onBatch) => void (await onBatch({ rekeys: rekeysOf(["7", "8"]) })) },
       { rekeyed: (from, to) => void moved.push(`${from}>${to}`), rekeyPacing: { lockMs: 0, pauseMs: 0 } },
     )
 
@@ -1168,7 +1168,10 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
 
       const fed = feeding(
         wrapped,
-        { storedChats: async () => {}, feed: async (onBatch) => onBatch({ rekeys: rekeysOf(["7", "8", "9"]) }) },
+        {
+          storedChats: async () => {},
+          feed: async (onBatch) => void (await onBatch({ rekeys: rekeysOf(["7", "8", "9"]) })),
+        },
         { rekeyPacing: { lockMs: 0, pauseMs: 25 }, closing: closing.signal, rekeyed: () => closing.abort() },
       )
       await vi.advanceTimersByTimeAsync(100)
@@ -1257,6 +1260,39 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
     expect(warnings).toEqual([expect.stringContaining("recipient list")])
   })
 
+  it("tells the messenger whether each pushed batch reached the store", async () => {
+    const { store } = await setUp()
+    const answers: (boolean | void)[] = []
+    const batch = {
+      chats: [
+        {
+          id: "11",
+          title: "Pushed",
+          kind: "dialog" as const,
+          unreadCount: 0,
+          lastMessageAt: null,
+          participantsCount: 2,
+        },
+      ],
+    }
+
+    await feeding(store, {
+      storedChats: async () => {},
+      feed: async (onBatch) => void answers.push(await onBatch(batch)),
+    })
+    await feeding(
+      store,
+      { storedChats: async () => {}, feed: async (onBatch) => void answers.push(await onBatch(batch)) },
+      {
+        store: async () => {
+          throw new Error("database disk image is malformed")
+        },
+      },
+    )
+
+    expect(answers).toEqual([true, false])
+  })
+
   it.each([
     ["rejects", async () => Promise.reject(new Error("engine not ready"))],
     [
@@ -1270,10 +1306,11 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
 
     const { warnings, codes } = await feeding(store, {
       storedChats,
-      feed: async (onBatch) =>
-        onBatch({
+      feed: async (onBatch) => {
+        await onBatch({
           chats: [{ id: "10", title: "New", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 }],
-        }),
+        })
+      },
     })
 
     expect(codes).toEqual(["stored_chats_failed"])
