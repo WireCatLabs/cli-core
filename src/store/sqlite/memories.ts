@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEMORY_KINDS, MEMORY_SCOPES, type MEMORY_STATUSES } from "../../domain/knowledge.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
+import { assertMayDecide, assertMayWithdraw, type Decider } from "../decisions.js"
 import { normalize } from "../normalize.js"
-import { type Actor, botNamed, ownerPerson } from "./actors.js"
+import { type Actor, botNamed, ownerPerson, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
@@ -12,8 +13,8 @@ import { stemmerCache } from "./stems.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { write } from "./transaction.js"
 
-/** Who wrote it: the owner, or an agent by its bot handle and the model it ran on. */
-export type Author = "owner" | { bot: string; model?: string }
+/** Who wrote it: the owner, or an agent (or a rule scorer) by its bot handle and the model it ran on. */
+export type Author = "owner" | { bot: string; model?: string; kind?: "agent" | "rule" }
 
 export interface Memory {
   id: string
@@ -29,8 +30,8 @@ export interface Memory {
   /** The project it belongs to, as `project:<id>`. */
   project: string | null
   projectName: string | null
-  /** `name` is a bot's handle; `null` for a person. */
-  author: { type: Actor["type"]; id: string; name: string | null }
+  /** `name` is a bot's handle and `kind` whether it is an agent or a rule; both `null` for a person. */
+  author: { type: Actor["type"]; id: string; name: string | null; kind: "agent" | "rule" | null }
   model: string | null
   confidence: number | null
   status: (typeof MEMORY_STATUSES)[number]
@@ -68,19 +69,20 @@ export interface MemoriesStore {
     kind?: Memory["kind"]
     status?: Memory["status"]
     scope?: Memory["scope"]
+    proposedBy?: ProposedByFilter
     limit?: number
   }): Promise<Memory[]>
   /** Moves it to another project, or to none with `null`. */
   update(reference: string, change: { project: string | null }): Promise<Memory>
-  /** The owner stands behind it; its evidence was checked now. */
-  confirm(reference: string): Promise<Memory>
-  /** Its evidence no longer holds. */
-  markStale(reference: string): Promise<Memory>
+  /** The owner, or an agent for the owner, stands behind it; its evidence was checked now. */
+  confirm(reference: string, by: Decider): Promise<Memory>
+  /** Its evidence no longer holds; for an agent's memory this is how it is turned down, so `by` must be allowed. */
+  markStale(reference: string, by: Decider): Promise<Memory>
   /**
    * Erases the memory: its row, its text in the search and meaning indexes, and every link from or to it. A memory
    * that replaced it no longer names it. A backup made before keeps it.
    */
-  remove(reference: string): Promise<{ ref: string; removed: true; links: number }>
+  remove(reference: string, by: Decider): Promise<{ ref: string; removed: true; links: number }>
   /** Each reference it rests on, read back; one deleted since is `missing`. */
   sources(reference: string): Promise<EvidenceSource[]>
   /** Indexes what was written since, then finds memories holding every word or a longer one it starts, best first. */
@@ -90,7 +92,7 @@ export interface MemoriesStore {
 
 type Row = Record<string, unknown>
 const NAMED =
-  "SELECT m.*, b.name AS author_name FROM memories m LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id"
+  "SELECT m.*, b.name AS author_name, b.kind AS author_kind FROM memories m LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id"
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
@@ -102,7 +104,7 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: st
 export const authorActor = (context: StoreContext, author: Author): { actor: Actor; model: string | null } => {
   if (author === "owner") return { actor: ownerPerson(context.database), model: null }
   return {
-    actor: botNamed(context.database, author.bot, context.now(), "agent"),
+    actor: botNamed(context.database, author.bot, context.now(), author.kind ?? "agent"),
     model: author.model === undefined ? null : author.model.trim().slice(0, 200) || null,
   }
 }
@@ -111,6 +113,7 @@ export const authorOf = (row: Row): Memory["author"] => ({
   type: row.author_type as Actor["type"],
   id: String(row.author_id),
   name: row.author_name == null ? null : String(row.author_name),
+  kind: row.author_type !== "bot" ? null : row.author_kind === "rule" || row.author_name === "rule" ? "rule" : "agent",
 })
 
 /** Writes `evidence` links from a row to each reference, refusing one the store does not hold. */
@@ -259,6 +262,14 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     if (row.deleted_at != null) throw new CliError("not_found", `${reference} is a fact now: store.facts holds it`)
     return row
   }
+  const decided = (reference: string, by: Decider) => {
+    const row = rowOf(reference)
+    assertMayDecide(
+      { id: `memory:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) },
+      by,
+      context.decisions,
+    )
+  }
   const setStatus = (reference: string, status: Memory["status"], verified: boolean) => {
     const row = rowOf(reference)
     const at = now()
@@ -286,6 +297,10 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       if (input.confidence !== undefined && !(input.confidence >= 0 && input.confidence <= 1))
         throw new CliError("validation_error", "confidence takes 0–1")
       const status = oneOf(input.status ?? "proposed", ["proposed", "confirmed"] as const, "a new memory's status")
+      if (status === "confirmed" && input.author !== "owner")
+        throw new CliError("permission_error", "an agent's memory waits as proposed; only the owner confirms it", {
+          reason: "proposal.owner-only",
+        })
       const id = write(database, () => {
         const { actor, model } = authorActor(context, input.author)
         const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
@@ -334,11 +349,12 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     list: async (options = {}) => {
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
       const project = options.project === undefined ? null : projectId(database, options.project)
+      const by = proposedBySql("m.author_type", "m.author_id", options.proposedBy)
       return database
         .prepare(
           `${NAMED} WHERE m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id = ?)) ` +
             "AND (? IS NULL OR m.project_id = ?) AND (? IS NULL OR m.kind = ?) AND (? IS NULL OR m.status = ?) AND (? IS NULL OR m.scope = ?) " +
-            "ORDER BY m.created_at DESC, m.id DESC LIMIT ?",
+            `AND ${by.sql} ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
         )
         .all(
           subject?.type ?? null,
@@ -352,6 +368,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
           options.status ?? null,
           options.scope ?? null,
           options.scope ?? null,
+          ...by.params,
           Math.min(Math.max(options.limit ?? 100, 1), 500),
         )
         .map(memoryOf)
@@ -363,10 +380,25 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
         database.prepare("UPDATE memories SET project_id = ?, updated_at = ? WHERE id = ?").run(project, now(), id)
         return memoryOf(rowOf(`memory:${id}`))
       }),
-    confirm: async (reference) => setStatus(reference, "confirmed", true),
-    markStale: async (reference) => setStatus(reference, "stale", false),
-    remove: async (reference) => {
-      const id = Number(rowOf(reference).id)
+    confirm: async (reference, by) => {
+      decided(reference, by)
+      return setStatus(reference, "confirmed", true)
+    },
+    markStale: async (reference, by) => {
+      decided(reference, by)
+      return setStatus(reference, "stale", false)
+    },
+    remove: async (reference, by) => {
+      const row = rowOf(reference)
+      assertMayWithdraw(
+        {
+          id: `memory:${row.id}`,
+          proposedBy: proposerOf(database, row.author_type, row.author_id),
+          proposed: row.status === "proposed",
+        },
+        by,
+      )
+      const id = Number(row.id)
       const links = erase(database, () => {
         keepHighestId(database, "memories", now())
         database.prepare("UPDATE memories SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
@@ -387,7 +419,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       const match = `normalized_text : (${words.map((word) => `"${word.replaceAll('"', '""')}"*`).join(" AND ")})`
       return database
         .prepare(
-          "SELECT m.*, b.name AS author_name FROM memory_words w JOIN memories m ON m.id = w.rowid " +
+          "SELECT m.*, b.name AS author_name, b.kind AS author_kind FROM memory_words w JOIN memories m ON m.id = w.rowid " +
             "LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id WHERE memory_words MATCH ? " +
             "AND m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id = ?)) " +
             "AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",

@@ -6,16 +6,20 @@ import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
 import { isClosedState } from "../../tasks/index.js"
+import { assertMayDecide, type Decider } from "../decisions.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
+import type { Author } from "./memories.js"
 import { holdingText } from "./note-index.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import type { ProposedAction } from "./proposed-actions.js"
 import { queryFilter } from "./query-filter.js"
+import { type LinkDecision, relationProposalsOver } from "./relation-proposals.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -169,27 +173,59 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
     description?: string
   }): Promise<Project>
   projects(query?: QueryAst): Promise<Project[]>
-  relate(
+  /** The owner's relationship is a link; `confirmed: false` keeps it a weak suggestion only the owner decides. */
+  relate(key: KnowledgeScope, input: RelateInput & { by: "owner" }): Promise<KnowledgeRelation>
+  /** An agent's relationship is a `relationship` proposal for the owner, never a link. */
+  relate(key: KnowledgeScope, input: RelateInput & { by: Exclude<Author, "owner"> }): Promise<ProposedAction>
+  /**
+   * An agent's or a rule's relationship, written as a `relationship` proposal for the owner instead of a link. The
+   * same pending pair returns the proposal already held.
+   */
+  proposeRelation(
     key: KnowledgeScope,
     input: {
       from: string
       to: string
       kind: KnowledgeRelation["kind"]
       role?: string
-      evidence?: string
-      confirmed?: boolean
-      provenance?: string
+      evidence?: string[]
+      reason?: string
     },
-  ): Promise<KnowledgeRelation>
+    by: Exclude<Author, "owner">,
+  ): Promise<ProposedAction>
+  /** Decides a stored `relationship` or `key_document` proposal; the link and the decision land together. */
+  decideLinkProposal(id: string, decision: LinkDecision): Promise<{ proposal: ProposedAction; link: Link | null }>
+  /** Decides an unconfirmed link written before proposals were stored. Its author is unknown, so only the owner may. */
+  decideSuggestedLink(id: string, decision: LinkDecision): Promise<Link | null>
   relations(key: KnowledgeScope, reference?: string): Promise<KnowledgeRelation[]>
-  removeRelation(key: KnowledgeScope, id: string): Promise<{ id: string; removed: true }>
-  confirmRelation(key: KnowledgeScope, id: string): Promise<KnowledgeRelation>
+  /**
+   * Removing an unconfirmed relationship rejects it, so `by` must be allowed to decide it. Removing a link to a
+   * project, or rejecting any suggestion, leaves a rejected `relationship` proposal so a scan never proposes it again.
+   */
+  removeRelation(key: KnowledgeScope, id: string, by: Decider): Promise<{ id: string; removed: true }>
+  confirmRelation(key: KnowledgeScope, id: string, by: Decider): Promise<KnowledgeRelation>
   schedule(key: AccountKey, task: string, dueAt: string, timezone: string): Promise<Reminder>
   reminders(key: AccountKey, query?: QueryAst): Promise<Reminder[]>
   cancelReminder(key: AccountKey, id: string): Promise<Reminder>
   snoozeReminder(key: AccountKey, id: string, dueAt: string, revision: number): Promise<Reminder>
   claimReminders(key: AccountKey, options?: { limit?: number; leaseMs?: number }): Promise<Reminder[]>
   acknowledgeReminder(key: AccountKey, id: string, receipt: string): Promise<Reminder>
+}
+
+/**
+ * A link records no actor, only free-text provenance anyone could write, so whoever proposed one is unverified and
+ * only the owner decides it.
+ */
+const UNVERIFIED = { type: "unknown" } as const
+
+export interface RelateInput {
+  from: string
+  to: string
+  kind: KnowledgeRelation["kind"]
+  role?: string
+  evidence?: string
+  confirmed?: boolean
+  provenance?: string
 }
 
 type Row = Record<string, unknown>
@@ -402,11 +438,25 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     confidenceCategory: link.confirmed ? "owner-confirmed" : "weak",
     createdAt: link.createdAt,
   })
+  const proposals = relationProposalsOver(context)
   const RELATIONS = `SELECT * FROM links WHERE kind IN (${RELATION_KINDS.map(linkKind).join(",")}) AND to_id IS NOT NULL`
   const relation = (id: string) => {
     const row = /^\d+$/.test(id) ? database.prepare(`${RELATIONS} AND id = ?`).get(Number(id)) : undefined
     if (!row) throw new CliError("not_found", "no relationship with that id")
     return row
+  }
+  /** The two ends of a relationship, checked, and the link that already joins them. */
+  const pair = (key: KnowledgeScope, input: { from: string; to: string; kind: KnowledgeRelation["kind"] }) => {
+    const from = related(key, input.from, true)
+    const to = related(key, input.to)
+    if ((from.type === to.type && from.id === to.id) || !RELATION_KINDS.includes(input.kind))
+      throw new CliError("validation_error", "a relationship needs distinct references and a supported kind")
+    if ((from.type === "chat" || from.type === "email_thread") && (input.kind !== "member-of" || to.type !== "project"))
+      throw new CliError("validation_error", "a chat is related only as member-of a project")
+    const existing = database
+      .prepare(`${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=?`)
+      .get(from.type, from.id, to.type, to.id, input.kind)
+    return { from, to, existing }
   }
   /** A chat may only be the member: its reference names its own account, so it is never another account's. */
   const related = (key: KnowledgeScope, reference: string, member = false): Thing => {
@@ -752,19 +802,23 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         .all(...(where?.params ?? []))
         .map(projectOf)
     },
-    relate: async (key, input) => {
-      const from = related(key, input.from, true)
-      const to = related(key, input.to)
-      if ((from.type === to.type && from.id === to.id) || !RELATION_KINDS.includes(input.kind))
-        throw new CliError("validation_error", "a relationship needs distinct references and a supported kind")
-      if (
-        (from.type === "chat" || from.type === "email_thread") &&
-        (input.kind !== "member-of" || to.type !== "project")
-      )
-        throw new CliError("validation_error", "a chat is related only as member-of a project")
-      const existing = database
-        .prepare(`${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=?`)
-        .get(from.type, from.id, to.type, to.id, input.kind)
+    relate: (async (key: KnowledgeScope, input: RelateInput & { by: Author }) => {
+      if (input.by === undefined)
+        throw new CliError("validation_error", "a relationship names who writes it: the owner or an agent", {
+          reason: "proposal.decider-required",
+        })
+      const { from, existing } = pair(key, input)
+      if (input.by !== "owner") {
+        if (existing)
+          throw new CliError("validation_error", `relationship ${String(existing.id)} already links them`, {
+            reason: "relationship.exists",
+          })
+        return proposals.propose(
+          from,
+          { ...input, ...(input.evidence === undefined ? {} : { reason: input.evidence }), evidence: [] },
+          input.by,
+        )
+      }
       if (existing) return relationOf(linkOf(database, existing))
       const confirmed = input.confirmed !== false
       return relationOf(
@@ -781,7 +835,17 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           }),
         ),
       )
+    }) as KnowledgeStore["relate"],
+    proposeRelation: async (key, input, by) => {
+      const { from, existing } = pair(key, input)
+      if (existing)
+        throw new CliError("validation_error", `relationship ${String(existing.id)} already links them`, {
+          reason: "relationship.exists",
+        })
+      return proposals.propose(from, input, by)
     },
+    decideLinkProposal: async (id, decision) => proposals.decideProposal(id, decision),
+    decideSuggestedLink: async (id, decision) => proposals.decideLink(id, decision),
     relations: async (key, reference) => {
       checked(key)
       const thing = reference === undefined ? undefined : thingOf(database, reference)
@@ -793,16 +857,22 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, thing?.type ?? null, thing?.id ?? null)
         .map((row) => relationOf(linkOf(database, row)))
     },
-    removeRelation: async (key, id) => {
-      checked(key)
-      relation(id)
-      database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
-      return { id, removed: true }
-    },
-    confirmRelation: async (key, id) => {
+    removeRelation: async (key, id, by) => {
       checked(key)
       const row = relation(id)
       const link = linkOf(database, row)
+      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
+      write(database, () => {
+        if (!link.confirmed || String(row.to_type) === "project") proposals.rejected(link, by)
+        database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
+      })
+      return { id, removed: true }
+    },
+    confirmRelation: async (key, id, by) => {
+      checked(key)
+      const row = relation(id)
+      const link = linkOf(database, row)
+      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
       related(key, link.from, true)
       related(key, String(link.to))
       database

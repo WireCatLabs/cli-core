@@ -36,14 +36,15 @@ describe("shared document knowledge", () => {
     try {
       expect(await f.k.tags(f.principal, f.ref, "add", ["budget", "review"])).toEqual(["budget", "review"])
       const note = await f.k.addNote(f.principal, f.ref, "Check the budget", "Review")
-      const link = await f.k.addLink(f.principal, f.ref, { to: note.ref, kind: "related-to" })
+      const link = await f.k.addLink(f.principal, f.ref, { by: "owner", to: note.ref, kind: "related-to" })
       const memory = await f.k.addMemory(f.principal, f.ref, {
+        author: "owner",
         body: "Budget decision",
         scope: "work",
         kind: "summary",
       })
       expect(memory).toMatchObject({ subject: f.ref, evidence: [f.ref], status: "proposed", scope: "work" })
-      await f.k.memory(f.principal, f.ref, memory.ref, "confirm")
+      await f.k.memory(f.principal, f.ref, memory.ref, "confirm", "owner")
       await f.index.save(f.principal, content({ ...f.metadata, name: "Renamed" }), "hash-one")
       expect((await f.k.memory(f.principal, f.ref, memory.ref)).status).toBe("confirmed")
       expect(await f.k.tags(f.principal, f.ref, "list")).toEqual(["budget", "review"])
@@ -59,9 +60,9 @@ describe("shared document knowledge", () => {
       await f.index.save(f.principal, content(f.metadata, "Revised decision"), "hash-two")
       expect((await f.k.memory(f.principal, f.ref, memory.ref)).status).toBe("stale")
       await f.k.tags(f.principal, f.ref, "remove", ["review"])
-      await f.k.removeLink(f.principal, f.ref, link.id)
+      await f.k.removeLink(f.principal, f.ref, link.id, "owner")
       expect(await f.k.tags(f.principal, f.ref, "list")).toEqual(["budget"])
-      await expect(f.k.removeLink(f.principal, f.ref, link.id)).rejects.toThrow("attached")
+      await expect(f.k.removeLink(f.principal, f.ref, link.id, "owner")).rejects.toThrow("attached")
     } finally {
       await f.index.close()
     }
@@ -70,7 +71,7 @@ describe("shared document knowledge", () => {
     const f = await setup()
     try {
       const other = await f.index.save(f.principal, content(file("doc-b")), "hash")
-      const memory = { body: "Budget review", scope: "work", kind: "summary" } as const
+      const memory = { body: "Budget review", scope: "work", kind: "summary", author: "owner" } as const
       for (let index = 0; index < 200; index += 1) await f.k.addMemory(f.principal, other, memory)
       const mine = await f.k.addMemory(f.principal, f.ref, memory)
       expect(await f.k.searchMemories(f.principal, f.ref, "budget")).toEqual({
@@ -92,6 +93,7 @@ describe("shared document knowledge", () => {
       await expect(f.k.note(f.principal, other, note.ref)).rejects.toThrow("attached")
       await expect(f.k.tags("other-account", f.ref, "list")).rejects.toThrow("account")
       const memory = await f.k.addMemory(f.principal, f.ref, {
+        author: "owner",
         body: "Updated budget",
         kind: "summary",
         scope: "personal",
@@ -99,6 +101,7 @@ describe("shared document knowledge", () => {
       await expect(f.k.memory(f.principal, other, memory.ref)).rejects.toThrow("attached")
       await expect(
         f.k.addMemory(f.principal, other, {
+          author: "owner",
           body: "Wrong source",
           kind: "summary",
           scope: "personal",
@@ -109,8 +112,9 @@ describe("shared document knowledge", () => {
       expect(await f.k.searchMemories(f.principal, f.ref, "budget", "personal")).toMatchObject({
         items: [{ ref: memory.ref }],
       })
-      await f.k.memory(f.principal, f.ref, memory.ref, "stale")
+      await f.k.memory(f.principal, f.ref, memory.ref, "stale", "owner")
       const replacement = await f.k.addMemory(f.principal, f.ref, {
+        author: "owner",
         body: "Corrected budget",
         kind: "summary",
         scope: "personal",
@@ -124,11 +128,30 @@ describe("shared document knowledge", () => {
       await f.index.close()
     }
   })
+  it("SEC-8: names who writes a memory or a fact, never the owner by default", async () => {
+    const f = await setup()
+    try {
+      const input = { body: "Source summary", kind: "summary", scope: "work" } as never
+      await expect(f.k.addMemory(f.principal, f.ref, input)).rejects.toMatchObject({
+        details: { reason: "proposal.decider-required" },
+      })
+      await expect(
+        f.k.addFact(f.principal, f.ref, { statement: "The budget was approved", type: "decision" } as never),
+      ).rejects.toMatchObject({ details: { reason: "proposal.decider-required" } })
+    } finally {
+      await f.index.close()
+    }
+  })
   it("stales source-backed memories on scope removal and refuses removed documents", async () => {
     const f = await setup()
     const store = f.store
     try {
-      const memory = await f.k.addMemory(f.principal, f.ref, { body: "Source summary", kind: "summary", scope: "work" })
+      const memory = await f.k.addMemory(f.principal, f.ref, {
+        author: "owner",
+        body: "Source summary",
+        kind: "summary",
+        scope: "work",
+      })
       await f.index.remove(f.principal, "doc-a")
       expect((await store.memories.get(memory.ref)).status).toBe("stale")
       await expect(f.k.document(f.principal, f.ref)).rejects.toThrow("account")
@@ -139,7 +162,11 @@ describe("shared document knowledge", () => {
   it("keeps facts on their document: the owner's accepted at once, an extraction's proposed", async () => {
     const f = await setup()
     try {
-      const owned = await f.k.addFact(f.principal, f.ref, { statement: "The budget was approved", type: "decision" })
+      const owned = await f.k.addFact(f.principal, f.ref, {
+        by: "owner",
+        statement: "The budget was approved",
+        type: "decision",
+      })
       expect(owned).toMatchObject({ type: "decision", status: "accepted", subject: f.ref, evidence: [f.ref] })
       const drawn = await f.k.addFact(f.principal, f.ref, {
         statement: "Alice Example owns the budget",
@@ -149,9 +176,9 @@ describe("shared document knowledge", () => {
       })
       expect(drawn).toMatchObject({ status: "proposed", model: "example-model", scope: "work" })
       expect((await f.k.facts(f.principal, f.ref, { status: "proposed" })).map((fact) => fact.ref)).toEqual([drawn.ref])
-      expect((await f.k.fact(f.principal, f.ref, drawn.ref, "confirm")).status).toBe("accepted")
+      expect((await f.k.fact(f.principal, f.ref, drawn.ref, "confirm", "owner")).status).toBe("accepted")
       await expect(
-        f.k.addMemory(f.principal, f.ref, { body: "A fact", kind: "fact" as never, scope: "work" }),
+        f.k.addMemory(f.principal, f.ref, { author: "owner", body: "A fact", kind: "fact" as never, scope: "work" }),
       ).rejects.toThrow("summary, digest, preference")
     } finally {
       await f.index.close()
@@ -160,7 +187,11 @@ describe("shared document knowledge", () => {
   it("replaces decisions on acceptance and reverses them without changing other documents", async () => {
     const f = await setup()
     try {
-      const old = await f.k.addFact(f.principal, f.ref, { statement: "Use the April budget", type: "decision" })
+      const old = await f.k.addFact(f.principal, f.ref, {
+        by: "owner",
+        statement: "Use the April budget",
+        type: "decision",
+      })
       const proposed = await f.k.addFact(f.principal, f.ref, {
         statement: "Use the May budget",
         type: "decision",
@@ -170,10 +201,11 @@ describe("shared document knowledge", () => {
       })
       expect(proposed).toMatchObject({ status: "proposed", supersedes: old.ref })
       expect((await f.k.fact(f.principal, f.ref, old.ref)).status).toBe("accepted")
-      await expect(f.k.fact(f.principal, f.ref, proposed.ref, "reverse")).rejects.toThrow()
-      expect((await f.k.fact(f.principal, f.ref, proposed.ref, "confirm")).status).toBe("accepted")
+      await expect(f.k.fact(f.principal, f.ref, proposed.ref, "reverse", "owner")).rejects.toThrow()
+      expect((await f.k.fact(f.principal, f.ref, proposed.ref, "confirm", "owner")).status).toBe("accepted")
       expect((await f.k.fact(f.principal, f.ref, old.ref)).status).toBe("superseded")
       const replacement = await f.k.addFact(f.principal, f.ref, {
+        by: "owner",
         statement: "Pause the budget",
         type: "decision",
         supersedes: proposed.ref,
@@ -181,10 +213,11 @@ describe("shared document knowledge", () => {
       expect(replacement).toMatchObject({ status: "accepted", supersedes: proposed.ref })
       expect((await f.k.fact(f.principal, f.ref, proposed.ref)).status).toBe("superseded")
       const other = await f.index.save(f.principal, content(file("doc-b")), "hash")
-      await expect(f.k.fact(f.principal, other, replacement.ref, "reverse")).rejects.toThrow("attached")
-      await expect(f.k.fact("other-account", f.ref, replacement.ref, "reverse")).rejects.toThrow("account")
+      await expect(f.k.fact(f.principal, other, replacement.ref, "reverse", "owner")).rejects.toThrow("attached")
+      await expect(f.k.fact("other-account", f.ref, replacement.ref, "reverse", "owner")).rejects.toThrow("account")
       await expect(
         f.k.addFact(f.principal, other, {
+          by: "owner",
           statement: "Wrong source",
           type: "decision",
           supersedes: replacement.ref,
@@ -192,6 +225,7 @@ describe("shared document knowledge", () => {
       ).rejects.toThrow("attached")
       await expect(
         f.k.addFact("other-account", f.ref, {
+          by: "owner",
           statement: "Wrong account",
           type: "decision",
           supersedes: replacement.ref,
@@ -199,10 +233,19 @@ describe("shared document knowledge", () => {
       ).rejects.toThrow("account")
       expect(await f.k.facts(f.principal, other)).toEqual([])
       expect((await f.k.fact(f.principal, f.ref, replacement.ref)).status).toBe("accepted")
-      expect((await f.k.fact(f.principal, f.ref, replacement.ref, "reverse")).status).toBe("reversed")
-      const ordinary = await f.k.addFact(f.principal, f.ref, { statement: "Budget discussed", type: "fact" })
-      await expect(f.k.fact(f.principal, f.ref, ordinary.ref, "reverse")).rejects.toThrow()
-      await f.k.addFact(f.principal, f.ref, { statement: "Budget agreed", type: "fact", supersedes: ordinary.ref })
+      expect((await f.k.fact(f.principal, f.ref, replacement.ref, "reverse", "owner")).status).toBe("reversed")
+      const ordinary = await f.k.addFact(f.principal, f.ref, {
+        by: "owner",
+        statement: "Budget discussed",
+        type: "fact",
+      })
+      await expect(f.k.fact(f.principal, f.ref, ordinary.ref, "reverse", "owner")).rejects.toThrow()
+      await f.k.addFact(f.principal, f.ref, {
+        by: "owner",
+        statement: "Budget agreed",
+        type: "fact",
+        supersedes: ordinary.ref,
+      })
       expect((await f.k.fact(f.principal, f.ref, ordinary.ref)).status).toBe("superseded")
       expect(await f.k.facts(f.principal, f.ref)).toHaveLength(5)
     } finally {

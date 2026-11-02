@@ -119,24 +119,28 @@ describe("the notes store", () => {
 
     const folder = await store.notes.addFolder({ name: "Vault" })
     const { note: file } = await store.notes.saveFileNote({ folderId: folder.id, path: "x.md", title: "x", text: "x" })
-    const owner = await store.notes.addLink({ from: file.ref, to: project.ref, kind: "about" })
+    const owner = await store.notes.addLink({ by: "owner", from: file.ref, to: project.ref, kind: "about" })
     await store.notes.replaceFileLinks(file.id, [{ kind: "links-to", to: note.ref, anchor: "#Budget" }])
     await store.notes.replaceFileLinks(file.id, [{ kind: "links-to", to: note.ref }])
     expect((await store.notes.links({ from: file.ref })).map((link) => [link.origin, link.anchor]).sort()).toEqual([
       ["file", null],
       ["owner", null],
     ])
-    await store.notes.removeLink(owner.id)
+    await store.notes.removeLink(owner.id, "owner")
     await store.notes.removeNote(note.id)
     await expect(store.notes.note(note.ref)).rejects.toMatchObject({ code: "not_found" })
     expect(await store.notes.links({ from: note.ref })).toEqual([])
-    await expect(store.notes.addLink({ from: "nothing", to: "note:1", kind: "about" })).rejects.toMatchObject({
+    await expect(
+      store.notes.addLink({ by: "owner", from: "nothing", to: "note:1", kind: "about" }),
+    ).rejects.toMatchObject({
       code: "validation_error",
     })
-    await expect(store.notes.addLink({ from: "note:01J", to: project.ref, kind: "about" })).rejects.toMatchObject({
+    await expect(
+      store.notes.addLink({ by: "owner", from: "note:01J", to: project.ref, kind: "about" }),
+    ).rejects.toMatchObject({
       code: "not_found",
     })
-    await expect(store.notes.addLink({ from: file.ref, kind: "about" })).rejects.toMatchObject({
+    await expect(store.notes.addLink({ by: "owner", from: file.ref, kind: "about" })).rejects.toMatchObject({
       code: "validation_error",
     })
   })
