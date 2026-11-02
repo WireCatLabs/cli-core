@@ -25,8 +25,9 @@ shape of this file.
   few English lines is `ru`. `transcriptLanguage(texts)` is exported for providers that build their own transcripts.
 - **Meeting search hits say the transcript's language and where in it the line is**: `language`, `line` (from 1) and
   `lines_total` on transcript hits of `search meetings` and `search all` ("line 161 of 192").
-- **`meetings backfill-language`** previews the language of stored transcripts that have none; `--yes` stores it
-  (`meeting_language_fill`, `MeetingStore.fillTranscriptLanguages`). Nothing is written on a read.
+- **`meetings repair`** previews filling what older builds left out of stored transcripts — their language, for
+  transcripts that have none; `--yes` stores it (`meeting_repair`, `MeetingStore.fillTranscriptLanguages`). Nothing is
+  written on a read.
 
 ### Changed — may break callers
 

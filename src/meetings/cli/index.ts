@@ -199,10 +199,12 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     print(await importFiles(files, deps.store, deps.now?.()), command)
   })
   output(
-    annotate(group.command("backfill-language"), {
+    annotate(group.command("repair"), {
       effects: LOCAL_WRITE,
-      output: { entity: "meeting_language_fill" },
-    }).description("preview detecting the language of stored transcripts that have none; --yes stores it"),
+      output: { entity: "meeting_repair" },
+    }).description(
+      "preview filling in what older builds left out of stored transcripts (their language); --yes stores it",
+    ),
   )
     .option("--yes", "store the detected languages; otherwise only preview")
     .action(async (opts: { yes?: boolean }, command: Command) => {

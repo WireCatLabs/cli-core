@@ -120,7 +120,7 @@ const embedding = v.union([
   }),
 ])
 
-const languageFill = v.strictObject({
+const repair = v.strictObject({
   account_id: identifier,
   applied: flag,
   transcripts: count,
@@ -133,5 +133,5 @@ export const MEETING_RESULT_ENTITIES = {
   meeting_association: meetingChange,
   meeting_transcription: transcription,
   meeting_embedding: embedding,
-  meeting_language_fill: languageFill,
+  meeting_repair: repair,
 } as const

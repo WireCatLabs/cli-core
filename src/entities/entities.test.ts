@@ -205,7 +205,7 @@ const samples: Record<EntityName, unknown> = {
     scope: "existing-current-chunks",
     rebuild_required: "explicit",
   },
-  meeting_language_fill: {
+  meeting_repair: {
     account_id: "1",
     applied: false,
     transcripts: 2,
