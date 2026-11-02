@@ -7,6 +7,25 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
+  it, when, provider, account, the CLI that opens it and whether it is `available`, `deleted` or `unavailable`. One
+  statement per kind present, offline. A malformed ref comes back `unknown`, never thrown, so one bad row cannot fail
+  a page. Titles hold no message text; `{ excerpt: true }` adds at most 280 characters. Read once per page.
+- **`refLabel(summary)` and `openOf(summary, { profilesFor, local? })`** (`./cli`): the one label
+  (`Chat «Title» (MAX)`) and the command that opens a ref. `openOf` never picks a profile: with none or several,
+  `argv` keeps `<profile>` and `profiles` lists the choices. Kinds no CLI owns open with the caller's `local` words.
+- **`ProviderEntry.opens`**: the read command that opens each kind of ref (`{ document: "documents show" }`). A CLI
+  writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
+  this build does not know is dropped, so an older build still reads a newer entry.
+
+### Changed — may break callers
+
+- **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
+  keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
+  (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
+
 ## 0.545.0 — 02.11.2026
 
 ### Added
