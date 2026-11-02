@@ -23,6 +23,16 @@ None open.
 
 ## Next (P2)
 
+- **CORE-43** · P2 · One way in for outside data: a versioned JSON envelope (WireCat Data Envelope v1, JSON
+  Schema) and one ingestion service — validate, plan (dry run), import, idempotent upserts by source id, receipts —
+  that every entry point calls (CLI, stdin, HTTP later). No tool writes SQLite directly. Starts with the P0 audit
+  in cli-private `plans/2026-11-02-business-ingestion-requirements.md` §1, §5–§6. Related: CORE-5 (open provider list).
+- **CORE-44** · P2 · Business entities beside the existing persons, organizations and projects, in vertical slices:
+  first an organization + opportunity + invoice + partial payment through CORE-43, searchable and linked, a repeat
+  import makes no duplicates. Money in exact minor units, never REAL. Same plan, §2 and §14.
+- **CORE-45** · P2 · Generic source objects and source relations for provider types without a canonical entity
+  (a campaign, a shipment, a custom approval), unresolved references resolved after import, never invented. Same
+  plan, §3–§4.
 - **CORE-42** · P2 · Take cli-base ≥ 0.66.1 so a bare number counts as a word of a `--discover` question: today any
   number ("after 21 days") sends the question to strict search, which usually finds nothing (cli-base#409). Moves the
   `@wirecat/cli-base` peer range to 0.66, so the tools built on Core move with it. `src/services/messages-discovery.ts`.
@@ -41,7 +51,8 @@ None open.
 - **CORE-5** · P2 · Let a new source join without editing this package: the provider list is fixed
   (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
   (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No
-  separate SDK: cli-core is the shared base (owner, 2026-10-23). Plan first.
+  separate SDK: cli-core is the shared base (owner, 2026-10-23; questioned again as NEED-2153). Plan first. Data with
+  no CLI of its own may come in through CORE-43 instead.
 - **CORE-6** · P2 · 🟡 Search start-up measured: model open 1.44 s, empty-store reopen 8.4 ms, bare Node 31.7 ms
   (medians). Next compare one-shot CLI and long-lived MCP on the same synthetic corpus before optimizing.
   [Runner and limits](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/startup) · [notes](BACKLOG-NOTES.md#core-6).
