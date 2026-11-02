@@ -387,6 +387,12 @@ shape of this file.
 - **`schedule agent --on-new-mail <holder>`,** where the host passes `newMail` (`holderHasMail`): the agent starts
   only when mail is stored past the holder's mark, and may check every 5 minutes; a run with nothing new costs no
   model call and records nothing. Mail that is only skipped moves the holder's mark without the agent.
+- **`facts.unconfirm(ref, by, reason?)` takes back the approval of an accepted fact** of any type: it waits as
+  `proposed` again and `confirmedBy` is cleared. Only the owner may (`permission_error`, `proposal.owner-only`). It
+  refuses a fact that is not accepted (`fact.not-accepted`), the owner's own fact, which was never proposed
+  (`fact.owner-written`), and a correction, because the fact it superseded cannot be put back as it was
+  (`fact.unconfirm-correction`). The step goes into the fact's `metadata.history` with who had confirmed it, the
+  `metadata.decision` it took back and the reason; `metadata.decision` is cleared.
 
 ### Fixed
 

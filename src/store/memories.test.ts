@@ -385,6 +385,81 @@ describe("facts", () => {
       ).rejects.toMatchObject({ code: "validation_error" })
   })
 
+  it("unconfirm an accepted fact an agent proposed back to proposed, keeping the step in its history", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
+    const store = await open(path)
+    const proposed = await store.facts.add({ type: "promise", statement: "Ana sends the draft", by: agent })
+    await store.facts.accept(proposed.ref, { bot: "reviewer", reason: "the thread says so" })
+    await expect(store.facts.unconfirm(proposed.ref, { bot: "reviewer", reason: "wrong" })).rejects.toMatchObject({
+      code: "permission_error",
+      details: { reason: "proposal.owner-only" },
+    })
+
+    const before = await store.facts.get(proposed.ref)
+    expect(await store.facts.unconfirm(proposed.ref, "owner", "not sure yet")).toMatchObject({
+      status: "proposed",
+      confirmedBy: null,
+    })
+    expect(new Date((await store.facts.get(proposed.ref)).updatedAt) >= new Date(before.updatedAt)).toBe(true)
+    await expect(store.facts.unconfirm(proposed.ref, "owner")).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: "fact.not-accepted" },
+    })
+
+    await store.facts.accept(proposed.ref, "owner")
+    await store.facts.unconfirm(proposed.ref, "owner")
+    const [row] = await sql(path, `SELECT metadata FROM facts WHERE id = ${proposed.id}`)
+    const kept = JSON.parse(String(row?.metadata))
+    expect(kept.decision).toBeUndefined()
+    expect(kept.history).toMatchObject([
+      {
+        step: "unconfirmed",
+        by: "owner",
+        confirmedBy: { type: "bot" },
+        decision: { by: "agent", bot: "reviewer", reason: "the thread says so" },
+        reason: "not sure yet",
+      },
+      { step: "unconfirmed", by: "owner", confirmedBy: { type: "person" } },
+    ])
+    expect(kept.history[1].decision).toBeUndefined()
+  })
+
+  it("unconfirm neither the owner's own fact, nor a correction, nor one that is not accepted", async () => {
+    const store = await open()
+    const owned = await store.facts.add({ type: "fact", statement: "The draft is due", by: "owner" })
+    await expect(store.facts.unconfirm(owned.ref, "owner")).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: "fact.owner-written" },
+    })
+
+    const first = await store.facts.add({ type: "statement", statement: "The review moved", by: agent })
+    const correction = await store.facts.add({
+      type: "statement",
+      statement: "The review moved to May",
+      by: agent,
+      supersedes: first.ref,
+    })
+    await store.facts.accept(correction.ref, "owner")
+    await expect(store.facts.unconfirm(correction.ref, "owner")).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: "fact.unconfirm-correction" },
+    })
+    expect(await store.facts.get(correction.ref)).toMatchObject({ status: "accepted" })
+    expect(await store.facts.get(first.ref)).toMatchObject({ status: "superseded" })
+
+    const rejected = await store.facts.add({ type: "statement", statement: "It was cancelled", by: agent })
+    await store.facts.reject(rejected.ref, "owner")
+    const decision = await store.facts.add({ type: "decision", statement: "Ship in April", by: agent })
+    await store.facts.accept(decision.ref, "owner")
+    await store.facts.reverse(decision.ref, "owner")
+    for (const [fact, status] of [
+      [first, "superseded"],
+      [rejected, "rejected"],
+      [decision, "reversed"],
+    ] as const)
+      await expect(store.facts.unconfirm(fact.ref, "owner")).rejects.toThrow(`${fact.ref} is ${status}`)
+  })
+
   it("reject only a proposed fact, and forget one with its links and the memory it was migrated from", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
     const store = await open(path)
