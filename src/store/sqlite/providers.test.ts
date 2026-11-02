@@ -31,6 +31,24 @@ describe("the stored provider registry", () => {
     expect(kindOf("example-calendar")).toBe("messages")
   })
 
+  it("**keeps the command that opens each kind**, so a new CLI's refs open with no change to cli-core", async () => {
+    const path = pathOf()
+    const drive = {
+      name: "google-drive",
+      kind: "documents",
+      aliases: [],
+      command: "drive",
+      opens: { document: "documents show" },
+    } as const
+    const writer = await openStore({ path })
+    await registerProvider(writer, drive)
+    await writer.close()
+    useProviders([])
+    const reader = await openStore({ path, readOnly: true })
+    expect(providerNamed("google-drive")).toEqual(drive)
+    await reader.close()
+  })
+
   it("writes an entry only when it changed, and keeps one entry per name", async () => {
     const path = pathOf()
     const stored = () => {

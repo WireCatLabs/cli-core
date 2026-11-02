@@ -28,12 +28,6 @@ const TAKES: Record<Takes, string> = {
   message: "a message: msg:<provider>/<account>/<chat>/<message>, or a chat and the message's id",
 }
 
-const OPENS: Partial<Record<Reference["type"], string>> = {
-  chat: "messages list",
-  message: "messages show",
-  contact: "contacts show",
-}
-
 const article = (word: string) => (/^[aeiou]/.test(word) ? "an" : "a")
 
 const wrongKind = (text: string, kind: Reference["type"], takes: Takes) =>
@@ -42,8 +36,9 @@ const wrongKind = (text: string, kind: Reference["type"], takes: Takes) =>
   })
 
 const wrongProvider = (text: string, provider: Provider, kind: Reference["type"]) => {
-  const command = providerNamed(provider)?.command
-  const opens = OPENS[kind]
+  const entry = providerNamed(provider)
+  const command = entry?.command
+  const opens = kind === "entity" ? undefined : entry?.opens?.[kind]
   const how = command && opens ? `open it with ${command} <profile> ${opens} ${text}` : "open it with its own CLI"
   const label = providerLabel(provider)
   return new CliError("validation_error", `${text} is ${article(label.toLowerCase())} ${label} ${kind}; ${how}`, {
