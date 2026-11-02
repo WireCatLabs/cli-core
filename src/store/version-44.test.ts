@@ -58,7 +58,11 @@ it("moves an older build's agent and rule suggestions into proposals and keeps D
   expect(old.prepare("SELECT name FROM pragma_table_info('links') WHERE name = 'purpose'").get()).toBeUndefined()
   old.close()
 
-  const upgraded = await openStore({ path, now: () => clock++ })
+  const upgraded = await openStore({
+    path,
+    now: () => clock++,
+    decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
+  })
   try {
     const left = await upgraded.notes.links({})
     expect(left.map((link) => link.id).sort()).toEqual([drive.id, confirmed.id].sort())

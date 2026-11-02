@@ -14,7 +14,11 @@ const claude = { bot: "claude-code", model: "synthetic" }
 
 const fixture = async () => {
   let clock = 1_000
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "purpose-")), "store.db"), now: () => clock++ })
+  const store = await openStore({
+    path: join(mkdtempSync(join(tmpdir(), "purpose-")), "store.db"),
+    now: () => clock++,
+    decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
+  })
   handles.push(store)
   const project = await store.knowledge.addProject({ name: "Harbour Clinic", key: "HRB" })
   const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })

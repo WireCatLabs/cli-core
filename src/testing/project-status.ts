@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { ChatKind, Message } from "../domain/models.js"
+import type { DecisionPolicy } from "../store/decisions.js"
 import { type AccountKey, historyStartKey, type MessageStore, openStore } from "../store/store.js"
 
 export const NOW = Date.parse("2026-11-02T10:00:00.000Z")
@@ -109,8 +110,8 @@ export const HARBOUR: FixtureChat[] = [
   },
 ]
 
-export const openTestStore = async (): Promise<MessageStore> =>
-  openStore({ path: join(mkdtempSync(join(tmpdir(), "project-status-")), "m.db") })
+export const openTestStore = async (decisions?: DecisionPolicy): Promise<MessageStore> =>
+  openStore({ path: join(mkdtempSync(join(tmpdir(), "project-status-")), "m.db"), decisions })
 
 export const seedChat = async (store: MessageStore, chat: FixtureChat, project: string) => {
   const messages = chat.messages.map((one) => said(chat.id, one))
@@ -140,8 +141,8 @@ export const seedChat = async (store: MessageStore, chat: FixtureChat, project: 
 }
 
 /** A store holding HRB and its four chats; every name and number in it is made up. */
-export const harbourStore = async (chats: FixtureChat[] = HARBOUR) => {
-  const store = await openTestStore()
+export const harbourStore = async (chats: FixtureChat[] = HARBOUR, decisions?: DecisionPolicy) => {
+  const store = await openTestStore(decisions)
   const project = await store.knowledge.addProject({ name: "Harbour site", key: "HRB" })
   for (const chat of chats) await seedChat(store, chat, project.ref)
   return { store, project: project.ref }

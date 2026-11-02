@@ -23,7 +23,7 @@ const ASK = "msg:max/11/-900/3"
 const REMINDER = "msg:max/11/-900/5"
 
 const fixture = async () => {
-  const { store, project } = await harbourStore()
+  const { store, project } = await harbourStore(undefined, { agentDecisions: true, ruleProposalsOwnerOnly: true })
   opened.push(store)
   const ana = await store.knowledge.addOrganization({ kind: "company", name: "Ana Studio" })
   const expected = { amount: "1200", currency: "EUR", direction: "to_us", counterparty: ana.ref, state: "expected" }

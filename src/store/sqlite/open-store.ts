@@ -33,7 +33,7 @@ export interface StoreOptions {
   version?: string
   /** Where the notice of an upgrade that locks other CLIs out goes; stderr, since stdout may carry JSON or MCP. */
   warn?: (line: string) => void
-  /** The host's decision policy (its `agent_decisions`); the default lets an agent decide with a reason. */
+  /** The host's decision policy (its `agent_decisions`); off unless the host passes `agentDecisions: true`. */
   decisions?: DecisionPolicy
 }
 export const BACKFILL_ON_OPEN = 5_000

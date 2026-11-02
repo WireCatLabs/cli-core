@@ -19,7 +19,11 @@ const codex = { bot: "codex", reason: "the bank statement shows it" }
 const fixture = async () => {
   let clock = Date.UTC(2026, 10, 2)
   const path = join(mkdtempSync(join(tmpdir(), "finance-")), "store.db")
-  const store = await openStore({ path, now: () => clock++ })
+  const store = await openStore({
+    path,
+    now: () => clock++,
+    decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
+  })
   handles.push(store)
   const project = await store.knowledge.addProject({ name: "Прокат", key: "PMED" })
   const romashka = await store.knowledge.addOrganization({ kind: "company", name: "ООО Ромашка" })

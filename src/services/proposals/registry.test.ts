@@ -17,7 +17,9 @@ afterEach(async () => {
 const claude = { bot: "claude-code", model: "synthetic" }
 const codex = { bot: "codex", reason: "the evidence names the project" }
 
-const fixture = async (decisions = DEFAULT_DECISION_POLICY) => {
+const AGENTS_ON = { ...DEFAULT_DECISION_POLICY, agentDecisions: true }
+
+const fixture = async (decisions = AGENTS_ON) => {
   let clock = 1_000
   const path = join(mkdtempSync(join(tmpdir(), "proposals-")), "store.db")
   const store = await openStore({ path, now: () => clock++, decisions })
@@ -159,7 +161,7 @@ describe("the proposal registry", () => {
   })
 
   it("keeps the agent's decisions with the owner when the host turns them off", async () => {
-    const f = await fixture({ ...DEFAULT_DECISION_POLICY, agentDecisions: false })
+    const f = await fixture(DEFAULT_DECISION_POLICY)
     const { refused } = await f.registry.decide([`link:${f.legacy.id}`, f.relation.id], { confirm: true, by: codex })
     expect(refused).toMatchObject([
       { code: "permission_error", reason: "proposals.agent-decisions-off" },

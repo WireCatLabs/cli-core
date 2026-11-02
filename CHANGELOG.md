@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Agents no longer decide for the owner by default; the owner turns it on.**
+  `DEFAULT_DECISION_POLICY.agentDecisions` is now `false`, so a store opened without `decisions` refuses every agent
+  confirm or reject with `proposals.agent-decisions-off`; before, an agent with a reason could decide facts, memories,
+  links and project findings. A host turns it back on only from the owner's explicit config, `"agent_decisions": true`,
+  passed as `openStore({ decisions: { ...DEFAULT_DECISION_POLICY, agentDecisions: true } })`. Owner-only proposals
+  (mail and meeting findings, task close suggestions) stay refused either way.
+
 ### Added
 
 - **A `propose` tier under `<PREFIX>_READ_ONLY`.** `proposesOnly(command)` marks a command that only stages
