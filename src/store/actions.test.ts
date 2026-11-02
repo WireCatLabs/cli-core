@@ -38,7 +38,7 @@ describe("proposed actions", () => {
     await expect(store.proposedActions.executed(reply.id)).rejects.toMatchObject({
       details: { reason: "proposal.wrong-state" },
     })
-    expect(await store.proposedActions.approve(reply.id)).toMatchObject({
+    expect(await store.proposedActions.approve(reply.id, "owner")).toMatchObject({
       status: "approved",
       decidedBy: { type: "person" },
       decidedAt: expect.any(String),
@@ -52,8 +52,8 @@ describe("proposed actions", () => {
     expect(await store.proposedActions.judge(reply.id, "useful")).toMatchObject({ verdict: "useful" })
 
     const ban = await store.proposedActions.propose({ kind: "ban", by: { bot: "helper" } })
-    await store.proposedActions.reject(ban.id)
-    await expect(store.proposedActions.approve(ban.id)).rejects.toMatchObject({ code: "validation_error" })
+    await store.proposedActions.reject(ban.id, "owner")
+    await expect(store.proposedActions.approve(ban.id, "owner")).rejects.toMatchObject({ code: "validation_error" })
     await expect(store.proposedActions.failed(ban.id, "nope")).rejects.toMatchObject({ code: "validation_error" })
   })
 })
@@ -84,7 +84,7 @@ describe("listing proposals and the agent log", () => {
     const { store } = await open()
     const first = await store.proposedActions.propose({ kind: "reply", by: { bot: "helper" } })
     const second = await store.proposedActions.propose({ kind: "ban", by: { bot: "helper" } })
-    await store.proposedActions.reject(first.id)
+    await store.proposedActions.reject(first.id, "owner")
 
     expect((await store.proposedActions.list()).map(({ id }) => id)).toEqual([second.id, first.id])
     expect((await store.proposedActions.list({ status: "rejected" })).map(({ id }) => id)).toEqual([first.id])

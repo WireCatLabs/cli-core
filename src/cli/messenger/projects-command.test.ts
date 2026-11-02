@@ -51,7 +51,13 @@ const setUp = async () => {
   const store = await openStore({ env })
   await store.messages.saveMessages(account, "7", [message(9), message(10)], { via: "test" })
   const project = await store.knowledge.addProject({ name: "Harbour" })
-  await store.knowledge.relate(null, { from: "chat:chat/500/7", to: project.ref, kind: "member-of", confirmed: true })
+  await store.knowledge.relate(null, {
+    by: "owner",
+    from: "chat:chat/500/7",
+    to: project.ref,
+    kind: "member-of",
+    confirmed: true,
+  })
   await store.close()
   const asked: (string | undefined)[] = []
   const messenger: Messenger = {

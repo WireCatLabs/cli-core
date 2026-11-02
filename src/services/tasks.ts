@@ -466,7 +466,9 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
           const link = {
             from: (await store.tasks.details(target.id)).ref,
             kind: "evidence" as const,
-            origin: origin === "owner" ? ("owner" as const) : ("suggested" as const),
+            ...(origin === "owner"
+              ? { origin: "owner" as const, by: "owner" as const }
+              : { origin: "suggested" as const, confirmed: false }),
           }
           try {
             await store.notes.addLink({ ...link, to: note ? note.ref : source })
@@ -686,15 +688,18 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
             }),
           ),
         )
-        const origin = by === "owner" ? "owner" : "suggested"
+        const origin =
+          by === "owner"
+            ? { origin: "owner" as const, by: "owner" as const }
+            : { origin: "suggested" as const, confirmed: false }
         for (const target of [...written, ...chatRefs]) {
           try {
-            await store.notes.addLink({ from, to: target, kind: kind as TaskLinkKind, origin })
+            await store.notes.addLink({ from, to: target, kind: kind as TaskLinkKind, ...origin })
           } catch (error) {
             // Only text that names nothing typed, or a message not saved yet; a mistyped `person:9` is refused.
             const unsaved = error instanceof CliError && error.code === "not_found" && target.startsWith("msg:")
             if (!unsaved && !(error instanceof CliError && error.code === "validation_error")) throw error
-            await store.notes.addLink({ from, targetText: target, kind: kind as TaskLinkKind, origin })
+            await store.notes.addLink({ from, targetText: target, kind: kind as TaskLinkKind, ...origin })
           }
         }
         if (!written.some((target) => target.startsWith("msg:"))) return cardOf(store, id)

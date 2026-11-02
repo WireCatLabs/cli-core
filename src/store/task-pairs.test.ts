@@ -152,7 +152,12 @@ describe("task pairs", () => {
   it("**a message merged or attached to a task opens no second task** when a rule sees it", async () => {
     const { store, agent, rule } = await setup([said("1", "pay the bill"), said("3", "who has the keys?")])
     const kept = await agent("1", "Pay the bill")
-    await store.notes.addLink({ from: (await store.tasks.details(kept)).ref, to: "msg:chat/500/7/3", kind: "evidence" })
+    await store.notes.addLink({
+      by: "owner",
+      from: (await store.tasks.details(kept)).ref,
+      to: "msg:chat/500/7/3",
+      kind: "evidence",
+    })
 
     expect(await rule("3")).toMatchObject({ created: false, task: { key: kept } })
     await store.close()

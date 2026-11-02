@@ -366,7 +366,7 @@ it("shows an owner project's task with its evidence and no account, and refuses 
     const project = await store.knowledge.addProject({ name: "Harbour Example", key: "HRB", scope: "work" })
     const made = await store.tasks.create({ project: project.ref, title: "Send the survey", type: "chore" }, "owner")
     const note = await store.notes.addNote({ text: "Synthetic finding", title: "Call notes" })
-    await store.notes.addLink({ from: made.ref, to: note.ref, kind: "evidence" })
+    await store.notes.addLink({ by: "owner", from: made.ref, to: note.ref, kind: "evidence" })
     const noAccount = vi.fn(async () => {
       throw new CliError("validation_error", "no account")
     })

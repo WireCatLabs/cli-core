@@ -1,3 +1,4 @@
+import type { DecisionPolicy } from "../decisions.js"
 // biome-ignore-all lint/plugin/no-sqlite-driver: cli-core owns the store, so it opens the driver itself
 import { type CacheDatabase, PRAGMAS } from "../driver.js"
 import { quietSqliteWarning } from "../sqlite-warning.js"
@@ -16,6 +17,8 @@ export interface StoreContext extends OpenedSqlite {
   now: () => number
   /** The owner's shared config file, whose `task_categories` edits the store's list; none in a bare context. */
   sharedConfig?: string
+  /** Who may decide proposals, set once by the host at open; every decide method reads it. */
+  decisions?: DecisionPolicy
 }
 
 /**

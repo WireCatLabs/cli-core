@@ -45,7 +45,7 @@ it("narrows by a linked person, by uid or person:<uid>, and finds nothing for on
   const uid = (await store.people.personOf({ provider: "telegram", id: "101" }))?.uid
   await save("a.md")
   const linked = await save("b.md")
-  await store.notes.addLink({ from: linked.ref, to: `person:${uid}`, kind: "about" })
+  await store.notes.addLink({ by: "owner", from: linked.ref, to: `person:${uid}`, kind: "about" })
   const page = { limit: 1, offset: 0 }
   expect(paths(await store.notes.importedDocuments(account, query(`person:${uid}`), page))).toEqual(["b.md"])
   expect(paths(await store.notes.importedDocuments(account, query(`person:"person:${uid}"`), page))).toEqual(["b.md"])
