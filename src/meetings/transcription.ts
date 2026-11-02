@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { contentHash } from "./ingest.js"
+import { transcriptLanguage } from "./language.js"
 import { dispatchMeetingMutation, type MeetingMutationOptions } from "./meeting-management.js"
 import type {
   MeetingTranscriptReceiptStore,
@@ -15,7 +16,14 @@ export interface MeetingMediaDescriptor {
   format: string
   sampleRate: number
   channels: number
-  recognition: { engine: string; model: string; version?: string; timing?: "fixed-windows" | "recognition-segments" }
+  recognition: {
+    engine: string
+    model: string
+    version?: string
+    timing?: "fixed-windows" | "recognition-segments"
+    /** The one language the model writes (`ru`); without it the language is read from the recognized text. */
+    language?: string
+  }
 }
 
 export interface MeetingRecognitionSegment {
@@ -110,6 +118,9 @@ export const transcribeMeeting = async (
   const timing = recognition.timing ?? "recognition-segments"
   if (timing !== "fixed-windows" && timing !== "recognition-segments")
     throw new CliError("invalid_response", "unsupported recognition timing")
+  const modelLanguage = recognition.language
+  if (modelLanguage !== undefined && (typeof modelLanguage !== "string" || !/^[a-z]{2,3}$/.test(modelLanguage)))
+    throw new CliError("invalid_response", "recognition language must be a two- or three-letter code")
   const media = Object.freeze({
     id: identifier(raw.id),
     contentHash: raw.contentHash,
@@ -204,7 +215,7 @@ export const transcribeMeeting = async (
                 source: `local/${encodeURIComponent(media.recognition.engine)}/${encodeURIComponent(media.recognition.model)}`,
                 format: "local-transcription",
               }),
-          language: null,
+          language: modelLanguage ?? transcriptLanguage(rows.map((row) => row.text)),
           contentHash: hash,
           externalCreatedAt: null,
           metadata: provenance,

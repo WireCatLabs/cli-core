@@ -348,7 +348,14 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         offset_ms: item.startMs,
         scope: item.scope,
         id: String(item.id),
-        ...(item.cueRef === undefined ? {} : { cue_ref: item.cueRef, sender_name: item.speakerName ?? null }),
+        ...(item.cueRef === undefined
+          ? {}
+          : {
+              cue_ref: item.cueRef,
+              sender_name: item.speakerName ?? null,
+              language: item.language ?? null,
+              ...(item.line === undefined ? {} : { line: item.line, lines_total: item.linesTotal }),
+            }),
         untrusted: ALL_HIT_UNTRUSTED.meeting,
       }
     : defined({

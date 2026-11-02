@@ -102,6 +102,11 @@ export interface SearchHit {
   startMs: number | null
   /** Who spoke a transcript hit's cue, as the transcript names them; absent for chat and summary hits. */
   speakerName?: string | null
+  /** A transcript hit's transcript language (`ru`, `en`…), `null` when unknown; absent for chat and summary hits. */
+  language?: string | null
+  /** A transcript hit's line, from 1, of `linesTotal` lines in its transcript: where in the meeting it was said. */
+  line?: number
+  linesTotal?: number
   /** `corrected` when a query word matched only as a stored word recognition may have garbled. */
   match?: "words" | "corrected"
   /** For a `corrected` hit, the stored words each such query word matched in this passage. */
@@ -136,4 +141,14 @@ export interface MeetingStore {
   reviewMeetingLink?(meetingId: number, eventIds: number[], now: number): Promise<void>
   cursor(accountId: number): Promise<string | null>
   setCursor(accountId: number, value: string, now: number): Promise<void>
+  /** Detects the language of the account's transcripts that have none; stores it only with `apply`. */
+  fillTranscriptLanguages?(input: { accountId: number; apply: boolean; now: number }): Promise<TranscriptLanguageFill>
+}
+export interface TranscriptLanguageFill {
+  accountId: number
+  applied: boolean
+  /** Transcripts that had no language. */
+  transcripts: number
+  /** How many of them each language was found in; `null` where the text did not show one. */
+  languages: { language: string | null; transcripts: number }[]
 }

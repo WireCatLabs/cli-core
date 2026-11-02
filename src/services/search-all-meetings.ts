@@ -41,6 +41,9 @@ export interface MeetingSearchItem {
   /** A transcript hit's cue, `meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens. */
   cueRef?: string
   speakerName?: string | null
+  language?: string | null
+  line?: number
+  linesTotal?: number
 }
 export interface MeetingSearchCursor {
   accountId: number
@@ -180,7 +183,12 @@ const collectMeetings = async (
           id: hit.id,
           startMs: hit.startMs,
           ...(hit.scope === "transcript" && hit.ref !== undefined
-            ? { cueRef: hit.ref, speakerName: hit.speakerName ?? null }
+            ? {
+                cueRef: hit.ref,
+                speakerName: hit.speakerName ?? null,
+                language: hit.language ?? null,
+                ...(hit.line === undefined ? {} : { line: hit.line, linesTotal: hit.linesTotal }),
+              }
             : {}),
         },
       })
