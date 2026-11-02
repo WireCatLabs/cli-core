@@ -1,5 +1,7 @@
 import { type BotCheckService, botCheckService } from "../botcheck/service.js"
 
+export { amountOf, amountsOf, type TaskAmount } from "../search/task-signature.js"
+export { AGENDA_DEFAULTS } from "./agenda.js"
 export { type ChatCoverage, chatCoverage } from "./chat-coverage.js"
 export type {
   ContextEvidenceItem,
@@ -27,6 +29,7 @@ export {
   downloadTextModel,
   type ModelDownloadOptions,
 } from "./model-downloads.js"
+export { MONEY_DONE, MONEY_REQUEST, MONEY_WORDS, moneyClassesOf, PROMISE } from "./money-words.js"
 export type {
   ProjectChatFetcher,
   ProjectChatFetchProgress,
@@ -55,9 +58,12 @@ export type {
   ProjectSender,
   ProjectUnitState,
 } from "./project-gathering-request.js"
+export { questions } from "./questions.js"
 export {
   canonicalProjectRef,
   gatherStoredProject,
+  type LinkedChat,
+  linkedChatsOf,
   type StoredProjectGathering,
   type StoredProjectInput,
 } from "./stored-project-gathering.js"
