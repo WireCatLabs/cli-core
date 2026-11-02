@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.555.0 — 02.11.2026
+
 ### Added
 
 - **`review` for mail CLIs** (`mailReadCommands`): every stored email, both sides, in threads that changed since a
