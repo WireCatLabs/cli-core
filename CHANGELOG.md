@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.556.0 — 02.11.2026
+
 ### Added
 
 - **A processing mark per holder and mail account** (`src/mail/marks.ts`): `review --holder <name>` reads what is
