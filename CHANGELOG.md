@@ -21,6 +21,8 @@ shape of this file.
   invoices by their `payment:` and `invoice:` refs, `status` being `proposed` or `confirmed`; the open total counts
   confirmed invoices only. Finance rows gain `evidence`, and `addInvoice` and `addPayment` take it.
 
+## 0.557.0 — 02.11.2026
+
 ### Added
 
 - **Invoices and payments in the store (store version 45).** `store.finance` adds, lists and shows invoices with
@@ -35,6 +37,10 @@ shape of this file.
   same write, or is refused while other confirmed payments already cover the invoice; rejecting drops them.
 - **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
   `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
+
+### Fixed
+
+- **Mail `review` gives three examples**, as the command lint asks; `--waiting` stays in its help.
 
 ## 0.556.0 — 02.11.2026
 
