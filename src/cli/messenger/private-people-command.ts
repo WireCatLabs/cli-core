@@ -19,7 +19,11 @@ const everyNote = (command: string, items: ContactNoteItem[]) =>
 
 export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const alias = new Command("aliases").description("a private local display name in the selected account")
-  annotate(alias.command("set"), { effects: LOCAL_WRITE, output: { entity: "contact_alias" } })
+  annotate(alias.command("set"), {
+    effects: LOCAL_WRITE,
+    output: { entity: "contact_alias" },
+    literal_after_dashes: true,
+  })
 
     .description("your own name for a person in this account; kept on this machine, never sent")
     .argument("<person>", "the person's id, reference or known name")

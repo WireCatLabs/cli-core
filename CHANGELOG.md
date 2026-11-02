@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
+  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
+  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
+  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
+  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
+  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
+  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
+  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
+  cli-base bumps it to 0.74.0 together with cli-core.
+
 ### Added
 
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
@@ -32,11 +45,6 @@ shape of this file.
     status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
-
-### Changed — may break callers
-
-- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
-  cli-base bumps it to 0.74.0 together with cli-core.
 
 ### Fixed
 

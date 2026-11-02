@@ -112,7 +112,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
       )
       renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
-  annotate(topics.command("create"), { effects: REMOTE_WRITE })
+  annotate(topics.command("create"), { effects: REMOTE_WRITE, literal_after_dashes: true })
     .description("create a named topic in an existing forum; never enable or upgrade a group implicitly")
     .argument("<chat>", messenger.chatArgument)
     .argument("<title>", "the topic title, at most 128 UTF-8 bytes")

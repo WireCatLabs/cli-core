@@ -38,7 +38,11 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
       }),
   )
 
-  const rename = annotate(new Command("rename"), { effects: REMOTE_WRITE, output: { entity: "contact_update" } })
+  const rename = annotate(new Command("rename"), {
+    effects: REMOTE_WRITE,
+    output: { entity: "contact_update" },
+    literal_after_dashes: true,
+  })
     .summary("change a contact's name in the messenger address book")
     .description("rename the contact in the messenger address book; use contacts alias for a private local name")
     .argument("<person>", PERSON)
