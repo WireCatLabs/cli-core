@@ -1,12 +1,7 @@
 import { readFileSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
-import * as v from "valibot"
 import { privateFiles } from "../cli/messenger/private-files.js"
 import type { OAuthClient } from "./provider.js"
-
-const ClientFile = v.object({
-  installed: v.object({ client_id: v.pipe(v.string(), v.minLength(1)), client_secret: v.optional(v.string()) }),
-})
 
 export interface ClientFileOptions {
   platform?: NodeJS.Platform
@@ -16,6 +11,7 @@ export interface ClientFileOptions {
   invalid?: CliError
 }
 
+// No schema library: the keeper-process test bundles this module without a node_modules next to it.
 /**
  * Reads a Google Desktop OAuth client file (`{ "installed": { client_id, client_secret? } }`, the JSON Google's console
  * downloads). Refuses a file other users can read, and never puts the file's contents in an error.
@@ -31,11 +27,11 @@ export const readClientFile = (location: URL | string, options: ClientFileOption
       )
   }
   try {
-    const { installed } = v.parse(ClientFile, JSON.parse(readFileSync(location, "utf8")))
-    return {
-      clientId: installed.client_id,
-      ...(installed.client_secret ? { clientSecret: installed.client_secret } : {}),
-    }
+    const { installed } = JSON.parse(readFileSync(location, "utf8")) as { installed: Record<string, unknown> }
+    const { client_id: clientId, client_secret: clientSecret } = installed
+    if (typeof clientId !== "string" || !clientId) throw new TypeError("client_id")
+    if (clientSecret !== undefined && typeof clientSecret !== "string") throw new TypeError("client_secret")
+    return { clientId, ...(clientSecret ? { clientSecret } : {}) }
   } catch {
     throw (
       options.invalid ??
