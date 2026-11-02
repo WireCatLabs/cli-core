@@ -68,6 +68,7 @@ export const botMenuCommand = (bot: BotMessenger): Command => {
   }
 
   annotate(command.command("set"), {
+    literal_after_dashes: true,
     effects: REMOTE_WRITE,
     examples: botExamples(bot, 'commands set "start=Begin here" "help=What I can do"'),
   })

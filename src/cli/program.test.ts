@@ -1044,16 +1044,18 @@ describe("machine failures", () => {
     })
   })
 
-  it("does not treat a literal --json after the delimiter as an output flag", async () => {
+  it("does not treat a literal --json after the delimiter as an output flag in a free-text command", async () => {
     const streams = captureStreams()
     const code = await run(
       ["item", "--no-record", "--", "--json"],
       {
         app,
         commands: () => [
-          new Command("item").argument("<name>").action(() => {
-            throw new CliError("not_found", "synthetic missing item")
-          }),
+          annotate(new Command("item"), { literal_after_dashes: true })
+            .argument("<name>")
+            .action(() => {
+              throw new CliError("not_found", "synthetic missing item")
+            }),
         ],
       },
       { streams, tty: true, env: process.env },
