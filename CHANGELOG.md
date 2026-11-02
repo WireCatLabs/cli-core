@@ -22,6 +22,19 @@ shape of this file.
   the event's own zone, RDATE, EXDATE and overrides). The address is a secret input, kept by the CLI and never
   printed; a fetch follows redirects only to https and stops at 10 MB and 30 s. `readIcs` takes
   `{ overrides: true }` and returns the calendar's `name`. See `docs/dev/CALENDARS.md`, "Feeds".
+- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
+  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
+  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
+  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
+  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
+  `setHistoryIncluded`; `Saving` takes `historyLimits`.
+- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
+  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
+  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
+  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
+  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
+  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
 
 ### Changed — may break callers
 
@@ -37,22 +50,6 @@ shape of this file.
   (`calendar.read-only`): create, quick add, import, update, delete, respond and move, for a feed and for a provider's
   `reader` or `free-busy` calendar alike. Before, only the target of a move was checked; the provider refused the rest.
   `calendars busy` and `search --backend server` leave feed calendars out.
-
-### Added
-
-- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
-  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
-  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
-  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
-  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
-  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
-  `setHistoryIncluded`; `Saving` takes `historyLimits`.
-- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
-  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
-  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
-  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
-  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
-  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
 
 ### Fixed
 
