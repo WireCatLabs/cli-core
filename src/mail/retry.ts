@@ -3,6 +3,7 @@ import type { LoadEngine } from "../readers/types.js"
 import type { MessageStore } from "../store/index.js"
 import { mailAccountKey } from "./account-key.js"
 import { type AttachmentLog, addressOf, FETCH_CHUNK, readAttachments } from "./attachments.js"
+import { sentAtOf } from "./email-input.js"
 import { mailFolders } from "./folders.js"
 import { mailHeadersOf } from "./headers.js"
 import { type ParsedMail, parseMail } from "./parse.js"
@@ -104,7 +105,7 @@ export const retryUnread = async ({
             to: mail.to.map(addressOf),
             cc: mail.cc.map(addressOf),
             bcc: mail.bcc.map(addressOf),
-            sentAt: null,
+            sentAt: sentAtOf(mail.date, item.receivedAt),
             receivedAt: Date.parse(item.receivedAt),
             bodyText: mail.text || null,
             size: item.size ?? stored.size,
