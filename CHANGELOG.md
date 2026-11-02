@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.545.0 — 02.11.2026
+
 ### Added
 
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
