@@ -7,7 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-<<<<<<< HEAD
 ### Added
 
 - **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
@@ -20,21 +19,6 @@ shape of this file.
   attachments, marked `metadata.partial`, and `meta.issues` says `search.server-partial`. `syncMail` then reads up to
   100 partial emails whole and clears the mark (`partial: { completed, left }`; `completePartial: false` skips it).
   `MailStore.partialEmails` lists them. No store migration: the mark is a JSON key older builds ignore.
-
-### Changed — may break callers
-
-- **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
-  candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
-
-## 0.544.0 — 02.11.2026
-
-||||||| 324b03ef
-## 0.544.0 — 02.11.2026
-
-=======
->>>>>>> origin/main
-### Added
-
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
   WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
   `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
@@ -42,6 +26,11 @@ shape of this file.
   never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
   (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
   `setHistoryIncluded`; `Saving` takes `historyLimits`.
+
+### Changed — may break callers
+
+- **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
+  candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
 
 ## 0.544.0 — 02.11.2026
 
