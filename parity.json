@@ -4676,6 +4676,12 @@
         "--encrypt": "all"
       }
     },
+    "store chats": {
+      "in": "all"
+    },
+    "store chats status": {
+      "in": "all"
+    },
     "store check": {
       "in": "all"
     },
