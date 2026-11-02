@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { Proposer } from "../decisions.js"
 import type { CacheDatabase } from "../driver.js"
 
 /** Who made or owns something: the store's polymorphic actor pair. */
@@ -10,7 +11,7 @@ export interface Actor {
 /** How the task package names who acted; each maps to one stable actor row. */
 export type Origin = "owner" | "agent" | "rule"
 
-const BOT_KINDS = ["agent", "script", "integration"] as const
+export const BOT_KINDS = ["agent", "rule", "script", "integration"] as const
 
 /** The owner's person row, which the initial migration seeds. */
 export const ownerPerson = (database: CacheDatabase): Actor => {
@@ -53,4 +54,31 @@ export const originOfActor = (database: CacheDatabase, type: unknown, id: unknow
   if (type == null || id == null) return undefined
   if (type === "person") return "owner"
   return database.prepare("SELECT name FROM bots WHERE id = ?").get(Number(id))?.name === "rule" ? "rule" : "agent"
+}
+
+/** Who proposed a stored row, from its actor pair; the seeded bot `rule` and a bot of kind `rule` are rules. */
+export const proposerOf = (database: CacheDatabase, type: unknown, id: unknown): Proposer => {
+  if (type === "person" && id != null) return { type: "person", id: String(id) }
+  if (type !== "bot" || id == null) return { type: "unknown" }
+  const bot = database.prepare("SELECT name, kind FROM bots WHERE id = ?").get(Number(id))
+  if (!bot) return { type: "unknown" }
+  const name = String(bot.name)
+  return { type: "bot", id: String(id), name, kind: bot.kind === "rule" || name === "rule" ? "rule" : "agent" }
+}
+
+/** Who proposed something, as a list filter: any agent, any rule, or one bot by its handle. */
+export type ProposedByFilter = "agent" | "rule" | { bot: string }
+
+/** The SQL that keeps rows whose actor pair matches `by`; the seeded bot `rule` counts as a rule. */
+export const proposedBySql = (
+  type: string,
+  id: string,
+  by: ProposedByFilter | undefined,
+): { sql: string; params: string[] } => {
+  if (by === undefined) return { sql: "1", params: [] }
+  const bot = (condition: string) =>
+    `${type} = 'bot' AND EXISTS (SELECT 1 FROM bots pb WHERE pb.id = ${id} AND ${condition})`
+  if (by === "rule") return { sql: bot("(pb.kind = 'rule' OR pb.name = 'rule')"), params: [] }
+  if (by === "agent") return { sql: bot("pb.kind <> 'rule' AND pb.name <> 'rule'"), params: [] }
+  return { sql: bot("pb.name = ?"), params: [by.bot] }
 }

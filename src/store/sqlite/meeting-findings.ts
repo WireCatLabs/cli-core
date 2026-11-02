@@ -9,6 +9,7 @@ import {
   parseMeetingReference,
   validateMeetingFindings,
 } from "../../meetings/index.js"
+import { assertMayDecide, deciderAuthor } from "../decisions.js"
 import type { MeetingFindingsBatch, MeetingFindingsStore } from "../meeting-findings.js"
 import type { AccountKey } from "../types.js"
 import { findingsCoreOver } from "./findings-core.js"
@@ -210,6 +211,8 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
         )
           return invalid("accept only unique IDs shown in this batch")
         const accepted = [...decision.accept].sort()
+        if (decision.by === undefined) return invalid("a findings review names who decides: the owner or an agent")
+        assertMayDecide({ id, proposedBy: proposals.proposer(id) }, decision.by, context.decisions)
         if (batch.receipt) {
           if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
             return invalid("this findings batch was already reviewed with a different decision")
@@ -224,13 +227,13 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
           bot: proposal.proposedBy.name,
           ...(input.agentModel === null ? {} : { model: input.agentModel }),
         }
-        const items = core.outcomes(account, batch.input, accepted, agent)
+        const items = core.outcomes(account, batch.input, accepted, agent, decision.by)
         return view(
-          proposals.approve(id, {
-            previewFingerprint: batch.fingerprint,
-            accepted,
-            items,
-          } satisfies MeetingFindingsReceipt),
+          proposals.approve(
+            id,
+            { previewFingerprint: batch.fingerprint, accepted, items } satisfies MeetingFindingsReceipt,
+            deciderAuthor(decision.by),
+          ),
         )
       }),
   }

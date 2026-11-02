@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { contextEvidenceFingerprint } from "../../context/evidence.js"
 import { type FindingEvidence, type FindingsInput, findingFingerprint, findingHash } from "../../meetings/index.js"
+import { assertMayDecide } from "../decisions.js"
 import {
   EVIDENCE_FINDINGS_KIND,
   type EvidenceFindingsBatch,
@@ -92,7 +93,8 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
   }
   const snapshot = (input: FindingsInput) => core.snapshot(input, cite())
   const decider = (by: unknown) => {
-    if (by === undefined || by === "owner") return { author: "owner" as const, decision: { by: "owner" as const } }
+    if (by === "owner") return { author: "owner" as const, decision: { by: "owner" as const } }
+    if (by === undefined) return invalid("a findings review names who decides: the owner or an agent with a reason")
     const raw = by as { bot?: unknown; model?: unknown; reason?: unknown }
     const agent = findingsAgent({
       bot: raw.bot as string,
@@ -187,7 +189,15 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
         )
           return invalid("accept only unique IDs shown in this batch")
         const accepted = [...decision.accept].sort()
-        const { author, decision: decidedBy } = decider(decision.by)
+        const { author, decision: checked } = decider(decision.by)
+        const reason = typeof decision.reason === "string" ? decision.reason.trim().slice(0, 2000) : ""
+        const decidedBy =
+          reason && checked.by === "owner"
+            ? { ...checked, reason }
+            : reason && checked.by === "agent"
+              ? { ...checked, reason: `${checked.reason}: ${reason}` }
+              : checked
+        assertMayDecide({ id, proposedBy: proposals.proposer(id) }, decision.by, context.decisions)
         if (batch.receipt) {
           if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
             return invalid("this findings batch was already reviewed with a different decision")
@@ -215,7 +225,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           bot: proposal.proposedBy.name,
           ...(input.agentModel === null ? {} : { model: input.agentModel }),
         }
-        const items = core.outcomes(null, batch.input, accepted, agent)
+        const items = core.outcomes(null, batch.input, accepted, agent, decision.by)
         return view(
           proposals.approve(
             id,

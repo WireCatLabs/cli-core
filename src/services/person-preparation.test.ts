@@ -102,7 +102,13 @@ describe("contacts context --prepare", () => {
     const shared = await store.knowledge.addProject({ name: "Harbour Example" })
     const foreign = await bindProject("Other account work", otherTg)
     for (const project of [shared, foreign])
-      await store.knowledge.relate(null, { from: `person:${uid}`, to: project.ref, kind: "member-of", confirmed: true })
+      await store.knowledge.relate(null, {
+        by: "owner",
+        from: `person:${uid}`,
+        to: project.ref,
+        kind: "member-of",
+        confirmed: true,
+      })
     const add = (statement: string, subject: string, project?: string) =>
       store.facts.add({ type: "fact", statement, subject, ...(project ? { project } : {}), by: "owner" })
     await add("Prefers written examples", `person:${uid}`)
