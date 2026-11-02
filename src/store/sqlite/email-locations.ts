@@ -1,4 +1,6 @@
+import type { Metadata } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
+import { fromJson } from "./events.js"
 
 /** Where an IMAP server holds an email: `folder` is the mailbox's external id. */
 export interface EmailLocationInput {
@@ -54,6 +56,50 @@ export const folderEmails = (
       locations: Number(row.locations),
       folders: Number(row.folders),
     }))
+
+/**
+ * An email stored from its first bytes only (`metadata.partial`): a sync reads it whole and clears the mark.
+ * `partialEmails` lists an account's live ones newest first, with how many there are in all.
+ */
+export interface PartialEmail {
+  externalId: string
+  threadExternalId: string
+  receivedAt: number | null
+  metadata: Metadata
+  locations: EmailLocationInput[]
+}
+
+export const partialEmails = (
+  database: CacheDatabase,
+  accountId: number,
+  limit: number,
+): { emails: PartialEmail[]; total: number } => {
+  const rows = database
+    .prepare(
+      `SELECT e.external_id, t.external_id AS thread, coalesce(e.received_at, e.sent_at) AS at, e.metadata,
+         count(*) OVER () AS total,
+         (SELECT json_group_array(json_object('folder', b.external_id, 'uidvalidity', l.uidvalidity, 'uid', l.uid))
+            FROM email_locations l JOIN mailboxes b ON b.id = l.mailbox_id WHERE l.email_id = e.id) AS places
+       FROM emails e JOIN email_threads t ON t.id = e.email_thread_id
+       WHERE e.account_id = ? AND e.deleted_at IS NULL AND json_extract(e.metadata, '$.partial') IS NOT NULL
+       ORDER BY at DESC, e.id DESC LIMIT ?`,
+    )
+    .all(accountId, limit)
+  return {
+    total: rows.length ? Number(rows[0]?.total) : 0,
+    emails: rows.map((row) => ({
+      externalId: String(row.external_id),
+      threadExternalId: String(row.thread),
+      receivedAt: row.at === null ? null : Number(row.at),
+      metadata: fromJson(row.metadata),
+      locations: (JSON.parse(String(row.places)) as EmailLocationInput[]).map((place) => ({
+        folder: String(place.folder),
+        uidvalidity: String(place.uidvalidity),
+        uid: Number(place.uid),
+      })),
+    })),
+  }
+}
 
 export const setLocations = (
   database: CacheDatabase,

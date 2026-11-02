@@ -9,6 +9,16 @@ shape of this file.
 
 ### Added
 
+- **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
+  `mail.search-refused` (`SEARCH_REFUSED`, `searchRefused`) when the server answers SEARCH with NO or BAD. `syncMail`
+  reads the other folders, answers `state: "partial"` with `refusedFolders`, and for the refused folder marks no mail
+  deleted, changes no membership, moves no resume point and leaves `mail_coverage` as it was. Before, a mail source that
+  read the refusal as "nothing found" made the folder look empty.
+- **Server search reads big mail text-first, and the next sync completes it.** A candidate is read up to
+  `SERVER_BOUNDS.textBytes` (256 KiB, `fetchRaw(items, { bytes })`); one cut short is stored with its text and no
+  attachments, marked `metadata.partial`, and `meta.issues` says `search.server-partial`. `syncMail` then reads up to
+  100 partial emails whole and clears the mark (`partial: { completed, left }`; `completePartial: false` skips it).
+  `MailStore.partialEmails` lists them. No store migration: the mark is a JSON key older builds ignore.
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -59,6 +69,8 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
+  candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
   it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
   global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A

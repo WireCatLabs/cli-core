@@ -8,8 +8,11 @@ import type { SearchQuery } from "./messages.js"
 import { prepareLucene } from "./messages-search.js"
 
 export const SERVER_SEARCH_KEY = "messages.server-search"
-/** `maxMessageBytes`: a candidate larger than this is not downloaded; a sync reads it, and the answer says so. */
-export const SERVER_BOUNDS = { timeMs: 5_000, perCall: 100, maxCalls: 3, maxMessageBytes: 5_000_000 }
+/**
+ * `textBytes`: a mail candidate is read up to this many bytes, its headers and text; one cut short is stored partial
+ * and the next sync reads it whole.
+ */
+export const SERVER_BOUNDS = { timeMs: 5_000, perCall: 100, maxCalls: 3, textBytes: 262_144 }
 export const DEFAULT_BACKEND = "both"
 export type Backend = "archive" | "server" | "both"
 export interface ServerOptions {
@@ -31,8 +34,8 @@ export interface ServerSearched {
   /** Messages the store did not hold before this search. */
   new: number
   failed: { chat: string | null; reason: "rate_limited" | "search_failed" | "time_or_abort_bound" }[]
-  /** Candidates larger than `SERVER_BOUNDS.maxMessageBytes`, left on the server unread. */
-  tooLarge?: number
+  /** Candidates stored from their first `SERVER_BOUNDS.textBytes`, without the attachments; a sync reads them whole. */
+  partial?: number
   complete: boolean
 }
 export type HitSource = "archive" | "server" | "both"
