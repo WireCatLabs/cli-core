@@ -196,8 +196,9 @@ const found = await searchAllIncludingMeetings(store, account, {
 
 Meeting hits have `kind: "meeting"`, `ref` (the meeting, `meeting:<account>/<meeting>`), `accountId`, `meetingId`,
 `scope`, `id` and `startMs`. A transcript hit also has `cueRef`, the matched cue
-(`meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens), and `speakerName`; the CLI
-answer names them `cue_ref` and `sender_name`. They contain text previews of at most 2000 characters; their meeting timestamp can
+(`meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens), `speakerName`, the transcript's
+`language` (`null` when unknown), and `line` of `linesTotal`, where in the transcript the cue is; the CLI answer names
+them `cue_ref`, `sender_name`, `language`, `line` and `lines_total`. They contain text previews of at most 2000 characters; their meeting timestamp can
 be null. The existing unified ranking and the meeting list are blended by reciprocal rank. Meeting
 order follows newest meeting first, then stored hit order; it does not claim a relevance score.
 

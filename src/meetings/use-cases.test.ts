@@ -61,6 +61,18 @@ describe("pull", () => {
     expect((await store.meeting(m?.id ?? 0))?.transcripts.length).toBe(1)
     expect(await store.cursor(1)).toBe("1970-01-01T00:00:04.000Z")
   })
+  it("stores the language a fetched transcript is in", async () => {
+    const source = fakeMeetingSource({
+      async transcript() {
+        return [{ startMs: 0, endMs: 1000, speaker: null, text: "Давайте обсудим план на следующую неделю." }]
+      },
+    })
+    const store = memoryMeetingStore()
+    await pull(source, store, options)
+    const [m] = await store.meetings()
+    expect((await store.meeting(m?.id ?? 0))?.transcripts[0]?.transcript.language).toBe("ru")
+  })
+
   it("keeps ambiguous names without guessing and warns", async () => {
     const source = fakeMeetingSource({
       async participants() {

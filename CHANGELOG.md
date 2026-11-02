@@ -17,6 +17,16 @@ shape of this file.
   and a messenger that pushes its history (`history: "store"`) is skipped. The summary gains
   `caught_up: { chats, fetched, failed, stopped }`; the log gains `start_sync`, `start_sync_chat_failed` and
   `start_sync_failed`.
+- **A meeting transcript knows its language.** `transcriptInput` (provider fetches and imports) and local
+  transcription fill `language` instead of `null`: a one-language speech model gives its own (`gigaam-v3` and
+  `gigaam-v3-ctc` write Russian, `LocalSpeechRecognitionModel.language`), any other transcript is read from its
+  letters — Cyrillic is `ru` (`uk` when Ukrainian letters show), Latin is told apart by frequent words (`en`, `es`,
+  `de`, `fr`, `it`, `pt`), and a mixed, short or undecided one stays `null`. A meeting that is mostly Russian with a
+  few English lines is `ru`. `transcriptLanguage(texts)` is exported for providers that build their own transcripts.
+- **Meeting search hits say the transcript's language and where in it the line is**: `language`, `line` (from 1) and
+  `lines_total` on transcript hits of `search meetings` and `search all` ("line 161 of 192").
+- **`meetings backfill-language`** previews the language of stored transcripts that have none; `--yes` stores it
+  (`meeting_language_fill`, `MeetingStore.fillTranscriptLanguages`). Nothing is written on a read.
 
 ### Changed — may break callers
 

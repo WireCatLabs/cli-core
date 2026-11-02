@@ -198,6 +198,25 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
       throw new MeetingError("validation_error", "file account differs from selected account")
     print(await importFiles(files, deps.store, deps.now?.()), command)
   })
+  output(
+    annotate(group.command("backfill-language"), {
+      effects: LOCAL_WRITE,
+      output: { entity: "meeting_language_fill" },
+    }).description("preview detecting the language of stored transcripts that have none; --yes stores it"),
+  )
+    .option("--yes", "store the detected languages; otherwise only preview")
+    .action(async (opts: { yes?: boolean }, command: Command) => {
+      if (!deps.store.fillTranscriptLanguages)
+        throw new MeetingError("configuration_error", "this store cannot fill transcript languages")
+      print(
+        await deps.store.fillTranscriptLanguages({
+          accountId: deps.accountId,
+          apply: opts.yes === true,
+          now: deps.now?.() ?? Date.now(),
+        }),
+        command,
+      )
+    })
   const eventList = queryWordsAfterOptions(
     annotate(program.command("events").description("the owner's stored events"), {
       effects: { remote: "none", local: "none" },

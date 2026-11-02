@@ -94,6 +94,7 @@ export {
   meetingItem,
 } from "./item.js"
 export { joinKeyOf, joinUrlWithoutQuery } from "./join-key.js"
+export { transcriptLanguage } from "./language.js"
 export {
   CHAT_MESSAGES_READ,
   type MeetingChatLine,
@@ -368,6 +369,7 @@ export type {
   ParticipantInput,
   SearchHit,
   TranscriptInput,
+  TranscriptLanguageFill,
   TranscriptRowInput,
 } from "./store.js"
 export type {

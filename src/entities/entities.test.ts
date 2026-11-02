@@ -205,6 +205,15 @@ const samples: Record<EntityName, unknown> = {
     scope: "existing-current-chunks",
     rebuild_required: "explicit",
   },
+  meeting_language_fill: {
+    account_id: "1",
+    applied: false,
+    transcripts: 2,
+    languages: [
+      { language: "ru", transcripts: 1 },
+      { language: null, transcripts: 1 },
+    ],
+  },
   contact_context: contactContextSample,
   contact_preparation: {
     ...contactContextSample,

@@ -11,6 +11,8 @@ export interface LocalSpeechRecognitionModel {
   engine: "sherpa-onnx"
   model: string
   version: string
+  /** The one language the model writes; absent for a multilingual model. */
+  language?: string
   sampleRate: 16000
   maxChunkSamples: 480000
 }
@@ -49,7 +51,14 @@ export const localSpeechRecognitionModel = (id: string): Readonly<LocalSpeechRec
       }),
     )
     .digest("hex")
-  return Object.freeze({ engine: "sherpa-onnx", model: model.id, version, sampleRate: 16000, maxChunkSamples: 480000 })
+  return Object.freeze({
+    engine: "sherpa-onnx",
+    model: model.id,
+    version,
+    ...(model.language === undefined ? {} : { language: model.language }),
+    sampleRate: 16000,
+    maxChunkSamples: 480000,
+  })
 }
 const notInstalled = (id: string) =>
   new CliError(

@@ -27,6 +27,11 @@ export const hit = v.strictObject({
   scope: v.optional(v.picklist(["transcript", "chat", "summary"])),
   /** A meeting transcript hit's cue, which `meetings passage` opens with the lines around it. */
   cue_ref: v.optional(reference),
+  /** A meeting transcript hit's transcript language (`ru`, `en`…), `null` when unknown. */
+  language: v.optional(v.nullable(text)),
+  /** A meeting transcript hit's line, from 1, of `lines_total` lines in its transcript. */
+  line: v.optional(v.pipe(count, v.minValue(1))),
+  lines_total: v.optional(count),
   /** A meeting passage's stored line, so two passages of one meeting stay apart; `search meetings` gives the same. */
   id: v.optional(v.pipe(v.string(), v.minLength(1))),
   /** A message's files; absent when it has none. */

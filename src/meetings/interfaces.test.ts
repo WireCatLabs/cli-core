@@ -51,6 +51,7 @@ describe("meeting commands", () => {
       "meetings people": { remote: "none", local: "read" },
       "meetings sync": { remote: "read", local: "write" },
       "meetings import": { remote: "none", local: "write" },
+      "meetings backfill-language": { remote: "none", local: "write" },
       "meetings projects": null,
       "meetings projects evidence": { remote: "none", local: "read" },
       events: { remote: "none", local: "none" },
