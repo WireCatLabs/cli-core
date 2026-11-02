@@ -74,7 +74,7 @@ export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "pro
         ...(reason === undefined ? {} : { reason }),
       })
       const made = (reviewed.receipt?.items ?? []).flatMap((item) =>
-        item.status === "accepted" && item.reference ? [item.reference] : [],
+        item.status === "accepted" && item.reference && !item.reused ? [item.reference] : [],
       )
       return { id, kind: "findings", status: accept.length ? "confirmed" : "rejected", made }
     },
