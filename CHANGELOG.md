@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.554.0 — 02.11.2026
+
 ### Fixed
 
 - **`schedule agent` help no longer shows `skill show follow-ups` to a CLI without that skill.** The prompt example is
