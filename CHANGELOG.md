@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.546.0 — 02.11.2026
+
 ### Added
 
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
