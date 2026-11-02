@@ -9,6 +9,21 @@ shape of this file.
 
 ### Added
 
+- **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
+  the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
+  purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
+- **`knowledge.updateRelation(scope, id, { role?, purpose?, by })`** sets a relationship's role and purpose; `null`
+  clears one. The owner's change applies; an agent's is a `relationship_update` proposal, listed and decided through
+  the proposal registry, and `knowledge.decideRelationUpdate(id, decision)` decides it in one transaction.
+- **`scanProjectLinks(store, { project, sources, since, write, scorers?, threshold?, limit?, purposes? })` and
+  `LinkScorer` (`@wirecat/cli-core/services`): memo proposes a project's chats, mail threads and people itself.**
+  Six scorers in `SCORERS` (`chat-title`, `alias-hits`, `member-chats`, `member-dialog`, `chat-senders`,
+  `mail-thread`) and the shared mail domain rule as `email-domain` in `PERSON_SCORERS`. Signals combine as
+  1 − Π(1 − w); at most 20 new proposals a run by the rule bot `memo-scan`, never confirmed by themselves. Each
+  carries `score` and `signals` (scorer, weight, why: ids and counts only). Linked and rejected pairs are skipped,
+  a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
+- **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
+  was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -56,24 +71,15 @@ shape of this file.
   place. `--since`, `--since-time`, `--until`, `--until-time`, `--after-time` and `--before-time` on `messages list`
   fail with the query form to type instead. The store's `messages()` window takes `after` (a message or a moment)
   and `until`.
-- **`scanProjectLinks(store, { project, sources, since, write, scorers?, threshold?, limit?, purposes? })` and
-  `LinkScorer` (`@wirecat/cli-core/services`): memo proposes a project's chats, mail threads and people itself.**
-  Six scorers in `SCORERS` (`chat-title`, `alias-hits`, `member-chats`, `member-dialog`, `chat-senders`,
-  `mail-thread`) and the shared mail domain rule as `email-domain` in `PERSON_SCORERS`. Signals combine as
-  1 − Π(1 − w); at most 20 new proposals a run by the rule bot `memo-scan`, never confirmed by themselves. Each
-  carries `score` and `signals` (scorer, weight, why: ids and counts only). Linked and rejected pairs are skipped,
-  a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
-- **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
-  was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
-- **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
-  the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
-  purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
-- **`knowledge.updateRelation(scope, id, { role?, purpose?, by })`** sets a relationship's role and purpose; `null`
-  clears one. The owner's change applies; an agent's is a `relationship_update` proposal, listed and decided through
-  the proposal registry, and `knowledge.decideRelationUpdate(id, decision)` decides it in one transaction.
 
 ### Changed — may break callers
 
+- **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
+  upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
+  link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
+  build no longer lists or confirms these as relationships, and a project transfer no longer carries them. Decide them
+  through the proposal registry by their new ids; `link:<id>` and `key:<id>` remain only for suggestions an older
+  build writes later.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
   it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
   global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
@@ -95,12 +101,6 @@ shape of this file.
   no longer found by that title; give its id or a part of the title.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
-- **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
-  upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
-  link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
-  build no longer lists or confirms these as relationships, and a project transfer no longer carries them. Decide them
-  through the proposal registry by their new ids; `link:<id>` and `key:<id>` remain only for suggestions an older
-  build writes later.
 
 ### Fixed
 
