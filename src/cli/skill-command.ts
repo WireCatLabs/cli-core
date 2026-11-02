@@ -6,6 +6,16 @@ import { environmentOf, outputFor } from "./context.js"
 import { grantsAuthority } from "./effects.js"
 import { printItem } from "./envelope.js"
 
+const skillSources = new WeakMap<Command, URL>()
+// zm and memo mount their own `skill` command in place of this one (`customizeSharedCommand`), from the same file.
+const skillSourcesByApp = new Map<string, URL>()
+
+/** The SKILL.md a program's `skill` command installs, so a run can refresh old copies of it. */
+export const skillSourceOf = (program: Command, appName: string): URL | undefined => {
+  const command = program.commands.find((sub) => sub.name() === "skill")
+  return command ? (skillSources.get(command) ?? skillSourcesByApp.get(appName)) : undefined
+}
+
 /**
  * `skill show` and `skill install`. `skill` is the CLI's own SKILL.md, shipped beside `dist/` in the
  * package and in a checkout alike, so the skill printed is always this version's.
@@ -23,6 +33,8 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
     },
     app.messenger === false ? {} : SHARED_SKILLS,
   )
+  skillSources.set(command, skill)
+  skillSourcesByApp.set(app.appName, skill)
   // An installed skill is instructions every later agent follows.
   const install = command.commands.find((sub) => sub.name() === "install")
   if (install) {
