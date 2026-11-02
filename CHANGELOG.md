@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A processing mark per holder and mail account** (`src/mail/marks.ts`): `review --holder <name>` reads what is
+  stored past the holder's mark, by store order (`emails.id`), so mail stored late is not skipped; bulk mail, envelopes
+  and drafts are skipped and counted, partial mail held until whole. `messages acknowledge --holder <name> --cursor
+  <cursor>` moves the mark forward; a read-only scheduled run may run it. Kept in `sync_cursors` as
+  `consumer:<holder>`, no schema change. `readPastMark`, `acknowledgeMark`, `marksOf`, `markItem` and the
+  `mail_mark` entity are exported for `status`; `store.mail` gains `emailsAfter`, `newestEmailId`, `statesLike` and
+  `emailHits`.
+
 ## 0.555.0 — 02.11.2026
 
 ### Added
@@ -30,13 +40,6 @@ shape of this file.
   task. `reviewMail`, `mailTurn`, `isBulk`, `MAIL_REVIEW_STEPS`, `store.mail.threadActivity` and
   `store.mail.emailMarks` are exported; `store.mail.threadHits` takes a received-time window; the `message` entity's
   `email` gains optional `bulk`, `list_id` and `rule_id`, and its `summary` view may carry `email`.
-- **A processing mark per holder and mail account** (`src/mail/marks.ts`): `review --holder <name>` reads what is
-  stored past the holder's mark, by store order (`emails.id`), so mail stored late is not skipped; bulk mail, envelopes
-  and drafts are skipped and counted, partial mail held until whole. `messages acknowledge --holder <name> --cursor
-  <cursor>` moves the mark forward; a read-only scheduled run may run it. Kept in `sync_cursors` as
-  `consumer:<holder>`, no schema change. `readPastMark`, `acknowledgeMark`, `marksOf`, `markItem` and the
-  `mail_mark` entity are exported for `status`; `store.mail` gains `emailsAfter`, `newestEmailId`, `statesLike` and
-  `emailHits`.
 - **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
   of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
 - **`config repair` mends a settings file whose JSON is broken only in its syntax**, without AI or network (the file
