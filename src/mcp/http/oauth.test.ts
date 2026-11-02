@@ -18,7 +18,7 @@ afterEach(async () => {
 
 const REDIRECT = "https://app.example/callback"
 
-const start = async ({ now, publicUrl }: { now?: () => number; publicUrl?: URL } = {}) => {
+const start = async ({ now, publicUrl, reaches }: { now?: () => number; publicUrl?: URL; reaches?: string } = {}) => {
   const port = await freePort()
   const base = new URL(`http://127.0.0.1:${port}`)
   const tokenFile = join(mkdtempSync(join(tmpdir(), "mcp-http-")), "state", "mcp-http.json")
@@ -30,6 +30,7 @@ const start = async ({ now, publicUrl }: { now?: () => number; publicUrl?: URL }
     appName: "chat",
     onCode: (code) => codes.push(code),
     ...(now ? { now } : {}),
+    ...(reaches ? { reaches } : {}),
   })
   closers.push(() => listening.close())
   const at = (path: string) => new URL(path, base)
@@ -336,6 +337,25 @@ describe("mcp --http and its owner login", () => {
     expect(html).toContain("the login goes to <strong>app.example</strong>")
     expect(page.headers.get("content-security-policy")).toContain("form-action 'self' https://app.example;")
     expect(page.headers.get("x-frame-options")).toBe("DENY")
+  })
+
+  it("says on the consent page what the app reaches and the command that serves it", async () => {
+    const consentPage = async (reaches?: string) => {
+      const { at, register, pkce } = await start(reaches ? { reaches } : {})
+      const { body: client } = await register()
+      const query = new URLSearchParams({
+        response_type: "code",
+        client_id: client.client_id ?? "",
+        redirect_uri: REDIRECT,
+        code_challenge: pkce().challenge,
+        code_challenge_method: "S256",
+      })
+      return (await fetch(at(`/authorize?${query}`))).text()
+    }
+    expect(await consentPage("your Google Calendar")).toContain(
+      "asks to reach your Google Calendar through <code>chat mcp serve --http</code>",
+    )
+    expect(await consentPage()).toContain("asks to reach your chat data through")
   })
 
   it("lets the consent form post from the tunnel's own origin, as a browser sends it", async () => {

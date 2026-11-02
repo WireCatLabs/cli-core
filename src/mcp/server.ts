@@ -504,6 +504,7 @@ export const serveOverHttpUntilStopped = async (
   const listening = await serveOverHttp(build, {
     ...http,
     appName,
+    reaches: "your messages",
     // In the background its log is a file; the code goes only to the lock that `mcp server status` reads.
     onCode: (code, expires) =>
       context.renderer.note(
