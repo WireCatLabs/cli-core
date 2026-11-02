@@ -23,16 +23,15 @@ None open.
 
 ## Next (P2)
 
-- **CORE-43** · P2 · One way in for outside data: a versioned JSON envelope (WireCat Data Envelope v1, JSON
-  Schema) and one ingestion service — validate, plan (dry run), import, idempotent upserts by source id, receipts —
-  that every entry point calls (CLI, stdin, HTTP later). No tool writes SQLite directly. Starts with the P0 audit
-  in cli-private `plans/2026-11-02-business-ingestion-requirements.md` §1, §5–§6. Related: CORE-5 (open provider list).
-- **CORE-44** · P2 · Business entities beside the existing persons, organizations and projects, in vertical slices:
-  first an organization + opportunity + invoice + partial payment through CORE-43, searchable and linked, a repeat
-  import makes no duplicates. Money in exact minor units, never REAL. Same plan, §2 and §14.
-- **CORE-45** · P2 · Generic source objects and source relations for provider types without a canonical entity
-  (a campaign, a shipment, a custom approval), unresolved references resolved after import, never invented. Same
-  plan, §3–§4.
+- **CORE-43** · P2 · One way in for outside data (slice B1b): a `records` table for what each source said (unique per
+  account, type and external id), a versioned JSON envelope with a JSON Schema, and `ingest(store, envelope)` —
+  validate, dry run, write per chunk, receipt, idempotent upserts, stale revisions refused. No tool writes SQLite
+  directly. HTTP and webhooks later (CORE-46). cli-private `plans/2026-11-02-business-ingestion.md` (TASK-886) §4.5–4.6. Related: CORE-5.
+- **CORE-44** · P2 · Finance as typed tables (slices B1a, then B0): money in integer minor units; `invoices`,
+  `invoice_lines`, `payments`, `payment_allocations` with their rules; `invoice:` and `payment:` refs; then retire the
+  fact kind `payment` into `payments` rows. Same plan, §4.1–4.2.
+- **CORE-45** · P2 · Personal CRM as typed tables (slice B2): `pipelines`, `pipeline_stages`, `opportunities`, status
+  kept apart from stage; people on a deal are links with a role. After CORE-44. Same plan, §4.3.
 - **CORE-42** · P2 · Take cli-base ≥ 0.66.1 so a bare number counts as a word of a `--discover` question: today any
   number ("after 21 days") sends the question to strict search, which usually finds nothing (cli-base#409). Moves the
   `@wirecat/cli-base` peer range to 0.66, so the tools built on Core move with it. `src/services/messages-discovery.ts`.
