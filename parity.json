@@ -242,6 +242,9 @@
       "value": "<post>",
       "meaning": "comment on this channel post; the comment goes to the post's discussion group"
     },
+    "--compact": {
+      "meaning": "one line per item, built from the same answer as --json, with its paging and next steps as # lines"
+    },
     "--component": {
       "value": "<name>",
       "meaning": "the ranking component whose contributing messages or answer pairs to read"
