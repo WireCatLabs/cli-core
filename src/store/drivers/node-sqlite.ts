@@ -1,6 +1,12 @@
 // biome-ignore-all lint/plugin/no-sqlite-driver: cli-core owns the store, so it opens the driver itself
 import { DatabaseSync } from "node:sqlite"
-import type { CacheDatabase, CacheStatement, SqlValue } from "../driver.js"
+import {
+  beforeTimeLimit,
+  type CacheDatabase,
+  type CacheStatement,
+  type SqlValue,
+  TIME_LIMIT_FUNCTION,
+} from "../driver.js"
 import { loadVectorExtension, vectorExtension } from "../vector-extension.js"
 
 /**
@@ -34,6 +40,7 @@ export const STATEMENT_CACHE_SIZE = 1000
 
 export const cacheOverNodeSqlite = (database: DatabaseSync, cacheSize = STATEMENT_CACHE_SIZE): CacheDatabase => {
   const statements = new Map<string, CacheStatement>()
+  database.function(TIME_LIMIT_FUNCTION, { deterministic: false, directOnly: true }, beforeTimeLimit)
   const prepare = (sql: string): CacheStatement => {
     const statement = database.prepare(sql)
     return {
@@ -43,6 +50,7 @@ export const cacheOverNodeSqlite = (database: DatabaseSync, cacheSize = STATEMEN
     }
   }
   return {
+    timeLimit: true,
     exec: (sql) => database.exec(sql),
     prepare: (sql) => {
       const cached = statements.get(sql)

@@ -7,7 +7,7 @@ import { correctWords } from "../search/correct.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
 import { FIELD_VERSION } from "../search/lucene/registry.js"
 import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
-import { exhausted, QUERY_LIMITS } from "../search/lucene/types.js"
+import { exhausted, outOfTime, QUERY_LIMITS } from "../search/lucene/types.js"
 import { normalize } from "../store/normalize.js"
 import type { AccountKey, MessageStore, ScoredHit } from "../store/store.js"
 import { withExcerpt } from "./excerpt.js"
@@ -56,7 +56,7 @@ export const searchCombined = async (
   const check = () => {
     if (request.signal?.aborted)
       throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
-    if (performance.now() - started > QUERY_LIMITS.milliseconds) exhausted("milliseconds")
+    if (performance.now() - started > QUERY_LIMITS.milliseconds) outOfTime()
   }
   check()
   const spans =

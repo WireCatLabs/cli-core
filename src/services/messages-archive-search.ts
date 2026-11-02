@@ -1,5 +1,6 @@
-import { CliError, isCliError } from "@wirecat/cli-base"
+import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
+import { isQueryLimit } from "../search/lucene/types.js"
 import { TOTAL_CAP, totalOf } from "../search/total.js"
 import type { AccountKey, MessageStore, StoredHit } from "../store/store.js"
 import type { Saved } from "./message-resolution.js"
@@ -87,7 +88,7 @@ export const searchStore = async (
           messenger,
           TOTAL_CAP,
         ).catch((error: unknown) => {
-          if (isCliError(error) && error.details.reason === "query.too-large") return undefined
+          if (isQueryLimit(error)) return undefined
           throw error
         }),
         found.items.length,

@@ -6,7 +6,7 @@ import type { WarmEmbedders } from "../embeddings/embed.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { fieldsOfQuery, meaningWords } from "../search/lucene/meaning-parts.js"
 import { validateFields } from "../search/lucene/registry.js"
-import { exhausted, MESSAGE_PARSING, QUERY_LIMITS } from "../search/lucene/types.js"
+import { exhausted, MESSAGE_PARSING, outOfTime, QUERY_LIMITS } from "../search/lucene/types.js"
 import { planQuestion, words } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
@@ -166,7 +166,7 @@ export const searchDiscovery = async (
   const check = () => {
     if (request.signal?.aborted)
       throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
-    if (performance.now() - started > QUERY_LIMITS.milliseconds) exhausted("milliseconds")
+    if (performance.now() - started > QUERY_LIMITS.milliseconds) outOfTime()
   }
   const union = new Map<string, FoundMessage & { fused: number }>()
   let truncated = false

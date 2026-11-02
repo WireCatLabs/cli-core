@@ -18,6 +18,21 @@ shape of this file.
   `caught_up: { chats, fetched, failed, stopped }`; the log gains `start_sync`, `start_sync_chat_failed` and
   `start_sync_failed`.
 
+### Changed — may break callers
+
+- **A search that runs out of time fails with `timeout` and the reason `query.time-limit`**, no longer with
+  `validation_error`, `query.too-large` and `budget: "time"` or `"milliseconds"`. The message says the query is valid
+  and the time limit was reached. The details keep `budget: "time"` and `complete: false`, and add `limit_ms`. A caller
+  that told the person to change the query on `query.too-large` no longer does it for a slow search.
+
+### Fixed
+
+- **A search stops at its time limit even inside one long SQLite statement.** A statement runs to its end before any
+  timer can fire, so a search over a large store ran far past the limit: 66 s against a 2 s limit, and past a
+  command's `--timeout 60s`. Under Node the message search statements now carry a check of the limit on every row
+  (the SQL function `wc_time_limit`) and stop when it passes. Bun has no SQL functions; there the limit is still
+  checked only between statements.
+
 ## 0.551.0 — 02.11.2026
 
 ### Added

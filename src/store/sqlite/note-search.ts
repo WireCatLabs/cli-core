@@ -9,7 +9,7 @@ import {
 } from "../../search/lucene/automaton.js"
 import type { ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolved.js"
 import { isStemmed } from "../../search/lucene/resolved.js"
-import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
+import { exhausted, outOfTime, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import type { Stemmer } from "../../search/stem.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
@@ -236,7 +236,7 @@ export const searchCorpus = (context: StoreContext, query: CorpusQuery, corpus: 
   const check = () => {
     if (query.signal?.aborted)
       throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
-    if (context.now() - started > QUERY_LIMITS.milliseconds) exhausted("time")
+    if (context.now() - started > QUERY_LIMITS.milliseconds) outOfTime()
   }
   const tests = new Map<ResolvedPredicate, (text: string) => boolean>()
   const fragments = new Map<ResolvedPredicate, Fragment>()

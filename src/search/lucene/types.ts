@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { QUERY_LIMITS as PARSER_LIMITS, type QueryContext, queryError, type Span } from "@wirecat/cli-base/query"
 
 export const QUERY_VERSION = 1
@@ -23,6 +23,21 @@ export const MOST_WORDS_APART = 50
 export function searchError(reason: string, span: Span, alternative?: string): never {
   queryError(reason, span, alternative, SEARCH_QUERY)
 }
+/**
+ * The search ran out of time, not the query out of bounds: a valid query over a large store. `timeout`, so a caller
+ * does not tell the person to fix what they typed.
+ */
+export function outOfTime(limitMs: number = QUERY_LIMITS.milliseconds): never {
+  throw new CliError(
+    "timeout",
+    `search stopped at its time limit of ${limitMs / 1000}s — the query is valid; ` +
+      "add chat: or date: to search less of the store",
+    { reason: "query.time-limit", budget: "time", limit_ms: limitMs, complete: false },
+  )
+}
+/** A search limit that leaves the answer without a part, such as its total, rather than failing it. */
+export const isQueryLimit = (error: unknown): boolean =>
+  isCliError(error) && (error.details.reason === "query.too-large" || error.details.reason === "query.time-limit")
 export function exhausted(budget: string): never {
   throw new CliError("validation_error", `search exceeded its ${budget} budget — narrow the chat or date range`, {
     reason: "query.too-large",
