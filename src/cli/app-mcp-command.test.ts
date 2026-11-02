@@ -181,11 +181,16 @@ describe("appMcpCommand", () => {
 })
 
 describe("appDoctorCommand", () => {
-  it("**reports the store, the OAuth client and the profile lock** without opening anything", async () => {
+  it("**reports the store, the OAuth client and the profile lock** without opening anything, with the clock (WC-TIME-7)", async () => {
     const env = { ...home(), CAL_PROFILE_LOCK: "work" }
     const streams = captureStreams()
     expect(await run(["doctor", "--json"], definition(), { streams, tty: false, env })).toBe(0)
-    const { item } = JSON.parse(streams.stdout[0] ?? "{}")
+    const { item, meta } = JSON.parse(streams.stdout[0] ?? "{}")
+    expect(meta).toMatchObject({
+      now: expect.stringMatching(/Z$/u),
+      now_local: expect.any(String),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    })
     expect(item).toMatchObject({
       store: { path: env.MESSAGING_STORE, exists: false },
       oauth_client: { client: "wirecat" },
