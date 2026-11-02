@@ -22,6 +22,10 @@ shape of this file.
 - **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
   `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
 
+### Fixed
+
+- **Mail `review` gives three examples**, as the command lint asks; `--waiting` stays in its help.
+
 ## 0.556.0 — 02.11.2026
 
 ### Added
