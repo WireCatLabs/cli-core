@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator, parseLocator } from "../domain/locator.js"
 import { type FindingOutcome, type FindingsInput, type FindingsReceipt, validateFindings } from "../meetings/index.js"
+import type { Decider } from "./decisions.js"
 import type { EvidenceSource } from "./sqlite/evidence-sources.js"
 
 export const EVIDENCE_FINDINGS_KIND = "evidence_findings"
@@ -23,7 +24,7 @@ export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
   })
 
 /** Who decided: the owner, or an agent the host let decide for the owner, with its reason. */
-export type EvidenceFindingsDecider = "owner" | { bot: string; model?: string; reason: string }
+export type EvidenceFindingsDecider = Decider
 
 export interface EvidenceFindingsReceipt extends FindingsReceipt {
   decision: { by: "owner" } | { by: "agent"; bot: string; model: string | null; reason: string }
@@ -58,7 +59,7 @@ export interface EvidenceFindingsStore {
   }): Promise<{ items: EvidenceFindingsBatch[]; hasMore: boolean }>
   review(
     id: string,
-    input: { fingerprint: string; accept: string[]; by?: EvidenceFindingsDecider },
+    input: { fingerprint: string; accept: string[]; by: EvidenceFindingsDecider },
   ): Promise<EvidenceFindingsBatch>
   /** Each reference the batch cites, read back once; one gone from the store since is `missing`. */
   sources(id: string): Promise<EvidenceSource[]>

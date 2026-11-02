@@ -84,7 +84,7 @@ const seed = async (name = collection) => {
     supersedes: fact.ref,
     scope: "work",
   })
-  await store.facts.accept(nextFact.ref)
+  await store.facts.accept(nextFact.ref, "owner")
   await store.facts.reverse(nextFact.ref)
   await store.notes.addLink({
     from: doc.ref,

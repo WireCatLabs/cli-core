@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEETING_FINDINGS_KIND } from "../meetings/index.js"
+import { assertMayDecide, type Decider } from "../store/decisions.js"
 import { EVIDENCE_FINDINGS_KIND } from "../store/evidence-findings.js"
+import { proposerOfAction } from "../store/index.js"
 import type { MessageStore, ProposedAction } from "../store/store.js"
 import { createTaskService, type Task } from "../tasks/index.js"
 import { taskAccount } from "./task-rules.js"
@@ -17,6 +19,7 @@ export const proposalSource = (id: string): string => `proposed-action:${id}`
 export const approveAsTask = async (
   store: ProposalTaskStore,
   id: string,
+  by: Decider,
 ): Promise<{ proposal: ProposedAction; task: Task }> => {
   const proposal = await store.proposedActions.get(id)
   if (proposal.kind === MEETING_FINDINGS_KIND)
@@ -31,6 +34,7 @@ export const approveAsTask = async (
     throw new CliError("validation_error", `a ${proposal.status} action cannot be approved`, {
       reason: "proposal.wrong-state",
     })
+  assertMayDecide({ id: proposal.id, proposedBy: proposerOfAction(proposal) }, by)
   if (proposal.account === null)
     throw new CliError("validation_error", "a proposal names the account that would act; this one names none")
   const { task } = await createTaskService({ store: store.tasks }).add({
@@ -41,5 +45,5 @@ export const approveAsTask = async (
     kind: "request",
     origin: "agent",
   })
-  return { proposal: await store.proposedActions.approve(proposal.id, { task: task.id }), task }
+  return { proposal: await store.proposedActions.approve(proposal.id, by, { task: task.id }), task }
 }

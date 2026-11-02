@@ -33,11 +33,13 @@ it("approves a proposal as the account's task, records it, and lists it with the
     reason: "Bob Sample asked twice",
   })
 
-  const { proposal: approved, task } = await approveAsTask(store, proposal.id)
+  const { proposal: approved, task } = await approveAsTask(store, proposal.id, "owner")
 
   expect(task).toMatchObject({ source: proposalSource(proposal.id), sourceKind: "proposed_action", kind: "request" })
   expect(approved).toMatchObject({ status: "approved", result: { task: task.id } })
-  await expect(approveAsTask(store, proposal.id)).rejects.toMatchObject({ details: { reason: "proposal.wrong-state" } })
+  await expect(approveAsTask(store, proposal.id, "owner")).rejects.toMatchObject({
+    details: { reason: "proposal.wrong-state" },
+  })
   const listed = await tasksService(storeOnlyDeps(store, account, { app, env: {} })).list({
     limit: 100,
     offset: 0,
@@ -59,7 +61,7 @@ it("finds the task an interrupted approval already made instead of making a seco
     origin: "agent",
   })
 
-  const { task } = await approveAsTask(store, proposal.id)
+  const { task } = await approveAsTask(store, proposal.id, "owner")
 
   expect(task.id).toBe(earlier.id)
   expect(await store.tasks.list({ account: taskAccount(account) })).toHaveLength(1)
@@ -68,6 +70,6 @@ it("finds the task an interrupted approval already made instead of making a seco
 it("refuses a proposal that names no account", async () => {
   const store = await opened()
   const proposal = await store.proposedActions.propose({ kind: "reply", by: { bot: "helper" } })
-  await expect(approveAsTask(store, proposal.id)).rejects.toMatchObject({ code: "validation_error" })
+  await expect(approveAsTask(store, proposal.id, "owner")).rejects.toMatchObject({ code: "validation_error" })
   expect((await store.proposedActions.get(proposal.id)).status).toBe("proposed")
 })

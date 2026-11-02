@@ -46,6 +46,15 @@ export {
   type TaskState,
 } from "../tasks/index.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
+export {
+  assertMayDecide,
+  DEFAULT_DECISION_POLICY,
+  type Decider,
+  type DecisionPolicy,
+  mayDecide,
+  type Proposer,
+  type Refusal,
+} from "./decisions.js"
 export type {
   DocumentTransferOptions,
   DocumentTransferPreview,
@@ -194,8 +203,13 @@ export type {
   NoteTag,
 } from "./sqlite/notes.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
-export type { ProposalInput, ProposedAction, ProposedActionsStore } from "./sqlite/proposed-actions.js"
-export { PROPOSAL_STATUSES } from "./sqlite/proposed-actions.js"
+export {
+  PROPOSAL_STATUSES,
+  type ProposalInput,
+  type ProposedAction,
+  type ProposedActionsStore,
+  proposerOfAction,
+} from "./sqlite/proposed-actions.js"
 export {
   fillSearchIndex,
   resetSearchIndex,

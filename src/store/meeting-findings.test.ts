@@ -65,15 +65,23 @@ describe("reviewed meeting findings", () => {
     const batch = await f.store.meetingFindings.stage(account, f.input, agent)
     f.db.prepare("UPDATE links SET confirmed=0 WHERE kind='member-of'").run()
     await expect(
-      f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: ["decision"] }),
+      f.store.meetingFindings.review(account, batch.id, {
+        fingerprint: batch.fingerprint,
+        accept: ["decision"],
+        by: "owner",
+      }),
     ).rejects.toThrow("confirmed membership")
     f.db.prepare("UPDATE links SET confirmed=1 WHERE kind='member-of'").run()
     f.db.prepare("UPDATE projects SET name='Renamed synthetic project' WHERE id=?").run(Number(f.project.id))
     await expect(
-      f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: ["decision"] }),
+      f.store.meetingFindings.review(account, batch.id, {
+        fingerprint: batch.fingerprint,
+        accept: ["decision"],
+        by: "owner",
+      }),
     ).rejects.toMatchObject({ details: { reason: "meeting-findings.stale" } })
     const next = await f.store.meetingFindings.stage(account, { ...f.input, key: "new-preview" }, agent)
-    const decision = { fingerprint: next.fingerprint, accept: ["decision"] }
+    const decision = { fingerprint: next.fingerprint, accept: ["decision"], by: "owner" as const }
     const reviewed = await f.store.meetingFindings.review(account, next.id, decision)
     f.seed.transcripts[0].contentHash = "corrected-synthetic-revision"
     f.seed.transcripts[0].rows[0].text = "A corrected synthetic statement"
@@ -105,6 +113,7 @@ describe("reviewed meeting findings", () => {
     const reviewed = await f.store.meetingFindings.review(account, batch.id, {
       fingerprint: batch.fingerprint,
       accept: [task.id],
+      by: "owner",
     })
     const made = await f.store.tasks.details(reviewed.receipt?.items[0]?.reference as string)
     expect(made).toMatchObject({
@@ -121,7 +130,7 @@ describe("reviewed meeting findings", () => {
     expect(await f.store.facts.list()).toEqual([])
     expect(await f.store.tasks.find({ project: f.project.ref })).toEqual([])
     expect(await f.store.meetingFindings.stage(account, f.input, agent)).toEqual(batch)
-    const decision = { fingerprint: batch.fingerprint, accept: ["decision", "followup"] }
+    const decision = { fingerprint: batch.fingerprint, accept: ["decision", "followup"], by: "owner" as const }
     const reviewed = await f.store.meetingFindings.review(account, batch.id, decision)
     expect(reviewed).toMatchObject({ decidedBy: { type: "person" }, decidedAt: new Date(1000).toISOString() })
     expect(reviewed.receipt?.items.map((x) => x.status)).toEqual(["accepted", "accepted"])
@@ -141,6 +150,7 @@ describe("reviewed meeting findings", () => {
     const repeated = await f.store.meetingFindings.review(account, second.id, {
       fingerprint: second.fingerprint,
       accept: decision.accept,
+      by: "owner",
     })
     expect(repeated.receipt?.items.map((x) => [x.reference, x.reused])).toEqual(
       reviewed.receipt?.items.map((x) => [x.reference, true]),
@@ -151,11 +161,11 @@ describe("reviewed meeting findings", () => {
   it("reserves findings from generic proposal approval before any inbox task is made", async () => {
     const f = await fixture()
     const batch = await f.store.meetingFindings.stage(account, f.input, agent)
-    await expect(approveAsTask(f.store, batch.id)).rejects.toMatchObject({
+    await expect(approveAsTask(f.store, batch.id, "owner")).rejects.toMatchObject({
       details: { reason: "meeting-findings.dedicated-review" },
     })
-    await expect(f.store.proposedActions.approve(batch.id)).rejects.toThrow("dedicated")
-    await expect(f.store.proposedActions.reject(batch.id)).rejects.toThrow("dedicated")
+    await expect(f.store.proposedActions.approve(batch.id, "owner")).rejects.toThrow("dedicated")
+    await expect(f.store.proposedActions.reject(batch.id, "owner")).rejects.toThrow("dedicated")
     await expect(f.store.proposedActions.propose({ kind: "meeting_findings", by: agent })).rejects.toThrow("dedicated")
     expect(f.db.prepare("SELECT count(*) AS n FROM tasks").get()?.n).toBe(0)
   })
@@ -165,13 +175,21 @@ describe("reviewed meeting findings", () => {
     await expect(f.store.meetingFindings.stage(account, { ...f.input, extractor: "different" }, agent)).rejects.toThrow(
       "different input",
     )
-    await f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: [] })
+    await f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: [], by: "owner" })
     await expect(
-      f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: ["decision"] }),
+      f.store.meetingFindings.review(account, batch.id, {
+        fingerprint: batch.fingerprint,
+        accept: ["decision"],
+        by: "owner",
+      }),
     ).rejects.toThrow("different decision")
     const next = await f.store.meetingFindings.stage(account, { ...f.input, key: "batch-2" }, agent)
     await expect(
-      f.store.meetingFindings.review(account, next.id, { fingerprint: next.fingerprint, accept: ["decision"] }),
+      f.store.meetingFindings.review(account, next.id, {
+        fingerprint: next.fingerprint,
+        accept: ["decision"],
+        by: "owner",
+      }),
     ).rejects.toThrow("already rejected")
     expect(await f.store.facts.list()).toEqual([])
   })
@@ -185,6 +203,7 @@ describe("reviewed meeting findings", () => {
       f.store.meetingFindings.review(account, batch.id, {
         fingerprint: batch.fingerprint,
         accept: ["decision", "followup"],
+        by: "owner",
       }),
     ).rejects.toThrow("synthetic task failure")
     expect(await f.store.facts.list()).toEqual([])
@@ -196,10 +215,18 @@ describe("reviewed meeting findings", () => {
     const batch = await f.store.meetingFindings.stage(account, f.input, agent)
     f.db.prepare("UPDATE meeting_transcript_rows SET text='Changed synthetic cue'").run()
     await expect(
-      f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: ["decision"] }),
+      f.store.meetingFindings.review(account, batch.id, {
+        fingerprint: batch.fingerprint,
+        accept: ["decision"],
+        by: "owner",
+      }),
     ).rejects.toMatchObject({ details: { reason: "meeting-findings.stale" } })
     expect(
-      await f.store.meetingFindings.review(account, batch.id, { fingerprint: batch.fingerprint, accept: [] }),
+      await f.store.meetingFindings.review(account, batch.id, {
+        fingerprint: batch.fingerprint,
+        accept: [],
+        by: "owner",
+      }),
     ).toMatchObject({ status: "reviewed", receipt: { accepted: [] } })
     await expect(f.store.meetingFindings.stage(account, { ...f.input, key: "changed" }, agent)).rejects.toMatchObject({
       details: { reason: "meeting-findings.stale" },

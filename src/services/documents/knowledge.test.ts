@@ -43,7 +43,7 @@ describe("shared document knowledge", () => {
         kind: "summary",
       })
       expect(memory).toMatchObject({ subject: f.ref, evidence: [f.ref], status: "proposed", scope: "work" })
-      await f.k.memory(f.principal, f.ref, memory.ref, "confirm")
+      await f.k.memory(f.principal, f.ref, memory.ref, "confirm", "owner")
       await f.index.save(f.principal, content({ ...f.metadata, name: "Renamed" }), "hash-one")
       expect((await f.k.memory(f.principal, f.ref, memory.ref)).status).toBe("confirmed")
       expect(await f.k.tags(f.principal, f.ref, "list")).toEqual(["budget", "review"])
@@ -149,7 +149,7 @@ describe("shared document knowledge", () => {
       })
       expect(drawn).toMatchObject({ status: "proposed", model: "example-model", scope: "work" })
       expect((await f.k.facts(f.principal, f.ref, { status: "proposed" })).map((fact) => fact.ref)).toEqual([drawn.ref])
-      expect((await f.k.fact(f.principal, f.ref, drawn.ref, "confirm")).status).toBe("accepted")
+      expect((await f.k.fact(f.principal, f.ref, drawn.ref, "confirm", "owner")).status).toBe("accepted")
       await expect(
         f.k.addMemory(f.principal, f.ref, { body: "A fact", kind: "fact" as never, scope: "work" }),
       ).rejects.toThrow("summary, digest, preference")
@@ -171,7 +171,7 @@ describe("shared document knowledge", () => {
       expect(proposed).toMatchObject({ status: "proposed", supersedes: old.ref })
       expect((await f.k.fact(f.principal, f.ref, old.ref)).status).toBe("accepted")
       await expect(f.k.fact(f.principal, f.ref, proposed.ref, "reverse")).rejects.toThrow()
-      expect((await f.k.fact(f.principal, f.ref, proposed.ref, "confirm")).status).toBe("accepted")
+      expect((await f.k.fact(f.principal, f.ref, proposed.ref, "confirm", "owner")).status).toBe("accepted")
       expect((await f.k.fact(f.principal, f.ref, old.ref)).status).toBe("superseded")
       const replacement = await f.k.addFact(f.principal, f.ref, {
         statement: "Pause the budget",

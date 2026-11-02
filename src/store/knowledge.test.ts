@@ -161,12 +161,12 @@ describe("cross-source knowledge metadata", () => {
       provenance: "synthetic weak rule",
     })
     expect(proposal).toMatchObject({ confirmed: false, confidenceCategory: "weak" })
-    expect(await f.store.knowledge.confirmRelation(key, proposal.id)).toMatchObject({
+    expect(await f.store.knowledge.confirmRelation(key, proposal.id, "owner")).toMatchObject({
       confirmed: true,
       confidenceCategory: "owner-confirmed",
     })
-    await f.store.knowledge.removeRelation(key, proposal.id)
-    await f.store.knowledge.removeRelation(key, relation.id)
+    await f.store.knowledge.removeRelation(key, proposal.id, "owner")
+    await f.store.knowledge.removeRelation(key, relation.id, "owner")
     expect(await f.store.knowledge.relations(key)).toEqual([])
   })
 
@@ -181,7 +181,7 @@ describe("cross-source knowledge metadata", () => {
       confirmed: false,
     })
     expect(link).toMatchObject({ from: chat, to: project.ref, kind: "member-of", confirmed: false })
-    expect(await f.store.knowledge.confirmRelation(null, link.id)).toMatchObject({ confirmed: true })
+    expect(await f.store.knowledge.confirmRelation(null, link.id, "owner")).toMatchObject({ confirmed: true })
     expect(await f.store.knowledge.relations(null, project.ref)).toEqual([expect.objectContaining({ from: chat })])
     expect(await f.store.notes.links({ to: project.ref })).toEqual([
       expect.objectContaining({ from: chat, kind: "member-of", confirmed: true }),

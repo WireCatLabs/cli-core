@@ -38,8 +38,10 @@ duplicate owner annotations, labels or relationships attached to a different per
 or `related-to` links between explicit references, with optional role/evidence. Who works on a task is
 `store.tasks.assign` (`task_assignments`: assignee, reviewer or watcher), not a link; store version 2 copied
 the old `assigned-to` links there. A relationship is a confirmed owner statement or an explicitly
-unconfirmed weak suggestion with provenance. `confirmRelation` records owner acceptance; weak
-suggestions are excluded from confirmed person/task context. Domain matching never links identities.
+unconfirmed weak suggestion with provenance. An agent's or a rule's relationship is a `relationship`
+proposal (`proposeRelation`), not a link. `confirmRelation` records the decision; weak
+suggestions are excluded from confirmed person/task context. Removing a link to a project, or a suggestion,
+leaves a rejected `relationship` proposal, so a scan never proposes the pair again. Domain matching never links identities.
 Listing/removal are account-scoped. Repeating the same relation preserves
 its ID; remove and add again to correct its role/evidence. References stay on their original UID
 through identity linking and splitting, so correction is explicit rather than guessed.
@@ -78,6 +80,17 @@ a retry finds the same task. A messenger adapter could instead execute an approv
 or `failed`. The payload may hold a reply's text, shown to the approver and never logged. `agentActions` is
 the audit trail: the MCP server writes one row per tool call (tool, tier, outcome code, times), never its
 arguments; `list` filters by tool and by the agent's name, such as `tg-mcp`.
+
+## Who decides a proposal
+
+Every decide method takes a `Decider`: `"owner"`, or `{ bot, model?, reason }` for an agent the host lets
+decide for the owner. Each runs `mayDecide` before it changes anything: an agent needs a reason, never
+decides its own bot's proposal (every Claude Code session is the bot `claude-code`), never a rule scorer's or
+one that names no author, and nothing when the host's `agent_decisions` is off. `proposalRegistry`
+(`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `memory`, `findings`,
+`action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
+Ids are bare numbers for stored proposals and `fact:`, `memory:`, `link:`, `key:` for the rest;
+`parseProposalIds` reads ranges and lists of them.
 
 ## Document extraction
 

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import type {
   Author,
+  Decider,
   Fact,
   Link,
   LinkInput,
@@ -48,7 +49,9 @@ export interface DocumentKnowledge {
     ref: string,
     options?: { scope?: Memory["scope"]; kind?: Memory["kind"]; status?: Memory["status"]; limit?: number },
   ): Promise<Memory[]>
-  memory(principal: string, ref: string, memoryRef: string, action?: "show" | "confirm" | "stale"): Promise<Memory>
+  memory(principal: string, ref: string, memoryRef: string, action?: "show" | "stale"): Promise<Memory>
+  /** `by` decides: the owner, or an agent for the owner that did not propose it. */
+  memory(principal: string, ref: string, memoryRef: string, action: "confirm", by: Decider): Promise<Memory>
   searchMemories(
     principal: string,
     ref: string,
@@ -72,8 +75,18 @@ export interface DocumentKnowledge {
     ref: string,
     options?: { type?: Fact["type"]; status?: Fact["status"]; limit?: number },
   ): Promise<Fact[]>
-  fact(principal: string, ref: string, factRef: string, action?: "show" | "confirm" | "reverse"): Promise<Fact>
+  fact(principal: string, ref: string, factRef: string, action?: "show" | "reverse"): Promise<Fact>
+  /** `by` decides: the owner, or an agent for the owner that did not propose it. */
+  fact(principal: string, ref: string, factRef: string, action: "confirm", by: Decider): Promise<Fact>
 }
+const decider = (by: Decider | undefined): Decider => {
+  if (by === undefined)
+    throw new CliError("validation_error", "a confirm names who decides: the owner or an agent with a reason", {
+      reason: "proposal.decider-required",
+    })
+  return by
+}
+
 export const documentKnowledge = (
   store: Pick<MessageStore, "notes" | "facts" | "memories" | "knowledge">,
   folder: (principal: string) => Promise<string | undefined>,
@@ -169,9 +182,9 @@ export const documentKnowledge = (
       await document(principal, ref)
       return store.memories.list({ ...options, subject: ref })
     },
-    memory: async (principal, ref, memoryRef, action = "show") => {
+    memory: async (principal: string, ref: string, memoryRef: string, action = "show", by?: Decider) => {
       const memory = await memoryFor(principal, ref, memoryRef)
-      if (action === "confirm") return store.memories.confirm(memory.ref)
+      if (action === "confirm") return store.memories.confirm(memory.ref, decider(by))
       if (action === "stale") return store.memories.markStale(memory.ref)
       return memory
     },
@@ -198,9 +211,9 @@ export const documentKnowledge = (
       await document(principal, ref)
       return store.facts.list({ ...options, subject: ref })
     },
-    fact: async (principal, ref, factRef, action = "show") => {
+    fact: async (principal: string, ref: string, factRef: string, action = "show", by?: Decider) => {
       const fact = await factFor(principal, ref, factRef)
-      if (action === "confirm") return store.facts.accept(fact.ref)
+      if (action === "confirm") return store.facts.accept(fact.ref, decider(by))
       if (action === "reverse") return store.facts.reverse(fact.ref)
       return fact
     },

@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { contextEvidenceFingerprint } from "../../context/evidence.js"
 import { type FindingEvidence, type FindingsInput, findingFingerprint, findingHash } from "../../meetings/index.js"
+import { assertMayDecide } from "../decisions.js"
 import {
   EVIDENCE_FINDINGS_KIND,
   type EvidenceFindingsBatch,
@@ -92,7 +93,8 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
   }
   const snapshot = (input: FindingsInput) => core.snapshot(input, cite())
   const decider = (by: unknown) => {
-    if (by === undefined || by === "owner") return { author: "owner" as const, decision: { by: "owner" as const } }
+    if (by === "owner") return { author: "owner" as const, decision: { by: "owner" as const } }
+    if (by === undefined) return invalid("a findings review names who decides: the owner or an agent with a reason")
     const raw = by as { bot?: unknown; model?: unknown; reason?: unknown }
     const agent = findingsAgent({
       bot: raw.bot as string,
@@ -188,6 +190,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           return invalid("accept only unique IDs shown in this batch")
         const accepted = [...decision.accept].sort()
         const { author, decision: decidedBy } = decider(decision.by)
+        assertMayDecide({ id, proposedBy: proposals.proposer(id) }, decision.by)
         if (batch.receipt) {
           if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
             return invalid("this findings batch was already reviewed with a different decision")

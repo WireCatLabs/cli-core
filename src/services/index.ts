@@ -404,6 +404,17 @@ export {
 } from "./person-meeting-context.js"
 export { privatePeopleService } from "./private-people.js"
 export { approveAsTask, type ProposalTaskStore, proposalSource } from "./proposal-tasks.js"
+export {
+  type Decided,
+  type Decision,
+  emptyProposalRegistry,
+  type ProposalFilter,
+  type ProposalKind,
+  type ProposalRegistry,
+  type ProposalRow,
+  parseProposalIds,
+  proposalRegistry,
+} from "./proposals/index.js"
 export type { RetentionQuery, RetentionService } from "./retention.js"
 export { retentionService } from "./retention.js"
 export {

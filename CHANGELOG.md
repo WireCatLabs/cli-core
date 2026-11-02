@@ -9,6 +9,20 @@ shape of this file.
 
 ### Added
 
+- **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
+  (`@wirecat/cli-core/services`) and `mayDecide` (`@wirecat/cli-core/store`).** The registry lists every pending
+  proposal newest first across kinds (`relationship`, `key_document`, `fact`, `memory`, `findings` for evidence
+  findings, and `action` for every other stored proposal), and decides many ids at once, each on its own: the answer
+  lists `decided` and `refused`, and one refusal never undoes the others. A new kind registers itself with its id
+  `prefix` or the `stored` proposal kinds it owns; nothing else changes. `parseProposalIds` reads
+  `17070-17079,fact:500-502,17080/f2` and refuses a range across prefixes. Unconfirmed agent and rule links show as
+  `link:<id>` (relationships) and `key:<id>` (key documents) until the store moves them.
+- **`knowledge.proposeRelation(scope, input, by)`**: an agent's or a rule's relationship is a stored `relationship`
+  proposal for the owner, not a link; the same pending pair returns the proposal already held. Removing a link to a
+  project, or rejecting any suggested link, leaves a rejected `relationship` proposal, so a later scan can skip it.
+- **`proposedActions.list({ kinds, except })`** and **`proposedBy.kind`** (`agent` or `rule`) on a proposed action;
+  bots may have the kind `rule`, and an `Author` may name it.
+
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
   copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
   with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy
@@ -18,6 +32,14 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
+  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
+  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
+  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
+  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
+  `confirm`. A host passes the owner only when the owner runs the command, and the agent's bot and reason otherwise.
+  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
+  decider.
 - **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
   `AI_AGENT`, `CLAUDECODE`, `OPENCLAW_SHELL=exec` or another agent marker is set is now treated like an MCP agent's
   call: `mcp.authority` and `bot.api` stay owner-only, and a level may only go down (`readonly` → `deny`, never
@@ -26,6 +48,16 @@ shape of this file.
   that talked it into running `config set`. The owner changes them in a terminal outside the agent; the desktop app
   already runs the tools without these variables. Not a sandbox: an agent with a general shell can still edit the
   file itself, so keep its own command approvals on.
+
+### Security
+
+- **An agent can no longer decide its own proposal.** Before, `facts.accept`/`reject`,
+  `memories.confirm`, `knowledge.confirmRelation`, `proposedActions.approve`/`reject`, `approveAsTask` and both
+  findings reviews never asked who decided, so over MCP an agent could confirm what it had proposed itself. Every one
+  of them, and the registry, now runs `mayDecide`: the owner always may; an agent needs a reason
+  (`proposal.reason-required`), is refused its own bot's proposal (`proposal.own`), a rule scorer's proposal and one
+  that names no author (`proposal.owner-only`), and every decision when the host turns agent decisions off
+  (`proposals.agent-decisions-off`). Removing an unconfirmed relationship counts as rejecting it.
 
 ## 0.543.0 — 02.11.2026
 
