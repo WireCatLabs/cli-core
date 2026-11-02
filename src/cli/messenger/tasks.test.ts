@@ -106,6 +106,9 @@ const setup = async (config?: object) => {
           "tasks unmerge": "task_unmerge",
           "tasks categories": "task_categories",
           "tasks scan": "task_scan",
+          "tasks status": "task_analysis",
+          "tasks review": "task_review",
+          "tasks acknowledge": "task_analysis_mark",
           "tasks claim": "task_card",
           "tasks release": "task_card",
           "tasks close": "task_closed",
@@ -178,6 +181,70 @@ describe("tasks", () => {
     const opened = json(await call("tasks", "scan", "7", "--yes", "--json"))
     expect(opened.items).toEqual([expect.objectContaining({ added: 1, tasks: [] })])
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
+  })
+
+  it("**reads a chat for tasks from its own point**, which only tasks acknowledge moves", async () => {
+    const call = await setup()
+    const since = ["--since-time", "2026-10-01T00:00:00Z"]
+    await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+
+    const first = item(await call("tasks", "review", "7", ...since, "--json"))
+    expect(first.messages.map((one: { ref: string }) => one.ref)).toEqual([PROMISE, "msg:chat/500/7/2"])
+    expect(first.open_tasks).toEqual([expect.objectContaining({ kind: "promise", source: PROMISE })])
+    expect(json(await call("tasks", "review", "7", ...since, "--json")).next).toEqual([
+      expect.objectContaining({
+        step: "tasks.acknowledge",
+        line: "chat tasks acknowledge 7 2 --since-time 2026-10-01T00:00:00.000Z",
+      }),
+    ])
+
+    const marked = item(await call("tasks", "acknowledge", "7", "2", ...since, "--json"))
+    expect(marked).toMatchObject({ chat: "7", through_id: "2", moved: true })
+    expect(item(await call("tasks", "acknowledge", "7", "1", "--json")).moved).toBe(false)
+    expect(item(await call("tasks", "review", "7", "--json")).messages).toEqual([])
+    expect(json(await call("tasks", "status", "--json")).items).toEqual([
+      expect.objectContaining({ chat: "7", waiting: 0, late: 0, mark: expect.objectContaining({ through_id: "2" }) }),
+    ])
+  })
+
+  it("**a read again only updates and closes tasks**, and opens one from history only with --open-new", async () => {
+    const call = await setup()
+    await call("tasks", "acknowledge", "7", "1", "--since-time", "2026-10-01T00:00:00Z", "--json")
+
+    const refused = await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+    expect(refused.code).not.toBe(0)
+    expect(JSON.parse(refused.stderr).error.reason).toBe("task.already-read")
+    expect(json(await call("tasks", "list", "--json")).items).toEqual([])
+
+    const after = item(
+      await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--category", "access", "--json"),
+    )
+    expect(after.created).toBe(true)
+    const opened = item(
+      await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--open-new", "--json"),
+    )
+    expect(opened).toMatchObject({ source: PROMISE, created: true })
+    expect(
+      item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")).created,
+    ).toBe(false)
+  })
+
+  it("lists a group's open tasks beside its messages, whose id starts with a minus", async () => {
+    const call = await setup()
+    const store = await openStore({ path: call.env.MESSAGING_STORE as string })
+    await store.chats.saveChats(account, [
+      { id: "-1001", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(account, "-1001", [{ ...said("1", "pay me back?"), chatId: "-1001" }], {
+      via: "test",
+    })
+    await store.close()
+    await call("tasks", "add", "msg:chat/500/-1001/1", "--type", "request", "--category", "money", "--json")
+
+    const answer = await call("tasks", "review", "-1001", "--since-time", "2026-10-01T00:00:00Z", "--json")
+    expect(answer.code, answer.stderr).toBe(0)
+    const read = item(answer)
+    expect(read.open_tasks).toEqual([expect.objectContaining({ source: "msg:chat/500/-1001/1" })])
   })
 
   it("**lists what someone owes the owner with assignee:**, after tasks add --assignee sender", async () => {

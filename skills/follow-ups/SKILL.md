@@ -38,6 +38,26 @@ no message text — read all of it:
 
 Anything not on the agenda waits for its own date. Do not open it.
 
+**Every chat keeps its own point of reading for tasks.** `review --new`, `inbox`, the owner reading on the phone
+and other agents all move their own points, so a message they showed is not yet read for tasks. Work from the
+task point instead:
+
+```sh
+{{command}} tasks status --json                        # per chat: read for tasks through when, how many wait, how many came late
+{{command}} tasks review "<chat>" --json               # the messages after the point, oldest first, and the chat's open tasks
+{{command}} tasks acknowledge "<chat>" <message id>    # after its tasks are opened, updated or closed: the next review starts after it
+```
+
+For each chat with `waiting` above 0: `tasks review`, then open new tasks, update or close the listed `open_tasks`
+the new messages settle, then run the `next` step the answer gives (`tasks acknowledge`). Acknowledge only what you
+finished; a page with `has_more: true` is followed by the next one. A chat with `late` above 0 got older history
+after it was read: `tasks review "<chat>" --since-time <mark.from>` reads the stretch again (up to 1000 messages),
+and acknowledging that read clears it. A read again only updates and closes tasks: `tasks add` refuses a message the
+point already passed (`task.already-read`) unless it is given `--open-new`, which you pass only when the owner asked
+for tasks from that history. When that answer has `has_more: true` it gives no acknowledge step: the stretch
+is too long to read again in one page, so tell the owner and move on. A chat whose history is not stored yet is fetched by `messages sync` first; `tasks review` reads
+only the store.
+
 **History is not work.** A first sync opens no tasks from old messages (`task_first_pass_per_chat`, 0 by
 default) and says how many it held. Do not read old chats looking for tasks. Ask the owner which chats to build,
 then for each: `{{command}} tasks scan "<chat>" --json` lists what would open, and `--yes` opens it. Dig deeper
@@ -103,7 +123,7 @@ stop. The owner sends what they choose.
 
 `{{command}} schedule agent follow-ups claude "<prompt>" --at 08:30` runs this every morning. Then you run
 with the CLI's read-only variable set (`MAX_READ_ONLY=1` for max). The task work above still runs: `tasks scan --yes`,
-`add`, `plan`, `link`, `merge`, `unmerge`, `duplicates reject`, `duplicates defer`, `claim`, `release` and `close`
+`acknowledge`, `add`, `plan`, `link`, `merge`, `unmerge`, `duplicates reject`, `duplicates defer`, `claim`, `release` and `close`
 — but every `tasks close` then waits on the owner as a suggestion, whatever your certainty, and `--as-owner` is
 refused. Everything else that writes is refused, so do not try: every send, reaction and edit; changes to schedules,
 settings, the recipient list or auto-replies; tags, contact notes and aliases, saved searches, `tasks reject`. What you print is the report the owner opens; its first line shows in the desktop
@@ -115,7 +135,7 @@ A recipe is a set of flags, not a new command:
 
 | Recipe | Command |
 |---|---|
-| Morning sweep | `review --new --json`, then `tasks agenda --json` |
+| Morning sweep | `review --new --json`, then `tasks agenda --json`, then `tasks status --json` and a `tasks review` per waiting chat |
 | Weekly quiet-chat pass | `tasks agenda --waiting 3d --within 90d --json` |
 | Groups too, not only people | `tasks agenda "chat_kind:(dialog OR group OR channel)" --json` |
 | Before a call with someone | `tasks list 'chat:"<chat>" state:open' --json`, then `tasks show` each |

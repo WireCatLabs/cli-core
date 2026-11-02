@@ -115,7 +115,9 @@ read  tasks categories
 read  tasks duplicates list
 read  tasks list
 read  tasks related
+read  tasks review
 read  tasks show
+read  tasks status
 read  topics icons list
 read  topics list
 write account privacy set
@@ -257,6 +259,7 @@ write store restore
 write tags add
 write tags rebuild
 write tags remove
+write tasks acknowledge
 write tasks add
 write tasks claim
 write tasks close

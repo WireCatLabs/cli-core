@@ -308,6 +308,7 @@ const NAMED_WRITE_KEYS = [
   "mentions.reject",
   "tags.add",
   "tags.remove",
+  "tasks.acknowledge",
   "tasks.add",
   "tasks.claim",
   "tasks.close",

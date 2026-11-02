@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "rule": "option-role",
+    "target": "tasks add --open-new",
+    "reason": "the owner chose this flag on 2026-11-03 (a read again opens tasks only with a flag); the word goes into cli-base's vocabulary in its next release",
+    "owner": "@leemour",
+    "review_after": "2026-12-01"
+  }
+]

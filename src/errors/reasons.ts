@@ -199,6 +199,10 @@ const OTHERS: Entry[] = [
     "a subtask moves to another project only when it is detached from its parent in the same write",
   ),
   validation("task.duplicate-candidates", "open tasks may be the same job: attach to one, or add it as new"),
+  validation(
+    "task.already-read",
+    "the message was already read for tasks: a read again only updates and closes tasks unless --open-new",
+  ),
   validation("task.certainty-required", "an agent closes a task with its certainty, 0 to 1"),
   ["task.pair-decided", "permission_error", "the owner already decided the pair; an agent does not change it"],
   validation("task.no-close-suggestion", "the task has no agent's close waiting on the owner"),

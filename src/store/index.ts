@@ -323,6 +323,8 @@ export {
   type TagFilter,
   type TagsStore,
   type TagTarget,
+  type TaskAnalysisMark,
+  type TaskAnalysisMarkWrite,
   type TaskTagTarget,
   type TextOrigin,
   type VectorsStore,
