@@ -12,8 +12,8 @@ import { stemmerCache } from "./stems.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { write } from "./transaction.js"
 
-/** Who wrote it: the owner, or an agent by its bot handle and the model it ran on. */
-export type Author = "owner" | { bot: string; model?: string }
+/** Who wrote it: the owner, or an agent (or a rule scorer) by its bot handle and the model it ran on. */
+export type Author = "owner" | { bot: string; model?: string; kind?: "agent" | "rule" }
 
 export interface Memory {
   id: string
@@ -102,7 +102,7 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: st
 export const authorActor = (context: StoreContext, author: Author): { actor: Actor; model: string | null } => {
   if (author === "owner") return { actor: ownerPerson(context.database), model: null }
   return {
-    actor: botNamed(context.database, author.bot, context.now(), "agent"),
+    actor: botNamed(context.database, author.bot, context.now(), author.kind ?? "agent"),
     model: author.model === undefined ? null : author.model.trim().slice(0, 200) || null,
   }
 }

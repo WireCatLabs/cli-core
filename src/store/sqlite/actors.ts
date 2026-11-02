@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { Proposer } from "../decisions.js"
 import type { CacheDatabase } from "../driver.js"
 
 /** Who made or owns something: the store's polymorphic actor pair. */
@@ -10,7 +11,7 @@ export interface Actor {
 /** How the task package names who acted; each maps to one stable actor row. */
 export type Origin = "owner" | "agent" | "rule"
 
-const BOT_KINDS = ["agent", "script", "integration"] as const
+export const BOT_KINDS = ["agent", "rule", "script", "integration"] as const
 
 /** The owner's person row, which the initial migration seeds. */
 export const ownerPerson = (database: CacheDatabase): Actor => {
@@ -53,4 +54,23 @@ export const originOfActor = (database: CacheDatabase, type: unknown, id: unknow
   if (type == null || id == null) return undefined
   if (type === "person") return "owner"
   return database.prepare("SELECT name FROM bots WHERE id = ?").get(Number(id))?.name === "rule" ? "rule" : "agent"
+}
+
+/** Who proposed a stored row, from its actor pair; the seeded bot `rule` and a bot of kind `rule` are rules. */
+export const proposerOf = (database: CacheDatabase, type: unknown, id: unknown): Proposer => {
+  if (type === "person" && id != null) return { type: "person", id: String(id) }
+  if (type !== "bot" || id == null) return { type: "unknown" }
+  const bot = database.prepare("SELECT name, kind FROM bots WHERE id = ?").get(Number(id))
+  if (!bot) return { type: "unknown" }
+  const name = String(bot.name)
+  return { type: "bot", id: String(id), name, kind: bot.kind === "rule" || name === "rule" ? "rule" : "agent" }
+}
+
+/** Who proposed an unconfirmed link, from the `agent:<bot>` or `rule:<id>` its provenance starts with. */
+export const proposerOfProvenance = (database: CacheDatabase, provenance: string | null): Proposer => {
+  const [, kind, name] = /^(agent|rule):([^\s;]+)/.exec(provenance ?? "") ?? []
+  if (!kind || !name) return { type: "unknown" }
+  if (kind === "rule") return { type: "bot", id: "", name: `rule:${name}`, kind: "rule" }
+  const bot = database.prepare("SELECT id FROM bots WHERE name = ?").get(name)
+  return { type: "bot", id: bot ? String(bot.id) : "", name, kind: "agent" }
 }
