@@ -72,6 +72,30 @@ shape of this file.
   proposed. Turning agent decisions off now holds for every store method, not only the registry, and a bot is the
   same bot whatever its letter case (`Claude-Code` is `claude-code`).
 
+### Added
+
+- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
+  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
+  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
+  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
+  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
+  `setHistoryIncluded`; `Saving` takes `historyLimits`.
+- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
+  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
+  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
+  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
+  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
+  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
+
+### Fixed
+
+- **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
+  only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
+  `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
+  decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
+  two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
+
 ## 0.545.0 — 02.11.2026
 
 ### Added
