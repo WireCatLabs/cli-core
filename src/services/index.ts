@@ -1,5 +1,6 @@
 import { type BotCheckService, botCheckService } from "../botcheck/service.js"
 
+export { paymentTitle } from "../meetings/index.js"
 export { amountOf, amountsOf, type TaskAmount } from "../search/task-signature.js"
 export { AGENDA_DEFAULTS } from "./agenda.js"
 export { type ChatCoverage, chatCoverage } from "./chat-coverage.js"
@@ -58,6 +59,23 @@ export type {
   ProjectSender,
   ProjectUnitState,
 } from "./project-gathering-request.js"
+export {
+  DEFAULT_PURPOSES,
+  type MoneyTotal,
+  type ProjectStatus,
+  type ProjectStatusInput,
+  projectStatus,
+  STATUS_CHATS,
+  STATUS_SIGNALS,
+  STATUS_WINDOW,
+  type StatusAttention,
+  type StatusChat,
+  type StatusChatSummary,
+  type StatusContext,
+  type StatusItem,
+  type StatusSignal,
+} from "./project-status/index.js"
+export { questions } from "./questions.js"
 export {
   canonicalProjectRef,
   gatherStoredProject,
@@ -413,6 +431,7 @@ export {
   type Decided,
   type Decision,
   emptyProposalRegistry,
+  FACT_SUMMARIES,
   type ProposalFilter,
   type ProposalKind,
   type ProposalRegistry,
