@@ -2,7 +2,8 @@ import { CliError, pathsAreOverridden } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { type AppIdentity, envName } from "../ports/app.js"
-import { AUTHORITY_KEY, BOT_API_KEY } from "../sends/permissions.js"
+import { agentOf } from "../runs/run-context.js"
+import { AUTHORITY_KEY, BOT_API_KEY, LEVELS, type Level, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { baseContext, environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
@@ -189,7 +190,13 @@ export const configCommand = (
           `this process is locked to profile ${settings.profile} (${lock}) — ${root ? setting : "--defaults"} changes other profiles`,
         )
       }
-      if (environmentOf(this).agent) refuseGuardedKey(setting, action === "set" ? String(given) : undefined, ownerOnly)
+      // An agent's own shell counts too: Hermes and OpenClaw run the tool there for anyone their chat accepts (SEC-116).
+      if (environmentOf(this).agent || agentOf(env)) {
+        refuseGuardedKey(setting, action === "set" ? String(given) : undefined, ownerOnly)
+        refuseLoosening(settings.permissions, setting, action === "set" ? String(given) : undefined, {
+          wide: Boolean(everyone || root || personal || bot),
+        })
+      }
       if (action === "set") refuseUnknownKey(this, setting, String(given), permissionKey)
       const saved = config.changeSetting(settings.configPath, {
         profile: defaults || root ? undefined : settings.profile,
@@ -272,6 +279,36 @@ const refuseGuardedKey = (setting: string, value: string | undefined, ownerOnly:
     `an agent cannot change permissions.${guarded} — the owner sets it in a terminal`,
     { permission: guarded },
   )
+}
+
+/**
+ * An agent may tighten a permission, never loosen one: a message in a chat the agent reads must not be able to talk it
+ * into lifting the owner's `readonly`. Removing a key, replacing `permissions` whole, or changing what several profiles
+ * get can loosen in ways this profile's levels cannot show, so there an agent may only set `deny`.
+ */
+const refuseLoosening = (
+  levels: Readonly<Record<PermissionKey, Level>>,
+  setting: string,
+  value: string | undefined,
+  { wide }: { wide: boolean },
+): void => {
+  if (setting !== "permissions" && !setting.startsWith("permissions.")) return
+  const key = setting.slice("permissions.".length)
+  const refuse = (why: string) => {
+    throw new CliError(
+      "permission_error",
+      `an agent cannot loosen permissions: ${why} — the owner does it in a terminal`,
+      {
+        permission: key || "permissions",
+      },
+    )
+  }
+  if (value === "deny" && setting !== "permissions") return
+  if (value === undefined) refuse(`unsetting ${setting} can lift a limit`)
+  if (setting === "permissions" || wide)
+    refuse(`only deny may be set for ${setting} with --defaults, --personal, --bot or the whole object`)
+  const now = levelFor(levels, key).level
+  if (LEVELS.indexOf(value as Level) > LEVELS.indexOf(now)) refuse(`${setting} is ${now}, ${value} is looser`)
 }
 
 /** The keys of a `permissions` object given whole; anything else is left to the schema to refuse. */

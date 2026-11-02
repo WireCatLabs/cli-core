@@ -26,6 +26,17 @@ shape of this file.
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
 
+### Fixed
+
+- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
+  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
+  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
+  `--brief` and `--full` too, and refuse them together as the others do.
+
+## 0.544.0 — 02.11.2026
+
+### Added
+
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
   copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
   with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy
@@ -33,12 +44,16 @@ shape of this file.
   failure is one note, never a failed command. The version tried is kept in `<state>/skill-refresh.json`. Off in a
   moved run, under vitest, during `skill`, and with `<PREFIX>_NO_SKILL_REFRESH=1`; `--quiet` keeps the line out.
 
-### Fixed
+### Changed — may break callers
 
-- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
-  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
-  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
-  `--brief` and `--full` too, and refuse them together as the others do.
+- **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
+  `AI_AGENT`, `CLAUDECODE`, `OPENCLAW_SHELL=exec` or another agent marker is set is now treated like an MCP agent's
+  call: `mcp.authority` and `bot.api` stay owner-only, and a level may only go down (`readonly` → `deny`, never
+  `readonly` → `allow`). Unsetting a permission, replacing `permissions` whole, or `--defaults`/`--personal`/`--bot`
+  accept only `deny`. Before, Hermes or OpenClaw could undo the read-only the desktop app set, from any chat message
+  that talked it into running `config set`. The owner changes them in a terminal outside the agent; the desktop app
+  already runs the tools without these variables. Not a sandbox: an agent with a general shell can still edit the
+  file itself, so keep its own command approvals on.
 
 ## 0.543.0 — 02.11.2026
 
