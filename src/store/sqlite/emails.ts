@@ -22,6 +22,8 @@ import {
   folderEmails,
   forgetLocations,
   locate,
+  type PartialEmail,
+  partialEmails,
   setLocations,
 } from "./email-locations.js"
 import { markEmailsDeleted, markEmailsRestored, recountEmailThread as recount, setEmailFlags } from "./email-state.js"
@@ -38,7 +40,7 @@ import { type ThreadFilter, threadRows } from "./thread-columns.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
-export type { EmailLocationInput, FolderEmail }
+export type { EmailLocationInput, FolderEmail, PartialEmail }
 
 import { dot } from "./vectors.js"
 
@@ -295,6 +297,7 @@ export interface MailStore {
   emails(filter?: EmailFilter): Promise<Email[]>
   /** Each matching email's Message-ID and mailboxes, without text or people: cheap over a whole mailbox. */
   emailRefs(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailRef[]>
+  partialEmails(accountId: number, limit: number): Promise<{ emails: PartialEmail[]; total: number }>
   /** Each matching email's sender, recipients, list, size, flag and mailboxes, oldest first; no text. */
   emailFacts(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailFacts[]>
   /**
@@ -856,6 +859,7 @@ export const mailStoreOver = (
         mailboxes: JSON.parse(String(row.boxes)) as EmailRef["mailboxes"],
       }))
   },
+  partialEmails: async (accountId, limit) => partialEmails(database, accountId, limit),
   async emailFacts(filter = {}) {
     const [where, params] = emailWhere(filter)
     return database

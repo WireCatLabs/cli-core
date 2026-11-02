@@ -19,6 +19,7 @@ import { parsedEmail } from "./email-input.js"
 import { factsOf } from "./facts.js"
 import { mailHeadersOf } from "./headers.js"
 import { parseMail } from "./parse.js"
+import { PARTIAL } from "./partial.js"
 import { storedMailRules } from "./rule-stored.js"
 import { ruleTagger, settleRuleTags } from "./rule-tags.js"
 import { decide, type MailRule, tagsOf } from "./rules.js"
@@ -128,6 +129,7 @@ export const searchMailServer = async (
   const ruled = new Map<Listed, { ruleId: number | null; tags: string[] }>()
   const inputs: ThreadSave[] = []
   const saved: Listed[] = []
+  let cutShort = 0
   let opening: ReturnType<MailServerAccess["open"]> | undefined
   let openFailure: unknown
   let unsupported = false
@@ -182,17 +184,12 @@ export const searchMailServer = async (
       report.returned += 1
       sources.set(sourceKey(item.threadId, item.messageId), held ? "both" : "server")
       if (held) continue
-      // A big message would hold the connection and the parser past the bound; sync reads it whole later.
-      if ((item.size ?? 0) > SERVER_BOUNDS.maxMessageBytes) {
-        report.tooLarge = (report.tooLarge ?? 0) + 1
-        report.complete = false
-        sources.delete(sourceKey(item.threadId, item.messageId))
-        continue
-      }
       fresh.push(item)
       ruled.set(item, { ruleId: rule?.id ?? null, tags: tagsOf(rules, facts(item)) })
     }
-    const raws = fresh.length && open ? await source.fetchRaw(fresh) : []
+    // A big message would hold the connection and the parser past the bound: its first bytes carry the text.
+    const bytes = SERVER_BOUNDS.textBytes
+    const raws = fresh.length && open ? await source.fetchRaw(fresh, { bytes }) : []
     // Parsing and reading attachments stay inside the bound: after it, nothing more is read or kept.
     const now = Date.now()
     for (const [index, item] of fresh.entries()) {
@@ -200,13 +197,17 @@ export const searchMailServer = async (
       const raw = raws[index]
       try {
         if (raw === undefined || raw instanceof Error) throw raw ?? new Error("not read")
+        const cut = raw.byteLength >= bytes && (item.size === undefined || item.size > raw.byteLength)
         const mail = await parseMail(raw)
-        const files = await readAttachments(
-          mail,
-          item.messageId,
-          { loadEngine: importEngine, maxAttachmentChars: MAX_ATTACHMENT_CHARS, at: now, signal: stop },
-          [],
-        )
+        // An attachment cut short is not the file: none is kept until the sync reads the whole message.
+        const files = cut
+          ? []
+          : await readAttachments(
+              mail,
+              item.messageId,
+              { loadEngine: importEngine, maxAttachmentChars: MAX_ATTACHMENT_CHARS, at: now, signal: stop },
+              [],
+            )
         if (!open) return
         const folder = item.folder as string
         const validity = validities.get(item)
@@ -227,12 +228,14 @@ export const searchMailServer = async (
                 : { locations: [{ folder, uidvalidity: validity, uid: Number(item.uid) }] }),
               ...(item.seen === undefined ? {} : { read: item.seen }),
               ...(item.flagged === undefined ? {} : { flagged: item.flagged }),
+              ...(cut ? { metadata: { [PARTIAL]: { bytes: raw.byteLength } } } : {}),
               mailRuleId: ruled.get(item)?.ruleId ?? null,
               attachments: files,
             },
           ],
         })
         saved.push(item)
+        if (cut) cutShort++
       } catch {
         sources.delete(sourceKey(item.threadId, item.messageId))
         report.complete = false
@@ -278,6 +281,10 @@ export const searchMailServer = async (
   }
   await settleRuleTags(store, accountId, rules, tagger.outcome())
   report.new = inputs.length
+  if (cutShort) {
+    report.partial = cutShort
+    report.complete = false
+  }
   report.returned = sources.size
   return { report, sources }
 }

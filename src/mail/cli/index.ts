@@ -94,11 +94,11 @@ const serverIssues = (server: ServerSearched | undefined) => {
     ...FAILED[reason],
     source: "server",
   }))
-  const tooLarge = server.tooLarge
-    ? [{ code: "outcome_unknown" as const, reason: "search.server-too-large", source: "server" }]
+  const partial = server.partial
+    ? [{ code: "outcome_unknown" as const, reason: "search.server-partial", source: "server" }]
     : []
-  return failed.length || tooLarge.length
-    ? [...failed, ...tooLarge]
+  return failed.length || partial.length
+    ? [...failed, ...partial]
     : [{ code: "outcome_unknown" as const, reason: "search.server-capped", source: "server" }]
 }
 
