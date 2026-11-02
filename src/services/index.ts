@@ -58,7 +58,6 @@ export type {
   ProjectSender,
   ProjectUnitState,
 } from "./project-gathering-request.js"
-export { questions } from "./questions.js"
 export {
   canonicalProjectRef,
   gatherStoredProject,
