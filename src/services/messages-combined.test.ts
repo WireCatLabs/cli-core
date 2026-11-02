@@ -319,7 +319,8 @@ it("bounds hydrated candidate bytes, reranking work and elapsed time", async () 
     .mockReturnValueOnce(0)
     .mockReturnValue(QUERY_LIMITS.milliseconds + 1)
   await expect(searchCombined(store, account, request("aurora"))).rejects.toMatchObject({
-    details: { reason: "query.too-large", budget: "milliseconds" },
+    code: "timeout",
+    details: { reason: "query.time-limit", budget: "time" },
   })
 })
 

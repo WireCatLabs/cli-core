@@ -668,8 +668,10 @@ Detector сообщает **кандидата**, а не подтверждён
 <!-- limits: end -->
 
 `query.too-large` — reason внутри `validation_error`, с `budget` и `complete:false`;
-сузьте чат/дату/pattern. Для `term expansions` сужать надо сам pattern — см. выше. Timeout/abort освобождает worker и timer. Предел времени проверяется
-между синхронными SQLite calls и bounded batches; уже выполняющийся SQLite statement не прерывается.
+сузьте чат/дату/pattern. Для `term expansions` сужать надо сам pattern — см. выше. Timeout/abort освобождает worker и timer. Предел времени
+(`milliseconds`) — не ошибка запроса: `timeout` с reason `query.time-limit`, `budget: "time"`, `limit_ms` и `complete:false`.
+Он проверяется между SQLite calls и bounded batches, а под Node ещё и на каждой строке statement поиска сообщений
+(SQL-функция `wc_time_limit`), так что долгий statement останавливается; под Bun SQL-функций нет, и statement доходит до конца.
 NFA work budget ограничивает один match.
 Query page: 1–1000 results, context: прежняя CLI/MCP модель. SQL и FTS получают bound values.
 

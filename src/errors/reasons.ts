@@ -41,6 +41,7 @@ const SIGN_IN: Entry[] = [
 ]
 
 const OTHERS: Entry[] = [
+  ["query.time-limit", "timeout", "the search took longer than its time limit; the query itself is valid"],
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
   [
     "contract.unacknowledged-override",

@@ -1,4 +1,4 @@
-import { CliError, isCliError } from "@wirecat/cli-base"
+import { CliError } from "@wirecat/cli-base"
 import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
@@ -18,7 +18,7 @@ import { entriesOfList, fitting, type SkippedSource } from "../search/account-li
 import { fieldsOfQuery as fieldsOf, meaningWords } from "../search/lucene/meaning-parts.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
-import { SEARCH_QUERY } from "../search/lucene/types.js"
+import { isQueryLimit, SEARCH_QUERY } from "../search/lucene/types.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
 import { type SearchTotal, TOTAL_CAP, totalOf } from "../search/total.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
@@ -527,12 +527,10 @@ const filterRefs = async (
     })
     return found.hasMore ? undefined : found.refs
   } catch (error) {
-    if (tooLarge(error)) return undefined
+    if (isQueryLimit(error)) return undefined
     throw error
   }
 }
-
-const tooLarge = (error: unknown) => isCliError(error) && error.details.reason === "query.too-large"
 
 /**
  * The notes the words find, with those found by meaning: every note the search would list, paged to the end. Never
@@ -570,7 +568,7 @@ const notesTotal = async (
       ...(stemmer ? { stemmer } : {}),
     })
   } catch (error) {
-    if (tooLarge(error)) return totalOf(undefined, shown, hasMore)
+    if (isQueryLimit(error)) return totalOf(undefined, shown, hasMore)
     throw error
   }
   const count = new Set([...words.refs, ...others]).size + (words.hasMore ? 1 : 0)
